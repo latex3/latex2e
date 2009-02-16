@@ -1,0 +1,98 @@
+# Construct file for LaTeX2e
+
+# Where to put the distirbution files
+$DISTRIB = 'distrib';
+$BUILD = 'build';
+
+$SCRIPTDIR = 'scripts';
+
+$FORMAT = "#$BUILD/latex.fmt";
+$FORMATPDF = "#$BUILD/pdflatex.fmt";
+
+@basefiles = <base/*>;
+@linkedfiles = map { my $x=$_; $x =~ s/^base/unpacked/; $x; } grep !/^Cons/,@basefiles;
+
+$LDOCS = [ qw(
+       cfgguide
+       clsguide
+       cyrguide
+       encguide
+       fntguide
+       ltnews01
+       ltnews02
+       ltnews03
+       ltnews04
+       ltnews05
+       ltnews06
+       ltnews07
+       ltnews08
+       ltnews09
+       ltnews10
+       ltnews11
+       ltnews12
+       ltnews13
+       ltnews14
+       ltnews15
+       ltnews16
+       ltnews17
+       ltx3info
+       modguide
+       usrguide
+)];
+
+Export qw ( CONS DISTRIB BUILD FORMAT FORMATPDF LDOCS );
+
+# A standard construction environment.
+$CONS = new cons(
+    RUNTEX => "cd build ; ../$SCRIPTDIR/run-tex"
+);
+
+sub cons::CompileTeX {
+    my($cons, $dir, $nms, $ext) = @_;
+    $ext = "tex" unless defined $ext;
+    foreach my $tgt (@$nms) {
+	$cons->Command(["$dir/$tgt.pdf"], ($FORMATPDF,"#$BUILD/$tgt.$ext"),qq(
+            export TEXINPUTS=../%2:d:\$TEXINPUTS 
+	    %RUNTEX %<:a || echo NOT GOOD
+            mv build/%>:f %>:a
+        ));
+    }
+}
+
+Conscript_chdir 1;
+
+#Link $DISTRIB => '.';
+
+
+Install $CONS 'unpacked', @basefiles;
+Install $CONS 'build', <support/*>;
+
+@supportfiles = <support/*>;
+foreach (@supportfiles) { s/^support/build/; }
+
+# unpack the distribution
+Command $CONS ('unpacked/unpack.log','unpacked/latex.ltx'), @linkedfiles, qq(
+	echo Generating LaTeX2e kernel bootstrap files...
+ 	(cd unpacked ; yes | etex -ini unpack.ins 2>/dev/null && touch unpack.log )
+);
+
+# Format creation
+Command $CONS ["$FORMAT"], (@supportfiles,"unpacked/unpack.log"), qq(
+	( cd build ; yes | TEXINPUTS=.:../unpacked etex -ini latex.ltx)
+);
+Command $CONS ["$FORMATPDF"], (@supportfiles,"unpacked/unpack.log"), qq(
+        ln -f -s latex.ltx pdflatex.ltx
+	(cd build ; yes | TEXINPUTS=.:../unpacked pdfetex -ini -jobname=pdflatex "*pdflatex.ini" latex.ltx)
+);
+
+#build documentation
+Build (
+      "doc/Conscript",
+);
+
+# Test suite
+Build ( "testfiles/Conscript" );
+Build qw(
+      required/tools/Conscript
+);
+

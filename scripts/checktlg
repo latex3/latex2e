@@ -1,0 +1,84 @@
+#!/bin/sh
+#
+# This file is part of the validate package.
+# ------------------------------------------
+#
+# Checks a .tlg file against the .log file created by TeX from the test 
+# file.
+# A test file must have the extension .lvt
+# Runs tex two times
+#
+# usage: checktlg <fmt name> <test file base> [translation table]
+#
+
+# check number of args and set format etc.
+#
+if [ $# -lt 2 -o $# -gt 3 ] ; then
+   echo >&2 Usage: checktlg format file [translation_table]
+   exit 1
+fi
+
+TRANSLATE=""
+if [ $# = 3 ]
+then
+TRANSLATE="--translate-file=$3"
+fi
+LATEX="etex $TRANSLATE -efmt=`dirname $1`/`basename $1 .fmt`"
+BASE=`basename $2 .lvt`
+BASEDIR=`dirname $2`
+
+LANG=C ; export LANG
+
+TLG_BASE=$BASE
+
+# remove all kind of rubbish
+#
+rm -f $BASE.log $BASE.au?  $BASE.tmp.tlg $TLG_BASE.tlg.diff $BASE.dvi
+rm -f $BASE.lvt.log $BASE.lvt.au?  $BASE.lvt.dvi $TLG_BASE.mod.tlg
+rm -f $BASE.glo $BASE.idx  $BASE.lof $BASE.toc $BASE.lot
+rm -f $BASE.lvt.glo $BASE.lvt.idx  $BASE.lvt.lof $BASE.lvt.toc $BASE.lvt.lot
+
+echo ' '
+echo Checking $BASE...
+# run TeX twice with chosen format
+#
+#$LATEX $BASE.lvt 
+( yes "" | $LATEX $BASE.lvt  > /dev/null 2>&1 ) 2>/dev/null
+( yes "" | $LATEX $BASE.lvt  > /dev/null 2>&1 ) 2>/dev/null
+
+if test -r $BASE.lvt.log ; then LOG=$BASE.lvt.log ; else LOG=$BASE.log ; fi
+
+# remove stuff from the log which is of no interest and save the result
+# in tmp file
+#
+#sed -e "1,/START-TEST-LOG/d"  \
+#    -e "/END-TEST-LOG/,//d"   \
+#    -e "/OMIT/,/TIMO/d"       \
+#    -e "s/$BASE//"            \
+#    ${BEFORE_SED_SCRIPTS}     \
+#    -e "/([^ ]*fd/,/^[ ]*)/d" \
+#    -e "\![^<][0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]!d" \
+#    ${AFTER_SED_SCRIPTS}      \
+#                              $LOG > $BASE.tmp.tlg
+perl `dirname $0`/log2tlg $BASE   < $LOG > $BASE.tmp.tlg
+
+# remove empty lines from .tlg file
+perl -n -e '/^\s*$/ || print' < $TLG_BASE.tlg >$TLG_BASE.mod.tlg
+
+# compare both files
+#
+if (cmp -s $TLG_BASE.mod.tlg $BASE.tmp.tlg)
+then
+  echo Check passed for $BASE
+  rm -f $BASE.log $BASE.au?  $BASE.tmp.tlg $TLG_BASE.tlg.diff $BASE.dvi
+  rm -f $BASE.glo $BASE.idx  $BASE.lof $BASE.toc $BASE.lot $TLG_BASE.mod.tlg
+else
+  echo '***************************************************************'
+  echo '*' Check not passed!  Preparing context diff in $TLG_BASE.tlg.diff 
+  echo '***************************************************************'
+  echo done with $TLG_BASE.tlg.diff
+  diff -c $TLG_BASE.mod.tlg $BASE.tmp.tlg > $TLG_BASE.tlg.diff
+fi
+
+
+#
