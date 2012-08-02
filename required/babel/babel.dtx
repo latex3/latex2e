@@ -26,7 +26,7 @@
 % and covered by LPPL is defined by the unpacking scripts (with
 % extension .ins) which are part of the distribution.
 % \fi
-% \CheckSum{4211}
+%^^A \CheckSum{4211}  % Temporal deactivation
 %%
 % \def\filename{babel.dtx}
 % \let\thisfilename\filename
@@ -208,15 +208,18 @@
 %  \DescribeMacro{\foreignlanguage}
 %    The command |\foreignlanguage| takes two arguments; the second
 %    argument is a phrase to be typeset according to the rules of the
-%    language named in its first argument. This command only switches
-%    the extra definitions and the hyphenation rules for the language,
-%    \emph{not} the names and dates.
+%    language named in its first argument. This command (1) only
+%    switches the extra definitions and the hyphenation rules for the
+%    language, \emph{not} the names and dates, (2) does not send
+%    information about the language to auxiliary files (i.e., the
+%    surrounding language is still in force), and (3) it works even if
+%    the language has not been set as package option (but in such a
+%    case it only sets the hyphenation patterns). The latter can be
+%    lead to unwanted results if the script is different, so a warning
+%    will be issued.
 %
 %  \DescribeEnv{otherlanguage*}
-%    In the environment \Lenv{otherlanguage*} only the typesetting
-%    is done according to the rules of the other language, but the
-%    text-strings such as `figure', `table', etc. are left as they
-%    were set outside this environment.
+%    Same as |\foreignlanguage| but as environment.
 %
 %  \DescribeEnv{hyphenrules}
 %    The environment \Lenv{hyphenrules} can be used to select
@@ -1032,6 +1035,7 @@
 \let\bbl@opt@config\@nnil
 \let\bbl@opt@main\@nnil
 \let\bbl@opt@strings\@nnil
+\let\bbl@opt@headfoot\@nnil
 %    \end{macrocode}
 %    The following tool is defined temporarily to store the values of
 %    options.
@@ -1127,6 +1131,19 @@
     %   {\g@addto@macro\bbl@ignorepackages{,hhline,}}
   \fi
 \fi
+%   \end{macrocode}
+%   !!!! Added 2012/07/30 an experimental code (which misuses
+%   \cs{@resetactivechars}) related to babel/3796. With
+%   |headfoot=lang| we can set the language used in heads/foots.
+%   For example, in babel/3796 just adds |headfoot=english|.
+%   \begin{macrocode}
+\ifx\bbl@opt@headfoot\@nnil\else
+  \g@addto@macro\@resetactivechars{%
+    \set@typeset@protect                  
+    \expandafter\select@language@aux\expandafter{\bbl@opt@headfoot}%
+    \let\protect\noexpand}
+\fi
+%
 \ifx\bbl@languages\@undefined\else
   \def\bbl@tempa#1/0/#2\@nnil{#1}%
   \edef\bbl@nulllanguage{\expandafter\bbl@tempa\bbl@languages\@nnil}
@@ -1308,7 +1325,8 @@
 %    given both as global option and the last package option, which
 %    formerly had not a well-defined behaviour.  Since there is a
 %    previous |\ProcessOptions|, |\@curroptions| is already
-%    defined. Note only language options are non empty.
+%    defined. Note only language options are non empty !!!!! Not true
+%    (options with = should be excluded) 
 %    \begin{macrocode}
 \@for\bbl@a:=\@curroptions\do{%
   \ifx\bbl@a\@empty\else
@@ -1382,6 +1400,8 @@
 %    loads the main language set with the key |main|. A warning [??
 %    error] is raised if the main language is not the same as the last
 %    named one, or if the value of the key |main| is not a language.
+%    !!!!! Doesn't work correctly if the language name is different
+%    from the option name, eg frenchb -> french
 %    \begin{macrocode}
 \ifx\bbl@opt@main\@nnil
   \ifx\bbl@lastoption\@undefined\else
@@ -1389,8 +1409,8 @@
        \PackageWarning{babel}{%
          Last named language is `\bbl@lastoption', but the main\MessageBreak
          language has been set to `\bbl@main@language'. The main\MessageBreak
-         language cannot be both a global and a package option.\MessageBreak
-         Use `main=\bbl@lastoption' as package option.\MessageBreak
+         language cannot be both a global and a package\MessageBreak
+         option. Use `main=\bbl@lastoption' as package option.\MessageBreak
          Reported }%
     \fi
   \fi
@@ -1506,6 +1526,7 @@
 % \changes{babel~3.0d}{1991/10/29}{Removed use of \cs{@ifundefined}}
 %    \begin{macrocode}
 %<*core>
+\let\iflanguage\@undefined %%%% <<<<<
 \ifx\iflanguage\@undefined
   \input switch.def\relax
 \fi
@@ -1941,9 +1962,9 @@
 %    \begin{macrocode}
   \if@filesw
     \protected@write\@auxout{}{\string\select@language{\languagename}}%
-    \addtocontents{toc}{\xstring\select@language{\languagename}}%
-    \addtocontents{lof}{\xstring\select@language{\languagename}}%
-    \addtocontents{lot}{\xstring\select@language{\languagename}}%
+    \addtocontents{toc}{\xstring\select@language@aux{\languagename}}%
+    \addtocontents{lof}{\xstring\select@language@aux{\languagename}}%
+    \addtocontents{lot}{\xstring\select@language@aux{\languagename}}%
   \fi}
 %    \end{macrocode}
 %  \end{macro}
@@ -1967,15 +1988,11 @@
 % \changes{babel~3.9a}{2012/07/27}{Moved \cs{bbl@patterns} to the
 %    correct place, when after setting the extras for the current
 %    language}
+% \changes{babel~3.9a}{2012/08/01}{Created \cs{bbl@swith} with code
+%    shared by \cs{select@language} and \cs{foreing@language}}
 %    \begin{macrocode}
-\def\select@language#1{%
-  \expandafter\ifx\csname l@#1\endcsname\relax
-    \@nolanerr{#1}%
-  \else
-    \expandafter\ifx\csname date#1\endcsname\relax
-      \@noopterr{#1}%
-    \else
-      \originalTeX
+\def\bbl@switch#1#2{%
+  \originalTeX
 %    \end{macrocode}
 %    The name of the language is stored in the control sequence
 %    |\languagename|. The contents of this control sequence could be
@@ -2006,15 +2023,15 @@
 % \changes{babel~3.2a}{1991/11/24}{Set \cs{originalTeX} to
 %    \cs{empty}, because it should be expandable.}
 %    \begin{macrocode}
-      \expandafter\def\expandafter\originalTeX
-          \expandafter{\csname noextras#1\endcsname
-                       \let\originalTeX\@empty}%
+  \expandafter\def\expandafter\originalTeX
+      \expandafter{\csname noextras#1\endcsname
+                   \let\originalTeX\@empty}%
 %    \end{macrocode}
 % \changes{babel~3.6d}{1997/01/07}{set the language shorthands to
 %    `none' before switching on the extras}
 %    \begin{macrocode}
-      \languageshorthands{none}%
-      \babel@beginsave
+  \languageshorthands{none}%
+  \babel@beginsave
 %    \end{macrocode}
 %    Now activate the language-specific definitions. This is done by
 %    constructing the names of three macros by concatenating three
@@ -2023,10 +2040,12 @@
 % \changes{babel~3.5b}{1995/05/13}{Separated the setting of the
 %    hyphenmin values}
 %    \begin{macrocode}
-      \csname captions#1\endcsname
-      \csname date#1\endcsname
-      \csname extras#1\endcsname\relax
-      \bbl@patterns{\languagename}%
+  \ifcase#2%
+    \csname captions#1\endcsname
+    \csname date#1\endcsname
+  \fi
+  \csname extras#1\endcsname\relax
+  \bbl@patterns{\languagename}%
 %    \end{macrocode}
 %    The switching of the values of |\lefthyphenmin| and
 %    |\righthyphenmin| is somewhat different. First we save their
@@ -2035,17 +2054,39 @@
 %    the values in |\|\langvar|hyphenmins| will be used.
 % \changes{babel~3.5b}{1995/06/05}{Addedd default setting of hyphenmin
 %    parameters}
+% \changes{babel~3.9b}{2012/08/01}{Addedd \cs{bbl@iflanguagename} and
+% \cs{select@language@aux}, which is no-op if the language is the same}
 %    \begin{macrocode}
-      \babel@savevariable\lefthyphenmin
-      \babel@savevariable\righthyphenmin
-      \expandafter\ifx\csname #1hyphenmins\endcsname\relax
-        \set@hyphenmins\tw@\thr@@\relax
-      \else
-        \expandafter\expandafter\expandafter\set@hyphenmins
-          \csname #1hyphenmins\endcsname\relax
-      \fi
+  \babel@savevariable\lefthyphenmin
+  \babel@savevariable\righthyphenmin
+  \expandafter\ifx\csname #1hyphenmins\endcsname\relax
+    \set@hyphenmins\tw@\thr@@\relax
+  \else
+    \expandafter\expandafter\expandafter\set@hyphenmins
+      \csname #1hyphenmins\endcsname\relax
+  \fi}
+\def\select@language#1{%
+  \expandafter\ifx\csname l@#1\endcsname\relax
+    \@nolanerr{#1}%
+  \else
+    \expandafter\ifx\csname date#1\endcsname\relax
+      \@noopterr{#1}%
+    \else
+      \bbl@switch{#1}\z@
     \fi
   \fi}
+\def\bbl@iflanguagename#1{%
+  \edef\bbl@tempa{\expandafter\string\languagename}%
+  \edef\bbl@tempb{\expandafter\string#1}%
+  \ifx\bbl@tempa\bbl@tempb
+    \expandafter\@firstoftwo
+  \else
+    \expandafter\@secondoftwo
+  \fi}
+% !!!! The test is not strictly correct, because we don't know if
+% date and captions have been activated
+\def\select@language@aux#1{%
+  \bbl@iflanguagename{#1}{}{\select@language{#1}}}
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -2065,6 +2106,7 @@
 % \changes{babel~3.5e}{1995/07/07}{changed name}
 % \changes{babel~3.7j}{2003/03/18}{rely on \cs{selectlanguage } to
 %    keep track of the nesting}
+% \changes{babel~3.9a}{2012/07/31}{Removed \cs{originalTeX}}
 %    \begin{macrocode}
 \long\def\otherlanguage#1{%
   \csname selectlanguage \endcsname{#1}%
@@ -2076,7 +2118,6 @@
 %    hide itself when it is called in horizontal mode.
 %    \begin{macrocode}
 \long\def\endotherlanguage{%
-  \originalTeX
   \global\@ignoretrue\ignorespaces
   }
 %    \end{macrocode}
@@ -2121,14 +2162,17 @@
 % \changes{babel~3.5d}{1995/06/22}{Macro added}
 % \changes{babel~3.6d}{1997/01/07}{Introduced \cs{foreign@language}}
 % \changes{babel~3.7a}{1998/03/12}{Added executing \cs{originalTeX}}
+% \changes{babel~3.9a}{2012/07/30}{Removed unnecesary \cs{noextras}
+%    just before closing the group}
+% \changes{babel~3.9a}{2012/07/31}{Moved \cs{originalTeX} to
+%    \cs{foreing@language} so that it's also used in
+%    \texttt{otherlanguage*}}
 %    \begin{macrocode}
 \def\foreignlanguage{\protect\csname foreignlanguage \endcsname}
 \expandafter\def\csname foreignlanguage \endcsname#1#2{%
   \begingroup
-    \originalTeX
     \foreign@language{#1}%
     #2%
-    \csname noextras#1\endcsname
   \endgroup
   }
 %    \end{macrocode}
@@ -2148,32 +2192,8 @@
   \expandafter\ifx\csname l@#1\endcsname\relax
     \@nolanerr{#1}%
   \else
-%    \end{macrocode}
-%    If it is we can select the proper hyphenation table and switch on
-%    the extra definitions for this language.
-% \changes{babel~3.6d}{1997/01/07}{set the language shorthands to
-%    `none' before switching on the extras}
-% \changes{babel~3.8l}{2008/07/06}{use \cs{bbl@patterns}}
-% \changes{babel~3.9a}{2012/07/27}{Moved \cs{bbl@patterns} to the
-%    correct place, when after setting the extras for the current
-%    language}
-%    \begin{macrocode}
-    \languageshorthands{none}%
-%    \end{macrocode}
-%    Then we set the left- and right hyphenmin variables.
-% \changes{babel~3.6d}{1997/01/07}{Added \cs{relax} to prevent
-%    disappearance of the first token after this command.}
-%    \begin{macrocode}
-    \csname extras#1\endcsname
-    \bbl@patterns{\languagename}%
-    \expandafter\ifx\csname #1hyphenmins\endcsname\relax
-      \set@hyphenmins\tw@\thr@@\relax
-    \else
-      \expandafter\expandafter\expandafter\set@hyphenmins
-        \csname #1hyphenmins\endcsname\relax
-    \fi
-  \fi
-  }
+    \bbl@switch{#1}\@ne
+  \fi}
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -2463,6 +2483,8 @@
 % \changes{babel~3.5a}{1995/02/15}{Added \cs{@activated} to log active
 %    characters}
 % \changes{babel~3.5c}{1995/06/19}{Added missing closing brace}
+% \changes{babel~3.9a}{2012/07/30}{\cs{newcommand}s replaced by
+%    \cs{def}'s, so that the file can be loaded twice}  
 %    \begin{macrocode}
 \ifx\PackageError\@undefined
   \def\@nolanerr#1{%
@@ -2479,21 +2501,21 @@
   \def\@activated#1{%
     \wlog{Package babel Info: Making #1 an active character}}
 \else
-  \newcommand*{\@nolanerr}[1]{%
+  \def\@nolanerr#1{%
     \PackageError{babel}%
                  {You haven't defined the language #1\space yet}%
         {Your command will be ignored, type <return> to proceed}}
-  \newcommand*{\@nopatterns}[1]{%
+  \def\@nopatterns#1{%
     \PackageWarningNoLine{babel}%
         {No hyphenation patterns were loaded for\MessageBreak
           the language `#1'\MessageBreak
           I will use the patterns loaded for \bbl@nulllanguage\space
           instead}}
-  \newcommand*{\@noopterr}[1]{%
+  \def\@noopterr#1{%
     \PackageError{babel}%
                  {You haven't loaded the option #1\space yet}%
              {You may proceed, but expect unexpected results}}
-  \newcommand*{\@activated}[1]{%
+  \def\@activated#1{%
     \PackageInfo{babel}{%
       Making #1 an active character}}
 \fi
