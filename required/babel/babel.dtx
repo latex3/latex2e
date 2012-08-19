@@ -549,6 +549,15 @@
 %    (\textsf{babel}, now with the correct catcodes for \verb/|/ and
 %    \verb|:|).\catcode`\|=\active
 %
+%    Documents with several input encodings are not frequent, but
+%    sometimes are useful. You can set different encodings for
+%    different languages as the following example shows:
+% \begin{verbatim}
+% \addto\extrasfrench{\inputencoding{latin1}}
+% \addto\extrasrussian{\inputencoding{koi8-r}}
+%\end{verbatim}
+%    (A recent version of \textsf{inputenc} is required.)
+%
 %  \section{The interface between the core of \babel{} and the language
 %    definition files}
 %
@@ -607,11 +616,11 @@
 %    |\l@|\langvar\ to be a dialect of |\language0| when
 %    |\l@|\langvar\ is undefined.
 %
-%    \item The language definition files can be read in the preamble of
-%    the document, but also in the middle of document processing. This
-%    means that they have to function independently of the current
-%    |\catcode| of the \texttt{@}~sign. [[!!!!! Clearly, assumption is
-%    not followed...]]
+%^^A    \item The language definition files can be read in the preamble of
+%^^A    the document, but also in the middle of document processing. This
+%^^A    means that they have to function independently of the current
+%^^A    |\catcode| of the \texttt{@}~sign. [[!!!!! Clearly, this is not
+%^^A    true, because LdfInit is an ``onlypreamble command]]
 %   \end{itemize}
 %
 %  \DescribeMacro{\providehyphenmins}
@@ -1307,9 +1316,9 @@
       \expandafter\bbl@aux@ifsh
     \else
       \ifx#2\@empty
-        \bbl@afterelse{\expandafter\@gobble}%
+        \bbl@afterelse\expandafter\@gobble
       \else
-        \bbl@afterfi{\expandafter\bbl@ifsh@i}%
+        \bbl@afterfi\expandafter\bbl@ifsh@i
       \fi
     \fi
     #1}
@@ -2182,16 +2191,18 @@
 %    \cs{originalTeX} before \cs{extras\langvar}}
 % \changes{babel~3.2a}{1991/11/24}{Set \cs{originalTeX} to
 %    \cs{empty}, because it should be expandable.}
+% \changes{babel~3.9a}{2012/08/14}{Make sure the save counter is reset
+%    even in \cs{originalTeX} is used in other contexts}
 %    \begin{macrocode}
-  \expandafter\def\expandafter\originalTeX
-      \expandafter{\csname noextras#1\endcsname
-                   \let\originalTeX\@empty}%
+  \expandafter\def\expandafter\originalTeX\expandafter{%
+    \csname noextras#1\endcsname
+    \let\originalTeX\@empty
+    \babel@beginsave}
 %    \end{macrocode}
 % \changes{babel~3.6d}{1997/01/07}{set the language shorthands to
 %    `none' before switching on the extras}
 %    \begin{macrocode}
   \languageshorthands{none}%
-  \babel@beginsave
 %    \end{macrocode}
 %    Now activate the language-specific definitions. This is done by
 %    constructing the names of three macros by concatenating three
@@ -2239,7 +2250,7 @@
       \bbl@switch{#1}%
     \fi
   \fi}
-\def\bbl@iflanguagename#1{%
+\def\bbl@iflanguagename#1{%  !!!! or with meaning ????
   \edef\bbl@tempa{\expandafter\bbl@sh@string\languagename\@empty}%
   \edef\bbl@tempb{\expandafter\bbl@sh@string#1\@empty}%
   \ifx\bbl@tempa\bbl@tempb
@@ -3184,7 +3195,8 @@
 %    |\if|-statement\footnote{This code is based on code presented in
 %    TUGboat vol. 12, no2, June 1991 in ``An expansion Power Lemma''
 %    by Sonja Maus.}. These macros will break if another |\if...\fi|
-%    statement appears in one of the arguments.
+%    statement appears in one of the arguments and it is not enclosed
+%    in braces.
 % \changes{babel~3.6i}{1997/02/20}{Made \cs{bbl@afterelse} and
 %    \cs{bbl@afterfi} \cs{long}}
 %    \begin{macrocode}
@@ -3200,26 +3212,65 @@
 %    performed once for each character.
 % \changes{babel~3.7c}{1999/04/30}{Only execute
 %    \cs{initiate@active@char} once for each character}
-% \changes{babel~3.9a}{1999/04/30}{Added \cs{bbl@defactive}}
+% \changes{babel~3.9a}{1999/04/30}{Added \cs{bbl@withactive}}
 %    \begin{macrocode}
-\def\bbl@defactive#1#2{%
+\def\bbl@withactive#1#2{%
   \begingroup
     \lccode`~=`#2\relax
     \lowercase{\endgroup#1~}}
+%    \end{macrocode}
+%    The following macro is used to defines shorthands in the three
+%    levels. It takes 4 arguments: the (string'ed) character,
+%    |\<level>@group|, |<level>@active| and |<next-level>@active|
+%    (except in |system|). 
+% \changes{babel~3.9a}{2012/08/18}{New macro, with code from
+%    \cs{@initiate@active@char}}
+%    \begin{macrocode}
+\def\bbl@active@def#1#2#3#4{%
+  \@namedef{#3#1}{%
+    \expandafter\ifx\csname#2@sh@#1@\endcsname\relax
+      \bbl@afterelse\bbl@sh@select#2#1{#3@arg#1}{#4#1}%
+    \else
+      \bbl@afterfi\csname#2@sh@#1@\endcsname
+    \fi}%
+%    \end{macrocode}
+%    When there is also no current-level shorthand with an argument we
+%    will check whether there is a next-level  defined shorthand for
+%    this active character. Before the next token is absorbed as
+%    argument we need to make sure that this is safe.
+% \changes{babel~3.5f}{1995/12/07}{use \cs{peek@token} to check whether
+%    it is safe to proceed}
+% \changes{babel~3.6i}{1997/02/20}{Remove the use of \cs{peek@token}
+%    again and make the \cs{...active@arg...} commands \cs{long}}
+% \changes{babel~3.7e}{1999/09/24}{pass the argument on with braces in
+%    order to prevent it from breaking up}
+% \changes{babel~3.7f}{2000/02/18}{remove the braces again}
+%    \begin{macrocode}
+  \long\@namedef{#3@arg#1}##1{%
+    \expandafter\ifx\csname#2@sh@#1@\string##1@\endcsname\relax
+      \bbl@afterelse\csname#4#1\endcsname##1%
+    \else
+      \bbl@afterfi\csname#2@sh@#1@\string##1@\endcsname
+    \fi}}%
+%    \end{macrocode}
+% \changes{babel~3.9a}{2012/08/18}{Removed an extra hash. Now calls
+%    \cs{@initiate@active@char} with 3 arguments.}
+%    \begin{macrocode}
 \def\initiate@active@char#1{%
-  \expandafter\ifx\csname active@char\string##1\endcsname\relax
-    \bbl@afterfi{\@initiate@active@char{#1}}%
+  \expandafter\ifx\csname active@char\string#1\endcsname\relax
+    \bbl@afterfi
+    \bbl@withactive
+      {\expandafter\@initiate@active@char\expandafter}#1\string#1#1%
   \fi}
 %    \end{macrocode}
-%    Note that the definition of |\@initiate@active@char| needs an
-%    active character, for this the |~| is used. Some of the changes
-%    we need, do not have to become available later on, so we do it
-%    inside a group.
+%    |\initiate@active@char| calls |\@initiate@active@char| with 3
+%    arguments. All of them are the same character with different
+%    catcodes: active, other (string'ed) and the original one.
+% \changes{babel~3.9e}{2012/08/18}{Introduced the 3-argument
+%   \cs{@initiate@active@char}, with different catcodes: active,
+%   string'ed, and original. Reorganized}
 %    \begin{macrocode}
-\begingroup
-  \catcode`\~\active
-  \def\x{\endgroup
-    \def\@initiate@active@char##1{%
+\def\@initiate@active@char#1#2#3{%
 %    \end{macrocode}
 %    If the character is already active we provide the default
 %    expansion under this shorthand mechanism.
@@ -3236,24 +3287,22 @@
 % \changes{babel~3.7e}{1999/09/06}{previous change was rubbish; use
 %    \cs{let} instead of \cs{edef}}
 %    \begin{macrocode}
-      \ifcat\noexpand##1\noexpand~\relax
-        \@ifundefined{normal@char\string##1}{%
-          \expandafter\let\csname normal@char\string##1\endcsname##1%
-          \expandafter\gdef
-            \expandafter##1%
-            \expandafter{%
-              \expandafter\active@prefix\expandafter##1%
-              \csname normal@char\string##1\endcsname}}{}%
-      \else
+  \ifcat\noexpand#3\noexpand#1\relax   % !!!! or just \ifx#1#3 ???
+    \@ifundefined{normal@char#2}{%
+      \expandafter\let\csname normal@char#2\endcsname#3%
+      \expandafter\gdef\expandafter#1\expandafter{%
+        \expandafter\active@prefix\expandafter#1%
+        \csname normal@char#2\endcsname}}{}%
+  \else
 %    \end{macrocode}
 %    Otherwise we write a message in the transcript file,
 %    \begin{macrocode}
-        \@activated{##1}%
+    \@activated{#2}%
 %    \end{macrocode}
 %    and define |\normal@char|\m{char} to expand to the character in
 %    its default state.
 %    \begin{macrocode}
-        \@namedef{normal@char\string##1}{##1}%
+    \@namedef{normal@char#2}{#3}%   !!!! Or \let ???
 %    \end{macrocode}
 %    If we are making the right quote active we need to change
 %    |\pr@m@s| as well.
@@ -3262,8 +3311,8 @@
 % \changes{babel~3.7f}{1999/12/18}{The redefinition needs to take
 %    place one level higher, \cs{prim@s} needs to be redefined.}
 %    \begin{macrocode}
-        \ifx##1'%
-          \let\prim@s\bbl@prim@s
+    \ifx'#3%   !!!!! Ensure catcode to other ????
+      \let\prim@s\bbl@prim@s
 %    \end{macrocode}
 %    Also, make sure that a single |'| in math mode `does the right
 %    thing'.
@@ -3272,35 +3321,54 @@
 % \changes{babel~3.7g}{2000/10/02}{use \cs{textormath} to get rid of
 %    the \cs{fi} (PR 3266)}
 %    \begin{macrocode}
-          \@namedef{normal@char\string##1}{%
-            \textormath{##1}{^\bgroup\prim@s}}%
-        \fi
+      \@namedef{normal@char#2}{\textormath{#3}{\sp\bgroup\prim@s}}%
+%  !!!! A duplicity with a similar 'system' declaration ????
+    \fi
 %    \end{macrocode}
 %    If we are using the caret as a shorthand character special care
 %    should be taken to make sure math still works. Therefor an extra
 %    level of expansion is introduced with a check for math mode on
 %    the upper level.
+%
+%    For the active caret we first expand to |\bbl@act@caret| in order
+%    to be able to handle math mode correctly.
 % \changes{babel~3.7f}{1999/12/18}{Introduced an extra level of
 %    expansion in the definition of an active caret}
+% \changes{babel~3.7f}{2000/09/25}{Make an exception for the active
+%    caret which needs an extra level of expansion}
 % \changes{babel~3.9a}{2012/06/20}{Added a couple of missing comment
 %    characters (PR 4146)}
 % \changes{babel~3.9a}{2012/07/29}{Use \cs{textormath} instead of
 %    \cs{ifmath}}
 %    \begin{macrocode}
-        \ifx##1^%
-          \gdef\bbl@act@caret{%
-            \textormath
-              {\if@safe@actives
-                 \bbl@afterelse\csname normal@char\string##1\endcsname
-               \else
-                 \bbl@afterfi\csname user@active\string##1\endcsname
-               \fi}
-              {\csname normal@char\string^\endcsname}}%
-        \fi
+    \ifx#3^%
+      \gdef\bbl@act@caret{%
+        \textormath
+          {\if@safe@actives
+             \bbl@afterelse\csname normal@char#2\endcsname
+           \else
+             \bbl@afterfi\csname user@active#2\endcsname
+           \fi}
+          {\csname normal@char#2\endcsname}}%
+      \@namedef{active@char#2}{\bbl@act@caret}% !!!! Or \let ????
+    \else
+%    \end{macrocode}
+%    We define the first level expansion of |\active@char|\m{char} to
+%    check the status of the |@safe@actives| flag. If it is set to
+%    true we expand to the `normal' version of this character,
+%    otherwise we call |\@active@char|\m{char}.
+%    \begin{macrocode}
+      \@namedef{active@char#2}{%
+        \if@safe@actives
+          \bbl@afterelse\csname normal@char#2\endcsname
+        \else
+          \bbl@afterfi\csname user@active#2\endcsname
+        \fi}%
+    \fi
 %    \end{macrocode}
 %    To prevent problems with the loading of other packages after
 %    \babel\ we reset the catcode of the character at the end of the
-%    package.
+%    package and of the language file.
 % \changes{babel~3.5f}{1995/12/01}{Restore the category code of a
 %    shorthand char at end of package}
 % \changes{babel~3.6f}{1997/01/14}{Made restoring of the category code
@@ -3311,33 +3379,17 @@
 %    each language, to prevent incompatibilities. Use \cs{string} instead
 %    of \cs{noexpand} and add \cs{relax}}
 %    \begin{macrocode}
-        \@ifpackagewith{babel}{KeepShorthandsActive}{}{%
-          \edef\bbl@tempa{\catcode`\string##1\the\catcode`##1\relax}%
-          \expandafter\AtEndOfLanguage\expandafter\CurrentOption
-            \expandafter{\bbl@tempa}%
-          \expandafter\AtEndOfPackage\expandafter{\bbl@tempa}}%
-%    \end{macrocode}
-%    Now we set the lowercase code of the |~| equal to that of the
-%    character to be made active and execute the rest of the code
-%    inside a |\lowercase| `environment'.
-% \changes{babel~3.5f}{1996/01/25}{store the \cs{lccode} of the tie
-%    before changing it}
-%    \begin{macrocode}
-        \@tempcnta=\lccode`\~
-        \lccode`~=`##1%
-        \lowercase{%
-%    \end{macrocode}
-%    Make the character active and add it to |\dospecials| and
-%    |\@sanitize|.
-%    \begin{macrocode}
-          \catcode`~\active
-          \expandafter\bbl@add@special
-            \csname \string##1\endcsname
+    \@ifpackagewith{babel}{KeepShorthandsActive}{}{%
+      \edef\bbl@tempa{\catcode`#2\the\catcode`#2\relax}%
+      \expandafter\AtEndOfLanguage\expandafter\CurrentOption
+        \expandafter{\bbl@tempa}%
+      \expandafter\AtEndOfPackage\expandafter{\bbl@tempa}}%
+    \expandafter\bbl@add@special\csname#2\endcsname
 %    \end{macrocode}
 %    Also re-activate it again at |\begin{document}|.
 %    \begin{macrocode}
-            \AtBeginDocument{%
-              \catcode`##1\active
+    \AtBeginDocument{%
+      \catcode`#2\active
 %    \end{macrocode}
 %    We also need to make sure that the shorthands are active during
 %    the processing of the \file{.aux} file. Otherwise some citations
@@ -3346,10 +3398,9 @@
 % \changes{babel~3.6i}{1997/03/01}{Make shorthands active during
 %    \file{.aux} file processing}
 %    \begin{macrocode}
-              \if@filesw
-                \immediate\write\@mainaux{%
-                  \string\catcode`##1\string\active}%
-              \fi}%
+      \if@filesw
+        \immediate\write\@mainaux{\string\catcode`#2\string\active}%
+      \fi}%
 %    \end{macrocode}
 %    Define the character to expand to
 %    \begin{center}
@@ -3358,35 +3409,10 @@
 %    (where |\active@char|\m{char} is \emph{one} control sequence!).
 % \changes{babel~3.5f}{1996/01/25}{restore the \cs{lccode} of the tie}
 %    \begin{macrocode}
-          \expandafter\gdef
-            \expandafter~%
-            \expandafter{%
-            \expandafter\active@prefix\expandafter##1%
-            \csname normal@char\string##1\endcsname}}%
-        \lccode`\~\@tempcnta
-      \fi
-%    \end{macrocode}
-%    For the active caret we first expand to |\bbl@act@caret| in order
-%    to be able to handle math mode correctly.
-% \changes{babel~3.7f}{2000/09/25}{Make an exception for the active
-%    caret which needs an extra level of expansion}
-%    \begin{macrocode}
-      \ifx##1^%
-        \@namedef{active@char\string##1}{\bbl@act@caret}%
-      \else
-%    \end{macrocode}
-%    We define the first level expansion of |\active@char|\m{char} to
-%    check the status of the |@safe@actives| flag. If it is set to
-%    true we expand to the `normal' version of this character,
-%    otherwise we call |\@active@char|\m{char}.
-%    \begin{macrocode}
-        \@namedef{active@char\string##1}{%
-          \if@safe@actives
-            \bbl@afterelse\csname normal@char\string##1\endcsname
-          \else
-            \bbl@afterfi\csname user@active\string##1\endcsname
-          \fi}%
-      \fi
+    \expandafter\gdef\expandafter#1\expandafter{%
+      \expandafter\active@prefix\expandafter#3%
+      \csname normal@char#2\endcsname}%
+  \fi
 %    \end{macrocode}
 %    The next level of the code checks whether a user has defined a
 %    shorthand for himself with this character. First we check for a
@@ -3395,129 +3421,30 @@
 % \changes{babel~3.5d}{1995/07/02}{Skip the user-level active char
 %    with argument if no shorthands with arguments were defined}
 % \changes{babel~3.8b}{2004/04/19}{Now use \cs{bbl@sh@select}}
+% \changes{babel~3.9a}{2012/08/18}{Instead of the ``copy-paste pattern''
+%    a new macro is used}
 %    \begin{macrocode}
-      \@namedef{user@active\string##1}{%
-        \expandafter\ifx
-        \csname \user@group @sh@\string##1@\endcsname
-        \relax
-          \bbl@afterelse\bbl@sh@select\user@group##1%
-        {user@active@arg\string##1}{language@active\string##1}%
-        \else
-          \bbl@afterfi\csname \user@group @sh@\string##1@\endcsname
-        \fi}%
-%    \end{macrocode}
-%    When there is also no user-level shorthand with an argument we
-%    will check whether there is a language defined shorthand for
-%    this active character. Before the next token is absorbed as
-%    argument we need to make sure that this is safe. Therefor
-%    |\peek@token| is called to decide that.
-% \changes{babel~3.5f}{1995/12/07}{use \cs{peek@token} to check whether
-%    it is safe to proceed}
-% \changes{babel~3.6i}{1997/02/20}{Remove the use of \cs{peek@token}
-%    again and make the \cs{...active@arg...} commands \cs{long}}
-% \changes{babel~3.7e}{1999/09/24}{pass the argument on with braces in
-%    order to prevent it from breaking up}
-% \changes{babel~3.7f}{2000/02/18}{remove the braces again}
-%    \begin{macrocode}
-      \long\@namedef{user@active@arg\string##1}####1{%
-        \expandafter\ifx
-        \csname \user@group @sh@\string##1@\string####1@\endcsname
-        \relax
-          \bbl@afterelse
-          \csname language@active\string##1\endcsname####1%
-        \else
-          \bbl@afterfi
-          \csname \user@group @sh@\string##1@\string####1@%
-          \endcsname
-        \fi}%
+  \bbl@active@def#2\user@group{user@active}{language@active}%
+  \bbl@active@def#2\language@group{language@active}{system@active}%
+  \bbl@active@def#2\system@group{system@active}{normal@char}%
 %    \end{macrocode}
 %    In order to do the right thing when a shorthand with an argument
 %    is used by itself at the end of the line we provide a definition
 %    for the case of an empty argument. For that case we let the
 %    shorthand character expand to its non-active self.
 %    \begin{macrocode}
-      \@namedef{\user@group @sh@\string##1@@}{%
-        \csname normal@char\string##1\endcsname}%
-%    \end{macrocode}
-%
-%    Like the shorthands that can be defined by the user, a language
-%    definition file can also define shorthands with and without an
-%    argument, so we need two more macros to check if they exist.
-% \changes{babel~3.5d}{1995/07/02}{Skip the language-level active char
-%    with argument if no shorthands with arguments were defined}
-% \changes{babel~3.8b}{2004/04/19}{Now use \cs{bbl@sh@select}}
-%    \begin{macrocode}
-      \@namedef{language@active\string##1}{%
-        \expandafter\ifx
-        \csname \language@group @sh@\string##1@\endcsname
-        \relax
-          \bbl@afterelse\bbl@sh@select\language@group##1%
-          {language@active@arg\string##1}{system@active\string##1}%
-        \else
-          \bbl@afterfi
-          \csname \language@group @sh@\string##1@\endcsname
-        \fi}%
-%    \end{macrocode}
-% \changes{babel~3.5f}{1995/12/07}{use \cs{peek@token} to check whether
-%    it is safe to proceed}
-% \changes{babel~3.6i}{1997/02/20}{Remove the use of \cs{peek@token}
-%    again}
-% \changes{babel~3.7e}{1999/09/24}{pass the argument on with braces in
-%    order to prevent it from breaking up}
-% \changes{babel~3.7f}{2000/02/18}{remove the braces again}
-%    \begin{macrocode}
-      \long\@namedef{language@active@arg\string##1}####1{%
-        \expandafter\ifx
-        \csname \language@group @sh@\string##1@\string####1@\endcsname
-        \relax
-          \bbl@afterelse
-          \csname system@active\string##1\endcsname####1%
-        \else
-          \bbl@afterfi
-          \csname \language@group @sh@\string##1@\string####1@%
-          \endcsname
-        \fi}%
-%    \end{macrocode}
-%    And the same goes for the system level.
-% \changes{babel~3.8b}{2004/04/19}{Now use \cs{bbl@sh@select}}
-%    \begin{macrocode}
-      \@namedef{system@active\string##1}{%
-        \expandafter\ifx
-        \csname \system@group @sh@\string##1@\endcsname
-        \relax
-          \bbl@afterelse\bbl@sh@select\system@group##1%
-          {system@active@arg\string##1}{normal@char\string##1}%
-        \else
-          \bbl@afterfi\csname \system@group @sh@\string##1@\endcsname
-        \fi}%
-%    \end{macrocode}
-%    When no shorthands were found the `normal' version of the active
-%    character is inserted.
-% \changes{babel~3.5f}{1995/12/07}{use \cs{peek@token} to check whether
-%    it is safe to proceed}
-% \changes{babel~3.6i}{1997/02/20}{Remove the use of \cs{peek@token}
-%    again}
-%    \begin{macrocode}
-      \long\@namedef{system@active@arg\string##1}####1{%
-        \expandafter\ifx
-        \csname \system@group @sh@\string##1@\string####1@\endcsname
-        \relax
-          \bbl@afterelse\csname normal@char\string##1\endcsname####1%
-        \else
-          \bbl@afterfi
-          \csname \system@group @sh@\string##1@\string####1@\endcsname
-        \fi}%
+  \@namedef{\user@group @sh@#2@@}{\csname normal@char#2\endcsname}%
 %    \end{macrocode}
 %    When a shorthand combination such as |''| ends up in a heading
 %    \TeX\ would see |\protect'\protect'|. To prevent this from
 %    happening a shorthand needs to be defined at user level.
 % \changes{babel~3.7f}{1999/12/09}{Added an extra shorthand
 %    combination on user level to catch an interfering \cs{protect}}
+% \changes{babel~3.9a}{2012/8/18}{Use \cs{user@group}, as above,
+%    instead of the hardwired \texttt{user}}
 %    \begin{macrocode}
-      \@namedef{user@sh@\string##1@\string\protect@}{%
-        \csname user@active\string##1\endcsname}%
-      }%
-    }\x
+  \@namedef{\user@group @sh@#2@\string\protect@}%
+    {\csname user@active#2\endcsname}}%
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -3532,14 +3459,15 @@
 %    will expand to either |\bbl@firstcs| or |\bbl@scndcs|. Hence two
 %    more arguments need to follow it.
 % \changes{babel~3.8b}{2004/04/19}{Added command}
+% \changes{babel~3.9a}{2012/08/18}{Removed \cs{string}s, because the
+%   char already string'ed}
 %    \begin{macrocode}
 \def\bbl@sh@select#1#2{%
-  \expandafter\ifx\csname#1@sh@\string#2@sel\endcsname\relax
+  \expandafter\ifx\csname#1@sh@#2@sel\endcsname\relax
     \bbl@afterelse\bbl@scndcs
   \else
-    \bbl@afterfi\csname#1@sh@\string#2@sel\endcsname
-  \fi
-}
+    \bbl@afterfi\csname#1@sh@#2@sel\endcsname
+  \fi}
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -3604,7 +3532,7 @@
 %    |\normal@char|\m{char}.
 %    \begin{macrocode}
 \def\bbl@activate#1{%
-  \expandafter\bbl@defactive
+  \expandafter\bbl@withactive
   \expandafter\def
   \expandafter#1\expandafter{%
     \expandafter\active@prefix
@@ -3620,7 +3548,7 @@
 %    definition to expand to |\normal@char|\m{char}.
 %    \begin{macrocode}
 \def\bbl@deactivate#1{%
-  \expandafter\bbl@defactive
+  \expandafter\bbl@withactive
   \expandafter\def
   \expandafter#1\expandafter{%
     \expandafter\active@prefix
@@ -3797,7 +3725,7 @@
 %    directly}
 %    Then, we define the new shorthand in terms of the original one.
 %    \begin{macrocode}
-       \expandafter\bbl@defactive
+       \expandafter\bbl@withactive
        \expandafter\def
        \expandafter#2\expandafter{%
          \expandafter\active@prefix
@@ -3867,23 +3795,20 @@
 %
 %  \begin{macro}{\bbl@switch@sh@off}
 %    All that is left to do is define the actual switching
-%    macros. Switching off is easy, we just set the category code to
-%    `other' (12).
+%    macros. Switching off and on is easy, we just set the category code to
+%    `other' (12) and |\active|. !!!! And making sure they are
+%    shorthands ???? And |~|, |^| ????
 %    \begin{macrocode}
 \def\bbl@switch@sh@off#1{\catcode`#112\relax}
 %    \end{macrocode}
 %  \end{macro}
-%
-%  \begin{macro}{\bbl@switch@sh@on}
-%    But switching the shorthand character back on is a bit more
-%    tricky. It involves making sure that we have an active character
-%    to begin with when the macro is being defined, so
-%    \cs{bbl@defactive} is used.
 % \changes{babel~3.8j}{2008/03/21}{Added a group in order to protect
 %    the current lowercase code of the tilde (PR 3851)} 
-% \changes{babel~3.9a}{2012/08/05}{Redefined using \cs{bbl@defactive}} 
+% \changes{babel~3.9a}{2012/08/05}{Redefined using
+%    \cs{bbl@withactive}} 
+% \changes{babel~3.9a}{2012/08/19}{Removed \cs{bbl@withactive}} 
 %    \begin{macrocode}
-\def\bbl@switch@sh@on#1{\bbl@defactive{\catcode`}#1\active}
+\def\bbl@switch@sh@on#1\catcode`#1\active}
 %    \end{macrocode}
 %  \end{macro}
 %    The next operation makes the above definition effective.
