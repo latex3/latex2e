@@ -308,6 +308,7 @@
 % \begin{decl}
 %   |\iflanguage{<language>}{<true>}{<false>}|
 % \end{decl}
+
 % If more than one language is used, it might be necessary to know
 % which language is active at a specific time. This can be checked by
 % a call to |\iflanguage|, but note here ``language'' is used in the
@@ -327,6 +328,11 @@
 % \item If at a certain level (system, language, user) there is a
 %   one-char shorthand, two-char ones starting with the same activated
 %   char are ignored.
+% \item Each language has its own set of shorthands and there is not
+%   a unified one. So, for example, in Dutch, Portugese and Catalan
+%   the soft hyphen is a redefined |\-| and the hard hyphen is |"-|,
+%   while in German, Spanish and Russian, the soft hyphen is |"-| and
+%   the hard hyphen is |"=|.
 %   \end{enumerate}
 %
 %  \DescribeMacro{\useshorthands}
@@ -3185,7 +3191,17 @@
 %    have the following line in a language definition file:
 %  \begin{verbatim}
 %    \initiate@active@char{"}
-%  \end{verbatim}
+%\end{verbatim}
+%    This defines |"| as |\active@prefix "\active@char"| (where the
+%    first |"| is the active character and |\active@char"| is a single
+%    token). In protected contexts, it expands to |\protect "| or
+%    |\noexpand "| (ie, with the |"|); otherwise |\active@char"| is
+%    executed. This macro in turn expands to |\normal@char"| in ``safe''
+%    contexts (eg, |\label|), but |\user@active"| in  normal ``unsafe''
+%    ones. The latter search a definition in the user, language and
+%    system levels, but if none is found, |\normal@char"| is used.
+%    However, a deactivated shorthand (with |\bbl@deactivate| is
+%    defined as |\active@prefix "\normal@char"|.
 %
 %  \begin{macro}{\bbl@afterelse}
 %  \begin{macro}{\bbl@afterfi}
@@ -3258,7 +3274,6 @@
 %    \begin{macrocode}
 \def\initiate@active@char#1{%
   \expandafter\ifx\csname active@char\string#1\endcsname\relax
-    \bbl@afterfi
     \bbl@withactive
       {\expandafter\@initiate@active@char\expandafter}#1\string#1#1%
   \fi}
@@ -3286,7 +3301,10 @@
 %    \cs{expandafter}\cs{strip@prefix}\cs{meaning}}
 % \changes{babel~3.7e}{1999/09/06}{previous change was rubbish; use
 %    \cs{let} instead of \cs{edef}}
+% \changes{babel~3.9a}{2012/08/19}{The catcode is saved}
 %    \begin{macrocode}
+  \expandafter\edef\csname bbl@char@catcode@#2\endcsname{%
+    \the\catcode`#2}%
   \ifcat\noexpand#3\noexpand#1\relax   % !!!! or just \ifx#1#3 ???
     \@ifundefined{normal@char#2}{%
       \expandafter\let\csname normal@char#2\endcsname#3%
@@ -3329,43 +3347,7 @@
 %    should be taken to make sure math still works. Therefor an extra
 %    level of expansion is introduced with a check for math mode on
 %    the upper level.
-%
-%    For the active caret we first expand to |\bbl@act@caret| in order
-%    to be able to handle math mode correctly.
-% \changes{babel~3.7f}{1999/12/18}{Introduced an extra level of
-%    expansion in the definition of an active caret}
-% \changes{babel~3.7f}{2000/09/25}{Make an exception for the active
-%    caret which needs an extra level of expansion}
-% \changes{babel~3.9a}{2012/06/20}{Added a couple of missing comment
-%    characters (PR 4146)}
-% \changes{babel~3.9a}{2012/07/29}{Use \cs{textormath} instead of
-%    \cs{ifmath}}
-%    \begin{macrocode}
-    \ifx#3^%
-      \gdef\bbl@act@caret{%
-        \textormath
-          {\if@safe@actives
-             \bbl@afterelse\csname normal@char#2\endcsname
-           \else
-             \bbl@afterfi\csname user@active#2\endcsname
-           \fi}
-          {\csname normal@char#2\endcsname}}%
-      \@namedef{active@char#2}{\bbl@act@caret}% !!!! Or \let ????
-    \else
-%    \end{macrocode}
-%    We define the first level expansion of |\active@char|\m{char} to
-%    check the status of the |@safe@actives| flag. If it is set to
-%    true we expand to the `normal' version of this character,
-%    otherwise we call |\@active@char|\m{char}.
-%    \begin{macrocode}
-      \@namedef{active@char#2}{%
-        \if@safe@actives
-          \bbl@afterelse\csname normal@char#2\endcsname
-        \else
-          \bbl@afterfi\csname user@active#2\endcsname
-        \fi}%
-    \fi
-%    \end{macrocode}
+
 %    To prevent problems with the loading of other packages after
 %    \babel\ we reset the catcode of the character at the end of the
 %    package and of the language file.
@@ -3412,6 +3394,46 @@
     \expandafter\gdef\expandafter#1\expandafter{%
       \expandafter\active@prefix\expandafter#3%
       \csname normal@char#2\endcsname}%
+  \fi
+%    \end{macrocode}
+%
+%    Now we define |\active@char|\m{char}, to be executed when the
+%    character is activated. For the active caret we first expand to
+%    |\bbl@act@caret| in order to be able to handle math mode
+%    correctly.  \changes{babel~3.7f}{1999/12/18}{Introduced an extra
+%    level of expansion in the definition of an active caret}
+%    \changes{babel~3.7f}{2000/09/25}{Make an exception for the active
+%    caret which needs an extra level of expansion}
+%    \changes{babel~3.9a}{2012/06/20}{Added a couple of missing
+%    comment characters (PR 4146)}
+%    \changes{babel~3.9a}{2012/07/29}{Use \cs{textormath} instead of
+%    \cs{ifmath}}
+%    \begin{macrocode}
+  \ifx#3^%
+    \gdef\bbl@act@caret{%
+      \textormath
+        {\if@safe@actives
+           \bbl@afterelse\csname normal@char#2\endcsname
+         \else
+           \bbl@afterfi\csname user@active#2\endcsname
+         \fi}
+        {\csname normal@char#2\endcsname}}%
+    \@namedef{active@char#2}{\bbl@act@caret}% !!!! Or \let ????
+  \else
+%    \end{macrocode}
+%    We define the first level expansion of |\active@char|\m{char} to
+%    check the status of the |@safe@actives| flag. If it is set to
+%    true we expand to the `normal' version of this character,
+%    otherwise we call |\user@active|\m{char} to start the search of a
+%    definition in the user, language and system levels (or
+%    eventually |normal@char|\m{char}).
+%    \begin{macrocode}
+    \@namedef{active@char#2}{%
+      \if@safe@actives
+        \bbl@afterelse\csname normal@char#2\endcsname
+      \else
+        \bbl@afterfi\csname user@active#2\endcsname
+      \fi}%
   \fi
 %    \end{macrocode}
 %    The next level of the code checks whether a user has defined a
@@ -3524,37 +3546,28 @@
 %  \end{macro}
 %
 %  \begin{macro}{\bbl@activate}
-% \changes{babel~3.5a}{1995/02/11}{Added macro}
-%
-%    This macro takes one argument, like |\initiate@active@char|. The
+%  \begin{macro}{\bbl@deactivate}
+%    \changes{babel~3.5a}{1995/02/11}{Added macro}
+%    \changes{babel~3.9a}{A combination of \cs{bbl@withactive}s and an
+%    auxiliary macro makes sure all catcodes are active}
+%    Both macros take one argument, like |\initiate@active@char|. The
 %    macro is used to change the definition of an active character to
-%    expand to |\active@char|\m{char} instead of
-%    |\normal@char|\m{char}.
+%    expand to |\active@char|\m{char} in the case of |\bbl@activate|,
+%    or |\normal@char|\m{char} in the case of
+%    |\bbl@deactivate|. First, an auxiliary macro is defined with
+%    shared code, which also makes sure all catcodes are active
+%    (parameters 1 and 2 are the same here, but different when called
+%    from |\aliasshorthand|).
 %    \begin{macrocode}
-\def\bbl@activate#1{%
-  \expandafter\bbl@withactive
-  \expandafter\def
-  \expandafter#1\expandafter{%
-    \expandafter\active@prefix
-    \expandafter#1\csname active@char\string#1\endcsname}%
-}
+\def\bbl@set@activate#1#2#3{%
+  \bbl@withactive\edef#2{%
+    \noexpand\active@prefix
+    \noexpand#1%
+    \expandafter\noexpand\csname#3@char\string#1\endcsname}}
+\def\bbl@activate#1{\bbl@withactive\bbl@set@activate#1#1{active}}
+\def\bbl@deactivate#1{\bbl@withactive\bbl@set@activate#1#1{normal}}
 %    \end{macrocode}
 %  \end{macro}
-%
-%  \begin{macro}{\bbl@deactivate}
-% \changes{babel~3.5a}{1995/02/11}{Added macro}
-%    This macro takes one argument, like |\bbl@activate|. The macro
-%    doesn't really make a character non-active; it changes its
-%    definition to expand to |\normal@char|\m{char}.
-%    \begin{macrocode}
-\def\bbl@deactivate#1{%
-  \expandafter\bbl@withactive
-  \expandafter\def
-  \expandafter#1\expandafter{%
-    \expandafter\active@prefix
-    \expandafter#1\csname normal@char\string#1\endcsname}%
-}
-%    \end{macrocode}
 %  \end{macro}
 %
 %  \begin{macro}{\bbl@firstcs}
@@ -3723,13 +3736,12 @@
 % \changes{babel~3.9a}{2012/08/06}{Instead of letting the new shorthand to
 %    the original char, which very often didn't work, we define it
 %    directly}
-%    Then, we define the new shorthand in terms of the original one.
+% \changes{babel~3.9a}{2012/08/20}{Make sure both characters (old an
+%    new) are active}
+%    Then, we define the new shorthand in terms of the original
+%    one.
 %    \begin{macrocode}
-       \expandafter\bbl@withactive
-       \expandafter\def
-       \expandafter#2\expandafter{%
-         \expandafter\active@prefix
-         \expandafter#1\csname active@char\string#1\endcsname}%
+       \bbl@withactive\bbl@set@activate#1#2{active}%
      \fi
    \fi}
 %    \end{macrocode}
@@ -3865,8 +3877,8 @@
 %
 %    To prevent problems with constructs such as |\char"01A| when the
 %    double quote is made active, we define a shorthand on system
-%    level. This declarations (as well as those based on using
-%    |\normal@char|) are in fact redundant, because the latter command
+%    level. This declaration (as well as those based on using
+%    |\normal@char|) is in fact redundant, because the latter command
 %    will be execucuted eventually if there is no system shorthand.
 %    \changes{babel~3.5a}{1995/03/10}{Replaced 16 system shorthands to
 %    deal with hex numbers by one}
