@@ -1,7 +1,7 @@
 @echo off
 
 rem TODO
-rem :ctan 
+rem add the required bundles
 
 rem Makefile for LaTeX2e files
 

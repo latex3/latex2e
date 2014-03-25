@@ -1,7 +1,6 @@
 @echo off
 
 rem TODO
-rem dtx etc are in unpacked - wrong?
 
 
 rem Makefile for LaTeX2 "base" files
