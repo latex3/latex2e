@@ -118,11 +118,12 @@ rem  set CHECKUNPACK=%UNPACK%
   call :unpack
 
 rem next unpacks are needed if we want to process all test files
-rem i.e. also those from the required portion
+rem i.e. also those from the required portion, but I guess we really 
+rem better keep this separate
 
-  call ..\required\tools\make.bat unpack show
-  call ..\required\graphics\make.bat unpack show
-  call ..\required\cyrillic\make.bat unpack show
+rem   call ..\required\tools\make.bat unpack show
+rem   call ..\required\graphics\make.bat unpack show
+rem   call ..\required\cyrillic\make.bat unpack show
 
   copy /y %SCRIPTDIR%\log2tlg  %TESTDIR% > nul
   copy /y %VALIDATE%\test2e.tex %TESTDIR% > nul
