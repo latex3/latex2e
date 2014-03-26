@@ -15,6 +15,7 @@ rem Makefile for LaTeX2 "base" files
   echo  make doc [show]     - typeset all dtx files
   echo  make localinstall   - locally install package
   echo  make savetlg ^<name^> - save test log for ^<name^>
+  echo  make checktlg ^<name^> - check one test file ^<name^>
   echo  make unpack [show]  - extract modules
   echo  make ctan [show]  - build CTAN distribution
   echo.
@@ -53,7 +54,6 @@ rem  set UNPACK=%MODULE%.ins
   set CHECKDIR=testfiles
   set CHECKEXE=etex -interaction=nonstopmode -translate-file ./ascii.tcx -efmt=..\build\latex.fmt -output-format=dvi 
   set CHECKRUNS=2
-rem  set CHECKUNPACK=%UNPACK%
 
   rem Local installation settings
 
@@ -90,6 +90,7 @@ rem  set CHECKUNPACK=%UNPACK%
 :main
 
   if /i [%1] == [check]        goto check
+  if /i [%1] == [checktlg]     goto checktlg
   if /i [%1] == [clean]        goto clean
   if /i [%1] == [cleanall]     goto clean
   if /i [%1] == [doc]          goto doc
@@ -100,7 +101,7 @@ rem  set CHECKUNPACK=%UNPACK%
 
   goto help
 
-:check
+:check-init
 
   if not exist %CHECKDIR%\nul goto end
 
@@ -130,6 +131,17 @@ rem   call ..\required\cyrillic\make.bat unpack show
   copy /y %VALIDATE%\test209.tex %TESTDIR% > nul
   copy /y %VALIDATE%\ascii.tcx  %TESTDIR% > nul
 
+  if exist %CHECKDIR%\helpers\nul (
+      copy /y %CHECKDIR%\helpers\* %TESTDIR% > nul
+  )
+
+  goto :EOF
+
+
+:check
+
+  call :check-init
+
   rem Copy all test files for which there is a matching reference log
 
   for %%I in (%CHECKDIR%\*.lvt) do (
@@ -139,9 +151,33 @@ rem   call ..\required\cyrillic\make.bat unpack show
     )
   )
 
-  if exist %CHECKDIR%\helpers\nul (
-      copy /y %CHECKDIR%\helpers\* %TESTDIR% > nul
+  goto check-execute
+
+:checktlg
+
+  if [%2] == [] goto help
+  if not exist %CHECKDIR%\%2.lvt (
+    echo.
+    echo Check file %2.lvt not found!
+    shift
+    goto end
   )
+
+  call :check-init
+
+  rem Copy all test files for which there is a matching reference log
+
+  for %%I in (%CHECKDIR%\%2.lvt) do (
+    if exist %CHECKDIR%\%%~nI.tlg (
+      copy /y %CHECKDIR%\%%~nI.lvt %TESTDIR% > nul
+      copy /y %CHECKDIR%\%%~nI.tlg %TESTDIR% > nul
+    )
+  )
+
+ shift
+
+
+:check-execute
 
   echo.
   echo Running checks on
@@ -323,9 +359,6 @@ rem  goto clean-int
 
 :savetlg
 
-  call :perl
-
-  if [%2] == [] goto help
   if not exist %CHECKDIR%\%2.lvt (
     echo.
     echo Check file %2.lvt not found!
@@ -333,23 +366,28 @@ rem  goto clean-int
     goto end
   )
 
-  for %%I in (%CHECKUNPACK%) do (
-    (echo y & echo y & echo y) | tex %%I %REDIRECT%
-  )
+  call :check-init
 
-  copy /y %SCRIPTDIR%\log2tlg   > nul
-  copy /y %VALIDATE%\test2e.tex > nul
-  copy /y %VALIDATE%\ascii.tcx  > nul
-  copy /y %CHECKDIR%\%2.lvt     > nul
+  rem Copy the test file 
+
+  copy /y %CHECKDIR%\%2.lvt %TESTDIR% > nul
 
   echo.
   echo Creating and copying %2.tlg
+
+  SET TEXINPUTS=.;%UNPACKDIR%;%BUILDDIR%
+
+  pushd %TESTDIR%
 
   for /l %%I in (1,1,%CHECKRUNS%) do (
       %CHECKEXE% %2.lvt %REDIRECT%
     )
   %PERLEXE% log2tlg %2 < %2.log > %2.tlg
-  copy /y %2.tlg %CHECKDIR%\%2.tlg > nul
+
+  popd
+
+  copy /y %TESTDIR%\%2.tlg %CHECKDIR%\%2.tlg > nul
+
 
   shift
 
