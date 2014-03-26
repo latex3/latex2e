@@ -158,8 +158,9 @@ rem Makefile for LaTeX2e documentation files
 
 :end
 
+rem  echo doc: PROBLEM="%PROBLEM%" and GLOBALPROBLEM="%GLOBALPROBLEM%"
 
-  endlocal & set GLOBALPROBLEM=%PROBLEM%
+  endlocal & if "%PROBLEM%" == "true" set GLOBALPROBLEM=%PROBLEM%
 
   rem If something like "make check show" was used, remove the "show"
 

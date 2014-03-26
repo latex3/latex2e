@@ -132,8 +132,8 @@ rem Makefile for LaTeX2e files
     echo ======================================
     echo == [main] ctan
     echo ======================================
-  zip -v -r latex2e-distrib.zip distrib -x "*~" 
 
+  zip -v -r latex2e-distrib.zip distrib -x "*~" 
 
   goto end
 
@@ -167,7 +167,9 @@ rem Makefile for LaTeX2e files
 
   if "%GLOBALPROBLEM%" == "true" (
      echo.
-     echo There have been some problems!
+     echo ==================================
+     echo There have been some problems!!!!!
+     echo ==================================
   )
   
   shift

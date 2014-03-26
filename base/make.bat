@@ -452,8 +452,9 @@ rem Make sure that no external input files are read by setting TEXINPUTS
 
 :end
 
+rem  echo base: PROBLEM="%PROBLEM%" and GLOBALPROBLEM="%GLOBALPROBLEM%"
 
-  endlocal & set GLOBALPROBLEM=%PROBLEM%
+  endlocal & if "%PROBLEM%" == "true" set GLOBALPROBLEM=%PROBLEM%
 
   rem If something like "make check show" was used, remove the "show"
 
