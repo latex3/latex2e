@@ -171,6 +171,9 @@ rem Makefile for LaTeX2e files
      echo There have been some problems!!!!!
      echo ==================================
   )
+
+  endlocal & set GLOBALPROBLEM=
+
   
   shift
   if not [%1] == [] goto main
