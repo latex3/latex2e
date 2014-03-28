@@ -64,7 +64,7 @@ rem Makefile for LaTeX2 "babel" files
 
   set MAINDIR=..\..
   set SCRIPTDIR=%MAINDIR%\scripts
-  set VALIDATE=%MAINDIR%\testfiles
+  set VALIDATE=%MAINDIR%\validate
 
   rem Set up redirection of output
 

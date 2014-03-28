@@ -68,7 +68,7 @@ rem  set UNPACK=%MODULE%.ins
 
   set MAINDIR=..
   set SCRIPTDIR=%MAINDIR%\scripts
-  set VALIDATE=%MAINDIR%\testfiles
+  set VALIDATE=%MAINDIR%\validate
 
   set UNPACKDIR=%MAINDIR%\unpacked
   set BUILDDIR=%MAINDIR%\build
