@@ -35,8 +35,8 @@ rem Makefile for LaTeX2e files
 
   rem Bundles that are part of the overall LaTeX2e structure
 
-  set BUNDLES=base doc required\tools
-rem  set BUNDLES=required\tools
+  set BUNDLES=base doc required\tools required\graphics
+rem  set BUNDLES=required\graphics
 
   set MAINDIR=.
   set DISTRIBDIR=%MAINDIR%\distrib

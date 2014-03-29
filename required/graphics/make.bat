@@ -1,6 +1,6 @@
 @echo off
 
-rem Makefile for LaTeX2 "tools" files
+rem Makefile for LaTeX2 "graphics" files
 
   if not [%1] == [] goto init
 
@@ -34,11 +34,11 @@ rem Makefile for LaTeX2 "tools" files
   rem The name of the module and the bundle it is part of
 
   set BUNDLE=latex2e
-  set MODULE=tools
+  set MODULE=graphics
 
   rem Unpacking information
 
-  set UNPACK=%MODULE%.ins
+  set UNPACK=%MODULE%.ins graphics-drivers.ins
 
   rem Clean up settings
 
@@ -57,7 +57,7 @@ rem  set CHECKEXE=latex -translate-file ./ascii.tcx
   rem Local installation settings
 
   set INSTALLDIR=latex\%BUNDLE%\%MODULE%
-  set INSTALLFILES=*.sty *.tex 
+  set INSTALLFILES=*.sty *.ldf *.def *.tex *.fd *.cfg 
 
   rem Documentation typesetting set up
 
@@ -70,7 +70,7 @@ rem  set CHECKEXE=latex -translate-file ./ascii.tcx
   set VALIDATE=%MAINDIR%\validate
   set TESTDIR=%MAINDIR%\required\test
   set UNPACKDIR=%MAINDIR%\required\unpacked
-  set DISTRIBDIR=%MAINDIR%\distrib\required\tools
+  set DISTRIBDIR=%MAINDIR%\distrib\required\graphics
 
   set BUILDDIR=%MAINDIR%\build
   set KERNELDIR=%MAINDIR%\unpacked
