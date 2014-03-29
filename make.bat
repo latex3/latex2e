@@ -1,7 +1,7 @@
 @echo off
 
 rem TODO
-rem add the required bundles
+rem change babel to same system?
 
 rem Makefile for LaTeX2e files
 
@@ -10,12 +10,13 @@ rem Makefile for LaTeX2e files
 :help
 
   echo.
-  echo  make check        - runs the automated test suite
-  echo  make doc          - runs all documentation files
-  echo  make clean        - clean out directory tree
-  echo  make ctan         - create CTAN-ready archives
-  echo  make localinstall - install files in local texmf tree
-  echo  make unpack       - extract packages
+  echo  make check         - runs the automated test suite
+  echo  make doc           - runs all documentation files
+  echo  make clean         - clean out directory tree
+  echo  make ctan          - create CTAN-ready archives
+  echo  make ctan ^<name^> - create CTAN-ready archive for required\name
+  echo  make localinstall  - install files in local texmf tree
+  echo  make unpack        - extract packages
 
   goto :EOF
 
@@ -35,8 +36,8 @@ rem Makefile for LaTeX2e files
 
   rem Bundles that are part of the overall LaTeX2e structure
 
-  set BUNDLES=base doc required\tools required\graphics
-rem  set BUNDLES=required\graphics
+  set BUNDLES=base doc required\tools required\graphics required\cyrillic
+rem  set BUNDLES=required\cyrillic
 
   set MAINDIR=.
   set DISTRIBDIR=%MAINDIR%\distrib
@@ -109,6 +110,42 @@ rem  set BUNDLES=required\graphics
 
 :ctan
 
+  if [%2] == [] goto ctanall
+
+  if not exist required\%2 (
+    echo.
+    echo Module required\%2 not found!
+    shift
+    goto end
+  )
+
+  pushd required\%2
+
+    call make clean
+    call make localinstall
+    call make check
+    call make doc
+    call make ctan
+
+  popd
+
+  zip -v -r latex2e-distrib-%2.zip distrib\required\%2 -x "*~" 
+
+  if "%GLOBALPROBLEM%" == "true" (
+     echo.
+     echo ==================================
+     echo There have been some problems!!!!!
+     echo ==================================
+  )
+
+  shift
+
+  endlocal & set GLOBALPROBLEM=
+
+  goto end
+
+:ctanall
+
   call :clean
   call :localinstall
   call :check
@@ -127,7 +164,20 @@ rem  set BUNDLES=required\graphics
     echo == [main] ctan
     echo ======================================
 
-  zip -v -r latex2e-distrib.zip distrib -x "*~" 
+  zip -v -r latex2e-distrib.zip distrib\base distrib\doc -x "*~" 
+
+  for %%I in (tools graphics cyrillic) do (
+    zip -v -r latex2e-distrib-%%I.zip distrib\required\%%I -x "*~" 
+  )
+
+  if "%GLOBALPROBLEM%" == "true" (
+     echo.
+     echo ==================================
+     echo There have been some problems!!!!!
+     echo ==================================
+  )
+
+  endlocal & set GLOBALPROBLEM=
 
   goto end
 
@@ -159,15 +209,5 @@ rem  set BUNDLES=required\graphics
 
 :end
 
-  if "%GLOBALPROBLEM%" == "true" (
-     echo.
-     echo ==================================
-     echo There have been some problems!!!!!
-     echo ==================================
-  )
-
-  endlocal & set GLOBALPROBLEM=
-
-  
   shift
   if not [%1] == [] goto main

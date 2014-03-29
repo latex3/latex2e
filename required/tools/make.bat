@@ -463,7 +463,7 @@ rem getting rid of emacs ~ files
 
 :end
 
-rem  echo base: PROBLEM="%PROBLEM%" and GLOBALPROBLEM="%GLOBALPROBLEM%"
+rem  echo status: PROBLEM="%PROBLEM%" and GLOBALPROBLEM="%GLOBALPROBLEM%"
 
   endlocal & if "%PROBLEM%" == "true" set GLOBALPROBLEM=%PROBLEM%
 

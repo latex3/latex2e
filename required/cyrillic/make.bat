@@ -1,6 +1,6 @@
 @echo off
 
-rem Makefile for LaTeX2 "graphics" files
+rem Makefile for LaTeX2 "cyrillic" files
 
   if not [%1] == [] goto init
 
@@ -34,11 +34,11 @@ rem Makefile for LaTeX2 "graphics" files
   rem The name of the module and the bundle it is part of
 
   set BUNDLE=latex2e
-  set MODULE=graphics
+  set MODULE=cyrillic
 
   rem Unpacking information
 
-  set UNPACK=%MODULE%.ins graphics-drivers.ins
+  set UNPACK=cyrlatex.ins
 
   rem Clean up settings
 
@@ -70,7 +70,7 @@ rem  set CHECKEXE=latex -translate-file ./ascii.tcx
   set VALIDATE=%MAINDIR%\validate
   set TESTDIR=%MAINDIR%\required\test
   set UNPACKDIR=%MAINDIR%\required\unpacked
-  set DISTRIBDIR=%MAINDIR%\distrib\required\graphics
+  set DISTRIBDIR=%MAINDIR%\distrib\required\cyrillic
 
   set BUILDDIR=%MAINDIR%\build
   set KERNELDIR=%MAINDIR%\unpacked
@@ -235,11 +235,11 @@ rem remove empty lines from .tlg file
 
   del /q %DISTRIBDIR%
 
-  for %%I in (*.dtx *.ins *.tex *.txt) do (
+  for %%I in (*.dtx *.fdd *.ins *.txt) do (
     copy /y %%I %DISTRIBDIR%\%%I >nul
   )
 
-  for %%I in (*.dtx~ *.ins~ *.tex~ *.txt~) do (
+  for %%I in (*.dtx~ *.fdd~ *.ins~ *.txt~) do (
     echo %%I
     if exist %DISTRIBDIR%\%%I del /q %DISTRIBDIR%\%%I >nul
   )
@@ -298,7 +298,8 @@ rem remainder unnecessary
 
   pushd %UNPACKDIR%
 
-  for %%I in (*.dtx *.tex) do (
+  for %%I in (*.dtx) do (
+    if %%~xI == .dtx (
     echo   %%I
     %TYPESETEXE% -draftmode %%I %REDIRECT%
     if ERRORLEVEL 1 (
@@ -311,6 +312,12 @@ rem remainder unnecessary
       %TYPESETEXE% %%I %REDIRECT%
       %TYPESETEXE% %%I %REDIRECT%
     )
+  ) else echo %%I skipped 
+  )
+
+  if "%PROBLEM%" == "true" (
+     echo.
+     echo There have been some problems!
   )
 
   popd
@@ -430,14 +437,14 @@ rem remainder unnecessary
 
   del /q %UNPACKDIR%\*
 
-  for %%I in (*.dtx *.ins *.tex) do (
+  for %%I in (*.dtx *.ins) do (
     copy /y %%I %UNPACKDIR%\%%I >nul
   )
 
 
 rem getting rid of emacs ~ files
 
-  for %%I in (*.dtx *.ins *.tex) do (
+  for %%I in (*.dtx *.ins) do (
     if exist %UNPACKDIR%\%%I~ rm %UNPACKDIR%\%%I~
   )
 
@@ -456,7 +463,7 @@ rem getting rid of emacs ~ files
 
 :end
 
-rem  echo status: PROBLEM="%PROBLEM%" and GLOBALPROBLEM="%GLOBALPROBLEM%"
+  rem echo status: PROBLEM="%PROBLEM%" and GLOBALPROBLEM="%GLOBALPROBLEM%"
 
   endlocal & if "%PROBLEM%" == "true" set GLOBALPROBLEM=%PROBLEM%
 
