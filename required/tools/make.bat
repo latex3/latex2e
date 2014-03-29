@@ -1,9 +1,6 @@
 @echo off
 
-rem TODO
-
-
-rem Makefile for LaTeX2 "base" files
+rem Makefile for LaTeX2 "tools" files
 
   if not [%1] == [] goto init
 
@@ -16,8 +13,8 @@ rem Makefile for LaTeX2 "base" files
   echo  make localinstall   - locally install package
   echo  make savetlg ^<name^> - save test log for ^<name^>
   echo  make checktlg ^<name^> - check one test file ^<name^>
+  echo  make ctan           - create CTAN-ready archives
   echo  make unpack [show]  - extract modules
-  echo  make ctan [show]  - build CTAN distribution
   echo.
   echo  The "show" option enables display of the output
   echo  of the TeX runs in the terminal.
@@ -37,45 +34,46 @@ rem Makefile for LaTeX2 "base" files
   rem The name of the module and the bundle it is part of
 
   set BUNDLE=latex2e
-  set MODULE=base
+  set MODULE=tools
 
   rem Unpacking information
 
-rem  set UNPACK=%MODULE%.ins
+  set UNPACK=%MODULE%.ins
 
   rem Clean up settings
 
-  set AUXFILES=aux cmds fpl glo hd idx ilg ind log lvt tlg toc out lof lot bbl tlg-clean
+  set AUXFILES=aux cmds fpl glo hd idx ilg ind log lvt tlg toc out lof lot bbl
   set CLEAN=fc gz pdf sty dvi def drv ldf ist fd ps xyc cfg
   set NOCLEAN=
 
   rem Check system set up
 
   set CHECKDIR=testfiles
-  set CHECKEXE=etex -interaction=nonstopmode -translate-file ./ascii.tcx -efmt=..\build\latex.fmt -output-format=dvi 
+  set CHECKEXE=etex -interaction=nonstopmode -translate-file ./ascii.tcx -efmt=..\..\build\latex.fmt -output-format=dvi 
+rem  set CHECKEXE=latex -translate-file ./ascii.tcx
   set CHECKRUNS=2
+  set CHECKUNPACK=%UNPACK%
 
   rem Local installation settings
 
   set INSTALLDIR=latex\%BUNDLE%\%MODULE%
-  set INSTALLFILES= *.cfg *.clo *.cls *.def *.dfu  *.fd *.ist *.ltx *.sty *.tex *.err
+  set INSTALLFILES=*.sty *.tex 
 
-  rem Documentation typesetting set up (not using internal format for now, perhaps it should)
+  rem Documentation typesetting set up
 
   set TYPESETEXE=pdflatex -interaction=nonstopmode
 
   rem Locations for the various support items required
 
-  set MAINDIR=..
+  set MAINDIR=..\..
   set SCRIPTDIR=%MAINDIR%\scripts
   set VALIDATE=%MAINDIR%\validate
+  set TESTDIR=%MAINDIR%\required\test
+  set UNPACKDIR=%MAINDIR%\required\unpacked
+  set DISTRIBDIR=%MAINDIR%\distrib\required\tools
 
-  set UNPACKDIR=%MAINDIR%\unpacked
   set BUILDDIR=%MAINDIR%\build
-  set TESTDIR=%MAINDIR%\test
-  set SUPPORTDIR=%MAINDIR%\support
-
-  set DISTRIBDIR=%MAINDIR%\distrib
+  set KERNELDIR=%MAINDIR%\unpacked
 
 
   rem Set up redirection of output
@@ -93,17 +91,21 @@ rem  set UNPACK=%MODULE%.ins
   if /i [%1] == [checktlg]     goto checktlg
   if /i [%1] == [clean]        goto clean
   if /i [%1] == [cleanall]     goto clean
+  if /i [%1] == [ctan]         goto ctan
   if /i [%1] == [doc]          goto doc
   if /i [%1] == [localinstall] goto localinstall
   if /i [%1] == [savetlg]      goto savetlg
   if /i [%1] == [unpack]       goto unpack
-  if /i [%1] == [ctan]      goto ctan
 
   goto help
 
 :check-init
 
   if not exist %CHECKDIR%\nul goto end
+
+  if not exist %BUILDDIR%\latex.fmt (
+      call ..\..\base\make unpack  
+  )
 
   rem Check for Perl, and give up if it is not found
 
@@ -118,14 +120,6 @@ rem  set UNPACK=%MODULE%.ins
 
   call :unpack
 
-rem next unpacks are needed if we want to process all test files
-rem i.e. also those from the required portion, but I guess we really 
-rem better keep this separate
-
-rem   call ..\required\tools\make.bat unpack show
-rem   call ..\required\graphics\make.bat unpack show
-rem   call ..\required\cyrillic\make.bat unpack show
-
   copy /y %SCRIPTDIR%\log2tlg  %TESTDIR% > nul
   copy /y %VALIDATE%\test2e.tex %TESTDIR% > nul
   copy /y %VALIDATE%\test209.tex %TESTDIR% > nul
@@ -136,7 +130,6 @@ rem   call ..\required\cyrillic\make.bat unpack show
   )
 
   goto :EOF
-
 
 :check
 
@@ -154,6 +147,7 @@ rem   call ..\required\cyrillic\make.bat unpack show
   )
 
   goto check-execute
+
 
 :checktlg
 
@@ -181,12 +175,13 @@ rem   call ..\required\cyrillic\make.bat unpack show
  shift
  goto check-execute
 
+
 :check-execute
 
   echo.
   echo Running checks on
 
-  SET TEXINPUTS=.;%UNPACKDIR%;%BUILDDIR%
+  SET TEXINPUTS=.;%UNPACKDIR%;%BUILDDIR%;%KERNELDIR%
 
   pushd %TESTDIR%
 
@@ -236,16 +231,42 @@ rem remove empty lines from .tlg file
 
   goto end
 
+:ctan
+
+  del /q %DISTRIBDIR%
+
+  for %%I in (*.dtx *.ins *.txt) do (
+    copy /y %%I %DISTRIBDIR%\%%I >nul
+  )
+
+  for %%I in (*.dtx~ *.ins~ *.txt~) do (
+    echo %%I
+    if exist %DISTRIBDIR%\%%I del /q %DISTRIBDIR%\%%I >nul
+  )
+
+
+  pushd %UNPACKDIR%
+
+rem this assumes :doc was run
+
+  for %%I in (*.pdf) do (
+    copy /y %%I %DISTRIBDIR%\%%I >nul
+  )
+
+  popd
+
+  goto end
+
+
+
+
 :clean
 
-
-  del /q %DISTRIBDIR%\base\*
-  del /q %DISTRIBDIR%\unpacked\*
-
+  del /q %DISTRIBDIR%\*
   del /q %TESTDIR%\*
   del /q %UNPACKDIR%\*
-  del /q %BUILDDIR%\*
 
+rem remainder unnecessary
 
   for %%I in (%NOCLEAN%) do (
     copy /y %%I %%I.bak > nul
@@ -266,16 +287,16 @@ rem remove empty lines from .tlg file
     if exist *.%%I del /q *.%%I
   )
 
-  if exist log2tlg del /q log2tlg
-  if exist test2e.tex del /q test2e.tex
-  if exist ascii.tcx del /q ascii.tcx
-
   goto end
 
 :doc
 
+  call :unpack
+
   echo.
   echo Typesetting (using normal TeX system on machine)
+
+  pushd %UNPACKDIR%
 
   for %%I in (*.dtx) do (
     if %%~xI == .dtx (
@@ -294,10 +315,12 @@ rem remove empty lines from .tlg file
   ) else echo %%I skipped 
   )
 
- if "%PROBLEM%" == "true" (
-    echo.
-    echo There have been some problems!
- )
+  if "%PROBLEM%" == "true" (
+     echo.
+     echo There have been some problems!
+  )
+
+  popd
 
   goto clean-int
 
@@ -322,8 +345,7 @@ rem remove empty lines from .tlg file
   if exist "%INSTALLROOT%\*.*" rmdir /q /s "%INSTALLROOT%"
   mkdir "%INSTALLROOT%"
 
-
-  pushd %UNPACKDIR% 
+  pushd %UNPACKDIR%
 
   for %%I in (%INSTALLFILES%) do (
     copy /y %%I "%INSTALLROOT%" > nul
@@ -371,6 +393,9 @@ rem remove empty lines from .tlg file
 
 :savetlg
 
+  call :perl
+
+  if [%2] == [] goto help
   if not exist %CHECKDIR%\%2.lvt (
     echo.
     echo Check file %2.lvt not found!
@@ -378,124 +403,58 @@ rem remove empty lines from .tlg file
     goto end
   )
 
-  call :check-init
+  for %%I in (%CHECKUNPACK%) do (
+    (echo y & echo y & echo y) | tex %%I %REDIRECT%
+  )
 
-  rem Copy the test file 
-
-  copy /y %CHECKDIR%\%2.lvt %TESTDIR% > nul
+  copy /y %SCRIPTDIR%\log2tlg   > nul
+  copy /y %VALIDATE%\test2e.tex > nul
+  copy /y %VALIDATE%\ascii.tcx  > nul
+  copy /y %CHECKDIR%\%2.lvt              > nul
 
   echo.
   echo Creating and copying %2.tlg
-
-  SET TEXINPUTS=.;%UNPACKDIR%;%BUILDDIR%
-
-  pushd %TESTDIR%
 
   for /l %%I in (1,1,%CHECKRUNS%) do (
       %CHECKEXE% %2.lvt %REDIRECT%
     )
   %PERLEXE% log2tlg %2 < %2.log > %2.tlg
-
-  popd
-
-  copy /y %TESTDIR%\%2.tlg %CHECKDIR%\%2.tlg > nul
-
+  copy /y %2.tlg %CHECKDIR%\%2.tlg > nul
 
   shift
 
   goto clean-int
 
-
-:ctan
-
-  del /q %DISTRIBDIR%\base\*
-  del /q %DISTRIBDIR%\unpacked\*
-
-  for %%I in (*.cls *.dtx latexbug.el *.err *.fdd *.ins ltpatch.ltx README *.tex *.txt) do (
-    copy /y %%I %DISTRIBDIR%\base\%%I >nul
-  )
-
-  for %%I in (*.cls~ *.dtx~ *atexbug.el~ *.err~ *.fdd~ *.ins~ *tpatch.ltx~ *EADME~ *.tex~ *.txt~) do (
-    echo %%I
-    if exist %DISTRIBDIR%\base\%%I del /q %DISTRIBDIR%\base\%%I >nul
-  )
-
-  call :unpack
-
-  copy /y %UNPACKDIR%\* %DISTRIBDIR%\unpacked >nul
-  
-  goto end
-
-
 :unpack
 
+  echo.
+  echo **********************************
+  echo *** Unpacking %MODULE%
+  echo **********************************
+  echo.
+
   del /q %UNPACKDIR%\*
-  del /q %BUILDDIR%\*
 
-  echo. 
-  echo ***************************************************
-  echo *** Copying kernel bootstrap sources ...
-  echo ***************************************************
-  echo. 
-
-  for %%I in (*.dtx *.ins *.fdd ltpatch.ltx *.tex *.cls) do (
+  for %%I in (*.dtx *.ins) do (
     copy /y %%I %UNPACKDIR%\%%I >nul
   )
 
+
 rem getting rid of emacs ~ files
 
-  for %%I in (*.dtx *.ins *.fdd ltpatch.ltx *.tex *.cls) do (
+  for %%I in (*.dtx *.ins) do (
     if exist %UNPACKDIR%\%%I~ rm %UNPACKDIR%\%%I~
   )
 
-rem remove other files
-  for %%I in (ttcterrata.cls) do (
-    if exist %UNPACKDIR%\%%I del %UNPACKDIR%\%%I
-  )
-
-
-rem unpack the distribution
-rem Make sure that no external input files are read by setting TEXINPUTS
-
-  echo. 
-  echo ***************************************************
-  echo *** Generating LaTeX2e kernel bootstrap files...
-  echo ***************************************************
-  echo. 
+  copy /y %SCRIPTDIR%\yes.txt %UNPACKDIR%\yes.txt >nul
+ 
 
   pushd %UNPACKDIR% 
-  SET TEXINPUTS=.;  
-  etex -ini unpack.ins <%SCRIPTDIR%\yes.txt
 
-
-  for %%I in (*.dtx *.ins *.fdd ) do (
-    if exist %%I del %%I  >nul
+  for %%I in (%UNPACK%) do (
+    tex %%I %REDIRECT% < yes.txt
   )
 
-
-
-  popd
-  pushd %BUILDDIR%
-
-  echo. 
-  echo ***************************************************
-  echo *** Copying format support files...
-  echo ***************************************************
-  echo. 
-  copy /y %SUPPORTDIR%\*.*
-
-  echo. 
-  echo ***************************************************
-  echo *** Generating LaTeX2e kernel formats...
-  echo ***************************************************
-  echo. 
-
-  SET TEXINPUTS=.;%UNPACKDIR%
-
-  etex -ini -etex latex.ltx <%SCRIPTDIR%\yes.txt   
-  pdfetex -ini -etex -jobname=pdflatex "*pdflatex.ini" latex.ltx <%SCRIPTDIR%\yes.txt   
-
-  set TEXINPUTS=
   popd
 
   goto end

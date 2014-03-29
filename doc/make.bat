@@ -103,6 +103,8 @@ rem Makefile for LaTeX2e documentation files
 
 :clean
 
+  del /q %DISTRIBDIR%\doc\*
+
   for %%I in (%NOCLEAN%) do (
     copy /y %%I %%I.bak > nul
   )

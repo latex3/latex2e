@@ -35,7 +35,8 @@ rem Makefile for LaTeX2e files
 
   rem Bundles that are part of the overall LaTeX2e structure
 
-  set BUNDLES=base doc
+  set BUNDLES=base doc required\tools
+rem  set BUNDLES=required\tools
 
   set MAINDIR=.
   set DISTRIBDIR=%MAINDIR%\distrib
@@ -104,14 +105,6 @@ rem Makefile for LaTeX2e files
     if exist *.%%I del /q *.%%I
   )
 
-  del /q %DISTRIBDIR%\doc\*
-  del /q %DISTRIBDIR%\base\*
-  del /q %DISTRIBDIR%\unpacked\*
-
-  del /q %TESTDIR%\*
-  del /q %UNPACKDIR%\*
-  del /q %BUILDDIR%\*
-
   goto end
 
 :ctan
@@ -119,6 +112,7 @@ rem Makefile for LaTeX2e files
   call :clean
   call :localinstall
   call :check
+  call :doc
 
   for %%I in (%BUNDLES%) do (
     echo ======================================
