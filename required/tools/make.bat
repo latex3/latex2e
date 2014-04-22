@@ -119,6 +119,7 @@ rem  set CHECKEXE=latex -translate-file ./ascii.tcx
   rem Unpack, allowing for using a 'trace' version or similar
 
   call :unpack
+  call ..\graphics\make.bat unpack show
 
   copy /y %SCRIPTDIR%\log2tlg  %TESTDIR% > nul
   copy /y %VALIDATE%\test2e.tex %TESTDIR% > nul
@@ -435,7 +436,8 @@ rem remainder unnecessary
   echo **********************************
   echo.
 
-  del /q %UNPACKDIR%\*
+rem shared dir no deletion
+rem  del /q %UNPACKDIR%\*
 
   for %%I in (*.dtx *.ins) do (
     copy /y %%I %UNPACKDIR%\%%I >nul

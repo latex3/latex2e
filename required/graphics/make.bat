@@ -428,7 +428,8 @@ rem remainder unnecessary
   echo **********************************
   echo.
 
-  del /q %UNPACKDIR%\*
+rem shared dir no deletion
+rem  del /q %UNPACKDIR%\*
 
   for %%I in (*.dtx *.ins *.tex) do (
     copy /y %%I %UNPACKDIR%\%%I >nul
