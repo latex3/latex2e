@@ -291,6 +291,7 @@ rem remainder unnecessary
 
 :doc
 
+  del /q %UNPACKDIR%\*
   call :unpack
 
   echo.
