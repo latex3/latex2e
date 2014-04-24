@@ -244,10 +244,9 @@ rem remove empty lines from .tlg file
     if exist %DISTRIBDIR%\%%I del /q %DISTRIBDIR%\%%I >nul
   )
 
+  call :doc
 
   pushd %UNPACKDIR%
-
-rem this assumes :doc was run
 
   for %%I in (*.pdf) do (
     copy /y %%I %DISTRIBDIR%\%%I >nul
@@ -300,6 +299,23 @@ rem remainder unnecessary
 
   for %%I in (*.dtx) do (
     if %%~xI == .dtx (
+    echo   %%I
+    %TYPESETEXE% -draftmode %%I %REDIRECT%
+    if ERRORLEVEL 1 (
+      echo   ! Compilation failed
+      set PROBLEM=true
+    ) else (
+      if exist %%~nI.idx (
+        makeindex -q -s l3doc.ist -o %%~nI.ind %%~nI.idx > nul
+      )
+      %TYPESETEXE% %%I %REDIRECT%
+      %TYPESETEXE% %%I %REDIRECT%
+    )
+  ) else echo %%I skipped 
+  )
+
+  for %%I in (*.fdd) do (
+    if %%~xI == .fdd (
     echo   %%I
     %TYPESETEXE% -draftmode %%I %REDIRECT%
     if ERRORLEVEL 1 (
@@ -437,14 +453,14 @@ rem remainder unnecessary
 
   del /q %UNPACKDIR%\*
 
-  for %%I in (*.dtx *.ins) do (
+  for %%I in (*.dtx *.fdd *.ins) do (
     copy /y %%I %UNPACKDIR%\%%I >nul
   )
 
 
 rem getting rid of emacs ~ files
 
-  for %%I in (*.dtx *.ins) do (
+  for %%I in (*.dtx *.ins *.fdd) do (
     if exist %UNPACKDIR%\%%I~ rm %UNPACKDIR%\%%I~
   )
 

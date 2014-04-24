@@ -294,6 +294,40 @@ rem remove empty lines from .tlg file
   ) else echo %%I skipped 
   )
 
+  for %%I in (*.fdd) do (
+    if %%~xI == .fdd (
+    echo   %%I
+    %TYPESETEXE% -draftmode %%I %REDIRECT%
+    if ERRORLEVEL 1 (
+      echo   ! Compilation failed
+      set PROBLEM=true
+    ) else (
+      if exist %%~nI.idx (
+        makeindex -q -s l3doc.ist -o %%~nI.ind %%~nI.idx > nul
+      )
+      %TYPESETEXE% %%I %REDIRECT%
+      %TYPESETEXE% %%I %REDIRECT%
+    )
+  ) else echo %%I skipped 
+  )
+
+  for %%I in (source2e.tex sample2e.tex lppl.tex small2e.tex) do (
+    if %%~xI == .tex (
+    echo   %%I
+    %TYPESETEXE% -draftmode %%I %REDIRECT%
+    if ERRORLEVEL 1 (
+      echo   ! Compilation failed
+      set PROBLEM=true
+    ) else (
+      if exist %%~nI.idx (
+        makeindex -q -s l3doc.ist -o %%~nI.ind %%~nI.idx > nul
+      )
+      %TYPESETEXE% %%I %REDIRECT%
+      %TYPESETEXE% %%I %REDIRECT%
+    )
+  ) else echo %%I skipped 
+  )
+
  if "%PROBLEM%" == "true" (
     echo.
     echo There have been some problems!
@@ -423,6 +457,17 @@ rem remove empty lines from .tlg file
   call :unpack
 
   copy /y %UNPACKDIR%\* %DISTRIBDIR%\unpacked >nul
+
+  call :doc
+
+  pushd %UNPACKDIR%
+
+  for %%I in (*.pdf) do (
+    copy /y %%I %DISTRIBDIR%\base\%%I >nul
+  )
+
+  popd
+
   
   goto end
 

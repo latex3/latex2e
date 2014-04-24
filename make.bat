@@ -124,7 +124,7 @@ rem  set BUNDLES=required\cyrillic
     call make clean
     call make localinstall
     call make check
-    call make doc
+rem    call make doc         -- done in ctan
     call make ctan
 
   popd
@@ -149,7 +149,7 @@ rem  set BUNDLES=required\cyrillic
   call :clean
   call :localinstall
   call :check
-  call :doc
+rem  call :doc               --- done in :ctan
 
   for %%I in (%BUNDLES%) do (
     echo ======================================

@@ -245,9 +245,9 @@ rem remove empty lines from .tlg file
   )
 
 
-  pushd %UNPACKDIR%
+  call :doc
 
-rem this assumes :doc was run
+  pushd %UNPACKDIR%
 
   for %%I in (*.pdf) do (
     copy /y %%I %DISTRIBDIR%\%%I >nul
@@ -429,7 +429,7 @@ rem remainder unnecessary
   echo **********************************
   echo.
 
-rem shared dir no deletion
+rem shared dir for check no deletion here, use explicitly if necessary
 rem  del /q %UNPACKDIR%\*
 
   for %%I in (*.dtx *.ins *.tex) do (

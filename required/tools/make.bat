@@ -245,10 +245,9 @@ rem remove empty lines from .tlg file
     if exist %DISTRIBDIR%\%%I del /q %DISTRIBDIR%\%%I >nul
   )
 
+  call :doc
 
   pushd %UNPACKDIR%
-
-rem this assumes :doc was run
 
   for %%I in (*.pdf) do (
     copy /y %%I %DISTRIBDIR%\%%I >nul
@@ -292,6 +291,7 @@ rem remainder unnecessary
 
 :doc
 
+  del /q %UNPACKDIR%\*
   call :unpack
 
   echo.
@@ -327,6 +327,7 @@ rem remainder unnecessary
 
 :localinstall
 
+  del /q %UNPACKDIR%\*
   call :unpack
 
   echo.
@@ -436,7 +437,7 @@ rem remainder unnecessary
   echo **********************************
   echo.
 
-rem shared dir no deletion
+rem shared dir for testing no deletion here, do elswhere before call :unpack
 rem  del /q %UNPACKDIR%\*
 
   for %%I in (*.dtx *.ins) do (
