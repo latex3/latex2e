@@ -165,8 +165,8 @@ rem  call :doc               --- done in :ctan
     echo == [main] ctan
     echo ======================================
 
-  zip -v -r -ll latex2e-distrib.zip distrib\base distrib\doc\ unpacked -x "*~" "*.pdf"
-  zip -v -r -g  latex2e-distrib.zip distrib\base distrib\doc\*.pdf unpacked\*.pdf -x "*~" 
+  zip -v -r -ll latex2e-distrib.zip distrib\base distrib\doc\ distrib\unpacked -x "*~" "*.pdf"
+  zip -v -r -g  latex2e-distrib.zip distrib\base distrib\doc\*.pdf distrib\unpacked\*.pdf -x "*~" 
 
   for %%I in (tools graphics cyrillic) do (
     zip -v -r -ll latex2e-distrib-%%I.zip distrib\required\%%I -x "*~" "*.pdf"
