@@ -28,7 +28,7 @@
 % \fi
 % Filename: ltnews.cls
 % Author: Alan Jeffrey et al
-% Version: 1.02
+% Version: 1.03
  
 % This is the LaTeX2e document class for the `LaTeX News' information 
 % sheet which comes with every LaTeX release.  It may be useful for 
@@ -42,7 +42,7 @@
  
 \NeedsTeXFormat{LaTeX2e}
  
-\ProvidesClass{ltnews}[2004/02/28 v1.01  Standard LaTeX class]
+\ProvidesClass{ltnews}[2014/05/01 v1.03  Standard LaTeX class]
 
 % The configuration file, used for passing options.
 
@@ -370,7 +370,7 @@
         /Author (The LaTeX Project)
       }
 \IfFileExists{hyperref.sty}{%
-  \RequirePackage{hyperref}}{}
+  \RequirePackage[hidelinks]{hyperref}}{}
     \fi
   \fi
 \fi
@@ -642,6 +642,7 @@
 %
 % 21 Oct 2004  v1.02 Improve check for PDF generation (taken from ifpdf.sty)
 % 
+% 01 May 2014  v1.03 hidelinks option for hyperref
 %
 % BUGS
 %
