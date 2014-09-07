@@ -513,7 +513,7 @@ rem Make sure that no external input files are read by setting TEXINPUTS
   etex -ini unpack.ins <%SCRIPTDIR%\yes.txt
 
 
-  for %%I in (*.dtx *.ins *.fdd ) do (
+  for %%I in (*.dtx *.ins *.fdd *.log *.aux) do (
     if exist %%I del %%I  >nul
   )
 
