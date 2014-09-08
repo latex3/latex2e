@@ -286,7 +286,7 @@ rem remove empty lines from .tlg file
       set PROBLEM=true
     ) else (
       if exist %%~nI.idx (
-        makeindex -q -s l3doc.ist -o %%~nI.ind %%~nI.idx > nul
+        makeindex -q -s gind.ist -o %%~nI.ind %%~nI.idx > nul
       )
       %TYPESETEXE% %%I %REDIRECT%
       %TYPESETEXE% %%I %REDIRECT%

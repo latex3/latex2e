@@ -129,8 +129,14 @@ rem    call make doc         -- done in ctan
 
   popd
 
-  zip -v -r -ll latex2e-distrib-%2.zip distrib\required\%2 -x "*~" "*.pdf" 
-  zip -v -r -g  latex2e-distrib-%2.zip distrib\required\%2\*.pdf -x "*~"
+  pushd distrib\required
+
+  zip -v -r -ll latex2e-distrib-%2.zip %2 -x "*~" "*.pdf" 
+  zip -v -r -g  latex2e-distrib-%2.zip %2\*.pdf -x "*~"
+
+  popd
+
+  mv distrib\required\*.zip .
 
   if "%GLOBALPROBLEM%" == "true" (
      echo.
@@ -168,10 +174,16 @@ rem  call :doc               --- done in :ctan
   zip -v -r -ll latex2e-distrib.zip distrib\base distrib\doc\ distrib\unpacked -x "*~" "*.pdf"
   zip -v -r -g  latex2e-distrib.zip distrib\base distrib\doc\*.pdf distrib\unpacked\*.pdf -x "*~" 
 
+  pushd distrib\required
+
   for %%I in (tools graphics cyrillic) do (
-    zip -v -r -ll latex2e-distrib-%%I.zip distrib\required\%%I -x "*~" "*.pdf"
-    zip -v -r -g  latex2e-distrib-%%I.zip distrib\required\%%I\*.pdf -x "*~"
+    zip -v -r -ll latex2e-distrib-%%I.zip %%I -x "*~" "*.pdf"
+    zip -v -r -g  latex2e-distrib-%%I.zip %%I\*.pdf -x "*~"
   )
+
+  popd
+
+  mv distrib\required\*.zip .
 
   if "%GLOBALPROBLEM%" == "true" (
      echo.
