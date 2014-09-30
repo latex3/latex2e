@@ -212,7 +212,7 @@ corresponding to directories in the standard LaTeX distribution:
 
  This text will be used as the mail header on all
  subsequent correspondence. Please use informative strings.
- For example:  \\mathit generates error in foobar environmenent
+ For example:  \\mathit generates error in foobar environment
  rather than just `LaTeX Bug' or similar strings.
 ")
   (set-buffer ltxbug-msg)
@@ -324,7 +324,7 @@ the behaviour. Please try to keep the file below 60 lines.
   (set-buffer ltxbug-help)
   (erase-buffer)
   (insert "
-Complete your bug report by giving the full descripition
+Complete your bug report by giving the full description
 below the  `Description of bug:' header.
 
 There are other database fields you may wish to add,
