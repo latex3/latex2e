@@ -64,6 +64,10 @@ rem  set UNPACK=%MODULE%.ins
 
   set TYPESETEXE=pdflatex -interaction=nonstopmode
 
+  rem pdfs that will get distributed fro the base directory (most aren't)
+
+  set BASEPDFDISTRIBUTED=lppl source2e utf8ienc syntonly nfssfont makeindx ltxdoc letter latexsym inputenc ifthen graphpap fixltx2e exscale docstrip doc classes alltt proc slides cmfonts slifonts
+
   rem Locations for the various support items required
 
   set MAINDIR=..
@@ -459,6 +463,10 @@ rem remove empty lines from .tlg file
   copy /y %UNPACKDIR%\* %DISTRIBDIR%\unpacked >nul
 
   call :doc
+
+  for %%I in (%BASEPDFDISTRIBUTED%) do (
+    copy /y %%I.pdf %DISTRIBDIR%\base\%%I.pdf >nul
+  )
 
   pushd %UNPACKDIR%
 
