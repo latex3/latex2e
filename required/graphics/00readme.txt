@@ -1,4 +1,6 @@
 %%
+%% Copyright 1993-2014 LaTeX Project
+%%
 %% This file is part of the Standard LaTeX `Graphics Bundle'.
 %%
 %% This file, and all the other files in this bundle as listed below,
@@ -16,7 +18,7 @@
 
 The LaTeX Colour and Graphics Packages
 ========================================
-                    2005/12/01
+             
 
 This is a collection of LaTeX packages for:
  * producing colour
@@ -133,6 +135,5 @@ versions are available from their developers.
 Removed pstcol.sty (now part of the pstricks distribution).
 
 ==============================================
-
 
 
