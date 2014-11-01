@@ -101,7 +101,7 @@ NOTE (docstrip version)
 **** docstrip.tex. It must be at least version 2.4.
 ****
 **** A suitable docstrip.tex may be found from `CTAN' archives such as
-**** ftp.dante.de   tex-archive/macros/latex/unpacked/docstrip.tex
+**** http://www.ctan.org/tex-archive/macros/latex/unpacked/docstrip.tex
 ****
 **** Docstrip is part of the base LaTeX distribution, so if you have
 **** an old docstrip then your LaTeX is out of date and you may consider
@@ -126,14 +126,6 @@ latex grfguide.tex.
 
 ==============================================
 
-MAIN CHANGES IN THIS RELEASE
-============================
 
-dvipdfmx and XeTeX support added.  
-Not all driver support files are included in since often more current
-versions are available from their developers.
-Removed pstcol.sty (now part of the pstricks distribution).
-
-==============================================
 
 
