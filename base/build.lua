@@ -51,7 +51,8 @@ checksuppfiles  = {"latex.fmt"}
 testsuppdir = "testfiles/helpers"
 
 -- No dependencies at all (other than l3build of course)
-checkdeps   = { }
+checkdeps  = { }
+unpackdeps = { }
 
 -- A function is needed to build the format
 -- As this is a one-off, things are hard-coded

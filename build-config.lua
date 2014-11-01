@@ -2,7 +2,8 @@
 
 -- The LaTeX2e kernel is needed by everything except 'base'
 -- There is an over-ride for that case
-checkdeps = checkdeps or {maindir .. "/base"}
+checkdeps  = checkdeps  or {maindir .. "/base"}
+unpackdeps = unpackdeps or {maindir .. "/base"}
 
 -- Set up the check system to work in 'stand-alone' mode
 -- This relies on a format being built by the 'base' dependency
