@@ -10,7 +10,8 @@ unpackdeps = unpackdeps or {maindir .. "/base"}
 checkformat    = ""
 checkopts      = "-translate-file ./ascii.tcx -efmt=latex.fmt -output-format=dvi"
 checkengines   = {"etex"}
-checksuppfiles = {"ascii.tcx", "color.cfg", "graphics.cfg", "test2e.tex"}
+checksuppfiles = 
+  {"ascii.tcx", "color.cfg", "graphics.cfg", "test209.tex", "test2e.tex"}
 stdengine      = "etex"
 
 -- Global searching is disabled when unpacking and checking
