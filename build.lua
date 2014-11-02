@@ -3,7 +3,7 @@
 -- Build script for LaTeX2e files
 
 --  No bundle or module here, but these have to be defined
-bundle  = "LaTeX3"
+bundle  = "LaTeX2e"
 module  = ""
 
 -- A couple of custom variables: the order here is set up for 'importance'
