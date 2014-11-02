@@ -3,7 +3,7 @@
 -- Build script for LaTeX2e "base" files
 
 -- Identify the bundle and module
-module = "latex2e-base"
+module = "base"
 bundle = ""
 
 -- Location of main directory: use Unix-style path separators
