@@ -15,7 +15,7 @@ installfiles =
     "*.cfg", "*.clo", "*.cls", "*.def", "*.dfu", "*.err", "*.fd", "*.ist",
     "*.ltx", "*.sty", "*.tex"
   }
-sourcefiles  = {"*.cls", "*.dtx", "*.fdd", "ltpatch.ltx", "*.ins", "*.tex"}
+sourcefiles  = {"*.cls", "*.dtx", "*.err", "*.fdd", "ltpatch.ltx", "*.ins", "*.tex"}
 typesetfiles =
   {
     "alltt.dtx",
