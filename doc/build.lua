@@ -20,9 +20,9 @@ unpackdeps = { }
 -- Simplified help
 function help ()
   print ""
-  print " build clean - clean out directory tree  "
-  print " build ctan  - create CTAN-ready archive "
-  print " build doc - runs all documentation files"
+  print " build clean - clean out directory tree    "
+  print " build ctan  - create CTAN-ready archive   "
+  print " build doc   - runs all documentation files"
   print ""
 end
 
