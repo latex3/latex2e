@@ -47,15 +47,12 @@ unpackfiles     = {"unpack.ins"}
 unpacksuppfiles = {"hyphen.cfg", "texsys.cfg", "UShyphen.tex"}
 
 -- Custom settings for the check system
-checksuppfiles  = {"latex.fmt"}
 testsuppdir = "testfiles/helpers"
 
 -- No dependencies at all (other than l3build of course)
 checkdeps  = { }
 unpackdeps = { }
 
--- A function is needed to build the format
--- As this is a one-off, things are hard-coded
 function format ()
   unpack ()
   -- Much the same as the standard unpack approach: run from 'here' so
@@ -66,12 +63,17 @@ function format ()
       "etex -etex -ini " .. " -output-directory=" .. unpackdir ..
       " " .. unpackdir .. "/latex.ltx"
     )
+  -- As format building is added in as an 'extra', the normal
+  -- copy mechanism (checkfiles) will fail as things get cleaned up
+  -- inside bundleunpack(): get around that using a manual copy
+  cp ("latex.fmt", unpackdir, localdir)
 end
 
 -- base does all of the targets itself
 function main (target, file, engine)
   local errorlevel
   if target == "check" then
+    format ()
     check (file, engine)
   elseif target == "clean" then
     clean ()
