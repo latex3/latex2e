@@ -10,6 +10,7 @@ unpackdeps = unpackdeps or {maindir .. "/base"}
 checkformat    = ""
 checkopts      = "-translate-file ./ascii.tcx -efmt=latex.fmt -output-format=dvi"
 checkengines   = {"etex"}
+checkruns      = 2
 checksuppfiles = 
   {"ascii.tcx", "color.cfg", "graphics.cfg", "test209.tex", "test2e.tex"}
 stdengine      = "etex"
