@@ -1,9 +1,9 @@
 #!/usr/bin/env texlua
 
--- Build script for LaTeX2e "base" files
+-- Build script for LaTeX2e "doc" files
 
 -- Identify the bundle and module
-module = "base"
+module = "doc"
 bundle = ""
 
 -- Location of main directory: use Unix-style path separators
