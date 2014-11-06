@@ -7,8 +7,8 @@ bundle  = "LaTeX2e"
 module  = ""
 
 -- A couple of custom variables: the order here is set up for 'importance'
-bundles     = {"base", "required/cyrllic", "required/graphics", "required/tools"}
-ctanbundles = bundles
+bundles  = {"base", "doc"}
+required = {"cyrillic", "graphics", "tools"}
 
 -- Location of main directory: use Unix-style path separators
 maindir = "."
@@ -28,7 +28,7 @@ end
 -- While almost all of this is customise, the need to be able to cp and
 -- rm files means that loading l3build.lua is very useful
 function main (target)
-  local function dobundles (bundles, target)
+  local function dobundles (target)
     local errorlevel = 0
     for _,i in ipairs (bundles) do
       errorlevel = run (i, "texlua " .. scriptname .. " " .. target)
@@ -36,27 +36,36 @@ function main (target)
         break
       end
     end
+    for _,i in ipairs (required) do
+      errorlevel = run ("required/" .. i, "texlua " .. scriptname .. " " .. target)
+      if errorlevel ~= 0 then
+        break
+      end
+    end
     return (errorlevel)
   end
   if target == "check" then
-    dobundles (bundles, "check")
+    dobundles ("check")
   elseif target == "clean" then
     print ("Cleaning up")
-    dobundles (bundles, "clean")
+    dobundles ("clean")
     rm (".", "*.zip")
   elseif target == "ctan" then
-    local errorlevel = dobundles (ctanbundles, "ctan")
+    local errorlevel = dobundles ("ctan")
     if errorlevel == 0 then
-      for _,i in ipairs (ctanbundles) do
+      for _,i in ipairs (bundles) do
         cp ("*.zip", i, ".")
+      end
+      for _,i in ipairs (required) do
+        cp ("*.zip", "required/" .. i, ".")
       end
     end
   elseif target == "doc" then
-    dobundles (bundles, "doc")
+    dobundles ("doc")
   elseif target == "install" then
-    dobundles (bundles, "install")
+    dobundles ("install")
   elseif target == "unpack" then
-    dobundles (bundles, "unpack")
+    dobundles ("unpack")
   elseif target == "version" then
       version ()
   else
