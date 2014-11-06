@@ -56,6 +56,9 @@ function main (target)
       for _,i in ipairs (bundles) do
         cp ("*.zip", i, ".")
       end
+      -- Handle the fact that the doc subtree is actually part of base in a way
+      ren (".", "base.zip", "doc.zip")
+      cp ("base.zip", "base/", ".")
       for _,i in ipairs (required) do
         cp ("*.zip", "required/" .. i, ".")
       end
