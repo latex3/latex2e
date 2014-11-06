@@ -36,10 +36,12 @@ function main (target)
         break
       end
     end
-    for _,i in ipairs (required) do
-      errorlevel = run ("required/" .. i, "texlua " .. scriptname .. " " .. target)
-      if errorlevel ~= 0 then
-        break
+    if errorlevel = 0 then
+      for _,i in ipairs (required) do
+        errorlevel = run ("required/" .. i, "texlua " .. scriptname .. " " .. target)
+        if errorlevel ~= 0 then
+          break
+        end
       end
     end
     return (errorlevel)
