@@ -74,29 +74,30 @@ function main (target, file, engine)
   local errorlevel
   if target == "check" then
     format ()
-    check (file, engine)
+    errorlevel = check (file, engine)
   elseif target == "clean" then
-    clean ()
+    errorlevel = clean ()
   elseif target == "ctan" then
-    ctan (true)
+    errorlevel = ctan (true)
   elseif target == "doc" then
-    doc ()
+    errorlevel = doc ()
   elseif target == "install" then
     install ()
   elseif target == "save" then
     if file then
-      save (file, engine)
+      errorlevel = save (file, engine)
     else
       help ()
     end
   elseif target == "unpack" then
     -- A simple way to have the unpack target also build the format
-    format ()
+    errorlevel = format ()
   elseif target == "version" then
     version ()
   else
     help ()
   end
+  os.exit (errorlevel)
 end
 
 -- Load the common settings for the LaTeX2e repo
