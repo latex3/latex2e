@@ -36,7 +36,7 @@ function main (target)
         break
       end
     end
-    if errorlevel = 0 then
+    if errorlevel == 0 then
       for _,i in ipairs (required) do
         errorlevel = run ("required/" .. i, "texlua " .. scriptname .. " " .. target)
         if errorlevel ~= 0 then
