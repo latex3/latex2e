@@ -15,6 +15,7 @@ installfiles =
 sourcefiles  = {"*.cls", "*.dtx", "*.err", "*.fdd", "ltpatch.ltx", "*.ins", "*.tex"}
 typesetfiles =
   {
+    "source2e.tex",
     "alltt.dtx",
     "classes.dtx",
     "cmfonts.dtx",
@@ -35,7 +36,6 @@ typesetfiles =
     "proc.dtx",
     "slides.dtx",
     "slifonts.dtx",
-    "source2e.tex",
     "syntonly.dtx",
   }
 
