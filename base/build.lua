@@ -50,6 +50,9 @@ testsuppdir = "testfiles/helpers"
 checkdeps  = { }
 unpackdeps = { }
 
+-- Customise typesetting
+indexstyle = "source2e.ist"
+
 function format ()
   unpack ()
   -- Much the same as the standard unpack approach: run from 'here' so
