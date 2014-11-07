@@ -1,5 +1,5 @@
 #!/usr/bin/env texlua
-packtdszip = true
+
 -- Build script for LaTeX2e "base" files
 
 -- Identify the bundle and module
