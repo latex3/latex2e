@@ -11,10 +11,7 @@ maindir = ".."
 
 -- Set up the file types needed here
 installfiles =
-  {
-    "*.cfg", "*.clo", "*.cls", "*.def", "*.dfu", "*.fd", "*.ist",
-    "*.ltx", "*.sty", "*.tex"
-  }
+  {"*.cfg", "*.clo", "*.cls", "*.def", "*.dfu", "*.fd", "*.ltx", "*.sty", "*.tex"}
 sourcefiles  = {"*.cls", "*.dtx", "*.err", "*.fdd", "ltpatch.ltx", "*.ins", "*.tex"}
 typesetfiles =
   {
