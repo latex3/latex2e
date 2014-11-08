@@ -16,8 +16,8 @@ checksuppfiles =
 stdengine      = "etex"
 
 -- Only rename README.txt but upload all .txt files
-demofiles = {"*.txt"}
-txtfiles  = {"README.txt"}
+readmefiles  = {"README.txt"}
+textfiles    = {"*.txt"}
 
 -- Global searching is disabled when unpacking and checking
 checksearch  = false
