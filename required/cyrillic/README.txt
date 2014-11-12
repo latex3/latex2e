@@ -16,7 +16,7 @@ then be moved to a directory on LaTeX's standard input path.
 
 NOTE that this bundle must be used with at least the December 1998
 LaTeX2e Release. In particular, this prevents an error because of the
-old version of docstrip.tex (see the file readme.txt from the `tools'
+old version of docstrip.tex (see the file README from the `tools'
 bundle).
 
 The documented source code of each component may then be obtained by

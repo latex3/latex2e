@@ -32,7 +32,7 @@ in LaTeX documents.
 THIS DIRECTORY CONTAINS 
 ======================
 
-00readme.txt    This File
+README          This File
 changes.txt     Log of changes to the packages.
 graphics.ins    Install file for docstrip.
 
