@@ -78,6 +78,7 @@ function main (target, file, engine)
   elseif target == "clean" then
     errorlevel = clean ()
   elseif target == "ctan" then
+    format ()
     errorlevel = ctan (true)
   elseif target == "doc" then
     errorlevel = doc ()
