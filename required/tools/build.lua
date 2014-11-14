@@ -11,7 +11,7 @@ maindir = "../.."
 
 -- Minor modifications to file types
 installfiles = {"*.def", "*.sty"}
-typesetfiles = {"*.dtx", "*.tex"}
+typesetfiles = {"*.dtx"}
 unpackfiles  = {"tools.ins"}
 
 checkdeps = {maindir .. "/base", maindir .. "/required/graphics"}
