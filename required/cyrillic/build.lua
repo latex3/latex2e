@@ -12,7 +12,7 @@ maindir = "../.."
 -- Minor modifications to file types
 installfiles = {"*.def", "*.sty"}
 sourcefiles  = {"*.dtx", "*.fdd", "*.ins"}
-typesetfiles = {"*.dtx", "*.fdd", "*.tex"}
+typesetfiles = {"*.dtx", "*.fdd"}
 
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
