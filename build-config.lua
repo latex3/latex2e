@@ -14,6 +14,7 @@ checkruns      = 2
 checksuppfiles = 
   {"ascii.tcx", "color.cfg", "graphics.cfg", "test209.tex", "test2e.tex"}
 stdengine      = "etex"
+typesetsuppfiles = {"ltxdoc.cfg", "ltxguide.cfg"}
 
 -- Only rename README.txt but upload all .txt files
 readmefiles  = {"README.txt"}
