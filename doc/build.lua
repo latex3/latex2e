@@ -11,7 +11,18 @@ maindir = ".."
 
 -- Set up the file types needed here
 installfiles = { }
-typesetfiles = {"*.dtx", "*.tex"}
+typesetfiles =
+  {
+    "cfgguide.tex",
+    "clsguide.tex",
+    "cyrguide.tex",
+    "encguide.tex",
+    "fntguide.tex",
+    "ltnews.tex",
+    "ltx3info.tex",
+    "modguide.tex",
+    "usrguide.tex",
+  }
 
 -- No dependencies at all (other than l3build of course)
 checkdeps  = { }
