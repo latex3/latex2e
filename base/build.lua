@@ -10,10 +10,11 @@ bundle = ""
 maindir = ".."
 
 -- Set up the file types needed here
-installfiles =
+installfiles   =
   {"*.cfg", "*.clo", "*.cls", "*.def", "*.dfu", "*.fd", "*.ltx", "*.sty", "*.tex"}
-sourcefiles  = {"*.cls", "*.dtx", "*.err", "*.fdd", "ltpatch.ltx", "*.ins", "*.tex"}
-typesetfiles =
+makeindexfiles = {"*.ist"}
+sourcefiles    = {"*.cls", "*.dtx", "*.err", "*.fdd", "ltpatch.ltx", "*.ins", "*.tex"}
+typesetfiles   =
   {
     "source2e.tex",
     "alltt.dtx",
@@ -37,6 +38,8 @@ typesetfiles =
     "slides.dtx",
     "slifonts.dtx",
     "syntonly.dtx",
+    "*.fdd",
+    "*.err",
   }
 
 -- A few special file for unpacking
