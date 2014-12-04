@@ -16,8 +16,7 @@ checksuppfiles =
 stdengine      = "etex"
 typesetsuppfiles = {"ltxdoc.cfg", "ltxguide.cfg"}
 
--- Only rename README.txt but upload all .txt files
-readmefiles  = {"README.txt"}
+-- Upload all .txt files
 textfiles    = {"*.txt"}
 
 -- Global searching is disabled when unpacking and checking
