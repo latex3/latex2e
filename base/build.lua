@@ -12,7 +12,6 @@ maindir = ".."
 -- Set up the file types needed here
 installfiles   =
   {"*.cfg", "*.clo", "*.cls", "*.def", "*.dfu", "*.fd", "*.ltx", "*.sty", "*.tex"}
-makeindexfiles = {"*.ist"}
 sourcefiles    = {"*.cls", "*.dtx", "*.fdd", "ltpatch.ltx", "*.ins", "*.tex"}
 typesetfiles   =
   {
