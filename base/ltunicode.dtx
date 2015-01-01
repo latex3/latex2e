@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-% Copyright 2014
+% Copyright 2014-2015
 % The LaTeX3 Project and any individual authors listed elsewhere
 % in this file.
 %
@@ -44,7 +44,7 @@
 %
 %<*driver>
 \ProvidesFile{ltunicode.dtx}
-  [2014/12/31 v1.0 LaTeX Kernel (Unicode data)]
+  [2015/01/01 v1.0 LaTeX Kernel (Unicode data)]
 \documentclass{ltxdoc}
 \begin{document}
 \DocInput{\jobname.dtx}
@@ -68,6 +68,11 @@
 % \texttt{LineBreak.txt} to be used for setting up \LaTeXe{} with sane
 % default settings when using the Xe\TeX{} and Lua\TeX{} engines. Details
 % of the process are included in the code comments.
+% 
+% To create the extracted file, run this file in a location containing
+% the three input data files using a plain \TeX{} system with the e-\TeX{}
+% extensions enabled (\texttt{pdftex}, \texttt{xetex} or \texttt{luatex}
+% in any modern \TeX{} distribution).
 %
 % \StopEventually{}
 %
@@ -100,6 +105,63 @@
 %    \begin{macrocode}
 \def\storedpar{\par}
 %    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\return}
+%   A stored |^^M| for string comparisons.
+%    \begin{macrocode}
+\begingroup
+  \catcode`\^^M=12 %
+  \gdef\return{^^M}%
+\endgroup%
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\sourceforhex}
+% \begin{macro}{\sethex}
+% \begin{macro}{\dohex}
+% \begin{macro}{\hexdigit}
+%   Some parts of the code here will need to be able to convert integers
+%   to their hexadecimal equivalent. That is easiest to do for the requirements
+%   here using a modified version of some code from Appendix~D of \emph{The
+%   \TeX{}book}.
+%    \begin{macrocode}
+\newcount\sourceforhex
+\def\sethex#1#2{%
+  \def#1{}%
+  \sourceforhex=#2\relax
+  \ifnum\sourceforhex=0 %
+    \def#1{0}%
+  \else
+    \dohex#1%
+  \fi
+}
+\def\dohex#1{%
+  \begingroup
+    \count0=\sourceforhex
+    \divide\sourceforhex by 16 %
+    \ifnum\sourceforhex>0 %
+      \dohex#1%
+    \fi
+    \count2=\sourceforhex
+    \multiply\count2 by -16 %
+    \advance\count0 by\count2
+    \hexdigit#1%
+  \expandafter\endgroup
+  \expandafter\def\expandafter#1\expandafter{#1}%
+}
+\def\hexdigit#1{%
+  \ifnum\count0<10 %
+    \edef#1{#1\number\count0}%
+  \else
+    \advance\count0 by -10 %
+    \edef#1{#1\ifcase\count0 A\or B\or C\or D\or E\or F\fi}%
+  \fi
+}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
 % \end{macro}
 %
 % \begin{macro}{\unicoderead, \unicodewrite}
@@ -372,6 +434,9 @@
 % Read the data and write the resulting code assignments to the file.
 %    \begin{macrocode}
 \openin\unicoderead=UnicodeData.txt %
+\ifeof\unicoderead
+  \errmessage{Data file missing: UnicodeData.txt}%
+\fi
 \loop\unless\ifeof\unicoderead
   \read\unicoderead to \unicodedataline
   \parseunicodedata\unicodedataline
@@ -390,9 +455,206 @@
 % Xe\TeX{}-only concept.
 %    \begin{macrocode}
 \verbatimcopy
-\ifx\XeTeXinterchartoks\XeTeXcharclass
+\ifx\XeTeXchartoks\XeTeXcharclass
   \expandafter\endinput
 \fi
+\endverbatimcopy
+%    \end{macrocode}
+%
+% \section{Xe\TeX{} Character classes}
+% 
+% The Xe\TeX{} engine includes the concept of character classes, which allow
+% insertion of tokens into the input stream at defined boundaries. Setting
+% up this data requires a two-part process as the information is split over
+% two input files.
+%
+% \begin{macro}{\parseunicodedata}
+% \begin{macro}{\parseunicodedata@auxi}
+% \begin{macro}{\parseunicodedata@auxii}
+%   The parsing system is redefined to parse a detokenized input line which
+%   may be a comment starting with |#|. Assuming that is not the case, the
+%   data line with start with a code point potentially forming part of a range.
+%   The range is extracted and the width stored for each code point.
+%    \begin{macrocode}
+\def\parseunicodedata#1{%
+  \ifx#1\return
+  \else
+    \if\expandafter\gobble\string\#\expandafter\firsttoken#1?\relax
+    \else
+      \expandafter\parseunicodedata@auxi#1\relax
+    \fi
+  \fi
+}
+\def\parseunicodedata@auxi#1;#2 #3\relax{%
+  \parseunicodedata@auxii#1....\relax{#2}%
+}
+\def\parseunicodedata@auxii#1..#2..#3\relax#4{%
+  \expandafter\gdef\csname EAW@#1\endcsname{#4}%
+  \ifx\relax#2\relax
+  \else
+    \count@="#1 %
+    \begingroup
+      \loop
+        \ifnum\count@<"#2 %
+          \advance\count@\@ne
+          \sethex\temp{\count@}%
+          \expandafter\gdef\csname EAW@\temp\endcsname{#4}%
+      \repeat
+    \endgroup
+  \fi
+}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% With the right parser in place, read the data file.
+%    \begin{macrocode}
+\openin\unicoderead=EastAsianWidth.txt %
+\ifeof\unicoderead
+  \errmessage{Data file missing: EastAsianWidth.txt}%
+\fi
+\loop\unless\ifeof\unicoderead
+  \readline\unicoderead to \unicodedataline
+  \parseunicodedata\unicodedataline
+\repeat
+%    \end{macrocode}
+%
+% \begin{macro}{\parseunicodedata@auxii}
+% \begin{macro}{\parseunicodedata@auxiii}
+% \begin{macro}{\parseunicodedata@auxiv}
+% \begin{macro}{\ID}
+% \begin{macro}{\OP}
+% \begin{macro}{\CL}
+% \begin{macro}{\EX}
+% \begin{macro}{\IS}
+% \begin{macro}{\NS}
+% \begin{macro}{\CM}
+%  The final file to read, |LineBreaking.txt|, uses the same format as
+%  |EastAsianWidth.txt|. As such, only the final parts of the parser have to be
+%  redefined.
+%    \begin{macrocode}
+\def\parseunicodedata@auxii#1..#2..#3\relax#4{%
+  \parseunicodedata@auxiii{#1}{#4}%
+  \ifx\relax#2\relax
+  \else
+    \count@="#1 %
+    \begingroup
+      \loop
+        \ifnum\count@<"#2 %
+          \advance\count@\@ne
+          \sethex\temp{\count@}%
+          \expandafter\parseunicodedata@auxiii\expandafter{\temp}{#4}%
+      \repeat
+    \endgroup
+  \fi
+}
+%    \end{macrocode}
+%   Adding data to the processed file depends on two factors: the
+%   classification in the line-breaking file and (possibly) the width data
+%   too. Any characters of class \texttt{ID} (ideograph) are stored: they
+%   always need special treatment. For characters of classes \texttt{OP}
+%   (opener), \texttt{CL} (closer), \texttt{EX} (exclamation), \texttt{IS}
+%   (infix sep) and \texttt{NS} (non-starter) the data is stored if the
+%   character is full, half or wide width. The same is true for 
+%   \texttt{CM} (combining marks) characters, which need to be transparent
+%   to the mechanism.
+%    \begin{macrocode}
+\def\parseunicodedata@auxiii#1#2{%
+  \ifcsname #2\endcsname
+    \ifnum\csname #2\endcsname=1 %
+      \parseunicodedata@auxiv{#1}{#2}%
+    \else
+      \ifnum 0%
+        \if F\csname EAW@#1\endcsname 1\fi
+        \if H\csname EAW@#1\endcsname 1\fi
+        \if W\csname EAW@#1\endcsname 1\fi
+        >0 %
+        \parseunicodedata@auxiv{#1}{#2}%
+      \fi
+    \fi
+  \fi
+}
+\def\parseunicodedata@auxiv#1#2{%
+  \immediate\write\unicodewrite{%
+    \space\space
+    \expandafter\string\csname #2\endcsname
+    \space
+    #1 %
+    \expandafter\gobble\string\%
+  }%
+}
+\def\ID{1}
+\def\OP{2}
+\def\CL{3}
+\let\EX\CL
+\let\IS\CL
+\let\NS\CL
+\def\CM{256}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% Before actually reading the line breaking data file, the appropriate
+% temporary code is added to the output. As described above, only a limited
+% number of classes need to be covered: they are hard-coded as classes
+% $1$, $2$ and $3$ following the convention adopted by plain Xe\TeX{}.
+%    \begin{macrocode}
+\verbatimcopy
+\begingroup
+  \def\ID#1 {\global\XeTeXcharclass"#1=1 \global\catcode"#1=11 }
+  \def\OP#1 {\global\XeTeXcharclass"#1=2 }
+  \def\CL#1 {\global\XeTeXcharclass"#1=3 }
+  \def\EX#1 {\global\XeTeXcharclass"#1=3 }
+  \def\IS#1 {\global\XeTeXcharclass"#1=3 }
+  \def\NS#1 {\global\XeTeXcharclass"#1=3 }
+  \def\CM#1 {\global\XeTeXcharclass"#1=256 }
+\endverbatimcopy
+%    \end{macrocode}
+%
+% Read the line breaking data and save to the output.
+%    \begin{macrocode}
+\openin\unicoderead=LineBreak.txt %
+\ifeof\unicoderead
+  \errmessage{Data file missing: LineBreak.txt}%
+\fi
+\loop\unless\ifeof\unicoderead
+  \readline\unicoderead to \unicodedataline
+  \parseunicodedata\unicodedataline
+\repeat
+%    \end{macrocode}
+%
+% Set up material to be inserted between character classes. Other than
+% using \cs{hspace} here in place of \cs{hskip} this code is identical to
+% that provided by plain Xe\TeX{}.
+%    \begin{macrocode}
+\verbatimcopy
+\endgroup
+\gdef\xtxHanGlue{\hspace{0pt plus 0.1em}}
+\gdef\xtxHanSpace{\hspace{0.2em plus 0.2em minus 0.1em}}
+\global\XeTeXinterchartoks 0 1 = {\xtxHanSpace}
+\global\XeTeXinterchartoks 0 2 = {\xtxHanSpace}
+\global\XeTeXinterchartoks 0 3 = {\nobreak\xtxHanSpace}
+\global\XeTeXinterchartoks 1 0 = {\xtxHanSpace}
+\global\XeTeXinterchartoks 2 0 = {\nobreak\xtxHanSpace}
+\global\XeTeXinterchartoks 3 0 = {\xtxHanSpace}
+\global\XeTeXinterchartoks 1 1 = {\xtxHanGlue}
+\global\XeTeXinterchartoks 1 2 = {\xtxHanGlue}
+\global\XeTeXinterchartoks 1 3 = {\nobreak\xtxHanGlue}
+\global\XeTeXinterchartoks 2 1 = {\nobreak\xtxHanGlue}
+\global\XeTeXinterchartoks 2 2 = {\nobreak\xtxHanGlue}
+\global\XeTeXinterchartoks 2 3 = {\xtxHanGlue}
+\global\XeTeXinterchartoks 3 1 = {\xtxHanGlue}
+\global\XeTeXinterchartoks 3 2 = {\xtxHanGlue}
+\global\XeTeXinterchartoks 3 3 = {\nobreak\xtxHanGlue}
 \endverbatimcopy
 %    \end{macrocode}
 %
