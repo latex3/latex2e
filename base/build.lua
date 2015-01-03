@@ -12,7 +12,7 @@ maindir = ".."
 -- Set up the file types needed here
 installfiles   =
   {"*.cfg", "*.clo", "*.cls", "*.def", "*.dfu", "*.fd", "*.ltx", "*.sty", "*.tex"}
-sourcefiles    = {"*.cls", "*.dtx", "*.fdd", "ltpatch.ltx", "*.ins", "*.tex"}
+sourcefiles    = {"*.cls", "*.dtx", "*.fdd", "ltpatch.ltx", "ltunicode.ltx", "*.ins", "*.tex"}
 typesetfiles   =
   {
     "source2e.tex",
