@@ -8,7 +8,7 @@ unpackdeps = unpackdeps or {maindir .. "/base"}
 -- Set up the check system to work in 'stand-alone' mode
 -- This relies on a format being built by the 'base' dependency
 checkformat    = "latex"
-checkopts      = "-translate-file ./ascii.tcx -output-format=dvi"
+checkopts      = ""
 checkengines   = {"etex"}
 checkruns      = 2
 checksuppfiles = 
