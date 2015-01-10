@@ -71,8 +71,9 @@ function format ()
     -- inside bundleunpack(): get around that using a manual copy
     cp (fmtname, unpackdir, localdir) 
   end
- format ("etex", "elatex.fmt")
- format ("xetex", "xelatex.fmt")
+  for _,i in iparis (checkengines) do
+    format (i, string.gsub (i, "latex$", "") .. "latex.fmt")
+  end
 end
 
 -- base does all of the targets itself
