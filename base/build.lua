@@ -57,18 +57,22 @@ indexstyle = "source2e.ist"
 
 function format ()
   unpack ()
-  -- Much the same as the standard unpack approach: run from 'here' so
-  -- the relationships are all correct
-  os.execute (
-      os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
-      .. os_concat ..
-      "etex -etex -ini " .. " -output-directory=" .. unpackdir ..
-      " " .. unpackdir .. "/latex.ltx"
-    )
-  -- As format building is added in as an 'extra', the normal
-  -- copy mechanism (checkfiles) will fail as things get cleaned up
-  -- inside bundleunpack(): get around that using a manual copy
-  cp ("latex.fmt", unpackdir, localdir)
+  local function format (engine,fmtname)
+    -- the relationships are all correct
+    os.execute (
+        os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
+        .. os_concat ..
+        engine .. " -etex -ini " .. " -output-directory=" .. unpackdir ..
+        " " .. unpackdir .. "/latex.ltx"
+      )
+    ren (unpackdir, "latex.fmt", fmtname)
+    -- As format building is added in as an 'extra', the normal
+    -- copy mechanism (checkfiles) will fail as things get cleaned up
+    -- inside bundleunpack(): get around that using a manual copy
+    cp (fmtname, unpackdir, localdir) 
+  end
+ format ("etex", "latex.fmt")
+ format ("xetex", "xelatex.fmt")
 end
 
 -- base does all of the targets itself
