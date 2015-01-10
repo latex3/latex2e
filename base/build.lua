@@ -71,7 +71,7 @@ function format ()
     -- inside bundleunpack(): get around that using a manual copy
     cp (fmtname, unpackdir, localdir) 
   end
- format ("etex", "latex.fmt")
+ format ("etex", "elatex.fmt")
  format ("xetex", "xelatex.fmt")
 end
 
