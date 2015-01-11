@@ -72,7 +72,7 @@ function format ()
     cp (fmtname, unpackdir, localdir) 
   end
   for _,i in ipairs (checkengines) do
-    format (i, string.gsub (i, "latex$", "") .. "latex.fmt")
+    format (i, string.gsub (i, "tex$", "") .. "latex.fmt")
   end
 end
 
