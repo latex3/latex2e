@@ -19,6 +19,9 @@ typesetsuppfiles = {"ltxdoc.cfg", "ltxguide.cfg"}
 -- Upload all .txt files
 textfiles    = {"*.txt"}
 
+-- Build TDS-style zips
+packtdszip = true
+
 -- Global searching is disabled when unpacking and checking
 checksearch  = false
 unpacksearch = false
