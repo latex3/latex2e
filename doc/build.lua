@@ -11,6 +11,7 @@ maindir = ".."
 
 -- Set up the file types needed here
 installfiles = { }
+sourcefiles  = {"ltnews??.tex"}
 typesetfiles =
   {
     "cfgguide.tex",
