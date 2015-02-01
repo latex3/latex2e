@@ -28,6 +28,7 @@ typesetfiles   =
     "inputenc.dtx",
     "lppl.tex",
     "utf8ienc.dtx",
+    "latexrelease.dtx",
     "latexsym.dtx",
     "letter.dtx",
     "ltxdoc.dtx",
