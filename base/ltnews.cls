@@ -42,7 +42,7 @@
  
 \NeedsTeXFormat{LaTeX2e}
  
-\ProvidesClass{ltnews}[2014/05/01 v1.03  Standard LaTeX class]
+\ProvidesClass{ltnews}[2015/02/15 v1.04  Standard LaTeX class]
 
 % The configuration file, used for passing options.
 
