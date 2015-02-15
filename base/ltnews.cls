@@ -246,6 +246,10 @@
    \large\sffamily\slshape
    \let\LaTeX\cmssLaTeX\let\TeX\cmssTeX
 }
+\newcommand{\@subheadingfont}{%
+   \normalsize\sffamily\slshape
+   \let\LaTeX\cmssLaTeX\let\TeX\cmssTeX
+}
 
 % The LW 35 fonts option
 
@@ -265,6 +269,10 @@
    }%
    \renewcommand{\@headingfont}{%
       \fontsize{12}{13.5}\fontfamily{phv}\fontseries{b}\selectfont
+      \let\LaTeX\phvLaTeX\let\TeX\phvTeX
+   }%
+   \renewcommand{\@subheadingfont}{%
+      \fontsize{10}{12}\fontfamily{phv}\fontseries{b}\selectfont
       \let\LaTeX\phvLaTeX\let\TeX\phvTeX
    }%
    \DeclareSymbolFont{letters}{OML}{ptmcm}{m}{it}%
@@ -289,6 +297,10 @@
    }%
    \renewcommand{\@headingfont}{%
       \fontsize{12}{14}\fontfamily{ugq}\fontseries{b}\selectfont
+      \let\LaTeX\ugqLaTeX\let\TeX\ugqTeX
+   }%
+   \renewcommand{\@subheadingfont}{%
+      \fontsize{10}{12}\fontfamily{ugq}\fontseries{b}\selectfont
       \let\LaTeX\ugqLaTeX\let\TeX\ugqTeX
    }%
    \renewcommand{\verbatim@font}{%
@@ -462,6 +474,18 @@
       {1ex \@plus.2ex}{\@headingfont}%
 }
  
+\renewcommand{\subsection}{%
+   \@startsection
+      {subsection}{1}{\z@}{-1.5ex \@plus -1ex \@minus -.2ex}%
+      {1sp}{\@subheadingfont}%
+}
+
+\renewcommand{\subsubsection}{%
+   \@startsection
+      {subsection}{1}{\z@}{-1.5ex \@plus -1ex \@minus -.2ex}%
+      {1sp}{\normalsize\bfseries}%
+}
+
 % No section numbers.
  
 \setcounter{secnumdepth}{0}
