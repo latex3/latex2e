@@ -508,6 +508,10 @@
 }
 \let \@listi \@listI
 
+% set defaults so that trivlist eg verbatim use tighter spacing
+\@listi
+\setlength\topsep{4pt plus 1pt minus 2pt}
+
 % But have a list type with no indentation on either side:
 % 
 \renewenvironment{description}
