@@ -23,6 +23,7 @@ typesetfiles =
     "ltx3info.tex",
     "modguide.tex",
     "usrguide.tex",
+    "latexchanges.tex"
   }
 
 -- No dependencies at all (other than l3build of course)
