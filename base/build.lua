@@ -22,7 +22,7 @@ typesetfiles   =
     "doc.dtx",
     "docstrip.dtx",
     "exscale.dtx",
-    "fixltx2e.dtx",
+    "fix-cm.dtx",
     "graphpap.dtx",
     "ifthen.dtx",
     "inputenc.dtx",
