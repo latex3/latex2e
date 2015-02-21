@@ -26,6 +26,7 @@ typesetfiles   =
     "graphpap.dtx",
     "ifthen.dtx",
     "inputenc.dtx",
+    "ltunicode.dtx",
     "lppl.tex",
     "utf8ienc.dtx",
     "latexrelease.dtx",
