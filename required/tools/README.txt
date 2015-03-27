@@ -1,7 +1,6 @@
-% \iffalse meta-comment
+
 %
-% Copyright 1993 1994 1995 1996 1997 1998 1999 2000 2001 2002 2003 2004 2005
-% 2006 2008 2009
+% Copyright 1993-2015
 % The LaTeX3 Project and any individual authors listed elsewhere
 % in this file. 
 % 
@@ -19,7 +18,7 @@
 % The list of all files belonging to the LaTeX `Tools Bundle' is
 % given in the file `manifest.txt'.
 % 
-% \fi
+
 
 README for the `tools' bundle  (December 1999)
 =============================
