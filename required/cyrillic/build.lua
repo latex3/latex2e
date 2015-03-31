@@ -10,7 +10,7 @@ module = "cyrillic"
 maindir = "../.."
 
 -- Minor modifications to file types
-installfiles = {"*.def", "*.sty"}
+installfiles = {"*.def", "*.fd", "*.sty"}
 sourcefiles  = {"*.dtx", "*.fdd", "*.ins"}
 typesetfiles = {"*.dtx", "*.fdd"}
 
