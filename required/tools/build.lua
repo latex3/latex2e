@@ -10,8 +10,8 @@ module = "tools"
 maindir = "../.."
 
 -- Minor modifications to file types
-installfiles = {"*.def", "*.sty", "*.tex"}
-typesetfiles = {"*.dtx"}
+installfiles = {"*.def", "*.sty", "?.tex", ".tex"}
+typesetfiles = {"*.dtx", "tools-overview.tex"}
 unpackfiles  = {"tools.ins"}
 
 checkdeps = {maindir .. "/base", maindir .. "/required/graphics"}
