@@ -47,8 +47,8 @@ typesetfiles   =
   }
 
 -- A few special file for unpacking
-unpackfiles     = {"unpack.ins"}
-unpacksuppfiles = {"hyphen.cfg", "texsys.cfg", "UShyphen.tex"}
+unpackfiles     = {"ltdirchk.dtx", "unpack.ins"}
+unpacksuppfiles = {"hyphen.cfg", "UShyphen.tex"}
 
 -- Custom settings for the check system
 testsuppdir = "testfiles/helpers"
