@@ -3,7 +3,7 @@
 -- Build script for LaTeX2e "doc" files
 
 -- Identify the bundle and module
-module = "doc"
+module = "base"
 bundle = ""
 
 -- CTAN's name for this is a bit different from ours
