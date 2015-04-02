@@ -57,7 +57,7 @@ Distribution Conditions
 All the files in this bundle are distributed under the terms of
 the LaTeX Project Public License (LPPL) as found in the base
 LaTeX distribution,  CTAN:macros/latex/base/lppl.txt;
-either version 1 of the license, or (at your option) any later
+either version 1.3c of the license, or (at your option) any later
 version.
 
---- Copyright 2005-2009 the LaTeX3 project.  All rights reserved ---
+--- Copyright 2005-2015 the LaTeX3 project.  All rights reserved ---
