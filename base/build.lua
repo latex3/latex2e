@@ -47,7 +47,7 @@ typesetfiles   =
   }
 
 -- A few special file for unpacking
-unpackfiles     = {"ltdirchk.dtx", "unpack.ins"}
+unpackfiles     = {"unpack.ins"}
 unpacksuppfiles = {"hyphen.cfg", "UShyphen.tex"}
 
 -- Custom settings for the check system
@@ -78,6 +78,35 @@ function format ()
   end
   for _,i in ipairs (checkengines) do
     format (i, string.gsub (i, "tex$", "") .. "latex.fmt")
+  end
+end
+
+-- Custom bundleunpack which does not search the localdir
+-- That is needed as texsys.cfg is unpacked in an odd way and
+-- without this will otherwise not be available
+function bundleunpack () 
+  mkdir (localdir)
+  cleandir (unpackdir)
+  for _,i in ipairs (sourcefiles) do
+    cp (i, ".", unpackdir)
+  end
+  for _,i in ipairs (unpacksuppfiles) do
+    cp (i, supportdir, localdir)
+  end
+  for _,i in ipairs (unpackfiles) do
+    for _,j in ipairs (filelist (unpackdir, i)) do
+      os.execute (os_yes .. ">>" .. localdir .. "/yes")
+      os.execute (
+          -- Notice that os.execute is used from 'here' as this ensures that
+          -- localdir points to the correct place: running 'inside'
+          -- unpackdir would avoid the need for setting -output-directory
+          -- but at the cost of needing to correct the relative position
+          -- of localdir w.r.t. unpackdir
+          os_setenv .. " TEXINPUTS=" .. unpackdir .. os_concat ..
+          unpackexe .. " " .. unpackopts .. " -output-directory=" .. unpackdir
+            .. " " .. unpackdir .. "/" .. j .. " < " .. localdir .. "/yes"
+        )
+    end
   end
 end
 
