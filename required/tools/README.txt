@@ -109,7 +109,7 @@ Quit (eg by hitting `enter' to all questions) and get a newer
 docstrip.tex. It must be at least version 2.4.
 
 A suitable docstrip.tex may be found from `CTAN' archives such as
-ftp.dante.de   tex-archive/macros/latex/unpacked/docstrip.tex
+http://mirror.ctan.org/macros/latex/unpacked/docstrip.tex
 
 Docstrip is part of the base LaTeX distribution, so if you have
 an old docstrip then your LaTeX is out of date and you may consider
