@@ -95,25 +95,3 @@ problem, and ensure that you are using the current version of the
 package, and of the base LaTeX software.
 
 
-NOTE (docstrip version)
-=======================
-
-If   latex tools.ins
-produces the `docstrip interactive mode' prompt:
-
-  * First type the extension of your input file(s):  *
-  \infileext=
-
-Then your version of docstrip is too old.
-Quit (eg by hitting `enter' to all questions) and get a newer
-docstrip.tex. It must be at least version 2.4.
-
-A suitable docstrip.tex may be found from `CTAN' archives such as
-http://mirror.ctan.org/macros/latex/unpacked/docstrip.tex
-
-Docstrip is part of the base LaTeX distribution, so if you have
-an old docstrip then your LaTeX is out of date and you may consider
-getting the whole of that directory and re-installing LaTeX.
-However you need to fetch only the file docstrip.tex to unpack
-this tools distribution with your existing format.
-
