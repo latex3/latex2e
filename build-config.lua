@@ -16,9 +16,6 @@ checksuppfiles =
 stdengine      = "etex"
 typesetsuppfiles = {"ltxdoc.cfg", "ltxguide.cfg"}
 
--- Upload all .txt files
-textfiles    = {"*.txt"}
-
 -- Build TDS-style zips
 packtdszip = true
 
