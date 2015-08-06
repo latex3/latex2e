@@ -1,0 +1,99 @@
+#!/bin/sh
+
+if [ $# -lt 2 -o $# -gt 3 ] ; then
+   echo >&2 Usage: run-tex format file [interaction_mode]
+   exit 1
+fi
+
+MAXRUNS=${MAXLATEXRUNS:-10}
+
+FORMAT=`basename $1 .fmt`
+FILE=$2
+if [ $# -eq 3 ] ; then
+   MODE="\\$3 \\input"
+fi
+
+# The following removes the directory part, the last dot and what follows it
+JOBNAME=`basename ${FILE} | sed -e 's/\...*$//'`
+
+# A function for computing a checksum
+checksum () {
+   CHECKSUM="`sum $1 | cut -f1 -d' '`"
+}
+
+
+# A simple function for showing a command on the screen and running it
+# If the command fails, the whole script exits,
+run_command () {
+   echo $*
+   $* || exit
+}
+
+
+# A more complicated function for running LaTeX until the message
+# `Rerun to get cross-references right.' does no longer show up.
+# The number of runs is limited by MAXRUNS (default 10, if not set
+# from environment variable MAXLATEXRUNS above.
+run_tex () {
+   SUCCESS=0
+   RUNS=0
+   until [ ${SUCCESS} = 1 ] ; do
+      run_command pdfetex -efmt=${FORMAT} ${MODE} ${FILE}
+      fgrep -q "Rerun to get cross-references right." ${JOBNAME}.log || SUCCESS=1
+      RUNS=`expr ${RUNS} + 1`
+      if [ ${RUNS} -gt ${MAXRUNS} ] ; then
+         echo >&2 Maximum number of runs reached. Stop.
+         exit 1
+      fi
+      checksum ${JOBNAME}.aux
+   done
+}
+
+# Initilizations
+RERUN=0
+CHECKSUM=""
+OLD_CHECKSUM=""
+
+# The rest is straightforward: run LaTeX....
+run_tex
+
+
+# Check if bibtex needs to be run....
+if fgrep -q "\bibdata" ${JOBNAME}.aux ; then
+   run_command bibtex ${JOBNAME}
+   RERUN=1
+fi
+
+# Check if makeindex needs to be run on the .idx file....
+if [ -s ${JOBNAME}.idx ] ; then
+   if test -r ${JOBNAME}.ist ; then
+      run_command makeindex -s ${JOBNAME}.ist ${JOBNAME}
+   elif fgrep -q "=\verb!*+" ${JOBNAME}.idx ; then
+      run_command makeindex -s gind.ist ${JOBNAME}
+   else
+      run_command makeindex ${JOBNAME}
+   fi
+   RERUN=1
+fi
+
+# Check if makeindex needs to be run on the .glo file....
+if [ -s ${JOBNAME}.glo ] ; then
+   if fgrep -q "=\verb!*+" ${JOBNAME}.glo ; then
+      run_command makeindex -s gglo.ist -o ${JOBNAME}.gls ${JOBNAME}.glo
+   else
+      run_command makeindex -o ${JOBNAME}.gls ${JOBNAME}.glo
+   fi
+   RERUN=1
+fi
+
+OLD_CHECKSUM=${CHECKSUM}
+
+# ...if one of the above was necessary, rerun LaTeX.
+if [ ${RERUN} = 1 ] ; then
+   run_tex
+   if [ "${OLD_CHECKSUM}" != "${CHECKSUM}" ] ; then
+      echo Checksum has changed. Running LaTeX again is recommended!
+   fi
+fi
+
+exit
