@@ -44,7 +44,7 @@
 %
 %<*driver>
 \ProvidesFile{ltunicode.dtx}
-  [2015/06/20 v1.0i LaTeX Kernel (Unicode data)]
+  [2015/08/06 v1.0j LaTeX Kernel (Unicode data)]
 \documentclass{ltxdoc}
 \begin{document}
 \DocInput{\jobname.dtx}
@@ -90,12 +90,15 @@
 %    \end{macrocode}
 %
 % \begin{macro}{\gobble}
+% \begin{macro}{\gobblethree}
 % \begin{macro}{\firsttoken}
 %   Standard utilities.
 %    \begin{macrocode}
 \long\def\gobble#1{}
+\long\def\gobblethree#1#2#3{}
 \long\def\firsttoken#1#2\relax{#1}
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 %
@@ -458,31 +461,52 @@
 % \end{macro}
 %
 % \changes{v1.0g}{2015/03/26}{Add missing \cs{global} in definition of \cs{C}}
+% \changes{v1.0j}{2015/08/05}{Compress data for caseless letters}
+% \changes{v1.0j}{2015/08/05}{Save some space by dropping end-of-line
+%   percent chars}
 % \begin{macro}{\unicodeletter, \unicodenonletter}
-% \begin{macro}{\writeunicodedata}
+% \begin{macro}{\writeunicodedatafull}
+% \begin{macro}{\writeunicodedatacompact}
 %   For `letters', we always want to write the data to file, and the only
 %   question here is if the character has case mappings or these point back
-%   to the character itself.
+%   to the character itself. If there are no mappings or the mappings are
+%   all equivalent to the same code point then use a shorter version of
+%   the write macro.
 %    \begin{macrocode}
 \def\unicodeletter#1#2#3{%
-  \writeunicodedata\L{#1}{#2}{#3}%
+  \ifx\relax#2#3\relax
+    \writeunicodedatacompact\l{#1}%
+  \else
+    \ifnum 0%
+      \ifnum"#1="\ifx\relax#2\relax#1 \else#2 \fi\else1\fi
+      \ifnum"#1="\ifx\relax#3\relax#1 \else#3 \fi\else1\fi
+      >0 %
+      \writeunicodedatafull\L{#1}{#2}{#3}%
+    \else
+      \writeunicodedatacompact\l{#1}%
+    \fi
+  \fi
 }
 %    \end{macrocode}
 %   Cased non-letters can also exist: they can be detected as they have at
-%   least one case mapping. Write these in much the same way as letters.
+%   least one case mapping. Write these in much the same way as letters,
+%   but always with a full mapping (must be the case to require the entry
+%   at all).
 %    \begin{macrocode}
 \def\unicodenonletter#1#2#3{%
   \ifx\relax#2#3\relax
   \else
-    \writeunicodedata\C{#1}{#2}{#3}%
+    \writeunicodedatafull\C{#1}{#2}{#3}%
   \fi
 }
 %    \end{macrocode}
 %   Actually write the data. In all cases both upper- and lower-case mappings
 %   are given, so there is a need to test that both were actually available and
-%   if not set up to do nothing.
+%   if not set up to do nothing. Cases where both mappings are no-ops will
+%   already have been filtered out and are written in a shorter form: this
+%   saves a significant amount of space in the file.
 %    \begin{macrocode}
-\def\writeunicodedata#1#2#3#4{%
+\def\writeunicodedatafull#1#2#3#4{%
   \immediate\write\unicodewrite{%
     \space\space
     \string#1\space
@@ -493,14 +517,21 @@
       #3 %
     \fi
     \ifx\relax#4\relax
-      #2 %
+      #2%
     \else
-      #4 %
+      #4%
     \fi
-    \expandafter\gobble\string\%
+  }%
+}
+\def\writeunicodedatacompact#1#2{%
+  \immediate\write\unicodewrite{%
+    \space\space
+    \string#1\space
+    #2%
   }%
 }
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 %
@@ -542,6 +573,7 @@
       \global\Umathcode"#1="0"01"#1 %
     \fi    
   }
+  \def\l#1 {\L#1 #1 #1 }
   \ifx\Umathcode\undefined
     \let\Umathcode\XeTeXmathcode
   \fi
@@ -636,9 +668,12 @@
 \repeat
 %    \end{macrocode}
 %
+% \changes{v1.0j}{2015/08/05}{Compress East Asian width data by recording
+%   ranges for code points of type \texttt{ID}}
 % \begin{macro}{\parseunicodedata@auxii}
 % \begin{macro}{\parseunicodedata@auxiii}
 % \begin{macro}{\parseunicodedata@auxiv}
+% \begin{macro}{\parseunicodedata@auxv}
 % \begin{macro}{\ID}
 % \begin{macro}{\OP}
 % \begin{macro}{\CL}
@@ -648,10 +683,44 @@
 % \begin{macro}{\CM}
 %  The final file to read, |LineBreak.txt|, uses the same format as\\
 %  |EastAsianWidth.txt|. As such, only the final parts of the parser have to be
-%  redefined.
+%  redefined. The first stage here is to check if the line breaking class
+%  is known, and if so if it is equal to |ID| (class one). 
 %    \begin{macrocode}
 \def\parseunicodedata@auxii#1..#2..#3\relax#4{%
-  \parseunicodedata@auxiii{#1}{#4}%
+  \ifcsname #4\endcsname
+    \ifnum\csname #4\endcsname=\@ne
+      \expandafter\expandafter\expandafter\parseunicodedata@auxiii
+    \else
+      \expandafter\expandafter\expandafter\parseunicodedata@auxiv
+    \fi
+  \else
+    \expandafter\gobblethree
+  \fi
+    {#1}{#2}{#4}%
+}
+%    \end{macrocode}
+%   For ranges of class \texttt{ID}, the entire range is written to the data
+%   file as a single block: no need to check on the width data.
+%    \begin{macrocode}
+\def\parseunicodedata@auxiii#1#2#3{%
+  \immediate\write\unicodewrite{%
+%    \space\space
+    \expandafter\string\csname #3\endcsname
+    \space
+    #1 \ifx\relax#2\relax#1\else#2\fi
+  }%
+}
+%    \end{macrocode}
+%   For other cases, loop over each code point separately. If the
+%   code point is of width |F|, |H| or |W| then the line breaking
+%   property is written to the data file. The earlier check means that
+%   this only happens for characters of classes \texttt{OP} (opener),
+%   \texttt{CL} (closer), \texttt{EX} (exclamation), \texttt{IS} (infix sep),
+%   \texttt{NS} (non-starter) and \texttt{CM} (combining marks) characters
+%   (the latter need to be transparent to the mechanism).
+%    \begin{macrocode}
+\def\parseunicodedata@auxiv#1#2#3{%
+  \parseunicodedata@auxv{#1}{#3}%
   \ifx\relax#2\relax
   \else
     \count@="#1 %
@@ -660,46 +729,28 @@
         \ifnum\count@<"#2 %
           \advance\count@\@ne
           \sethex\temp{\count@}%
-          \expandafter\parseunicodedata@auxiii\expandafter{\temp}{#4}%
+          \expandafter\parseunicodedata@auxv\expandafter{\temp}{#3}%
       \repeat
     \endgroup
   \fi
 }
-%    \end{macrocode}
-%   Adding data to the processed file depends on two factors: the
-%   classification in the line-breaking file and (possibly) the width data
-%   too. Any characters of class \texttt{ID} (ideograph) are stored: they
-%   always need special treatment. For characters of classes \texttt{OP}
-%   (opener), \texttt{CL} (closer), \texttt{EX} (exclamation), \texttt{IS}
-%   (infix sep) and \texttt{NS} (non-starter) the data is stored if the
-%   character is full, half or wide width. The same is true for 
-%   \texttt{CM} (combining marks) characters, which need to be transparent
-%   to the mechanism.
-%    \begin{macrocode}
-\def\parseunicodedata@auxiii#1#2{%
-  \ifcsname #2\endcsname
-    \ifnum\csname #2\endcsname=1 %
-      \parseunicodedata@auxiv{#1}{#2}%
-    \else
-      \ifnum 0%
-        \if F\csname EAW@#1\endcsname 1\fi
-        \if H\csname EAW@#1\endcsname 1\fi
-        \if W\csname EAW@#1\endcsname 1\fi
-        >0 %
-        \parseunicodedata@auxiv{#1}{#2}%
-      \fi
-    \fi
+\def\parseunicodedata@auxv#1#2{%
+  \ifnum 0%
+    \if F\csname EAW@#1\endcsname 1\fi
+    \if H\csname EAW@#1\endcsname 1\fi
+    \if W\csname EAW@#1\endcsname 1\fi
+     >0 %
+    \immediate\write\unicodewrite{%
+      \space\space
+      \expandafter\string\csname #2\endcsname
+      \space
+      #1%
+    }%
   \fi
 }
-\def\parseunicodedata@auxiv#1#2{%
-  \immediate\write\unicodewrite{%
-    \space\space
-    \expandafter\string\csname #2\endcsname
-    \space
-    #1 %
-    \expandafter\gobble\string\%
-  }%
-}
+%    \end{macrocode}
+%   The East Asian width class mappings.
+%    \begin{macrocode}
 \def\ID{1}
 \def\OP{2}
 \def\CL{3}
@@ -719,8 +770,11 @@
 % \end{macro}
 % \end{macro}
 %
-% \changes{v1.0h}{2015/05/11}{Apply cateogry codes to East Asian
+% \changes{v1.0h}{2015/05/11}{Apply category codes to East Asian
 %   chars in all cases}
+% \changes{v1.0j}{2015/08/05}{Move the stop point for Lua\TeX{}}
+% \changes{v1.0j}{2015/08/05}{Only set \cs{XeTeXcharclass} from
+%   East Asian char data}
 % Before actually reading the line breaking data file, the appropriate
 % temporary code is added to the output. As described above, only a limited
 % number of classes need to be covered: they are hard-coded as classes
@@ -729,21 +783,29 @@
 \verbatimcopy
 \begingroup
   \ifx\XeTeXchartoks\XeTeXcharclass
-    \def\ID#1 {\global\catcode"#1=11 }
-    \def\OP#1 {}
-    \let\CL\OP
-    \let\EX\OP
-    \let\IS\OP
-    \let\NS\OP
-    \let\CM\OP
+    \expandafter\endinput
   \else
-    \def\ID#1 {\global\XeTeXcharclass"#1=1 \global\catcode"#1=11 }
-    \def\OP#1 {\global\XeTeXcharclass"#1=2 }
-    \def\CL#1 {\global\XeTeXcharclass"#1=3 }
-    \def\EX#1 {\global\XeTeXcharclass"#1=3 }
-    \def\IS#1 {\global\XeTeXcharclass"#1=3 }
-    \def\NS#1 {\global\XeTeXcharclass"#1=3 }
-    \def\CM#1 {\global\XeTeXcharclass"#1=256 }
+    \def\setclass#1#2#3{%
+      \ifnum#1>#2 %
+        \expandafter\gobble
+      \else
+        \expandafter\firstofone
+      \fi
+        {%
+          \global\XeTeXcharclass#1=#3 %
+          \expandafter\setclass\expandafter
+            {\number\numexpr#1+1\relax}{#2}{#3}%
+        }%
+    }%
+    \def\gobble#1{}
+    \def\firstofone#1{#1}
+    \def\ID#1 #2 {\setclass{"#1}{"#2}{1}}
+    \def\OP#1 {\setclass{"#1}{"#1}{2}}
+    \def\CL#1 {\setclass{"#1}{"#1}{3}}
+    \def\EX#1 {\setclass{"#1}{"#1}{3}}
+    \def\IS#1 {\setclass{"#1}{"#1}{3}}
+    \def\NS#1 {\setclass{"#1}{"#1}{3}}
+    \def\CM#1 {\setclass{"#1}{"#1}{256}}
   \fi
 \endverbatimcopy
 %    \end{macrocode}
@@ -757,18 +819,6 @@
 \repeat
 %    \end{macrocode}
 %
-% \changes{v1.0h}{2015/05/11}{Move the stop point for Lua\TeX{}}
-% Lua\TeX{} and older versions of Xe\TeX{} stop here: character classes are a
-% Xe\TeX{}-only concept.
-%    \begin{macrocode}
-\verbatimcopy
-\endgroup
-\ifx\XeTeXchartoks\XeTeXcharclass
-  \expandafter\endinput
-\fi
-\endverbatimcopy
-%    \end{macrocode}
-%
 % \changes{v1.0a}{2015/03/25}{Use \cs{hskip} rather than \cs{hspace}
 %   in glue settings}
 % Set up material to be inserted between character classes.
@@ -776,6 +826,7 @@
 % work with plain as well as \LaTeXe{}.
 %    \begin{macrocode}
 \verbatimcopy
+\endgroup
 \gdef\xtxHanGlue{\hskip0pt plus 0.1em\relax}
 \gdef\xtxHanSpace{\hskip0.2em plus 0.2em minus 0.1em\relax}
 \global\XeTeXinterchartoks 0 1 = {\xtxHanSpace}
