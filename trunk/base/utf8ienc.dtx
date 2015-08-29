@@ -47,7 +47,7 @@
 %</driver>
 % \fi
 %
-% \CheckSum{1244}
+% \CheckSum{1353}
 %
 % \newpage
 %
@@ -295,8 +295,11 @@
 %    can't produce multiline strings without some precaution.
 % \changes{v1.1b}{2004/02/09}{No newlines allowed in error messages}
 % \changes{v1.1g}{2005/09/27}{Real spaces do not show up so use \cs{space}}
+% \changes{v1.1o}{2015/08/28}{Show Unicode number of character in hex}
 %    \begin{macrocode}
-      \PackageError{inputenc}{Unicode\space char\space \string#1\space
+      \PackageError{inputenc}{Unicode\space char\space\expandafter
+                              \UTFviii@splitcsname\string#1\relax
+                              \MessageBreak
                               not\space set\space up\space
                               for\space use\space with\space LaTeX}\@eha
   \else\expandafter
@@ -508,7 +511,8 @@
 %    totally (and we are too lazy to reread the Unicode book to see if
 %    this is the correct algorithm).\footnote{We were hoping to also
 %    find in his work the \TeX{} code for going the other way: from
-%    UTF-8 octets to Unicode slot number, but no luck!}
+%    UTF-8 octets to Unicode slot number, but no luck!
+%    This has now been added as \cs{decode@UTFviii}}
 %    \begin{macrocode}
   \else\ifnum\count@<"800\relax
      \parse@UTFviii@a,%
@@ -554,11 +558,133 @@
      \uccode`#3\count@
      \uppercase{\gdef\UTFviii@tmp{#2#3#4}}}
 %    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\decode@UTFviii}
+% \changes{v1.1o}{2015/08/28}{Macro added}
+%    In the reverse direction, take a sequence of octects(bytes)
+%    representing a character in UTF-8 and construct the Unicode number.
+%    The sequence is terminated by |\relax|.
+%
+%    In this version, if the sequence is not valid UTF-8 you probably
+%    get a low level arithmetic error from |\numexpr| or stray characters
+%    at the end. Getting a better error message would be somewhat expensive.
+%    As the main use is for reporting characters in messages, this is done
+%    just using expansion, so |\numexpr| is used, A stub returning 0 is defined
+%    if |\numexpr| is not available.
+%    \begin{macrocode}
+\ifx\numexpr\@undefined
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\gdef\decode@UTFviii#1{0}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\else
+%    \end{macrocode}
+%
+% If the input is malformed UTF-8 there may not be enough closing ) so
+% add 5 so there are always some remaining then cleanup and remove
+% any remaining ones at the end. This avoids |\numexpr| parse errors
+% while outputting a package error.
+%    \begin{macrocode}
+\gdef\decode@UTFviii#1\relax{%
+  \expandafter\UTFviii@cleanup
+    \the\numexpr\dec@de@UTFviii#1\relax)))))\@empty}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\gdef\UTFviii@cleanup#1)#2\@empty{#1}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\gdef\dec@de@UTFviii#1{%
+\ifx\relax#1%
+\else
+  \ifnum`#1>"EF 
+    ((((`#1-"F0)%
+  \else
+    \ifnum`#1>"DF 
+      (((`#1-"E0)%
+    \else
+      \ifnum`#1>"BF 
+        ((`#1-"C0)%
+      \else
+        \ifnum`#1>"7F 
+        )*64+(`#1-"80)%
+        \else
+        +`#1 %
+        \fi
+      \fi
+    \fi
+  \fi
+  \expandafter\dec@de@UTFviii
+\fi}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\fi
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\UTFviii@hexnumber}
+% \changes{v1.1o}{2015/08/28}{Macro added}
+%    Convert a number to a sequence of uppercase hex digits.
+% If |\numexpr| is not available, it returns its argument unchanged.
+%    \begin{macrocode}
+\ifx\numexpr\@undefined
+%    \end{macrocode}
+%    \begin{macrocode}
+\global\let\UTFviii@hexnumber\@firstofone
+\global\UTFviii@hexdigit\hexnumber@
+%    \end{macrocode}
+%    \begin{macrocode}
+\else
+%    \end{macrocode}
+%    \begin{macrocode}
+\gdef\UTFviii@hexnumber#1{%
+\ifnum#1>15 %
+\expandafter\UTFviii@hexnumber\expandafter{\the\numexpr(#1-8)/16\relax}%
+\fi
+\UTFviii@hexdigit{\numexpr#1\ifnum#1>0-((#1-8)/16)*16\fi\relax}%
+}
+%    \end{macrocode}
+%
+% Almost but not quite |\hexnumber@|.
+%    \begin{macrocode}
+\gdef\UTFviii@hexdigit#1{\ifcase\numexpr#1\relax
+  0\or1\or2\or3\or4\or5\or6\or7\or8\or9\or
+  A\or B\or C\or D\or E\or F\fi}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\fi
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\UTFviii@splitcsname}
+% \changes{v1.1o}{2015/08/28}{Macro added}
+%    Split a csname representing a unicode character and return
+%    the character and (if |\numexpr| is defined) the unicode number in hex.
+%    \begin{macrocode}
+\ifx\numexpr\@undefined
+\gdef\UTFviii@splitcsname#1:#2\relax{#2}}
+\else
+\gdef\UTFviii@splitcsname#1:#2\relax{%
+%    \end{macrocode}
+% Need to pre-expand the argument to ensure cleanup in case of mal-formed UTF-8.
+%    \begin{macrocode}
+#2 (U+\expandafter\UTFviii@hexnumber\expandafter{%
+                     \the\numexpr\decode@UTFviii#2\relax})
+}
+\fi
+%    \end{macrocode}
+% \end{macro}
 %
 %    \begin{macrocode}
 \endgroup
 %    \end{macrocode}
-% \end{macro}
 %
 %    \begin{macrocode}
 \@onlypreamble\DeclareUnicodeCharacter
