@@ -20,5 +20,7 @@ typesetsuppfiles = {"ltxdoc.cfg", "ltxguide.cfg"}
 packtdszip = true
 
 -- Global searching is disabled when unpacking and checking
-checksearch  = false
+if checksearch == nil then
+  checksearch  = false
+end
 unpacksearch = false
