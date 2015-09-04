@@ -14,6 +14,9 @@ installfiles = {"*.def", "*.ldf", "*.sty", "*.tex"}
 sourcefiles  = {"*.dtx", "*.ins"}
 typesetfiles = {"babel.dtx"}
 
+-- babel tests lots of third-party code
+checksearch = true
+
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
 
