@@ -15,7 +15,13 @@ sourcefiles  = {"*.dtx", "*.ins"}
 typesetfiles = {"babel.dtx"}
 
 -- babel tests lots of third-party code
-checksearch = true
+checkdeps    = { }
+checksearch  = true
+unpackdeps   = { }
+unpacksearch = true
+
+-- Avoid zapping babel.pdf
+cleanfiles = {"*.log", "*.zip"}
 
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")

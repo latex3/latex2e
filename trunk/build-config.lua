@@ -23,4 +23,6 @@ packtdszip = true
 if checksearch == nil then
   checksearch  = false
 end
-unpacksearch = false
+if unpacksearch == nil then
+  unpacksearch  = false
+end
