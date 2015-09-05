@@ -23,6 +23,9 @@ unpacksearch = true
 -- Avoid zapping babel.pdf
 cleanfiles = {"*.log", "*.zip"}
 
+-- Babel needs the translation file (to address in l3build)
+checkopts = "-translate-file ./ascii.tcx"
+
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
 
