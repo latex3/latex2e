@@ -71,6 +71,8 @@
 %  \item[\texttt{\string\e@alloc@luafunction@count}] Lua functions
 %    (default~260)
 %  \item[\texttt{\string\e@alloc@whatsit@count}] User whatsits (default~261)
+%  \item[\texttt{\string\e@alloc@bytecode@count}] Lua bytecodes (default~262)
+%  \item[\texttt{\string\e@alloc@luachunk@count}] Lua chunks (default~263)
 % \end{itemize}
 % (|\count 256| is used for |\newmarks| allocation and |\count 257|
 % is used for\linebreak
@@ -113,6 +115,11 @@
 % \DescribeMacro{\newwhatsit}
 % |\newwhatsit{|\meta{whatsit}|}|\\
 % Defines a custom \cs{whatsit}, indexed from~$1$.
+%
+% \noindent
+% \DescribeMacro{\newluabytecode}
+% |\newluabytecode{|\meta{bytecode}|}|\\
+% Allocates a number for lua bytecode register, indexed from~$1$.
 %
 % \noindent
 % \DescribeMacro{\catcodetable@initex}
@@ -343,7 +350,7 @@
 %
 % \endgroup
 %
-% \CheckSum{427}
+% \CheckSum{467}
 % \StopEventually{}
 %
 % \section{Implementation}
@@ -501,6 +508,8 @@
 \expandafter\csname newcount\endcsname\e@alloc@ccodetable@count
 \expandafter\csname newcount\endcsname\e@alloc@luafunction@count
 \expandafter\csname newcount\endcsname\e@alloc@whatsit@count
+\expandafter\csname newcount\endcsname\e@alloc@bytecode@count
+\expandafter\csname newcount\endcsname\e@alloc@luachunk@count
 %    \end{macrocode}
 %
 % End of conditional setup for plain \TeX\ / old \LaTeX.
@@ -660,6 +669,40 @@
 %    \end{macrocode}
 % \end{macro}
 %
+% \subsection{Lua bytecode registers}
+%
+% \begin{macro}{\newluabytecode}
+% \changes{v1.0a}{0000/00/00}{Macro added}
+%   These are only settable from Lua but for consistency are definable
+%   here.
+%    \begin{macrocode}
+\ifx\e@alloc@bytecode@count\@undefined
+  \countdef\e@alloc@bytecode@count=262
+\fi
+\def\newluabytecode#1{%
+  \e@alloc\luabytecode\e@alloc@chardef
+    \e@alloc@bytecode@count\m@ne\e@alloc@top#1%
+}
+\e@alloc@bytecode@count=\z@
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Lua chunk registers}
+%
+% Currently we do not provide a \verb|\newluachunk| allocator
+% from \TeX, as the main allocation needs to be in lua to access the
+% \verb|lua.name| table, however we maintain teh allocation counter as
+% a \TeX\ count register for consistency with the other allocations
+% and to simplify saving the number in custom formats where the lua
+% state is not saved by \verb|\dump|.
+%
+%    \begin{macrocode}
+\ifx\e@alloc@luachunk@count\@undefined
+  \countdef\e@alloc@luachunk@count=263
+\fi
+\e@alloc@luachunk@count=\z@
+%    \end{macrocode}
+%
 % \subsection{Lua loader}
 %
 % Load the Lua code at the start of every job.
@@ -705,6 +748,9 @@
 %<latexrelease>\let\e@alloc@luafunction@count\@undefined
 %<latexrelease>\let\newwhatsit\@undefined
 %<latexrelease>\let\e@alloc@whatsit@count\@undefined
+%<latexrelease>\let\newluabytecode\@undefined
+%<latexrelease>\let\e@alloc@bytecode@count\@undefined
+%<latexrelease>\let\e@alloc@luachunk@count\@undefined
 %<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 %
@@ -971,7 +1017,7 @@ local function new_whatsit(name)
     luatexbase_error("No room for a new custom whatsit")
     return -1
   end
-  texio_write_nl("Custom whatsit " .. name .. " = " ..
+  texio_write_nl("Custom whatsit " .. (name or "") .. " = " ..
                  tex_count["e@alloc@whatsit@count"])
   return tex_count["e@alloc@whatsit@count"]
 end
@@ -983,20 +1029,18 @@ luatexbase.new_whatsit = new_whatsit
 %
 % \begin{macro}{new_bytecode}
 % Much the same as for attribute allocation in Lua.
-% Currently we maintain the allocation count purely in lua, not using
-% a \TeX\ counter.
 % The optional \meta{name} argument is used in the log if given.
 %    \begin{macrocode}
-local bytecode_count = 0
 local function new_bytecode(name)
-  bytecode_count = bytecode_count + 1
-  if bytecode_count > 65534 then
-    luatexbase_error("No room for a new bytecode")
+  tex_setcount("global", "e@alloc@bytecode@count", 
+                         tex_count["e@alloc@bytecode@count"] + 1)
+  if tex_count["e@alloc@bytecode@count"] > 65534 then
+    luatexbase_error("No room for a new bytecode register")
     return -1
   end
-  texio_write_nl("Lua bytecode " .. (name or "") .. " = " .. 
-                 bytecode_count .. "\n")
-  return bytecode_count
+  texio_write_nl("Lua bytecode " .. (name or "") .. " = " ..
+                 tex_count["e@alloc@bytecode@count"])
+  return tex_count["e@alloc@bytecode@count"]
 end
 luatexbase.new_bytecode = new_bytecode
 %    \end{macrocode}
@@ -1005,18 +1049,20 @@ luatexbase.new_bytecode = new_bytecode
 % \subsection{Lua chunk name allocation}
 %
 % \begin{macro}{new_chunkname}
-% As for bytecode registers but here we also store the name in the
+% As for bytecode registers but also store the name in the
 % |lua.name| table.
 %    \begin{macrocode}
-local chunkname_count = 0
 local function new_chunkname(name)
+  tex_setcount("global", "e@alloc@luachunk@count", 
+                         tex_count["e@alloc@luachunk@count"] + 1)
+  local chunkname_count = tex_count["e@alloc@luachunk@count"]
   chunkname_count = chunkname_count + 1
   if chunkname_count > 65534 then
     luatexbase_error("No room for a new chunkname")
     return -1
   end
   lua.name[chunkname_count]=name
-  texio_write_nl("Lua chunkname " .. name .. " = " .. 
+  texio_write_nl("Lua chunkname " .. (name or "") .. " = " .. 
                  chunkname_count .. "\n")
   return chunkname_count
 end
