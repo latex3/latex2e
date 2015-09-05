@@ -85,7 +85,10 @@ function format ()
     -- As format building is added in as an 'extra', the normal
     -- copy mechanism (checkfiles) will fail as things get cleaned up
     -- inside bundleunpack(): get around that using a manual copy
-    cp (fmtname, unpackdir, localdir) 
+    cp (fmtname, unpackdir, localdir)
+    if fmtname == "elatex.fmt" then
+      ren(localdir, fmtname, "latex.fmt")
+    end
   end
   for _,i in ipairs (checkengines) do
     format (i, string.gsub (i, "tex$", "") .. "latex.fmt")
