@@ -90,7 +90,8 @@ function format ()
       ren(localdir, fmtname, "latex.fmt")
     end
   end
-  for _,i in ipairs (checkengines) do
+  local checkengines = optengines or checkengines
+  for _,i in ipairs(checkengines) do
     format (i, string.gsub (i, "tex$", "") .. "latex.fmt")
   end
 end
