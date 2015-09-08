@@ -29,6 +29,10 @@ checkopts = "-translate-file ./ascii.tcx"
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
 
+-- Override formats to be used
+checkengines = {"xetex","pdftex"}
+checksearch  = true
+
 -- Find and run the build system
 kpse.set_program_name ("kpsewhich")
 dofile (kpse.lookup ("l3build.lua"))
