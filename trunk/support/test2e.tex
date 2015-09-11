@@ -19,11 +19,12 @@
 % Version 0.1,  18 Jun 1992 FMi small updates
 % Version 1.0a, 28 Jun 1992 FMi small updates for distribution
 % Version 1.0b, 1993/12/08  DPC update for LaTeX2e
-% Version 1.0e, add config file.
-% Version 1.0f, drop \errorstopmode from \loggingoutput
+% Version 1.0e, 1994/05/19 add config file.
+% Version 1.0f, 1994/05/19 drop \errorstopmode from \loggingoutput
+% Version 1.0g, 2015/09/11 luatex support
 
-% \def\fileversion{v1.0e}
-% \def\filedate{1994/05/19}
+% \def\fileversion{v1.0g}
+% \def\filedate{2015/09/11}
 
 % This file should not be used as a package or class file, 
 % it should be \input.
@@ -187,29 +188,47 @@
       {\typeout{^^J***^^Jtest2e.cfg in operation^^J***^^J}}{}
 \TIMO
 
-% arrange that duplicate fonts share internal font id
-% so they are shown with teh same csname in luatex
+% Arrange that duplicate fonts share internal font id
+% so they are shown with the same csname in luatex
 % to match (pdf)tex and xetex.
-\ifx\directlua\@undefined\else
+\ifx\directlua\undefined\else
 \directlua{
+local original_fontloader=font.read_tfm
+if (luatexbase==nil) then
+  callback.register('define_font',latexDefineFont)
+else
+  if(luatexbase.in_callback==nil) then
+    error('update luatexbase')
+  else
+    local cbl=luatexbase.callback_descriptions('define_font')
+    if(cbl[1]\string~=nil) then
+      original_fontloader=luatexbase.remove_from_callback('define_font',cbl[1])
+    end
+  end
+end
 function latexDefineFont(n,s,i)
   local f = nil
   for ii,vv in font.each() do
     if (n == vv.name) then
-      if(s == vv.size or (s == -1000 and vv.size == vv.designsize)) then
+      if(vv.size == 
+        (s > 0 and s
+          or 
+        (- s * vv.designsize) / 1000)) then
         f=ii
-% debugging
-%      else
-%       print('font callback: ' .. n .. ' ' .. s .. ' ' .. vv.size)
+% debugging (not to log, so not affect tlg)
+      else
+       print('Font callback: ' .. n .. ' ' .. s .. 
+' ' .. vv.size ..
+' ' .. vv.designsize ..
+' ' .. (s > 0 and s or (- s * vv.designsize) / 1000))
       end
     end
   end
-  return f or font.read_tfm(n,s)
+  return f or original_fontloader(n,s,i)
 end
 if (luatexbase==nil) then
   callback.register('define_font',latexDefineFont)
 else
-  % may need to test if this is already set and do something else if so.
   luatexbase.add_to_callback('define_font',latexDefineFont,"latexDefineFont")
 end
 }
