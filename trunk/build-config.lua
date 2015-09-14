@@ -7,12 +7,12 @@ unpackdeps = unpackdeps or {maindir .. "/base"}
 
 -- Set up the check system to work in 'stand-alone' mode
 -- This relies on a format being built by the 'base' dependency
+asciiengines   = {"etex", "pdftex"}
 checkformat    = "latex"
-checkopts      = checkopts or ""
 checkengines   = {"xetex","etex"}
 checkruns      = 2
 checksuppfiles = 
-  {"ascii.tcx", "color.cfg", "graphics.cfg", "test209.tex", "test2e.tex", "xetex.def"}
+  {"color.cfg", "graphics.cfg", "test209.tex", "test2e.tex", "xetex.def"}
 stdengine      = "etex"
 typesetsuppfiles = {"ltxdoc.cfg", "ltxguide.cfg"}
 
@@ -26,3 +26,5 @@ end
 if unpacksearch == nil then
   unpacksearch  = false
 end
+
+
