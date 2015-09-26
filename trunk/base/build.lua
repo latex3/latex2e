@@ -72,15 +72,21 @@ unpackdeps = { }
 indexstyle = "source2e.ist"
 
 function format ()
-  unpack ()
+  local errorlevel = unpack ()
+  if errorlevel ~=0 then
+    return errorlevel
+  end
   local function format (engine,fmtname)
     -- the relationships are all correct
-    os.execute (
+    local errorlevel = os.execute (
         os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
         .. os_concat ..
         engine .. " -etex -ini " .. " -output-directory=" .. unpackdir ..
         " " .. unpackdir .. "/latex.ltx"
       )
+    if errorlevel ~=0 then
+      return errorlevel
+    end
     ren (unpackdir, "latex.fmt", fmtname)
     -- As format building is added in as an 'extra', the normal
     -- copy mechanism (checkfiles) will fail as things get cleaned up
@@ -89,29 +95,46 @@ function format ()
     if fmtname == "elatex.fmt" then
       ren(localdir, fmtname, "latex.fmt")
     end
+    return 0
   end
   local checkengines = optengines or checkengines
   for _,i in ipairs(checkengines) do
-    format (i, string.gsub (i, "tex$", "") .. "latex.fmt")
+    errorlevel = format (i, string.gsub (i, "tex$", "") .. "latex.fmt")
+    if errorlevel ~=0 then
+      return errorlevel
+    end
   end
+  return 0
 end
 
 -- Custom bundleunpack which does not search the localdir
 -- That is needed as texsys.cfg is unpacked in an odd way and
 -- without this will otherwise not be available
 function bundleunpack () 
-  mkdir (localdir)
-  cleandir (unpackdir)
+  local errorlevel = mkdir(localdir)
+  if errorlevel ~=0 then
+    return errorlevel
+  end
+  errorlevel = cleandir(unpackdir)
+  if errorlevel ~=0 then
+    return errorlevel
+  end
   for _,i in ipairs (sourcefiles) do
-    cp (i, ".", unpackdir)
+    errorlevel = cp (i, ".", unpackdir)
+    if errorlevel ~=0 then
+      return errorlevel
+    end
   end
   for _,i in ipairs (unpacksuppfiles) do
-    cp (i, supportdir, localdir)
+    errorlevel = cp (i, supportdir, localdir)
+    if errorlevel ~=0 then
+      return errorlevel
+    end
   end
   for _,i in ipairs (unpackfiles) do
     for _,j in ipairs (filelist (unpackdir, i)) do
       os.execute (os_yes .. ">>" .. localdir .. "/yes")
-      os.execute (
+      errorlevel = os.execute (
           -- Notice that os.execute is used from 'here' as this ensures that
           -- localdir points to the correct place: running 'inside'
           -- unpackdir would avoid the need for setting -output-directory
@@ -121,8 +144,12 @@ function bundleunpack ()
           unpackexe .. " " .. unpackopts .. " -output-directory=" .. unpackdir
             .. " " .. unpackdir .. "/" .. j .. " < " .. localdir .. "/yes"
         )
+      if errorlevel ~=0 then
+        return errorlevel
+      end
     end
   end
+  return 0
 end
 
 -- base does all of the targets itself
