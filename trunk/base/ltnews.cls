@@ -546,7 +546,7 @@
 
 % Abbreviations:
 
-\newcommand{\ctanhttp}{http://www.tex.ac.uk/tex-archive/}
+\newcommand{\ctanhttp}{http://mirror.ctan.org/}
 
 % Needed for 09:
 
