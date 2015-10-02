@@ -92,6 +92,9 @@ function format ()
     -- copy mechanism (checkfiles) will fail as things get cleaned up
     -- inside bundleunpack(): get around that using a manual copy
     cp (fmtname, unpackdir, localdir)
+    if fmtname == "elatex.fmt" then
+      ren(localdir, fmtname, "latex.fmt")
+    end
     return 0
   end
   local checkengines = optengines or checkengines
