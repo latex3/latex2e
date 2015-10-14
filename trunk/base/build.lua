@@ -46,6 +46,7 @@ typesetfiles   =
     "latexrelease.dtx",
     "latexsym.dtx",
     "letter.dtx",
+    "ltluatex.dtx",
     "ltxdoc.dtx",
     "makeindx.dtx",
     "nfssfont.dtx",
