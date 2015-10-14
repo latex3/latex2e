@@ -26,7 +26,7 @@ installfiles   =
     "*.sty",
     "*.tex"
   }
-sourcefiles    = {"*.cls", "unicode-letters.def", "*.dtx", "*.fdd", "ltpatch.ltx", "*.ins", "*.tex"}
+sourcefiles    = {"*.cls", "unicode-letters.def", "*.dtx", "*.fdd", "*.ins", "*.tex"}
 typesetfiles   =
   {
     "source2e.tex",
