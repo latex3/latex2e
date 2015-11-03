@@ -94,6 +94,7 @@ function format ()
     -- inside bundleunpack(): get around that using a manual copy
     cp (fmtname, unpackdir, localdir)
     if fmtname == "elatex.fmt" then
+      rm(localdir, "latex.fmt")
       ren(localdir, fmtname, "latex.fmt")
     end
     return 0
