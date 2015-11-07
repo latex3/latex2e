@@ -1,0 +1,111 @@
+#!/usr/local/bin/perl
+
+if ($#ARGV != 0) {
+    die "Usage: log2tlg basename";
+}
+
+$BASE = shift;
+
+
+$skipping = 0;
+$skip_autoload = 0;
+
+$LTOPDIR = $ENV{'LTOPDIR'};
+
+#
+# skip everything until START-TEST-LOG is seen
+#
+
+while (<>) {
+    /^START-TEST-LOG/ && last;
+}
+
+
+while (<>) {
+    # if END-TEST-LOG is seen, terminate
+    /^END-TEST-LOG/ && last;
+
+    # if OMIT is seen, skip until TIMO
+    if (/^OMIT/) {
+	$skipping++;
+	next;
+    } elsif (/^TIMO/) {
+	$skipping--;
+	next;
+    }
+
+    next if $skipping;
+
+    # if environment variable LTOPDIR is set, replace beginning of paths
+    if ($LTOPDIR) {
+        s#$LTOPDIR/latex2/#../../#g;
+    }
+
+#    s/$BASE(\.lvt)?//og;
+    s/(\.\/)?$BASE//og;
+
+    # if we are running the autoload test suite, the environment variable
+    # TLG_PREFIX is set
+
+    if ($ENV{'TLG_PREFIX'}) {
+
+	if ($skip_autoload) {
+	    /^\)/ && ($skip_autoload = 0);
+	    next;
+	} elsif (/^(.*)\(auto(err|fss1|out1|pict|tabg)\.sty$/) {
+	    $skip_autoload = 1;
+	    ($_ = $1) =~ s/\s+$//;
+	    $_ = "$_\n";
+	}
+
+    }
+
+    # skip filedate lines
+    /[^<][0-9][0-9][0-9][0-9]\/[0-9][0-9]\/[0-9][0-9]/ && next;
+
+    # skip ident lines from .fd files
+    if (/\([^ ]*fd/.../^[ ]*\)/) {
+        next;
+    }
+
+
+    # skip \openin/\openout lines in web2c 7.x
+    if (/^\\open(in|out)\d+ = /) {
+	# skip empty line
+	$_ = <>;
+	next;
+    }
+
+    # remove messy DOS CR at end of line
+    s/\r+$//;
+
+    # normalise Windows \ separator to /
+    # Just look for something that looks like ( followed by path to a three letter extension
+    while (/\([^()]*\\[^()]*\..../) {
+	s/(\([^()]*)\\([^()]*\....)/$1\/$2/ ;
+    }
+
+    # zap ./ at begin of filename
+    s/\(\.\//\(/g;
+
+    # remove filename paths from full file names of the form
+    # (/path/file or (x:/path/file -> (.../file
+    s/^\((:?\/|\w:\/)(?:[^\/]+\/)+/\(...\//;
+
+    # remove string ",display" at the end of hboxes from displayed math
+    s/(\\hbox\(.*), display$/$1/;
+
+# decision on these needed:
+
+#    # zap hyphenation register number
+#    s/(hyphenation register nr: )\d+/$1 <num>/;
+#
+#    # zap \setlanguage number
+#    s/\\setlanguage\d+ /\\setlanguage<num> /;
+#
+#    # zap "Language: number"
+#    s/Language: \d+,/Language: <num>,/;
+
+    # do not print empty lines
+    print if ! /^\s*$/;
+}
