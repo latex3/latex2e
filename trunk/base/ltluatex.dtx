@@ -24,7 +24,7 @@
 \ProvidesFile{ltluatex.dtx}
 %</driver>
 %<*tex>
-[2015/12/02 v1.0j
+[2015/12/02 v1.0k
 %</tex>
 %<plain>  LuaTeX support for plain TeX (core)
 %<*tex>
@@ -351,7 +351,7 @@
 %
 % \endgroup
 %
-% \CheckSum{488}
+% \CheckSum{495}
 % \StopEventually{}
 %
 % \section{Implementation}
@@ -362,9 +362,9 @@
 %    \end{macrocode}
 %
 %
-% \changes{v1.0j}{2012/12/02}{remove nonlocal iteration variables (PHG)}
-% \changes{v1.0j}{2012/12/02}{Assorted typos fixed (PHG)}
-% \changes{v1.0j}{2012/12/02}{Remove unreaschable code after calls to error() (PHG)}
+% \changes{v1.0j}{2015/12/02}{Remove nonlocal iteration variables (PHG)}
+% \changes{v1.0j}{2015/12/02}{Assorted typos fixed (PHG)}
+% \changes{v1.0j}{2015/12/02}{Remove unreachable code after calls to error() (PHG)}
 % \subsection{Minimum Lua\TeX{} version}
 %
 % Lua\TeX{} has changed a lot over time. In the kernel support for ancient
@@ -867,7 +867,7 @@ luatexbase.provides_module = provides_module
 %
 % First an auxiliary for the formatting: this measures up the message
 % leader so we always get the correct indent.
-% \changes{v1.0j}{2012/12/02}{Declaration/use of first\_head fixed (PHG)}
+% \changes{v1.0j}{2015/12/02}{Declaration/use of first\_head fixed (PHG)}
 %    \begin{macrocode}
 local function msg_format(mod, msg_type, text)
   local leader = ""
@@ -940,7 +940,7 @@ end
 %   \texttt{(new)token.create}}
 % Collect up the data from the \TeX{} level into a Lua table: from
 % version~0.80, Lua\TeX{} makes that easy.
-% \changes{v1.0j}{2012/12/02}{Adjust hashtokens to store the result of tex.hashtokens()), not the function (PHG)}
+% \changes{v1.0j}{2015/12/02}{Adjust hashtokens to store the result of tex.hashtokens()), not the function (PHG)}
 %    \begin{macrocode}
 local luaregisterbasetable = { }
 local registermap = {
@@ -1272,6 +1272,7 @@ local function exclusive_handler(name)
 end
 %    \end{macrocode}
 % Handler for |list| callbacks.
+% \changes{v1.0k}{2015/12/02}{resolve name and i.description (PHG)}
 %    \begin{macrocode}
 local function list_handler(name)
   return function(head, ...)
@@ -1281,8 +1282,8 @@ local function list_handler(name)
       ret = i.func(head, ...)
       if ret == false then
         luatexbase_warning(
-          "Function `i.description' returned false\n"
-            .. "in callback `name'"
+          "Function `" .. i.description .. "' returned false\n"
+            .. "in callback `" .. name .."'"
          )
          break
       end
@@ -1328,19 +1329,25 @@ local user_callbacks_defaults = { }
 %
 % \begin{macro}{create_callback}
 % \changes{v1.0a}{2015/09/24}{Function added}
+% \changes{v1.0i}{2015/11/29}{Check name is not nil in error message (PHG)}
+% \changes{v1.0k}{2015/12/02}{Give more specific error messages (PHG)}
 %   The allocator itself.
 %    \begin{macrocode}
 local function create_callback(name, ctype, default)
-  if not name or
-    name == "" or
-    callbacktypes[name] or
-    not(default == false or  type(default) == "function")
-    then
-%    \end{macrocode}
-% \changes{v1.0i}{2015/11/29}{Check name is not nil in error message (PHG)}
-%    \begin{macrocode}
-      luatexbase_error("Unable to create callback " .. (name or "nil"))
+  if not name  or name  == ""
+  or not ctype or ctype == ""
+  then
+    luatexbase_error("Unable to create callback:\n" ..
+                     "valid callback name and type required")
   end
+  if callbacktypes[name] then
+    luatexbase_error("Unable to create callback `" .. name ..
+                     "':\ncallback type disallowed as name")
+  end
+  if default ~= false and type (default) ~= "function" then
+    luatexbase_error("Unable to create callback `" .. name ..
+                     ":\ndefault is not a function")
+   end
   user_callbacks_defaults[name] = default
   callbacktypes[name] = types[ctype]
 end
@@ -1350,18 +1357,19 @@ luatexbase.create_callback = create_callback
 %
 % \begin{macro}{call_callback}
 % \changes{v1.0a}{2015/09/24}{Function added}
+% \changes{v1.0i}{2015/11/29}{Check name is not nil in error message (PHG)}
+% \changes{v1.0k}{2015/12/02}{Give more specific error messages (PHG)}
 %  Call a user defined callback. First check arguments.
 %    \begin{macrocode}
 local function call_callback(name,...)
-  if not name or
-    name == "" or
-    user_callbacks_defaults[name] == nil
-    then
-%    \end{macrocode}
-% \changes{v1.0i}{2015/11/29}{Check name is not nil in error message (PHG)}
-%    \begin{macrocode}
-        luatexbase_error("Unable to call callback " .. (name or "nil"))
+  if not name or name == "" then
+    luatexbase_error("Unable to create callback:\n" ..
+                     "valid callback name required")
   end
+  if user_callbacks_defaults[name] == nil then
+    luatexbase_error("Unable to call callback `" .. name
+                     .. "':\nunknown or empty")
+   end
   local l = callbacklist[name]
   local f
   if not l then
@@ -1381,12 +1389,14 @@ luatexbase.call_callback=call_callback
 % \begin{macro}{add_to_callback}
 % \changes{v1.0a}{2015/09/24}{Function added}
 %   Add a function to a callback. First check arguments.
+% \changes{v1.0k}{2015/12/02}{Give more specific error messages (PHG)}
 %    \begin{macrocode}
 local function add_to_callback(name, func, description)
-  if
-    not name or
-    name == "" or
-    not callbacktypes[name] or
+  if not name or name == "" then
+    luatexbase_error("Unable to register callback:\n" ..
+                     "valid callback name required")
+  end
+  if not callbacktypes[name] or
     type(func) ~= "function" or
     not description or
     description == "" then
@@ -1442,13 +1452,16 @@ luatexbase.add_to_callback = add_to_callback
 %
 % \begin{macro}{remove_from_callback}
 % \changes{v1.0a}{2015/09/24}{Function added}
+% \changes{v1.0k}{2015/12/02}{adjust initialisation of cb local (PHG)}
+% \changes{v1.0k}{2015/12/02}{Give more specific error messages (PHG)}
 %   Remove a function from a callback. First check arguments.
 %    \begin{macrocode}
 local function remove_from_callback(name, description)
-  if
-    not name or
-    name == "" or
-    not callbacktypes[name] or
+  if not name or name == "" then
+    luatexbase_error("Unable to remove function from callback:\n" ..
+                     "valid callback name required")
+  end
+  if not callbacktypes[name] or
     not description or
     description == "" then
     luatexbase_error(
@@ -1468,7 +1481,6 @@ local function remove_from_callback(name, description)
 %   callback handler.
 %    \begin{macrocode}
   local index = false
-  local cb = {}
   for i,j in ipairs(l) do
     if j.description == description then
       index = i
@@ -1480,7 +1492,7 @@ local function remove_from_callback(name, description)
       "No callback `" .. description .. "' registered for `" ..
       name .. "'\n")
   end
-  cb = l[index]
+  local cb = l[index]
   table.remove(l, index)
   luatexbase_log(
     "Removing  `" .. description .. "' from `" .. name .. "'."
