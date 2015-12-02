@@ -24,7 +24,7 @@
 \ProvidesFile{ltluatex.dtx}
 %</driver>
 %<*tex>
-[2015/11/29 v1.0i
+[2015/12/02 v1.0j
 %</tex>
 %<plain>  LuaTeX support for plain TeX (core)
 %<*tex>
@@ -119,12 +119,12 @@
 % \noindent
 % \DescribeMacro{\newluabytecode}
 % |\newluabytecode{|\meta{bytecode}|}|\\
-% Allocates a number for lua bytecode register, indexed from~$1$.
+% Allocates a number for Lua bytecode register, indexed from~$1$.
 %
 % \noindent
 % \DescribeMacro{\newluachunkname}
 % |newluachunkname{|\meta{chunkname}|}|\\
-% Allocates a number for lua chunk register, indexed from~$1$.
+% Allocates a number for Lua chunk register, indexed from~$1$.
 % Also enters the name of the regiser (without backslash) into the
 % \verb|lua.name| table to be used in stack traces.
 %
@@ -149,7 +149,7 @@
 % \section{Plain \TeX\ interface}
 %
 % The \textsf{ltluatex} interface may be used with plain \TeX\ using 
-% |\input{ltluatex}| this inputs |ltluatex.tex| which inputs
+% |\input{ltluatex}|. This inputs |ltluatex.tex| which inputs
 % |etex.src| (or |etex.sty| if used with \LaTeX)
 % if it is not already input, and then defines some internal commands to
 % allow the \textsf{ltluatex} interface to be defined.
@@ -179,7 +179,7 @@
 % |\attributedef|.
 % The attribute name is recorded in the |attributes| table. A
 % metatable is provided so that the table syntax can be used
-% consistently for attributes declared in \TeX\ or lua.
+% consistently for attributes declared in \TeX\ or Lua.
 %
 % \noindent
 % \DescribeMacro{new_whatsit}
@@ -195,7 +195,7 @@
 % \noindent
 % \DescribeMacro{new_chunkname}
 % |luatexbase.new_chunkname(|\meta{chunkname}|)|\\
-% Returns an allocation number for a lua chunk name for use with 
+% Returns an allocation number for a Lua chunk name for use with 
 % |\directlua| and |\latelua|, indexed from~$1$.
 % The number is returned and also \meta{name} argument is added to the
 % |lua.name| array at that index.
@@ -342,7 +342,7 @@
 % \DescribeMacro{create_callback}
 % |luatexbase.create_callback(|\meta{name},meta{type},\meta{default}|)|
 % Defines a user defined callback. The last argument is a default
-% functtion of |false|.
+% function or |false|.
 %
 % \noindent
 % \DescribeMacro{call_callback}
@@ -362,6 +362,9 @@
 %    \end{macrocode}
 %
 %
+% \changes{v1.0j}{2012/12/02}{remove nonlocal iteration variables (PHG)}
+% \changes{v1.0j}{2012/12/02}{Assorted typos fixed (PHG)}
+% \changes{v1.0j}{2012/12/02}{Remove unreaschable code after calls to error() (PHG)}
 % \subsection{Minimum Lua\TeX{} version}
 %
 % Lua\TeX{} has changed a lot over time. In the kernel support for ancient
@@ -417,8 +420,8 @@
 % \subsubsection{Fixes to \texttt{etex.src}/\texttt{etex.sty}}
 %
 % These could and probably should be made directly in an
-% update to etex.src which already has some luatex-specific
-% code, but does not define the correct range for luatex.
+% update to |etex.src| which already has some Lua\TeX-specific
+% code, but does not define the correct range for Lua\TeX.
 %
 %    \begin{macrocode}
 % 2015-07-13 higher range in luatex
@@ -638,8 +641,8 @@
 % \begin{macro}{\newluafunction}
 % \changes{v1.0a}{2015/09/24}{Macro added}
 %   Much the same story for allocating Lua\TeX{} functions except here they are
-%   just numbers so are allocated in the same way as boxes. Lua index from~$1$
-%   so once again slot~$0$ is skipped.
+%   just numbers so they are allocated in the same way as boxes.
+%   Lua indexes from~$1$ so once again slot~$0$ is skipped.
 %    \begin{macrocode}
 \ifx\e@alloc@luafunction@count\@undefined
   \countdef\e@alloc@luafunction@count=260
@@ -818,6 +821,7 @@ local luatexbase_error
 %   information and to return it.
 %    \begin{macrocode}
 local modules = modules or { }
+local luatexbase_error
 %    \end{macrocode}
 % \end{macro}
 %
@@ -836,8 +840,7 @@ end
 %    \begin{macrocode}
 local function provides_module(info)
   if not (info and info.name) then
-    luatexbase_error("Missing module name for provides_modules")
-    return
+    luatexbase_error("Missing module name for provides_module")
   end
   local function spaced(text)
     return text and (" " .. text) or ""
@@ -864,13 +867,15 @@ luatexbase.provides_module = provides_module
 %
 % First an auxiliary for the formatting: this measures up the message
 % leader so we always get the correct indent.
+% \changes{v1.0j}{2012/12/02}{Declaration/use of first\_head fixed (PHG)}
 %    \begin{macrocode}
 local function msg_format(mod, msg_type, text)
   local leader = ""
   local cont
+  local first_head
   if mod == "LaTeX" then
     cont = string_gsub(leader, ".", " ")
-    leader = leader .. "LaTeX: "
+    first_head = leader .. "LaTeX: "
   else
     first_head = leader .. "Module "  .. msg_type
     cont = "(" .. mod .. ")"
@@ -935,6 +940,7 @@ end
 %   \texttt{(new)token.create}}
 % Collect up the data from the \TeX{} level into a Lua table: from
 % version~0.80, Lua\TeX{} makes that easy.
+% \changes{v1.0j}{2012/12/02}{Adjust hashtokens to store the result of tex.hashtokens()), not the function (PHG)}
 %    \begin{macrocode}
 local luaregisterbasetable = { }
 local registermap = {
@@ -947,19 +953,18 @@ local registermap = {
   skipzero      = "assign_skip"    ,
   tokszero      = "assign_toks"    ,
 }
-local i, j
 local createtoken
 if tex.luatexversion > 81 then
   createtoken = token.create
 elseif tex.luatexversion > 79 then
   createtoken = newtoken.create 
 end
-local hashtokens    = tex.hashtokens
+local hashtokens    = tex.hashtokens()
 local luatexversion = tex.luatexversion
 for i,j in pairs (registermap) do
   if luatexversion < 80 then
-    luaregisterbasetable[hashtokens()[i][1]] =
-      hashtokens()[i][2]
+    luaregisterbasetable[hashtokens[i][1]] =
+      hashtokens[i][2]
   else
     luaregisterbasetable[j] = createtoken(i).mode
   end
@@ -976,7 +981,7 @@ end
 local registernumber
 if luatexversion < 80 then
   function registernumber(name)
-    local nt = hashtokens()[name]
+    local nt = hashtokens[name]
     if(nt and luaregisterbasetable[nt[1]]) then
       return nt[2] - luaregisterbasetable[nt[1]]
     else
@@ -1020,7 +1025,6 @@ local function new_attribute(name)
                           tex_count["e@alloc@attribute@count"] + 1)
   if tex_count["e@alloc@attribute@count"] > 65534 then
     luatexbase_error("No room for a new \\attribute")
-    return -1
   end
   attributes[name]= tex_count["e@alloc@attribute@count"]
   luatexbase_log("Lua-only attribute " .. name .. " = " ..
@@ -1034,14 +1038,13 @@ luatexbase.new_attribute = new_attribute
 % \subsection{Custom whatsit allocation}
 %
 % \begin{macro}{new_whatsit}
-% Much the same as for attribute allocation in Lua
+% Much the same as for attribute allocation in Lua.
 %    \begin{macrocode}
 local function new_whatsit(name)
   tex_setcount("global", "e@alloc@whatsit@count", 
                          tex_count["e@alloc@whatsit@count"] + 1)
   if tex_count["e@alloc@whatsit@count"] > 65534 then
     luatexbase_error("No room for a new custom whatsit")
-    return -1
   end
   luatexbase_log("Custom whatsit " .. (name or "") .. " = " ..
                  tex_count["e@alloc@whatsit@count"])
@@ -1062,7 +1065,6 @@ local function new_bytecode(name)
                          tex_count["e@alloc@bytecode@count"] + 1)
   if tex_count["e@alloc@bytecode@count"] > 65534 then
     luatexbase_error("No room for a new bytecode register")
-    return -1
   end
   luatexbase_log("Lua bytecode " .. (name or "") .. " = " ..
                  tex_count["e@alloc@bytecode@count"])
@@ -1085,7 +1087,6 @@ local function new_chunkname(name)
   chunkname_count = chunkname_count + 1
   if chunkname_count > 65534 then
     luatexbase_error("No room for a new chunkname")
-    return -1
   end
   lua.name[chunkname_count]=name
   luatexbase_log("Lua chunkname " .. (name or "") .. " = " .. 
@@ -1098,7 +1099,7 @@ luatexbase.new_chunkname = new_chunkname
 %
 % \subsection{Lua callback management}
 %
-% The native mechanism for callbacks in Lua allows only one per function.
+% The native mechanism for callbacks in Lua\TeX\ allows only one per function.
 % That is extremely restrictive and so a mechanism is needed to add and
 % remove callbacks from the appropriate hooks.
 %
@@ -1242,7 +1243,7 @@ end
 %
 % The handler function is registered into the callback when the
 % first function is added to this callback's list. Then, when the callback
-% is called, then handler takes care of running all functions in the list.
+% is called, the handler takes care of running all functions in the list.
 % When the last function is removed from the callback's list, the handler
 % is unregistered.
 %
@@ -1253,7 +1254,6 @@ end
 %    \begin{macrocode}
 local function data_handler(name)
   return function(data, ...)
-    local i
     for _,i in ipairs(callbacklist[name]) do
       data = i.func(data,...)
     end
@@ -1277,7 +1277,6 @@ local function list_handler(name)
   return function(head, ...)
     local ret
     local alltrue = true
-    local i
     for _,i in ipairs(callbacklist[name]) do
       ret = i.func(head, ...)
       if ret == false then
@@ -1300,7 +1299,6 @@ end
 %    \begin{macrocode}
 local function simple_handler(name)
   return function(...)
-    local i
     for _,i in ipairs(callbacklist[name]) do
       i.func(...)
     end
@@ -1322,7 +1320,7 @@ local handlers = {
 %
 % Defining user callbacks perhaps should be in package code,
 % but impacts on |add_to_callback|.
-% If a default function is not required, may may be declared as |false|.
+% If a default function is not required, it may be declared as |false|.
 % First we need a list of user callbacks.
 %    \begin{macrocode}
 local user_callbacks_defaults = { }
@@ -1397,7 +1395,6 @@ local function add_to_callback(name, func, description)
         .. "Correct usage:\n"
         .. "add_to_callback(<callback>, <function>, <description>)"
     )
-    return
   end
 %    \end{macrocode}
 %   Then test if this callback is already in use. If not, initialise its list
@@ -1459,7 +1456,6 @@ local function remove_from_callback(name, description)
         .. "Correct usage:\n"
         .. "remove_from_callback(<callback>, <description>)"
     )
-    return
   end
   local l = callbacklist[name]
   if not l then
@@ -1472,7 +1468,6 @@ local function remove_from_callback(name, description)
 %   callback handler.
 %    \begin{macrocode}
   local index = false
-  local i,j
   local cb = {}
   for i,j in ipairs(l) do
     if j.description == description then
@@ -1484,7 +1479,6 @@ local function remove_from_callback(name, description)
     luatexbase_error(
       "No callback `" .. description .. "' registered for `" ..
       name .. "'\n")
-    return
   end
   cb = l[index]
   table.remove(l, index)
@@ -1514,7 +1508,6 @@ local function in_callback(name, description)
     or not description then
       return false
   end
-  local i
   for _, i in pairs(callbacklist[name]) do
     if i.description == description then
       return true
@@ -1556,7 +1549,6 @@ local function callback_descriptions (name)
     then
     return d
   else
-  local i
   for k, i in pairs(callbacklist[name]) do
     d[k]= i.description
     end
