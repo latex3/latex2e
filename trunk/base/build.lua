@@ -60,7 +60,17 @@ typesetfiles   =
 
 -- A few special file for unpacking
 unpackfiles     = {"unpack.ins"}
-unpacksuppfiles = {"hyphen.cfg", "UShyphen.tex"}
+unpacksuppfiles =
+  {
+    "EastAsianWidth.txt",
+    "hyphen.cfg",
+    "LineBreak.txt",
+    "load-unicode-data.tex",
+    "load-unicode-xetex-classes.tex",
+    "MathClass.txt",
+    "UnicodeData.txt",
+    "UShyphen.tex"
+  }
 
 -- Custom settings for the check system
 testsuppdir = "testfiles/helpers"
