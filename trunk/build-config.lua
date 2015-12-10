@@ -11,7 +11,7 @@ asciiengines   = {"etex", "pdftex"}
 checkformat    = "latex"
 checkengines   = {"xetex","etex"}
 checkruns      = 2
-checksuppfiles = {"color.cfg", "graphics.cfg", "test209.tex", "test2e.tex"}
+checksuppfiles = {"color.cfg", "graphics.cfg", "test209.tex", "test2e.tex", "xetex.def"}
 stdengine      = "etex"
 typesetsuppfiles = {"ltxdoc.cfg", "ltxguide.cfg"}
 
