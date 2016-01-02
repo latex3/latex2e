@@ -9,7 +9,7 @@ unpackdeps = unpackdeps or {maindir .. "/base"}
 -- This relies on a format being built by the 'base' dependency
 asciiengines   = {"etex", "pdftex"}
 checkformat    = "latex"
-checkengines   = {"etex","xetex", "luatex"}
+checkengines   = {"xetex","etex"}
 checkruns      = 2
 checksuppfiles = {"color.cfg", "graphics.cfg", "test209.tex", "test2e.tex", "xetex.def"}
 stdengine      = "etex"
