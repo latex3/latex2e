@@ -7,13 +7,14 @@ unpackdeps = unpackdeps or {maindir .. "/base"}
 
 -- Set up the check system to work in 'stand-alone' mode
 -- This relies on a format being built by the 'base' dependency
-asciiengines   = {"etex", "pdftex"}
-checkformat    = "latex"
-checkengines   = {"xetex","etex"}
-checkruns      = 2
-checksuppfiles = {"color.cfg", "graphics.cfg", "test209.tex", "test2e.tex", "xetex.def"}
-stdengine      = "etex"
-typesetsuppfiles = {"ltxdoc.cfg", "ltxguide.cfg"}
+asciiengines   = asciiengines       or {"etex"}
+checkformat    = checkformat        or "latex"
+checkengines   = checkengines       or {"etex", "xetex"}
+checkruns      = checkruns          or  2
+checksuppfiles = checksuppfiles     or
+  {"color.cfg", "graphics.cfg", "test209.tex", "test2e.tex", "xetex.def"}
+stdengine      = stdengine          or "etex"
+typesetsuppfiles = typesetsuppfiles or {"ltxdoc.cfg", "ltxguide.cfg"}
 
 -- Build TDS-style zips
 packtdszip = true
