@@ -60,4 +60,4 @@ LaTeX distribution,  CTAN:macros/latex/base/lppl.txt;
 either version 1.3c of the license, or (at your option) any later
 version.
 
---- Copyright 2005-2015 the LaTeX3 project.  All rights reserved ---
+--- Copyright 2005-2016 the LaTeX3 project.  All rights reserved ---
