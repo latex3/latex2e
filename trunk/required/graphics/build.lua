@@ -6,6 +6,9 @@
 bundle = ""
 module = "graphics"
 
+-- CTAN's name for this is a bit different from ours
+ctanpkg = "latex-graphics"
+
 -- Location of main directory: use Unix-style path separators
 maindir = "../.."
 
