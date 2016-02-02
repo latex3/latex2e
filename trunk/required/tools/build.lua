@@ -6,6 +6,9 @@
 bundle = ""
 module = "tools"
 
+-- CTAN's name for this is a bit different from ours
+ctanpkg = "latex-tools"
+
 -- Location of main directory: use Unix-style path separators
 maindir = "../.."
 
