@@ -6,6 +6,9 @@
 bundle = ""
 module = "cyrillic"
 
+-- CTAN's name for this is a bit different from ours
+ctanpkg = "latex-cyrillic"
+
 -- Location of main directory: use Unix-style path separators
 maindir = "../.."
 
