@@ -16,8 +16,10 @@ maindir = "../.."
 installfiles = {"*.sty"}
 typesetfiles = {"*.dtx", "*.tex"}
 unpackfiles  = {"*.ins"}
+unpacksuppfiles = {"amstex.sty"}
 
-checkdeps = {maindir .. "/base"}
+unpackdeps = {}
+checkdeps = {}
 
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
