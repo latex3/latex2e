@@ -13,13 +13,14 @@ ctanpkg = "latex-amsmath"
 maindir = "../.."
 
 -- Minor modifications to file types
-installfiles = {"*.sty"}
+sourcefiles  = {"*.dtx", "*.ins", "amstex.sty"}
 typesetfiles = {"*.dtx", "*.tex"}
-unpackfiles  = {"*.ins"}
-unpacksuppfiles = {"amstex.sty"}
 
-unpackdeps = {}
-checkdeps = {}
+-- Avoid isolation (cf. babel)
+checkdeps    = { }
+checksearch  = true
+unpackdeps   = { }
+unpacksearch = true
 
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
