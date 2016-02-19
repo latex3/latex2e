@@ -1,6 +1,6 @@
 #!/usr/bin/env texlua
 
--- Build script for LaTeX2e "tools" files
+-- Build script for LaTeX2e "amsmath" files
 
 -- Identify the bundle and module
 bundle = ""
