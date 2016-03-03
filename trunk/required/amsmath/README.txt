@@ -1,4 +1,4 @@
-README for amsmath 2.15 [2016/02/20]
+README for amsmath 2.15a [2016/03/03]
            American Mathematical Society, LaTeX3 Project
 
 Copyright 2001-2004, 2007, 2008, 2010, 2011, 2013 American Mathematical Society.
@@ -73,11 +73,15 @@ for a category.
 ========================================================================
 IV. REMARKS ON THIS RELEASE
 
-Version 2.14 is a minor update to provide more fluid interoperability
-with stix.sty.  It should be fully compatible with version 2.13.
+Version 2.15 adds some compatibility with luatex 0.87 and fixes to
+\dots handling.
 
 ========================================================================
 V. CHANGE LOG (REVERSE CHRONOLOGICAL ORDER)
+
+2016-03-03 amsmath.dtx 2.15a
+     One missing % added to mathstrut handling.
+
 
 2016-02-20 amsmath.dtx 2.15
      Updates for new \mathchardef handling in luatex
