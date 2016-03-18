@@ -1,4 +1,4 @@
-README for amsmath 2.15a [2016/03/03]
+README for amsmath 2.15b [2016/03/10]
            American Mathematical Society, LaTeX3 Project
 
 Copyright 2001-2004, 2007, 2008, 2010, 2011, 2013 American Mathematical Society.
