@@ -20,7 +20,7 @@
 % 
 
 
-README for the `tools' bundle  (December 1999)
+README for the `tools' bundle
 =============================
 
 This `bundle' consists of LaTeX2e packages written and supported by
