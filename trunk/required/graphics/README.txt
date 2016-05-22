@@ -46,6 +46,7 @@ Non Standard Packages
 =====================
 graphicx.dtx    Source for graphicx package (extension of graphics)
 epsfig.dtx      Source for epsfig package (extension of graphicx)
+rotating.dtx    Source for rotating package (extension of graphicx)
 keyval.dtx      Source for keyval pacakge (required by both the above)
 lscape.sty      Produce landscape pages in a (mainly) portrait document.
 
@@ -64,6 +65,8 @@ grfguide.tex    User Guide to all the packages in this bundle.
                 containing (for example)
                                 \ExecuteOptions{dvips}
                 Before running this file.
+
+rotex.tex       examples of use of rotating package.
 
 =============================================
 

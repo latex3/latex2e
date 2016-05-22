@@ -15,6 +15,7 @@ maindir = "../.."
 -- Minor modifications to file types
 installfiles = {"*.def", "*.sty"}
 typesetfiles = {"*.dtx", "*.tex"}
+docfiles     = {"cat.eps"}
 
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
