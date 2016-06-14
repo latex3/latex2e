@@ -26,7 +26,24 @@ installfiles   =
     "*.sty",
     "*.tex"
   }
-sourcefiles    = {"*.cls", "*.dtx", "*.fdd", "*.ins", "*.tex"}
+sourcefiles    = 
+  {
+    "ltnews.cls",
+    "ltxguide.cls",
+    "minimal.cls",
+    "*.dtx",
+    "*.fdd",
+    "*.ins",
+    "idx.tex",
+    "lablst.tex",
+    "latexbug.tex",
+    "lppl.tex",
+    "ltxcheck.tex",
+    "sample2e.tex",
+    "small2e.tex",
+    "source2e.tex",
+    "testpage.tex"
+  }
 typesetfiles   =
   {
     "source2e.tex",
