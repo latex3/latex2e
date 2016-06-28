@@ -1,4 +1,4 @@
-README for amsmath 2.15c [2016/05/26]
+README for amsmath 2.15d [2016/06/28]
            American Mathematical Society, LaTeX3 Project
 
 Copyright 2001-2004, 2007, 2008, 2010, 2011, 2013 American Mathematical Society.
@@ -80,10 +80,13 @@ Version 2.15 adds some compatibility with luatex 0.87 and fixes to
 V. CHANGE LOG (REVERSE CHRONOLOGICAL ORDER)
 
 
-2016-05-26 amsmath.dtx 2.15a
+2016-06-28 amsmath.dtx 2.15d
+     avoid error on \dots \left ....
+
+2016-05-26 amsmath.dtx 2.15c
      ignore spaces at start of \intertext
 
-2016-03-10 amsmath.dtx 2.15a
+2016-03-10 amsmath.dtx 2.15b
      Preserve box0 in \resetMathstrut@
      In xetex, and luatex, add version of \newmcodes@
 	that works even if - has a \Umathcode definition.
