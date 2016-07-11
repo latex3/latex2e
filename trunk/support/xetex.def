@@ -1,24 +1,50 @@
 %% This is file `xetex.def' for XeTeX,
 %% based upon other drivers for LaTeX color and graphics support.
 %%
-%%  Copyright 2004-2007, 2009, 2013-2014
+%%  Copyright 2004-2007, 2009, 2013-2016
 %%  Ross Moore <ross@maths.mq.edu.au>
 %%  modified by Jonathan Kew et al.
+%%
+%%  Copyright 2016 LaTeX3 project and above named authors.
 %%
 %% This file is not part of the Standard LaTeX `Graphics Bundle'.
 %% It may be distributed under the terms of the LaTeX Project Public
 %% License, as described in lppl.txt in the base LaTeX distribution.
 %% Either version 1.0 or, at your option, any later version.
 %%
-%% This driver is developed at:
-%%   http://puszcza.gnu.org.ua/projects/latexfmxdef
-%% Please report bugs and patches through the tracker there.
-%% Official releases, though, are made through CTAN:
-%%   http://www.ctan.org/pkg/xetex-def
-%%   http://www.ctan.org/pkg/xetex-def
+%% This work has the LPPL maintenance status `maintained'.
+%%
+%% The Current Maintainer of this work is the LaTeX3 Project.
+%%
+%% https://github.com/latex3/graphics-def/issues
+%%
 %% 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%  Version History
+%%
+%%  2016/07/10  [DPC] [v4.10] \mag test added to all the files
+%%
+%%  2016/07/02  [DPC] [v4.09] support new (no)setpagesize options of
+%%              color and graphics packages.
+%%              revert pagecolor code to match dvips
+%%
+%%  2016/04/06  [AK] [v4.08] Support new suffix .mps (or .MPS) for eps files
+%%              created by MetaPost. In TeX Live 2016, the option --mvorigin
+%%              for [x]dvipdfmx is necessary to include MetaPost-created eps
+%%              files by the usual \Ginclude@eps. This may a bit be inconvenient.
+%%              Thus we introduce a new command \Ginclude@mps for the suffix
+%%              .mps (or .MPS). In \Ginclude@mps, llx, lly, urx, and ury are
+%%              natural compared with those in \Ginclude@eps. Thus the origin
+%%              should not be translated, that is the option --mvorigin should
+%%              not be given.
+%%
+%%  2015/09/11  [AK, NA, TY] [v4.06] Support pagebox=artbox, etc. in xelatex,
+%%              like in pdflatex. It requires new xetex and xdvipdfmx, which
+%%              will be available in TeX Live 2016. Interested users may build
+%%              new binaries by using new sources in the TeX Live repository.
+%%
+%%  2015/03/26  [SH] [v4.04] JPEG 2000 (.jp2, .jpf) support, written for
+%%                           dvipdfmx.
 %%
 %%  2014/04/28  [KB] [v4.03] \newif outside \def.  Skipped 4.02.
 %%
@@ -94,7 +120,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % emacs-page
 \ProvidesFile{xetex.def}
-  [2014/07/25 v4.03 LaTeX color/graphics driver for XeTeX (RRM/JK)]
+  [2016/07/02 v4.09 LaTeX color/graphics driver for XeTeX (L3/RRM/JK)]
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % make sure we can use " with correct catcode
@@ -193,6 +219,11 @@
 
 %
 % v0.02t: support for \pagecolor
+% not used by default but may be re-activated 
+% with \oldxetexpagecolorcode
+% see http://tug.org/pipermail/xetex/2016-June/026696.html
+%
+\def\oldxetexpagecolorcode{%
 \def\set@page@color{%
   \global\let\current@page@color\current@color
   \@ifundefined{GXTorg@shipout}{%
@@ -219,7 +250,9 @@
       \special{background \current@page@color}%
     }%
   }{}%
+}%
 }
+\def\set@page@color{\special{background \current@color}}
 
 \def\set@color@stack{%
   \special{color push \current@color}%
@@ -270,18 +303,42 @@
 %
 % PDF is a special case which has extra features
 \def\G@pdf@ext{.pdf}
+%
 
+
+\def\GPT@warn{\PackageWarning{xetex.def}}%
+%
 % \Gin@XeTeX@page: page number of pdf image or \@empty otherwise.
 % This code adapted from  pdftex.def
 \let\Gin@XeTeX@page\@empty
+\let\GPT@pagebox\@empty
 \begingroup
-  \toks@{\define@key{Gin}{page}{\def\Gin@XeTeX@page{#1}}}%
+  \toks@{\define@key{Gin}{page}{\def\Gin@XeTeX@page{#1}}
+\define@key{Gin}{pagebox}{%
+  \expandafter\let\expandafter\GPT@pagebox%
+      \csname GPT@pagebox@#1\endcsname
+  \ifx\GPT@pagebox\relax
+    \let\GPT@pagebox\@empty
+    \GPT@warn{%
+      Unknown value `#1' for `pagebox'.\MessageBreak
+      Supported values:\MessageBreak
+      mediabox, cropbox, bleedbox, trimbox, artbox%
+    }%
+  \fi%
+}%
+}%
   \@ifundefined{define@key}{%
    \edef\x{\endgroup\noexpand\AtBeginDocument{%
      \noexpand\@ifundefined{define@key}{}{\the\toks@}}%
     }\x
   }{\expandafter\endgroup\the\toks@}
 
+\def\GPT@pagebox@cropbox{crop}%
+\def\GPT@pagebox@mediabox{media}%
+\def\GPT@pagebox@artbox{art}%
+\def\GPT@pagebox@trimbox{trim}%
+\def\GPT@pagebox@bleedbox{bleed}%
+%
 % rotating graphics is supported, but 
 % rotation of arbitrary material is not supported yet
 %
@@ -301,19 +358,22 @@
 %
 \def\XeTeX@include@QTm#1{%
   \def\picpage{}%
+  \def\picpagebox{}%
   \edef\type@ext{%
     \noexpand\lowercase{%
       \noexpand\def\noexpand\type@ext{\Gin@ext}%
     }%
   }\type@ext
   \ifx\type@ext\G@pdf@ext
+   \ifx\GPT@pagebox\@empty\else
+     \edef\picpagebox{ \GPT@pagebox}\fi
    \ifx\Gin@XeTeX@page\@empty\else
      \edef\picpage{ page\Gin@XeTeX@page}\fi
    \def\picfilecommand{\pdffile@cmd}%
   \else
    \def\picfilecommand{\picfile@cmd}%
   \fi
-  \edef\picfileargs{ \XeTeXquote#1\XeTeXquote\space\picpage}%
+  \edef\picfileargs{ \XeTeXquote#1\XeTeXquote\space\picpage\picpagebox}%
   \Gin@log{%
     <use \picfileargs>%
   }%
@@ -434,11 +494,13 @@
    \ifx\type@ext\G@pdf@ext
     \ifx\Gin@XeTeX@page\@empty \def\picpage{}%
     \else \edef\picpage{ page\Gin@XeTeX@page}\fi
+    \ifx\GPT@pagebox\@empty \def\picpagebox{}%
+    \else \edef\picpagebox{ \GPT@pagebox}\fi
    \fi
    \setbox0=\hbox{%
      \ifx\type@ext\G@pdf@ext
       \edef\piccommand{\noexpand\pdffile@cmd
-         \XeTeXquote#1#2\XeTeXquote\space\picpage}%
+         \XeTeXquote#1#2\XeTeXquote\space\picpage\picpagebox}%
      \else
       \edef\piccommand{\noexpand\picfile@cmd 
          \XeTeXquote#1#2\XeTeXquote\space}%
@@ -474,6 +536,9 @@
 \@namedef{Gin@rule@.eps}#1{{eps}{.eps}{#1}}
 \@namedef{Gin@rule@.EPS}#1{{eps}{.EPS}{#1}}
 %
+\@namedef{Gin@rule@.mps}#1{{mps}{.mps}{#1}}
+\@namedef{Gin@rule@.MPS}#1{{mps}{.MPS}{#1}}
+%
 \@namedef{Gin@rule@.ps}#1{{eps}{.ps}{#1}}
 \@namedef{Gin@rule@.PS}#1{{eps}{.PS}{#1}}
 %
@@ -484,6 +549,12 @@
 \@namedef{Gin@rule@.JPG}#1{{QTm}{QTm}{#1}}
 \@namedef{Gin@rule@.jpeg}#1{{QTm}{QTm}{#1}}
 \@namedef{Gin@rule@.JPEG}#1{{QTm}{QTm}{#1}}
+%
+\@namedef{Gin@rule@.jp2}#1{{QTm}{QTm}{#1}}
+\@namedef{Gin@rule@.JP2}#1{{QTm}{QTm}{#1}}
+%
+\@namedef{Gin@rule@.jpf}#1{{QTm}{QTm}{#1}}
+\@namedef{Gin@rule@.JPF}#1{{QTm}{QTm}{#1}}
 %
 \@namedef{Gin@rule@.bmp}#1{{QTm}{QTm}{#1}}
 \@namedef{Gin@rule@.BMP}#1{{QTm}{QTm}{#1}}
@@ -519,8 +590,8 @@
 
 % ... and add its extension here
 \def\Gin@extensions{% order here is like dvipdfmx.def, except for PS
-  .pdf,.PDF,.eps,.EPS,.ps,.PS,%
-  .png,.PNG,.jpg,.JPG,.jpeg,.JPEG,.bmp,.BMP,%
+  .pdf,.PDF,.eps,.EPS,.mps,.MPS,.ps,.PS,%
+  .png,.PNG,.jpg,.JPG,.jpeg,.JPEG,.jp2,.JP2,.jpf,.JPF,.bmp,.BMP,%
   .pict,.PICT,.psd,.PSD,.mac,.MAC,.TGA,.tga,%
   .gif,.GIF,.tif,.TIF,.tiff,.TIFF,%
 }
@@ -561,7 +632,38 @@
       \ifx\Gin@scaley\@tempa\else rhi=\number\@tempdima\space\fi
       \ifGin@clip clip\fi}%
   \egroup}
-
+%
+% In the above \Ginclude@eps, llx, lly, urx, and ury are translated to match
+% the -dEPSCrop option for Ghostscript to convert eps to pdf.
+% In the case of eps files created by MetaPost, the files are included
+% directly without the help of Ghostscript. That is, we have to translate
+% the origin accordingly if we use \Ginclude@eps for eps files created by
+% MetaPost. In TeX Live 2015, the translation of the origin was the default.
+% After TeX Live 2016, however, the translation of the origin is enabled only
+% if the --mvorigin option is given for dvipdfmx or xdvipdfmx.
+% This may be a bit inconvenient, especially in the case of XeTeX where
+% xdvipdfmx is usually called as a pipe. Therefore we introduce a new suffix
+% .mps(or .MPS) to support inclusion of eps files created by MetaPost without
+% the option --mvorigin.
+%
+\def\Ginclude@mps#1{%
+ \message{<#1>}%
+  \bgroup
+  \def\@tempa{!}%
+  \dimen@\Gin@req@width
+  \dimen@ii.1bp%
+  \divide\dimen@\dimen@ii
+  \@tempdima\Gin@req@height
+  \divide\@tempdima\dimen@ii
+    \special{PSfile="#1"\space
+      llx=\Gin@llx\space
+      lly=\Gin@lly\space
+      urx=\Gin@urx\space
+      ury=\Gin@ury\space
+      \ifx\Gin@scalex\@tempa\else rwi=\number\dimen@\space\fi
+      \ifx\Gin@scaley\@tempa\else rhi=\number\@tempdima\space\fi
+      \ifGin@clip clip\fi}%
+  \egroup}
 %
 % Rotation & Scaling
 %  supported from xetex v0.6 onwards
@@ -575,6 +677,42 @@
   \special{x:gsave}\special{x:scale \Gscale@x\space\Gscale@y}}
 \let\Gscale@end\Grot@end
 %
+
+%
+% (no)setpagesize option
+%
+\@ifundefined{ifGin@setpagesize}
+{\expandafter\let\csname ifGin@setpagesize\expandafter\endcsname
+\csname iftrue\endcsname}
+{}
+\ifGin@setpagesize
+\ifx\paperwidth\@undefined\else
+\AtBeginDocument{%
+% If a package has changed \mag, assume it knows what it is doing
+% and leave page size alone
+\ifnum\mag=\@m
+\@ifundefined{stockwidth}{%
+\@ifundefined{paperwidth}{%
+}{%
+\ifdim\paperwidth>0pt\relax
+\ifdim\paperheight>0pt\relax
+\pdfpagewidth=\paperwidth
+\pdfpageheight=\paperheight
+\fi
+\fi
+}%
+}{%
+\ifdim\stockwidth>0pt\relax
+\ifdim\stockheight>0pt\relax
+\pdfpagewidth=\stockwidth
+\pdfpageheight=\stockheight
+\fi
+\fi
+}%
+\fi
+}
+\fi
+\fi 
 
 \endinput
 %%

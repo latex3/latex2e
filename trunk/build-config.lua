@@ -12,7 +12,7 @@ checkformat    = checkformat        or "latex"
 checkengines   = checkengines       or {"etex", "xetex", "luatex"}
 checkruns      = checkruns          or  2
 checksuppfiles = checksuppfiles     or
-  {"color.cfg", "graphics.cfg", "test209.tex", "test2e.tex", "xetex.def"}
+  {"color.cfg", "graphics.cfg", "test209.tex", "test2e.tex", "xetex.def", "dvips.def"}
 stdengine      = stdengine          or "etex"
 typesetsuppfiles = typesetsuppfiles or {"ltxdoc.cfg", "ltxguide.cfg"}
 
