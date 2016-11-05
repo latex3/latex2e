@@ -234,9 +234,10 @@ Bug reports can be opened (category \texttt{#1}) at\\%
 % \opt{alignedleftspaceno} to disable adding this space.
 %
 % \opt{alignedleftspaceyesifneg} the new default behaviour, do not add
-% the space unless the enviornment is preceded by a negative skip or
+% the space unless the environment is preceded by a negative skip or
 % kern, so that |\!\begin{aligned}| works as before.
 %
+% \changes{v2.16a}{2016/11/05}{New options to control aligned spacing}
 %    \begin{macrocode}
 \DeclareOption{alignedleftspaceyes}{\def\alignedspace@left{\null\,}}
 \DeclareOption{alignedleftspaceno}{\def\alignedspace@left{\null}}
@@ -259,7 +260,8 @@ Bug reports can be opened (category \texttt{#1}) at\\%
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-\ExecuteOptions{nointlimits,sumlimits,namelimits,centertags,alignedleftspaceyesifneg}
+\ExecuteOptions{%
+  nointlimits,sumlimits,namelimits,centertags,alignedleftspaceyesifneg}
 %    \end{macrocode}
 %    The \cs{par} after \cs{ProcessOptions} is to ensure the correct
 %    line number on screen if an error occurs during option processing;
@@ -579,6 +581,8 @@ Foreign command \@backslashchar#1;\MessageBreak
 %    \end{macrocode}
 %
 %  \begin{macro}{\genfrac}
+% \changes{v2.16a}{2016/11/05}{New genfrac implementation for extended
+% TeXs}
 %    This command provides access to \tex/'s generalized fraction
 %    primitives. Args: \arg{1} left delim, \arg{2} right delim, \arg{3}
 %    line thickness, \arg{4} mathstyle override, \arg{5} numerator,
@@ -587,6 +591,22 @@ Foreign command \@backslashchar#1;\MessageBreak
 %    fraction primitive. Any of those four args could be empty, and when
 %    empty the obvious defaults are selected (no delimiters, default
 %    line thickness (normally .4pt), and no mathstyle override).
+%
+%    the |withdelims| primitives do not work in xetex with OpenType
+%    fonts, and the relevant font dimen parameters are often not set
+%    in luatex as theer are no matching values in the OpenType Math
+%    table, so here we use variants that use the font parameters if
+%    they are set, but scale using |\left\right| rather than the
+%    |withdelims| primitives.
+%
+%    \begin{macrocode}
+\ifx\directlua\@undefined
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\ifx\XeTeXcharclass\@undefined
+%    \end{macrocode}
+% Classic version
 %    \begin{macrocode}
 \DeclareRobustCommand{\genfrac}[4]{%
   \def\@tempa{#1#2}%
@@ -595,6 +615,98 @@ Foreign command \@backslashchar#1;\MessageBreak
     \ifx\@tempa\@empty \else withdelims\fi\endcsname}
   \@tempb{#1#2#3}}
 %    \end{macrocode}
+%
+%    \begin{macrocode}
+\else   
+%    \end{macrocode}
+%     XeTeX version
+%    \begin{macrocode}
+\def\genfrac@rule#1#2#3#4{%
+\hbox{$\left#1\vcenter{\hrule \@width\z@
+                       \@height 
+                       \ifdim\fontdimen#2#3\tw@=\z@
+                       #4\fontdimen6#3\tw@
+                       \else
+                       \fontdimen#2#3\tw@
+                       \fi
+                      }\right.$}}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\def\genfrac@choice#1#2{%
+\ifx @#2@\else
+{\delimitershortfall\z@\delimiterfactor\@m
+ \mathsurround\z@\nulldelimiterspace\z@
+\ifx c#1\kern-\nulldelimiterspace\fi
+\mathchoice
+{\genfrac@rule{#2}{20}\textfont{2.39}}%
+{\genfrac@rule{#2}{21}\textfont{1}}%
+{\genfrac@rule{#2}{21}\scriptfont{1.45}}%
+{\genfrac@rule{#2}{21}\scriptscriptfont{1.35}}%
+}%
+\ifx o#1\kern-\nulldelimiterspace\fi
+\fi
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareRobustCommand{\genfrac}[6]{{%
+\@mathstyle{#4}%
+\genfrac@choice o{#1}%
+{\begingroup#5\endgroup\ifx @#3@\@@over\else\@@above\fi#3\relax#6}%
+\genfrac@choice c{#2}%
+}}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\fi
+\else
+%    \end{macrocode}
+% LuaTeX version
+%    \begin{macrocode}
+\def\genfrac@rule#1#2#3{%
+\hbox{$\left#1\vcenter{\hrule \@width\z@
+                       \@height 
+                       \ifdim\Umathfractiondelsize#2=\z@
+                       #3\fontdimen6#3\tw@
+                       \else
+                       \Umathfractiondelsize#2%
+                       \fi
+                      }\right.$}}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\def\genfrac@choice#1#2{%
+\ifx @#2@\else
+{\delimitershortfall\z@\delimiterfactor\@m
+ \mathsurround\z@\nulldelimiterspace\z@
+\ifx c#1\kern-\nulldelimiterspace\fi
+\mathchoice
+{\genfrac@rule{#2}\displaystyle{2.39}}%
+{\genfrac@rule{#2}\textstyle{1}}%
+{\genfrac@rule{#2}\scriptstyle{1.45}}%
+{\genfrac@rule{#2}\scriptscriptstyle{1.35}}%
+}%
+\ifx o#1\kern-\nulldelimiterspace\fi
+\fi
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareRobustCommand{\genfrac}[6]{{%
+\@mathstyle{#4}%
+\genfrac@choice o{#1}%
+{\begingroup#5\endgroup\ifx @#3@\@@over\else\@@above\fi#3\relax#6}%
+\genfrac@choice c{#2}%
+}}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\fi
+%    \end{macrocode}
+%
+% End of test for Lua\TeX/Xe\TeX.
+%
 %    \cs{@genfrac} takes the preceding arguments and reads the
 %    numerator and denominator. Note that there's no convenient way to
 %    make the numerator and denominator \emph{contents}
@@ -964,8 +1076,8 @@ Foreign command \@backslashchar#1;\MessageBreak
 %    \begin{macrocode}
          \xdef\meaning@{\meaning\@let@token. .........}%
 %    \end{macrocode}
-% In previous versions \verb|\long| macros were not seen
-% bad as this file uses \verb|\(re)newcommand| for \verb|\implies| etc.
+% In previous versions \verb|\long| macros were not seen by the lokkahead.
+% That was bad as this file uses \verb|\(re)newcommand| for \verb|\implies| etc.
 %    \begin{macrocode}
          \xdef\meaning@@{\@xp\striplong@\meaning@\relax\meaning@}%
 %    \end{macrocode}
