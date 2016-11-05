@@ -1,4 +1,4 @@
-README for amsmath 2.15d [2016/06/28]
+README for amsmath 2.16a [2016/11/05]
            American Mathematical Society, LaTeX3 Project
 
 Copyright 2001-2004, 2007, 2008, 2010, 2011, 2013 American Mathematical Society.
@@ -73,12 +73,15 @@ for a category.
 ========================================================================
 IV. REMARKS ON THIS RELEASE
 
-Version 2.15 adds some compatibility with luatex 0.87 and fixes to
-\dots handling.
+Version 2.16 adds some control over spacing around aligned/gathered
+and adjustments to the generalized fraction code so that it works in xetex.
 
 ========================================================================
 V. CHANGE LOG (REVERSE CHRONOLOGICAL ORDER)
 
+
+2016-11-05 amsmath.dtx 2.16a
+     alignedleftspace[yes|no|yesifneg] package options
 
 2016-06-28 amsmath.dtx 2.15d
      avoid error on \dots \left ....
