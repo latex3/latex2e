@@ -100,6 +100,7 @@ V. CHANGE LOG (REVERSE CHRONOLOGICAL ORDER)
 2016-11-05 amsmath.dtx 2.16a
      alignedleftspace[yes|no|yesifneg] package options
      New genfrac implementation for XeTeX and LuaTeX
+     Delete obsolete install.txt file.
      
      
 2016-06-28 amsmath.dtx 2.15d
