@@ -33,17 +33,28 @@ developed by the American Mathematical Society and released for general
 use as a service to the mathematical community. A number of smaller
 auxiliary packages are also distributed with the amsmath package.
 
+Effective in 2016, maintenance of amsmath was transferred from AMS to
+the LaTeX3 Project; as amsmath is considered a "required" package, this
+centralizes control over the core LaTeX components.
+
 ========================================================================
 II. INSTALLATION AND GETTING STARTED
 
-In order to use amsmath you need to have TeX installed first. TeX is
-not an AMS product. For information on getting TeX see one of the
-following:
+In order to use amsmath you need to have TeX installed first.
+For information on getting TeX see one of the following:
 
     http://www.tug.org/
     http://www.ams.org/tex/tex-resources
 
-If you are installing amsmath manually, see install.txt.
+It is recommended to install a comprehensive distribution, such as
+TeX Live, MiKTeX for Windows, or MacTeX for Macintosh.
+As part of the "required" LaTeX package subset, amsmath
+will already be available if one of these distributions is chosen,
+
+If you are installing amsmath manually, the most recent version
+will be available from the CTAN archives
+https://www.ctan.org/pkg/amsmath
+
 
 The primary documentation for amsmath is in
 
@@ -56,25 +67,31 @@ Additional documentation files include:
     technote.pdf
     testmath.pdf
 
-which are included in the collection.
+which are included in the collection.  All of these can be accessed
+easily with most distributions by entering "texdoc filename" at the
+command line, or via "TeXdoc Online" at http://texdoc.net .
 
 ========================================================================
 III. SUBMITTING BUG REPORTS
 
-Technical support is available via the addresses listed above.  Bug
-reports should be submitted using the standard LaTeX bug reporting
-system: Execute the command
+Bug reports should be submitted using the standard LaTeX bug reporting
+system:
 
-    latex latexbug.tex
+See the form at
+
+http://www.latex-project.org/bugs/
 
 and follow the resulting instructions. Select "amslatex" when asked
 for a category.
 
+Questions regarding usage can be posted at http://tex.stackexchange.com .
+Check first to see whether your question has already been answered.
+
 ========================================================================
 IV. REMARKS ON THIS RELEASE
 
-Version 2.16 adds some control over spacing around aligned/gathered
-and adjustments to the generalized fraction code so that it works in xetex.
+Version 2.16 adds some control over spacing around aligned/gathered and
+adjustments to the generalized fraction code so that it works in xetex.
 
 ========================================================================
 V. CHANGE LOG (REVERSE CHRONOLOGICAL ORDER)
@@ -82,7 +99,9 @@ V. CHANGE LOG (REVERSE CHRONOLOGICAL ORDER)
 
 2016-11-05 amsmath.dtx 2.16a
      alignedleftspace[yes|no|yesifneg] package options
-
+     New genfrac implementation for XeTeX and LuaTeX
+     
+     
 2016-06-28 amsmath.dtx 2.15d
      avoid error on \dots \left ....
 
@@ -160,3 +179,8 @@ V. CHANGE LOG (REVERSE CHRONOLOGICAL ORDER)
        inside indented lists (displaywidth < columnwidth). Changed the
        multline/fleqn/leqno indent to match mathmargin when possible
        instead of always just using multlinetaggap.
+
+The file diffs-m.txt contains information on development and changes
+prior to 2000.
+
+[end]
