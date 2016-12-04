@@ -129,6 +129,7 @@ function format ()
     end
     return 0
   end
+  cp ('fonttext.cfg', supportdir, unpackdir)
   local checkengines = optengines or checkengines
   for _,i in ipairs(checkengines) do
     errorlevel = format (i, string.gsub (i, "tex$", "") .. "latex.fmt")
