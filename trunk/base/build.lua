@@ -42,7 +42,9 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "source2e.tex",
-    "testpage.tex"
+    "testpage.tex",
+    "tu*.def",
+    "tu*.fd"
   }
 typesetfiles   =
   {
@@ -86,7 +88,8 @@ unpacksuppfiles =
     "load-unicode-xetex-classes.tex",
     "MathClass.txt",
     "UnicodeData.txt",
-    "UShyphen.tex"
+    "UShyphen.tex",
+    "ot1lmr.fd"
   }
 
 -- Custom settings for the check system
