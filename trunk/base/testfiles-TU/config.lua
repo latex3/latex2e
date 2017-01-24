@@ -1,5 +1,5 @@
 -- Special config for these tests
 
 checksearch  = true
-checkengines = {"etex", "xetex"}
+checkengines = {"xetex","luatex"}
 testfiledir  = "testfiles-TU"
