@@ -128,7 +128,9 @@ function format ()
     end
     return 0
   end
-  cp ('fonttext.cfg', supportdir, unpackdir)
+  if not TUenc then
+    cp ('fonttext.cfg', supportdir, unpackdir)
+  end
   local checkengines = optengines or checkengines
   for _,i in ipairs(checkengines) do
     errorlevel = format (i, string.gsub (i, "tex$", "") .. "latex.fmt")
