@@ -2,4 +2,3 @@
 
 checksearch  = true
 checkengines = {"xetex","luatex"}
-testfiledir  = "testfiles-TU"
