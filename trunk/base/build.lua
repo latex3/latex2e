@@ -43,7 +43,6 @@ sourcefiles    =
     "small2e.tex",
     "source2e.tex",
     "testpage.tex",
-    "tu*.fd"
   }
 typesetfiles   =
   {
