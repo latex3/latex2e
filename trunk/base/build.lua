@@ -36,7 +36,6 @@ sourcefiles    =
     "*.ins",
     "idx.tex",
     "lablst.tex",
-    "latexbug.tex",
     "lppl.tex",
     "ltxcheck.tex",
     "sample2e.tex",
