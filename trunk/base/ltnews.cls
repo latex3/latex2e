@@ -42,7 +42,7 @@
  
 \NeedsTeXFormat{LaTeX2e}
  
-\ProvidesClass{ltnews}[2015/02/15 v1.04  Standard LaTeX class]
+\ProvidesClass{ltnews}[2017/03/07 v1.05  Standard LaTeX class]
 
 % The configuration file, used for passing options.
 
@@ -374,6 +374,11 @@
 %
 % If pdf is being produced add some info to the pdf file and use hyperref.
 % But move this after other packages are, possibly, loaded.
+% LuaTeX support.
+\ifx\pdfoutput\@undefined
+  \let\pdfoutput\outputmode
+  \protected\def\pdfinfo{\pdfextension info }
+\fi
 \ifx\pdfoutput\@undefined\else
   \ifx\pdfoutput\relax\else
     \ifcase\pdfoutput\else
