@@ -1,6 +1,6 @@
                        LaTeX Distribution Guide
                       
-                            2017/01/01
+                            2017/05/01
 
 
 WELCOME TO LaTeX!
@@ -112,4 +112,4 @@ Please do not request updates from us.  Distribution is done only through the
 CTAN archives.
 
 
---- Copyright 2016 the LaTeX3 project.  All rights reserved ---
+--- Copyright 2017 the LaTeX3 project.  All rights reserved ---
