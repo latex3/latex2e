@@ -1,6 +1,6 @@
                        LaTeX Distribution Guide
                       
-                            2017/05/01
+                            2017/04/15
 
 
 WELCOME TO LaTeX!
