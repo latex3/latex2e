@@ -1,6 +1,6 @@
 
 %
-% Copyright 1993-2016
+% Copyright 1993-2017
 % The LaTeX3 Project and any individual authors listed elsewhere
 % in this file. 
 % 

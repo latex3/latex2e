@@ -1,5 +1,5 @@
 %%
-%% Copyright 1993-2016 LaTeX Project
+%% Copyright 1993-2017 LaTeX Project
 %%
 %% This file is part of the Standard LaTeX `Graphics Bundle'.
 %%
