@@ -1,4 +1,4 @@
-README for amsmath 2.16a [2016/11/05]
+README for latex-amsmath bundle [2017/04/14]
            American Mathematical Society, LaTeX3 Project
 
 Copyright 2001-2004, 2007, 2008, 2010, 2011, 2013 American Mathematical Society.
@@ -96,6 +96,10 @@ adjustments to the generalized fraction code so that it works in xetex.
 ========================================================================
 V. CHANGE LOG (REVERSE CHRONOLOGICAL ORDER)
 
+
+2017-04-14  David Carlisle  <latex-bugs@latex-project.org>
+
+	* amscd.dtx: typo fix in ProvidesPackage line.
 
 2016-11-05 amsmath.dtx 2.16a
      alignedleftspace[yes|no|yesifneg] package options
