@@ -164,6 +164,10 @@ function bundleunpack ()
     end
   end
   for _,i in ipairs (unpackfiles) do
+    local os_yes = "printf 'y\\n%.0s' {1..200}"
+    if os.type == "windows" then
+      os_yes = "for /l %I in (1,1,200) do @echo y"
+    end
     for _,j in ipairs (filelist (unpackdir, i)) do
       os.execute (os_yes .. ">>" .. localdir .. "/yes")
       errorlevel = os.execute (
