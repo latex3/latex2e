@@ -126,7 +126,7 @@ function format ()
     end
     return 0
   end
-  if not userargs["testfiledir"] then
+  if not options["testfiledir"] then
     cp ('fonttext.cfg', supportdir, unpackdir)
   end
   local checkengines = optengines or checkengines
