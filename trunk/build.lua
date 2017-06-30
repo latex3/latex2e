@@ -29,22 +29,14 @@ end
 -- rm files means that loading l3build.lua is very useful
 function main (target)
   local function dobundles (target)
-    local errorlevel = 0
-    for _,i in ipairs (bundles) do
-      errorlevel = run (i, "texlua " .. scriptname .. " " .. target)
-      if errorlevel ~= 0 then
-        break
-      end
+    local t = { }
+    for _,v in ipairs(bundles) do
+      table.insert(t, v)
     end
-    if errorlevel == 0 then
-      for _,i in ipairs (required) do
-        errorlevel = run ("required/" .. i, "texlua " .. scriptname .. " " .. target)
-        if errorlevel ~= 0 then
-          break
-        end
-      end
+    for _,v in ipairs(required) do
+      table.insert(t, "required/" .. v)
     end
-    return (errorlevel)
+   return call(t, target)
   end
   if target == "check" then
     dobundles ("check")
