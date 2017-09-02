@@ -90,8 +90,8 @@ Check first to see whether your question has already been answered.
 ========================================================================
 IV. REMARKS ON THIS RELEASE
 
-Version 2.16 adds some control over spacing around aligned/gathered and
-adjustments to the generalized fraction code so that it works in xetex.
+Version 2.17 fixes a bug in the spacing around the closing delimiter in generalised
+fractions in xetex and luatex version added in release 2.16
 
 ========================================================================
 V. CHANGE LOG
