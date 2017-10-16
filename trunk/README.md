@@ -48,6 +48,14 @@ the effects on existing documents. We strongly suggest raising suggestions on
 the [LaTeX-L mailing
 list](https://listserv.uni-heidelberg.de/cgi-bin/wa?A0=latex-l) early.
 
+You can subscribe to the LaTeX-L mailing list by sending mail to
+
+    listserv@urz.uni-heidelberg.de
+
+with the body containing
+
+    subscribe LATEX-L <Your-First-Name> <Your-Second-Name>
+
 ## Development team
 
 The LaTeX kernel is developed by [The LaTeX3 Project](https://latex-project.org).
