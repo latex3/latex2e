@@ -39,11 +39,11 @@ We are unable to provide advice/support here: community sites such as
 Community](http://latex-community.org) are available for general help. See also
 https://www.latex-project.org/help for further suggestions.
 
-## Code suggestions
+## Code fixes
 
 Changes to the core LaTeX distribution have to be approached bearing in mind
 the importance of maintaining stability. This means that all changes have to be
-carefully weighed up, balancing the addition of new or improved features with
+carefully weighed up, balancing the issues addressed by a change with
 the effects on existing documents. We strongly suggest raising suggestions on
 the [LaTeX-L mailing
 list](https://listserv.uni-heidelberg.de/cgi-bin/wa?A0=latex-l) early.
