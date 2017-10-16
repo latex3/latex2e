@@ -27,7 +27,7 @@ maintainers.
 To help you making the right decision where to report an issue we ask to start
 your minimal example file showing the problem *always* with
 
-    \RequirePackage{latexbug} 
+    \RequirePackage{latexbug}
 
 More details on creating issue reports for the core LaTeX distribution
 are given in our CONTRIBUTING guide.
