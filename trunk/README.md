@@ -37,7 +37,8 @@ are given in our CONTRIBUTING guide.
 We are unable to provide advice/support here: community sites such as
 [TeX-LaTeX StackExchange](http://tex.stackexchange.com) and [The LaTeX
 Community](http://latex-community.org) are available for general help. See also
-[the help pages on our website](https://www.latex-project.org/help) for further suggestions.
+[the help pages on our website](https://www.latex-project.org/help) for further
+suggestions.
 
 ## Code fixes
 
