@@ -49,7 +49,9 @@ have been used for many years in essentially all documents (even
 documents using different classes often build them upon the standard
 classes in the background) and thus such changes would break or as a
 minimum noticeably change nearly all existing documents. See also the
-file LaTeX2e News Issue 07 with regard to this policy.
+file [LaTeX2e News Issue
+07](https://www.latex-project.org/news/latex2e-news/ltnews07.pdf) with
+regard to this policy.
 
 ## Code contributions
 
