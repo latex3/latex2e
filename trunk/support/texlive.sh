@@ -34,10 +34,13 @@ tlmgr install cm etex knuth-lib latex-bin tex tex-ini-files unicode-data \
 # warnings with some packages and errors with others
 tlmgr install metafont mfware
 
-# Other contrib packages: done as a block to avoid multiple calls to tlmgr
+# Contrib packages: done as a block to avoid multiple calls to tlmgr
 tlmgr install   \
   amsfonts      \
-  ec
+  ec            \
+  fontspec      \
+  lualibs       \
+  luaotfload
 
 # Keep no backups (not required, simply makes cache bigger)
 tlmgr option -- autobackup 0
