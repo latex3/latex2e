@@ -36,6 +36,7 @@ tlmgr install metafont mfware
 
 # Other contrib packages: done as a block to avoid multiple calls to tlmgr
 tlmgr install   \
+  amsfonts      \
   ec
 
 # Keep no backups (not required, simply makes cache bigger)
