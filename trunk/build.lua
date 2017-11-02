@@ -28,6 +28,7 @@ end
 -- While almost all of this is customise, the need to be able to cp and
 -- rm files means that loading l3build.lua is very useful
 function main (target)
+  local errorlevel
   local function dobundles (target)
     local t = { }
     for _,v in ipairs(bundles) do
@@ -39,13 +40,13 @@ function main (target)
    return call(t, target)
   end
   if target == "check" then
-    dobundles ("check")
+    errorlevel = dobundles ("check")
   elseif target == "clean" then
     print ("Cleaning up")
-    dobundles ("clean")
+    errorlevel = dobundles ("clean")
     rm (".", "*.zip")
   elseif target == "ctan" then
-    local errorlevel = dobundles ("ctan")
+    errorlevel = dobundles ("ctan")
     if errorlevel == 0 then
       for _,i in ipairs (bundles) do
         cp ("*.zip", i, ".")
@@ -55,15 +56,18 @@ function main (target)
       end
     end
   elseif target == "doc" then
-    dobundles ("doc")
+    errorlevel = dobundles ("doc")
   elseif target == "install" then
-    dobundles ("install")
+    errorlevel = dobundles ("install")
   elseif target == "unpack" then
-    dobundles ("unpack")
+    errorlevel = dobundles ("unpack")
   elseif target == "version" then
       version ()
   else
     help ()
+  end
+  if errorlevel ~=0 then
+    os.exit(1)
   end
 end
 
