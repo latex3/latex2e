@@ -26,7 +26,7 @@
 %% Copyright (C) 1989-1998 Frank Mittelbach, all rights reserved.
 %<+package>\NeedsTeXFormat{LaTeX2e}[1995/06/01]
 %<+package>\ProvidesPackage{array}
-%<+package>         [2016/10/07 v2.4e Tabular extension package (FMi)]
+%<+package>         [2016/11/04 v2.4f Tabular extension package (FMi)]
 %
 % \fi
 %
@@ -593,6 +593,16 @@
 % standard \LaTeX, and also in \texttt{!}-expressions (but see the
 % note below).
 % \end{itemize}
+%
+% Prior to version 2.4e space added by the optional argument to =\\=
+% was added inside an m-cell if the last column was of type
+% \texttt{m}. As a result that cell was vertically center with that
+% space inside resulting in a strange offset. Since 2.4e, this space
+% is now added after centering the cell.
+% 
+% A similar problem happened when =\extrarowheight= was used. For that
+% reason m-cells are now manually position the cell content which
+% allows to ignore this extra space request during the vertical aligment. 
 %
 %
 % \subsection{Bugs and Features}
@@ -1268,11 +1278,14 @@
    \let\@sharp\relax \let\@startpbox\relax \let\@endpbox\relax
 %    \end{macrocode}
 %    Two more are needed to deal with the code that handles struts
-%    =\do@array@strut= and code that checks the height of m-cells.
+%    for extra space after a row from =\\[<space>]=
+%    (=\do@row@strut=) and code that manages m-cells depending on
+%   their heights (=\align@mcell=).
 % \changes{v2.4e}{2016/10/07}{Fixing SX68732}
+% \changes{v2.4f}{2017/17/04}{Managing m-cells without \cs{vcenter}}
 %    \begin{macrocode}
-   \let\do@array@strut\relax
-   \let\fmi@vcentercheck\relax 
+   \let\do@row@strut\relax
+   \let\align@mcell\relax 
 %    \end{macrocode}
 %    Now we remove possible  $*$-forms in the user preamble with the
 %    command =\@xexpast=.  As we already know, this command saves
@@ -1520,7 +1533,7 @@
 %    The strut to enforce a regular row height is placed between the two.
 % \changes{v2.4e}{2016/10/07}{Fixing SX68732}
 %    \begin{macrocode}
-      \d@llarend \do@array@strut \hfil \or
+      \d@llarend \do@row@strut \hfil \or
 %    \end{macrocode}
 %    The templates for \texttt{l} and \texttt{r} (i.e.\ =\@chnum= $1$
 %    or $2$) are generated the same way. Since one  =\hfil= is
@@ -1537,16 +1550,17 @@
 %     {Change both \cs{kern}\cs{z@} to \cs{hskip}1sp for latex/2160}
 % \changes{v2.4e}{2016/10/07}{Fixing SX68732}
 %    \begin{macrocode}
-      \hskip1sp\d@llarbegin \insert@column \d@llarend \do@array@strut \hfil \or
-      \hfil\hskip1sp\d@llarbegin \insert@column \d@llarend \do@array@strut \or
+      \hskip1sp\d@llarbegin \insert@column \d@llarend \do@row@strut \hfil \or
+      \hfil\hskip1sp\d@llarbegin \insert@column \d@llarend \do@row@strut \or
 %    \end{macrocode}
 %    The templates for \texttt{p}, \texttt{m} and \texttt{b} mainly
 %    consist of a \textsf{box}. In case of \texttt{m} it is generated
 %    by =\vcenter=.  This command is allowed only in math
 %    mode. Therefore we start with a~=$=.
+% \changes{v2.4f}{2017/17/04}{Managing m-cells without \cs{vcenter}}
 %    \begin{macrocode}
 %   $\vcenter
-    \setbox\fmi@vcenterbox\vbox 
+    \setbox\mcell@box\vbox 
 %    \end{macrocode}
 %    The part of the templates which is the same in all three cases
 %    (\texttt{p}, \texttt{m} and \texttt{b})
@@ -1558,19 +1572,20 @@
 %    =\insert@column=.
 %    The strut is places after the box
 % \changes{v2.4e}{2016/10/07}{Fixing SX68732}
+% \changes{v2.4f}{2017/17/04}{Managing m-cells without \cs{vcenter}}
 %    \begin{macrocode}
        \@startpbox{\@nextchar}\insert@column \@endpbox 
-    \fmi@vcentercheck 
+    \align@mcell 
 %$
-    \do@array@strut \or
+    \do@row@strut \or
 %    \end{macrocode}
 %    The templates for \texttt{p} and \texttt{b} are generated in the
 %    same way though we do not need the =$= characters because we use
 %    =\vtop= or =\vbox=.
 % \changes{v2.4e}{2016/10/07}{Fixing SX68732}
 %    \begin{macrocode}
-   \vtop \@startpbox{\@nextchar}\insert@column \@endpbox\do@array@strut \or
-   \vbox \@startpbox{\@nextchar}\insert@column \@endpbox\do@array@strut
+   \vtop \@startpbox{\@nextchar}\insert@column \@endpbox\do@row@strut \or
+   \vbox \@startpbox{\@nextchar}\insert@column \@endpbox\do@row@strut
 %    \end{macrocode}
 %    Other values for =\@chnum= are impossible. Therefore we
 %    end the arguments to =\@addtopreamble= and =\ifcase=.
@@ -1582,22 +1597,63 @@
 % \end{macro}
 %
 
-\newbox\fmi@vcenterbox
-
-\def\fmi@vcentercheck{%
- %\showthe\ht\fmi@vcenterbox
- %\showthe\ht\@arstrutbox
-\ifdim \ht\fmi@vcenterbox > \ht\@arstrutbox  % more than one line or
-                                             % unusually large
-  \begingroup
-   \dimen@\ht\fmi@vcenterbox
-   \advance\dimen@-\ht\@arstrutbox
-   \advance\dimen@\baselineskip
-   \lower.5\dimen@\box\fmi@vcenterbox
-  \endgroup
-\else % assume one line and align at baseline
-   \box\fmi@vcenterbox
-\fi}
+%
+% \begin{macro}{\mcell@box}
+%    When dealing with m-cells we need a box to measure the cell
+%    height.
+% \changes{v2.4f}{2017/17/04}{Managing m-cells without \cs{vcenter}}
+%    \begin{macrocode}
+\newbox\mcell@box
+%    \end{macrocode}
+% \end{macro}
+%
+%
+% \begin{macro}{\align@mcell}
+%    M-cells are supposed to be vertically centered within the table
+%    row. In the original implementation that was done using
+%    =\vcenter= but the issue with that approach is that it centers
+%    the material based on the math-axis. In most situations that
+%    comes out quit right, but if, for example, an m-cell has only a
+%    single line worth of material inside it will be positioned
+%    differently to a =l=, =c= or =r= cell or to a =p= or =b= cell
+%    with  the same content.
+%
+%    For that reason the new implementation does the centering
+%    manually: First we check the height of the cell and if that is
+%    less or equal to =\ht\@arstrutbox= we assume that this is a
+%    single line cell. In that case  we don't do any vertical maneuvre
+%    and simply output the box, i.e., make it behave like a single
+%    line p-cell.
+% \changes{v2.4f}{2017/17/04}{Managing m-cells without \cs{vcenter}}
+%    \begin{macrocode}
+\def\align@mcell{%
+  \ifdim \ht\mcell@box > \ht\@arstrutbox
+%    \end{macrocode}
+%    Otherwise we realign vertically by lowering the box. The question
+%    is how much do we need to move down? If there is any
+%    =\arraystretch= in place then the first line will have some
+%    unusual height and we don't want to consider that when finding
+%    the middle point. So we substract from the cell height the height
+%    of that strut. But of course we want to include the normal height
+%    of the first line (which would be something like =\ht\strutbox=)
+%    so we need to add that. On the other hand, when centering around
+%    the mid-point of the cell, we also need to account for the depth
+%    of the last line (which is nominally something like
+%    =\dp\strutbox=). Both together equals =\baselineskip= so that is
+%    what we add and then lower the cell by half of the resulting value.
+%    \begin{macrocode}
+    \begingroup
+     \dimen@\ht\mcell@box
+     \advance\dimen@-\ht\@arstrutbox
+     \advance\dimen@\baselineskip
+     \lower.5\dimen@\box\mcell@box
+    \endgroup
+  \else % assume one line and align at baseline
+    \box\mcell@box
+  \fi}
+%    \end{macrocode}
+% \end{macro}
+%
 
 %
 % \begin{macro}{\@classix}
@@ -2075,10 +2131,10 @@
 %    The following macros were already explained above.
 % \changes{v2.4e}{2016/10/07}{Fixing SX68732}
 %    \begin{macrocode}
-\def\@xargarraycr#1{\unskip\gdef\do@array@strut
+\def\@xargarraycr#1{\unskip\gdef\do@row@strut
  {\@tempdima #1\advance\@tempdima \dp\@arstrutbox
-  \vrule \@depth\@tempdima \@width\z@\global\let\do@array@strut\relax}\cr}
-\let\do@array@strut\relax
+  \vrule \@depth\@tempdima \@width\z@\global\let\do@row@strut\relax}\cr}
+\let\do@row@strut\relax
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -2582,11 +2638,12 @@
 %    "\@xexpast" (which expanded $*$-forms) by a loop which expands
 %    all "\newcolumntype" specifiers.
 % \changes{v2.4e}{2016/10/07}{Fixing SX68732}
+% \changes{v2.4f}{2017/17/04}{Managing m-cells without \cs{vcenter}}
 %    \begin{macrocode}
 \def\@mkpream#1{\gdef\@preamble{}\@lastchclass 4 \@firstamptrue
    \let\@sharp\relax \let\@startpbox\relax \let\@endpbox\relax
-   \let\do@array@strut\relax
-   \let\fmi@vcentercheck\relax 
+   \let\do@row@strut\relax
+   \let\align@mcell\relax 
 %    \end{macrocode}
 %    Now we remove possible  $*$-forms and user-defined column
 %    specifiers in the user preamble by repeatedly executing the list
