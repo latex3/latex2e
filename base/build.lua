@@ -129,7 +129,7 @@ function format ()
   if not options["testfiledir"] then
     cp ('fonttext.cfg', supportdir, unpackdir)
   end
-  local checkengines = optengines or checkengines
+  local checkengines = options["engine"] or checkengines
   for _,i in ipairs(checkengines) do
     errorlevel = format (i, string.gsub (i, "tex$", "") .. "latex.fmt")
     if errorlevel ~=0 then
