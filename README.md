@@ -14,15 +14,15 @@ comprises:
   - Key mathematics support (`amsmath`)
 
 The master public Git repository is hosted on
-[Github](https://github.com/latex3/latex2e).
+[GitHub](https://github.com/latex3/latex2e).
 
 ## Issues
 
-Only issues *specifically related to these components* should be logged here
-(https://github.com/latex3/latex2e/issues). The LaTeX ecosystem is large, and
-there are *many* (thousands) of additional packages not maintained by us:
-issues related to the use of those need to be reported to the relevant
-maintainers.
+Only issues *specifically related to these components* should be logged [with
+the team on GitHub](https://github.com/latex3/latex2e/issues). The LaTeX
+ecosystem is large, and there are *many* (thousands) of additional packages not
+maintained by us: issues related to the use of those need to be reported to the
+relevant maintainers.
 
 To help you making the right decision where to report an issue we ask to start
 your minimal example file showing the problem *always* with
@@ -30,7 +30,7 @@ your minimal example file showing the problem *always* with
     \RequirePackage{latexbug}
 
 More details on creating issue reports for the core LaTeX distribution
-are given in our [CONTRIBUTING](CONTRIBUTING.md) guide.
+are given in our [CONTRIBUTING guide](CONTRIBUTING.md).
 
 ## Support
 
