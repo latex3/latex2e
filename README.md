@@ -30,7 +30,7 @@ your minimal example file showing the problem *always* with
     \RequirePackage{latexbug}
 
 More details on creating issue reports for the core LaTeX distribution
-are given in our CONTRIBUTING guide.
+are given in our [CONTRIBUTING](CONTRIBUTING.md) guide.
 
 ## Support
 
