@@ -1,6 +1,6 @@
 Thank you for using Issue Tracker!
 
-*Note: for support questions, please use StackExchange or a similar forum. This repository's issues are reserved for bug reports.*
+*Note: for support questions, please use [StackExchange](http://tex.stackexchange.com) or a similar forum. This repository's issues are reserved for bug reports.*
 
 ## Brief outline of the bug
 
