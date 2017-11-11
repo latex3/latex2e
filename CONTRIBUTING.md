@@ -23,7 +23,7 @@ report a bug in LaTeX as follows:
 
 If the `latexbug` package is not part of your distribution you can
 download it
-[Github](https://raw.githubusercontent.com/latex3/latexbug/master/latexbug.sty).
+[GitHub](https://raw.githubusercontent.com/latex3/latexbug/master/latexbug.sty).
 In that case simply place it in the directory next to your test file (or
 place it into your local `texmf` tree so that it will be always found –
 how to do that depends on the installation you use).
