@@ -2,6 +2,8 @@ Thank you for using Issue Tracker!
 
 *Note: for support questions, please use [StackExchange](http://tex.stackexchange.com) or a similar forum. This repository's issues are reserved for bug reports.*
 
+If the bug is clearly related to some particular package, e.g., `multicol` we suggest that you use a title line indicating that package, e.g., `multicol: <issue title>`.
+
 ## Brief outline of the bug
 
 Please replace this line with a brief summary of your issue.
