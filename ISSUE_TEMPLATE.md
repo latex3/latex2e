@@ -23,4 +23,4 @@ If the bug turns out to be with third-party software then please contact the dev
 
 Once you have constructed a minimal example, run LaTeX on *exactly* that input and check that `latexbug` doesn't report any problems. If all looks good, attach the `.log` file by dragging-and-dropping it onto the issue report.
 
-In some cases it may also be helpful to attach the resulting .pdf file.
+In some cases it may also be helpful to attach the resulting `.pdf` file.
