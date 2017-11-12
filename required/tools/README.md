@@ -17,9 +17,6 @@ The files with extensions `.sty` and `.tex` (including a file whose
 name is just `.tex`) should then be moved to a directory on LaTeX's
 standard input path.
 
-See the Note at the end of this file if you have problems processing
-the tools.ins file.
-
 Documentation for the individual packages may then be obtained by
 running LaTeX on the `.dtx` files.
 
