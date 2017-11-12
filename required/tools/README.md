@@ -11,7 +11,7 @@ package files, and some associated files.
 
 So you should first process `tools.ins`:
 
-  latex tools.ins
+    latex tools.ins
 
 The files with extensions `.sty` and `.tex` (including a file whose
 name is just `.tex`) should then be moved to a directory on LaTeX's
@@ -25,7 +25,7 @@ running LaTeX on the `.dtx` files.
 
 For example:
 
-  latex array.dtx
+    latex array.dtx
 
 will produce the file `array.pdf`, documenting the array package.
 
@@ -46,11 +46,11 @@ All the files in this bundle may be distributed under the conditions
 of the LaTeX Project Public License, either version 1.3c of this
 license or (at your option) any later version.  The latest version of
 this license is in
-   https://www.latex-project.org/lppl.txt
+    https://www.latex-project.org/lppl.txt
 and version 1.3c or later is part of all distributions of LaTeX 
 version 2005/12/01 or later.
 
-The list of all files belonging to the `Tools Bundle` is
+The list of all files belonging to the Tools Bundle is
 given in the file `manifest.txt`.
 
 Commercial users of the `multicol` package are asked to read the
@@ -63,7 +63,7 @@ The use of these files is otherwise unrestricted.
 
 If you wish to report a problem or bug in any of these packages
 please use the 
-[Issue Tracker on GitHub](https://github.com/latex3/latex2e/issues)
+[Issue Tracker for LaTeX2e on GitHub](https://github.com/latex3/latex2e/issues)
 and follow the guidelines that pop up if you press the `New issue` button.
 
 
