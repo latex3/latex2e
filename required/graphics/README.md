@@ -14,35 +14,37 @@ in LaTeX documents.
 
 ### THIS DIRECTORY CONTAINS 
 
-README         | This File
-changes.txt    | Log of changes to the packages.
-graphics.ins   | Install file for docstrip.
-
-| Standard packages | 
+| | Support files | 
 | --- | --- |
-color.dtx      | Source for color package
-graphics.dtx   | Source for graphics package
-trig.dtx       | Source for trig package (required by graphics)
+| README         | This File |
+| changes.txt    | Log of changes to the packages |
+| graphics.ins   | Install file for docstrip |
 
-| Non Standard Packages |
+| | Standard packages | 
 | --- | --- |
-graphicx.dtx   | Source for graphicx package (extension of graphics)
-epsfig.dtx     | Source for epsfig package (extension of graphicx)
-rotating.dtx   | Source for rotating package (extension of graphicx)
-keyval.dtx     | Source for keyval pacakge (required by both the above)
-lscape.sty     | Produce landscape pages in a (mainly) portrait document.
+|color.dtx      | Source for color package |
+|graphics.dtx   | Source for graphics package |
+|trig.dtx       | Source for trig package (required by graphics) |
 
-| Driver Files |
+| | Non Standard Packages |
 | --- | --- |
-drivers.dtx    | Source for driver files for supported drivers.
+|graphicx.dtx   | Source for graphicx package (extension of graphics) |
+|epsfig.dtx     | Source for epsfig package (extension of graphicx) |
+|rotating.dtx   | Source for rotating package (extension of graphicx) |
+|keyval.dtx     | Source for keyval pacakge (required by both the above) |
+|lscape.sty     | Produce landscape pages in a (mainly) portrait document. |
 
-| User Documentation |
+| | Driver Files |
 | --- | --- |
-grfguide.tex   | User Guide to all the packages in this bundle.
-               | WARNING: 
-               | This file calls color and graphics packages without a driver option. 
-               | You *must* set up two files `color.cfg` and `graphics.cfg` containing (for example) `\ExecuteOptions{dvips}` before running this file.
-rotex.tex      | examples of use of rotating package.
+|drivers.dtx    | Source for driver files for supported drivers. |
+
+| | User Documentation |
+| --- | --- |
+|grfguide.tex   | User Guide to all the packages in this bundle. |
+|               | WARNING:  |
+|               | This file calls color and graphics packages without a driver option.  |
+|               | You *must* set up two files `color.cfg` and `graphics.cfg` containing (for example) `\ExecuteOptions{dvips}` before running this file. |
+|rotex.tex      | examples of use of rotating package. |
 
 
 
