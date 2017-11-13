@@ -35,7 +35,7 @@ in LaTeX documents.
 |lscape.sty     | Produce landscape pages in a (mainly) portrait document |
 
 | | Driver Files |
-| --- | --- |
+| --- | :--- |
 |drivers.dtx    | Source for driver files for supported drivers |
 
 | | User Documentation |

@@ -1,8 +1,7 @@
-
 ## README for the `tools` bundle
 
 
-This `bundle` consists of LaTeX2e packages written and supported by
+This bundle consists of LaTeX2e packages written and supported by
 members of the LaTeX3 Project Team.
 
 The documented source code of each package is in a file with extension
