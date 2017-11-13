@@ -16,7 +16,8 @@ in LaTeX documents.
 
 #### Support files 
 
-| --- | :--- |
+| File | Notes |
+| ---  | :---  |
 | README.md      | This file |
 | changes.txt    | Log of changes to the packages |
 | graphics.ins   | Install file for docstrip |
