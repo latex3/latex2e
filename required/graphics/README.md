@@ -9,31 +9,30 @@ It is a collection of LaTeX packages for:
 - rotation and scaling of text
 in LaTeX documents.
 
-=======================================================================
 
 
 ### THIS DIRECTORY CONTAINS 
 
 #### Support files 
 
-| File | Notes |
-| ---  |  ---  |
+| File           | Notes |
+| ---            |  ---  |
 | README.md      | This file |
 | changes.txt    | Log of changes to the packages |
 | graphics.ins   | Install file for docstrip |
 
 #### Basic packages
 
-| File | Notes |
-| ---  |  ---  |
+| File          | Notes |
+| ---           |  ---  |
 |color.dtx      | Source for color package |
 |graphics.dtx   | Source for graphics package |
 |trig.dtx       | Source for trig package (required by graphics) |
 
 #### Extension Packages
 
-| File | Notes |
-| ---  |  ---  |
+| File          | Notes |
+| ---           |  ---  |
 |graphicx.dtx   | Source for graphicx package (extension of graphics) |
 |epsfig.dtx     | Source for epsfig package (extension of graphicx) |
 |rotating.dtx   | Source for rotating package (extension of graphicx) |
@@ -42,14 +41,14 @@ in LaTeX documents.
 
 #### Driver Files
 
-| File | Notes |
-| ---  |  ---  |
+| File          | Notes |
+| ---           |  ---  |
 |drivers.dtx    | Source for driver files for supported drivers |
 
 #### User Documentation
 
-| File | Notes |
-| ---  |  ---  |
+| File          | Notes |
+| ---           |  ---  |
 |grfguide.tex   | User Guide to all the packages in this bundle |
 |               | **WARNING:** *This file calls color and graphics packages without a driver option.  You **must** therefore set up two files `color.cfg` and `graphics.cfg` containing (for example) `\ExecuteOptions{dvips}` before running this file.* |
 |rotex.tex      | Examples of use of rotating package |
@@ -120,7 +119,7 @@ a short, self-contained document that shows the problem. This should
 include the `latexbug` package, which will warn if your test file is
 not suitable for one or the other reason. See the [CONTRIBUTING
 guide](https://github.com/latex3/latex2e/blob/master/CONTRIBUTING.md)
-for details and also if you need to obtain the `latexbug` package.
+for further details, or if you need to obtain the `latexbug` package.
 
 If the bug turns out to be with third-party software then please
 contact the developer, and not us!

@@ -68,7 +68,7 @@ a short, self-contained document that shows the problem. This should
 include the `latexbug` package, which will warn if your test file is
 not suitable for one or the other reason. See the [CONTRIBUTING
 guide](https://github.com/latex3/latex2e/blob/master/CONTRIBUTING.md)
-for details and also if you need to obtain the `latexbug` package.
+for further details, or if you need to obtain the `latexbug` package.
 
 If the bug turns out to be with third-party software then please
 contact the developer, and not us!
