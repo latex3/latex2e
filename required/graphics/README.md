@@ -41,17 +41,17 @@ in LaTeX documents.
 
 #### Driver Files
 
-| File           | Notes |
-| ---            |  ---  |
+| File           | Notes                                         |
+| ---            |  ---                                          |
 | drivers.dtx    | Source for driver files for supported drivers |
 
 #### User Documentation
 
-| File           | Notes |
-| ---            |  ---  |
+| File           | Notes                                         |
+| ---            |  ---                                          |
 | grfguide.tex   | User Guide to all the packages in this bundle |
 |                | **WARNING:** *This file calls color and graphics packages without a driver option.  You **must** therefore set up two files `color.cfg` and `graphics.cfg` containing (for example) `\ExecuteOptions{dvips}` before running this file.* |
-| rotex.tex      | Examples of use of rotating package |
+| rotex.tex      | Examples of use of rotating package           |
 
 
 
