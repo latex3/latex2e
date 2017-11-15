@@ -103,19 +103,4 @@ This work has the LPPL maintenance status `maintained'.
 
 The Current Maintainer of this work is the LaTeX3 Project.
 
-
-
-### SUBMITTING BUG REPORTS
-
-Bug reports should be submitted using the standard LaTeX bug reporting
-system:
-
-See the form at
-
-http://www.latex-project.org/bugs/
-
-and follow the resulting instructions. Select "amslatex" when asked
-for a category.
-
-Questions regarding usage can be posted at http://tex.stackexchange.com .
-Check first to see whether your question has already been answered.
+This README file is copyright 2016-2017 The LaTeX3 Project.
