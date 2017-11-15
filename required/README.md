@@ -12,7 +12,7 @@ The set comprises:
  - `graphics`: The standard LaTeX graphics and colour packages; and
  - `tools`: Basic LaTeX tools.
 
-In the past there been two more bundles:
+In the past there have been two further bundles:
 
  -  `psnfss`: Basic support for using common Adobe Type 1 fonts with LaTeX—the “psnfss”; and
  -  `mfnfss`: some Metafont font support files

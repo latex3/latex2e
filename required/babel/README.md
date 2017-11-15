@@ -4,7 +4,9 @@
 This is Babel 3.9t.
 
 ** Babel 3.9o and 3.9p are deprecated.                         **
+
 ** For incompatibilities with polyglossia read the manual.     **
+
 ** You must recreate the formats if coming from version <3.9q. **
 
 Version 3.9a fixed lots of bugs and added some new features, intended mainly to make it compatible somehow with Unicode engines. Some bugs have not been fixed to avoid backward incompatibilities, but they have been documented. Most of the new features (like package options) are intended to overcome issues in previous releases without changing significantly the behaviour of Babel.
