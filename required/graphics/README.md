@@ -15,43 +15,43 @@ in LaTeX documents.
 
 #### Support files 
 
-| File           | Notes |
-| ---            |  ---  |
-| README.md      | This file |
+| File           | Notes                          |
+| ---            | ---                            |
+| README.md      | This file                      |
 | changes.txt    | Log of changes to the packages |
-| graphics.ins   | Install file for docstrip |
+| graphics.ins   | Install file for docstrip      |
 
 #### Basic packages
 
-| File          | Notes |
-| ---           |  ---  |
-|color.dtx      | Source for color package |
-|graphics.dtx   | Source for graphics package |
-|trig.dtx       | Source for trig package (required by graphics) |
+| File           | Notes                                          |
+| ---            | ---                                            |
+| color.dtx      | Source for color package                       |
+| graphics.dtx   | Source for graphics package                    |
+| trig.dtx       | Source for trig package (required by graphics) |
 
 #### Extension Packages
 
-| File          | Notes |
-| ---           |  ---  |
-|graphicx.dtx   | Source for graphicx package (extension of graphics) |
-|epsfig.dtx     | Source for epsfig package (extension of graphicx) |
-|rotating.dtx   | Source for rotating package (extension of graphicx) |
-|keyval.dtx     | Source for keyval pacakge (required by both the above) |
-|lscape.sty     | Produce landscape pages in a (mainly) portrait document |
+| File           | Notes |
+| ---            |  ---  |
+| graphicx.dtx   | Source for graphicx package (extension of graphics)     |
+| epsfig.dtx     | Source for epsfig package (extension of graphicx).      |
+| rotating.dtx   | Source for rotating package (extension of graphicx).    |
+| keyval.dtx     | Source for keyval pacakge (required by both the above)  |
+| lscape.sty     | Produce landscape pages in a (mainly) portrait document |
 
 #### Driver Files
 
-| File          | Notes |
-| ---           |  ---  |
-|drivers.dtx    | Source for driver files for supported drivers |
+| File           | Notes |
+| ---            |  ---  |
+| drivers.dtx    | Source for driver files for supported drivers |
 
 #### User Documentation
 
-| File          | Notes |
-| ---           |  ---  |
-|grfguide.tex   | User Guide to all the packages in this bundle |
-|               | **WARNING:** *This file calls color and graphics packages without a driver option.  You **must** therefore set up two files `color.cfg` and `graphics.cfg` containing (for example) `\ExecuteOptions{dvips}` before running this file.* |
-|rotex.tex      | Examples of use of rotating package |
+| File           | Notes |
+| ---            |  ---  |
+| grfguide.tex   | User Guide to all the packages in this bundle |
+|                | **WARNING:** *This file calls color and graphics packages without a driver option.  You **must** therefore set up two files `color.cfg` and `graphics.cfg` containing (for example) `\ExecuteOptions{dvips}` before running this file.* |
+| rotex.tex      | Examples of use of rotating package |
 
 
 
