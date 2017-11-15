@@ -86,7 +86,7 @@ If the bug turns out to be with third-party software then please
 contact the developer, and not us!
 
 
-#### Copyright
+### Copyright
 
 Copyright 2001-2004, 2007, 2008, 2010, 2011, 2013 American Mathematical Society.
 Copyright 2016-2017 LaTeX3 Project and American Mathematical Society.
