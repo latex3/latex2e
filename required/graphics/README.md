@@ -101,7 +101,7 @@ this license is in
 and version 1.3c or later is part of all distributions of LaTeX 
 version 2005/12/01 or later.
 
-The list of all files belonging to the Graphics Bundle is listed above.
+The list of all files belonging to this bundle is listed above.
 
 The use of these files is otherwise unrestricted.
 
