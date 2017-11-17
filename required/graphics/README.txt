@@ -10,7 +10,7 @@
 %%
 %% The latest version of this license is in
 %%
-%%   http://www.latex-project.org/lppl.txt
+%%   https://www.latex-project.org/lppl.txt
 %%
 %% and version 1.3c or later is part of all distributions of LaTeX 
 %% version 2005/12/01 or later.
