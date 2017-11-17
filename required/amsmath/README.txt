@@ -8,7 +8,7 @@ This work may be distributed and/or modified under the
 conditions of the LaTeX Project Public License, either version 1.3c
 of this license or (at your option) any later version.
 The latest version of this license is in
-  http://www.latex-project.org/lppl.txt
+  https://www.latex-project.org/lppl.txt
 and version 1.3c or later is part of all distributions of LaTeX
 version 2005/12/01 or later.
 
@@ -43,8 +43,8 @@ II. INSTALLATION AND GETTING STARTED
 In order to use amsmath you need to have TeX installed first.
 For information on getting TeX see one of the following:
 
-    http://www.tug.org/
-    http://www.ams.org/tex/tex-resources
+    https://www.tug.org/
+    https://www.ams.org/tex/tex-resources
 
 It is recommended to install a comprehensive distribution, such as
 TeX Live, MiKTeX for Windows, or MacTeX for Macintosh.
@@ -79,12 +79,12 @@ system:
 
 See the form at
 
-http://www.latex-project.org/bugs/
+https://www.latex-project.org/bugs/
 
 and follow the resulting instructions. Select "amslatex" when asked
 for a category.
 
-Questions regarding usage can be posted at http://tex.stackexchange.com .
+Questions regarding usage can be posted at https://tex.stackexchange.com .
 Check first to see whether your question has already been answered.
 
 ========================================================================
