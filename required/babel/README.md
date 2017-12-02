@@ -5,6 +5,8 @@ rules, and hyphenation patterns for a wide range of languages.  Many
 language styles work with pdflatex, as well as with xelatex and
 lualatex out of the box.  A few even work with plain formats.
 
+The latest stable version is available on <https://ctan.org/pkg/babel>.
+
 Version 3.9a fixed lots of bugs and added some new features, intended
 mainly to make it compatible somehow with Unicode engines. Some bugs
 have not been fixed to avoid backward incompatibilities, but they have
@@ -70,8 +72,7 @@ respective authors.
       - With a few exceptions, ini files have reached version 1.0.
       - New key `import' for \babelprovide, which also defines dates. 
 
-[3.12 - No real changes in the babel core. Just a few technical changes
-        related to the files.]
+[3.12 - Internal.]
 
 3.11  - Fix - error when version in format and of package
         didn't match.
@@ -86,10 +87,9 @@ respective authors.
       - Fix - with \babelhyphen{soft} the hyphen could vanish.
       - English, Indonesian and Malay "dialects" now rely on the proxy
         files provided by these languages (eg, american.ldf, melayu.ldf).
-	If you upgrade babel, you MUST upgrade those languages, too.
-	
-3.9s  - Bug fix - extra spaces with \babelensure
+        If you upgrade babel, you MUST upgrade those languages, too.
 ```
+
 Javier Bezos
 2017-11-03
 
