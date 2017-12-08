@@ -6,7 +6,7 @@
 
 ## Your minimal example showing the bug
 
-```
+```latex
 \RequirePackage{latexbug}       % <--should be always the first line (see CONTRIBUTING)!
 \documentclass{article}
 

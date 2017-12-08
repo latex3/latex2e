@@ -17,9 +17,11 @@ exhibits the issue. The [`latexbug`](https://github.com/latex3/latexbug)
 package should be loaded at the very top of any such test file used to
 report a bug in LaTeX as follows:
 
-    \RequirePackage{latexbug}    % <- first line
-    \documentclass{article}      % or some other class
-    ...                          % code showing the problem
+```latex
+\RequirePackage{latexbug}    % <- first line
+\documentclass{article}      % or some other class
+...                          % code showing the problem
+```
 
 If the `latexbug` package is not part of your distribution you can
 download it
