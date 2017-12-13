@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-% Copyright 1993 1994 1995 1996 1997 1998 1999 2000 2001 2002 2003 2004 2005 2006 2007 2008 2009
+% Copyright 1993-2017
 % The LaTeX3 Project and any individual authors listed elsewhere
 % in this file. 
 % 
@@ -28,21 +28,20 @@
 % \fi
 % Filename: ltnews.cls
 % Author: Alan Jeffrey et al
-% Version: 1.03
  
 % This is the LaTeX2e document class for the `LaTeX News' information 
 % sheet which comes with every LaTeX release.  It may be useful for 
 % newsletters, or as an example of how simple newsletters can be set
 % with LaTeX.  The changes log is at the end of the file.
  
-% Copyright 1994 1995 1996 1997 1999 2000 2001 2002 2003 2004
+% Copyright 1994-2004
 % Alan Jeffrey and the LaTeX3 project.  
  
 % This is a LaTeX2e document class.
  
 \NeedsTeXFormat{LaTeX2e}
  
-\ProvidesClass{ltnews}[2017/03/07 v1.05  Standard LaTeX class]
+\ProvidesClass{ltnews}[2017/12/13 v1.06  Standard LaTeX class]
 
 % The configuration file, used for passing options.
 
@@ -485,10 +484,11 @@
       {1sp}{\@subheadingfont}%
 }
 
+% maybe not the greatest design but normally we wouldn't have subsubsections
 \renewcommand{\subsubsection}{%
    \@startsection
-      {subsection}{1}{\z@}{-1.5ex \@plus -1ex \@minus -.2ex}%
-      {1sp}{\normalsize\bfseries}%
+      {subsubsection}{2}{20pt}{-1.5ex \@plus -1ex \@minus -.2ex}%
+      {1sp}{\@subheadingfont}%
 }
 
 % No section numbers.
