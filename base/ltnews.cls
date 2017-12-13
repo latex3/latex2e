@@ -487,7 +487,7 @@
 % maybe not the greatest design but normally we wouldn't have subsubsections
 \renewcommand{\subsubsection}{%
    \@startsection
-      {subsubsection}{2}{20pt}{-1.5ex \@plus -1ex \@minus -.2ex}%
+      {subsubsection}{2}{\leftmargini}{-1.5ex \@plus -1ex \@minus -.2ex}%
       {1sp}{\@subheadingfont}%
 }
 
