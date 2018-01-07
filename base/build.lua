@@ -99,6 +99,9 @@ unpackdeps = { }
 -- Customise typesetting
 indexstyle = "source2e.ist"
 
+-- Allow for TU test
+checkconfigs = {"build","config-TU"}
+
 function format ()
   local errorlevel = unpack ()
   if errorlevel ~=0 then
