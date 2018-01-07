@@ -126,8 +126,8 @@ function format ()
     end
     return 0
   end
-  if not options["testfiledir"] then
-    cp ('fonttext.cfg', supportdir, unpackdir)
+  if not options["config"] or options["config"][1] ~= "config-TU" then
+    cp("fonttext.cfg",supportdir,unpackdir)
   end
   local checkengines = options["engine"] or checkengines
   for _,i in ipairs(checkengines) do
