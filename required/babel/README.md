@@ -1,4 +1,4 @@
-## Babel 3.15
+## Babel 3.16.1150 %%NB%%
 
 This package manages culturally-determined typographical (and other)
 rules, and hyphenation patterns for a wide range of languages.  Many
@@ -20,7 +20,7 @@ be added incrementally. Versions numbers drop the letter and now 3.10,
 3.11, etc., will be used instead. So, 3.9t is the last in the former
 series.
 
-Included is a set of ini files for about 200 languages). 
+Included is a set of ini files for about 200 languages.
 
 Languages are not part of the Babel core any more; in particular, it
 shall be no longer necessary to synchronize Babel core releases with
@@ -38,11 +38,21 @@ be improved in next releases.
 
 ### Reporting Bugs
 
-If you wish to report a problem or bug in any of these packages please use the [Issue Tracker for LaTeX2e on GitHub](https://github.com/latex3/latex2e/issues) and follow the guidelines that pop up if you press the `New issue` button.
+If you wish to report a problem or bug in any of these packages please
+use the
+[Issue Tracker for LaTeX2e on GitHub](https://github.com/latex3/latex2e/issues)
+and follow the guidelines that pop up if you press the `New issue`
+button.
 
-In particular, to check that you are really seeing a bug, please write a short, self-contained document that shows the problem. This should include the `latexbug` package, which will warn if your test file is not suitable for one or the other reason. See the [CONTRIBUTING guide](https://github.com/latex3/latex2e/blob/master/CONTRIBUTING.md) for further details, or if you need to obtain the `latexbug` package.
+In particular, to check that you are really seeing a bug, please write
+a short, self-contained document that shows the problem. This should
+include the `latexbug` package, which will warn if your test file is
+not suitable for one or the other reason. See the
+[CONTRIBUTING guide](https://github.com/latex3/latex2e/blob/master/CONTRIBUTING.md)
+for further details, or if you need to obtain the `latexbug` package.
 
-If the bug turns out to be with third-party software then please contact the developer, and not us!
+If the bug turns out to be with third-party software then please
+contact the developer, and not us!
 
 You may also report them to the author more informally on:
 
@@ -54,6 +64,12 @@ respective authors.
 ### New
 
 ```
+3.16   - New package option layout for bidi documents.
+       - Quotes in TU encoding
+       - Fix - \<language>date did not work correctly
+       - Fix - with some languages (eg, british), using
+         \babelfont raised an error.
+
 3.15  - New command \babelfont (in Unicode engines) to define
         language/script dependent fonts. Related to it, new
         keys (script, language) in \babelprovide.
@@ -91,5 +107,5 @@ respective authors.
 ```
 
 Javier Bezos
-2017-11-03
+2018/01/08 %%NB%%
 
