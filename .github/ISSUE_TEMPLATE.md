@@ -4,7 +4,7 @@
 
 
 
-## Your minimal example showing the bug
+## Minimal example showing the bug
 
 ```latex
 \RequirePackage{latexbug}       % <--should be always the first line (see CONTRIBUTING)!
@@ -20,7 +20,7 @@
 ```
 
 
-## Log (and possibly PDF) file  
+## Log file (required) and possibly PDF file  
 
 !! Use drag-and-drop !!
 
