@@ -30,10 +30,27 @@ In that case simply place it in the directory next to your test file (or
 place it into your local `texmf` tree so that it will be always found –
 how to do that depends on the installation you use).
 
-If you think the bug is in core LaTeX (as maintained by the LaTeX Team)
-but `latexbug` complains about are needed to demonstrate the problem,
-then please continue and send the bug report to us but explain this
-explicitly in your description of bug.
+If `latexbug` complains about third-party packages you should first
+remove those from your test file. If that is not possible, then the
+bug is most likely in one of these packages and you should report the
+problem to the maintainers of the package instead of opening an issue
+here.  However, if you think the bug is in core LaTeX (as maintained
+by the LaTeX Team) even though you need the third-party packages to
+demonstrate the problem, then please continue and send the bug report
+to us but explain this explicitly in your description of the bug.
+
+
+## Font related issues
+
+Problems that are clearly due to using a specific font setup or a
+specific font are normally out of scope as we do not maintain fonts
+for LaTeX and can't help with problems in that area. Especially with
+XeTeX and LuaTeX people may experience issues due to font usage that
+are either due to the font itself or to different versions or
+treatment on different platforms. So please use Computer Modern or
+Latin Modern fonts in the test files.
+
+
 
 ## Layout and interface deficiencies
 
