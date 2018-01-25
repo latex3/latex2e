@@ -1,4 +1,4 @@
-!! Please fill out all sections after reading CONRIBUTING guidelines !!
+!! Please fill out all sections after reading CONTRIBUTING guidelines !!
 
 ## Brief outline of the bug
 
