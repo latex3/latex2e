@@ -1,4 +1,4 @@
-## Babel 3.16.1150
+## Babel 3.17
 
 This package manages culturally-determined typographical (and other)
 rules, and hyphenation patterns for a wide range of languages.  Many
@@ -64,6 +64,9 @@ respective authors.
 ### New
 
 ```
+3.17   - A tool for bidi footnotes.
+       - Fix - \ragged... didn't work for bidi.
+       
 3.16   - New package option layout for bidi documents.
        - Quotes in TU encoding
        - Fix - \<language>date did not work correctly
@@ -107,5 +110,5 @@ respective authors.
 ```
 
 Javier Bezos
-2018/01/08
+2018/01/24
 
