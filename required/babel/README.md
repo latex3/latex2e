@@ -1,4 +1,4 @@
-## Babel 3.17.1180
+## Babel 3.18
 
 This package manages culturally-determined typographical (and other)
 rules, and hyphenation patterns for a wide range of languages.  Many
@@ -64,6 +64,14 @@ respective authors.
 ### New
 
 ```
+3.18   - More bidi in luatex: captions (required only in multilingual
+         docs) and tabular (required for R tables). Also an experimental
+         support for captions in xetex and pdftex (tabular is not yet
+         supported).
+       - New ini files: ar-DZ, ar-MA, ar-SY
+       - Fix - \begin{hyphenrules} didn't work with polyglossia.
+       - Fix - switch.def was loaded twice.
+       
 3.17   - A tool for bidi footnotes.
        - Fix - \ragged... didn't work for bidi.
        
@@ -110,5 +118,5 @@ respective authors.
 ```
 
 Javier Bezos
-2018/02/07
+2018/02/14
 
