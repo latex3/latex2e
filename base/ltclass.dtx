@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-% Copyright 1993-2016
+% Copyright 1993-2018
 % The LaTeX3 Project and any individual authors listed elsewhere
 % in this file.
 %
@@ -33,7 +33,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltclass.dtx}
-             [2018/01/08 v1.2d LaTeX Kernel (Class & Package Interface)]
+             [2018/02/18 v1.2d LaTeX Kernel (Class & Package Interface)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltclass.dtx}
@@ -56,10 +56,15 @@
 % \fi
 %
 %
+% \changes{v0.2f}{1993/11/22}
+%         {\cs{@unknownversion} removed}
+% \changes{v1.0j}{1994/10/18}
+%         {Move \cs{listfiles} to ltfiles.dtx}
 % \changes{v1.0f}{1994/05/22}{Use new warning and error commands}
 % \changes{v1.0l}{1994/11/17}{\cs{@tempa} to \cs{reserved@a}}
 % \changes{v1.0z}{1998/03/21}{Added to documentation of filecontents}
 % \changes{v1.1c}{1998/08/17}{(RmS) Minor documentation fixes.}
+%
 %
 % \section{Introduction}
 %
@@ -618,14 +623,35 @@
 % This internal macro is also used in |\NeedsTeXFormat|.
 % \changes{v0.2f}{1993/11/22}
 %         {Added //00 so parsing never produces a runaway argument.}
+% \changes{v1.2d}{2018/02/18}
+%         {Added 0 up front to make bad data come out as 0.}
 %    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2018/03/01}%
+%<latexrelease>                 {\@ifl@t@r}{Guard against bad input}%
+%<*2ekernel|latexrelease>
 \def\@ifl@t@r#1#2{%
-  \ifnum\expandafter\@parse@version#1//00\@nil<%
-        \expandafter\@parse@version#2//00\@nil
+  \ifnum\expandafter\@parse@version\expandafter0#1//00\@nil<%
+        \expandafter\@parse@version\expandafter0#2//00\@nil
     \expandafter\@secondoftwo
   \else
     \expandafter\@firstoftwo
   \fi}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000/00/00}%
+%<latexrelease>                 {\@ifl@t@r}{Guard against bad input}%
+%<latexrelease>\def\@ifl@t@r#1#2{%
+%<latexrelease>  \ifnum\expandafter\@parse@version#1//00\@nil<%
+%<latexrelease>        \expandafter\@parse@version#2//00\@nil
+%<latexrelease>    \expandafter\@secondoftwo
+%<latexrelease>  \else
+%<latexrelease>    \expandafter\@firstoftwo
+%<latexrelease>  \fi}
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
 \@onlypreamble\@ifl@t@r
 %    \end{macrocode}
 %
@@ -1440,7 +1466,7 @@
     \csname\@currname.\@currext-h@@k\endcsname
     \expandafter\let\csname\@currname.\@currext-h@@k\endcsname
               \@undefined
-    \@unprocessedoptions}
+    \@unprocessedoptions}%
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -1810,14 +1836,566 @@
 % \end{macro}
 %
 %
-% \changes{v0.2f}{1993/11/22}
-%         {\cs{@unknownversion} removed}
-% \changes{v1.0j}{1994/10/18}
-%         {Move \cs{listfiles} to ltfiles.dtx}
+%
+%
+%
+% \section{Package/class rollback mechanism}
+%
+
+%  \begin{macro}{\pkgcls@debug}
+%    For testing we have a few extra lines of code that by default do
+%    nothing but one can set |\pkgcls@debug| to  |\typeout| to get
+%    extra info. Sometime in the future this will be dropped.
+%    \begin{macrocode}
+%<*tracerollback>
+%\let\pkgcls@debug\typeout
+\let\pkgcls@debug\@gobble
+%</tracerollback>
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\requestedLaTeXdate}
+%    The macro (!) |\requestedLaTeXdate| holds the globally requested
+%    rollback date (via \texttt{latexrelease}) or zero if no such
+%    request was made. 
+%    \begin{macrocode}
+\def\requestedLaTeXdate{0}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\pkgcls@targetdate}
+%  \begin{macro}{\pkgcls@targetlabel}
+%
+%    If a rollback for a package or class is requested then
+%    |\pkgcls@targetdate| holds the requested date as a number
+%    YYYYMMDD (if there was one, otherwise the value of
+%    |\requestedLaTeXdate|) and |\pkgcls@targetlabel| will be
+%    empty. If there was a request for a named version then
+%    |\pkgcls@targetlabel| holds the verion name and
+%    |\pkgcls@targetdate| is set to \texttt{1}.
+%
+%    |\pkgcls@targetdate=0| is used to indicate that there was no
+%    rollback request.
+%
+%    \begin{macrocode}
+\newcount\pkgcls@targetdate
+\let\pkgcls@targetlabel\@empty
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
+
+%  \begin{macro}{\pkgcls@candidate}
+%  \begin{macro}{\pkgcls@releasedate}
+%    When looping through the |\DeclareOldRelease| declarations we
+%    record if the release is the best candidate we have seen so far.
+%    This is recorded in |\pkgcls@candidate| and we update it whenever
+%    we see a better one.
+%
+%    In |\pkgcls@releasedate| we keep track of the release date of
+%    that candidate.
+%    \begin{macrocode}
+\let\pkgcls@candidate\@empty
+\let\pkgcls@releasedate\@empty
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
+
+
+
+%  \begin{macro}{\load@onefilewithoptions}
+%  \begin{macro}{\@onefilewithoptions}
+%    the best place to add the rollback code is at the point where
+%    |\@onefilewithoptions| is called to load a single class or
+%    package.
+%
+%    To make things easy we save the old definition as
+%    |\load@onefilewithoptions| and then provide a new interface.
+%    \begin{macrocode}
+%<*2ekernel|latexrelease>
+%<latexrelease>\IncludeInRelease{2018/03/01}%
+%<latexrelease>                 {\@onefilewithoptions}{Rollback}%
+\let\load@onefilewithoptions\@onefilewithoptions
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\def\@onefilewithoptions#1[#2][#3]#4{%
+%    \end{macrocode}
+%    First a bit of tracing normally disabled.
+%    \begin{macrocode}
+%<*tracerollback>
+  \pkgcls@debug{--- File loaded request (\noexpand\usepackage or ...)}%
+  \pkgcls@debug{\@spaces 1: #1}%
+  \pkgcls@debug{\@spaces 2: #2}%
+  \pkgcls@debug{\@spaces 3: #3}%
+  \pkgcls@debug{\@spaces 4: #4}%
+%</tracerollback>
+%    \end{macrocode}
+%    Two of the arguments are needed later on in error/warning
+%    messages so we save them.
+%    \begin{macrocode}
+  \def\pkgcls@name{#1}%                  % for info message
+  \def\pkgcls@arg {#3}%                  % for info message
+%    \end{macrocode}
+%    then we parse the final optional argument to determine if there
+%    is a specific rollback request for the current file. This will
+%    set |\pkgcls@targetdate|, |\pkgcls@targetlabel| and
+%    |\pkgcls@mindate|.
+%    \begin{macrocode}
+  \pkgcls@parse@date@arg{#3}%
+%    \end{macrocode}
+%    When determining the correct release to load we keep track of
+%    candiates in |\pkgcls@candidate| and initially we don't have any:
+%    \begin{macrocode}
+  \let\pkgcls@candidate\@empty
+%    \end{macrocode}
+%    If we had a rollback request then |#3| may contain data but not
+%    necessarily a ``minimal date'' so instead of passing it on we
+%    pass on |\pkgcls@mindate|.
+%    \begin{macrocode}
+  \load@onefilewithoptions#1[#2][\pkgcls@mindate]#4%
+}
+%<latexrelease>\EndIncludeInRelease
+%</2ekernel|latexrelease>
+%<*2ekernel>
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
+%    
+%
+%  \begin{macro}{\pkgcls@parse@date@arg}
+%    The |\pkgcls@parse@date@arg| command parses the second optional
+%   argument of |\usepackage|, |\RequirePackage| or |\documentclass|
+%   for a rollback request setting the values of |\pkgcls@targetdate|
+%   and |\pkgcls@targetlabel|.
+%
+%   This optional argument has a dual purpose: If it just contains a
+%   date string then this means that the package should have at least
+%   that date (to ensure that a certain feature is actually available,
+%   or a certain bug has been fixed). When the package gets loaded the
+%   information in |\Provides...| will then be checked against this
+%   request.
+%
+%   But if it starts with an equal sign followed by a date string or
+%   followed by a version name then this means that we should roll
+%   back to the state of the package at tht date or to the version
+%   with the requested name.
+%
+%   If there was no optional argument or the optional argument
+%   does not start with ``\texttt{=}'' then the |\pkgcls@targetdate|
+%   is set to the date of the overall rollback request (via
+%   \texttt{latexrelease}) or if that was not given it is set to
+%   \texttt{0}.
+%   In either case |\pkgcls@targetlabel| will be made empty.
+%
+%   If the argument doesn't start with  ``\texttt{=}'' then it is
+%    supposed to be a ``minimal date'' and we therefore save the value
+%    in |\pkgcls@mindate|, otherwise this macro is made empty.
+%
+%   So in summary we have:
+%   \begin{flushleft}
+%     \hspace*{-1in}\begin{tabular}{ccccc}
+%   Input        &  & \cs{pkgcls@targetdate} 
+%                   & \cs{pkgcls@targetlabel} 
+%                   & \cs{pkgcls@mindate}\\[3pt]
+% \meta{empty}   & $\to$ & \meta{global-rollbackdate-as-number}
+%                        & \meta{empty} & \meta{empty}
+% \\
+% \meta{date}    & $\to$ & \meta{global-rollbackdate-as-number}
+%                        & \meta{empty} & \meta{date}
+% \\
+% \texttt{=}\meta{date} & $\to$ & \meta{date-as-number}
+%                        & \meta{empty} & \meta{empty}
+% \\
+% \texttt{=}\meta{version}& $\to$ & \texttt{1}  
+%                                 & \meta{version}  & \meta{empty}
+% \\
+% \meta{other}   & $\to$ & \meta{global-rollbackdate-as-number}
+%                        & \meta{empty} & \meta{other}
+% \\
+%     \end{tabular}
+%   \end{flushleft}
+%    where \meta{global-rollbackdate-as-number} is a date request given
+%    via \texttt{latexrelease} or if there wasn't one \texttt{0}.
+% 
+%    \begin{macrocode}
+\def\pkgcls@parse@date@arg #1{%
+%    \end{macrocode}
+%    If the argument is empty we use the rollback date from
+%    \texttt{latexrelease} which has the value of zero if there was no
+%    rollback request. The label and the minimal date is made empty in that case.
+%    \begin{macrocode}
+   \ifx\@nil#1\@nil
+     \pkgcls@targetdate\requestedLaTeXdate\relax
+     \let\pkgcls@targetlabel\@empty
+     \let\pkgcls@mindate\@empty
+%    \end{macrocode}
+%    Otherwise we parse the argument further, checking for a \texttt{=}
+%    as the first character. We append a \texttt{=} at the end so that
+%    there is at least one such character in the argument.
+%    \begin{macrocode}
+   \else
+     \pkgcls@parse@date@arg@#1=\@nil\relax
+   \fi
+ }
+%    \end{macrocode}
+%    The actual parsing work then happens in |\pkgcls@parse@date@arg@|: 
+%    \begin{macrocode}
+\def\pkgcls@parse@date@arg@#1=#2\@nil{%
+%    \end{macrocode}
+%    We set |\pkgcls@targetdate| depending on the parsing result; the
+%    code is expandable so we can do the parsing as part of the assignment.
+%    \begin{macrocode}
+  \pkgcls@targetdate
+%    \end{macrocode}
+%    If a \texttt{=} was in first position then |#1| will be empty. In
+%    that case |#2| will be the original argument with a \texttt{=}
+%    appended.
+%
+%    This can be parsed with |\@parse@version|, the trailing character
+%    is simply ignored. This macro returns the parsed date as a number
+%    (or zero if it wasn't a date) and accepts both YYYY/MM/DD and YYYY-MM-DD
+%    formats.
+%    \begin{macrocode}
+    \ifx\@nil#1\@nil
+      \@parse@version0#2//00\@nil\relax
+%    \end{macrocode}
+%     Whatever is returned is thus assigned to |\pkgcls@targetdate|
+%    and therefore we can now test its value. If the value is zero we
+%    assume that the remaining argument string represents a version
+%    and change |\pkgcls@targetdate| and set |\pkgcls@targetlabel| to
+%    the version name (after stripping off the trailing \texttt{=}.
+%    \begin{macrocode}
+      \ifnum \pkgcls@targetdate=\z@
+        \pkgcls@targetdate\@ne
+        \pkgcls@parse@date@arg@version#2%
+      \fi
+      \let\pkgcls@mindate\@empty
+    \else
+%    \end{macrocode}
+%    If |#1| was not empty then there wasn't a \texttt{=} character in
+%    first position so we we are dealing either with a ``minimum
+%    date'' or with some incorrect data. We assume the former and make
+%    the following assignments (the first one finishing the assignment
+%    of |\pkgcls@targetdate|):
+%    \begin{macrocode}
+      \requestedLaTeXdate\relax
+      \let\pkgcls@targetlabel\@empty
+      \def\pkgcls@mindate{#1}%
+%    \end{macrocode}
+%    If the min-date is after the requested rollback date (if there is
+%    any, i.e., if it is not zero) then we have a conflict and
+%    therefore issue an error.
+%    \begin{macrocode}
+      \ifnum \pkgcls@targetdate > \z@
+        \ifnum \@parse@version0#1//00\@nil > \pkgcls@targetdate
+          \@latex@error{Suspicious rollback/min-date date given}%
+            {There is a minimal date of #1 specified for
+             \@cls@pkg\space'\pkgcls@name'.\MessageBreak  
+             But this is in conflict
+             with a rollback request to \requestedpatchdate,
+             so something\MessageBreak 
+             is wrong here. Continue and I 
+             ignore the minimal date request.}%
+        \fi
+      \fi
+    \fi
+}
+%    \end{macrocode}
+%    Strip off te trailing \texttt{=} and assign the version name to
+%    |\pkgcls@targetlabel|.
+%    \begin{macrocode}
+\def\pkgcls@parse@date@arg@version#1={%
+  \def\pkgcls@targetlabel{#1}}
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+
+%  \begin{macro}{\DeclareOldRelease}
+%    First argument is the ``name'' of the release and it is optional
+%    as that is the exceptional case.
+%    The second argument is that from which on this release was
+%    available (or should be used in case of minor updates).
+%    The final argument is the external file name of this release, by
+%    convention this should be
+%    \meta{pkg/cls-name}\texttt{-}\meta{date}\texttt{.}\meta{extension}
+%    but this is not enforced and through this argument one can
+%    overwrite it.
+%    \begin{macrocode}
+\newcommand\DeclareOldRelease[3][]{%
+  \ifnum\pkgcls@targetdate>\z@  % some sort of rollback request
+%<*tracerollback>
+    \pkgcls@debug{---\string\DeclareOldRelease:}%
+    \pkgcls@debug{\@spaces 1: #1}%
+    \pkgcls@debug{\@spaces 2: #2}%
+    \pkgcls@debug{\@spaces 3: #3}%
+%</tracerollback>
+%    \end{macrocode}
+%    If the value of |\pkgcls@targetdate| is greater than 1 (or in
+%    reality greater than something like 19930101) we are dealing with a
+%    rollback request to a specific date.
+%    \begin{macrocode}
+    \ifnum\pkgcls@targetdate>\@ne  % a real request
+%    \end{macrocode}
+%    So we parse the date of this release to check if it is before or
+%    after the request date.
+%    \begin{macrocode}
+      \ifnum\@parse@version#2//00\@nil
+           >\pkgcls@targetdate
+%    \end{macrocode}
+%    If it is after we have to distinguish between two cases: If there
+%    was an earlier candidate we use that one because the other is too
+%    late, but if there wasn't one (i.e., if current release is the
+%    oldest that exists) we use it as the best choice. However in
+%    that case something is wrong (as there shouldn't be a rollback to
+%    a date where a package used doesn't yet exists. So we make a
+%    complained to the user.
+%    \begin{macrocode}
+        \ifx\pkgcls@candidate\@empty
+          \pkgcls@rollbackdate@error{#2}%
+          \pkgcls@use@this@release{#3}{#2}%
+        \else
+          \pkgcls@use@this@release\pkgcls@candidate
+                                  \pkgcls@releasedate
+        \fi
+      \else
+%    \end{macrocode}
+%    Otherwise, if the release date of this version is before the
+%    target rollback and we record it as a candidate. But we don't use
+%    it yet as there may be another release which is still before the
+%    target rollback.
+%    \begin{macrocode}
+        \def\pkgcls@candidate{#3}%
+        \def\pkgcls@releasedate{#2}%
+%<*tracerollback>
+        \pkgcls@debug{New candidate: #3}%
+%</tracerollback>
+      \fi
+    \else 
+%    \end{macrocode}
+%    If we end up in this branch we have a named version request. So
+%    we check if |\pkgcls@targetlabel| matches the current name and if
+%    yes we use this release immediately, otherwise we do nothing as a
+%    later declaration may match it.
+%    \begin{macrocode}
+      \def\reserved@a{#1}%
+      \ifx\pkgcls@targetlabel\reserved@a
+        \pkgcls@use@this@release{#3}{#2}%
+%<*tracerollback>
+      \else
+        \pkgcls@debug{Label doesn't match}%
+%</tracerollback>
+      \fi
+    \fi
+  \fi
+}
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+
+%  \begin{macro}{\pkgcls@use@this@release}
+%    If a certain release has been selected (stored in the external
+%    file given in \verb=#1=) we need to input it and afterwards stop
+%    reading the current file.
+%    \begin{macrocode}
+\def\pkgcls@use@this@release#1#2{%
+%    \end{macrocode}
+%    Before that we record the selection made inside the transcript.
+%    \begin{macrocode}
+   \pkgcls@show@selection{#1}{#2}%
+%    \end{macrocode}
+%    We then set the |\pkgcls@targetdate| to zero so that any
+%    |\DeclareOldRelease| or |\DeclareCurrentRelease| in the file we
+%    now load are bypassed\footnote{The older release may also have
+%    such declarations inside if it was a simply copy od the
+%    \texttt{.sty} or \texttt{.cls} file current at that
+%    date. Removing these declarations would make the file load a tiny
+%    bit faster, but this way it works in any case.} and then we
+%    finally load the correct release.
+%
+%    After loading that file we need to stop reading the current file
+%    so we issue |\endinput|. Note that the |\relax| before that is
+%    essential to ensure that the |\endinput| is only happening after
+%    the file has been fully processed, otherwise it would act after the
+%    first line of the |\@@input|!
+%    \begin{macrocode}
+   \pkgcls@targetdate\z@
+   \@@input #1.\@currext\relax
+   \endinput
+}
+%    \end{macrocode}
+%  \end{macro}
+
+
+%  \begin{macro}{\pkgcls@show@selection}
+%    This command records what selection was made. As that is needed
+%    in two places (and it is rather lengthly) it was placed in a
+%    separate command. The first argument is the name of the external
+%    file that is being loaded and is only needed for debugging.  The
+%    second argument is the date that corresponds to this file and it
+%    is used as part of the message.
+%    \begin{macrocode}
+\def\pkgcls@show@selection#1#2{%
+%<*tracerollback>
+  \pkgcls@debug{Result: use  #1}%
+%</tracerollback>
+  \GenericInfo
+   {\@spaces\@spaces\space}{Rollback for
+    \@cls@pkg\space'\@currname' requested ->
+    \ifx\pkgcls@targetlabel\@empty
+       date
+       \ifnum\requestedLaTeXdate=\pkgcls@targetdate
+          \requestedpatchdate
+       \else 
+          \expandafter\@gobble\pkgcls@arg
+       \fi.\MessageBreak
+%    \end{macrocode}
+%    Instead of ``best approximation'' we could say that we have been
+%    able to exactly match the date (if it is exact), but that would
+%    mean extra tests without much gain, so not done.
+%    \begin{macrocode}
+       Best approximation is
+    \else
+       version '\pkgcls@targetlabel'.\MessageBreak 
+       This corresponds to
+    \fi
+     the release introduced on #2\@gobble}%
+}
+%    \end{macrocode}
+%  \end{macro}
+ 
+
+%  \begin{macro}{\pkgcls@rollbackdate@error}
+%    This is called if the requested rollback date is earlier than the
+%    earliest known release of a package or class.
+%
+%    A similar error is given if global rollback date and min-date on
+%    a specific package conflict with each other, but that case is
+%    happens only once so it is is inlined.
+%    \begin{macrocode}
+\def\pkgcls@rollbackdate@error#1{%
+  \@latex@error{Suspicious rollback date given}%
+     {The \@cls@pkg\space'\@currname'  claims that it 
+      came into existence on #1 which\MessageBreak
+      is after your requested rollback date --- so
+      something is wrong here.\MessageBreak
+      Continue and we use the earliest known release.}}
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+%  \begin{macro}{\DeclareCurrentRelease}
+%    This declares the date (and possible name) of the current version
+%    of a package or class.
+%    \begin{macrocode}
+\newcommand\DeclareCurrentRelease[2][]{%
+%    \end{macrocode}
+%    First we test if |\pkgcls@targetdate| is greater than zero,
+%    otherwise this code is bypassed (as there is no rollback request).
+%    \begin{macrocode}
+  \ifnum\pkgcls@targetdate>\z@  % some sort of rollback request
+%<*tracerollback>
+    \pkgcls@debug{---DeclareCurrentRelease}%
+    \pkgcls@debug{   1: #1}%
+    \pkgcls@debug{   2: #2}%
+%</tracerollback>
+%    \end{macrocode}
+%    If the value is greater than 1 we have to deal with a date
+%    request, so we parse |#2| as a date and compare it with
+%    |\pkgcls@targetdate|.
+%    \begin{macrocode}
+    \ifnum\pkgcls@targetdate>\@ne  % a date request
+      \ifnum\@parse@version#2//00\@nil
+           >\pkgcls@targetdate
+%    \end{macrocode}
+%    If it is greater that means the release date if this file is
+%    later than the requested rollback date. Again we have two cases:
+%    If there was a previous candidate release we use that one as the
+%    current release is too young, but if there wasn't we have to use
+%    this release nevertheless as there isn't any alternative.
+%
+%    However this case can only happen if there is a
+%    |\DeclareCurrentRelease| but no declared older releases (so
+%    basically the use of the declaration is a bit dubious).
+%    \begin{macrocode}
+
+        \ifx\pkgcls@candidate\@empty
+          \pkgcls@rollbackdate@error{#2}%
+        \else
+          \pkgcls@use@this@release\pkgcls@candidate
+                                  \pkgcls@releasedate
+        \fi
+      \fi
+    \else % a label request
+%    \end{macrocode}
+%    Otherwise we have a rollback request to a named version so we
+%    check if that fits the current name and if not give an error as
+%    this was the last possible opportunity.
+%    \begin{macrocode}
+      \def\reserved@a{#1}%
+      \ifx\pkgcls@targetlabel\reserved@a
+        \pkgcls@show@selection{current version}{#2}%
+      \else
+        \@latex@error{Requested version '\pkgcls@targetlabel' for
+          \@cls@pkg\space'\@currname' is unknown}\@ehc
+      \fi
+    \fi
+  \fi
+}
+%    \end{macrocode}
+%  \end{macro}
+
+
+
 %
 %    \begin{macrocode}
 %</2ekernel>
 %    \end{macrocode}
+%
+%    Undo the above definition and changes:
+%    \begin{macrocode}
+%<*latexrelease>
+\IncludeInRelease{0000/00/00}%
+                 {\@onefilewithoptions}{Rollback}%
+
+\let\@onefilewithoptions\load@onefilewithoptions
+\let\load@onefilewithoptions\@undefined
+
+\pkgcls@debug
+\requestedLaTeXdate
+\pkgcls@targetdate
+\pkgcls@targetlabel
+\pkgcls@candidate
+\pkgcls@releasedate
+\pkgcls@parse@date@arg
+\pkgcls@parse@date@arg@
+\DeclareOldRelease
+\pkgcls@use@this@release
+\pkgcls@show@selection
+\pkgcls@rollbackdate@error
+\DeclareCurrentRelease
+
+\EndIncludeInRelease
+%</latexrelease>
+%    \end{macrocode}
+
+
+
+
+
+
+
+
+
+
+
+
 %
 % \section{After Preamble}
 % Finally we declare a package that allows all the commands declared
