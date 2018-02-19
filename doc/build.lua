@@ -33,31 +33,6 @@ typesetfiles =
 checkdeps  = { }
 unpackdeps = { }
 
--- Simplified help
-function help ()
-  print ""
-  print " build clean - clean out directory tree    "
-  print " build ctan  - create CTAN-ready archive   "
-  print " build doc   - runs all documentation files"
-  print ""
-end
-
--- doc does all of the targets itself
-function main (target, file, engine)
-  local errorlevel
-  if target == "doc" then
-    doc ()
-  elseif target == "clean" then
-    clean ()
-  elseif target == "ctan" then
-    ctan (true)
-  elseif target == "version" then
-    version ()
-  else
-    help ()
-  end
-end
-
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
 
