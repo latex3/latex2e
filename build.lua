@@ -73,4 +73,5 @@ end
 
 -- Find and run the build system
 kpse.set_program_name ("kpsewhich")
+dofile(("./build-config.lua"))
 dofile (kpse.lookup ("l3build.lua"))
