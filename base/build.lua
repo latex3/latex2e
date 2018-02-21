@@ -191,7 +191,9 @@ end
 function main (target, file, engine)
   local errorlevel
   if target == "check" then
-    format ()
+    if not options["rerun"] then
+      format()
+    end
     errorlevel = check (file, engine)
   elseif target == "clean" then
     errorlevel = clean ()
