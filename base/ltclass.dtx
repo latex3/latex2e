@@ -1876,6 +1876,7 @@
 %
 %  \begin{macro}{\pkgcls@targetdate}
 %  \begin{macro}{\pkgcls@targetlabel}
+%  \begin{macro}{\pkgcls@innerdate}
 %
 %    If a rollback for a package or class is requested then
 %    |\pkgcls@targetdate| holds the requested date as a number
@@ -1887,19 +1888,31 @@
 %
 %    |\pkgcls@targetdate=0| is used to indicate that there was no
 %    rollback request.
+%    While loading an old release |\pkgcls@targetdate| is also reset to
+%    zero so that |\DeclareRelease| declarations are bypassed.
+%
+%    In contrast |\pkgcls@innerdate| will always hold the requested
+%    date (in a macro not a counter) if there was one, otherwise,
+%    e.g., if there was no request or a request to a version name it
+%    will contain \TeX{} largest legal number. While loading a file
+%    this can be used to provide conditionals that select code based
+%    on the request.
+%
 %
 %    \begin{macrocode}
 \ifx\pkgcls@targetdate\@undefined
   \newcount\pkgcls@targetdate
 \fi
 \let\pkgcls@targetlabel\@empty
+\def\pkgcls@innerdate{\maxdimen}
 %    \end{macrocode}
+%  \end{macro}
 %  \end{macro}
 %  \end{macro}
 
 %  \begin{macro}{\pkgcls@candidate}
 %  \begin{macro}{\pkgcls@releasedate}
-%    When looping through the |\DeclareOldRelease| declarations we
+%    When looping through the |\DeclareRelease| declarations we
 %    record if the release is the best candidate we have seen so far.
 %    This is recorded in |\pkgcls@candidate| and we update it whenever
 %    we see a better one.
@@ -2129,7 +2142,7 @@
 
 
 
-%  \begin{macro}{\DeclareOldRelease}
+%  \begin{macro}{\DeclareRelease}
 %    First argument is the ``name'' of the release and it can be left empty
 %    if one doesn't like to give a name to the release.
 %    The second argument is that from which on this release was
@@ -2140,15 +2153,22 @@
 %    but this is not enforced and through this argument one can
 %    overwrite it.
 %    \begin{macrocode}
-\def\DeclareOldRelease#1#2#3{%
+\def\DeclareRelease#1#2#3{%
   \ifnum\pkgcls@targetdate>\z@  % some sort of rollback request
 %<*tracerollback>
-    \pkgcls@debug{---\string\DeclareOldRelease:}%
+    \pkgcls@debug{---\string\DeclareRelease:}%
     \pkgcls@debug{\@spaces 1: #1}%
     \pkgcls@debug{\@spaces 2: #2}%
     \pkgcls@debug{\@spaces 3: #3}%
 %</tracerollback>
 %    \end{macrocode}
+%    If the date argument |#2| is empty we are dealing with a special
+%    release that should be only accessible via its name; a typical
+%    use case would be a ``beta'' release. So if we are
+%    currently processing a date request we ignore it and otherwise we
+%    check if we can match the name and if  so load the corresponding
+%    release file.
+%    \begin{macrocode}
     \ifx\@nil#2\@nil
       \ifnum\pkgcls@targetdate=\@ne  % named request
         \def\reserved@a{#1}%
@@ -2165,19 +2185,18 @@
 %</tracerollback>
       \fi
     \else
-%    \begin{macrocode}
 %    \end{macrocode}
 %    If the value of |\pkgcls@targetdate| is greater than 1 (or in
 %    reality greater than something like 19930101) we are dealing with a
 %    rollback request to a specific date.
 %    \begin{macrocode}
-    \ifnum\pkgcls@targetdate>\@ne  % a real request
+      \ifnum\pkgcls@targetdate>\@ne  % a real request
 %    \end{macrocode}
 %    So we parse the date of this release to check if it is before or
 %    after the request date.
 %    \begin{macrocode}
-      \ifnum\@parse@version#2//00\@nil
-           >\pkgcls@targetdate
+        \ifnum\@parse@version#2//00\@nil
+             >\pkgcls@targetdate
 %    \end{macrocode}
 %    If it is after we have to distinguish between two cases: If there
 %    was an earlier candidate we use that one because the other is too
@@ -2187,42 +2206,42 @@
 %    a date where a package used doesn't yet exists. So we make a
 %    complained to the user.
 %    \begin{macrocode}
-        \ifx\pkgcls@candidate\@empty
-          \pkgcls@rollbackdate@error{#2}%
-          \pkgcls@use@this@release{#3}{#2}%
+          \ifx\pkgcls@candidate\@empty
+            \pkgcls@rollbackdate@error{#2}%
+            \pkgcls@use@this@release{#3}{#2}%
+          \else
+            \pkgcls@use@this@release\pkgcls@candidate
+                                    \pkgcls@releasedate
+          \fi
         \else
-          \pkgcls@use@this@release\pkgcls@candidate
-                                  \pkgcls@releasedate
-        \fi
-      \else
 %    \end{macrocode}
 %    Otherwise, if the release date of this version is before the
 %    target rollback and we record it as a candidate. But we don't use
 %    it yet as there may be another release which is still before the
 %    target rollback.
 %    \begin{macrocode}
-        \def\pkgcls@candidate{#3}%
-        \def\pkgcls@releasedate{#2}%
+          \def\pkgcls@candidate{#3}%
+          \def\pkgcls@releasedate{#2}%
 %<*tracerollback>
-        \pkgcls@debug{New candidate: #3}%
+          \pkgcls@debug{New candidate: #3}%
 %</tracerollback>
-      \fi
-    \else 
+        \fi
+      \else 
 %    \end{macrocode}
 %    If we end up in this branch we have a named version request. So
 %    we check if |\pkgcls@targetlabel| matches the current name and if
 %    yes we use this release immediately, otherwise we do nothing as a
 %    later declaration may match it.
 %    \begin{macrocode}
-      \def\reserved@a{#1}%
-      \ifx\pkgcls@targetlabel\reserved@a
-        \pkgcls@use@this@release{#3}{#2}%
+        \def\reserved@a{#1}%
+        \ifx\pkgcls@targetlabel\reserved@a
+          \pkgcls@use@this@release{#3}{#2}%
 %<*tracerollback>
-      \else
-        \pkgcls@debug{Label doesn't match}%
+        \else
+          \pkgcls@debug{Label doesn't match}%
 %</tracerollback>
+        \fi
       \fi
-    \fi
     \fi
   \fi
 }
@@ -2244,7 +2263,7 @@
    \pkgcls@show@selection{#1}{#2}%
 %    \end{macrocode}
 %    We then set the |\pkgcls@targetdate| to zero so that any
-%    |\DeclareOldRelease| or |\DeclareCurrentRelease| in the file we
+%    |\DeclareRelease| or |\DeclareCurrentRelease| in the file we
 %    now load are bypassed\footnote{The older release may also have
 %    such declarations inside if it was a simply copy od the
 %    \texttt{.sty} or \texttt{.cls} file current at that
@@ -2326,36 +2345,9 @@
       Continue and we use the earliest known release.}}
 %    \end{macrocode}
 %  \end{macro}
-
-
-%  \begin{macro}{\DeclareSpecialRelease}}
-%    A special release: one that can be only
-%    selected via a name, typical use case is a ``beta'' release.
-%    \begin{macrocode}
-\def\DeclareSpecialRelease#1#2{%
-  \ifnum\pkgcls@targetdate=\@ne  % named request
-%<*tracerollback>
-    \pkgcls@debug{---DeclareSpecialRelease}%
-    \pkgcls@debug{   1: #1}%
-    \pkgcls@debug{   2: #2}%
-%</tracerollback>
-    \def\reserved@a{#1}%
-    \ifx\pkgcls@targetlabel\reserved@a
-      \pkgcls@use@this@release{#2}{}%
-%<*tracerollback>
-    \else
-      \pkgcls@debug{Label doesn't match}%
-%</tracerollback>
-    \fi
-%<*tracerollback>
-  \else
-    \pkgcls@debug{Date request: ignored}%
-%</tracerollback>
-  \fi
-}
-%    \end{macrocode}
-%  \end{macro}
-
+%
+%
+%
 %  \begin{macro}{\DeclareCurrentRelease}
 %    This declares the date (and possible name) of the current version
 %    of a package or class.
@@ -2363,7 +2355,8 @@
 \def\DeclareCurrentRelease#1#2{%
 %    \end{macrocode}
 %    First we test if |\pkgcls@targetdate| is greater than zero,
-%    otherwise this code is bypassed (as there is no rollback request).
+%    otherwise this code is bypassed (as there is no rollback
+%    request).
 %    \begin{macrocode}
   \ifnum\pkgcls@targetdate>\z@  % some sort of rollback request
 %<*tracerollback>
@@ -2426,7 +2419,15 @@
 %
 
 %  \begin{macro}{\IfTargetDateBefore}
-%    
+%    This enables a simple form of conditional code inside a class or
+%    package file. If there is a date request and the request date is
+%    earlier than the first argument the code in the second argument
+%    is processed otherwise the code in the third argument is
+%    processed. If there was no date request then we also execute the
+%    third argument, i.e., we will get the ``latest'' version of the
+%    file.
+%
+%    Most often the second argument (before-date-code) will be empty.
 %    \begin{macrocode}
 \long\def\IfTargetDateBefore#1{%
   \ifnum\pkgcls@innerdate <%
