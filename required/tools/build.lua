@@ -17,6 +17,8 @@ installfiles = {"*.def", "*.sty", "*.tex"}
 typesetfiles = {"*.dtx", "tools-overview.tex"}
 unpackfiles  = {"tools.ins"}
 
+sourcefiles  = {"*.dtx", "*.ins", "*.sty"}
+
 checkdeps = {maindir .. "/base", maindir .. "/required/graphics"}
 
 -- Load the common settings for the LaTeX2e repo
