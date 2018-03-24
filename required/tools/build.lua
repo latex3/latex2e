@@ -17,7 +17,7 @@ installfiles = {"*.def", "*.sty", "*.tex"}
 typesetfiles = {"*.dtx", "tools-overview.tex"}
 unpackfiles  = {"tools.ins"}
 
-sourcefiles  = {"*.dtx", "*.ins", "*.sty"}
+sourcefiles  = {"*.dtx", "*.ins", "*-????-??-??.sty"}
 
 checkdeps = {maindir .. "/base", maindir .. "/required/graphics"}
 
