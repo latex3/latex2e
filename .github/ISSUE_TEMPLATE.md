@@ -1,4 +1,4 @@
-!! Please fill out all sections after reading CONTRIBUTING guidelines (and remove lines startting with !!)
+!! Please fill out all sections after reading CONTRIBUTING guidelines (and remove lines starting with !!)
 
 ## Brief outline of the bug
 
