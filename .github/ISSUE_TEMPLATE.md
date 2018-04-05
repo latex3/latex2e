@@ -1,4 +1,4 @@
-!! Please fill out all sections after reading CONTRIBUTING guidelines !!
+!! Please fill out all sections after reading CONTRIBUTING guidelines (and remove lines startting with !!)
 
 ## Brief outline of the bug
 
@@ -22,5 +22,5 @@
 
 ## Log file (required) and possibly PDF file  
 
-!! Use drag-and-drop !!
+!! Use drag-and-drop  (remember: .log file is required) !!
 
