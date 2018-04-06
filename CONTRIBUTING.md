@@ -5,12 +5,13 @@ pointers to help things along.
 
 ## Bugs
 
-There are thousands of packages and the LaTeX Project Team only supports
-a few dozen core packages beside the kernel code. So if a bug is due to
-code from a contributed third-party package the LaTeX Project Team is
-not able to help or fix the code as that is maintained by others. As
-such, we ask you follow the procedure below as it will help to weed
-cases where we cannot help.
+There are thousands of packages and tools and the LaTeX Project Team
+only supports a few dozen core packages beside the kernel code. We
+also don't maintain any tools or the TeX-engines themselves! So if a
+bug is due to code from a contributed third-party package then the LaTeX
+Project Team is not able to help or fix the code as that is maintained
+by others. As such, we ask you follow the procedure below as it will
+help to weed cases where we cannot help.
 
 To report a bug it is important to provide a short test file that
 exhibits the issue. The [`latexbug`](https://github.com/latex3/latexbug)
