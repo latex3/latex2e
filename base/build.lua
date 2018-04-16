@@ -24,7 +24,15 @@ installfiles   =
     "*.ltx",
     "*.lua",
     "*.sty",
-    "*.tex"
+    "docstrip.tex",
+    "idx.tex",
+    "lablst.tex",
+    "ltluatex.tex",
+    "ltxcheck.tex",
+    "nfssfont.tex",
+    "sample2e.tex",
+    "small2e.tex",
+    "testpage.tex",
   }
 sourcefiles    = 
   {
@@ -34,14 +42,11 @@ sourcefiles    =
     "*.dtx",
     "*.fdd",
     "*.ins",
-    "idx.tex",
-    "lablst.tex",
-    "lppl.tex",
-    "ltxcheck.tex",
-    "sample2e.tex",
-    "small2e.tex",
-    "source2e.tex",
-    "testpage.tex",
+    "idx.tex", 
+    "ltxcheck.tex", 
+    "sample2e.tex", 
+    "small2e.tex", 
+    "testpage.tex", 
   }
 typesetfiles   =
   {
@@ -72,6 +77,10 @@ typesetfiles   =
     "syntonly.dtx",
     "*.fdd",
     "*.err",
+  }
+docfiles =
+  {
+    "lppl.tex",
   }
 
 -- A few special file for unpacking
