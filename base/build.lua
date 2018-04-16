@@ -43,6 +43,7 @@ sourcefiles    =
     "*.fdd",
     "*.ins",
     "idx.tex", 
+    "lablst.tex", 
     "ltxcheck.tex", 
     "sample2e.tex", 
     "small2e.tex", 
