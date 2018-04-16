@@ -34,7 +34,7 @@ installfiles   =
     "small2e.tex",
     "testpage.tex",
   }
-sourcefiles    = 
+sourcefiles    =
   {
     "ltnews.cls",
     "ltxguide.cls",
@@ -42,12 +42,12 @@ sourcefiles    =
     "*.dtx",
     "*.fdd",
     "*.ins",
-    "idx.tex", 
-    "lablst.tex", 
-    "ltxcheck.tex", 
-    "sample2e.tex", 
-    "small2e.tex", 
-    "testpage.tex", 
+    "idx.tex",
+    "lablst.tex",
+    "ltxcheck.tex",
+    "sample2e.tex",
+    "small2e.tex",
+    "testpage.tex",
   }
 typesetfiles   =
   {
@@ -155,7 +155,7 @@ end
 -- Custom bundleunpack which does not search the localdir
 -- That is needed as texsys.cfg is unpacked in an odd way and
 -- without this will otherwise not be available
-function bundleunpack () 
+function bundleunpack ()
   local errorlevel = mkdir(localdir)
   if errorlevel ~=0 then
     return errorlevel
