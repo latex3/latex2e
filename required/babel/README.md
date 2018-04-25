@@ -1,4 +1,4 @@
-## Babel 3.18.1236
+## Babel 3.19
 
 This package manages culturally-determined typographical (and other)
 rules, and hyphenation patterns for a wide range of languages.  Many
@@ -64,6 +64,16 @@ respective authors.
 ### New
 
 ```
+3.19   - Most changes are for luatex:
+         . The main new feature is a bidi method for both implicit L in
+           R text, and implicit R in L text, with the possibility of
+           switching the font automatically. Still somewhat
+           experimental, but it should work in most cases.
+         . layout=extras for a couple of miscellaneous readjustments.
+         . bidi equation numbers.
+       - Also, for all engines, new field in some ini files:
+         digits.native (to be used in future releases).
+         
 3.18   - More bidi in luatex: captions (required only in multilingual
          docs) and tabular (required for R tables). Also an experimental
          support for captions in xetex and pdftex (tabular is not yet
@@ -118,5 +128,5 @@ respective authors.
 ```
 
 Javier Bezos
-2018/04/04
+2018/04/25
 
