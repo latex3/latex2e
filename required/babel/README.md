@@ -1,4 +1,4 @@
-## Babel 3.19
+## Babel 3.20
 
 This package manages culturally-determined typographical (and other)
 rules, and hyphenation patterns for a wide range of languages.  Many
@@ -64,6 +64,16 @@ respective authors.
 ### New
 
 ```
+3.20   - ini files with the field digits.native define
+         \<language>digits and \<language>counters. \arabic can be
+         redefined to use native digits.
+       - Fix - mapfont in bidi=basic didn't take into account combining
+         marks (eg, Arabic vowels).
+       - Fix - A bug introduced in 3.19, which sometimes reversed text 
+         in \hbox'es.
+       - Fix for luatex 1.07 - An internal change in luatex broke
+         bidi at 'automatic' hyphens.
+       - Fix for latest latex - babel.ins raised an error.
 3.19   - Most changes are for luatex:
          . The main new feature is a bidi method for both implicit L in
            R text, and implicit R in L text, with the possibility of
@@ -128,5 +138,5 @@ respective authors.
 ```
 
 Javier Bezos
-2018/04/25
+2018/05/02
 
