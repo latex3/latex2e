@@ -1,4 +1,4 @@
-## Babel 3.20
+## Babel 3.21
 
 This package manages culturally-determined typographical (and other)
 rules, and hyphenation patterns for a wide range of languages.  Many
@@ -64,6 +64,10 @@ respective authors.
 ### New
 
 ```
+3.21   - Fix - equation numbers raised an error.
+       - Two minor changes: if no language is requested load nil 
+         instead of raising an error, and the message 'babel <x.x>...'
+         is not printed to the log any more.
 3.20   - ini files with the field digits.native define
          \<language>digits and \<language>counters. \arabic can be
          redefined to use native digits.
@@ -138,5 +142,5 @@ respective authors.
 ```
 
 Javier Bezos
-2018/05/02
+2018/05/10
 
