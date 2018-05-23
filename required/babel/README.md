@@ -1,4 +1,4 @@
-## Babel 3.21
+## Babel 3.21.1285
 
 This package manages culturally-determined typographical (and other)
 rules, and hyphenation patterns for a wide range of languages.  Many
@@ -64,6 +64,10 @@ respective authors.
 ### New
 
 ```
+3.xx   - Fix - Error with \chapter if empty in ini
+       - Prelimimary support for Sanskrit
+       - Unknown languages in aux files do not raise an error
+         any more (only show a warning).
 3.21   - Fix - equation numbers raised an error.
        - Two minor changes: if no language is requested load nil 
          instead of raising an error, and the message 'babel <x.x>...'
@@ -142,5 +146,5 @@ respective authors.
 ```
 
 Javier Bezos
-2018/05/10
+2018/05/23
 
