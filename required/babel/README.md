@@ -1,4 +1,4 @@
-## Babel 3.21.1285
+## Babel 3.22
 
 This package manages culturally-determined typographical (and other)
 rules, and hyphenation patterns for a wide range of languages.  Many
@@ -64,7 +64,7 @@ respective authors.
 ### New
 
 ```
-3.xx   - Fix - Error with \chapter if empty in ini
+3.22   - Fix - Error with \chapter if empty in ini
        - Prelimimary support for Sanskrit
        - Unknown languages in aux files do not raise an error
          any more (only show a warning).
@@ -126,25 +126,8 @@ respective authors.
         \DeclareOption (except hebrew).
       - With a few exceptions, ini files have reached version 1.0.
       - New key `import' for \babelprovide, which also defines dates. 
-
-[3.12 - Internal.]
-
-3.11  - Fix - error when version in format and of package
-        didn't match.
-      - Now switch.def is loaded always.
-      - First steps in bidi writing.
-
-3.10  - New versioning
-      - New macro - \babelprovide
-
-3.9t  - Part of the code for 3.10 ss has been "back-ported" to this
-        release, but they are only internal changes.
-      - Fix - with \babelhyphen{soft} the hyphen could vanish.
-      - English, Indonesian and Malay "dialects" now rely on the proxy
-        files provided by these languages (eg, american.ldf, melayu.ldf).
-        If you upgrade babel, you MUST upgrade those languages, too.
 ```
 
 Javier Bezos
-2018/05/23
+2018/06/05
 
