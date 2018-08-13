@@ -83,6 +83,7 @@ docfiles =
   {
     "lppl.tex",
   }
+dynamicfiles = {"*.tst"}
 
 -- A few special file for unpacking
 unpackfiles     = {"unpack.ins"}
