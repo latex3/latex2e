@@ -59,6 +59,8 @@ function main (target)
     errorlevel = dobundles ("doc")
   elseif target == "install" then
     errorlevel = dobundles ("install")
+  elseif target == "uninstall" then
+    errorlevel = dobundles("uninstall")
   elseif target == "unpack" then
     errorlevel = dobundles ("unpack")
   elseif target == "version" then

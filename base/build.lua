@@ -224,6 +224,8 @@ function main (target, file, engine)
   elseif target == "unpack" then
     -- A simple way to have the unpack target also build the format
     errorlevel = format ()
+  elseif target == "uninstall" then
+    errorlevel = uninstall()
   elseif target == "version" then
     version ()
   else
