@@ -1,4 +1,4 @@
-## Babel 3.22.1381
+## Babel 3.23
 
 This package manages culturally-determined typographical (and other)
 rules, and hyphenation patterns for a wide range of languages.  Many
@@ -61,9 +61,20 @@ You may also report them to the author more informally on:
 Bugs related to specific languages are best reported to their
 respective authors.
 
-### New
+### Latest changes
 
 ```
+3.23   - After extensive tests and fixing some issues, bidi=basic is 
+         not experimental any longer.
+       - import in \babelprovide does not require a language code if
+         the language name is a recognized one.
+       - New macro: \ifbabelshorthand.
+       - TS1, T3 and TS3 have been added to the non-ascii list, to 
+         avoid problems in case no ASCII-savvy encoding is requested.
+       - Define Language and Script if fontspec does not known them (eg, 
+         the Japanese script).
+       - Set the \thepage bidi bahavior in foots/heads.
+       - Fix - Undefined \bbl@stripslash in Plain.
 3.22   - Fix - Error with \chapter if empty in ini
        - Prelimimary support for Sanskrit
        - Unknown languages in aux files do not raise an error
@@ -108,26 +119,8 @@ respective authors.
        - Fix - \<language>date did not work correctly
        - Fix - with some languages (eg, british), using
          \babelfont raised an error.
-
-3.15  - New command \babelfont (in Unicode engines) to define
-        language/script dependent fonts. Related to it, new
-        keys (script, language) in \babelprovide.
-      - A common mistake is to leave some space(s) in \captions<lang>,
-        which go to the document. Now babel removes them.
-      - Fix - Error with hyphenrules in \babelprovide in some cases.
-      - Fix - \hyphenrules doesn't set \languagename any more (which
-        was against the documented behavior),
-	
-3.14  - R text (Hebrew-like) and AL text (Arabic-like) in luatex, with
-        "European" and "Arabic" numbers, mirroring and unmarked L text.
-      - Fix - `import' ignored `hyphenrules' in ini files.
-
-3.13  - Existing ldf files takes priority over declared options with
-        \DeclareOption (except hebrew).
-      - With a few exceptions, ini files have reached version 1.0.
-      - New key `import' for \babelprovide, which also defines dates. 
 ```
 
 Javier Bezos
-2018/08/27
+2018/09/02
 
