@@ -1,7 +1,8 @@
 
 # simple script to move log files to tlgs (after checking them manually)
 #
-# copy the logs into the testfiles dir and then run this script
+# Step 1: copy the logs into the testfiles dir and then run this script
+# Step 2: run the script
 #
 # In latex2e the base engine is etex not pdftex :-( maybe we should 
 # normalize that one day ...
