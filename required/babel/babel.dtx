@@ -31,7 +31,7 @@
 %
 % \iffalse
 %<*filedriver>
-\ProvidesFile{babel.dtx}[2018/09/02 v3.23 The Babel package]
+\ProvidesFile{babel.dtx}[2018/09/06 v3.23.1391 The Babel package]
 \documentclass{ltxdoc}
 \GetFileInfo{babel.dtx}
 \usepackage{fontspec}
@@ -2859,55 +2859,6 @@ as well as “non-European” digits. Also on the roadmap are R layouts
 (lists, footnotes, tables, column order), page and section numbering,
 and maybe kashida justification.
 
-As to Thai line breaking, here is the basic idea of what \luatex{} can
-do for us, with the Thai patterns and a little script (the final
-version will not be so little, of course). It replaces each
-discretionary by the equivalent to ZWJ.
-
-\begingroup
-\catcode`\_=13 \def_{\string_}
-\begin{verbatim}
-\documentclass{article}
-
-\usepackage{babel}
-
-\babelprovide[import, main]{thai}
-
-\babelfont{rm}{FreeSerif}
-
-\directlua{
-local GLYF = node.id'glyph'
-function insertsp (head)
-  local size = 0
-  for item in node.traverse(head) do
-    local i = item.id
-    if i == GLYF then
-      f = font.getfont(item.font)
-      size = f.size
-    elseif i == 7 then
-      local n = node.new(12, 0)
-      node.setglue(n, 0, size * 1) % 1 is a factor
-      node.insert_before(head, item, n)
-      node.remove(head, item)
-    end
-  end
-end
-
-luatexbase.add_to_callback('hyphenate',
-  function (head, tail)
-    lang.hyphenate(head)
-    insertsp(head)
-  end, 'insertsp')
-}
-
-\begin{document}
-
-(Thai text.)
-
-\end{document}
-\end{verbatim}
-\endgroup
-
 Useful additions would be, for example, time, currency, addresses and
 personal names.\footnote{See for example POSIX, ISO 14652 and the
 Unicode Common Locale Data Repository (CLDR). Those system, however,
@@ -2924,6 +2875,18 @@ chapters), in Hungarian ``from (1)'' is ``(1)-b\H{o}l'', but ``from
 ``3.$^{\textrm{\scriptsize er}}$ \'{\i}tem'', and so on.
 
 \subsection{Tentative and experimental code}
+
+\textbf{Southeast Asian interword spacing}
+
+There is some rudimentary interword spacing for Thai, Lao and Khemer
+in \luatex{} (provided there are hyphenation patters). It is activated
+automatically if a language with of one of these scripts are loaded
+with |\babelprovide|. They are just the first steps. See the sample on 
+the \babel{} repository.
+
+Note you can easily add, modify and remove patterns with 
+|\babelpatterns|. Even if there are no pattern for the language, you 
+can add at least some typical cases.
 
 \medskip
 \textbf{Old stuff}
@@ -3865,8 +3828,8 @@ help from Bernd Raichle, for which I am grateful.
 % \section{Tools}
 %
 %    \begin{macrocode}
-%<<version=3.23>>
-%<<date=2018/09/02>>
+%<<version=3.23.1391>>
+%<<date=2018/09/06>>
 %    \end{macrocode}
 %
 % \textbf{Do not use the following macros in \texttt{ldf} files. They
@@ -6744,6 +6707,19 @@ help from Bernd Raichle, for which I am grateful.
 %    \end{macrocode}
 %
 %  \end{macro}
+%
+% \subsection{Interword spacing in Southeast Asian scripts}
+%
+% \textit{At work}.
+%
+%    \begin{macrocode}
+\def\bbl@seascripts{,Thai,Lao,Khmer,} % Malayalam?
+\newcommand\babelinterword[3]{%
+  \def\BabelInterword{#1}%
+  \def\BabelInterwordStretch{#2}%
+  \def\BabelInterwordShrink{#3}}
+\babelinterword{0}{.1}{0}
+%    \end{macrocode}
 % \subsection{Multiencoding strings}
 %
 % \changes{babel~3.9a}{2012/09/05}{Added tentative code for string
@@ -8169,7 +8145,9 @@ help from Bernd Raichle, for which I am grateful.
 %    \end{macrocode}
 %
 % Language and Script values to be used when defining a font or
-% setting the direction are set with the following macros.
+% setting the direction are set with the following macros. It also 
+% activates interword spacing in Southeast Asian scripts if not done 
+% before.
 %
 %    \begin{macrocode}
 \def\bbl@provide@lsys#1{%
@@ -8182,7 +8160,11 @@ help from Bernd Raichle, for which I am grateful.
   \bbl@csarg\bbl@add@list{lsys@#1}{Script=\bbl@cs{sname@#1}}%
   \bbl@ifunset{bbl@lname@#1}{}%
     {\bbl@csarg\bbl@add@list{lsys@#1}{Language=\bbl@cs{lname@#1}}}%
-  \bbl@csarg\bbl@toglobal{lsys@#1}%}%
+  \bbl@csarg\bbl@toglobal{lsys@#1}%
+  \bbl@xin@{\csname bbl@sname@#1\endcsname}{\bbl@seascripts}%
+  \ifin@
+    \@nameuse{bbl@seainterword}%
+  \fi
   \bbl@exp{% TODO - should be global, but even local does its job
            % I'm still not sure -- must investigate 
     \<keys_if_exist:nnF>{fontspec-opentype}{Script/\bbl@cs{sname@#1}}%
@@ -11497,6 +11479,48 @@ help from Bernd Raichle, for which I am grateful.
     \fi}}
 %    \end{macrocode}
 %  \end{macro}
+%
+% \section{Southeast Asian scripts}
+%
+%    \begin{macrocode}
+\def\bbl@seainterword{
+  \let\bbl@seainterword\relax
+  \directlua{
+    Babel = Babel or {}
+    function Babel.sea_disc_to_space (head)
+      local useinterword = false
+      local size = 10
+      for item in node.traverse(head) do
+        local i = item.id
+        if i == node.id'glyph' then
+          f = font.getfont(item.font)
+          size = f.size   %% 10 pt = 655360 = 10 * 65536
+          if (item.char > 0x0E00 and item.char < 0x0E7F) or   % Thai
+             (item.char > 0x0E80 and item.char < 0x0EFF) or   % Lao
+             (item.char > 0x1780 and item.char < 0x17FF) then % Khemer
+            useinterword = true
+          else
+            useinterword = false
+          end
+        end
+        if i == 7 and item.subtype == 3 and useinterword then
+          local n = node.new(12, 13)
+          node.setglue(n, \BabelInterword * size,
+                          \BabelInterwordStretch * size,
+                          \BabelInterwordShrink * size)
+          node.insert_before(head, item, n)
+          node.remove(head, item)
+        end
+      end
+    end
+    luatexbase.add_to_callback('hyphenate',
+      function (head, tail)
+        lang.hyphenate(head)
+        Babel.sea_disc_to_space(head)
+      end,
+      'Babel.sea_disc_to_space')
+}}
+%    \end{macrocode}
 %
 % Common stuff.
 %
