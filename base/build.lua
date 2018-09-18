@@ -27,6 +27,7 @@ installfiles   =
     "docstrip.tex",
     "idx.tex",
     "lablst.tex",
+    "lppl.tex",
     "ltluatex.tex",
     "ltxcheck.tex",
     "nfssfont.tex",
@@ -43,7 +44,7 @@ sourcefiles    =
     "*.fdd",
     "*.ins",
     "idx.tex",
-    "lablst.tex",
+    "lablst.tex"
     "ltxcheck.tex",
     "sample2e.tex",
     "small2e.tex",
@@ -78,10 +79,6 @@ typesetfiles   =
     "syntonly.dtx",
     "*.fdd",
     "*.err",
-  }
-docfiles =
-  {
-    "lppl.tex",
   }
 dynamicfiles = {"*.tst"}
 
