@@ -1,4 +1,4 @@
-## Babel 3.23.1391
+## Babel 3.24
 
 This package manages culturally-determined typographical (and other)
 rules, and hyphenation patterns for a wide range of languages.  Many
@@ -7,27 +7,14 @@ lualatex out of the box.  A few even work with plain formats.
 
 The latest stable version is available on <https://ctan.org/pkg/babel>.
 
-Version 3.9a fixed lots of bugs and added some new features, intended
-mainly to make it compatible somehow with Unicode engines. Some bugs
-have not been fixed to avoid backward incompatibilities, but they have
-been documented. Most of the new features (like package options) were
-intended to overcome issues in previous releases without changing
-significantly the behaviour of Babel.
-
-Current development is focused on Unicode engines (XeTeX and LuaTeX).
-New features related to font selection, bidi writing and the like will
-be added incrementally. Versions numbers drop the letter and now 3.10,
-3.11, etc., will be used instead. So, 3.9t is the last in the former
-series.
-
-Included is a set of ini files for about 200 languages.
-
 Languages are not part of the Babel core any more; in particular, it
 shall be no longer necessary to synchronize Babel core releases with
 releases of Babel language files. See CONTRIB for further details
 about contributing a language. You may also create an ini file or
 improve the existing ones -- it's a trivial task (no programming
 skills required at all), but don't hesitate to ask for help.
+
+Included is a set of ini files for about 200 languages.
 
 The best way to install and/or update it is with the help of package
 managers.
@@ -64,6 +51,7 @@ respective authors.
 ### Latest changes
 
 ```
+3.24   - Prelimimary support for Thai interword spacing with luatex.
 3.23   - After extensive tests and fixing some issues, bidi=basic is 
          not experimental any longer.
        - import in \babelprovide does not require a language code if
@@ -122,5 +110,5 @@ respective authors.
 ```
 
 Javier Bezos
-2018/09/06
+2018/09/26
 
