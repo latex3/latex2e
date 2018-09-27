@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-% Copyright 1993-2017
+% Copyright 1993-2018
 % The LaTeX3 Project and any individual authors listed elsewhere
 % in this file.
 %
@@ -32,7 +32,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltmiscen.dtx}
-             [2017/09/13 v1.1m LaTeX Kernel (Misc. Environments)]
+             [2018/09/26 v1.1n LaTeX Kernel (Misc. Environments)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltmiscen.dtx}
@@ -303,18 +303,135 @@
 %  \end{macro}
 %
 %
+% Reading data from auxiliary files (like \texttt{.toc} normally
+% happens in vertical mode and it therefore doesn't matter if line
+% endings are converted to spaces by \TeX{} during that process.
+%
+% However, especially the \textt{.toc} file might be read in L-R mode
+% (in cases the \cs{tableofcontents} attempts to put, say a list of
+% sub-sections as a paragraph. In that case the newlines after a line
+% like
+% \begin{verbatim}
+% \contentsline {subsubsection}{\numberline {1.1.1}A C-head}{2}
+% \end{verbatim}
+% might result in spurious spaces (e.g., when that level is not
+% included).
+%
+% That could be fixed by reading in the file using
+% \cs{endlinechar}\texttt{=-1} but that has the danger that it drops
+% some valid endlines that should be converted to spaces (for example
+% when the user edited the TOC and then used \cs{nofiles} to preserve
+% it.
+%
+% So the approach taken instead is this:
+% \begin{itemize}
+% \item \cs{addcontentsline} adds the command
+%    \cs{protected@file@percent} to the end of the second argument of
+%    \cs{@writefile} that is written to the \texttt{.aux}. As the name
+%    indicates this is a protected macro so it doesn't change if it is
+%    written out.
+%
+% \item When the \texttt{.aux} is read back in at the end of the run,
+%    \cs{@writefile} is executed and writes its second argument
+%    unmodified to the file with the extension given by its first
+%    argument. Or rather that was how it was in the past.
+%
+% \item Instead we change \cs{@writefile} slightly: basically it looks
+%    at the second argument and if the last token in there is
+%    \cs{protected@file@percent} then it is replaced by a percent
+%    character and that is then written out. If not (for example, if
+%    the data came from a user issued \cs{addtocontents}, or from some
+%    package that uses \cs{@writefile} for writing its own files) then
+%    the command behaves exactly as before.
+% \end{itemize}
+% 
+%
+%  \begin{macro}{\protected@file@percent}
+%    Dummy cs to be replaced by a percent sign inside
+%    \cs{@writefile}. If it survives (when used incorrectly) it will
+%    expand to nothing in a typsetting context.
+% \changes{v1.1n}{2018/09/26}{Sometimes mask the endline char when
+%    writing to files (github/73)}
+%    \begin{macrocode}
+%</2ekernel>
+%<*2ekernel|latexrelease>
+%<latexrelease>\IncludeInRelease{2018/12/01}%
+%<latexrelease>                 {\protected@file@percent}{Mask line endings}%
+\protected\def\protected@file@percent{} 
+%    \end{macrocode}
+%  \end{macro}
+
+
+%  \begin{macro}{\add@percent@to@temptokena}
+%    Helper function which is used to inspect a sequence of tokens
+%    (the second argument of \cs{@writefile} and it the last token is
+%    \cs{\protected@file@percent} it will replace it by a harmless
+%    percent. The result is saved in \cs{@temptokena} for later use.
+% \changes{v1.1n}{2018/09/26}{Sometimes mask the endline char when
+%    writing to files (github/73)}
+%    \begin{macrocode}
+\begingroup
+\catcode`\%=12
+%    \end{macrocode}
+%    \texttt{latexrelease} will read this code in high-speed
+%    mode in certain situations. During that it will only look for
+%    \cs{if} tests but not actually execute the \cs{catcode} change
+%    above. As a result it will drop anything after the |%| character
+%    in the definition. Therefore the |\fi| needs to be on the next
+%    line and we need locally another comment character to avoid
+%    getting spaces into the definition---a weird problem :-)
+%    \begin{macrocode}
+\catcode`\^^A=9 
+\long\gdef\add@percent@to@temptokena
+    #1\protected@file@percent#2\add@percent@to@temptokena
+    {\ifx!#2!\@temptokena{#1}\else\@temptokena{#1%^^A
+%    \end{macrocode}
+%    Can't be on the same line as the |%| --- see above.
+%    \begin{macrocode}
+      }\fi}
+\endgroup
+%    \end{macrocode}
+%  \end{macro}
+%
 % \begin{macro}{\@writefile}
 % \changes{v1.0l}{1994/05/20}{Added correct setting of \cs{protect}.}
 % \changes{v1.0t}{1994/11/04}{Removed setting of \cs{protect}. ASAJ.}
 % \changes{v1.0z}{1995/07/13}{Added missing percent and use \cs{relax}
 %  in the THEN case}
+% \changes{v1.1n}{2018/09/26}{Sometimes mask the endline char when
+%    writing to files (github/73)}
 %    \begin{macrocode}
 \long\def\@writefile#1#2{%
   \@ifundefined{tf@#1}\relax
-    {\@temptokena{#2}%
+    {%
+%    \end{macrocode}
+%    If we write to the file we first prepare |#2| using
+%    \cs{add@percent@to@temptokena} and then write the token register
+%    out.
+%    \begin{macrocode}
+      \add@percent@to@temptokena
+        #2\protected@file@percent
+        \add@percent@to@temptokena
      \immediate\write\csname tf@#1\endcsname{\the\@temptokena}%
     }%
 }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000/00/00}%
+%<latexrelease>                 {\protected@file@percent}{Mask line endings}%
+%<latexrelease>\let\protected@file@percent\@undefined
+%<latexrelease>\let\add@percent@to@temptokena\@undefined
+%<latexrelease>\long\def\@writefile#1#2{%
+%<latexrelease>  \@ifundefined{tf@#1}\relax
+%<latexrelease>    {\@temptokena{#2}%
+%<latexrelease>     \immediate\write\csname tf@#1\endcsname{\the\@temptokena}%
+%<latexrelease>    }%
+%<latexrelease>}
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
 %    \end{macrocode}
 %  \end{macro}
 %
