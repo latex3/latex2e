@@ -1,4 +1,4 @@
-## Babel 3.25
+## Babel 3.24
 
 This package manages culturally-determined typographical (and other)
 rules, and hyphenation patterns for a wide range of languages.  Many
@@ -51,10 +51,6 @@ respective authors.
 ### Latest changes
 
 ```
-3.25   - Fixes for 3.23 - mapfont=direction could raise an error.
-         Language and Script were not always defined correctly.
-       - Improved tentative support for Thai, Lao and Khmer in both 
-         luatex and xetex.
 3.24   - Prelimimary support for Thai interword spacing with luatex.
 3.23   - After extensive tests and fixing some issues, bidi=basic is 
          not experimental any longer.
@@ -114,5 +110,5 @@ respective authors.
 ```
 
 Javier Bezos
-2018/10/03
+2018/09/26
 
