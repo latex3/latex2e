@@ -16,11 +16,8 @@ maindir = "../.."
 sourcefiles  = {"*.dtx", "*.ins", "amstex.sty"}
 typesetfiles = {"*.dtx", "*.tex"}
 
--- Avoid isolation (cf. babel)
-checkdeps    = { }
-checksearch  = true
-unpackdeps   = { }
-unpacksearch = true
+-- Allow for TU test
+checkconfigs = {"build","config-TU"}
 
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
