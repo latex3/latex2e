@@ -292,7 +292,7 @@
 % Test if the sequence is invalid UTF-8 or valid UTF-8 but without
 % a \LaTeX\ definition.
 %    \begin{macrocode}
-     \if\relax\expandafter\UTFviii@checkseq\string#1\relax\relax
+     \if\relax\expandafter\UTFviii@checkseq\string#1\empty\relax%
 %    \end{macrocode}
 %    The endline character has a special definition within the
 %    inputenc package (it is gobbling spaces). For this reason we
@@ -309,7 +309,7 @@
      \else
       \PackageError{inputenc}{Invalid UTF-8 byte sequence}%
                              \UTFviii@invalid@help
-     \fi         
+     \fi
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -357,32 +357,118 @@
 %
 %
 % \begin{macro}{\UTFviii@checkseq}
-% \begin{macro}{\UTFviii@check@continue}
+% \begin{macro}{\UTFviii@check@one}
+% \begin{macro}{\UTFviii@check@two}
+% \begin{macro}{\UTFviii@check@three}
 % \changes{v1.2a}{2018/03/24}{Macro added}%
+% \changes{v1.2f}{2018/10/06}{@continue reoved, \empty terminates}%
 % Check that the csname consists of a valid UTF-8 sequence.
 %    \begin{macrocode}
-\def\UTFviii@checkseq#1:#2#3{%
+\gdef\UTFviii@checkseq#1:#2#3\empty{%
  \ifnum`#2<"80 %
-   \ifx\relax#3\else1\fi
- \else
-   \ifnum`#2<"C0 %
-     1 %
-   \else
-     \expandafter\expandafter\expandafter\UTFviii@check@continue
-     \expandafter\expandafter\expandafter#3%
-   \fi
-  \fi}
+  \ifx\empty#3\empty%
+  \else%
+   1%
+  \fi%
+ \else%
+  \ifnum`#2<"C2 %
+   1%
+  \else%
+   \ifnum`#2<"E0 %
+    % one 80-BF
+    \UTFviii@check@one#3\empty%
+   \else%
+    \ifnum`#2<"E1 %
+     % A0-BF + one 80-BF
+     \UTFviii@check@two"A0.#3\empty%
+    \else%
+     \ifnum`#2<"F0 %
+      % two 80-BF
+      \UTFviii@check@two"80.#3\empty%
+     \else%
+      \ifnum`#2<"F1 %
+       % 90-BF + two 80-BF
+       \UTFviii@check@three"90."BF.#3\empty%
+      \else%
+       \ifnum`#2<"F4 %
+        % three 80-BF
+        \UTFviii@check@three"80."BF.#3\empty%
+       \else%
+        \ifnum`#2<"F5 %
+         % 80-8F + two 80-BF
+         \UTFviii@check@three"80."8F.#3\empty%
+        \else%
+         1%
+        \fi%
+       \fi%
+      \fi%
+     \fi%
+    \fi%
+   \fi%
+  \fi%
+ \fi%
+}%
 %    \end{macrocode}
 %
+% Check last trail octet in the range "80.."BF.
+%
 %    \begin{macrocode}
-\def\UTFviii@check@continue#1{%
-  \ifx\relax#1%
-  \else
-  \ifnum`#1<"80 1\else\ifnum`#1>"BF 1\fi\fi
-  \expandafter\UTFviii@check@continue
-  \fi
-}
+\gdef\UTFviii@check@one#1#2\empty{%
+ \ifx\empty#2\empty%
+  \ifnum`#1<"80 %
+   1%
+  \else%
+   \ifnum`#1>"BF %
+    1%
+   \fi%
+  \fi%
+ \else%
+  1%
+ \fi%
+}%
 %    \end{macrocode}
+%
+% Check second-to-last trail octet in the range #1.."BF.
+%
+%    \begin{macrocode}
+\gdef\UTFviii@check@two#1.#2#3\empty{%
+ \ifx\empty#3\empty%
+  1%
+ \else%
+  \ifnum`#2<#1 %
+   1%
+  \else%
+   \ifnum`#2>"BF %
+    1%
+   \else%
+    \UTFviii@check@one#3\empty%
+   \fi%
+  \fi%
+ \fi%
+}%
+%    \end{macrocode}
+%
+% Check third-to-last trail octet in the range #1..#2.
+%
+%    \begin{macrocode}
+\gdef\UTFviii@check@three#1.#2.#3#4\empty{%
+ \ifx\empty#4\empty%
+  1%
+ \else%
+  \ifnum`#3<#1 %
+   1%
+  \else%
+   \ifnum`#3>#2 %
+    1%
+   \else%
+    \UTFviii@check@two"80.#4\empty%
+   \fi%
+  \fi%
+ \fi%
+}%
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 %
@@ -626,7 +712,7 @@
 % the character os already active.  The definition of |\UTFviii@tmp|
 % looks slightly strange but is designed for the sequence of |\expandafter|
 % in |\DeclareUnicodeCharacter|.
-% 
+%
 %    \begin{macrocode}
   \ifnum\count@<"A0\relax
     \ifnum\catcode\count@=13
@@ -641,7 +727,7 @@
 %    The code below is derived from \texttt{xmltex} and generates the UTF-8 byte sequence
 %    for the number in |\count@|.
 %
-%    The reverse operation (just used in error messages) 
+%    The reverse operation (just used in error messages)
 %    has now been added as \cs{decode@UTFviii}.
 %    \begin{macrocode}
   \else\ifnum\count@<"800\relax
@@ -706,69 +792,61 @@
 %
 % \begin{macro}{\decode@UTFviii}
 % \changes{v1.1o}{2015/08/28}{Macro added}
+% \changes{v1.2f}{2018/10/06}{Replaced by fully checking version}%
 %    In the reverse direction, take a sequence of octects(bytes)
 %    representing a character in UTF-8 and construct the Unicode number.
 %    The sequence is terminated by |\relax|.
 %
-%    In this version, if the sequence is not valid UTF-8 you probably
-%    get a low level arithmetic error from |\numexpr| or stray characters
-%    at the end. Getting a better error message would be somewhat expensive.
-%    As the main use is for reporting characters in messages, this is done
-%    just using expansion, so |\numexpr| is used, A stub returning 0 is defined
-%    if |\numexpr| is not available.
-%    \begin{macrocode}
-\ifx\numexpr\@undefined
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-\gdef\decode@UTFviii#1{0}
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-\else
-%    \end{macrocode}
-%
-% If the input is malformed UTF-8 there may not be enough closing ) so
-% add 5 so there are always some remaining then cleanup and remove
-% any remaining ones at the end. This avoids |\numexpr| parse errors
-% while outputting a package error.
 %    \begin{macrocode}
 \gdef\decode@UTFviii#1\relax{%
-  \expandafter\UTFviii@cleanup
-    \the\numexpr\dec@de@UTFviii#1\relax)))))\@empty}
+ \the\numexpr(\UTFviii@decode0:#1\relax)%
+}%
 %    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\UTFviii@decode}
+% \changes{v1.2f}{2018/10/06}{Macro added}
+%    Safer decode, returns "1FFFFF for illegal sequences.
 %
 %    \begin{macrocode}
-\gdef\UTFviii@cleanup#1)#2\@empty{#1}
+\gdef\UTFviii@decode#1\relax{%
+ \if\relax\expandafter\UTFviii@checkseq\string#1\empty\relax%
+  \UTFviii@dec@lead#1\relax%
+ \else%
+  2097151%
+ \fi%
+}%
 %    \end{macrocode}
 %
-%    \begin{macrocode}
-\gdef\dec@de@UTFviii#1{%
-\ifx\relax#1%
-\else
-  \ifnum`#1>"EF 
-    ((((`#1-"F0)%
-  \else
-    \ifnum`#1>"DF 
-      (((`#1-"E0)%
-    \else
-      \ifnum`#1>"BF 
-        ((`#1-"C0)%
-      \else
-        \ifnum`#1>"7F 
-        )*64+(`#1-"80)%
-        \else
-        +`#1 %
-        \fi
-      \fi
-    \fi
-  \fi
-  \expandafter\dec@de@UTFviii
-\fi}
-%    \end{macrocode}
+%    Decode lead octet.
 %
 %    \begin{macrocode}
-\fi
+\gdef\UTFviii@dec@lead#1:#2#3\relax{%
+ % we know #2 is in "00.."7F, "C2.."F4
+ \ifnum`#2<"80 %
+  `#2%
+ \else%
+  \ifnum`#2<"E0 %
+   (`#2-"C0%
+  \else%
+   \ifnum`#2<"F0 %
+    ((`#2-"E0%
+   \else%
+    (((`#2-"F0%
+   \fi%
+  \fi%
+  \UTFviii@dec@trail#3\relax%
+ \fi%
+}%
+%    \end{macrocode}
+%
+%    Decode trail octets recursively.
+%
+%    \begin{macrocode}
+\gdef\UTFviii@dec@trail#1#2\relax{%
+ )*64+(`#1-"80)%
+ \ifx\relax#2\else\UTFviii@dec@trail#2\relax\fi%
+}%
 %    \end{macrocode}
 % \end{macro}
 %
@@ -1635,7 +1713,7 @@
 %    \begin{macrocode}
 %<all,ts1,utf8>\DeclareUnicodeCharacter{FEFF}{\ifhmode\nobreak\fi}
 %    \end{macrocode}
-% 
+%
 % \endgroup
 % \subsection{Notes}
 %
