@@ -1,4 +1,4 @@
-## Babel 3.25
+## Babel 3.26
 
 This package manages culturally-determined typographical (and other)
 rules, and hyphenation patterns for a wide range of languages.  Many
@@ -51,6 +51,7 @@ respective authors.
 ### Latest changes
 
 ```
+3.26   - Fix for 3.25 - \babelprovide raised an error with xetex. 
 3.25   - Fixes for 3.23 - mapfont=direction could raise an error.
          Language and Script were not always defined correctly.
        - Improved tentative support for Thai, Lao and Khmer in both 
@@ -114,5 +115,5 @@ respective authors.
 ```
 
 Javier Bezos
-2018/10/03
+2018/10/16
 
