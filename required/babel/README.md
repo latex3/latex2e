@@ -1,4 +1,4 @@
-## Babel 3.26
+## Babel 3.26.1445
 
 This package manages culturally-determined typographical (and other)
 rules, and hyphenation patterns for a wide range of languages.  Many
@@ -115,5 +115,5 @@ respective authors.
 ```
 
 Javier Bezos
-2018/10/16
+2018/10/30
 
