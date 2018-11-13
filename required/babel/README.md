@@ -1,4 +1,4 @@
-## Babel 3.26.1445
+## Babel 3.27
 
 This package manages culturally-determined typographical (and other)
 rules, and hyphenation patterns for a wide range of languages.  Many
@@ -51,6 +51,10 @@ respective authors.
 ### Latest changes
 
 ```
+3.27   - Preliminary support for bidi (by Vafa Khalighi) with xetex.
+       - Fix for 3.23 - \ensureascii was redefined even when not 
+         necessary.
+       - Minor improvements in babel-vi.ini.
 3.26   - Fix for 3.25 - \babelprovide raised an error with xetex. 
 3.25   - Fixes for 3.23 - mapfont=direction could raise an error.
          Language and Script were not always defined correctly.
@@ -115,5 +119,5 @@ respective authors.
 ```
 
 Javier Bezos
-2018/10/30
+2018/11/13
 
