@@ -50,14 +50,6 @@ command line, or via [TeXdoc Online](http://texdoc.net).
 
 
 
-### REMARKS ON THIS RELEASE
-
-#### Version 2.17
-
-Fixes a bug in the spacing around the closing delimiter in generalised
-fractions in xetex and luatex version added in release 2.16.
-Fixes a bug that overfull lines did not always produce warnings.
-
 
 ### CHANGE LOG
 
@@ -89,7 +81,7 @@ contact the developer, and not us!
 ### Copyright
 
 Copyright 2001-2004, 2007, 2008, 2010, 2011, 2013 American Mathematical Society.
-Copyright 2016-2017 LaTeX3 Project and American Mathematical Society.
+Copyright 2016-2018 LaTeX3 Project and American Mathematical Society.
 
 This work may be distributed and/or modified under the
 conditions of the LaTeX Project Public License, either version 1.3c
@@ -103,4 +95,4 @@ This work has the LPPL maintenance status `maintained'.
 
 The Current Maintainer of this work is the LaTeX3 Project.
 
-This README file is copyright 2016-2017 The LaTeX3 Project.
+This README file is copyright 2016-2018 The LaTeX3 Project.
