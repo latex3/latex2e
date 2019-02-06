@@ -108,7 +108,7 @@ unpackdeps = { }
 indexstyle = "source2e.ist"
 
 -- Allow for TU test
-checkconfigs = {"build","config-TU"}
+checkconfigs = {"build","config-TU","config-legacy"}
 
 function format ()
   local errorlevel = unpack ()
