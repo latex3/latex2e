@@ -1,8 +1,285 @@
+%% This is a patch of the LaTeX kernel to support UTF8 character in
+%% all places where they can be supported by an 8bit engine such as
+%% pdfTeX.
+%%
+%%
+%% This should enable UTF8 not only in ordinary text (as
+%% already provided by a recent LaTeX release but in addition
+%% supports:
+%%
+%%  - utf8 characters in file names used by \input \includegraphics
+%%    and the like --- this includes spaces and it is not longer necessary
+%     to quote the file name in this case (not possible is the use of
+%%    the " as part of a file name, this is restriction of the library
+%%    the TeX engines use).
+%%
+%%  - use of all utf8 characters in labels
+%%
+%%  - in contrast to the utf8 characters that are used in typesetting
+%%    it is not necessary that LaTeX has any knowledge how to render
+%%    the character, e.g., without loading the textcomp package it is
+%%    not possible to typeset € but even then you can have a file or a
+%%    label with that character.
+%%
+%%
+%% The plan is to integrate this patch (or a version of it) into the
+%% kernel. Thus the current external version is intended to invite
+%% tests with real documents beyond the test suite that we have
+%% available at our disposal.
+%%
+%%
+%% If you find any issues, please prepare a short example and submit
+%% it as an issue at
+%%
+%%    https://github.com/latex3/latex2e/issues
+%%
+%% Thanks!
+
+
 \makeatletter
 
 
 
+% utf8
+%
+%
+%  whenever we encounter a UTF8 char in non-typesetting  situation we make sure it
+%  doesn't expand.
 
+%-------------------------------------------------------------------------
+
+% Approach
+%
+% The utf8 characters are seen by an 8-bit engine as a sequence of octets.
+%
+% We make each starting octet an active character.
+%
+
+%  - When typesetting we pick up the necessary number of additional
+%    octets check if they form a command that LaTeX knows about
+%    ( \csname u8:\string#1\string#2...\encsname ) and if so use that
+%    for typesetting.  \string is needed as the octets may (all?) be
+%    active and we want the literal values in the name.
+
+%  - If the utf8 character is going to be part of a label then it is
+%    essentially becoming part of some csname and with the
+%    test \ifincsname we can find this out. If so we render the whole
+%    sequence off octets harmless by using \string too when the
+%    starting octet executes.
+%
+
+%  - Another possible case is that \protect has *not* the meaning
+%    of \typeset@protect. In that case we may do a write or we may do
+%    a \protected@edef or ...  In all such cases we want to keep the
+%    sequence of octets unchanged, but we can't use \string since at
+%    least in the case of \protect@edef the result may later be
+%    typeset after all (in fact that is quite likely) and so at that
+%    point the starting octet needs to be an active character again
+%    (the others could be stringified). So for those cases we use \noexpand.
+%
+
+%  So the code for a start octet of a two byte sequence would there
+%  look like this:
+
+%
+%
+% \long\def\UTFviii@two@octets{%
+%   \ifincsname
+%     \expandafter
+%     \UTF@twostring@octets
+%   \else
+%     \ifx\protect\@typeset@protect
+%     \else
+%       \expandafter\expandafter\expandafter
+%      \UTF@twoharmless@octets
+%     \fi
+%   \fi
+%   \UTFviii@two@octets@do
+% }
+% 
+
+% \ifcsname is tested first because that can be true even if we are
+%  otherwise doing typesetting. If this is the case use \string on the
+%  whole octet sequence. \UTF@twostring@octets not only does this but
+%  also gets rid of \UTFviii@two@octets@do in the input stream by
+%  picking it up as a first argument and dropping it.
+%
+% If this is not the case and we are doing typesetting (i.e., \protect
+%  is \typeset@protect) then execute \UTFviii@two@octets@do which
+%  picks up all octets and typesets the character (or generates an
+%  error if it doesn't know how to typeset it).
+%
+% If we are not doing typesetting then we run \UTFviii@two@octets@do
+%  which is like \UTF@twostring@octets but uses \noexpand instead
+%  of \string. This way the sequence is temporay frozen, eg would
+%  display as is or stays put inside a \protected@edef but if the
+%  result is later reused the starting octet is still active.
+%
+% The definitions for the other starting octets are the same except
+% that they pick up more octets after them.
+
+
+
+% In the original all starting octets would be defined as calling such
+%  a \UTFviii@...@octets command followed by a \string version of the
+%  octet itself (so that it can be used to form the character). We now
+%  need to keep that octet active and so we have to do a slightly
+%  different setup.
+%
+%
+% So here is the new setup loop. Note that for error cases we can and
+%  should of course use a \string version of the octet since there is
+%  no point do extra work.
+
+\begingroup
+\catcode`\~13
+\catcode`\"12
+\def\UTFviii@loop{%
+  \uccode`\~\count@
+  \uppercase\expandafter{\UTFviii@tmp}%
+  \advance\count@\@ne
+  \ifnum\count@<\@tempcnta
+  \expandafter\UTFviii@loop
+  \fi}
+    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@undefined@err{:\string~}}}
+    \count@"1
+    \@tempcnta9
+\UTFviii@loop
+    \count@11
+    \@tempcnta12
+\UTFviii@loop
+    \count@14
+    \@tempcnta32
+\UTFviii@loop
+    \count@"80
+    \@tempcnta"C2
+    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@invalid@err\string~}}
+\UTFviii@loop
+    \count@"C2
+    \@tempcnta"E0
+    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@two@octets\noexpand~}}
+\UTFviii@loop
+    \count@"E0
+    \@tempcnta"F0
+    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@three@octets\noexpand~}}
+\UTFviii@loop
+    \count@"F0
+    \@tempcnta"F5
+    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@four@octets\noexpand~}}
+\UTFviii@loop
+    \count@"F5
+    \@tempcnta"100
+    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@invalid@err\string~}}
+\UTFviii@loop
+\endgroup
+
+% These are new work macros for the sequences as discussed above.
+
+\long\def\UTFviii@two@octets{%
+  \ifincsname
+    \expandafter
+    \UTF@twostring@octets
+  \else
+    \ifx\protect\@typeset@protect
+    \else
+      \expandafter\expandafter\expandafter
+     \UTF@twoharmless@octets
+    \fi
+  \fi
+  \UTFviii@two@octets@do
+}
+
+
+\long\def\UTFviii@three@octets{%
+  \ifincsname
+    \expandafter
+    \UTF@threestring@octets
+  \else
+    \ifx\protect\@typeset@protect
+    \else
+      \expandafter\expandafter\expandafter
+     \UTF@threeharmless@octets
+    \fi
+  \fi
+  \UTFviii@three@octets@do
+}
+
+
+\long\def\UTFviii@four@octets{%
+  \ifincsname
+    \expandafter
+    \UTF@fourstring@octets
+  \else
+    \ifx\protect\@typeset@protect
+    \else
+      \expandafter\expandafter\expandafter
+     \UTF@fourharmless@octets
+    \fi
+  \fi
+  \UTFviii@four@octets@do
+}
+
+
+% The \...@do are more or less what the original code was doing as
+%  part of \UTFviii@...@octets. However #1 is now active (wasn't in
+%  the original impl) so we better string that inside the cs. This
+%  is faster than having it figure out that by itself that it is in a
+%  csname.
+
+\long\def\UTFviii@two@octets@do#1#2{\expandafter
+    \UTFviii@defined\csname u8:\string#1\string#2\endcsname}
+\long\def\UTFviii@three@octets@do#1#2#3{\expandafter
+    \UTFviii@defined\csname u8:\string#1\string#2\string#3\endcsname}
+\long\def\UTFviii@four@octets@do#1#2#3#4{\expandafter
+    \UTFviii@defined\csname u8:\string#1\string#2\string#3\string#4\endcsname}
+
+
+% These tempoarily prevent the active chars from expanding. (Maybe
+%  using \unexpanded would be faster here?)
+
+\long\def\UTF@twoharmless@octets#1#2{\noexpand#2\noexpand}
+\long\def\UTF@threeharmless@octets#1#2#3{\noexpand#2\noexpand#3\noexpand}
+\long\def\UTF@fourharmless@octets#1#2#3#4{\noexpand#2\noexpand#3\noexpand#4\noexpand}
+
+% And the same with \string for use in \csname constructions.
+
+\long\def\UTF@twostring@octets#1#2{\string#2\string}
+\long\def\UTF@threestring@octets#1#2#3{\string#2\string#3\string}
+\long\def\UTF@fourstring@octets#1#2#3#4{\string#2\string#3\string#4\string}
+
+
+% The kernel already has saved away definitions for the starting code so
+%  we have to refresh that (until the day this is properly integrated):
+
+% if used in the kernel we also need this:
+\let\UTFviii@two@octets@@\UTFviii@two@octets
+\let\UTFviii@three@octets@@\UTFviii@three@octets
+\let\UTFviii@four@octets@@\UTFviii@four@octets
+
+% Done :-)
+
+
+%-------------------------------------------------------------------------
+%
+
+% File name handling is done by generating a csname from the provided
+%  file name (which means that utf8 octets gets turned into strings
+%  due to the above procedure). By setting \escapchar to -1 we ensure
+%  that we don't get a \ in front. As a result we end up with all
+%  characters as catcode 12 (plus spaces). We then sometimes add
+%  quotes around the contruct (removing any existing inner
+%  quotes. Somes we only remove the quotes if they have been supplied
+%  by the user. There is clearly some room for improvement.
+%
+% A side effect of the new code is that we will see quotes around file
+%  name displays where there haven't been any before.
+
+\def\set@curr@file#1{%
+  \begingroup
+    \escapechar\m@ne
+    \xdef\@curr@file{\expandafter\string\csname #1\endcsname}%
+  \endgroup
+}
 
 % quoting spaces
 % a b c     -> "a b c"
@@ -12,71 +289,9 @@
 \def\quote@name#1{"\quote@@name#1\@gobble""}
 \def\quote@@name#1"{#1\quote@@name}
 
-
-% utf8
-
-\long\def\UTFviii@two@octets{%
-  \ifx\protect\relax
-    \ifincsname
-      \expandafter\expandafter\expandafter
-      \UTF@twoharmless@octets
-    \fi
-  \else
-    \expandafter\UTF@twoharmless@octets
-  \fi
-  \UTFviii@two@octets@do
-}
-
-
-\long\def\UTFviii@three@octets{%
-  \ifx\protect\relax
-    \ifincsname
-      \expandafter\expandafter\expandafter
-      \UTF@threeharmless@octets
-    \fi
-  \else
-    \expandafter\UTF@threeharmless@octets
-  \fi
-  \UTFviii@three@octets@do
-}
-
-
-\long\def\UTFviii@four@octets{%
-  \ifx\protect\relax
-    \ifincsname
-      \expandafter\expandafter\expandafter
-      \UTF@fourharmless@octets
-    \fi
-  \else
-    \expandafter\UTF@fourharmless@octets
-  \fi
-  \UTFviii@four@octets@do
-}
-
-
-
-\long\def\UTFviii@two@octets@do#1#2{\expandafter
-    \UTFviii@defined\csname u8:#1\string#2\endcsname}
-\long\def\UTFviii@three@octets@do#1#2#3{\expandafter
-    \UTFviii@defined\csname u8:#1\string#2\string#3\endcsname}
-\long\def\UTFviii@four@octets@do#1#2#3#4{\expandafter
-    \UTFviii@defined\csname u8:#1\string#2\string#3\string#4\endcsname}
-
-
-\long\def\UTF@twoharmless@octets#1#2{\string#2\string}
-\long\def\UTF@threeharmless@octets#1#2#3{\string#2\string#3\string}
-\long\def\UTF@fourharmless@octets#1#2#3#4{\string#2\string#3\string#4\string}
-
-
-
-%-------------------------------------------------------------------------
-
-\def\set@curr@file#1{%
-  \begingroup
-    \escapechar\m@ne
-    \xdef\@curr@file{\expandafter\string\csname #1\endcsname}%
-  \endgroup
-}
+% removing quotes
+%
+\def\unquote@name#1{\quote@@name#1\@gobble"}
 
 
 %-------------------------------------------------------------------------
@@ -210,7 +425,6 @@
 
 % graphics
 
-\def\unquote@name#1{\quote@@name#1\@gobble"}
 
 
 \AtBeginDocument{%
