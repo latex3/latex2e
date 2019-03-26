@@ -31,7 +31,7 @@
 %
 % \iffalse
 %<*filedriver>
-\ProvidesFile{babel.dtx}[2019/03/19 v3.27.1585 The Babel package]
+\ProvidesFile{babel.dtx}[2019/03/26 v3.27.1592 The Babel package]
 \documentclass{ltxdoc}
 \GetFileInfo{babel.dtx}
 \usepackage{fontspec}
@@ -2495,7 +2495,7 @@ _\babelprovide[import, main]{arabic}_
 
 \New{3.16} \textit{To be expanded}. Selects which layout elements are
 adapted in bidi documents, including some text elements. You may use
-several options with a comma-separated list (eg,
+several options with a dot-separated list (eg,
 |layout=counters.contents.sectioning|). This list will be expanded in
 future releases (tables, captions, etc.). Note not all options are
 required by all engines.
@@ -3917,8 +3917,8 @@ help from Bernd Raichle, for which I am grateful.
 % \section{Tools}
 %
 %    \begin{macrocode}
-%<<version=3.27.1585>>
-%<<date=2019/03/19>>
+%<<version=3.27.1592>>
+%<<date=2019/03/26>>
 %    \end{macrocode}
 %
 % \textbf{Do not use the following macros in \texttt{ldf} files. They
@@ -9263,6 +9263,7 @@ help from Bernd Raichle, for which I am grateful.
 \ifodd\bbl@engine  % luatex=1
   \AddBabelHook{babel-bidi}{afterextras}{\bbl@switchdir}
   \DisableBabelHook{babel-bidi}
+  \chardef\bbl@thetextdir\z@
   \chardef\bbl@thepardir\z@
   \def\bbl@getluadir#1{%
     \directlua{
@@ -9283,12 +9284,23 @@ help from Bernd Raichle, for which I am grateful.
     \fi}
   \def\bbl@textdir#1{%
     \bbl@setluadir{text}\textdir{#1}% TODO - ?\linedir
+    \chardef\bbl@thetextdir#1\relax
     \setattribute\bbl@attr@dir{\numexpr\bbl@thepardir*3+#1}}
-  \def\bbl@pardir#1{\bbl@setluadir{par}\pardir{#1}%
+  \def\bbl@pardir#1{%
+    \bbl@setluadir{par}\pardir{#1}%
     \chardef\bbl@thepardir#1\relax}
   \def\bbl@bodydir{\bbl@setluadir{body}\bodydir}
   \def\bbl@pagedir{\bbl@setluadir{page}\pagedir}
   \def\bbl@dirparastext{\pardir\the\textdir\relax}%   %%%%
+  % Sadly, we have to deal with boxes in math with basic:
+  \def\bbl@mathboxdir{%
+    \ifcase\bbl@thetextdir\relax
+      \everyhbox{\bgroup\aftergroup\egroup\textdir TLT\relax}%
+    \else
+      \everyhbox{\bgroup\aftergroup\egroup\textdir TRT\relax}%
+    \fi}
+  \everymath{\bbl@mathboxdir}
+  \everydisplay{\bbl@mathboxdir}
 \else % pdftex=0, xetex=2
   \AddBabelHook{babel-bidi}{afterextras}{\bbl@switchdir}
   \DisableBabelHook{babel-bidi}
@@ -11813,9 +11825,9 @@ help from Bernd Raichle, for which I am grateful.
 \fi
 \ifx\bbl@opt@layout\@nnil\endinput\fi  % if no layout
 \ifx\bbl@beforeforeign\leavevmode % A poor test for bidi=
-  \def\bbl@nextfake#1{%
-    \mathdir\bodydir  % non-local, use always inside a group!
+  \def\bbl@nextfake#1{%  non-local changes - always inside a group!
     \bbl@exp{%
+      \mathdir\the\bodydir  
       #1%              Once entered in math, set boxes to restore values
       \everyvbox{%
         \the\everyvbox
@@ -18397,8 +18409,11 @@ local function insert_numeric(head, state)
   return head, new_state
 end
 
--- \hbox with an explicit dir can lead to wrong results
--- <R \hbox dir TLT{<R>}> and <L \hbox dir TRT{<L>}>
+-- TODO - \hbox with an explicit dir can lead to wrong results
+-- <R \hbox dir TLT{<R>}> and <L \hbox dir TRT{<L>}>. A small attempt
+-- is made to improve the situation, but the problem is the 3-dir
+-- model in babel/Unicode and the 2-dir model in LuaTeX don't fit
+-- well.
 
 function Babel.bidi(head, ispar, hdir)
   local d   -- d is used mainly for computations in a loop
@@ -18426,9 +18441,14 @@ function Babel.bidi(head, ispar, hdir)
                  (temp == 2 and 'al')
   elseif ispar then            -- Or error? Shouldn't happen
     save_outer = ('TRT' == tex.pardir) and 'r' or 'l'
-  else
+  else                         -- Or error? Shouldn't happen
     save_outer = ('TRT' == hdir) and 'r' or 'l'
   end
+    -- when the callback is called, we are just _after_ the box,
+    -- and the textdir is that of the surrounding text
+  -- if not ispar and hdir ~= tex.textdir then 
+  --   save_outer = ('TRT' == hdir) and 'r' or 'l'
+  -- end
   local outer = save_outer
   local last = outer
   -- 'al' is only taken into account in the first, current loop
