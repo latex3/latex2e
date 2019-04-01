@@ -1,4 +1,4 @@
-## Babel 3.27.1585
+## Babel 3.28
 
 This package manages culturally-determined typographical (and other)
 rules, and hyphenation patterns for a wide range of languages.  Many
@@ -51,11 +51,12 @@ respective authors.
 ### Latest changes
 
 ```
-3.28   - Fix - wrong dir after math with basic-r
-       - Fix - wrong dir in weak L inside R inside L 
+3.28 -   Fixes - wrong dir after math, in math inside tabular, in weak L
+         inside R inside L, and in boxes inside math.
        - \babelfont now takes into account \defaultfontfeatures. This
-         is potentially a source of backwards incompatibilities, but
-         very likely the risks are very low. 
+         is a potential source of backwards incompatibilities, but
+         very likely the risks are very low, and it is, I think, the
+         expected behavior.
 3.27   - Preliminary support for bidi (by Vafa Khalighi) with xetex.
        - Fix for 3.23 - \ensureascii was redefined even when not 
          necessary.
@@ -124,5 +125,5 @@ respective authors.
 ```
 
 Javier Bezos
-2019/03/19
+2019/04/01
 
