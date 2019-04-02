@@ -27,9 +27,17 @@ if unpacksearch == nil then
   unpacksearch  = false
 end
 
--- Allow for 'next' release
+-- Allow for 'dev' release
 -- See stackoverflow.com/a/12142066/212001
-local branch = os.execute("git rev-parse --abbrev-ref HEAD") or ""
-if branch ~= "master" then
-  tdsroot = tdsroot or "latex-dev"
+local errorlevel = os.execute("git rev-parse --abbrev-ref HEAD > branch.tmp")
+if errorlevel ~= 0 then
+  exit(1)
+else
+  local f = assert(io.open("branch.tmp", "rb"))
+  local branch = f:read("*all")
+  f:close()
+  os.remove("branch.tmp")
+  if not string.match(branch, "%s*master%s*") then
+    tdsroot = tdsroot or "latex-dev"
+  end
 end
