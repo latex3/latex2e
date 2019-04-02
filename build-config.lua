@@ -31,5 +31,5 @@ end
 -- See stackoverflow.com/a/12142066/212001
 local branch = os.execute("git rev-parse --abbrev-ref HEAD") or ""
 if branch ~= "master" then
-  tdsroot = tdsroot or "latex-next"
+  tdsroot = tdsroot or "latex-dev"
 end
