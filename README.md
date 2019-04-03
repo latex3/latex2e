@@ -10,11 +10,13 @@ comprises:
 - Packages which must be available (`required`). These are
   - Essential tools (`tools`)
   - Core graphics and color support (`graphics`)
-  - Support for multiple languages (`babel`)
   - Key mathematics support (`amsmath`)
 
 The master public Git repository is hosted on
 [GitHub](https://github.com/latex3/latex2e).
+
+Note that Babel got is own repository in 2019 at [GitHub](https://github.com/latex3/babel) 
+so any issues related to Babel should be reported there.
 
 ## Issues
 
