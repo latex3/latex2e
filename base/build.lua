@@ -94,7 +94,9 @@ unpacksuppfiles =
     "MathClass.txt",
     "UnicodeData.txt",
     "UShyphen.tex",
-    "ot1lmr.fd"
+    "ot1lmr.fd",
+    "t1lmr.fd",
+    "ts1lmr.fd"
   }
 
 -- Custom settings for the check system
