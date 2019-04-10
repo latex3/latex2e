@@ -1,5 +1,5 @@
 -- Tests for non Unicode engines
 
-checkengines = {"pdftex"}
+checkengines = {"etex"}
 checksearch  = false
 testfiledir  = "testfiles-legacy"
