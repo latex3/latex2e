@@ -34,7 +34,6 @@ installfiles   =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
-    "utf8andspace.tex",
     }
 sourcefiles    =
   {
@@ -50,7 +49,6 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
-    "utf8andspace.tex"
   }
 typesetfiles   =
   {
