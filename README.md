@@ -10,11 +10,19 @@ comprises:
 - Packages which must be available (`required`). These are
   - Essential tools (`tools`)
   - Core graphics and color support (`graphics`)
-  - Support for multiple languages (`babel`)
   - Key mathematics support (`amsmath`)
 
 The master public Git repository is hosted on
 [GitHub](https://github.com/latex3/latex2e).
+
+Note that Babel got is own repository in 2019 at [GitHub](https://github.com/latex3/babel) 
+so any issues related to Babel should be reported there.
+
+## LaTeX Version number
+
+The LaTeX version is defined in the file `ltvers.dtx` in the two commands
+`\fmtversion`  (the main version) and `\patch@level` (the patch level).
+A negative patch level indicates a pretest version.
 
 ## Issues
 
@@ -63,4 +71,4 @@ The LaTeX kernel is developed by [The LaTeX3 Project](https://latex-project.org)
 
 ## Copyright
 
-This README file is copyright 2017 The LaTeX3 Project.
+This README file is copyright 2019 The LaTeX3 Project.
