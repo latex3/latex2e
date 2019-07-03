@@ -34,7 +34,7 @@ installfiles   =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
-  }
+    }
 sourcefiles    =
   {
     "ltnews.cls",
