@@ -39,6 +39,7 @@ tlmgr install   \
   amsfonts      \
   ec            \
   fontspec      \
+  l3backend     \
   lualibs       \
   luaotfload
 
