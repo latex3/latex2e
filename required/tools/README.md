@@ -1,5 +1,5 @@
 The LaTeX `tools` bundle
-===========================
+========================
 
 Release 2019-10-01 pre-release 1
 
@@ -13,7 +13,7 @@ Installation
 ------------
 
 We no longer distribute installation instructions for the various TeX
-implementations. All modern TeX systems include `graphics` as-standard, and end
+implementations. All modern TeX systems include `tools` as-standard, and end
 users should in general use the release versions supplied in this way.
 
 Release distribution is carried out only through the CTAN archives.
