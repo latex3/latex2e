@@ -88,6 +88,13 @@ features require `\ifincsname`, which is currently available in release
 versions of pdfTeX, XeTeX and LuaTeX, and is being introduced shortly in
 e-pTeX and e-upTeX.
 
+License
+-------
+
+The contents of this bundle are distributed under the [LaTeX Project
+Public License](https://www.latex-project.org/lppl/lppl-1-3c/),
+version 1.3c or later.
+
 -----
 
 <p>Copyright (C) 1989-2019 The LaTeX3 Project <br />

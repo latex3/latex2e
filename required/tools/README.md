@@ -36,6 +36,13 @@ for further details, or if you need to obtain the `latexbug` package.
 If the bug turns out to be with third-party software then please
 contact the developer, and not us!
 
+License
+-------
+
+The contents of this bundle are distributed under the [LaTeX Project
+Public License](https://www.latex-project.org/lppl/lppl-1-3c/),
+version 1.3c or later.
+
 Copyright
 ---------
 

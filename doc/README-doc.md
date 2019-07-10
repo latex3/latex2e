@@ -14,6 +14,13 @@ installed TeX system, `base` and `doc` should be placed within the same
 location; the distinction is therefore primarily of importance when looking
 at the development code.
 
+License
+-------
+
+The contents of this bundle are distributed under the [LaTeX Project
+Public License](https://www.latex-project.org/lppl/lppl-1-3c/),
+version 1.3c or later.
+
 -----
 
 <p>Copyright (C) 2019 The LaTeX3 Project <br />
