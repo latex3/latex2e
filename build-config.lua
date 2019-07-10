@@ -14,6 +14,7 @@ checkruns      = checkruns          or  2
 checksuppfiles = checksuppfiles     or
   {"color.cfg", "graphics.cfg", "test209.tex", "test2e.tex", "xetex.def", "dvips.def", "lipsum.sty"}
 stdengine      = stdengine          or "etex"
+tagfiles       = tagfiles or {"README.md"}
 typesetsuppfiles = typesetsuppfiles or {"ltxdoc.cfg", "ltxguide.cfg"}
 
 -- Build TDS-style zips
@@ -30,6 +31,7 @@ end
 -- Allow for 'dev' release
 -- See stackoverflow.com/a/12142066/212001
 local errorlevel = os.execute("git rev-parse --abbrev-ref HEAD > branch.tmp")
+local master_branch = true
 if errorlevel ~= 0 then
   exit(1)
 else
@@ -38,6 +40,26 @@ else
   f:close()
   os.remove("branch.tmp")
   if not string.match(branch, "%s*master%s*") then
+    master_branch = false
     tdsroot = tdsroot or "latex-dev"
   end
+end
+
+-- Detail how to set the version automatically
+function update_tag(file,content,tagname,tagdate)
+  local iso = "%d%d%d%d%-%d%d%-%d%d"
+  local tag, rev = string.match(tagname,"^(.*):([^:]*)$")
+  if master_branch then
+    if rev then
+      tag = tag .. " patch level " .. rev
+    end
+  else
+    tag = tag .. " pre-release "
+    if rev then
+      tag = tag .. rev
+    end
+  end
+  return string.gsub(content,
+    "\nRelease " .. iso .. "[^\n]*\n",
+    "\nRelease " .. tag .. "\n")
 end

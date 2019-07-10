@@ -15,6 +15,7 @@ maindir = ".."
 -- Set up the file types needed here
 installfiles = { }
 sourcefiles  = {"ltnews??.tex"}
+tagfiles = {"README-doc.md"}
 typesetfiles =
   {
     "cfgguide.tex",
