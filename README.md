@@ -25,6 +25,9 @@ The LaTeX version is defined in the file `ltvers.dtx` in the two commands
 `\fmtversion`  (the main version) and `\patch@level` (the patch level).
 A negative patch level indicates a pretest version.
 
+Each component of the core distribution contains a `README` file which
+is tagged with the appropriate release string prior to upload to CTAN.
+
 ## Issues
 
 Only issues *specifically related to these components* should be logged [with
