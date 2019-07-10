@@ -36,6 +36,12 @@ for further details, or if you need to obtain the `latexbug` package.
 If the bug turns out to be with third-party software then please
 contact the developer, and not us!
 
+Copyright
+---------
+
+Copyright is maintained on each of these packages by the author(s)
+of the package.
+
 -----
 
 <p>Copyright (C) 1993-2019 The LaTeX Project <br />
