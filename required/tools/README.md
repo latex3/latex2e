@@ -52,9 +52,3 @@ of the package.
 -----
 
 <p>Copyright (C) 1993-2019 The LaTeX Project <br />
-
-
-
-
-
-
