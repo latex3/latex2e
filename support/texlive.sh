@@ -40,6 +40,7 @@ tlmgr install   \
   ec            \
   fontspec      \
   l3backend     \
+  lh            \
   lualibs       \
   luaotfload
 
