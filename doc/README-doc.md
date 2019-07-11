@@ -1,7 +1,7 @@
 Documentation for the LaTeX kernel
 ==================================
 
-Release 2019-10-01 pre-release 1
+Release 2019-10-01 pre-release 2
 
 Overview
 --------
