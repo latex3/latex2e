@@ -1,51 +1,30 @@
-## README for the `cyrillic` bundle  (June 2001)
+The LaTeX `cyrillic` bundle
+===========================
 
-This `bundle` consists of LaTeX2e packages for Cyrillic languages
-supported by the LaTeX3 Project Team.
+Release 2019-10-01 pre-release 1
 
-Running LaTeX on the file cyrlatex.ins will produce all the package
-files, and some associated files.
+Overview
+--------
 
-So you should first process cyrlatex.ins:
+This bundle consists of LaTeX2e packages for Cyrillic languages
+supported by the LaTeX Project.
 
-     latex cyrlatex.ins
+Installation
+------------
 
-The files with extensions `.def`, `.fd`, `.sty` and `.tex` should
-then be moved to a directory on LaTeX's standard input path.
+We no longer distribute installation instructions for the various TeX
+implementations. All modern TeX systems include `cyrillic` as-standard, and end
+users should in general use the release versions supplied in this way.
 
-The documented source code of each component may then be obtained by
-running LaTeX on a files with extensions `.dtx` and `.fdd`.
+Release distribution is carried out only through the CTAN archives.
 
-For example:
+Reporting Bugs
+--------------
 
-  latex cyoutenc.dtx
-
-will produce the file `cyoutenc.pdf`, documenting the output encodings
-source code.
-
-The file `manifest.txt` contains a list of the main files in the
-distribution together with a one-or-two line summary of each file.
-
-
-### Distribution Conditions
-
-All the files in this bundle may be distributed under the conditions
-of the LaTeX Project Public License, either version 1.3c of this
-license or (at your option) any later version.  The latest version of
-this license is in
-    https://www.latex-project.org/lppl.txt
-and version 1.3c or later is part of all distributions of LaTeX 
-version 2005/12/01 or later.
-
-The use of these files is otherwise unrestricted.
-
-
-### Reporting Bugs
-
-If you wish to report a problem or bug in any of these packages
-please use the 
-[Issue Tracker for LaTeX2e on GitHub](https://github.com/latex3/latex2e/issues)
-and follow the guidelines that pop up if you press the `New issue` button.
+If you wish to report a problem or bug in the `cyrillic` bundle
+please use the [Issue Tracker for LaTeX2e on
+GitHub](https://github.com/latex3/latex2e/issues)
+and follow the guidelines that pop up if you press the "New issue" button.
 
 In particular, to check that you are really seeing a bug, please write
 a short, self-contained document that shows the problem. This should
@@ -57,11 +36,19 @@ for further details, or if you need to obtain the `latexbug` package.
 If the bug turns out to be with third-party software then please
 contact the developer, and not us!
 
+License
+-------
 
+The contents of this bundle are distributed under the [LaTeX Project
+Public License](https://www.latex-project.org/lppl/lppl-1-3c/),
+version 1.3c or later.
 
-### Copyright
+Copyright
+---------
 
-This README file is copyright 2005-2017 The LaTeX3 Project.
+Copyright is maintained on each of these packages by the author(s)
+of the package.
 
+-----
 
-
+<p>Copyright (C) 2005-2019 The LaTeX Project <br />
