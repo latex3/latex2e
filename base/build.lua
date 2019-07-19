@@ -142,7 +142,9 @@ function format ()
     cp("fonttext.cfg",supportdir,unpackdir)
   end
   local fmtengines = options["engine"] or checkengines
-  table.insert(fmtengines,"pdftex")
+  if not options["config"] then
+    table.insert(fmtengines,"pdftex")
+  end
   for _,i in ipairs(fmtengines) do
     errorlevel = format (i, string.gsub (i, "tex$", "") .. "latex.fmt")
     if errorlevel ~=0 then
