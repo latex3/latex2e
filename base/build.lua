@@ -101,8 +101,9 @@ unpacksuppfiles =
 testsuppdir = "testfiles/helpers"
 
 -- No dependencies at all (other than l3build of course)
-checkdeps  = { }
-unpackdeps = { }
+checkdeps   = { }
+typesetdeps = { }
+unpackdeps  = { }
 
 -- Customise typesetting
 indexstyle = "source2e.ist"
@@ -140,8 +141,9 @@ function format ()
   if not options["config"] or options["config"][1] ~= "config-TU" then
     cp("fonttext.cfg",supportdir,unpackdir)
   end
-  local checkengines = options["engine"] or checkengines
-  for _,i in ipairs(checkengines) do
+  local fmtengines = options["engine"] or checkengines
+  table.insert(fmtengines,"pdftex")
+  for _,i in ipairs(fmtengines) do
     errorlevel = format (i, string.gsub (i, "tex$", "") .. "latex.fmt")
     if errorlevel ~=0 then
       return errorlevel

@@ -2,8 +2,9 @@
 
 -- The LaTeX2e kernel is needed by everything except 'base'
 -- There is an over-ride for that case
-checkdeps  = checkdeps  or {maindir .. "/base"}
-unpackdeps = unpackdeps or {maindir .. "/base"}
+checkdeps   = checkdeps   or {maindir .. "/base"}
+typesetdeps = typesetdeps or {maindir .. "/base"}
+unpackdeps  = unpackdeps  or {maindir .. "/base"}
 
 -- Set up the check system to work in 'stand-alone' mode
 -- This relies on a format being built by the 'base' dependency
@@ -16,6 +17,18 @@ checksuppfiles = checksuppfiles     or
 stdengine      = stdengine          or "etex"
 tagfiles       = tagfiles or {"README.md"}
 typesetsuppfiles = typesetsuppfiles or {"ltxdoc.cfg", "ltxguide.cfg"}
+
+-- Ensure the local format file is used
+typesetexe = 'pdftex -interaction=nonstopmode "&pdflatex"'
+typesetopts = ""
+
+-- Force finding the format file
+function tex(file,dir)
+  local dir = dir or "."
+  return runcmd(typesetexe .. " " .. typesetopts .. " \"" .. typesetcmds
+    .. "\\input " .. file .. "\"",
+    dir,{"TEXINPUTS","TEXFORMATS"})
+end
 
 -- Build TDS-style zips
 packtdszip = true
