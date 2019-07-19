@@ -94,7 +94,9 @@ unpacksuppfiles =
     "MathClass.txt",
     "UnicodeData.txt",
     "UShyphen.tex",
-    "ot1lmr.fd"
+    "ot1lmr.fd",
+    "pdflatex.ini",
+    "pdftexconfig.tex"
   }
 
 -- Custom settings for the check system
@@ -118,11 +120,16 @@ function format ()
   end
   local function format (engine,fmtname)
     -- the relationships are all correct
+    local sourcefile = unpackdir .. "/latex.ltx"
+    local finalname = string.gsub(engine,"tex","latex")
+    if fileexists(localdir .. "/" .. finalname .. ".ini") then
+       sourcefile = localdir .. "/" .. finalname .. ".ini"
+    end
     local errorlevel = os.execute (
         os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
         .. os_concat ..
         engine .. " -etex -ini " .. " -output-directory=" .. unpackdir ..
-        " " .. unpackdir .. "/latex.ltx"
+        " " .. sourcefile
       )
     if errorlevel ~=0 then
       return errorlevel
