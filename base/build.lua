@@ -134,7 +134,9 @@ function format ()
     if errorlevel ~=0 then
       return errorlevel
     end
-    ren (unpackdir, "latex.fmt", fmtname)
+    if exist(unpackdir,"latex.fmt")
+      ren (unpackdir, "latex.fmt", fmtname)
+    end
     -- As format building is added in as an 'extra', the normal
     -- copy mechanism (checkfiles) will fail as things get cleaned up
     -- inside bundleunpack(): get around that using a manual copy
