@@ -134,7 +134,7 @@ function format ()
     if errorlevel ~=0 then
       return errorlevel
     end
-    if exist(unpackdir,"latex.fmt") then
+    if fileexists(unpackdir,"latex.fmt") then
       ren (unpackdir, "latex.fmt", fmtname)
     end
     -- As format building is added in as an 'extra', the normal
