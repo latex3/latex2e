@@ -129,14 +129,12 @@ function format ()
         os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
         .. os_concat ..
         engine .. " -etex -ini " .. " -output-directory=" .. unpackdir ..
-        " " .. sourcefile
+        " -jobname=latex " .. sourcefile
       )
     if errorlevel ~=0 then
       return errorlevel
     end
-    if fileexists(unpackdir,"latex.fmt") then
-      ren (unpackdir, "latex.fmt", fmtname)
-    end
+    ren (unpackdir, "latex.fmt", fmtname)
     -- As format building is added in as an 'extra', the normal
     -- copy mechanism (checkfiles) will fail as things get cleaned up
     -- inside bundleunpack(): get around that using a manual copy
