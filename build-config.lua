@@ -59,7 +59,7 @@ else
 end
 
 -- Detail how to set the version automatically
-function update_tag(file,content,tagname,tagdate)
+update_tag = update_tag or function (file,content,tagname,tagdate)
   local iso = "%d%d%d%d%-%d%d%-%d%d"
   local tag, rev = string.match(tagname,"^(.*):([^:]*)$")
   if master_branch then

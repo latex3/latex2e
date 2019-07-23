@@ -113,6 +113,36 @@ indexstyle = "source2e.ist"
 -- Allow for TU test
 checkconfigs = {"build","config-TU"}
 
+-- Detail how to set the version automatically
+tagfiles = {"README.md", "ltvers.dtx"}
+function update_tag(file,content,tagname,tagdate)
+  local iso = "%d%d%d%d%-%d%d%-%d%d"
+  local tag, rev = string.match(tagname,"^(.*):([^:]*)$")
+  local patch_level = ""
+  if master_branch then
+    if rev then
+      tag = tag .. " patch level " .. rev
+      patch_level = rev
+    end
+  else
+    tag = tag .. " pre-release "
+    if rev then
+      tag = tag .. rev
+      patch_level = "-" .. rev
+    end
+  end
+  if file == "README.md" then
+    return string.gsub(content,
+      "\nRelease " .. iso .. "[^\n]*\n",
+      "\nRelease " .. tag .. "\n")
+  elseif file == "ltvers.dtx" then
+    return string.gsub(content,
+      "\\patch@level{%-?%d+}",
+      "\\patch@level{" .. patch_level .. "}")
+  end
+  return content
+end
+
 function format ()
   local errorlevel = unpack ()
   if errorlevel ~=0 then
