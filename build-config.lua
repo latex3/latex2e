@@ -55,6 +55,8 @@ else
   if not string.match(branch, "%s*master%s*") then
     master_branch = false
     tdsroot = tdsroot or "latex-dev"
+    ctanpkg = ctanpkg .. "-dev"
+    ctanzip = ctanpkg
   end
 end
 
