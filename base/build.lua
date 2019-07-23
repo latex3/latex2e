@@ -111,7 +111,7 @@ unpackdeps  = { }
 indexstyle = "source2e.ist"
 
 -- Allow for TU test
-checkconfigs = {"build","config-TU","config-legacy"}
+checkconfigs = {"build","config-TU"}
 
 function format ()
   local errorlevel = unpack ()
@@ -229,6 +229,8 @@ function main (target, file, engine)
     else
       help ()
     end
+  elseif target == "tag" then
+    errorlevel = tag(file,engine)
   elseif target == "unpack" then
     -- A simple way to have the unpack target also build the format
     errorlevel = format ()
