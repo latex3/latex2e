@@ -49,6 +49,7 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
+    "ltnews??.tex"
   }
 typesetfiles   =
   {
@@ -79,6 +80,16 @@ typesetfiles   =
     "syntonly.dtx",
     "*.fdd",
     "*.err",
+    "cfgguide.tex",
+    "clsguide.tex",
+    "cyrguide.tex",
+    "encguide.tex",
+    "fntguide.tex",
+    "ltnews.tex",
+    "ltx3info.tex",
+    "modguide.tex",
+    "usrguide.tex",
+    "latexchanges.tex"
   }
 dynamicfiles = {"*.tst"}
 
