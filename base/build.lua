@@ -53,6 +53,21 @@ sourcefiles    =
     "small2e.tex",
     "testpage.tex",
   }
+textfiles =
+  {
+    "README.md",
+    "bugs.txt",
+    "legal.txt",
+    "manifest.txt",
+    "changes.old.txt",
+    "changes.txt",
+    "lppl.txt",
+    "lppl-1-0.txt",
+    "lppl-1-1.txt",
+    "lppl-1-2.txt",
+    "tex2.txt",
+    "texpert.txt"
+  }
 typesetfiles   =
   {
     "source2e.tex", -- Has to be first: source2e.ist creation!
