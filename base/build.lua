@@ -12,7 +12,10 @@ ctanpkg = "latex-base"
 -- Location of main directory: use Unix-style path separators
 maindir = ".."
 
+docfiledir = "./doc"
+
 -- Set up the file types needed here
+docfiles = {"ltnews??.tex"}
 installfiles   =
   {
     "*.cfg",
@@ -34,7 +37,7 @@ installfiles   =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
-    }
+  }
 sourcefiles    =
   {
     "ltnews.cls",
@@ -52,7 +55,7 @@ sourcefiles    =
   }
 typesetfiles   =
   {
-    "source2e.tex",
+    "source2e.tex", -- Has to be first: source2e.ist creation!
     "alltt.dtx",
     "classes.dtx",
     "cmfonts.dtx",
@@ -64,7 +67,6 @@ typesetfiles   =
     "ifthen.dtx",
     "inputenc.dtx",
     "ltunicode.dtx",
-    "lppl.tex",
     "utf8ienc.dtx",
     "latexrelease.dtx",
     "latexsym.dtx",
@@ -79,6 +81,17 @@ typesetfiles   =
     "syntonly.dtx",
     "*.fdd",
     "*.err",
+    "lppl.tex",
+    "cfgguide.tex",
+    "clsguide.tex",
+    "cyrguide.tex",
+    "encguide.tex",
+    "fntguide.tex",
+    "ltnews.tex",
+    "ltx3info.tex",
+    "modguide.tex",
+    "usrguide.tex",
+    "latexchanges.tex"
   }
 dynamicfiles = {"*.tst"}
 
