@@ -161,7 +161,7 @@ function update_tag(file,content,tagname,tagdate)
     return content
   end
   local iso = "%d%d%d%d%-%d%d%-%d%d"
-  local tag, rev = string.match(tagname,"^(.*):([^:]*)$")
+  local tag, rev = string.match(tagname,"^(.*):([^:]*)$")  or tagname,""
   local patch_level = ""
   if master_branch then
     if rev then

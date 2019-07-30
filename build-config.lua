@@ -81,7 +81,7 @@ update_tag = update_tag or function (file,content,tagname,tagdate)
     return content
   end
   local iso = "%d%d%d%d%-%d%d%-%d%d"
-  local tag, rev = string.match(tagname,"^(.*):?([^:]*)$")
+  local tag, rev = string.match(tagname,"^(.*):([^:]*)$") or tagname,""
   if master_branch then
     if rev then
       tag = tag .. " patch level " .. rev
