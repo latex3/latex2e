@@ -15,7 +15,7 @@ checkruns      = checkruns          or  2
 checksuppfiles = checksuppfiles     or
   {"color.cfg", "graphics.cfg", "test209.tex", "test2e.tex", "xetex.def", "dvips.def", "lipsum.sty"}
 stdengine      = stdengine          or "etex"
-tagfiles       = tagfiles or {"README.md"}
+tagfiles       = tagfiles or {"*.dtx","*.ins","*.tex","README.md"}
 typesetsuppfiles = typesetsuppfiles or {"ltxdoc.cfg", "ltxguide.cfg"}
 
 -- Ensure the local format file is used
@@ -63,8 +63,25 @@ end
 
 -- Detail how to set the version automatically
 update_tag = update_tag or function (file,content,tagname,tagdate)
+  local year = os.date("%Y")
+  if string.match(content,"%% Copyright %d%d%d%d%-%d%d%d%d") then
+    content = string.gsub(content,
+      "Copyright (%d%d%d%d)%-%d%d%d%d",
+      "Copyright %1-" .. year)
+  elseif string.match(content,"%% Copyright %d%d%d%d\n") then
+    local oldyear = string.match(content,"%% Copyright (%d%d%d%d)\n")
+    if not year == oldyear then
+      content = string.gsub(content,
+        "Copyright %d%d%d%d",
+        "Copyright " .. oldyear .. "-" .. year)
+    end
+  end
+  if not string.match(file,"%.md$") then
+    -- Stop here for files other than .md
+    return content
+  end
   local iso = "%d%d%d%d%-%d%d%-%d%d"
-  local tag, rev = string.match(tagname,"^(.*):([^:]*)$")
+  local tag, rev = string.match(tagname,"^(.*):?([^:]*)$")
   if master_branch then
     if rev then
       tag = tag .. " patch level " .. rev

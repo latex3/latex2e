@@ -142,8 +142,24 @@ indexstyle = "source2e.ist"
 checkconfigs = {"build","config-TU"}
 
 -- Detail how to set the version automatically
-tagfiles = {"README.md", "ltvers.dtx"}
 function update_tag(file,content,tagname,tagdate)
+  local year = os.date("%Y")
+  if string.match(content,"%% Copyright %d%d%d%d%-%d%d%d%d") then
+    content = string.gsub(content,
+      "Copyright (%d%d%d%d)%-%d%d%d%d",
+      "Copyright %1-" .. year)
+  elseif string.match(content,"%% Copyright %d%d%d%d\n") then
+    local oldyear = string.match(content,"%% Copyright (%d%d%d%d)\n")
+    if not year == oldyear then
+      content = string.gsub(content,
+        "Copyright %d%d%d%d",
+        "Copyright " .. oldyear .. "-" .. year)
+    end
+  end
+  if not string.match(file,"%.md$") or not string.match(file,"ltvers.dtx") then
+    -- Stop here for files other than .md
+    return content
+  end
   local iso = "%d%d%d%d%-%d%d%-%d%d"
   local tag, rev = string.match(tagname,"^(.*):([^:]*)$")
   local patch_level = ""
