@@ -141,56 +141,7 @@ indexstyle = "source2e.ist"
 -- Allow for TU test
 checkconfigs = {"build","config-TU"}
 
--- Detail how to set the version automatically
-function update_tag(file,content,tagname,tagdate)
-  local year = os.date("%Y")
-  if string.match(content,"%% Copyright %d%d%d%d%-%d%d%d%d") then
-    content = string.gsub(content,
-      "Copyright %(C%) (%d%d%d%d)%-%d%d%d%d",
-      "Copyright (C) %1-" .. year)
-  elseif string.match(content,"%% Copyright %(C%) %d%d%d%d\n") then
-    local oldyear = string.match(content,"%% Copyright %(C%) (%d%d%d%d)\n")
-    if not year == oldyear then
-      content = string.gsub(content,
-        "Copyright %(C%) %d%d%d%d",
-        "Copyright (C) " .. oldyear .. "-" .. year)
-    end
-  end
-  if not string.match(file,"%.md$") and not string.match(file,"ltvers.dtx") then
-    -- Stop here for files other than .md
-    return content
-  end
-  local iso = "%d%d%d%d%-%d%d%-%d%d"
-  local tag, rev = string.match(tagname,"^(.*):([^:]*)$")
-  if not tag then
-    tag = tagname
-  end
-  local patch_level = ""
-  if master_branch then
-    if rev then
-      tag = tag .. " patch level " .. rev
-      patch_level = rev
-    end
-  else
-    tag = tag .. " pre-release "
-    if rev then
-      tag = tag .. rev
-      patch_level = "-" .. rev
-    else
-      patch_level = "0"
-    end
-  end
-  if file == "README.md" then
-    return string.gsub(content,
-      "\nRelease " .. iso .. "[^\n]*\n",
-      "\nRelease " .. tag .. "\n")
-  elseif file == "ltvers.dtx" then
-    return string.gsub(content,
-      "\\patch@level{%-?%d}",
-      "\\patch@level{" .. patch_level .. "}")
-  end
-  return content
-end
+update_tag = update_tag_base
 
 function format ()
   local errorlevel = unpack ()
