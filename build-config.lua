@@ -62,7 +62,7 @@ else
 end
 
 -- Detail how to set the version automatically
-update_tag = update_tag or function (file,content,tagname,tagdate)
+function update_tag(file,content,tagname,tagdate)
   local year = os.date("%Y")
   if string.match(content,"%% Copyright %d%d%d%d%-%d%d%d%d") then
     content = string.gsub(content,
