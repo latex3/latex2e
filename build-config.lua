@@ -81,7 +81,10 @@ function update_tag(file,content,tagname,tagdate)
     return content
   end
   local iso = "%d%d%d%d%-%d%d%-%d%d"
-  local tag, rev = string.match(tagname,"^(.*):([^:]*)$") or tagname,""
+  local tag, rev = string.match(tagname,"^(.*):([^:]*)$")
+  if not tag then
+    tag = tagname
+  end
   if master_branch then
     if rev then
       tag = tag .. " patch level " .. rev
@@ -90,6 +93,8 @@ function update_tag(file,content,tagname,tagdate)
     tag = tag .. " pre-release "
     if rev then
       tag = tag .. rev
+    else
+      patch_level = "0"
     end
   end
   return string.gsub(content,
