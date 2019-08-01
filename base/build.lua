@@ -156,12 +156,15 @@ function update_tag(file,content,tagname,tagdate)
         "Copyright (C) " .. oldyear .. "-" .. year)
     end
   end
-  if not string.match(file,"%.md$") or not string.match(file,"ltvers.dtx") then
+  if not string.match(file,"%.md$") and not string.match(file,"ltvers.dtx") then
     -- Stop here for files other than .md
     return content
   end
   local iso = "%d%d%d%d%-%d%d%-%d%d"
-  local tag, rev = string.match(tagname,"^(.*):([^:]*)$")  or tagname,""
+  local tag, rev = string.match(tagname,"^(.*):([^:]*)$")
+  if not tag then
+    tag = tagname
+  end
   local patch_level = ""
   if master_branch then
     if rev then
@@ -173,6 +176,8 @@ function update_tag(file,content,tagname,tagdate)
     if rev then
       tag = tag .. rev
       patch_level = "-" .. rev
+    else
+      patch_level = "0"
     end
   end
   if file == "README.md" then
@@ -181,7 +186,7 @@ function update_tag(file,content,tagname,tagdate)
       "\nRelease " .. tag .. "\n")
   elseif file == "ltvers.dtx" then
     return string.gsub(content,
-      "\\patch@level{%-?%d+}",
+      "\\patch@level{%-?%d}",
       "\\patch@level{" .. patch_level .. "}")
   end
   return content
