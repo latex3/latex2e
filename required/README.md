@@ -6,11 +6,16 @@ All bundles are supported by members of the LaTeX team and bug report can be ope
 
 The set comprises:
 
- - AmsLaTeX, mathematical support from the AMS (these days maintained by the LaTeX team);
- - `babel`: The babel package for multilingual typesetting;
+ - `amsmath`: mathematical support from the AMS (these days maintained by the LaTeX team);
  - `cyrillic`: Standard LaTeX support for using Cyrillic alphabet fonts;
  - `graphics`: The standard LaTeX graphics and colour packages; and
  - `tools`: Basic LaTeX tools.
+
+Also part of the "required" set of bundles is
+
+ - `babel`: The babel package for multilingual typesetting.
+
+However, it has its own Github repository and any bug report concerning babel should be opened at the [Issue Tracker for Babel on GitHub](https://github.com/latex3/babel/issues).
 
 In the past there have been two further bundles:
 
@@ -21,5 +26,5 @@ but these are no longer maintained by the Team and any issue with them should be
 
 ### Copyright
 
-This README file is copyright 2017 The LaTeX3 Project.
+This README file is copyright 2019 The LaTeX Project.
 
