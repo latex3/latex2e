@@ -255,6 +255,9 @@ function main (target, file, engine)
     install ()
   elseif target == "save" then
     if file then
+      if not options["rerun"] then
+        format()
+      end
       errorlevel = save (file, engine)
     else
       help ()
