@@ -143,7 +143,7 @@ checkconfigs = {"build","config-TU"}
 
 update_tag = update_tag_base
 
-function format ()
+function format (doc)
   local errorlevel = unpack ()
   if errorlevel ~=0 then
     return errorlevel
@@ -178,11 +178,15 @@ function format ()
   if not options["config"] or options["config"][1] ~= "config-TU" then
     cp("fonttext.cfg",supportdir,unpackdir)
   end
-  local fmtengines = options["engine"] or checkengines
-  if not options["config"] then
-    table.insert(fmtengines,"pdftex")
+  local buildformats = { }
+  local enginedata = options["engine"] or checkengines
+  for _,name in ipairs(enginedata) do
+    table.insert(buildformats,name)
   end
-  for _,i in ipairs(fmtengines) do
+  if not options["config"] then
+    table.insert(buildformats,"pdftex")
+  end
+  for _,i in ipairs(buildformats) do
     errorlevel = format (i, string.gsub (i, "tex$", "") .. "latex.fmt")
     if errorlevel ~=0 then
       return errorlevel
