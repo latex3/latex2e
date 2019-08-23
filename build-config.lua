@@ -13,7 +13,7 @@ checkformat    = checkformat        or "latex"
 checkengines   = checkengines       or {"etex", "xetex", "luatex"}
 checkruns      = checkruns          or  2
 checksuppfiles = checksuppfiles     or
-  {"color.cfg", "graphics.cfg", "test209.tex", "test2e.tex", "xetex.def", "dvips.def", "lipsum.sty"}
+  {"color.cfg", "graphics.cfg", "test209.tex", "test2e.tex", "xetex.def", "dvips.def", "lipsum.sty", "*.txt", "lualibs*.lua", "fontloader*.lua", "luaotfload*.lua", "luaotfloat.sty"}
 stdengine      = stdengine          or "etex"
 tagfiles       = tagfiles or {"*.dtx","*.ins","*.tex","README.md"}
 typesetsuppfiles = typesetsuppfiles or {"ltxdoc.cfg", "ltxguide.cfg"}
