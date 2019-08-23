@@ -181,7 +181,7 @@ function format (doc)
   local buildformats = { }
   local enginedata = options["engine"] or checkengines
   for _,name in ipairs(enginedata) do
-    table.insert(buildformats,name
+    table.insert(buildformats,name)
   end
   if not options["config"] then
     table.insert(buildformats,"pdftex")
