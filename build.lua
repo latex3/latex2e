@@ -7,7 +7,7 @@ bundle  = "LaTeX2e"
 module  = ""
 
 -- A couple of custom variables: the order here is set up for 'importance'
-bundles  = {"base", "doc"}
+bundles  = {"base"}
 required = {"cyrillic", "graphics", "tools", "amsmath"}
 
 -- Location of main directory: use Unix-style path separators
@@ -59,6 +59,8 @@ function main (target)
     errorlevel = dobundles ("doc")
   elseif target == "install" then
     errorlevel = dobundles ("install")
+  elseif target == "tag" then
+    errorlevel = dobundles("tag")
   elseif target == "uninstall" then
     errorlevel = dobundles("uninstall")
   elseif target == "unpack" then

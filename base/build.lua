@@ -12,7 +12,10 @@ ctanpkg = "latex-base"
 -- Location of main directory: use Unix-style path separators
 maindir = ".."
 
+docfiledir = "./doc"
+
 -- Set up the file types needed here
+docfiles = {"ltnews??.tex"}
 installfiles   =
   {
     "*.cfg",
@@ -52,9 +55,24 @@ sourcefiles    =
     "testpage.tex",
     "textcomp-adds.tex"      -- tmp file for testing
   }
+textfiles =
+  {
+    "README.md",
+    "bugs.txt",
+    "legal.txt",
+    "manifest.txt",
+    "changes.old.txt",
+    "changes.txt",
+    "lppl.txt",
+    "lppl-1-0.txt",
+    "lppl-1-1.txt",
+    "lppl-1-2.txt",
+    "tex2.txt",
+    "texpert.txt"
+  }
 typesetfiles   =
   {
-    "source2e.tex",
+    "source2e.tex", -- Has to be first: source2e.ist creation!
     "alltt.dtx",
     "classes.dtx",
     "cmfonts.dtx",
@@ -66,7 +84,6 @@ typesetfiles   =
     "ifthen.dtx",
     "inputenc.dtx",
     "ltunicode.dtx",
-    "lppl.tex",
     "utf8ienc.dtx",
     "latexrelease.dtx",
     "latexsym.dtx",
@@ -81,6 +98,17 @@ typesetfiles   =
     "syntonly.dtx",
     "*.fdd",
     "*.err",
+    "lppl.tex",
+    "cfgguide.tex",
+    "clsguide.tex",
+    "cyrguide.tex",
+    "encguide.tex",
+    "fntguide.tex",
+    "ltnews.tex",
+    "ltx3info.tex",
+    "modguide.tex",
+    "usrguide.tex",
+    "latexchanges.tex"
   }
 dynamicfiles = {"*.tst"}
 
@@ -97,35 +125,48 @@ unpacksuppfiles =
     "UnicodeData.txt",
     "UShyphen.tex",
     "ot1lmr.fd",
+<<<<<<< .merge_file_H5FaDF
     "t1lmr.fd",
     "ts1lmr.fd"
+=======
+    "pdflatex.ini",
+    "pdftexconfig.tex"
+>>>>>>> .merge_file_7X2OBJ
   }
 
 -- Custom settings for the check system
 testsuppdir = "testfiles/helpers"
 
 -- No dependencies at all (other than l3build of course)
-checkdeps  = { }
-unpackdeps = { }
+checkdeps   = { }
+typesetdeps = { }
+unpackdeps  = { }
 
 -- Customise typesetting
 indexstyle = "source2e.ist"
 
 -- Allow for TU test
-checkconfigs = {"build","config-TU","config-legacy"}
+checkconfigs = {"build","config-TU"}
 
-function format ()
+update_tag = update_tag_base
+
+function format (doc)
   local errorlevel = unpack ()
   if errorlevel ~=0 then
     return errorlevel
   end
   local function format (engine,fmtname)
     -- the relationships are all correct
+    local sourcefile = unpackdir .. "/latex.ltx"
+    local finalname = string.gsub(engine,"tex","latex")
+    if fileexists(localdir .. "/" .. finalname .. ".ini") then
+       sourcefile = localdir .. "/" .. finalname .. ".ini"
+    end
     local errorlevel = os.execute (
         os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
         .. os_concat ..
         engine .. " -etex -ini " .. " -output-directory=" .. unpackdir ..
-        " " .. unpackdir .. "/latex.ltx"
+        " -jobname=latex " .. sourcefile
       )
     if errorlevel ~=0 then
       return errorlevel
@@ -144,8 +185,15 @@ function format ()
   if not options["config"] or options["config"][1] ~= "config-TU" then
     cp("fonttext.cfg",supportdir,unpackdir)
   end
-  local checkengines = options["engine"] or checkengines
-  for _,i in ipairs(checkengines) do
+  local buildformats = { }
+  local enginedata = options["engine"] or checkengines
+  for _,name in ipairs(enginedata) do
+    table.insert(buildformats,name)
+  end
+  if not options["config"] then
+    table.insert(buildformats,"pdftex")
+  end
+  for _,i in ipairs(buildformats) do
     errorlevel = format (i, string.gsub (i, "tex$", "") .. "latex.fmt")
     if errorlevel ~=0 then
       return errorlevel
@@ -218,10 +266,15 @@ function main (target, file, engine)
     install ()
   elseif target == "save" then
     if file then
+      if not options["rerun"] then
+        format()
+      end
       errorlevel = save (file, engine)
     else
       help ()
     end
+  elseif target == "tag" then
+    errorlevel = tag(file,engine)
   elseif target == "unpack" then
     -- A simple way to have the unpack target also build the format
     errorlevel = format ()

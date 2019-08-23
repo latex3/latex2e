@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-% Copyright 1993-2019
+% Copyright (C) 1993-2019
 % The LaTeX3 Project and any individual authors listed elsewhere
 % in this file.
 %
@@ -13,7 +13,7 @@
 % The latest version of this license is in
 %    https://www.latex-project.org/lppl.txt
 % and version 1.3c or later is part of all distributions of LaTeX
-% version 2005/12/01 or later.
+% version 2008 or later.
 %
 % This file has the LPPL maintenance status "maintained".
 %
@@ -46,7 +46,6 @@
 \end{document}
 %</driver>
 % \fi
-%
 %
 % \newpage
 %
@@ -217,11 +216,27 @@
 %<+ts1> \ProvidesFile{ts1enc.dfu}
 %<+x2>  \ProvidesFile{x2enc.dfu}
 %<+all> \ProvidesFile{utf8enc.dfu}
-   [2019/02/07 v1.2h UTF-8 support for inputenc]
+%<-utf8-2018>   [2019/07/11 v1.2j UTF-8 support for inputenc]
 %    \end{macrocode}
 %
 %    \begin{macrocode}
 %<*utf8>
+%    \end{macrocode}
+%    This is a temporary fix for the e-p\TeX{} / e-up\TeX{} engines that do not yet
+%    have a |\ifincsname| primitive. Once this is available the the extra file will
+%    be dropped.
+% \changes{v1.2h}{2019/07/09}{Temp rollback fix for e-pTeX}
+%    \begin{macrocode}
+\ifx\ifincsname\@undefined  % old e-pTeX or e-upTeX engines
+  \input utf8-2018.def
+  \expandafter\@firstofone
+\else
+  \expandafter\@gobble
+\fi
+  \endinput
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
 \makeatletter
 %    \end{macrocode}
 %    We restore the |\catcode| of space (which is set to ignore in
@@ -237,48 +252,175 @@
 %
 % \subsection{Parsing UTF-8 input}
 %
-% \begin{macro}{\UTFviii@two@octets}
-% \begin{macro}{\UTFviii@three@octets}
-% \begin{macro}{\UTFviii@four@octets}
-% \changes{v1.2a}{2018/03/24}{Macros made `\cs{long} for improved error messages}%
 %    A UTF-8 char (that is not actually a 7-bit char, i.e.~a single
 %    octet) is parsed as follows: each starting octet is an active
 %    \TeX{} character token; each of these is defined below to be a
 %    macro with one to three arguments nominally (depending on the
 %    starting octet). It calls one of |\UTFviii@two@octets|,
 %    |\UTFviii@three@octets|, or |\UTFviii@four@octets| which then
-%    actually picks up the argument(s).
+%    actually picks up the remaining octets as the argument(s).
 %
+%    \begin{itemize}
+%  \item When typesetting we pick up the necessary number of additional
+%    octets, check if they form a command that \LaTeX{} knows about
+%    (via \cs{csname} \texttt{u8:}\cs{string}
+%     \verb=#1=\cs{string} \verb=#2...=\cs{endcsname}) and if so use that
+%    for typesetting.  \cs{string} is needed as the octets may (all?) be
+%    active and we want the literal values in the name.
+%
+%  \item If the UTF-8 character is going to be part of a label, then it is
+%    essentially becoming part of some csname and with the
+%    test \cs{ifincsname} we can find this out. If so, we render the whole
+%    sequence off octets harmless by using \cs{string} too when the
+%    starting octet executes (\cs{UTF@...@octets@string}).
+%
+%  \item Another possible case is that \cs{protect} has \emph{not} the meaning
+%    of \cs{typeset@protect}. In that case we may do a \cs{write} or we may do
+%    a \cs{protected@edef} or \ldots{}  In all such cases we want to keep the
+%    sequence of octets unchanged, but we can't use \cs{string} this time, since at
+%    least in the case of \cs{protect@edef} the result may later be
+%    typeset after all (in fact that is quite likely) and so at that
+%    point the starting octet needs to be an active character again
+%    (the others could be stringified). So for this case we use \cs{noexpand}
+%    ((\cs{UTF@...s@octets@noexpand}).
+%  \end{itemize}
+%
+% \begin{macro}{\UTFviii@two@octets}
+% \changes{v1.2a}{2018/03/24}{Macros made `\cs{long} for improved error messages}%
+%    Putting that all together the code for a start octet of a two
+%    byte sequence would then look like this:
+%    \begin{macrocode}
+\long\def\UTFviii@two@octets{%
+  \ifincsname
+    \expandafter \UTF@two@octets@string
+  \else
+    \ifx \protect\@typeset@protect \else
+      \expandafter\expandafter\expandafter \UTF@two@octets@noexpand
+    \fi
+  \fi
+  \UTFviii@two@octets@combine
+}
+%    \end{macrocode}
+
+%    \cs{ifcsname} is tested first because that can be true even if we
+%    are otherwise doing typesetting. If this is the case we use
+%    \cs{string} on the whole octet
+%    sequence. \cs{UTF@two@octets@string} not only does this but also
+%    gets rid of the command \cs{UTFviii@two@octets@combine} in the input
+%    stream by picking it up as a first argument and dropping it.
+%
+%     If this is not the case and we are doing typesetting (i.e.,
+%    \cs{protect} is \cs{typeset@protect}), then we execute
+%    \cs{UTFviii@two@octets@combine} which picks up all octets and typesets
+%    the character (or generates an error if it doesn't know how to
+%    typeset it).
+%
+%    However, if we are not doing typesetting, then we execute the
+%    command \cs{UTFviii@two@octets@noexpand} which works like
+%    \cs{UTF@two@octets@string} but uses \cs{noexpand} instead of
+%    \cs{string}. This way the sequence is temporay rendered harmless,
+%    e.g., would display as is or stays put inside a
+%    \cs{protected@edef}. But if the result is later reused the
+%    starting octet is still active and so will be able to construct
+%    the UTF-8 character again.
+% \end{macro}
+%
+%
+% \begin{macro}{\UTFviii@three@octets}
+% \changes{v1.2a}{2018/03/24}{Macros made `\cs{long} for improved error messages}%
+% \begin{macro}{\UTFviii@four@octets}
+% \changes{v1.2a}{2018/03/24}{Macros made `\cs{long} for improved
+%                             error messages}
+%    The definitions for the other starting octets
+%    are the same except that they pick up more octets after them.
+%    \begin{macrocode}
+\long\def\UTFviii@three@octets{%
+  \ifincsname
+    \expandafter \UTF@three@octets@string
+  \else
+    \ifx \protect\@typeset@protect \else
+      \expandafter\expandafter\expandafter \UTF@three@octets@noexpand
+    \fi
+  \fi
+  \UTFviii@three@octets@combine
+}
+%    \end{macrocode}
+%    \begin{macrocode}
+\long\def\UTFviii@four@octets{%
+  \ifincsname
+    \expandafter \UTF@four@octets@string
+  \else
+    \ifx \protect\@typeset@protect \else
+      \expandafter\expandafter\expandafter \UTF@four@octets@noexpand
+    \fi
+  \fi
+  \UTFviii@four@octets@combine
+}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\UTFviii@two@octets@noexpand}
+% \begin{macro}{\UTFviii@three@octets@noexpand}
+% \begin{macro}{\UTFviii@four@octets@noexpand}
+%    These tempoarily prevent the active chars from expanding.
+%    \begin{macrocode}
+\long\def\UTF@two@octets@noexpand#1#2{\noexpand#2\noexpand}
+\long\def\UTF@three@octets@noexpand#1#2#3{\noexpand#2\noexpand#3\noexpand}
+\long\def\UTF@four@octets@noexpand#1#2#3#4{\noexpand#2\noexpand#3\noexpand#4\noexpand}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+
+% \begin{macro}{\UTFviii@two@octets@string}
+% \begin{macro}{\UTFviii@three@octets@string}
+% \begin{macro}{\UTFviii@four@octets@string}
+%    And the same with \cs{string} for use in \cs{csname} constructions.
+%    \begin{macrocode}
+\long\def\UTF@two@octets@string#1#2{\string#2\string}
+\long\def\UTF@three@octets@string#1#2#3{\string#2\string#3\string}
+\long\def\UTF@four@octets@string#1#2#3#4{\string#2\string#3\string#4\string}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+
+
+% \begin{macro}{\UTFviii@two@octets@combine}
+% \begin{macro}{\UTFviii@three@octets@combine}
+% \begin{macro}{\UTFviii@four@octets@combine}
 %    From the arguments a control sequence with a name of the form
 %    \verb=u8:#1#2...= is constructed where the |#i| ($i>1$) are the
-%    arguments and |#1| is the starting octet (as a \TeX{} character
+%    arguments and |#1| is the starting octet (as a \TeX{} active character
 %    token).  Since some or even all of these characters are active
-%    (when inputenc is loaded) we need to use |\string| when building
-%    the csname.
+%    we need to use |\string| when building
+%    the \cs{csname}.
 %
-%    The csname thus constructed can of course be undefined but to
+%    The \cs{csname} thus constructed can of course be undefined but to
 %    avoid producing an unhelpful low-level undefined command error we
 %    pass it to |\UTFviii@defined| which is responsible for producing
 %    a more sensible error message (not yet done!!).  If, however, it is
 %    defined we simply execute the thing (which should then expand to
 %    an encoding specific internal \LaTeX{} form).
 %    \begin{macrocode}
-\long\def\UTFviii@two@octets#1#2{\expandafter
-    \UTFviii@defined\csname u8:#1\string#2\endcsname}
+\long\def\UTFviii@two@octets@combine#1#2{\expandafter
+    \UTFviii@defined\csname u8:\string#1\string#2\endcsname}
 %    \end{macrocode}
-% \end{macro}
 %
 %    \begin{macrocode}
-\long\def\UTFviii@three@octets#1#2#3{\expandafter
-    \UTFviii@defined\csname u8:#1\string#2\string#3\endcsname}
+\long\def\UTFviii@three@octets@combine#1#2#3{\expandafter
+    \UTFviii@defined\csname u8:\string#1\string#2\string#3\endcsname}
 %    \end{macrocode}
-% \end{macro}
 %
 %    \begin{macrocode}
-\long\def\UTFviii@four@octets#1#2#3#4{\expandafter
-    \UTFviii@defined\csname u8:#1\string#2\string#3\string#4\endcsname}
+\long\def\UTFviii@four@octets@combine#1#2#3#4{\expandafter
+    \UTFviii@defined\csname u8:\string#1\string#2\string#3\string#4\endcsname}
 %    \end{macrocode}
 % \end{macro}
+% \end{macro}
+% \end{macro}
+%
 %
 % \begin{macro}{\UTFviii@defined}
 %    This tests whether its argument is different from |\relax|: it
@@ -447,11 +589,12 @@
 \UTFviii@loop
 %    \end{macrocode}
 %
-%    Setting up 2-byte UTF-8:
+%    Setting up 2-byte UTF-8: The starting bytes is passed as an
+%    active character so that it can be reprocessed later!
 %    \begin{macrocode}
     \count@"C2
     \@tempcnta"E0
-    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@two@octets\string~}}
+    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@two@octets\noexpand~}}
 \UTFviii@loop
 %    \end{macrocode}
 %
@@ -459,7 +602,7 @@
 %    \begin{macrocode}
     \count@"E0
     \@tempcnta"F0
-    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@three@octets\string~}}
+    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@three@octets\noexpand~}}
 \UTFviii@loop
 %    \end{macrocode}
 %
@@ -468,7 +611,7 @@
 %    \begin{macrocode}
     \count@"F0
     \@tempcnta"F5
-    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@four@octets\string~}}
+    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@four@octets\noexpand~}}
 \UTFviii@loop
 %    \end{macrocode}
 %
@@ -1639,10 +1782,30 @@
 %<all,t1>\DeclareUnicodeCharacter{1E20}{\@tabacckludge=G}
 %<all,t1>\DeclareUnicodeCharacter{1E21}{\@tabacckludge=g}
 %    \end{macrocode}
+%
+%    When doing cut-and-paste from other documents f-ligatures might show
+%    up as Unicode characters. We translate them back to individual
+%    characters so that they get accepted. If supported by the font
+%    (which is normally the case) they are then reconstructed as
+%    ligatures so they come out as desired. Otherwise they will come
+%    out as individual characters which is fine too.
+% \changes{v1.2j}{2019/07/11}{Add typical f-ligatures and st (github/154)}
+%    \begin{macrocode}
+%<all,t1,ot1,ly1,t2a,t2b,t2c>\DeclareUnicodeCharacter{FB00}{ff}   % ﬀ
+%<all,t1,ot1,ly1,t2a,t2b,t2c>\DeclareUnicodeCharacter{FB01}{fi}   % ﬁ
+%<all,t1,ot1,ly1,t2a,t2b,t2c>\DeclareUnicodeCharacter{FB02}{fl}   % ﬂ
+%<all,t1,ot1,ly1,t2a,t2b,t2c>\DeclareUnicodeCharacter{FB03}{ffi}  % ﬃ
+%<all,t1,ot1,ly1,t2a,t2b,t2c>\DeclareUnicodeCharacter{FB04}{ffl}  % ﬄ
+%<all,t1,ot1,ly1,t2a,t2b,t2c>\DeclareUnicodeCharacter{FB05}{ft}   % ﬅ
+%<all,t1,ot1,ly1,t2a,t2b,t2c>\DeclareUnicodeCharacter{FB06}{st}   % ﬆ
+%    \end{macrocode}
+%
+%
 % \changes{v1.2c}{2018/04/05}{Add BOM}
 %    \begin{macrocode}
 %<all,ts1,utf8>\DeclareUnicodeCharacter{FEFF}{\ifhmode\nobreak\fi}
 %    \end{macrocode}
+%    
 % 
 % \endgroup
 % \subsection{Notes}
@@ -1767,6 +1930,291 @@
 %<*utf8>
 % This space is intentionally empty ...
 %</utf8>
+%    \end{macrocode}
+%    
+% \subsection{Old \texttt{utf8.def} file as a temp fix for p\TeX{} and friends}
+%
+%
+% \changes{v1.2h}{2019/07/09}{Temp rollback fix for e-pTeX}
+%    \begin{macrocode}
+%<*utf8-2018>
+\ProvidesFile{utf8.def}
+   [2018/10/05 v1.2f UTF-8 support for inputenc]
+\makeatletter
+\catcode`\ \saved@space@catcode
+\long\def\UTFviii@two@octets#1#2{\expandafter
+    \UTFviii@defined\csname u8:#1\string#2\endcsname}
+\long\def\UTFviii@three@octets#1#2#3{\expandafter
+    \UTFviii@defined\csname u8:#1\string#2\string#3\endcsname}
+\long\def\UTFviii@four@octets#1#2#3#4{\expandafter
+    \UTFviii@defined\csname u8:#1\string#2\string#3\string#4\endcsname}
+\def\UTFviii@defined#1{%
+  \ifx#1\relax
+     \if\relax\expandafter\UTFviii@checkseq\string#1\relax\relax
+      \UTFviii@undefined@err{#1}%
+     \else
+      \PackageError{inputenc}{Invalid UTF-8 byte sequence}%
+                             \UTFviii@invalid@help
+     \fi
+  \else\expandafter
+    #1%
+  \fi
+}
+\def\UTFviii@invalid@err#1{%
+ \PackageError{inputenc}{Invalid UTF-8 byte "\UTFviii@hexnumber{`#1}}%
+                        \UTFviii@invalid@help}
+\def\UTFviii@invalid@help{%
+   The document does not appear to be in UTF-8 encoding.\MessageBreak
+   Try adding \noexpand\UseRawInputEncoding as the first line of the file\MessageBreak
+   or specify an encoding such as \noexpand\usepackage[latin1]{inputenc}\MessageBreak
+   in the document preamble.\MessageBreak
+   Alternatively, save the file in UTF-8 using your editor or another tool}
+\def\UTFviii@undefined@err#1{%
+  \PackageError{inputenc}{Unicode character \expandafter
+                          \UTFviii@splitcsname\string#1\relax
+                          \MessageBreak
+                          not set up for use with LaTeX}%
+                         {You may provide a definition with\MessageBreak
+                          \noexpand\DeclareUnicodeCharacter}%
+   }
+\def\UTFviii@checkseq#1:#2#3{%
+ \ifnum`#2<"80 %
+   \ifx\relax#3\else1\fi
+ \else
+   \ifnum`#2<"C0 %
+     1 %
+   \else
+     \expandafter\expandafter\expandafter\UTFviii@check@continue
+     \expandafter\expandafter\expandafter#3%
+   \fi
+  \fi}
+\def\UTFviii@check@continue#1{%
+  \ifx\relax#1%
+  \else
+  \ifnum`#1<"80 1\else\ifnum`#1>"BF 1\fi\fi
+  \expandafter\UTFviii@check@continue
+  \fi
+}
+\begingroup
+\catcode`\~13
+\catcode`\"12
+\def\UTFviii@loop{%
+  \uccode`\~\count@
+  \uppercase\expandafter{\UTFviii@tmp}%
+  \advance\count@\@ne
+  \ifnum\count@<\@tempcnta
+  \expandafter\UTFviii@loop
+  \fi}
+    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@undefined@err{:\string~}}}
+    \count@"1
+    \@tempcnta9
+\UTFviii@loop
+    \count@11
+    \@tempcnta12
+\UTFviii@loop
+    \count@14
+    \@tempcnta32
+\UTFviii@loop
+    \count@"80
+    \@tempcnta"C2
+    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@invalid@err\string~}}
+\UTFviii@loop
+    \count@"C2
+    \@tempcnta"E0
+    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@two@octets\string~}}
+\UTFviii@loop
+    \count@"E0
+    \@tempcnta"F0
+    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@three@octets\string~}}
+\UTFviii@loop
+    \count@"F0
+    \@tempcnta"F5
+    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@four@octets\string~}}
+\UTFviii@loop
+    \count@"F5
+    \@tempcnta"100
+    \def\UTFviii@tmp{\xdef~{\noexpand\UTFviii@invalid@err\string~}}
+\UTFviii@loop
+\endgroup
+\@inpenc@test
+\ifx\@begindocumenthook\@undefined
+  \makeatother
+  \endinput \fi
+\begingroup
+\catcode`\"=12
+\catcode`\<=12
+\catcode`\.=12
+\catcode`\,=12
+\catcode`\;=12
+\catcode`\!=12
+\catcode`\~=13
+\gdef\DeclareUnicodeCharacter#1#2{%
+  \count@"#1\relax
+  \wlog{ \space\space defining Unicode char U+#1 (decimal \the\count@)}%
+  \begingroup
+    \parse@XML@charref
+    \def\UTFviii@two@octets##1##2{\csname u8:##1\string##2\endcsname}%
+    \def\UTFviii@three@octets##1##2##3{\csname u8:##1%
+                                     \string##2\string##3\endcsname}%
+    \def\UTFviii@four@octets##1##2##3##4{\csname u8:##1%
+                           \string##2\string##3\string##4\endcsname}%
+    \expandafter\expandafter\expandafter
+    \expandafter\expandafter\expandafter
+    \expandafter
+     \gdef\UTFviii@tmp{\IeC{#2}}%
+   \endgroup
+}
+\gdef\parse@XML@charref{%
+  \ifnum\count@<"A0\relax
+    \ifnum\catcode\count@=13
+      \uccode`\~=\count@\uppercase{\def\UTFviii@tmp{\@empty\@empty~}}%
+    \else
+      \PackageError{inputenc}%
+                   {Cannot define non-active Unicode char value < 00A0}%
+                   \@eha
+      \def\UTFviii@tmp{\UTFviii@tmp}%
+    \fi
+  \else\ifnum\count@<"800\relax
+     \parse@UTFviii@a,%
+     \parse@UTFviii@b C\UTFviii@two@octets.,%
+  \else\ifnum\count@<"10000\relax
+     \parse@UTFviii@a;%
+     \parse@UTFviii@a,%
+     \parse@UTFviii@b E\UTFviii@three@octets.{,;}%
+   \else
+     \ifnum\count@>"10FFFF\relax
+           \PackageError{inputenc}%
+                {\UTFviii@hexnumber\count@\space too large for Unicode}%
+                {Values between 0 and 10FFFF are permitted}%
+      \fi
+     \parse@UTFviii@a;%
+     \parse@UTFviii@a,%
+     \parse@UTFviii@a!%
+     \parse@UTFviii@b F\UTFviii@four@octets.{!,;}%
+    \fi
+    \fi
+  \fi
+}
+\gdef\parse@UTFviii@a#1{%
+     \@tempcnta\count@
+     \divide\count@ 64
+     \@tempcntb\count@
+     \multiply\count@ 64
+     \advance\@tempcnta-\count@
+     \advance\@tempcnta 128
+     \uccode`#1\@tempcnta
+     \count@\@tempcntb}
+\gdef\parse@UTFviii@b#1#2#3#4{%
+     \advance\count@ "#10\relax
+     \uccode`#3\count@
+     \uppercase{\gdef\UTFviii@tmp{#2#3#4}}}
+\ifx\numexpr\@undefined
+\gdef\decode@UTFviii#1{0}
+\else
+\gdef\decode@UTFviii#1\relax{%
+  \expandafter\UTFviii@cleanup
+    \the\numexpr\dec@de@UTFviii#1\relax)))))\@empty}
+\gdef\UTFviii@cleanup#1)#2\@empty{#1}
+\gdef\dec@de@UTFviii#1{%
+\ifx\relax#1%
+\else
+  \ifnum`#1>"EF
+    ((((`#1-"F0)%
+  \else
+    \ifnum`#1>"DF
+      (((`#1-"E0)%
+    \else
+      \ifnum`#1>"BF
+        ((`#1-"C0)%
+      \else
+        \ifnum`#1>"7F
+        )*64+(`#1-"80)%
+        \else
+        +`#1 %
+        \fi
+      \fi
+    \fi
+  \fi
+  \expandafter\dec@de@UTFviii
+\fi}
+\fi
+\ifx\numexpr\@undefined
+\global\let\UTFviii@hexnumber\@firstofone
+\global\UTFviii@hexdigit\hexnumber@
+\else
+\gdef\UTFviii@hexnumber#1{%
+\ifnum#1>15 %
+\expandafter\UTFviii@hexnumber\expandafter{\the\numexpr(#1-8)/16\relax}%
+\fi
+\UTFviii@hexdigit{\numexpr#1\ifnum#1>0-((#1-8)/16)*16\fi\relax}%
+}
+\gdef\UTFviii@hexdigit#1{\ifcase\numexpr#1\relax
+  0\or1\or2\or3\or4\or5\or6\or7\or8\or9\or
+  A\or B\or C\or D\or E\or F\fi}
+\fi
+\gdef\UTFviii@hexcodepoint#1{U+%
+ \ifnum#1<16 0\fi
+ \ifnum#1<256 0\fi
+ \ifnum#1<4096 0\fi
+ \UTFviii@hexnumber{#1}%
+}%
+\gdef\UTFviii@splitcsname#1:#2\relax{%
+#2 (\expandafter\UTFviii@hexcodepoint\expandafter{%
+                     \the\numexpr\decode@UTFviii#2\relax})%
+}
+\endgroup
+\@onlypreamble\DeclareUnicodeCharacter
+\@onlypreamble\parse@XML@charref
+\@onlypreamble\parse@UTFviii@a
+\@onlypreamble\parse@UTFviii@b
+\begingroup
+  \def\cdp@elt#1#2#3#4{%
+    \wlog{Now handling font encoding #1 ...}%
+    \lowercase{%
+        \InputIfFileExists{#1enc.dfu}}%
+           {\wlog{... processing UTF-8 mapping file for font %
+                     encoding #1}%
+            \catcode`\ 9\relax}%
+          {\wlog{... no UTF-8 mapping file for font encoding #1}}%
+  }
+  \cdp@list
+\endgroup
+\def\DeclareFontEncoding@#1#2#3{%
+  \expandafter
+  \ifx\csname T@#1\endcsname\relax
+    \def\cdp@elt{\noexpand\cdp@elt}%
+    \xdef\cdp@list{\cdp@list\cdp@elt{#1}%
+                    {\default@family}{\default@series}%
+                    {\default@shape}}%
+    \expandafter\let\csname#1-cmd\endcsname\@changed@cmd
+    \begingroup
+      \wlog{Now handling font encoding #1 ...}%
+      \lowercase{%
+        \InputIfFileExists{#1enc.dfu}}%
+           {\wlog{... processing UTF-8 mapping file for font %
+                      encoding #1}}%
+           {\wlog{... no UTF-8 mapping file for font encoding #1}}%
+    \endgroup
+  \else
+     \@font@info{Redeclaring font encoding #1}%
+  \fi
+  \global\@namedef{T@#1}{#2}%
+  \global\@namedef{M@#1}{\default@M#3}%
+  \xdef\LastDeclaredEncoding{#1}%
+  }
+\DeclareUnicodeCharacter{00A9}{\textcopyright}
+\DeclareUnicodeCharacter{00AA}{\textordfeminine}
+\DeclareUnicodeCharacter{00AE}{\textregistered}
+\DeclareUnicodeCharacter{00BA}{\textordmasculine}
+\DeclareUnicodeCharacter{02C6}{\textasciicircum}
+\DeclareUnicodeCharacter{02DC}{\textasciitilde}
+\DeclareUnicodeCharacter{200C}{\textcompwordmark}
+\DeclareUnicodeCharacter{2026}{\textellipsis}
+\DeclareUnicodeCharacter{2122}{\texttrademark}
+\DeclareUnicodeCharacter{2423}{\textvisiblespace}
+\DeclareUnicodeCharacter{FEFF}{\ifhmode\nobreak\fi}
+\endinput
+</utf8-2018>
 %    \end{macrocode}
 %
 %

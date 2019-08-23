@@ -2,4 +2,5 @@
 
 checkengines = {"etex"}
 checksearch  = false
+checkdeps    = {maindir .. "/required/cyrillic"}
 testfiledir  = "testfiles-legacy"
