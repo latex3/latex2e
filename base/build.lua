@@ -178,7 +178,11 @@ function format (doc)
   if not options["config"] or options["config"][1] ~= "config-TU" then
     cp("fonttext.cfg",supportdir,unpackdir)
   end
-  local buildformats = options["engine"] or checkengines
+  local buildformats = { }
+  local enginedata = options["engine"] or checkengines
+  for _,name in ipairs(enginedata) do
+    table.insert(buildformats,name
+  end
   if not options["config"] then
     table.insert(buildformats,"pdftex")
   end
