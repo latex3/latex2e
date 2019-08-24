@@ -125,13 +125,10 @@ unpacksuppfiles =
     "UnicodeData.txt",
     "UShyphen.tex",
     "ot1lmr.fd",
-<<<<<<< .merge_file_H5FaDF
     "t1lmr.fd",
-    "ts1lmr.fd"
-=======
+    "ts1lmr.fd",
     "pdflatex.ini",
     "pdftexconfig.tex"
->>>>>>> .merge_file_7X2OBJ
   }
 
 -- Custom settings for the check system
