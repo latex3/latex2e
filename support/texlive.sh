@@ -39,9 +39,13 @@ tlmgr install   \
   amsfonts      \
   ec            \
   fontspec      \
+  hyperref      \
+  ifxetex       \
+  oberdiek      \
   lh            \
   lualibs       \
-  luaotfload
+  luaotfload    \
+  url
 
 # Keep no backups (not required, simply makes cache bigger)
 tlmgr option -- autobackup 0
