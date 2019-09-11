@@ -33,7 +33,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltclass.dtx}
-             [2019/08/27 v1.3b LaTeX Kernel (Class & Package Interface)]
+             [2019/09/11 v1.3c LaTeX Kernel (Class & Package Interface)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltclass.dtx}
@@ -155,11 +155,27 @@
 % verbatim to the file name given as the first argument, together with
 % some comments about how it was produced.
 %
-% The environment is allowed only before |\documentclass| to ensure
-% that all packages or options necessary for this particular run are
-% present when needed.  The begin and end tags should each be on a
-% line by itself.  There is also a star-form; this does not write
-% extra comments into the file.
+% The package can also be called with an optional argument which is
+% used to alter some of its behavior: option
+% \texttt{overwrite} will allow for overwriting existing files,
+% option \texttt{nosearch} will only check the current directory
+% when looking if the file exists. This can be useful if you want to
+% generate a local (modified) copy of some file that is already in the
+% search tree of \TeX{}. Finally, you can use \texttt{nopremable} to
+% prevent it from writing the standard blurb at the top of the file
+% (this is actually the same as using the star form of the environment).
+%
+% The environment is now allowed anywhere in the document, but to ensure
+% that all packages or options necessary are available when the
+% document is run, it is normally best to place it at the top of your
+% file (before \cs{documentclass}).
+% A possible use case for using it inside the document body is if you
+% want to reuse some text several times in the document you could then
+% write it and later use \cs{input} to retrieve it where needed.
+% 
+%
+% The begin and end tags should each be on a
+% line by itself. 
 %
 % \subsection{Option processing}
 %
@@ -1708,11 +1724,65 @@
 % \changes{v1.3a}{2019/07/01}{Support UTF8 and spaces in
 %                             filecontents environment file name}
 % \changes{v1.3b}{2019/08/27}{Make various commands robust}
+% \changes{v1.3c}{2019/09/11}{Support optional argument for filecontents}
 %
 %</2ekernel>
 %<*2ekernel|latexrelease>
 %<latexrelease>\IncludeInRelease{2019/10/01}%
-%<latexrelease>                 {\filec@ntents}{Spaces in file names}%
+%<latexrelease>                 {\filec@ntents}{Spaces in file names + optional arg}%
+%
+
+
+%    \end{macrocode}
+%    We use |@tempswa| to mean no preamble writing and reuse |@filesw|
+%    to indicate no overwriting:
+%    \begin{macrocode}
+\def\filecontents{\@tempswatrue\@fileswtrue
+  \@ifnextchar[\filec@ntents@opt\filec@ntents
+}
+\@namedef{filecontents*}{\@tempswafalse\@fileswtrue
+  \@ifnextchar[\filec@ntents@opt\filec@ntents
+}
+%    \end{macrocode}
+%    To handle the optional argument we execute for each option the
+%    command \cs{filec@ntents@OPTION} if it exist or complain about
+%    unknown option.
+%    \begin{macrocode}
+\def\filec@ntents@opt[#1]{%
+  \@for\@tempa:=#1\do{%
+    \ifcsname filec@ntents@\@tempa\endcsname
+      \csname filec@ntents@\@tempa\endcsname
+    \else
+    \@latex@error{Unknown filecontents option #1}%
+       {Valid options are overwrite, nosearch, nopreamble}%
+    \fi}%
+  \filec@ntents
+}
+%    \end{macrocode}
+%    Option \texttt{overwrite} changes the
+%    overwriting switch
+%    \begin{macrocode}
+\let\filec@ntents@overwrite\@fileswfalse
+%    \end{macrocode}
+%    and option \texttt{nopreamble} the preamble switch (which is
+%    equivalent to using the star form of the environment).
+%    \begin{macrocode}
+\let\filec@ntents@nopreamble\@tempswafalse
+%    \end{macrocode}
+%    Option \texttt{nosearch} only checks the current directory not
+%    the how \TeX{} tree for the existence of the file to write.
+%    \begin{macrocode}
+\def\filec@ntents@nosearch{%
+  \let\filec@ntents@checkdir\@currdir
+  \def\filec@ntents@where{in current directory}}
+%    \end{macrocode}
+%    By default we search the whole tree:
+%    \begin{macrocode}
+\let\filec@ntents@checkdir\@empty
+\def\filec@ntents@where{exists on the system}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
 \begingroup%
 \@tempcnta=1
 \loop
@@ -1727,15 +1797,10 @@
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-\gdef\filecontents{\@tempswatrue\filec@ntents}%
-\gdef\filecontents*{\@tempswafalse\filec@ntents}%
-%    \end{macrocode}
-%
-%    \begin{macrocode}
 \gdef\filec@ntents#1{%
-   \set@curr@file{#1}%
-   \edef\q@curr@file{\expandafter\quote@name\expandafter{\@curr@file}}%
-   \openin\@inputcheck\q@curr@file \space %
+  \set@curr@file{\filec@ntents@checkdir#1}%
+  \edef\q@curr@file{\expandafter\quote@name\expandafter{\@curr@file}}%
+  \openin\@inputcheck\q@curr@file \space %
   \ifeof\@inputcheck%
     \@latex@warning@no@line%
         {Writing file `\@currdir\@curr@file'}%
@@ -1753,13 +1818,54 @@
 % \changes{v1.0y}{1997/10/10}
 %         {Use \cs{@gobbletwo}}
 %    \begin{macrocode}
-    \closein\@inputcheck%
-    \@latex@warning@no@line%
-            {File `\@curr@file' already exists on the system.\MessageBreak%
+    \if@filesw%
+      \@latex@warning@no@line%
+          {File `\@curr@file' already \filec@ntents@where.\MessageBreak%
              Not generating it from this source}%
-    \let\write\@gobbletwo%
-    \let\closeout\@gobble%
+      \let\write\@gobbletwo%
+      \let\closeout\@gobble%
+    \else%
+%    \end{macrocode}
+%    If we are overwriting, we try to make sure that the user is not
+%    by mistake overwriting the input file (\cs{jobname}). Of course,
+%    this only works for input files ending in \texttt{.tex}. If a
+%    different extension is used there is no way to see that we are
+%    overwriting outselves!
+%    \begin{macrocode}
+      \edef\reserved@a{#1}%
+      \edef\reserved@a{\detokenize\expandafter{\reserved@a}}%
+      \edef\reserved@b{\detokenize\expandafter{\jobname}}%
+      \ifx\reserved@a\reserved@b%
+        \@fileswtrue%
+      \else%
+        \edef\reserved@b{\reserved@b\detokenize{.tex}}%
+        \ifx\reserved@a\reserved@b
+          \@fileswtrue%
+        \fi%
+      \fi%
+%    \end{macrocode}
+%    We allocate a write channel but we open it only if it is
+%    (hopefully) safe. If not opened that means we are going to write
+%    on the terminal.      
+%    \begin{macrocode}
+      \chardef\reserved@c15 %
+      \ch@ck7\reserved@c\write%
+      \if@filesw%  % Foul ... trying to overwrite \jobname!
+      \@latex@error{Trying to overwrite `\jobname.tex'}{You can't %
+        write to the file you a reading from!\MessageBreak%
+        Data is written to screen instead.}%
+      \else%
+        \@latex@warning@no@line%
+           {Writing or overwriting file `\@currdir\@curr@file'}%
+        \immediate\openout\reserved@c#1\relax%
+      \fi%
+    \fi%
   \fi%
+%    \end{macrocode}
+%    Closing the \cs{@inputcheck} is done here ot avoid having to do
+%    this in each branch.
+%    \begin{macrocode}
+  \closein\@inputcheck%
   \if@tempswa%
 %    \end{macrocode}
 %
@@ -1850,7 +1956,15 @@
 %</2ekernel|latexrelease>
 %<latexrelease>\EndIncludeInRelease
 %<latexrelease>\IncludeInRelease{0000/00/00}%
-%<latexrelease>                 {\filec@ntents}{Spaces in file names}%
+%<latexrelease>                 {\filec@ntents}{Spaces in file names + optional arg}%
+%<latexrelease>
+%<latexrelease>\let\filec@ntents@opt        \@undefined
+%<latexrelease>\let\filec@ntents@overwrite  \@undefined
+%<latexrelease>\let\filec@ntents@nopreamble \@undefined
+%<latexrelease>\let\filec@ntents@nosearch   \@undefined
+%<latexrelease>\let\filec@ntents@checkdir   \@undefined
+%<latexrelease>\let\filec@ntents@where      \@undefined
+%<latexrelease>
 %<latexrelease>\begingroup%
 %<latexrelease>\@tempcnta=1
 %<latexrelease>\loop
@@ -1950,12 +2064,16 @@
   \T\I{Tab}{Spac}|
   \immediate\write\@unused{}}
 \global\let\endfilecontents*\endfilecontents
-\@onlypreamble\filecontents
-\@onlypreamble\endfilecontents
-\@onlypreamble\filecontents*
-\@onlypreamble\endfilecontents*
+%    \end{macrocode}
+%    We no longer prevent the code to be used after begin document (no
+%    rollback needed for this change).
+%    \begin{macrocode}
+%\@onlypreamble\filecontents
+%\@onlypreamble\endfilecontents
+%\@onlypreamble\filecontents*
+%\@onlypreamble\endfilecontents*
 \endgroup
-\@onlypreamble\filec@ntents
+%\@onlypreamble\filec@ntents
 %    \end{macrocode}
 % \end{macro}
 % \end{macro}
