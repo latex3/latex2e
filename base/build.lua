@@ -15,7 +15,6 @@ maindir = ".."
 docfiledir = "./doc"
 
 -- Set up the file types needed here
-docfiles = {"ltnews??.tex"}
 installfiles   =
   {
     "*.cfg",
@@ -103,6 +102,7 @@ typesetfiles   =
     "encguide.tex",
     "fntguide.tex",
     "ltnews.tex",
+    "ltnews??.tex",
     "ltx3info.tex",
     "modguide.tex",
     "usrguide.tex",
