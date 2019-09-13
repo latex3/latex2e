@@ -70,14 +70,14 @@ function update_tag(file,content,tagname,tagdate)
   local year = os.date("%Y")
   if string.match(content,"%% Copyright %(C%) %d%d%d%d%-%d%d%d%d\n") then
     content = string.gsub(content,
-      "Copyright %(C%) (%d%d%d%d)%-%d%d%d%d",
-      "Copyright (C) %1-" .. year)
+      "Copyright %(C%) (%d%d%d%d)%-%d%d%d%d\n",
+      "Copyright (C) %1-" .. year .. "\n")
   elseif string.match(content,"%% Copyright %(C%) %d%d%d%d\n") then
     local oldyear = string.match(content,"%% Copyright %(C%) (%d%d%d%d)\n")
     if not year == oldyear then
       content = string.gsub(content,
-        "Copyright %(C%) %d%d%d%d",
-        "Copyright (C) " .. oldyear .. "-" .. year)
+        "Copyright %(C%) %d%d%d%d\n",
+        "Copyright (C) " .. oldyear .. "-" .. year .. "\n")
     end
   end
   if not string.match(file,"%.md$") and not string.match(file,"ltvers.dtx") then
