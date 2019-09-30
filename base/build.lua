@@ -114,7 +114,13 @@ dynamicfiles = {"*.tst"}
 unpackfiles     = {"unpack.ins"}
 unpacksuppfiles =
   {
+    "EastAsianWidth.txt",
     "hyphen.cfg",
+    "LineBreak.txt",
+    "load-unicode-data.tex",
+    "load-unicode-xetex-classes.tex",
+    "MathClass.txt",
+    "UnicodeData.txt",
     "UShyphen.tex",
     "ot1lmr.fd",
     "pdflatex.ini",
@@ -149,14 +155,9 @@ function format (doc)
     if fileexists(localdir .. "/" .. finalname .. ".ini") then
        sourcefile = localdir .. "/" .. finalname .. ".ini"
     end
-    local localdir = abspath(localdir)
-    local localtexmf = ""
-    if texmfdir and texmfdir ~= "" then
-      localtexmf = os_pathsep .. abspath(texmfdir) .. "//"
-    end
     local errorlevel = os.execute (
         os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
-          .. localtexmf .. os_concat ..
+        .. os_concat ..
         engine .. " -etex -ini " .. " -output-directory=" .. unpackdir ..
         " -jobname=latex " .. sourcefile
       )
