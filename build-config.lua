@@ -163,3 +163,43 @@ function update_tag_ltx(file,content,tagname,tagdate)
     "\nRelease " .. iso .. "[^\n]*\n",
     "\nRelease " .. tag .. "\n")
 end
+
+-- Need to build format files
+local function fmt(names)
+  local function mkfmt(engine)
+    -- Use .ini files if available
+    local src = "latex.ltx"
+    local ini = string.gsub(engine,"tex","") .. "latex.ini"
+    if fileexists(supportdir .. "/" .. ini) then
+      src = ini
+    end
+    print("Building format for " .. engine)
+    local errorlevel = os.execute(
+      os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
+      .. os_pathsep .. texmfdir .. "//"
+      .. os_concat .. engine .. " -etex -ini -output-directory=" .. unpackdir
+      .. " " .. src 
+      .. (hide and (" > " .. os_null) or ""))
+    if errorlevel ~= 0 then return errorlevel end
+    local fmtname = string.gsub(engine,"tex$","") .. "latex.fmt"
+    if fileexists (unpackdir,"latex.fmt") then
+      ren(unpackdir,"latex.fmt",fmtname)
+    end
+    cp(fmtname,unpackdir,testdir)
+    return 0
+  end
+
+  if not options["config"] or options["config"][1] ~= "config-TU" then
+    cp("fonttext.cfg",supportdir,unpackdir)
+  end
+
+  local checkengines = names or options["engine"] or checkengines
+  local errorlevel
+  for _,engine in pairs(checkengines) do
+    errorlevel = mkfmt(engine)
+    if errorlevel ~= 0 then return errorlevel end
+  end
+  return 0
+end
+
+function checkinit_hook() return fmt() end
