@@ -127,6 +127,11 @@ unpacksuppfiles =
     "pdftexconfig.tex"
   }
 
+checksuppfiles =
+  {
+    "load-unicode-xetex-classes.tex",
+  }
+
 -- Custom settings for the check system
 testsuppdir = "testfiles/helpers"
 
