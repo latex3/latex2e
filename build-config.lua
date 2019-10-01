@@ -182,6 +182,7 @@ local function fmt(names)
       .. (hide and (" > " .. os_null) or ""))
     if errorlevel ~= 0 then return errorlevel end
     local fmtname = string.gsub(engine,"tex$","") .. "latex.fmt"
+    if engine == "etex" then fmtname = "latex.fmt" end
     if fileexists (unpackdir,"latex.fmt") then
       ren(unpackdir,"latex.fmt",fmtname)
     end
