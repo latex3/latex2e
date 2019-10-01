@@ -130,9 +130,13 @@ unpacksuppfiles =
 -- Custom settings for the check system
 testsuppdir = "testfiles/helpers"
 
--- No dependencies at all (other than l3build of course)
+-- No dependencies at all (other than l3build and for typesetting)
 checkdeps   = { }
-typesetdeps = { }
+typesetdeps =
+  {
+    maindir .. "/required/graphics",
+    maindir .. "/required/tool"
+  }
 unpackdeps  = { }
 
 -- Customise typesetting

@@ -3,7 +3,12 @@
 -- The LaTeX2e kernel is needed by everything except 'base'
 -- There is an over-ride for that case
 checkdeps   = checkdeps   or {maindir .. "/base"}
-typesetdeps = typesetdeps or {maindir .. "/base"}
+typesetdeps = typesetdeps or
+  {
+    maindir .. "/base",
+    maindir .. "/required/graphics",
+    maindir .. "/required/tool"
+  }
 unpackdeps  = unpackdeps  or {maindir .. "/base"}
 
 -- We really need 3 on most files (toc + references)
@@ -19,7 +24,8 @@ checksuppfiles = checksuppfiles     or
   {"color.cfg", "graphics.cfg", "test209.tex", "test2e.tex", "xetex.def", "dvips.def", "lipsum.sty", "*.txt", "lualibs*.lua", "fontloader*.lua", "luaotfload*.lua", "luaotfloat.sty"}
 stdengine      = stdengine          or "etex"
 tagfiles       = tagfiles or {"*.dtx","*.ins","*.tex","README.md"}
-typesetsuppfiles = typesetsuppfiles or {"ltxdoc.cfg", "ltxguide.cfg"}
+typesetsuppfiles = typesetsuppfiles or
+  {"color.cfg", "graphics.cfg", "ltxdoc.cfg", "ltxguide.cfg"}
 
 -- Ensure the local format file is used
 typesetexe = 'pdftex -interaction=nonstopmode "&pdflatex"'
