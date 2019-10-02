@@ -179,7 +179,7 @@ function update_tag_ltx(file,content,tagname,tagdate)
 end
 
 -- Need to build format files
-local function fmt(names)
+local function fmt(engines)
   local function mkfmt(engine)
     -- Use .ini files if available
     local src = "latex.ltx"
@@ -208,13 +208,14 @@ local function fmt(names)
     cp("fonttext.cfg",supportdir,unpackdir)
   end
 
-  local checkengines = names or options["engine"] or checkengines
   local errorlevel
-  for _,engine in pairs(checkengines) do
+  for _,engine in pairs(engines) do
     errorlevel = mkfmt(engine)
     if errorlevel ~= 0 then return errorlevel end
   end
   return 0
 end
 
-function checkinit_hook() return fmt() end
+function checkinit_hook() return fmt(options["engine"] or checkengines) end
+
+function docinit_hook() return fmt({typesetexe}) end
