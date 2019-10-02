@@ -135,7 +135,7 @@ checkdeps   = { }
 typesetdeps =
   {
     maindir .. "/required/graphics",
-    maindir .. "/required/tool"
+    maindir .. "/required/tools"
   }
 unpackdeps  = { }
 
