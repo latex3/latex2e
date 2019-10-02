@@ -192,43 +192,6 @@ function bundleunpack ()
   return 0
 end
 
--- base does all of the targets itself
-function main (target, file, engine)
-  local errorlevel
-  if target == "check" then
-    errorlevel = check (file, engine)
-  elseif target == "clean" then
-    errorlevel = clean ()
-  elseif target == "ctan" then
-    format ()
-    errorlevel = ctan (true)
-  elseif target == "doc" then
-    errorlevel = doc ()
-  elseif target == "install" then
-    install ()
-  elseif target == "save" then
-    if file then
-      if not options["rerun"] then
-        format()
-      end
-      errorlevel = save (file, engine)
-    else
-      help ()
-    end
-  elseif target == "tag" then
-    errorlevel = tag(file,engine)
-  elseif target == "unpack" then
-    errorlevel = unpack ()
-  elseif target == "uninstall" then
-    errorlevel = uninstall()
-  elseif target == "version" then
-    version ()
-  else
-    help ()
-  end
-  os.exit (errorlevel)
-end
-
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
 
@@ -237,4 +200,3 @@ kpse.set_program_name ("kpsewhich")
 if not release_date then
   dofile(kpse.lookup("l3build.lua"))
 end
-
