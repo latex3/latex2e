@@ -179,7 +179,7 @@ function update_tag_ltx(file,content,tagname,tagdate)
 end
 
 -- Need to build format files
-local function fmt(engines)
+local function fmt(engines,dest)
   local function mkfmt(engine)
     -- Use .ini files if available
     local src = "latex.ltx"
@@ -200,7 +200,7 @@ local function fmt(engines)
     if fileexists (unpackdir,"latex.fmt") then
       ren(unpackdir,"latex.fmt",fmtname)
     end
-    cp(fmtname,unpackdir,testdir)
+    cp(fmtname,unpackdir,dest)
     return 0
   end
 
@@ -216,6 +216,8 @@ local function fmt(engines)
   return 0
 end
 
-function checkinit_hook() return fmt(options["engine"] or checkengines) end
+function checkinit_hook()
+  return fmt(options["engine"] or checkengines,testdir)
+end
 
-function docinit_hook() return fmt({typesetexe}) end
+function docinit_hook() return fmt({typesetexe},typesetdir) end
