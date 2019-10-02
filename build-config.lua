@@ -7,7 +7,7 @@ typesetdeps = typesetdeps or
   {
     maindir .. "/base",
     maindir .. "/required/graphics",
-    maindir .. "/required/tool"
+    maindir .. "/required/tools"
   }
 unpackdeps  = unpackdeps  or {maindir .. "/base"}
 
