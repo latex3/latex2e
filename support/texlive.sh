@@ -68,7 +68,6 @@ tlmgr install  \
   palatino     \
   pl           \
   sauter       \
-  tabularx     \
   times        \
   vntex        \
   wasy         \
