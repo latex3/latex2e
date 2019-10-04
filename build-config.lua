@@ -220,4 +220,4 @@ function checkinit_hook()
   return fmt(options["engine"] or checkengines,testdir)
 end
 
-function docinit_hook() return fmt({typesetexe},typesetdir) end
+function docinit_hook() return fmt({"pdftex"},typesetdir) end
