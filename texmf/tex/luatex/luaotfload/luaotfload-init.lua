@@ -7,8 +7,8 @@
 
 local ProvidesLuaModule = { 
     name          = "luaotfload-init",
-    version       = "2.991",       --TAGVERSION
-    date          = "2019-08-11", --TAGDATE
+    version       = "3.00",       --TAGVERSION
+    date          = "2019-09-13", --TAGDATE
     description   = "luaotfload submodule / initialization",
     license       = "GPL v2.0"
 }
@@ -462,6 +462,14 @@ end --- [init_adapt]
 
 local init_main = function ()
 
+  --[[doc--
+
+      First save a copy of font.each in order to also catch old-style fonts
+
+  --doc]]--
+
+  font.originaleach = font.each
+
   local load_fontloader_module = luaotfload.loaders.fontloader
   local ignore_module          = luaotfload.loaders.ignore
 
@@ -648,7 +656,11 @@ local init_post_install_callbacks = function ()
   -- MK Pass current text direction to simple_font_handler
   local handler = nodes.simple_font_handler
   local callback = function(head, groupcode, _, _, direction)
-    return handler(head, groupcode, nil, nil, direction or tex.get'textdir')
+    if not direction then
+      direction = tex.get'textdir'
+    end
+    domultiscript(head, nil, nil, nil, direction)
+    return handler(head, groupcode, nil, nil, direction)
   end
   luatexbase.add_to_callback("pre_linebreak_filter",
                              callback,

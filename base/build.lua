@@ -114,13 +114,7 @@ dynamicfiles = {"*.tst"}
 unpackfiles     = {"unpack.ins"}
 unpacksuppfiles =
   {
-    "EastAsianWidth.txt",
     "hyphen.cfg",
-    "LineBreak.txt",
-    "load-unicode-data.tex",
-    "load-unicode-xetex-classes.tex",
-    "MathClass.txt",
-    "UnicodeData.txt",
     "UShyphen.tex",
     "ot1lmr.fd",
     "pdflatex.ini",

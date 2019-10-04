@@ -20,8 +20,8 @@ local authors = "\z
 -- version number is used below!
 local ProvidesLuaModule = { 
     name          = "luaotfload-main",
-    version       = "2.991",       --TAGVERSION
-    date          = "2019-08-11", --TAGDATE
+    version       = "3.00",       --TAGVERSION
+    date          = "2019-09-13", --TAGDATE
     description   = "luaotfload entry point",
     author        = authors,
     copyright     = authors,
@@ -301,6 +301,7 @@ luaotfload.main = function ()
     loadmodule "embolden"     --- fake bold
     loadmodule "notdef"       --- missing glyph handling
     initialize "auxiliary"    --- additional high-level functionality
+    loadmodule "multiscript"  --- ...
 
     luaotfload.aux.start_rewrite_fontname () --- to be migrated to fontspec
 
