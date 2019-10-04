@@ -39,9 +39,40 @@ tlmgr install   \
   amsfonts      \
   ec            \
   fontspec      \
+  hyperref      \
+  ifxetex       \
+  oberdiek      \
   lh            \
   lualibs       \
-  luaotfload
+  luaotfload    \
+  url
+
+# Additional support for typesetting
+tlmgr install  \
+  amscls       \
+  cbfonts      \
+  csquotes     \
+  dvips        \
+  epstopdf     \
+  etoolbox     \
+  fancyvrb     \
+  fc           \
+  geometry     \
+  graphics-def \
+  helvetic     \
+  ifluatex     \
+  imakeidx     \
+  ly1          \
+  makeindex    \
+  mflogo       \
+  palatino     \
+  pl           \
+  sauter       \
+  times        \
+  vntex        \
+  wasy         \
+  wsuipa       \
+  xkeyval
 
 # Keep no backups (not required, simply makes cache bigger)
 tlmgr option -- autobackup 0

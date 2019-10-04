@@ -32,7 +32,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltmiscen.dtx}
-             [2018/10/11 v1.1o LaTeX Kernel (Misc. Environments)]
+             [2019/08/29 v1.1p LaTeX Kernel (Misc. Environments)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltmiscen.dtx}
@@ -72,6 +72,7 @@
 % \changes{v1.1d}{1996/06/03}{Move setting of verbatim font and
 %         \cs{@noligs}.}
 % \changes{v1.1g}{1998/08/17}{(RmS) Minor documentation fixes.}
+% \changes{v1.1p}{2019/08/27}{Make various commands robust}
 %
 % \section{Miscellaneous Environments}
 %  This section implements the basic environment mechanism, and also
@@ -505,8 +506,13 @@
 %      remember line number. Used by \cs{@badend} to display
 %      position of non-matching \cs{begin}.}
 % \changes{v1.1e}{1996/07/26}{remove \cs{global} before \cs{@ignore...}}
+% \changes{v1.1p}{2019/08/27}{Make command robust}
 %    \begin{macrocode}
-\def\begin#1{%
+%</2ekernel>
+%<*2ekernel|latexrelease>
+%<latexrelease>\IncludeInRelease{2019/10/01}%
+%<latexrelease>                 {\begin}{Making \begin/\end robust}%
+\DeclareRobustCommand\begin[1]{%
   \@ifundefined{#1}%
     {\def\reserved@a{\@latex@error{Environment #1 undefined}\@eha}}%
     {\def\reserved@a{\def\@currenvir{#1}%
@@ -515,17 +521,123 @@
   \@ignorefalse
   \begingroup\@endpefalse\reserved@a}
 %    \end{macrocode}
-%  \end{macro}
+%    A version that doesn't start out with \cs{relax} when in
+%    typesetting mode would be the following, but since \cs{begin}
+%    issues a \cs{begingroup} it wouldn't help much with respect to
+%    allowing things like \cs{noalign} or \cs{multicolumn} inside.
+%    \begin{macrocode}
+%\edef\begin
+%  {\unexpanded{%
+%       \ifx\protect\@typeset@protect
+%         \expandafter\@gobble
+%       \fi
+%       \protect
+%     }%
+%   \expandafter\noexpand\csname begin \endcsname
+%  }
+%\@namedef{begin }#1{%
+%  \@ifundefined{#1}%
+%    {\def\reserved@a{\@latex@error{Environment #1 undefined}\@eha}}%
+%    {\def\reserved@a{\def\@currenvir{#1}%
+%     \edef\@currenvline{\on@line}%
+%     \csname #1\endcsname}}%
+%  \@ignorefalse
+%  \begingroup\@endpefalse\reserved@a}
+%    \end{macrocode}
 %
 %  \begin{macro}{\end}
+%    While \cs{begin} was made robust simply by using
+%    \cs{DeclareRobustCommand} we need to be a bit more subtle with
+%    \cs{end} as there are packages out there that try to look into
+%    the top-level contents of \verb=\end{foo}= (that is at the expansion
+%    of \verb=\endfoo=) to see if it contains certain macros. This is
+%    done by hitting \verb=\end{foo}=  with three \cs{expandafter}s,
+%    the first to get
+%\begin{verbatim}
+%  \csname endfoo\endcsname       \@checkend{foo}% etc.
+%\end{verbatim}
+%    the second to expand the \cs{csname}, i.e., to get to
+%\begin{verbatim}
+%  \endfoo                        \@checkend{foo}% etc.
+%\end{verbatim}
+%    and the third to finally get to the top-level content of
+%    \verb=\endfoo=, i.e.
+%\begin{verbatim}
+%  <top-level content of \endfoo> \@checkend{foo}% etc.
+%\end{verbatim}
+%    Therefore a robust replacement should produce the same results
+%    after three expansions (there first is obviously different).
+%
+%    Basically the definition of \cs{end} should either produce
+%    \verb*=\protect\end = (when not doing typesetting) or it should
+%    produce \verb*=\end = (without the \cs{protect}) when doing typesetting.
+%    Furthermore, it should (when in typesetting mode) show exactly the
+%    same result as
+%    \verb*=\end = (which is the original fragile definition
+%    of \cs{end}) when you expand either of them twice, i.e.,
+%\begin{verbatim}
+%  \endfoo                        \@checkend{foo}% etc.
+%\end{verbatim}
+%    That is achieved with the code below (which is worth studying
+%    carefully).
+%
+%    There is some trickery involved here: in particular we use
+%    \cs{romannumeral} to change a single expansion into three
+%    successive expansions in one go. That primitive expands until it
+%    has scanned a number (0 in this case, so it doesn't produce any
+%    output) and so it allows us to place arbitrary many
+%    \cs{expandafter}s inside that are all going to be executed when
+%    \cs{romannumeral} is hit by a single \cs{expandafter}.
+%
 % \changes{v1.1e}{1996/07/26}{remove \cs{global} before \cs{@ignore...}}
+% \changes{v1.1p}{2019/08/27}{Make command robust}
+%
 %    \begin{macrocode}
-\def\end#1{%
+\edef\end
+  {\unexpanded{%
+     \romannumeral
+       \ifx\protect\@typeset@protect
+       \expandafter       %1
+         \expandafter        %2
+       \expandafter       %1
+           \expandafter         %3 expands the \csname inside \end<space>
+       \expandafter       %1
+         \expandafter        %2  expands \end<space>
+       \expandafter       %1     expands the \else
+           \z@
+       \else
+         \expandafter\z@\expandafter\protect
+       \fi
+   }%
+   \expandafter\noexpand\csname end \endcsname
+  }
+%    \end{macrocode}
+%    And here is the original definition of \cs{end} the way it was in
+%    \LaTeX{} for several decades now hidden in \verb*=\end =.
+%    \begin{macrocode}
+\@namedef{end }#1{%
   \csname end#1\endcsname\@checkend{#1}%
   \expandafter\endgroup\if@endpe\@doendpe\fi
   \if@ignore\@ignorefalse\ignorespaces\fi}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%    \end{macrocode}
+%    An here the rollback in case that is ever needed.
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{0000/00/00}%
+%<latexrelease>                 {\begin}{Making \begin/\end robust}%
+%<latexrelease>\kernel@make@fragile\begin
+%<latexrelease>\kernel@make@fragile\end
+%<latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
 %    \end{macrocode}
 %  \end{macro}
+%  \end{macro}
+%
+%
+%
+%
 %
 %  \begin{macro}{\@checkend}
 %    \begin{macrocode}
@@ -598,6 +710,7 @@
 %    \begin{macrocode}
 \def\@icentercr[#1]{\vskip #1\ignorespaces}
 %    \end{macrocode}
+%    
 % \end{macro}
 %
 %
@@ -615,14 +728,56 @@
 %    \end{macrocode}
 % \end{environment}
 %
+%    
+%    \begin{macrocode}
+%</2ekernel>
+%<*2ekernel|latexrelease>
+%<latexrelease>\IncludeInRelease{2019/10/01}%
+%<latexrelease>                 {\centering}{Make commands robust}%
+%    \end{macrocode}
+%
 % \begin{macro}{\centering}
 %    \begin{macrocode}
-\def\centering{%
+\DeclareRobustCommand\centering{%
   \let\\\@centercr
   \rightskip\@flushglue\leftskip\@flushglue
   \parindent\z@\parfillskip\z@skip}
 %    \end{macrocode}
 % \end{macro}
+%
+% \begin{macro}{\raggedright}
+%    \begin{macrocode}
+\DeclareRobustCommand\raggedright{%
+  \let\\\@centercr\@rightskip\@flushglue \rightskip\@rightskip
+  \leftskip\z@skip
+  \parindent\z@}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\raggedleft}
+%    \begin{macrocode}
+\DeclareRobustCommand\raggedleft{%
+  \let\\\@centercr
+  \rightskip\z@skip\leftskip\@flushglue
+  \parindent\z@\parfillskip\z@skip}
+%    \end{macrocode}
+% \end{macro}
+%
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000/00/00}%
+%<latexrelease>                 {\centering}{Make commands robust}%
+%<latexrelease>
+%<latexrelease>\kernel@make@fragile\centering
+%<latexrelease>\kernel@make@fragile\raggedright
+%<latexrelease>\kernel@make@fragile\raggedleft
+%<latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
+%    \end{macrocode}
+%
+%
 %
 % \begin{macro}{\@rightskip}
 %    \begin{macrocode}
@@ -644,14 +799,6 @@
 %    \end{macrocode}
 % \end{environment}
 %
-% \begin{macro}{\raggedright}
-%    \begin{macrocode}
-\def\raggedright{%
-  \let\\\@centercr\@rightskip\@flushglue \rightskip\@rightskip
-  \leftskip\z@skip
-  \parindent\z@}
-%    \end{macrocode}
-% \end{macro}
 %
 % \begin{environment}{flushright}
 % \changes{v0.9h}{1993/12/13}{Removed optional argument of \cs{item}}
@@ -666,15 +813,6 @@
 \def\endflushright{\endtrivlist}
 %    \end{macrocode}
 % \end{environment}
-%
-% \begin{macro}{\raggedleft}
-%    \begin{macrocode}
-\def\raggedleft{%
-  \let\\\@centercr
-  \rightskip\z@skip\leftskip\@flushglue
-  \parindent\z@\parfillskip\z@skip}
-%    \end{macrocode}
-% \end{macro}
 %
 %
 % \subsection{Verbatim}

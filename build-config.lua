@@ -3,8 +3,16 @@
 -- The LaTeX2e kernel is needed by everything except 'base'
 -- There is an over-ride for that case
 checkdeps   = checkdeps   or {maindir .. "/base"}
-typesetdeps = typesetdeps or {maindir .. "/base"}
+typesetdeps = typesetdeps or
+  {
+    maindir .. "/base",
+    maindir .. "/required/graphics",
+    maindir .. "/required/tools"
+  }
 unpackdeps  = unpackdeps  or {maindir .. "/base"}
+
+-- We really need 3 on most files (toc + references)
+typesetruns  = 3
 
 -- Set up the check system to work in 'stand-alone' mode
 -- This relies on a format being built by the 'base' dependency
@@ -13,10 +21,25 @@ checkformat    = checkformat        or "latex"
 checkengines   = checkengines       or {"etex", "xetex", "luatex"}
 checkruns      = checkruns          or  2
 checksuppfiles = checksuppfiles     or
-  {"color.cfg", "graphics.cfg", "test209.tex", "test2e.tex", "xetex.def", "dvips.def", "lipsum.sty", "*.txt", "lualibs*.lua", "fontloader*.lua", "luaotfload*.lua", "luaotfloat.sty"}
+  {
+    "color.cfg",
+    "graphics.cfg",
+    "test209.tex",
+    "test2e.tex",
+    "xetex.def",
+    "dvips.def",
+    "lipsum.sty",
+    "*.txt",
+    "load-unicode-xetex-classes.tex",
+    "lualibs*.lua", 
+    "fontloader*.lua",
+    "luaotfload*.lua",
+    "luaotfloat.sty"
+  }
 stdengine      = stdengine          or "etex"
 tagfiles       = tagfiles or {"*.dtx","*.ins","*.tex","README.md"}
-typesetsuppfiles = typesetsuppfiles or {"ltxdoc.cfg", "ltxguide.cfg"}
+typesetsuppfiles = typesetsuppfiles or
+  {"color.cfg", "graphics.cfg", "ltxdoc.cfg", "ltxguide.cfg"}
 
 -- Ensure the local format file is used
 typesetexe = 'pdftex -interaction=nonstopmode "&pdflatex"'
@@ -67,14 +90,14 @@ function update_tag(file,content,tagname,tagdate)
   local year = os.date("%Y")
   if string.match(content,"%% Copyright %(C%) %d%d%d%d%-%d%d%d%d\n") then
     content = string.gsub(content,
-      "Copyright %(C%) (%d%d%d%d)%-%d%d%d%d",
-      "Copyright (C) %1-" .. year)
+      "Copyright %(C%) (%d%d%d%d)%-%d%d%d%d\n",
+      "Copyright (C) %1-" .. year .. "\n")
   elseif string.match(content,"%% Copyright %(C%) %d%d%d%d\n") then
     local oldyear = string.match(content,"%% Copyright %(C%) (%d%d%d%d)\n")
     if not year == oldyear then
       content = string.gsub(content,
-        "Copyright %(C%) %d%d%d%d",
-        "Copyright (C) " .. oldyear .. "-" .. year)
+        "Copyright %(C%) %d%d%d%d\n",
+        "Copyright (C) " .. oldyear .. "-" .. year .. "\n")
     end
   end
   if not string.match(file,"%.md$") and not string.match(file,"ltvers.dtx") then
@@ -154,3 +177,47 @@ function update_tag_ltx(file,content,tagname,tagdate)
     "\nRelease " .. iso .. "[^\n]*\n",
     "\nRelease " .. tag .. "\n")
 end
+
+-- Need to build format files
+local function fmt(engines,dest)
+  local function mkfmt(engine)
+    -- Use .ini files if available
+    local src = "latex.ltx"
+    local ini = string.gsub(engine,"tex","") .. "latex.ini"
+    if fileexists(supportdir .. "/" .. ini) then
+      src = ini
+    end
+    print("Building format for " .. engine)
+    local errorlevel = os.execute(
+      os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
+      .. os_pathsep .. texmfdir .. "//"
+      .. os_concat .. engine .. " -etex -ini -output-directory=" .. unpackdir
+      .. " " .. src 
+      .. (hide and (" > " .. os_null) or ""))
+    if errorlevel ~= 0 then return errorlevel end
+    local fmtname = string.gsub(engine,"tex$","") .. "latex.fmt"
+    if engine == "etex" then fmtname = "latex.fmt" end
+    if fileexists (unpackdir,"latex.fmt") then
+      ren(unpackdir,"latex.fmt",fmtname)
+    end
+    cp(fmtname,unpackdir,dest)
+    return 0
+  end
+
+  if not options["config"] or options["config"][1] ~= "config-TU" then
+    cp("fonttext.cfg",supportdir,unpackdir)
+  end
+
+  local errorlevel
+  for _,engine in pairs(engines) do
+    errorlevel = mkfmt(engine)
+    if errorlevel ~= 0 then return errorlevel end
+  end
+  return 0
+end
+
+function checkinit_hook()
+  return fmt(options["engine"] or checkengines,testdir)
+end
+
+function docinit_hook() return fmt({"pdftex"},typesetdir) end

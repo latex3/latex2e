@@ -19,7 +19,15 @@ unpackfiles  = {"tools.ins"}
 
 sourcefiles  = {"*.dtx", "*.ins", "*-????-??-??.sty"}
 
-checkdeps = {maindir .. "/base", maindir .. "/required/graphics"}
+checkdeps =
+  {
+    maindir .. "/base",
+    maindir .. "/required/graphics"
+  }
+
+-- Allow for test searching the tree
+checkconfigs = {"build","config-search"}
+
 
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
