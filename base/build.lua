@@ -114,13 +114,7 @@ dynamicfiles = {"*.tst"}
 unpackfiles     = {"unpack.ins"}
 unpacksuppfiles =
   {
-    "EastAsianWidth.txt",
     "hyphen.cfg",
-    "LineBreak.txt",
-    "load-unicode-data.tex",
-    "load-unicode-xetex-classes.tex",
-    "MathClass.txt",
-    "UnicodeData.txt",
     "UShyphen.tex",
     "ot1lmr.fd",
     "pdflatex.ini",
@@ -194,6 +188,11 @@ end
 
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
+
+-- Suppress makeindex tree other than formal releases
+if not master_branch then
+  makeindexfiles = { }
+end
 
 -- Find and run the build system
 kpse.set_program_name ("kpsewhich")

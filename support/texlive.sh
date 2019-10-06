@@ -50,6 +50,7 @@ tlmgr install   \
 # Additional support for typesetting
 tlmgr install  \
   amscls       \
+  babel-german \
   cbfonts      \
   csquotes     \
   dvips        \
