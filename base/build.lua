@@ -36,6 +36,7 @@ installfiles   =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
+    "nfssaxes.tex",
   }
 sourcefiles    =
   {
@@ -51,6 +52,7 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
+    "nfssaxes.tex",
   }
 textfiles =
   {
