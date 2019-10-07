@@ -139,7 +139,7 @@ unpackdeps  = { }
 indexstyle = "source2e.ist"
 
 -- Allow for TU test
-checkconfigs = {"build","config-TU"}
+checkconfigs = {"build","config-TU","config-search"}
 
 update_tag = update_tag_base
 
