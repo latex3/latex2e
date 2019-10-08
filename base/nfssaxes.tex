@@ -27,19 +27,24 @@
 %    \end{macrocode}
 %  \end{macro}
 %
-% \subsection{Mappin rules for series changes}
+% \subsection{Mapping rules for series changes}
 %
 % The rules set up use explicit series values not \cs{..default}
 % indirections; my current feeling is that this is in fact better.
 %
 % With 9 weights and 9 width classes this table is getting a bit large
 % in the end (324 entries) but on the other hand it doesn't change and
-% accessing speed and it is not \emph{that} large.
+% accessing speed and it is fast this way.
 %
-% \emph{What is missing so far, is a way to state that I want to revert, say
-% the weight to ``regular'' but keep the width or vize versa. That
-% would probably need a new letter due to the double use of ``m''. ---
-%    not quite sure what I meant when I wrote that sentence!}
+% We could alternatively split the axis and maintain weight and width
+% separately, but that would take more processing time and would not
+% allow for setting up explicit exceptions nicely (not sure that that
+% would ever get used though).
+%
+% \emph{What is missing, is a way to state on document level that one
+% wants to revert, say, the weight to ``regular'' but keep the width
+% or vize versa. But maybe this is overkill and \cs{bfseries} and
+% \cs{mdseries} is all that people need in practice.}
 %
 %    \begin{macrocode}
 \DeclareFontSeriesChangeRule {m}{c}  {c}  {m}
@@ -356,6 +361,53 @@
 %  \end{macro}
 
 
+%    This code implements one aspect of what the package \pkg{fontaxes}
+%    provide. So its redefinitions for the vairous shape commands,
+%    such as \cs{itshape} should no longer happen.
+%
+%    For initial testing we simply undo them at begin document, but of
+%    course the correct way would be to update that package to simply
+%    use the kernel functionality when running with a new kernel.
+%
+%    \begin{macrocode}
+\AtBeginDocument{%
+%    \end{macrocode}
+%    I use \cs{protected} here not \cs{DeclareRobustCommand} to avoid
+%    extra status lines that would change test results in the test suite.
+%    \begin{macrocode}
+  \protected\def\upshape
+          {\not@math@alphabet\upshape\relax
+           \fontshape\updefault\selectfont}%
+  \protected\def\slshape
+          {\not@math@alphabet\slshape\relax
+           \fontshape\sldefault\selectfont}%
+  \protected\def\scshape
+          {\not@math@alphabet\scshape\relax
+           \fontshape\scdefault\selectfont}%
+  \protected\def\itshape
+          {\not@math@alphabet\itshape\mathit
+           \fontshape\itdefault\selectfont}%
+  \protected\def\ulcshape
+          {\not@math@alphabet\ulcshape\relax
+           \fontshape{ulc}\selectfont}%
+}
+%    \end{macrocode}
+%
+% The \pkg{fontaxes} package also implements two further shapes,
+% namely \cs{swshape} and \cs{sscshape}. They could now easily be
+% integrated by specifying a few further table entries such as
+%    \begin{macrocode}
+%\DeclareFontShapeChangeRule {n}{sw}   {sw}     {n}
+%\DeclareFontShapeChangeRule {it}{sw}  {sw}     {it}
+%\DeclareFontShapeChangeRule {sc}{sw}  {scsw}   {sc}
+%   ...
+%    \end{macrocode}
+% Again that should happen directly in \pkg{fontaxes} or maybe
+% directly in the kernel (even though there are currently only a few fonts
+% that support swash letters or ``spaced small capitals'').
+%
+
+
 
 
 % \section{Supporting nested emphasis}
@@ -560,29 +612,63 @@
 %    arguments:
 %   \begin{description}
 %   \item[document family interface:] Can either be \texttt{rm},
-%    \texttt{sf} or \texttt{tt}.
+%    \texttt{sf} or \texttt{tt}. This is optional and if not given the
+%    overall default.
 %   \item[document series interface:] Can be \textt{md} or
 %    \texttt{bf}.
 %   \item[series value:] This is the value that is going to be used
 %    with the combination is requested.
 %  \end{description}
 %
-%    For example, \verb=DeclareFontSeriesDefault{rm}{bf}{sb}= would
+%    For example, \verb=\DeclareFontSeriesDefault[rm]{bf}{sb}= would
 %    use \texttt{sb} (semi-bold) when \cs{rmfamily} \cs{bfseries} is
 %    asked for.
-
+%
+%    If used without the optional argument, e.g.,
+%    \verb=\DeclareFontSeriesDefault{bf}{b}=  then this is like
+%    redefining \cs{bfdefault} or \cs{mddefault}.
+%
+%    If some family specify defaults aren't given, e.g. if there are
+%    no declarations for, say, \textttt{tt} then the format defaults
+%    of \cs{mddefault} and \cs{bfdefault} are assumed. If those are
+%    later changed this is \emph{not} reflected!\footnote{I see no
+%    easy way to achieve this without compromising compatibility with
+%    existing packages that currently use \pkg{mweights} and directly
+%    define (some) of the \cs{mdseries@..} commands but not others.}
+%
+%
+%
 %  \begin{macro}{\DeclareFontSeriesDefault}
-%    
+%    The command to declare font series defaults for the ``rm'', ``sf'' or
+%    ``tt'' family.
 %    \begin{macrocode}
-\def\DeclareFontSeriesDefault#1#2#3{%
-  \ifcsname #2series@#1\endcsname          % supported are
-                                           % \[md/bf]series@[rm/sf/tt]
-    \expandafter\edef
-       \csname #2series@#1\endcsname{#3}%                     
+\newcommand\DeclareFontSeriesDefault[3][]{%
+  \def\@reserveda{#1}%
+%    \end{macrocode}
+%    No optional argument: set up general default.
+%    \begin{macrocode}
+  \ifx\@resereda\@empty
+    \ifcsname #2series\endcsname           % supported are
+                                           % \[md/bf]default
+      \expandafter\def
+         \csname #2default\endcsname{#3}%                     
+    \else
+       \@latex@error{Wrong syntax for \string\DeclareFontSeriesDefault}%
+          {Mandatory first argument must be 'md'  or 'bf'.}
+    \fi
+%    \end{macrocode}
+%    Optional argument given, set up specific default.
+%    \begin{macrocode}
   \else
-     \@latex@error{Wrong syntax for \string\DeclareFontSeriesDefault}%
-        {First argument must be 'rm', 'sf', or 'tt'. \MessageBreak
-         Second argument must be 'md'  or 'bf'.}
+    \ifcsname #2series@#1\endcsname          % supported are
+                                             % \[md/bf]series@[rm/sf/tt]
+      \expandafter\edef
+         \csname #2series@#1\endcsname{#3}%                     
+    \else
+       \@latex@error{Wrong syntax for \string\DeclareFontSeriesDefault}%
+          {Optional first argument must be 'rm', 'sf', or 'tt'. \MessageBreak
+           Second argument must be 'md'  or 'bf'.}
+    \fi
   \fi
 }
 %    \end{macrocode}
@@ -591,8 +677,44 @@
 
 
 
+%  \begin{macro}{\mdseries@rm}
+%  \begin{macro}{\mdseries@sf}
+%  \begin{macro}{\mdseries@tt}
+%  \begin{macro}{\bfseries@rm}
+%  \begin{macro}{\bfseries@sf}
+%  \begin{macro}{\bfseries@tt}
+%    We initialize the family specific defaulst at the end of the
+%    format generation. Later on they may get overwritten in the
+%    preamble or a package via \cs{DeclareFontSeriesDefault} (or
+%    possibly directly).
+%    \begin{macrocode}
+\edef\mdseries@rm{\mddefault}
+\edef\bfseries@rm{\bfdefault}
+\edef\mdseries@sf{\mddefault}
+\edef\bfseries@sf{\bfdefault}
+\edef\mdseries@tt{\mddefault}
+\edef\bfseries@tt{\bfdefault}
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
+%  \end{macro}
+%  \end{macro}
+%  \end{macro}
+%  \end{macro}
 
-\def\mweights@init{%
+
+
+%  \begin{macro}{\expand@font@defaults}
+%
+%    The family specific defaults are fully expanded, i.e., they are
+%    defined via \cs{edef} inside \cs{DeclareFontSeriesDefault}.
+%    However, the overall defaults, e.g., \cs{bfdefault} may have been
+%    redefined by the user and thus may not be fully expanded. So to
+%    enable reliable comparison we make expanded versions of
+%    them. That we rerun each time. The alternative would be to only
+%    allow for changes before begin document.
+%    \begin{macrocode}
+\def\expand@font@defaults{%
   \edef\rmdef@ult{\rmdefault}%
   \edef\sfdef@ult{\sfdefault}%
   \edef\ttdef@ult{\ttdefault}%
@@ -600,21 +722,196 @@
   \edef\mddef@ult{\mddefault}%
   \edef\famdef@ult{\familydefault}%
 }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\expand@font@defaults
+%    \end{macrocode}
+%  \end{macro}
 
 
-%    We initialize things at the end of the format. Later on they may
-%    get overwritten in the preamble or a package
-%    \cs{DeclareFontSeriesDefault}.
 
-\edef\mdseries@rm{\mddefault}
-\edef\bfseries@rm{\bfdefault}
-\edef\mdseries@sf{\mddefault}
-\edef\bfseries@sf{\bfdefault}
-\edef\mdseries@tt{\mddefault}
-\edef\bfseries@tt{\bfdefault}
+%  \begin{macro}{\bfseries}
+%    This document command switches to the bold series.
+%    \begin{macrocode}
+\DeclareRobustCommand\bfseries{%
+  \not@math@alphabet\bfseries\mathbf
+%    \end{macrocode}
+%    In the original \NFSS{} definition it then called \cs{fontseries}
+%    with the value \cs{bfdefault}. In the new scheme we have more
+%    alternatives and therefore check if the current family
+%    (\cs{f@family}) is the current \cs{rmdef@ult}, \cs{sfdef@ult} or
+%    \cs{ttdef@ult}  and the select the correct family default in that case.
+%    \begin{macrocode}
+  \expand@font@defaults
+  \fontseries{%
+    \ifx\f@family\rmdef@ult      \bfseries@rm
+    \else\ifx\f@family\sfdef@ult \bfseries@sf
+    \else\ifx\f@family\ttdef@ult \bfseries@tt
+%    \end{macrocode}
+%    If not \cs{bfdefault} is used.
+%    \begin{macrocode}
+    \else                        \bfdefault
+    \fi\fi\fi
+  }%
+  \selectfont
+}
+%    \end{macrocode}
+%  \end{macro}
 
+
+
+%  \begin{macro}{\mdseries}
+%    This document command switches to the medium series.
+%    \begin{macrocode}
+\DeclareRobustCommand\mdseries{%
+  \not@math@alphabet\mdseries\relax
+  \expand@font@defaults
+  \fontseries{%
+    \ifx\f@family\rmdef@ult      \mdseries@rm
+    \else\ifx\f@family\sfdef@ult \mdseries@sf
+    \else\ifx\f@family\ttdef@ult \mdseries@tt
+    \else                        \mddefault
+    \fi\fi\fi
+  }%
+  \selectfont
+}
+%    \end{macrocode}
+%  \end{macro}
+
+
+%  \begin{macro}{\rmfamily}
+%    Here are the document level commands for changing the main font
+%    families.
+%    \begin{macrocode}
+\DeclareRobustCommand\rmfamily{%
+  \not@math@alphabet\rmfamily\mathrm
+  % change the current series before changing the family
+%    \end{macrocode}
+%    If families are changed then we have to do a bit more work.
+%    In the original \NFSS implementation
+%    a family change kept encoding, series shape and size unchanged
+%    but now we can't any 
+%    longer simply reuse the current series value. Instead we may have
+%    to change it from one family default to the next.
+%    \begin{macrocode}
+  \expand@font@defaults
+%    \end{macrocode}
+%    Thus, if the current family is the sans family
+%    \begin{macrocode}
+  \ifx\f@family\sfdef@ult
+%    \end{macrocode}
+%    and if we using the medium series of the sans family
+%    \begin{macrocode}
+       \ifx\f@series\mdseries@sf
+%    \end{macrocode}
+%    then lets switch to the medium series for the serif family
+%    \begin{macrocode}
+                                       \fontseries\mdseries@rm
+%    \end{macrocode}
+%    and if we use the bold series of the sans family switch to the
+%    bold default of the serif family:
+%    \begin{macrocode}
+       \else\ifx\f@series\bfseries@sf  \fontseries\bfseries@rm
+%    \end{macrocode}
+%    However, the sans family may not have any specific defaults set,
+%    so we also compare with the verall defaults.
+%    \begin{macrocode}
+       \else\ifx\f@series\mddef@ult    \fontseries\mdseries@rm
+       \else\ifx\f@series\bfdef@ult    \fontseries\bfseries@rm
+%    \end{macrocode}
+%    If neither test was true we leave the series alone. This way a
+%    special manual setting such as \verb=\fontseries{lc}= is not
+%    undone if the family changes (of course there may not be any
+%    support for it in the new family but then the \NFSS{}
+%    substitution kicks in and  sorts it out).
+%    \begin{macrocode}
+       \fi\fi\fi\fi
+%
+%    \end{macrocode}
+%    We need to do the same if the current family is the typewriter family:
+%    \begin{macrocode}
+  \else\ifx\f@family\ttdef@ult
+       \ifx\f@series\mdseries@tt       \fontseries\mdseries@rm
+       \else\ifx\f@series\bfseries@tt  \fontseries\bfseries@rm
+       \else\ifx\f@series\mddef@ult    \fontseries\mdseries@rm
+       \else\ifx\f@series\bfdef@ult    \fontseries\bfseries@rm
+       \fi\fi\fi\fi
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \fi\fi
+%    \end{macrocode}
+%    With these preparations for series out of the way we can now
+%    change the font family to \cs{rmdefault}.
+%    \begin{macrocode}
+  \fontfamily\rmdefault\selectfont}
+%    \end{macrocode}
+%    
+%  \begin{macro}{\sffamily}
+%  \begin{macro}{\ttfamily}
+%    The definitions for \cs{sffamily} and \cs{ttfamily} are similar,
+%    the differences are only in what font families get checked.
+%    \begin{macrocode}
+\DeclareRobustCommand\sffamily{%
+  \not@math@alphabet\sffamily\mathsf
+  \expand@font@defaults
+  \ifx\f@family\rmdef@ult
+       \ifx\f@series\mdseries@rm       \fontseries\mdseries@sf
+       \else\ifx\f@series\bfseries@rm  \fontseries\bfseries@sf
+       \else\ifx\f@series\mddef@ult    \fontseries\mdseries@sf
+       \else\ifx\f@series\bfdef@ult    \fontseries\bfseries@sf
+       \fi\fi\fi\fi
+  \else\ifx\f@family\ttdef@ult
+       \ifx\f@series\mdseries@tt       \fontseries\mdseries@sf
+       \else\ifx\f@series\bfseries@tt  \fontseries\bfseries@sf
+       \else\ifx\f@series\mddef@ult    \fontseries\mdseries@sf
+       \else\ifx\f@series\bfdef@ult    \fontseries\bfseries@sf
+       \fi\fi\fi\fi
+  \fi\fi
+  \fontfamily\sfdefault\selectfont}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareRobustCommand\ttfamily{%
+  \not@math@alphabet\ttfamily\mathtt
+  \expand@font@defaults
+  \ifx\f@family\rmdef@ult
+       \ifx\f@series\mdseries@rm       \fontseries\mdseries@tt
+       \else\ifx\f@series\bfseries@rm  \fontseries\bfseries@tt
+       \else\ifx\f@series\mddef@ult    \fontseries\mdseries@tt
+       \else\ifx\f@series\bfdef@ult    \fontseries\bfseries@tt
+       \fi\fi\fi\fi
+  \else\ifx\f@family\rmdef@ult
+       \ifx\f@series\mdseries@rm       \fontseries\mdseries@tt
+       \else\ifx\f@series\bfseries@rm  \fontseries\bfseries@tt
+       \else\ifx\f@series\mddef@ult    \fontseries\mdseries@tt
+       \else\ifx\f@series\bfdef@ult    \fontseries\bfseries@tt
+       \fi\fi\fi\fi
+  \fi\fi
+  \fontfamily\ttdefault\selectfont}
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
+%  \end{macro}
+
+
+
+
+
+
+
+
+%  \begin{macro}{\AtBeginDocument}
+%    
+%    If the document preamble has changed the \cs{familydefault} or if the
+%    if the \cs{rmdefault} contains a new font family, we have to
+%    adjust the series defaults accordingly, before starting typesetting. So we run \cs{rmfamily},
+%    \cs{sffamily} or \cs{ttfamily} depending on the situation which
+%    does that (as a sideeffect) for us.
+%    \begin{macrocode}
 \AtBeginDocument{%
-  \mweights@init
+  \expand@font@defaults
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
@@ -623,122 +920,26 @@
   \else\ifx\famdef@ult\ttdef@ult \ttfamily
   \fi\fi\fi
 }%
+%    \end{macrocode}
+%  \end{macro}
 
 
-\DeclareRobustCommand\bfseries{%
-  \mweights@init
-  \not@math@alphabet\bfseries\mathbf
-  \fontseries{%
-    \ifx\f@family\rmdef@ult
-      \bfseries@rm
-    \else
-      \ifx\f@family\sfdef@ult
-        \bfseries@sf
-      \else
-        \ifx\f@family\ttdef@ult
-          \bfseries@tt
-        \else
-          \bfdefault
-        \fi
-      \fi
-    \fi
-  }%
-  \selectfont
-}
 
-
-\DeclareRobustCommand\mdseries{%
-  \mweights@init
-  \not@math@alphabet\mdseries\relax
-  \fontseries{%
-    \ifx\f@family\rmdef@ult
-      \mdseries@rm
-    \else
-      \ifx\f@family\sfdef@ult
-        \mdseries@sf
-      \else
-        \ifx\f@family\ttdef@ult
-          \mdseries@tt
-        \else
-          \mddefault
-        \fi
-      \fi
-    \fi
-  }%
-  \selectfont
-}
-
-
-\DeclareRobustCommand\rmfamily{%
-  \mweights@init
-  \not@math@alphabet\rmfamily\mathrm
-  % change the current series before changing the family
-  \ifx\f@family\sfdef@ult
-       \ifx\f@series\mdseries@sf       \fontseries\mdseries@rm
-       \else\ifx\f@series\bfseries@sf  \fontseries\bfseries@rm
-       \else\ifx\f@series\mddef@ult    \fontseries\mdseries@rm
-       \else\ifx\f@series\bfdef@ult    \fontseries\bfseries@rm
-       \fi\fi\fi\fi
+%    As the kernel code now implements the same functionality as
+%    \pkg{mweights}, albeit internally coded slightly differently,
+%    that package shouldn't be loaded any more.  We therefore pretend
+%    that it already got loaded. Thus, a font package that tries to
+%    load it and then sets \cs{mdseries@..}, etc.\ will continue to
+%    work but will now use the kernel code.
 %
-  \else\ifx\f@family\ttdef@ult
-       \ifx\f@series\mdseries@tt       \fontseries\mdseries@rm
-       \else\ifx\f@series\bfseries@tt  \fontseries\bfseries@rm
-       \else\ifx\f@series\mddef@ult    \fontseries\mdseries@rm
-       \else\ifx\f@series\bfdef@ult    \fontseries\bfseries@rm
-       \fi\fi\fi\fi
+%    Of course, mid-term such package should probably use
+%    \cs{DeclareFontSeriesDefault} instead of making using low-level
+%    definitions.
 %
-  \fi\fi
-  \fontfamily\rmdefault\selectfont}
-
-
-\DeclareRobustCommand\sffamily{%
-  \mweights@init
-  \not@math@alphabet\sffamily\mathsf
-  % change the current series before changing the family
-  \ifx\f@family\rmdef@ult
-       \ifx\f@series\mdseries@rm       \fontseries\mdseries@sf
-       \else\ifx\f@series\bfseries@rm  \fontseries\bfseries@sf
-       \else\ifx\f@series\mddef@ult    \fontseries\mdseries@sf
-       \else\ifx\f@series\bfdef@ult    \fontseries\bfseries@sf
-       \fi\fi\fi\fi
-%
-  \else\ifx\f@family\ttdef@ult
-       \ifx\f@series\mdseries@tt       \fontseries\mdseries@sf
-       \else\ifx\f@series\bfseries@tt  \fontseries\bfseries@sf
-       \else\ifx\f@series\mddef@ult    \fontseries\mdseries@sf
-       \else\ifx\f@series\bfdef@ult    \fontseries\bfseries@sf
-       \fi\fi\fi\fi
-%
-  \fi\fi
-  \fontfamily\sfdefault\selectfont}
-
-
-\DeclareRobustCommand\ttfamily{%
-  \mweights@init
-  \not@math@alphabet\ttfamily\mathtt
-  % change the current series before changing the family
-  \ifx\f@family\rmdef@ult
-       \ifx\f@series\mdseries@rm       \fontseries\mdseries@tt
-       \else\ifx\f@series\bfseries@rm  \fontseries\bfseries@tt
-       \else\ifx\f@series\mddef@ult    \fontseries\mdseries@tt
-       \else\ifx\f@series\bfdef@ult    \fontseries\bfseries@tt
-       \fi\fi\fi\fi
-%
-  \else\ifx\f@family\rmdef@ult
-       \ifx\f@series\mdseries@rm       \fontseries\mdseries@tt
-       \else\ifx\f@series\bfseries@rm  \fontseries\bfseries@tt
-       \else\ifx\f@series\mddef@ult    \fontseries\mdseries@tt
-       \else\ifx\f@series\bfdef@ult    \fontseries\bfseries@tt
-       \fi\fi\fi\fi
-%
-  \fi\fi
-  \fontfamily\ttdefault\selectfont}
-
-
-
-% pretend that mweights already got loaded \ldots
-
+%    \begin{macrocode}
 \expandafter\let\csname ver@mweights.sty\endcsname\fmtversion
+%    \end{macrocode}
+
 
 
 % ^^A Possible issue with tudscr.cls -- needs checking
