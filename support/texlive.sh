@@ -45,6 +45,7 @@ tlmgr install   \
   lh            \
   lualibs       \
   luaotfload    \
+  tex-gyre      \
   url
 
 # Additional support for typesetting
