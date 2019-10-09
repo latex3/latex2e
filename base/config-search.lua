@@ -6,5 +6,3 @@ checksearch  = true
 testfiledir  = "./testfiles-search"
 
 testsuppdir  = testfiledir .. "/support"
-
-checkdeps = {maindir .. "/required/graphics"}
