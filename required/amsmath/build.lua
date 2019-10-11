@@ -13,7 +13,7 @@ ctanpkg = "latex-amsmath"
 maindir = "../.."
 
 -- Minor modifications to file types
-sourcefiles  = {"*.dtx", "*.ins", "amstex.sty"}
+sourcefiles  = {"*.dtx", "*.ins", "amstex.sty","amsmath-2018-12-01.sty"}
 typesetfiles = {"*.dtx", "*.tex"}
 
 -- Allow for TU test
