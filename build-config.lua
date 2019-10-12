@@ -198,12 +198,15 @@ local function fmt(engines,dest)
       .. " " .. src 
       .. (hide and (" > " .. os_null) or ""))
     if errorlevel ~= 0 then return errorlevel end
+
+    local engname = string.match(src,"^[^.]*") .. ".fmt"
     local fmtname = string.gsub(engine,"tex$","") .. "latex.fmt"
     if engine == "etex" then fmtname = "latex.fmt" end
-    if fileexists (unpackdir,"latex.fmt") then
-      ren(unpackdir,"latex.fmt",fmtname)
+    if engname ~= fmtname then
+      ren(unpackdir,engname,fmtname)
     end
     cp(fmtname,unpackdir,dest)
+
     return 0
   end
 
