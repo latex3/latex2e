@@ -23,6 +23,7 @@ checkruns      = checkruns          or  2
 checksuppfiles = checksuppfiles     or
   {
     "color.cfg",
+    "etex.sty",
     "graphics.cfg",
     "test209.tex",
     "test2e.tex",
