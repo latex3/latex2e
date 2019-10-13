@@ -43,15 +43,12 @@ typesetsuppfiles = typesetsuppfiles or
   {"color.cfg", "graphics.cfg", "ltxdoc.cfg", "ltxguide.cfg"}
 
 -- Ensure the local format file is used
-typesetexe = 'pdftex -interaction=nonstopmode "&pdflatex"'
-typesetopts = ""
-
--- Force finding the format file
 function tex(file,dir)
   local dir = dir or "."
-  return runcmd(typesetexe .. " " .. typesetopts .. " \"" .. typesetcmds
-    .. "\\input " .. file .. "\"",
-    dir,{"TEXINPUTS","TEXFORMATS"})
+  return runcmd(
+    'pdftex -fmt=pdflatex -interaction=nonstopmode -jobname="' ..
+      string.match(file,"^[^.]*") .. '" "\\input ' .. file .. '"',
+    dir,{"TEXINPUTS","TEXFORMATS","LUAINPUTS"})
 end
 
 -- Build TDS-style zips
