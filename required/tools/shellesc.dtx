@@ -20,7 +20,7 @@
 %<driver> \ProvidesFile{shellesc.drv}
 % \fi
 %         \ProvidesFile{shellesc.dtx}
-       [2016/06/07 v0.02b unified shell escape interface for LaTeX]
+       [2019/10/13 v1.0a unified shell escape interface for LaTeX]
 %
 % \iffalse
 %<*driver>
@@ -36,9 +36,14 @@
 % \title{The \textsf{shellesc} Package\thanks{This file
 %        has version number \fileversion, last
 %        revised \filedate.}}
-% \author{LaTeX3 project}
+% \author{\LaTeX3 project}
 % \date{\filedate}
+%
+%
 % \maketitle
+%
+% \vspace*{-\baselineskip}
+% \enlargethispage{\baselineskip}
 %
 % \changes{v0.1b}{2016/02/02}{Doc typo fixes (JB)}
 % \changes{v0.2a}{2016/06/07}{Improve use with plain TeX}
@@ -57,7 +62,7 @@
 % so a command to remove a file on a unix-like system could be
 % specified  using \verb|\ShellEscape{rm file.txt}| (or \verb|del| in
 % windows). Note that by default system access is not allowed and
-% latex will typically need to be called with the \verb|--shell-escape|
+% \LaTeX\ will typically need to be called with the \verb|--shell-escape|
 % command line option.
 %
 % The package may be used with standard \texttt{latex} or
@@ -75,6 +80,9 @@
 % known) for this classically you could use \verb|\write18| (or
 % (\verb|\latelua|). This package provides \verb|\DelayedShellEscape|
 % as a common syntax for this use.
+%
+% The shell escape status may be queried by checking the integer (chardef)
+% command \verb|\ShellEscapeStatus|, 0 (disabled) 1 (enabled) 2 (restricted).
 %
 % To aid porting existing documents to Lua\TeX~0.87 this package does
 % overload the \verb|\write| command so that
@@ -98,9 +106,14 @@
 % \subsection{Status Check}
 %
 %
-% \changes{v0.2a}{2016/06/07}{spelling in messages}
+% \subsection{The shellesc package interface}
+%
+% \begin{macro}{\ShellEscapeStatus}
+% \changes{v1.0a}{2019/10/13}{Command Introduced}
+% Integer value with meanings 0 (shell escape disabled), 1 (shell escape allowed), 2 (Restricted shell escape).
+%
 %    \begin{macrocode}
-\ifcase
+\chardef\ShellEscapeStatus
   \ifx\pdfshellescape\@undefined
     \ifx\shellescape\@undefined
       \ifx\directlua\@undefined
@@ -115,6 +128,12 @@
   \else
     \pdfshellescape
   \fi
+%    \end{macrocode}
+% \end{macro}
+%
+% \changes{v0.2a}{2016/06/07}{spelling in messages}
+%    \begin{macrocode}
+\ifcase\ShellEscapeStatus
   \PackageWarning{shellesc}{Shell escape disabled}
 \or
   \PackageInfo   {shellesc}{Unrestricted shell escape enabled}
@@ -123,9 +142,9 @@
 \fi
 %    \end{macrocode}
 %
-% \subsection{The shellesc package interface}
 %
 % \begin{macro}{\ShellEscape}
+% \changes{v1.0a}{2019/10/13}{LUa logging for gh/195}
 % Execute the supplied tokens as a system dependent command, assuming 
 % such execution is allowed.
 %    \begin{macrocode}
@@ -135,14 +154,14 @@
 %
 %    \begin{macrocode}
 \else
-  \protected\def\ShellEscape#1{%
-    \directlua{os.execute("\luaescapestring{#1}")}}
+  \protected\def\ShellEscape{\directlua\ShellEscape@Lua}
 \fi
 %    \end{macrocode}
 % \end{macro}
 %
 % \begin{macro}{\DelayedShellEscape}
 % \changes{v0.1c}{2016/04/29}{Define \cs{DelayedShellEscape} not \cs{ShellEscape}(UF)}
+% \changes{v1.0a}{2019/10/13}{LUa logging for gh/195}
 % Execute the supplied tokens as a system dependent command, when this
 % node is shipped out with the completed page, assuming 
 % such execution is allowed.
@@ -153,13 +172,37 @@
 %
 %    \begin{macrocode}
 \else
-  \protected\def\DelayedShellEscape#1{%
-    \latelua{os.execute("\luaescapestring{#1}")}}
+  \protected\def\DelayedShellEscape{\latelua\ShellEscape@Lua}
 \fi
 %    \end{macrocode}
 % \end{macro}
 %
 %
+%
+% \begin{macro}{\ShellEscape@Lua}
+% \changes{v1.0a}{2019/10/13}{loging for gh/195}
+% Shared Lua code for \verb|\DelayedShellEscape| and \verb|\ShellEscape|.
+%    \begin{macrocode}
+\ifx\directlua\@undefined\else
+\protected\def\ShellEscape@Lua#1{{%
+local status, msg = os.execute("\luaescapestring{#1}")%
+if status == nil then
+    texio.write_nl("log",%
+      "runsystem(" .. "\luaescapestring{#1}"%
+       .. ")...(" .. msg .. ")\string\n")
+  elseif status == 0 then
+    texio.write_nl("log",%
+      "runsystem(" .. "\luaescapestring{#1}"%
+      .. ")...executed\string\n")
+  else
+    texio.write_nl("log",%
+      "runsystem(" .. "\luaescapestring{#1}"%
+       .. ")...failed " .. (msg or "") .. "\string\n")
+  end
+}}
+\fi
+%    \end{macrocode}
+% \end{macro}
 %
 % \subsection{The write18 package interface}
 %
