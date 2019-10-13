@@ -1,7 +1,7 @@
 The amsmath bundle for LaTeX
 ============================
 
-Release 2019-10-01b
+Release 2019-10-01 patch level 1
 
 Overview
 --------
