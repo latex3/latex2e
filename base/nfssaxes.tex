@@ -1273,6 +1273,14 @@
                                              % \[md/bf]series@[rm/sf/tt]
       \expandafter\edef
          \csname #2series@#1\endcsname{#3}%                     
+%    \end{macrocode}
+%
+%    If the interface is used we remove the frozen kernel
+%    default. This way, we know that something was explicitly set up
+%    (even if the setup has the same value as the default).
+%    \begin{macrocode}
+      \expandafter\let
+         \csname #2series@#1@kernel\endcsname\@undefined
     \else
        \@latex@error{Wrong syntax for \string\DeclareFontSeriesDefault}%
           {Optional first argument must be 'rm', 'sf', or 'tt'. \MessageBreak
@@ -1292,7 +1300,7 @@
 %  \begin{macro}{\bfseries@rm}
 %  \begin{macro}{\bfseries@sf}
 %  \begin{macro}{\bfseries@tt}
-%    We initialize the family specific defaulst at the end of the
+%    We initialize the family specific default at the end of the
 %    format generation. Later on they may get overwritten in the
 %    preamble or a package via \cs{DeclareFontSeriesDefault} (or
 %    possibly directly).
@@ -1313,9 +1321,16 @@
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
-\edef\bfseries@rm{bx}        
-\edef\bfseries@sf{bx}
-\edef\bfseries@tt{bx}
+\def\bfseries@rm{bx}    
+\def\bfseries@sf{bx}
+\def\bfseries@tt{bx}
+%    \end{macrocode}
+%
+%    Frozen version of the kernel defaults so we can see if they have changed.
+%    \begin{macrocode}
+\let\bfseries@rm@kernel\bfseries@rm
+\let\bfseries@sf@kernel\bfseries@sf
+\let\bfseries@tt@kernel\bfseries@tt
 %    \end{macrocode}
 %
 %    The default for the medium series is \texttt{m} and this will be
@@ -1500,7 +1515,15 @@
 %    \begin{macrocode}
   \ifx\target@series@value\@empty \else
     \begingroup\try@load@fontshape\endgroup
-    \fontseries\target@series@value
+%    \end{macrocode}
+%    Updating the series in this case means directly changing
+%    \cs{f@series} to the target value. We don't want to go through
+%    \cs{fontseries} because that would apply the mappings and then
+%    \texttt{bx + b} would keep \texttt{bx} instead of changing to
+%    \texttt{b} as desired.
+%    as 
+%    \begin{macrocode}
+    \let\f@series\target@series@value
   \fi
   \selectfont}
 %    \end{macrocode}
@@ -1530,7 +1553,7 @@
   \fontfamily\sfdefault
   \ifx\target@series@value\@empty \else
     \begingroup\try@load@fontshape\endgroup
-    \fontseries\target@series@value
+    \let\f@series\target@series@value
   \fi
   \selectfont}
 %    \end{macrocode}
@@ -1556,7 +1579,7 @@
   \fontfamily\ttdefault
   \ifx\target@series@value\@empty \else
     \begingroup\try@load@fontshape\endgroup
-    \fontseries\target@series@value
+    \let\f@series\target@series@value
   \fi
   \selectfont}
 %    \end{macrocode}
@@ -1573,6 +1596,43 @@
 
 %  \begin{macro}{\AtBeginDocument}
 %    
+%    \begin{macrocode}
+\AtBeginDocument{%
+%    \end{macrocode}
+%
+%    We only want \texttt{bx} in \cs{bfseries@rm} if the Roman font is
+%    Computer Modern or Latin Modern, otherwise it should be
+%    \texttt{b}. It was set to \texttt{bx} in the kernel so that any
+%    font use with the default families in the preamble get this
+%    value. Now at the real document start we check if the fonts have
+%    been changed. If there was a \cs{DeclareFontSeriesDefault}
+%    declaration or \cs{bfseries@rm} was directly altered then it
+%    differs from \cs{bfseries@rm@kernel} and we do nothing.
+%    Otherwise we check if \cs{rmdefault} is one of the CM/LM font
+%    families and if so we keep \texttt{bx} otherwise we change it to
+%    \texttt{b}.
+%
+%    This approach doesn't cover one case: CM/LM got changed to a
+%    different family that supports \texttt{bx}, but the support
+%    package for that family used \verb=\def\bfseries@rm{bx}= instead
+%    of using  \cs{DeclareFontSeriesDefault}. In that case the code
+%    here changes it to \texttt{b}. Solution: use the
+%    \cs{DeclareFontSeriesDefault} interface.
+%    \begin{macrocode}
+  \ifx\bfseries@rm@kernel\bfseries@rm
+    \expandafter\in@\expandafter{\rmdefault}{cmr,cmss,cmtt,lcmss,lcmtt,lmr,lmss,lmtt}%
+    \ifin@ \else \def\bfseries@rm{b}\fi\fi
+%    \end{macrocode}
+%    Same approach for \cs{bfseries@sf} and \cs{bfseries@tt}:
+%    \begin{macrocode}
+  \ifx\bfseries@sf@kernel\bfseries@sf
+    \expandafter\in@\expandafter{\sfdefault}{cmr,cmss,cmtt,lcmss,lcmtt,lmr,lmss,lmtt}%
+    \ifin@ \else \def\bfseries@sf{b}\fi\fi
+  \ifx\bfseries@tt@kernel\bfseries@tt
+    \expandafter\in@\expandafter{\ttdefault}{cmr,cmss,cmtt,lcmss,lcmtt,lmr,lmss,lmtt}%
+    \ifin@ \else \def\bfseries@tt{b}\fi\fi
+%    \end{macrocode}
+%    
 %    If the document preamble has changed the \cs{familydefault} or if
 %    the if the \cs{rmdefault} contains a new font family, we have to
 %    adjust the series defaults accordingly, before starting
@@ -1580,11 +1640,7 @@
 %    \cs{ttfamily} depending on the situation which does that (as a
 %    sideeffect) for us.
 %    \begin{macrocode}
-\AtBeginDocument{%
   \expand@font@defaults
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
   \ifx\famdef@ult\rmdef@ult      \rmfamily
   \else\ifx\famdef@ult\sfdef@ult \sffamily
   \else\ifx\famdef@ult\ttdef@ult \ttfamily
