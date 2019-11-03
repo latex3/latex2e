@@ -40,7 +40,7 @@ tlmgr install   \
   ec            \
   fontspec      \
   hyperref      \
-  ifxetex       \
+  iftex         \
   oberdiek      \
   lh            \
   lualibs       \
@@ -62,7 +62,6 @@ tlmgr install  \
   geometry     \
   graphics-def \
   helvetic     \
-  ifluatex     \
   imakeidx     \
   ly1          \
   makeindex    \
