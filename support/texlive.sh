@@ -40,7 +40,7 @@ tlmgr install   \
   ec            \
   fontspec      \
   hyperref      \
-  ifxetex       \
+  iftex         \
   oberdiek      \
   lh            \
   lualibs       \
@@ -50,6 +50,7 @@ tlmgr install   \
 # Additional support for typesetting
 tlmgr install  \
   amscls       \
+  babel-german \
   cbfonts      \
   csquotes     \
   dvips        \
@@ -60,7 +61,6 @@ tlmgr install  \
   geometry     \
   graphics-def \
   helvetic     \
-  ifluatex     \
   imakeidx     \
   ly1          \
   makeindex    \
