@@ -225,3 +225,28 @@ function checkinit_hook()
 end
 
 function docinit_hook() return fmt({"pdftex"},typesetdir) end
+
+-- Somewhat shorten the log
+local function shorttex(file,dir)
+  local dir = dir or "."
+  return runcmd('pdftex -interaction=batchmode "&pdflatex" "' .. typesetcmds
+    .. "\\input " .. file .. "\"",
+    dir,{"TEXINPUTS","TEXFORMATS"})
+end
+
+function typeset(file,dir)
+  dir = dir or "."
+  local name = jobname(file)
+  local errorlevel = tex(file,dir)
+  if errorlevel ~= 0 then
+    return errorlevel
+  end
+  for i = 2,typesetruns - 1 do
+    errorlevel =
+      makeindex(name,dir,".glo",".gls",".glg",glossarystyle) +
+      makeindex(name,dir,".idx",".ind",".ilg",indexstyle)    +
+      shorttex(file,dir)
+    if errorlevel ~= 0 then return errorlevel end
+  end
+  return tex(file,dir)
+end
