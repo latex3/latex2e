@@ -1,7 +1,7 @@
 The LaTeX `tools` bundle
 ========================
 
-Release 2019-10-01 patch level 1
+Release 2019-10-01 patch level 2
 
 Overview
 --------
