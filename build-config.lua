@@ -43,10 +43,11 @@ typesetsuppfiles = typesetsuppfiles or
   {"color.cfg", "graphics.cfg", "ltxdoc.cfg", "ltxguide.cfg"}
 
 -- Ensure the local format file is used
-function tex(file,dir)
+function tex(file,dir,mode)
   local dir = dir or "."
+  local mode = mode or "nonstopmode"
   return runcmd(
-    'pdftex -fmt=pdflatex -interaction=nonstopmode -jobname="' ..
+    'pdftex -fmt=pdflatex -interaction=" .. mode .. " -jobname="' ..
       string.match(file,"^[^.]*") .. '" "\\input ' .. file .. '"',
     dir,{"TEXINPUTS","TEXFORMATS","LUAINPUTS"})
 end
@@ -225,3 +226,25 @@ function checkinit_hook()
 end
 
 function docinit_hook() return fmt({"pdftex"},typesetdir) end
+
+-- Shorten second run
+function typeset(file,dir)
+  dir = dir or "."
+  local errorlevel = tex(file,dir)
+  if errorlevel ~= 0 then
+    return errorlevel
+  end
+  local name = jobname(file)
+  errorlevel = biber(name,dir) + bibtex(name,dir)
+  if errorlevel ~= 0 then
+    return errorlevel
+  end
+  for i = 2,typesetruns - 1 do
+    errorlevel =
+      makeindex(name,dir,".glo",".gls",".glg",glossarystyle) +
+      makeindex(name,dir,".idx",".ind",".ilg",indexstyle)    +
+      tex(file,dir,"batchmode")
+    if errorlevel ~= 0 then break end
+  end
+  return errorlevel
+end
