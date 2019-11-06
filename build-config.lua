@@ -46,7 +46,7 @@ function tex(file,dir,mode)
   local dir = dir or "."
   local mode = mode or "nonstopmode"
   return runcmd(
-    'pdftex -fmt=pdflatex -interaction=" .. mode .. " -jobname="' ..
+    'pdftex -fmt=pdflatex -interaction=' .. mode .. ' -jobname="' ..
       string.match(file,"^[^.]*") .. '" "\\input ' .. file .. '"',
     dir,{"TEXINPUTS","TEXFORMATS","LUAINPUTS"})
 end
