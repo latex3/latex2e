@@ -42,15 +42,13 @@ typesetsuppfiles = typesetsuppfiles or
   {"color.cfg", "graphics.cfg", "ltxdoc.cfg", "ltxguide.cfg"}
 
 -- Ensure the local format file is used
-typesetexe = 'pdftex -interaction=nonstopmode "&pdflatex"'
-typesetopts = ""
-
--- Force finding the format file
-function tex(file,dir)
+function tex(file,dir,mode)
   local dir = dir or "."
-  return runcmd(typesetexe .. " " .. typesetopts .. " \"" .. typesetcmds
-    .. "\\input " .. file .. "\"",
-    dir,{"TEXINPUTS","TEXFORMATS"})
+  local mode = mode or "nonstopmode"
+  return runcmd(
+    'pdftex -fmt=pdflatex -interaction=" .. mode .. " -jobname="' ..
+      string.match(file,"^[^.]*") .. '" "\\input ' .. file .. '"',
+    dir,{"TEXINPUTS","TEXFORMATS","LUAINPUTS"})
 end
 
 -- Build TDS-style zips
@@ -222,14 +220,7 @@ end
 
 function docinit_hook() return fmt({"pdftex"},typesetdir) end
 
--- Somewhat shorten the log
-local function shorttex(file,dir)
-  local dir = dir or "."
-  return runcmd('pdftex -interaction=batchmode "&pdflatex" "' .. typesetcmds
-    .. "\\input " .. file .. "\"",
-    dir,{"TEXINPUTS","TEXFORMATS"})
-end
-
+-- Shorten second run
 function typeset(file,dir)
   dir = dir or "."
   local name = jobname(file)
@@ -241,7 +232,7 @@ function typeset(file,dir)
     errorlevel =
       makeindex(name,dir,".glo",".gls",".glg",glossarystyle) +
       makeindex(name,dir,".idx",".ind",".ilg",indexstyle)    +
-      shorttex(file,dir)
+      tex(file,dir,"batchmode")
     if errorlevel ~= 0 then return errorlevel end
   end
   return tex(file,dir)
