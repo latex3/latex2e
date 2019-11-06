@@ -47,7 +47,7 @@ function tex(file,dir,mode)
   local dir = dir or "."
   local mode = mode or "nonstopmode"
   return runcmd(
-    'pdftex -fmt=pdflatex -interaction=" .. mode .. " -jobname="' ..
+    'pdftex -fmt=pdflatex -interaction=' .. mode .. ' -jobname="' ..
       string.match(file,"^[^.]*") .. '" "\\input ' .. file .. '"',
     dir,{"TEXINPUTS","TEXFORMATS","LUAINPUTS"})
 end
@@ -244,7 +244,7 @@ function typeset(file,dir)
       makeindex(name,dir,".glo",".gls",".glg",glossarystyle) +
       makeindex(name,dir,".idx",".ind",".ilg",indexstyle)    +
       tex(file,dir,"batchmode")
-    if errorlevel ~= 0 then break end
+    if errorlevel ~= 0 then return errorlevel end
   end
-  return errorlevel
+  return tex(file,dir)
 end
