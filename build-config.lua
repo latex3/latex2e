@@ -23,7 +23,6 @@ checkruns      = checkruns          or  2
 checksuppfiles = checksuppfiles     or
   {
     "color.cfg",
-    "etex.sty",
     "graphics.cfg",
     "test209.tex",
     "test2e.tex",
@@ -43,10 +42,11 @@ typesetsuppfiles = typesetsuppfiles or
   {"color.cfg", "graphics.cfg", "ltxdoc.cfg", "ltxguide.cfg"}
 
 -- Ensure the local format file is used
-function tex(file,dir)
+function tex(file,dir,mode)
   local dir = dir or "."
+  local mode = mode or "nonstopmode"
   return runcmd(
-    'pdftex -fmt=pdflatex -interaction=nonstopmode -jobname="' ..
+    'pdftex -fmt=pdflatex -interaction=' .. mode .. ' -jobname="' ..
       string.match(file,"^[^.]*") .. '" "\\input ' .. file .. '"',
     dir,{"TEXINPUTS","TEXFORMATS","LUAINPUTS"})
 end
@@ -189,22 +189,16 @@ local function fmt(engines,dest)
     local errorlevel = os.execute(
       os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
       .. os_pathsep .. texmfdir .. "//"
-      .. os_concat ..
-      os_setenv .. " LUAINPUTS=" .. unpackdir .. os_pathsep .. localdir
-      .. os_pathsep .. texmfdir .. "//"
       .. os_concat .. engine .. " -etex -ini -output-directory=" .. unpackdir
       .. " " .. src 
       .. (hide and (" > " .. os_null) or ""))
     if errorlevel ~= 0 then return errorlevel end
-
-    local engname = string.match(src,"^[^.]*") .. ".fmt"
     local fmtname = string.gsub(engine,"tex$","") .. "latex.fmt"
     if engine == "etex" then fmtname = "latex.fmt" end
-    if engname ~= fmtname then
-      ren(unpackdir,engname,fmtname)
+    if fileexists (unpackdir,"latex.fmt") then
+      ren(unpackdir,"latex.fmt",fmtname)
     end
     cp(fmtname,unpackdir,dest)
-
     return 0
   end
 
@@ -226,14 +220,7 @@ end
 
 function docinit_hook() return fmt({"pdftex"},typesetdir) end
 
--- Somewhat shorten the log
-local function shorttex(file,dir)
-  local dir = dir or "."
-  return runcmd('pdftex -interaction=batchmode "&pdflatex" "' .. typesetcmds
-    .. "\\input " .. file .. "\"",
-    dir,{"TEXINPUTS","TEXFORMATS"})
-end
-
+-- Shorten second run
 function typeset(file,dir)
   dir = dir or "."
   local name = jobname(file)
@@ -245,7 +232,7 @@ function typeset(file,dir)
     errorlevel =
       makeindex(name,dir,".glo",".gls",".glg",glossarystyle) +
       makeindex(name,dir,".idx",".ind",".ilg",indexstyle)    +
-      shorttex(file,dir)
+      tex(file,dir,"batchmode")
     if errorlevel ~= 0 then return errorlevel end
   end
   return tex(file,dir)
