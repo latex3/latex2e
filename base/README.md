@@ -1,7 +1,7 @@
 The LaTeX kernel
 ================
 
-Release 2019-10-01 patch level 2
+Release 2019-10-01 patch level 3
 
 Overview
 --------
