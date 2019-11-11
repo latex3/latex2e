@@ -36,7 +36,6 @@ installfiles   =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
-    "nfssaxes.tex",
   }
 sourcefiles    =
   {
@@ -52,7 +51,6 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
-    "nfssaxes.tex",
   }
 textfiles =
   {
@@ -138,8 +136,8 @@ unpackdeps  = { }
 -- Customise typesetting
 indexstyle = "source2e.ist"
 
--- Allow for TU test
-checkconfigs = {"build","config-TU","config-search"}
+-- Allow for TU and other tests test
+checkconfigs = {"build","config-TU","config-legacy"}
 
 update_tag = update_tag_base
 

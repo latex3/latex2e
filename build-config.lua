@@ -23,6 +23,7 @@ checkruns      = checkruns          or  2
 checksuppfiles = checksuppfiles     or
   {
     "color.cfg",
+    "etex.sty",
     "graphics.cfg",
     "test209.tex",
     "test2e.tex",
@@ -189,16 +190,22 @@ local function fmt(engines,dest)
     local errorlevel = os.execute(
       os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
       .. os_pathsep .. texmfdir .. "//"
+      .. os_concat ..
+      os_setenv .. " LUAINPUTS=" .. unpackdir .. os_pathsep .. localdir
+      .. os_pathsep .. texmfdir .. "//"
       .. os_concat .. engine .. " -etex -ini -output-directory=" .. unpackdir
       .. " " .. src 
       .. (hide and (" > " .. os_null) or ""))
     if errorlevel ~= 0 then return errorlevel end
+
+    local engname = string.match(src,"^[^.]*") .. ".fmt"
     local fmtname = string.gsub(engine,"tex$","") .. "latex.fmt"
     if engine == "etex" then fmtname = "latex.fmt" end
-    if fileexists (unpackdir,"latex.fmt") then
-      ren(unpackdir,"latex.fmt",fmtname)
+    if engname ~= fmtname then
+      ren(unpackdir,engname,fmtname)
     end
     cp(fmtname,unpackdir,dest)
+
     return 0
   end
 
@@ -223,8 +230,12 @@ function docinit_hook() return fmt({"pdftex"},typesetdir) end
 -- Shorten second run
 function typeset(file,dir)
   dir = dir or "."
-  local name = jobname(file)
   local errorlevel = tex(file,dir)
+  if errorlevel ~= 0 then
+    return errorlevel
+  end
+  local name = jobname(file)
+  errorlevel = biber(name,dir) + bibtex(name,dir)
   if errorlevel ~= 0 then
     return errorlevel
   end
