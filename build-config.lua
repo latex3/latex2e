@@ -230,8 +230,12 @@ function docinit_hook() return fmt({"pdftex"},typesetdir) end
 -- Shorten second run
 function typeset(file,dir)
   dir = dir or "."
-  local name = jobname(file)
   local errorlevel = tex(file,dir)
+  if errorlevel ~= 0 then
+    return errorlevel
+  end
+  local name = jobname(file)
+  errorlevel = biber(name,dir) + bibtex(name,dir)
   if errorlevel ~= 0 then
     return errorlevel
   end
