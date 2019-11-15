@@ -179,6 +179,9 @@ end
 
 -- Need to build format files
 local function fmt(engines,dest)
+
+  local fmtsearch = false
+
   local function mkfmt(engine)
     -- Use .ini files if available
     local src = "latex.ltx"
@@ -189,10 +192,10 @@ local function fmt(engines,dest)
     print("Building format for " .. engine)
     local errorlevel = os.execute(
       os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
-      .. os_pathsep .. texmfdir .. "//"
+      .. os_pathsep .. texmfdir .. "//" .. (fmtsearch and os_pathsep or "")
       .. os_concat ..
       os_setenv .. " LUAINPUTS=" .. unpackdir .. os_pathsep .. localdir
-      .. os_pathsep .. texmfdir .. "//"
+      .. os_pathsep .. texmfdir .. "//" .. (fmtsearch and os_pathsep or "")
       .. os_concat .. engine .. " -etex -ini -output-directory=" .. unpackdir
       .. " " .. src 
       .. (hide and (" > " .. os_null) or ""))
@@ -211,6 +214,12 @@ local function fmt(engines,dest)
 
   if not options["config"] or options["config"][1] ~= "config-TU" then
     cp("fonttext.cfg",supportdir,unpackdir)
+  end
+
+  -- Zap the custom hyphen.cfg when typesetting
+  if dest == typesetdir then
+    rm(localdir,"hyphen.cfg")
+    fmtsearch =  true
   end
 
   local errorlevel
