@@ -113,11 +113,12 @@ function update_tag(file,content,tagname,tagdate)
     if rev then
       tag = tag .. " patch level " .. rev
       patch_level = rev
+    else
+      patch_level = "0"
     end
   else
-    tag = tag .. " pre-release "
     if rev then
-      tag = tag .. rev
+      tag = tag .. " pre-release " .. rev
       patch_level = "-" .. rev
     else
       patch_level = "0"
@@ -165,11 +166,8 @@ function update_tag_ltx(file,content,tagname,tagdate)
       tag = tag .. " patch level " .. rev
     end
   else
-    tag = tag .. " pre-release "
     if rev then
-      tag = tag .. rev
-    else
-      patch_level = "0"
+      tag = tag .. " pre-release " .. rev
     end
   end
   return string.gsub(content,
