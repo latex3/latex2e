@@ -39,7 +39,7 @@ function main (target)
     end
     -- Avoid inter-bundle issues
     for _,v in ipairs(t) do
-      cleandir(builddir)
+      if target == "ctan" then call({v},"clean") end
       local errorlevel = call({v},target)
       if errorlevel ~= 0 then return errorlevel end
     end
