@@ -37,7 +37,13 @@ function main (target)
     for _,v in ipairs(required) do
       table.insert(t, "required/" .. v)
     end
-   return call(t, target)
+    -- Avoid inter-bundle issues
+    for _,v in ipairs(t) do
+      cleandir(builddir)
+      local errorlevel = call({v},target)
+      if errorlevel ~= 0 then return errorlevel end
+    end
+    return 0
   end
   if target == "check" then
     errorlevel = dobundles ("check")
