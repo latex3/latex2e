@@ -210,7 +210,8 @@ local function fmt(engines,dest)
     return 0
   end
 
-  if not options["config"] or options["config"][1] ~= "config-TU" then
+  if dest ~= typesetdir and
+    (not options["config"] or options["config"][1] ~= "config-TU") then
     cp("fonttext.cfg",supportdir,unpackdir)
   end
 
