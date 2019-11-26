@@ -56,6 +56,7 @@ tlmgr install  \
   csquotes     \
   dvips        \
   epstopdf     \
+  epstopdf-pkg \
   etoolbox     \
   fancyvrb     \
   fc           \
