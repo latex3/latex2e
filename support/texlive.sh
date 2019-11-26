@@ -42,6 +42,7 @@ tlmgr install   \
   hyperref      \
   iftex         \
   oberdiek      \
+  pdftexcmds    \
   lh            \
   lualibs       \
   luaotfload    \
