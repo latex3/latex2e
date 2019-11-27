@@ -42,6 +42,7 @@ tlmgr install   \
   hyperref      \
   iftex         \
   oberdiek      \
+  pdftexcmds    \
   lh            \
   lualibs       \
   luaotfload    \
@@ -56,6 +57,7 @@ tlmgr install  \
   csquotes     \
   dvips        \
   epstopdf     \
+  epstopdf-pkg \
   etoolbox     \
   fancyvrb     \
   fc           \
