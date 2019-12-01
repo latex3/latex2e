@@ -41,12 +41,14 @@ tlmgr install   \
   fontspec      \
   hyperref      \
   iftex         \
+  kvoptions     \
   oberdiek      \
   pdftexcmds    \
   lh            \
   lualibs       \
   luaotfload    \
   tex-gyre      \
+  stringenc     \
   url
 
 # Additional support for typesetting
