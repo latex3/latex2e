@@ -47,6 +47,7 @@ tlmgr install   \
   lh            \
   lualibs       \
   luaotfload    \
+  stringenc     \
   url
 
 # Additional support for typesetting
