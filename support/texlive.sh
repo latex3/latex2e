@@ -41,6 +41,7 @@ tlmgr install   \
   fontspec      \
   hyperref      \
   iftex         \
+  kvoptions     \
   oberdiek      \
   pdftexcmds    \
   lh            \
