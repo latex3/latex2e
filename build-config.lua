@@ -23,6 +23,7 @@ checkruns      = checkruns          or  2
 checksuppfiles = checksuppfiles     or
   {
     "color.cfg",
+    "etex.sty",
     "graphics.cfg",
     "test209.tex",
     "test2e.tex",
@@ -42,15 +43,13 @@ typesetsuppfiles = typesetsuppfiles or
   {"color.cfg", "graphics.cfg", "ltxdoc.cfg", "ltxguide.cfg"}
 
 -- Ensure the local format file is used
-typesetexe = 'pdftex -interaction=nonstopmode "&pdflatex"'
-typesetopts = ""
-
--- Force finding the format file
-function tex(file,dir)
+function tex(file,dir,mode)
   local dir = dir or "."
-  return runcmd(typesetexe .. " " .. typesetopts .. " \"" .. typesetcmds
-    .. "\\input " .. file .. "\"",
-    dir,{"TEXINPUTS","TEXFORMATS"})
+  local mode = mode or "nonstopmode"
+  return runcmd(
+    'pdftex -fmt=pdflatex -interaction=' .. mode .. ' -jobname="' ..
+      string.match(file,"^[^.]*") .. '" "\\input ' .. file .. '"',
+    dir,{"TEXINPUTS","TEXFORMATS","LUAINPUTS"})
 end
 
 -- Build TDS-style zips
@@ -114,11 +113,12 @@ function update_tag(file,content,tagname,tagdate)
     if rev then
       tag = tag .. " patch level " .. rev
       patch_level = rev
+    else
+      patch_level = "0"
     end
   else
-    tag = tag .. " pre-release "
     if rev then
-      tag = tag .. rev
+      tag = tag .. " pre-release " .. rev
       patch_level = "-" .. rev
     else
       patch_level = "0"
@@ -166,11 +166,8 @@ function update_tag_ltx(file,content,tagname,tagdate)
       tag = tag .. " patch level " .. rev
     end
   else
-    tag = tag .. " pre-release "
     if rev then
-      tag = tag .. rev
-    else
-      patch_level = "0"
+      tag = tag .. " pre-release " .. rev
     end
   end
   return string.gsub(content,
@@ -180,6 +177,9 @@ end
 
 -- Need to build format files
 local function fmt(engines,dest)
+
+  local fmtsearch = false
+
   local function mkfmt(engine)
     -- Use .ini files if available
     local src = "latex.ltx"
@@ -190,22 +190,35 @@ local function fmt(engines,dest)
     print("Building format for " .. engine)
     local errorlevel = os.execute(
       os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
-      .. os_pathsep .. texmfdir .. "//"
+      .. os_pathsep .. texmfdir .. "//" .. (fmtsearch and os_pathsep or "")
+      .. os_concat ..
+      os_setenv .. " LUAINPUTS=" .. unpackdir .. os_pathsep .. localdir
+      .. os_pathsep .. texmfdir .. "//" .. (fmtsearch and os_pathsep or "")
       .. os_concat .. engine .. " -etex -ini -output-directory=" .. unpackdir
       .. " " .. src 
       .. (hide and (" > " .. os_null) or ""))
     if errorlevel ~= 0 then return errorlevel end
+
+    local engname = string.match(src,"^[^.]*") .. ".fmt"
     local fmtname = string.gsub(engine,"tex$","") .. "latex.fmt"
     if engine == "etex" then fmtname = "latex.fmt" end
-    if fileexists (unpackdir,"latex.fmt") then
-      ren(unpackdir,"latex.fmt",fmtname)
+    if engname ~= fmtname then
+      ren(unpackdir,engname,fmtname)
     end
     cp(fmtname,unpackdir,dest)
+
     return 0
   end
 
-  if not options["config"] or options["config"][1] ~= "config-TU" then
+  if dest ~= typesetdir and
+    (not options["config"] or options["config"][1] ~= "config-TU") then
     cp("fonttext.cfg",supportdir,unpackdir)
+  end
+
+  -- Zap the custom hyphen.cfg when typesetting
+  if dest == typesetdir then
+    rm(localdir,"hyphen.cfg")
+    fmtsearch =  true
   end
 
   local errorlevel
@@ -221,3 +234,25 @@ function checkinit_hook()
 end
 
 function docinit_hook() return fmt({"pdftex"},typesetdir) end
+
+-- Shorten second run
+function typeset(file,dir)
+  dir = dir or "."
+  local errorlevel = tex(file,dir)
+  if errorlevel ~= 0 then
+    return errorlevel
+  end
+  local name = jobname(file)
+  errorlevel = biber(name,dir) + bibtex(name,dir)
+  if errorlevel ~= 0 then
+    return errorlevel
+  end
+  for i = 2,typesetruns - 1 do
+    errorlevel =
+      makeindex(name,dir,".glo",".gls",".glg",glossarystyle) +
+      makeindex(name,dir,".idx",".ind",".ilg",indexstyle)    +
+      tex(file,dir,"batchmode")
+    if errorlevel ~= 0 then return errorlevel end
+  end
+  return tex(file,dir)
+end

@@ -19,6 +19,12 @@ if ! command -v texlua > /dev/null; then
   cd ..
 fi
 
+# Backups only make the cache bigger
+tlmgr option -- autobackup 0
+
+# Update a cached version first (else later step might fail)
+tlmgr update --self
+
 # Needed for any use of texlua even if not testing LuaTeX
 tlmgr install luatex
 
@@ -40,11 +46,14 @@ tlmgr install   \
   ec            \
   fontspec      \
   hyperref      \
-  ifxetex       \
+  iftex         \
+  kvoptions     \
   oberdiek      \
+  pdftexcmds    \
   lh            \
   lualibs       \
   luaotfload    \
+  stringenc     \
   url
 
 # Additional support for typesetting
@@ -55,13 +64,13 @@ tlmgr install  \
   csquotes     \
   dvips        \
   epstopdf     \
+  epstopdf-pkg \
   etoolbox     \
   fancyvrb     \
   fc           \
   geometry     \
   graphics-def \
   helvetic     \
-  ifluatex     \
   imakeidx     \
   ly1          \
   makeindex    \
@@ -74,9 +83,3 @@ tlmgr install  \
   wasy         \
   wsuipa       \
   xkeyval
-
-# Keep no backups (not required, simply makes cache bigger)
-tlmgr option -- autobackup 0
-
-# Update the TL install but add nothing new
-tlmgr update --self --all --no-auto-install
