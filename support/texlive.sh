@@ -17,6 +17,9 @@ if ! command -v texlua > /dev/null; then
   ./install-tl --profile=../support/texlive.profile
 
   cd ..
+else
+  # update a cached version first (else later step might fail)
+  tlmgr update --self
 fi
 
 # Needed for any use of texlua even if not testing LuaTeX
