@@ -18,12 +18,9 @@ if ! command -v texlua > /dev/null; then
 
   cd ..
 else
-  # update a cached version first (else later step might fail)
+  # Update a cached version first (else later step might fail)
   tlmgr update --self
 fi
-
-# Update tlmgr first
-tlmgr update --self
 
 # Needed for any use of texlua even if not testing LuaTeX
 tlmgr install luatex
