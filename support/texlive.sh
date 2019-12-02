@@ -22,6 +22,9 @@ else
   tlmgr update --self
 fi
 
+# Update tlmgr first
+tlmgr update --self
+
 # Needed for any use of texlua even if not testing LuaTeX
 tlmgr install luatex
 
@@ -85,4 +88,4 @@ tlmgr install  \
 tlmgr option -- autobackup 0
 
 # Update the TL install but add nothing new
-tlmgr update --self --all --no-auto-install
+tlmgr update --all --no-auto-install
