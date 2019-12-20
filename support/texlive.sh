@@ -53,6 +53,7 @@ tlmgr install   \
   lh            \
   lualibs       \
   luaotfload    \
+  tex-gyre      \
   stringenc     \
   url
 
