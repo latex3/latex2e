@@ -35,8 +35,7 @@ installfiles   =
     "nfssfont.tex",
     "sample2e.tex",
     "small2e.tex",
-    "testpage.tex",
-    "textcomp-adds.tex"      -- tmp file for testing
+    "testpage.tex"
   }
 sourcefiles    =
   {
@@ -52,7 +51,7 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
-    "textcomp-adds.tex"      -- tmp file for testing
+     "*-????-??-??.sty"
   }
 textfiles =
   {
