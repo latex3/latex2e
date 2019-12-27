@@ -35,7 +35,7 @@ installfiles   =
     "nfssfont.tex",
     "sample2e.tex",
     "small2e.tex",
-    "testpage.tex",
+    "testpage.tex"
   }
 sourcefiles    =
   {
@@ -51,6 +51,7 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
+     "*-????-??-??.sty"
   }
 textfiles =
   {
@@ -117,6 +118,8 @@ unpacksuppfiles =
     "hyphen.cfg",
     "UShyphen.tex",
     "ot1lmr.fd",
+    "t1lmr.fd",
+    "ts1lmr.fd",
     "pdflatex.ini",
     "pdftexconfig.tex"
   }
