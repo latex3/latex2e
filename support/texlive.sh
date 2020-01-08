@@ -60,13 +60,17 @@ tlmgr install   \
 # Additional support for typesetting
 tlmgr install  \
   amscls       \
+  atbegshi     \
   atveryend    \
+  auxhook      \
   babel-german \
+  bitset       \
   cbfonts      \
   csquotes     \
   dvips        \
   epstopdf     \
   epstopdf-pkg \
+  etexcmds     \
   etoolbox     \
   fancyvrb     \
   fc           \
@@ -75,6 +79,8 @@ tlmgr install  \
   helvetic     \
   hycolor      \
   imakeidx     \
+  infwarerr    \
+  intcalc      \
   kvdefinekeys \
   kvoptions    \
   kvsetkeys    \
@@ -86,6 +92,7 @@ tlmgr install  \
   palatino     \
   pdfescape    \
   pl           \
+  rerunfilecheck \
   sauter       \
   times        \
   vntex        \
