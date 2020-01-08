@@ -78,6 +78,7 @@ tlmgr install  \
   kvdefinekeys \
   kvoptions    \
   kvsetkeys    \
+  letltxmacro  \
   ltxcmds      \
   ly1          \
   makeindex    \
