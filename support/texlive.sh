@@ -61,7 +61,6 @@ tlmgr install   \
 tlmgr install  \
   amscls       \
   atveryend    \
-  ltxcmds      \
   babel-german \
   cbfonts      \
   csquotes     \
@@ -75,6 +74,8 @@ tlmgr install  \
   graphics-def \
   helvetic     \
   imakeidx     \
+  kvsetkeys    \
+  ltxcmds      \
   ly1          \
   makeindex    \
   mflogo       \
