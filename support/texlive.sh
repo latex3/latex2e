@@ -61,6 +61,7 @@ tlmgr install   \
 tlmgr install  \
   amscls       \
   atveryend    \
+  ltxcmds      \
   babel-german \
   cbfonts      \
   csquotes     \
