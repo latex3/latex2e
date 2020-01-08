@@ -64,6 +64,7 @@ tlmgr install  \
   atveryend    \
   auxhook      \
   babel-german \
+  bigintcalc   \
   bitset       \
   cbfonts      \
   csquotes     \
