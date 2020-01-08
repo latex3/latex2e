@@ -74,6 +74,8 @@ tlmgr install  \
   graphics-def \
   helvetic     \
   imakeidx     \
+  kvdefinekeys \
+  kvoptions    \
   kvsetkeys    \
   ltxcmds      \
   ly1          \
