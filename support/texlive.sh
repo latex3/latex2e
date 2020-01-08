@@ -82,6 +82,7 @@ tlmgr install  \
   makeindex    \
   mflogo       \
   palatino     \
+  pdfescape    \
   pl           \
   sauter       \
   times        \
