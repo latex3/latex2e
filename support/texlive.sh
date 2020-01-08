@@ -73,6 +73,7 @@ tlmgr install  \
   geometry     \
   graphics-def \
   helvetic     \
+  hycolor      \
   imakeidx     \
   kvdefinekeys \
   kvoptions    \
