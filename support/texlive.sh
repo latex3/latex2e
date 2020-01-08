@@ -96,7 +96,9 @@ tlmgr install  \
   rerunfilecheck \
   sauter       \
   times        \
+  uniquecounter \
   vntex        \
   wasy         \
   wsuipa       \
-  xkeyval
+  xkeyval      \
+  zref
