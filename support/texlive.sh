@@ -60,6 +60,7 @@ tlmgr install   \
 # Additional support for typesetting
 tlmgr install  \
   amscls       \
+  atveryend    \
   babel-german \
   cbfonts      \
   csquotes     \
