@@ -79,6 +79,7 @@ tlmgr install  \
   gettitlestring \
   graphics-def \
   helvetic     \
+  hologo       \
   hycolor      \
   imakeidx     \
   infwarerr    \
