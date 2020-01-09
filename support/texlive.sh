@@ -60,27 +60,47 @@ tlmgr install   \
 # Additional support for typesetting
 tlmgr install  \
   amscls       \
+  atbegshi     \
+  atveryend    \
+  auxhook      \
   babel-german \
+  bigintcalc   \
+  bitset       \
   cbfonts      \
   csquotes     \
   dvips        \
   epstopdf     \
   epstopdf-pkg \
+  etexcmds     \
   etoolbox     \
   fancyvrb     \
   fc           \
   geometry     \
+  gettitlestring \
   graphics-def \
   helvetic     \
+  hycolor      \
   imakeidx     \
+  infwarerr    \
+  intcalc      \
+  kvdefinekeys \
+  kvoptions    \
+  kvsetkeys    \
+  letltxmacro  \
+  ltxcmds      \
   ly1          \
   makeindex    \
   mflogo       \
   palatino     \
+  pdfescape    \
   pl           \
+  refcount     \
+  rerunfilecheck \
   sauter       \
   times        \
+  uniquecounter \
   vntex        \
   wasy         \
   wsuipa       \
-  xkeyval
+  xkeyval      \
+  zref
