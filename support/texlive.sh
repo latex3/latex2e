@@ -66,6 +66,7 @@ tlmgr install  \
   babel-german \
   bigintcalc   \
   bitset       \
+  bookmark     \
   cbfonts      \
   csquotes     \
   dvips        \
