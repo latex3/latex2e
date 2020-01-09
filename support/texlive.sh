@@ -38,7 +38,7 @@ tlmgr install cm etex knuth-lib latex-bin tex tex-ini-files unicode-data \
  
 # Assuming a 'basic' font set up, metafont is required to avoid
 # warnings with some packages and errors with others
-tlmgr install metafont mfware
+tlmgr install metafont mfware texlive-scripts
 
 # Contrib packages: done as a block to avoid multiple calls to tlmgr
 tlmgr install   \
