@@ -76,6 +76,7 @@ tlmgr install  \
   fancyvrb     \
   fc           \
   geometry     \
+  gettitlestring \
   graphics-def \
   helvetic     \
   hycolor      \
@@ -93,6 +94,7 @@ tlmgr install  \
   palatino     \
   pdfescape    \
   pl           \
+  refcount     \
   rerunfilecheck \
   sauter       \
   times        \
