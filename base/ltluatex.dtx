@@ -1338,7 +1338,9 @@ local callbacktypes = callbacktypes or {
   ligaturing             = simple,
   kerning                = simple,
   insert_local_par       = simple,
+  pre_mlist_to_hlist_filter = list,
   mlist_to_hlist         = exclusive,
+  post_mlist_to_hlist_filter = reverselist,
   new_graf               = simple,
 %    \end{macrocode}
 % Section 8.5: information reporting callbacks.
@@ -1575,7 +1577,11 @@ local defaults = {
 % If a default function is not required, it may be declared as |false|.
 % First we need a list of user callbacks.
 %    \begin{macrocode}
-local user_callbacks_defaults = { }
+local user_callbacks_defaults = {
+  pre_mlist_to_hlist_filter = list_handler_default,
+  mlist_to_hlist = node.mlist_to_hlist,
+  post_mlist_to_hlist_filter = list_handler_default,
+}
 %    \end{macrocode}
 %
 % \begin{macro}{create_callback}
@@ -1842,6 +1848,31 @@ local function uninstall()
   luatexbase = nil
 end
 luatexbase.uninstall = uninstall
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{mlist_to_hlist}
+% \changes{v1.1l}{2020/02/02}{|pre/post_mlist_to_hlist| added}
+%   To emulate these callbacks, the ``real'' |mlist_to_hlist| is replaced by a
+%   wrapper calling the wrappers before and after.
+%    \begin{macrocode}
+callback_register("mlist_to_hlist", function(head, display_type, need_penalties)
+  local current = call_callback("pre_mlist_to_hlist_filter", head, display_type, need_penalties)
+  if current == false then
+    flush_list(head)
+    return nil
+  elseif current == true then
+    current = head
+  end
+  current = call_callback("mlist_to_hlist", current, display_type, need_penalties)
+  local post = call_callback("post_mlist_to_hlist_filter", current, display_type, need_penalties)
+  if post == true then
+    return current
+  elseif post == false then
+    flush_list(current)
+    return nil
+  end
+  return post
+end)
 %    \end{macrocode}
 % \end{macro}
 % \endgroup
