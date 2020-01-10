@@ -28,7 +28,7 @@
 \ProvidesFile{ltluatex.dtx}
 %</driver>
 %<*tex>
-[2019/10/22 v1.1j
+[2020/02/02 v1.1l
 %</tex>
 %<plain>  LuaTeX support for plain TeX (core)
 %<*tex>
@@ -1453,6 +1453,12 @@ local function data_handler(name)
   end
 end
 %    \end{macrocode}
+% Default for user-defined |data| callbacks without explicit default.
+%    \begin{macrocode}
+local function data_handler_default(value)
+  return value
+end
+%    \end{macrocode}
 % Handler for |exclusive| callbacks. We can assume |callbacklist[name]| is not
 % empty: otherwise, the function wouldn't be registered in the callback any
 % more.
@@ -1488,6 +1494,12 @@ local function list_handler(name)
   end
 end
 %    \end{macrocode}
+% Default for user-defined |list| callbacks without explicit default.
+%    \begin{macrocode}
+local function list_handler_default()
+  return true
+end
+%    \end{macrocode}
 % Handler for |simple| callbacks.
 %    \begin{macrocode}
 local function simple_handler(name)
@@ -1498,14 +1510,25 @@ local function simple_handler(name)
   end
 end
 %    \end{macrocode}
+% Default for user-defined |simple| callbacks without explicit default.
+%    \begin{macrocode}
+local function simple_handler_default()
+end
+%    \end{macrocode}
 %
-% Keep a handlers table for indexed access.
+% Keep a handlers table for indexed access and a table with the corresponding default functions.
 %    \begin{macrocode}
 local handlers = {
   [data]      = data_handler,
   [exclusive] = exclusive_handler,
   [list]      = list_handler,
   [simple]    = simple_handler,
+}
+local defaults = {
+  [data]      = data_handler_default,
+  [exclusive] = nil,
+  [list]      = list_handler_default,
+  [simple]    = simple_handler_default,
 }
 %    \end{macrocode}
 %
@@ -1523,11 +1546,13 @@ local user_callbacks_defaults = { }
 % \changes{v1.0a}{2015/09/24}{Function added}
 % \changes{v1.0i}{2015/11/29}{Check name is not nil in error message (PHG)}
 % \changes{v1.0k}{2015/12/02}{Give more specific error messages (PHG)}
+% \changes{v1.1l}{2020/02/02}{Provide proper fallbacks for user-defined callbacks without user-provided default handler}
 %   The allocator itself.
 %    \begin{macrocode}
 local function create_callback(name, ctype, default)
+  local ctype_id = types[ctype]
   if not name  or name  == ""
-  or not ctype or ctype == ""
+  or not ctype_id
   then
     luatexbase_error("Unable to create callback:\n" ..
                      "valid callback name and type required")
@@ -1536,12 +1561,17 @@ local function create_callback(name, ctype, default)
     luatexbase_error("Unable to create callback `" .. name ..
                      "':\ncallback is already defined")
   end
-  if default ~= false and type (default) ~= "function" then
+  default = default or defaults[ctype_id]
+  if not default then
     luatexbase_error("Unable to create callback `" .. name ..
-                     ":\ndefault is not a function")
-   end
+                     "':\ndefault is required for `" .. ctype ..
+                     "' callbacks")
+  elseif type (default) ~= "function" then
+    luatexbase_error("Unable to create callback `" .. name ..
+                     "':\ndefault is not a function")
+  end
   user_callbacks_defaults[name] = default
-  callbacktypes[name] = types[ctype]
+  callbacktypes[name] = ctype_id
 end
 luatexbase.create_callback = create_callback
 %    \end{macrocode}
@@ -1566,9 +1596,6 @@ local function call_callback(name,...)
   local f
   if not l then
     f = user_callbacks_defaults[name]
-    if l == false then
-	   return nil
-	 end
   else
     f = handlers[callbacktypes[name]](name)
   end
