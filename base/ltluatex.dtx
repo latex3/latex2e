@@ -1239,12 +1239,13 @@ local callbacklist = callbacklist or { }
 % Numerical codes for callback types, and name-to-value association (the
 % table keys are strings, the values are numbers).
 %    \begin{macrocode}
-local list, data, exclusive, simple = 1, 2, 3, 4
-local types = {
-  list      = list,
-  data      = data,
-  exclusive = exclusive,
-  simple    = simple,
+local list, data, exclusive, simple, reverselist = 1, 2, 3, 4, 5
+local types   = {
+  list        = list,
+  data        = data,
+  exclusive   = exclusive,
+  simple      = simple,
+  reverselist = reverselist,
 }
 %    \end{macrocode}
 %
@@ -1441,6 +1442,8 @@ end
 %     |true|, then the same head is passed to the next function. If all
 %     functions return |true|, then |true| is returned, otherwise the return
 %     value of the last function not returning |true| is used.
+%   \item[reverselist] is a specialized variant of \emph{list} which executes
+%     functions in inverse order.
 %   \item[exclusive] is for functions with more complex signatures; functions in
 %     this type of callback are \emph{not} combined: An error is raised if
 %     a second callback is registered..
@@ -1498,10 +1501,37 @@ local function list_handler(name)
   end
 end
 %    \end{macrocode}
-% Default for user-defined |list| callbacks without explicit default.
+% Default for user-defined |list| and |reverselist| callbacks without explicit default.
 %    \begin{macrocode}
 local function list_handler_default()
   return true
+end
+%    \end{macrocode}
+% Handler for |reverselist| callbacks.
+% \changes{v1.1l}{2020/02/02}{Add reverselist callback type}
+%    \begin{macrocode}
+local function reverselist_handler(name)
+  return function(head, ...)
+    local ret
+    local alltrue = true
+    local callbacks = callbacklist[name]
+    for i = #callbacks, 1, -1 do
+      local cb = callbacks[i]
+      ret = cb.func(head, ...)
+      if ret == false then
+        luatexbase_warning(
+          "Function `" .. cb.description .. "' returned false\n"
+            .. "in callback `" .. name .."'"
+         )
+         break
+      end
+      if ret ~= true then
+        alltrue = false
+        head = ret
+      end
+    end
+    return alltrue and true or head
+  end
 end
 %    \end{macrocode}
 % Handler for |simple| callbacks.
@@ -1522,17 +1552,19 @@ end
 %
 % Keep a handlers table for indexed access and a table with the corresponding default functions.
 %    \begin{macrocode}
-local handlers = {
-  [data]      = data_handler,
-  [exclusive] = exclusive_handler,
-  [list]      = list_handler,
-  [simple]    = simple_handler,
+local handlers  = {
+  [data]        = data_handler,
+  [exclusive]   = exclusive_handler,
+  [list]        = list_handler,
+  [reverselist] = reverselist_handler,
+  [simple]      = simple_handler,
 }
 local defaults = {
-  [data]      = data_handler_default,
-  [exclusive] = nil,
-  [list]      = list_handler_default,
-  [simple]    = simple_handler_default,
+  [data]        = data_handler_default,
+  [exclusive]   = nil,
+  [list]        = list_handler_default,
+  [reverselist] = list_handler_default,
+  [simple]      = simple_handler_default,
 }
 %    \end{macrocode}
 %
