@@ -106,3 +106,6 @@ tlmgr install  \
   wsuipa       \
   xkeyval      \
   zref
+
+# ensure we have the latest of the above packages
+tlmgr update --all
