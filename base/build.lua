@@ -119,6 +119,8 @@ unpacksuppfiles =
     "UShyphen.tex",
     "ot1lmr.fd",
     "t1lmr.fd",
+    "t1lmss.fd",
+    "t1lmtt.fd",
     "ts1lmr.fd",
     "pdflatex.ini",
     "pdftexconfig.tex"
