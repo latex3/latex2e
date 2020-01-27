@@ -35,7 +35,7 @@ the most significant of these files are
 - `manifest.txt` lists all the files in this LaTeX distribution,
    with one line of information about the contents
 - `unpacked.txt` lists all the files in the unpacked LaTeX distribution
-- `legal.txt` and `lppl.txt` (LaTeX Project Public License) describe the 
+- `legal.txt` and `lppl.txt` (LaTeX Project Public License) describe the
    LaTeX copyright, warranty and copying restrictions.
 - `patches.txt` describes the how important changes will be distributed
    between releases
@@ -62,7 +62,7 @@ The following files contain further information:
 - `tlc2.err` lists errata in _The LaTeX Companion_ (Mittelbach et al.)
 
 The files `ltnews*.tex` (part of the `doc` bundle) contain the LaTeX
-newsletters, the highest number being the most recent. 
+newsletters, the highest number being the most recent.
 
 For historical reasons, the base distribution and the core documentation
 are bundled separately. Documentation is found in the `doc` bundle. In an
@@ -100,4 +100,3 @@ version 1.3c or later.
 <p>Copyright (C) 1989-2020 The LaTeX Project <br />
 <a href="http://latex-project.org/">http://latex-project.org/</a> <br />
 All rights reserved.</p>
-
