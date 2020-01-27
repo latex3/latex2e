@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-% Copyright 1993-2019
+% Copyright 1993-2020
 % The LaTeX3 Project and any individual authors listed elsewhere
 % in this file. 
 % 
@@ -400,6 +400,9 @@
 % The page style.
  
 \pagestyle{empty}
+\renewcommand{\@oddfoot}{\@indiciafont\mbox{}\hfill --\thepage}%
+\renewcommand{\@evenfoot}{\@indiciafont\mbox{}\hfill --\thepage}%
+
 \setlength{\parindent}{1em}
 % Why \textwidth?
 \setlength{\rightskip}{0pt plus \textwidth}
