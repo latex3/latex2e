@@ -74,7 +74,8 @@ else
   local branch = f:read("*all")
   f:close()
   os.remove("branch.tmp")
-  if not string.match(branch, "%s*master%s*") then
+  if not string.match(branch, "%s*master%s*") and
+     not string.match(branch, "^release/") then
     master_branch = false
     tdsroot = tdsroot or "latex-dev"
     ctanpkg = ctanpkg or ""
