@@ -1,7 +1,7 @@
 The LaTeX `graphics` bundle
 ===========================
 
-Release 2019-10-01 patch level 2
+Release 2020-02-02
 
 Overview
 --------
@@ -61,4 +61,4 @@ of the package.
 
 -----
 
-<p>Copyright (C) 1993-2019 The LaTeX Project <br />
+<p>Copyright (C) 1993-2020 The LaTeX Project <br />

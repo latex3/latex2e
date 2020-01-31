@@ -35,7 +35,7 @@ installfiles   =
     "nfssfont.tex",
     "sample2e.tex",
     "small2e.tex",
-    "testpage.tex",
+    "testpage.tex"
   }
 sourcefiles    =
   {
@@ -51,6 +51,7 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
+     "*-????-??-??.sty"
   }
 textfiles =
   {
@@ -114,15 +115,13 @@ dynamicfiles = {"*.tst"}
 unpackfiles     = {"unpack.ins"}
 unpacksuppfiles =
   {
-    "EastAsianWidth.txt",
     "hyphen.cfg",
-    "LineBreak.txt",
-    "load-unicode-data.tex",
-    "load-unicode-xetex-classes.tex",
-    "MathClass.txt",
-    "UnicodeData.txt",
     "UShyphen.tex",
     "ot1lmr.fd",
+    "t1lmr.fd",
+    "t1lmss.fd",
+    "t1lmtt.fd",
+    "ts1lmr.fd",
     "pdflatex.ini",
     "pdftexconfig.tex"
   }
@@ -130,9 +129,13 @@ unpacksuppfiles =
 -- Custom settings for the check system
 testsuppdir = "testfiles/helpers"
 
--- No dependencies at all (other than l3build of course)
+-- No dependencies at all (other than l3build and for typesetting)
 checkdeps   = { }
-typesetdeps = { }
+typesetdeps =
+  {
+    maindir .. "/required/graphics",
+    maindir .. "/required/tools"
+  }
 unpackdeps  = { }
 
 -- Customise typesetting
@@ -142,58 +145,6 @@ indexstyle = "source2e.ist"
 checkconfigs = {"build","config-TU","config-legacy"}
 
 update_tag = update_tag_base
-
-function format (doc)
-  local errorlevel = unpack ()
-  if errorlevel ~=0 then
-    return errorlevel
-  end
-  local function format (engine,fmtname)
-    -- the relationships are all correct
-    local sourcefile = unpackdir .. "/latex.ltx"
-    local finalname = string.gsub(engine,"tex","latex")
-    if fileexists(localdir .. "/" .. finalname .. ".ini") then
-       sourcefile = localdir .. "/" .. finalname .. ".ini"
-    end
-    local errorlevel = os.execute (
-        os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
-        .. os_concat ..
-        engine .. " -etex -ini " .. " -output-directory=" .. unpackdir ..
-        " -jobname=latex " .. sourcefile
-      )
-    if errorlevel ~=0 then
-      return errorlevel
-    end
-    ren (unpackdir, "latex.fmt", fmtname)
-    -- As format building is added in as an 'extra', the normal
-    -- copy mechanism (checkfiles) will fail as things get cleaned up
-    -- inside bundleunpack(): get around that using a manual copy
-    cp (fmtname, unpackdir, localdir)
-    if fmtname == "elatex.fmt" then
-      rm(localdir, "latex.fmt")
-      ren(localdir, fmtname, "latex.fmt")
-    end
-    return 0
-  end
-  if not options["config"] or options["config"][1] ~= "config-TU" then
-    cp("fonttext.cfg",supportdir,unpackdir)
-  end
-  local buildformats = { }
-  local enginedata = options["engine"] or checkengines
-  for _,name in ipairs(enginedata) do
-    table.insert(buildformats,name)
-  end
-  if not options["config"] then
-    table.insert(buildformats,"pdftex")
-  end
-  for _,i in ipairs(buildformats) do
-    errorlevel = format (i, string.gsub (i, "tex$", "") .. "latex.fmt")
-    if errorlevel ~=0 then
-      return errorlevel
-    end
-  end
-  return 0
-end
 
 -- Custom bundleunpack which does not search the localdir
 -- That is needed as texsys.cfg is unpacked in an odd way and
@@ -240,53 +191,16 @@ function bundleunpack ()
   return 0
 end
 
--- base does all of the targets itself
-function main (target, file, engine)
-  local errorlevel
-  if target == "check" then
-    if not options["rerun"] then
-      format()
-    end
-    errorlevel = check (file, engine)
-  elseif target == "clean" then
-    errorlevel = clean ()
-  elseif target == "ctan" then
-    format ()
-    errorlevel = ctan (true)
-  elseif target == "doc" then
-    errorlevel = doc ()
-  elseif target == "install" then
-    install ()
-  elseif target == "save" then
-    if file then
-      if not options["rerun"] then
-        format()
-      end
-      errorlevel = save (file, engine)
-    else
-      help ()
-    end
-  elseif target == "tag" then
-    errorlevel = tag(file,engine)
-  elseif target == "unpack" then
-    -- A simple way to have the unpack target also build the format
-    errorlevel = format ()
-  elseif target == "uninstall" then
-    errorlevel = uninstall()
-  elseif target == "version" then
-    version ()
-  else
-    help ()
-  end
-  os.exit (errorlevel)
-end
-
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
+
+-- Suppress makeindex tree other than formal releases
+if not master_branch then
+  makeindexfiles = { }
+end
 
 -- Find and run the build system
 kpse.set_program_name ("kpsewhich")
 if not release_date then
   dofile(kpse.lookup("l3build.lua"))
 end
-

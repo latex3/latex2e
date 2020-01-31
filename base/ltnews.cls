@@ -1,46 +1,46 @@
 % \iffalse meta-comment
 %
-% Copyright 1993-2019
+% Copyright 1993-2020
 % The LaTeX3 Project and any individual authors listed elsewhere
-% in this file. 
-% 
+% in this file.
+%
 % This file is part of the LaTeX base system.
 % -------------------------------------------
-% 
+%
 % It may be distributed and/or modified under the
 % conditions of the LaTeX Project Public License, either version 1.3c
 % of this license or (at your option) any later version.
 % The latest version of this license is in
 %    https://www.latex-project.org/lppl.txt
-% and version 1.3c or later is part of all distributions of LaTeX 
+% and version 1.3c or later is part of all distributions of LaTeX
 % version 2008 or later.
-% 
+%
 % This file has the LPPL maintenance status "maintained".
-% 
+%
 % The list of all files belonging to the LaTeX base distribution is
 % given in the file `manifest.txt'. See also `legal.txt' for additional
 % information.
-% 
-% The list of derived (unpacked) files belonging to the distribution 
-% and covered by LPPL is defined by the unpacking scripts (with 
+%
+% The list of derived (unpacked) files belonging to the distribution
+% and covered by LPPL is defined by the unpacking scripts (with
 % extension .ins) which are part of the distribution.
-% 
+%
 % \fi
 % Filename: ltnews.cls
 % Author: Alan Jeffrey et al
- 
-% This is the LaTeX2e document class for the `LaTeX News' information 
-% sheet which comes with every LaTeX release.  It may be useful for 
+
+% This is the LaTeX2e document class for the `LaTeX News' information
+% sheet which comes with every LaTeX release.  It may be useful for
 % newsletters, or as an example of how simple newsletters can be set
 % with LaTeX.  The changes log is at the end of the file.
- 
+
 % Copyright 1994-2004
-% Alan Jeffrey and the LaTeX3 project.  
- 
+% Alan Jeffrey and the LaTeX3 project.
+
 % This is a LaTeX2e document class.
- 
+
 \NeedsTeXFormat{LaTeX2e}
- 
+
 \ProvidesClass{ltnews}[2017/12/13 v1.06  Standard LaTeX class]
 
 % The configuration file, used for passing options.
@@ -60,7 +60,7 @@
 %    Mathptm symbol font     (AMS logo)
 %
 % The type1fonts option uses the fonts:
-% 
+%
 %    Adobe Utopia            (main text)
 %    URW Grotesk-T Bold      (headings)
 %    Lucida Sans typewriter  (program listings)
@@ -71,17 +71,17 @@
 
 \DeclareFontFamily{OT1}{ppl}{}
 \DeclareFontShape{OT1}{ppl}{m}{n}{<-> pplr7t}{}
-\DeclareFontShape{OT1}{ppl}{bx}{n}{<-> pplb7t}{}  
+\DeclareFontShape{OT1}{ppl}{bx}{n}{<-> pplb7t}{}
 \DeclareFontShape{OT1}{ppl}{m}{sc}{<-> pplrc7t}{}
 \DeclareFontShape{OT1}{ppl}{m}{it}{<-> pplri7t}{}
-\DeclareFontShape{OT1}{ppl}{m}{sl}{<-> pplro7t}{} 
+\DeclareFontShape{OT1}{ppl}{m}{sl}{<-> pplro7t}{}
 
 \DeclareFontFamily{T1}{ppl}{}
 \DeclareFontShape{T1}{ppl}{m}{n}{<-> pplr8t}{}
-\DeclareFontShape{T1}{ppl}{bx}{n}{<-> pplb8t}{}   
+\DeclareFontShape{T1}{ppl}{bx}{n}{<-> pplb8t}{}
 \DeclareFontShape{T1}{ppl}{m}{sc}{<-> pplrc8t}{}
 \DeclareFontShape{T1}{ppl}{m}{it}{<-> pplri8t}{}
-\DeclareFontShape{T1}{ppl}{m}{sl}{<-> pplro8t}{}  
+\DeclareFontShape{T1}{ppl}{m}{sl}{<-> pplro8t}{}
 
 % The Adobe Helvetica fonts:
 
@@ -97,10 +97,10 @@
 
 \DeclareFontFamily{OT1}{pcr}{\hyphenchar\font=-1}
 \DeclareFontShape{OT1}{pcr}{m}{n}{<-> s*[0.89] pcrr7t}{}
- 
+
 \DeclareFontFamily{T1}{pcr}{\hyphenchar\font=-1}
 \DeclareFontShape{T1}{pcr}{m}{n}{<-> s*[0.89] pcrr8t}{}
- 
+
 % The Utopia fonts:
 
 \DeclareFontFamily{OT1}{put}{}
@@ -223,9 +223,9 @@
 % The eTeX logo.
 
 \DeclareRobustCommand\eTeX{\ensuremath{\varepsilon}-\kern-.125em\TeX}
-       
+
 % Switch off some of the article options.
- 
+
 \DeclareOption{a4paper}{\OptionNotUsed}
 \DeclareOption{a5paper}{\OptionNotUsed}
 \DeclareOption{b5paper}{\OptionNotUsed}
@@ -254,7 +254,7 @@
 
 %% The size of the haeding font was reduced (from 14pt) here to
 %%   try and ensure that the pagination does not change whilst the
-%%   line count remains the same. 
+%%   line count remains the same.
 \DeclareOption{lw35fonts}{%
    \renewcommand{\rmdefault}{ppl}%
    \renewcommand{\ttdefault}{pcr}%
@@ -313,15 +313,15 @@
 
 % The default action for any option is to pass it to the article
 % class.
- 
+
 \DeclareOption*{\PassOptionsToClass{\CurrentOption}{article}}
- 
+
 % Execute the options.
- 
+
 \ProcessOptions
- 
+
 % Load the article class.
- 
+
 \LoadClass[twocolumn,oneside]{article}
 
 %
@@ -332,8 +332,8 @@
 %
 % Also, it uses a verbatim input mode so Chris does not use it for
 % urls as he wants to control layout and use macros within it.  Also
-% he usuually wants to hand-craft the line-breaks in such text. 
-% 
+% he usuually wants to hand-craft the line-breaks in such text.
+%
 \IfFileExists{url.sty}{%
   \RequirePackage{url}
   \newcommand\email{\begingroup \Url}}{%
@@ -345,7 +345,7 @@
 % to HTML conversion; noticeable the latexonly and htmlonly
 % environments.
 % Again, let's check if it exists and if not provide necessary stubs
-% 
+%
 \IfFileExists{html.sty}{%
   \RequirePackage{html}}{%
   % When it couldn't be found, provide some necessary stuff...
@@ -394,12 +394,15 @@
 % naively generated by \url can be produced in the pdf file.
 
 %% Please DO NOT load any packages after this point.
-%% 
+%%
 
 
 % The page style.
- 
+
 \pagestyle{empty}
+\renewcommand{\@oddfoot}{\@indiciafont\mbox{}\hfill --\thepage}%
+\renewcommand{\@evenfoot}{\@indiciafont\mbox{}\hfill --\thepage}%
+
 \setlength{\parindent}{1em}
 % Why \textwidth?
 \setlength{\rightskip}{0pt plus \textwidth}
@@ -408,40 +411,40 @@
 \setlength{\columnsep}{2em}
 
 % The text size, which tries to work with both A4 and letter paper
-% sizes. 
- 
+% sizes.
+
 \setlength{\textheight}{230mm}
 \setlength{\topmargin}{-10mm}
- 
+
 \setlength{\textwidth}{180mm}
 \setlength{\oddsidemargin}{-10mm}
- 
+
 % \maketitle parameters.
- 
+
 \newcommand{\publicationmonth}{\renewcommand{\@month}}
 \newcommand{\@month}{\ClassError{ltnews}
    {No \protect\publicationmonth~given}\@eha}
- 
+
 \newcommand{\publicationyear}{\renewcommand{\@year}}
 \newcommand{\@year}{\ClassError{ltnews}
    {No \protect\publicationyear~given}\@eha}
- 
+
 \newcommand{\publicationissue}{\renewcommand{\@issue}}
 \newcommand{\@issue}{\ClassError{ltnews}
    {No \protect\publicationissue~given}\@eha}
 \newcommand{\issuename}{Issue}
- 
+
 \newcommand{\indicia}{\renewcommand{\@indicia}}
 \newcommand{\@indicia}{%
    \LaTeXNews, and the \LaTeX{} software,
    are brought to you by the \LaTeX3 Project Team;
    Copyright \@year, all rights reserved.
 }
- 
+
 \title{\LaTeXNews}
 
 % The \maketitle for the LaTeX News.
- 
+
 \renewcommand{\maketitle}{%
    \twocolumn[{%
       \parbox[t][7\baselineskip]{\textwidth}{%
@@ -459,7 +462,7 @@
    \renewcommand{\@evenfoot}{\@indiciafont\@indicia\hfill}%
 }
 %
-% When PostScript fonts are use we want the first section heading 
+% When PostScript fonts are use we want the first section heading
 % to come out a little bit higher on the page.
 
 \newcommand{\raisefirstsection}{%
@@ -471,13 +474,13 @@
   \fi
 }
 % Sectioning commands.
- 
+
 \renewcommand{\section}{%
    \@startsection
       {section}{1}{\z@}{-1.5ex \@plus -1ex \@minus -.2ex}%
       {1ex \@plus.2ex}{\@headingfont}%
 }
- 
+
 \renewcommand{\subsection}{%
    \@startsection
       {subsection}{1}{\z@}{-1.5ex \@plus -1ex \@minus -.2ex}%
@@ -492,10 +495,10 @@
 }
 
 % No section numbers.
- 
+
 \setcounter{secnumdepth}{0}
- 
-% Set lists tighter, but brought in by 1em (otherwise the first line 
+
+% Set lists tighter, but brought in by 1em (otherwise the first line
 % always looks very wide).  Should this be done with \rightskip?
 % It actually does nothing since after this \rightskip is set to
 % \@rightskip: I think \rightmargin was intended but should we change
@@ -503,7 +506,7 @@
 % FMi 1999/12/11: in fact it needs to go as it would affect the
 % paragraph before the list making it flush right and indented while
 % the rest of the document is set ragged.
- 
+
 \renewcommand{\@listI}{%
    \setlength{\leftmargin}{\leftmargini}%
    \setlength{\topsep}{\medskipamount}%
@@ -518,7 +521,7 @@
 \setlength\topsep{4pt plus 1pt minus 2pt}
 
 % But have a list type with no indentation on either side:
-% 
+%
 \renewenvironment{description}
                {\list{}{\labelwidth\z@
                    \leftmargin \z@
@@ -534,9 +537,9 @@
 }{%
    \endlist
 }
- 
+
 % Some logos:
- 
+
 \newcommand{\NFSS}{NFSS}
 \newcommand{\LaTeXNews}{\LaTeX~News}
 \newcommand{\AW}{Addison Wesley}
@@ -561,15 +564,15 @@
 
 \newcommand*\class[1]{\texttt{#1}}
 \newcommand*\package[1]{\textsf{#1}}
-\let \pkg \package  % backward compatibility 
+\let \pkg \package  % backward compatibility
 \newcommand*\file[1]{\texttt{#1}}
 
 
-% Hacking to make <...> produce italics in verbatim.  NB: this can be 
+% Hacking to make <...> produce italics in verbatim.  NB: this can be
 % done more cleanly using the verbatim package.  But the ltnews class
 % has  to run on any LaTeX installation, even those without the
-% verbatim package.  
- 
+% verbatim package.
+
 % Here we extend the font-setting command to include making <> active
 % (ie adjusting the input encoding).
 \renewcommand \verbatim@font {%
@@ -577,11 +580,11 @@
   \catcode`\<=\active
   \catcode`\>=\active
 }
-  
+
 % Make active <...> produce italics surrounded by angle brackets
 % (used in verbatim and \verb);
 % << produces a less-than, and >> produces a greater-than.
- 
+
 \begingroup
   \catcode`\<=\active
   \catcode`\>=\active
@@ -604,21 +607,21 @@
 \def\verbatim@nolig@list{\do\`\do\,\do\'\do\-}
 
 % That's it!
- 
+
 \endinput
- 
+
 % CHANGELOG
 %
 % 20 May 1994, v0.01: Created file.
 %
 % 21 May 1994, v0.02: Made <...> produce italics inside verbatim.
-%    Added the indicia, \publicationyear, \publicationmonth and 
-%    \publicationissue.  Added the citations environment.  Switched off 
+%    Added the indicia, \publicationyear, \publicationmonth and
+%    \publicationissue.  Added the citations environment.  Switched off
 %    some of the article class options.
-% 
+%
 % 21 May 1994, v0.03: Fixed a bug with ragged right.  Fixed a bug
 %    which was causing underfull hbox messages.
-% 
+%
 % 27 May 1994, v0.04: Added SliTeX logo, and proper AMS LaTeX logo.
 %    Added angle brackets to <...>.
 %
@@ -629,14 +632,14 @@
 %
 % 27 Jul 1994, v0.06: Corrected a typo `\PassOptionToClass' should
 %    have been `\PassOptionsToClass'.  Manas Mandal pointed that one
-%    out. 
+%    out.
 %
 % 29 Nov 1994, v0.07: Made <...> only active in verbatim.
-% 
+%
 % 09 Dec 1995, v0.08: Upper case for Project Team.
-% 
+%
 % 20 Dec 1995, v0.09: Tidied up the list stuff.
-% 
+%
 % 03 Jun 1996, v0.10: Changed fonts for lw35 option, for logical and
 %    aesthetic reasons.
 %
@@ -648,24 +651,24 @@
 %
 % 22 Nov 1997, v0.13: Added new form of description.
 %    Found all sorts of strange things involving \rightskip
-%    
+%
 % 23 Feb 1999, v0.14: Added  some logos etc.
-%    
+%
 % 02 Jul 1999, v0.15: Added some logical markup
-% 
+%
 % 03 Jul 1999, v0.16: Amended \pkg and added \email
 %
 % 21 Dec 1999, v0.17: Added PDF info, load package url.sty
 %
 % 23 Dec 1999, v0.18: Don't depend on url.sty being present
-% 
+%
 % 21 Jul 2000, v0.19: Extra short-cuts, added to doc re v0.17;
 %    and more fonts
-% 
+%
 % 31 Aug 2000, v0.20: Fixed typo in URL (JLB)
 %
 % 06 Jun 2001, v0.21: Corrected undocumented stubs for html.sty
-% 
+%
 % 12 Jul 2001, v0.22: Added eTeX logo (from ltugboat.cls)
 %
 % 26 Feb 2004, v1.00: If pdf is being produced, use hyperref.
@@ -674,7 +677,7 @@
 % 28 Feb 2004  v1.01 Heading font in lw35, size change.
 %
 % 21 Oct 2004  v1.02 Improve check for PDF generation (taken from ifpdf.sty)
-% 
+%
 % 01 May 2014  v1.03 hidelinks option for hyperref
 %
 % BUGS

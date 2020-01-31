@@ -19,6 +19,12 @@ if ! command -v texlua > /dev/null; then
   cd ..
 fi
 
+# Backups only make the cache bigger
+tlmgr option -- autobackup 0
+
+# Update a cached version first (else later step might fail)
+tlmgr update --self
+
 # Needed for any use of texlua even if not testing LuaTeX
 tlmgr install luatex
 
@@ -32,7 +38,7 @@ tlmgr install cm etex knuth-lib latex-bin tex tex-ini-files unicode-data \
  
 # Assuming a 'basic' font set up, metafont is required to avoid
 # warnings with some packages and errors with others
-tlmgr install metafont mfware
+tlmgr install metafont mfware texlive-scripts
 
 # Contrib packages: done as a block to avoid multiple calls to tlmgr
 tlmgr install   \
@@ -40,15 +46,66 @@ tlmgr install   \
   ec            \
   fontspec      \
   hyperref      \
-  ifxetex       \
+  iftex         \
+  kvoptions     \
   oberdiek      \
+  pdftexcmds    \
   lh            \
   lualibs       \
   luaotfload    \
+  tex-gyre      \
+  stringenc     \
   url
 
-# Keep no backups (not required, simply makes cache bigger)
-tlmgr option -- autobackup 0
+# Additional support for typesetting
+tlmgr install  \
+  amscls       \
+  atbegshi     \
+  atveryend    \
+  auxhook      \
+  babel-german \
+  bigintcalc   \
+  bitset       \
+  bookmark     \
+  cbfonts      \
+  csquotes     \
+  dvips        \
+  epstopdf     \
+  epstopdf-pkg \
+  etexcmds     \
+  etoolbox     \
+  fancyvrb     \
+  fc           \
+  geometry     \
+  gettitlestring \
+  graphics-def \
+  helvetic     \
+  hologo       \
+  hycolor      \
+  imakeidx     \
+  infwarerr    \
+  intcalc      \
+  kvdefinekeys \
+  kvoptions    \
+  kvsetkeys    \
+  letltxmacro  \
+  ltxcmds      \
+  ly1          \
+  makeindex    \
+  mflogo       \
+  palatino     \
+  pdfescape    \
+  pl           \
+  refcount     \
+  rerunfilecheck \
+  sauter       \
+  times        \
+  uniquecounter \
+  vntex        \
+  wasy         \
+  wsuipa       \
+  xkeyval      \
+  zref
 
-# Update the TL install but add nothing new
-tlmgr update --self --all --no-auto-install
+# ensure we have the latest of the above packages
+tlmgr update --all

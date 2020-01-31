@@ -19,7 +19,11 @@ unpackfiles  = {"tools.ins"}
 
 sourcefiles  = {"*.dtx", "*.ins", "*-????-??-??.sty"}
 
-checkdeps = {maindir .. "/base", maindir .. "/required/graphics"}
+checkdeps =
+  {
+    maindir .. "/base",
+    maindir .. "/required/graphics"
+  }
 
 -- Allow for TU and other tests test
 checkconfigs = {"build","config-TU","config-legacy","config-search"}

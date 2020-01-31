@@ -17,6 +17,12 @@ installfiles = {"*.def", "*.sty"}
 typesetfiles = {"*.dtx", "*.tex"}
 docfiles     = {"cat.eps"}
 
+checkdeps =
+  {
+    maindir .. "/base",
+    maindir .. "/required/tools"
+  }
+
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
 

@@ -1,0 +1,1229 @@
+% \iffalse meta-comment
+%
+% Copyright (C) 2019-2020
+% The LaTeX3 Project and any individual authors listed elsewhere
+% in this file.
+%
+% This file is part of the LaTeX base system.
+% -------------------------------------------
+%
+% It may be distributed and/or modified under the
+% conditions of the LaTeX Project Public License, either version 1.3c
+% of this license or (at your option) any later version.
+% The latest version of this license is in
+%    https://www.latex-project.org/lppl.txt
+% and version 1.3c or later is part of all distributions of LaTeX
+% version 2008 or later.
+%
+% This file has the LPPL maintenance status "maintained".
+%
+% The list of all files belonging to the LaTeX base distribution is
+% given in the file `manifest.txt'. See also `legal.txt' for additional
+% information.
+%
+% The list of derived (unpacked) files belonging to the distribution
+% and covered by LPPL is defined by the unpacking scripts (with
+% extension .ins) which are part of the distribution.
+%
+% \fi
+% \iffalse
+%%% From File: ltfssaxes.dtx
+%% Copyright (C) 1999-2020 Frank Mittelbach
+%
+%<*driver>
+% \fi
+%
+%
+\ProvidesFile{ltfssaxes.dtx}
+             [2020/01/30 v1.0a LaTeX Kernel (NFSS Axes handing)]
+% \iffalse
+\documentclass{ltxdoc}
+\begin{document}
+\DocInput{ltfssaxes.dtx}
+\end{document}
+%</driver>
+% \fi
+%
+%
+%
+%
+% \GetFileInfo{ltfssaxes.dtx}
+% \title{A new font selection scheme for \TeX{} macro packages\\
+%        (Axes Handling)\thanks
+%       {This file has version number
+%       \fileversion\ dated \filedate}}
+%
+% \author{Frank Mittelbach}
+%
+% \MaintainedByLaTeXTeam{latex}
+% \maketitle
+%
+% This file contains the implementation for handling extra axes
+% splitting the series and the values into sub-categories.  selection
+% commands. See other parts of the \LaTeX\ distribution, or \emph{The
+% \LaTeX\ Companion} for higher level documentation of the
+% \LaTeX\ Font Selection Scheme.
+%
+%
+%
+% \StopEventually{}
+%
+% Everything in the this file got introduced 2020/02/02, so we do a
+% single rollback (for now).
+%    \begin{macrocode}
+%<*2ekernel>
+%</2ekernel>
+%<*2ekernel|latexrelease>
+%<latexrelease>\IncludeInRelease{2020/02/02}%
+%<latexrelease>   {\DeclareFontSeriesChangeRule}{Series change rules}%
+%    \end{macrocode}
+%
+%
+%
+% \section{Changing the font series}
+%
+% In the original NFSS implementation the series was a single
+% attribute stored in \cs{f@series} and so one always had to specify
+% both weight and width together. This means it was impossible to
+% typeset, a paragraph in a condensed font and inside have a few words
+% in bold weight (but still condensed) without doing this manually by
+% requesting \verb=\fontseries{bc}\selectfont=.
+%
+% The new implementation now works differently by looking both at the
+% current value of \cs{f@series} and the requested new series and out
+% of that combination selects a resulting series value. Thus, if the
+% current series is \texttt{c} and we ask for \texttt{b} we  now get
+% \texttt{bc}.
+%
+% This is done by consulting a simple lookup table. This table is
+% configurable (though most likely that flexibility will seldom of
+% ever be needed) Adding or changing entries in this table are done
+% with \cs{DeclareFontSeriesChangeRule}.
+%
+% \subsection{The series lookup table}
+%
+%
+%  \begin{macro}{\DeclareFontSeriesChangeRule}
+%    The \cs{DeclareFontSeriesChangeRule} defines entries in a simple
+%    database (implemented as a set of commands) that define mappings
+%    between from an existing series and requested new series and maps
+%    that to  a result series (and additionally offers an alternative
+%    if the desired one is not existing):
+%    \begin{itemize}
+%    \item[\texttt{\#1}] current \cs{f@series}
+%    \item[\texttt{\#2}] requested new series
+%    \item[\texttt{\#3}] result (if that exist for the given font family
+%    \item[\texttt{\#4}] alternative result (if \texttt{\#3} does not exist)
+%    \end{itemize}
+%    If an \texttt{.fd} file has its own substitution rules then
+%    \texttt{\#3} exist and thus \texttt{\#4} is not applied.
+%
+%    If there is no matching database entry or if neither the result
+%    nor the alternate result exist in the font family the requested
+%    new series is used (which then may trigger substitutions later on.
+%    \begin{macrocode}
+\def\DeclareFontSeriesChangeRule#1#2#3#4{%
+  \@namedef{series@#1@#2}{{#3}{#4}}}
+%    \end{macrocode}
+%  \end{macro}
+%
+% \subsection{Mapping rules for series changes}
+%
+% The rules set up use explicit series values not \cs{..default}
+% indirections; my current feeling is that this is in fact better.
+%
+% With 9 weights and 9 width classes this table is getting a bit large
+% in the end (324 entries) but on the other hand it doesn't change and
+% accessing speed and it is fast this way.
+%
+% We could alternatively split the axis and maintain weight and width
+% separately, but that would take more processing time and would not
+% allow for setting up explicit exceptions nicely (not sure that this
+% would ever get used though).
+%
+% Design considerations for mapping entries:
+% \begin{itemize}
+% \item
+%
+%    We make \texttt{m} to reset both weight and width (as this is
+%    how it always worked). To reset just the width \texttt{?m} is
+%    provided and to reset just the weight \texttt{m?}.
+%
+% \item
+%
+%   We do support ``\texttt{m}\textit{width}'' and
+%    ``\textit{weight}\texttt{m}'', e.g., \texttt{mec} to mean ``go to
+%    medium weight and extra-condensed width''. At the end of the
+%    process we automatically drop any leftover \texttt{m} in the
+%    series name (unless it is just a single \texttt{m}).
+%
+%
+% \item
+%
+%    If there is no table entry then the target series is used
+%    unconditionally. This means that any request to set both weight
+%    and width (e.g. \texttt{bx} or \texttt{ulc}) needs no table
+%    entries.
+%    For that reason there are no entries which have a weight+width as
+%    request (i.e., second argument).
+%
+%    In particular this is also true for cases involving \texttt{m},
+%    e.g., \texttt{bm} (bold medium width) which automatially gets
+%    reduced result in \texttt{b} or \texttt{mc} (medium weight
+%    condensed) which becomes \texttt{c} as a result.
+%
+% \item
+%
+%    Only a few entries have ``alterative'' values and perhaps most of
+%    them should get dropped. Or maybe not \ldots{} needs some thought
+%    perhaps.
+%
+%    The idea is that you don't want the normal substitution to kick
+%    in because that would reset the shape first and it may be better
+%    to stay with \texttt{b} when a change to \texttt{c} is requested
+%    and \texttt{bc} doesn't exist, than to go to first change the
+%    shape to \texttt{n} and then find that \texttt{bc/n} doesn't
+%    exist either and thus ending up wth \texttt{m/n}.
+%
+% \item
+%
+%    Also: while I did set up all nine standard weight values from
+%    \texttt{ul} to \texttt{ub} I only bothered to provide entries for
+%    \texttt{ec},  \texttt{sc}, \texttt{c} and \texttt{x}, because other levels of
+%    compression/expansion are not in any real fonts that I know.
+%
+%    Could and perhaps should be eventually extended to cover the
+%    whole set.
+%
+% \end{itemize}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {bc}{b}{bc}{}
+\DeclareFontSeriesChangeRule {bc}{c}{bc}{}
+\DeclareFontSeriesChangeRule {bc}{eb}{ebc}{}
+\DeclareFontSeriesChangeRule {bc}{ec}{bec} {bc}
+\DeclareFontSeriesChangeRule {bc}{el}{elc}{}
+\DeclareFontSeriesChangeRule {bc}{l}{lc}{}
+\DeclareFontSeriesChangeRule {bc}{sb}{sbc}{}
+\DeclareFontSeriesChangeRule {bc}{sc}{bsc} {bc}
+\DeclareFontSeriesChangeRule {bc}{sl}{slc}{}
+\DeclareFontSeriesChangeRule {bc}{ub}{ubc}{}
+\DeclareFontSeriesChangeRule {bc}{ul}{ulc}{}
+\DeclareFontSeriesChangeRule {bc}{x}{bx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {bx}{b}{bx}{}
+\DeclareFontSeriesChangeRule {bx}{c}  {bc}  {bx}	%<-----
+\DeclareFontSeriesChangeRule {bx}{eb}{ebx}{}
+\DeclareFontSeriesChangeRule {bx}{ec}  {bec}  {bx}	%<-----
+\DeclareFontSeriesChangeRule {bx}{el}{elx}{}
+\DeclareFontSeriesChangeRule {bx}{l}{lx}{}
+\DeclareFontSeriesChangeRule {bx}{sb} {sbx} {}
+\DeclareFontSeriesChangeRule {bx}{sc}  {bsc}  {bx}	%<-----
+\DeclareFontSeriesChangeRule {bx}{sl}{slx}  {}
+\DeclareFontSeriesChangeRule {bx}{ub}{ubx}{}
+\DeclareFontSeriesChangeRule {bx}{ul}{ulx}{}
+\DeclareFontSeriesChangeRule {bx}{x}{bx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {b}{bx} {bx}  {b}		%<-----
+\DeclareFontSeriesChangeRule {b}{c}  {bc}  {b}		%<-----
+\DeclareFontSeriesChangeRule {b}{ec}  {bec}  {b}	%<-----
+\DeclareFontSeriesChangeRule {b}{sb} {sb}  {b}		%<-----
+\DeclareFontSeriesChangeRule {b}{sc}  {bsc}  {b}	%<-----
+\DeclareFontSeriesChangeRule {b}{x}  {bx}  {b}		%<-----
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {c}{bx} {bx}  {b} 		%<-----
+\DeclareFontSeriesChangeRule {c}{b}{bc}{}
+\DeclareFontSeriesChangeRule {c}{eb}{ebc}{}
+\DeclareFontSeriesChangeRule {c}{el}{elc}{}
+\DeclareFontSeriesChangeRule {c}{l}{lc}{}
+\DeclareFontSeriesChangeRule {c}{sb}{sbc}{}
+\DeclareFontSeriesChangeRule {c}{sl}{slc}{}
+\DeclareFontSeriesChangeRule {c}{ub}{ubc}{}
+\DeclareFontSeriesChangeRule {c}{ul}{ulc}{}
+\DeclareFontSeriesChangeRule {c}{x}{x}{m}               %<-----
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {ebc}{b}{bc}{}
+\DeclareFontSeriesChangeRule {ebc}{c}{ebc}{}
+\DeclareFontSeriesChangeRule {ebc}{eb}{ebc}{}
+\DeclareFontSeriesChangeRule {ebc}{ec}{ebec}{ebc}
+\DeclareFontSeriesChangeRule {ebc}{el}{elc}{}
+\DeclareFontSeriesChangeRule {ebc}{l}{lc}{}
+\DeclareFontSeriesChangeRule {ebc}{sb}{sbc}{}
+\DeclareFontSeriesChangeRule {ebc}{sc}{ebsc}{ebc}
+\DeclareFontSeriesChangeRule {ebc}{sl}{slc}{}
+\DeclareFontSeriesChangeRule {ebc}{ub}{ubc}{}
+\DeclareFontSeriesChangeRule {ebc}{ul}{ulc}{}
+\DeclareFontSeriesChangeRule {ebc}{x}{ebx}{}
+%    \end{macrocode}
+%
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {ec}{bx} {bx}  {b} 	%<-----
+\DeclareFontSeriesChangeRule {ec}{b}{bec}{}
+\DeclareFontSeriesChangeRule {ec}{eb}{ebec}{}
+\DeclareFontSeriesChangeRule {ec}{el}{elec}{}
+\DeclareFontSeriesChangeRule {ec}{l}{lec}{}
+\DeclareFontSeriesChangeRule {ec}{sb}{sbec}{}
+\DeclareFontSeriesChangeRule {ec}{sl}{slec}{}
+\DeclareFontSeriesChangeRule {ec}{ub}{ubec}{}
+\DeclareFontSeriesChangeRule {ec}{ul}{ulec}{}
+\DeclareFontSeriesChangeRule {ec}{x}{x}{m}              %<-----
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {sc}{bx} {bx}  {b} 	%<-----
+\DeclareFontSeriesChangeRule {sc}{b}{bsc}{}
+\DeclareFontSeriesChangeRule {sc}{eb}{ebsc}{}
+\DeclareFontSeriesChangeRule {sc}{el}{elsc}{}
+\DeclareFontSeriesChangeRule {sc}{l}{lsc}{}
+\DeclareFontSeriesChangeRule {sc}{sb}{sbsc}{}
+\DeclareFontSeriesChangeRule {sc}{sl}{slsc}{}
+\DeclareFontSeriesChangeRule {sc}{ub}{ubsc}{}
+\DeclareFontSeriesChangeRule {sc}{ul}{ulsc}{}
+\DeclareFontSeriesChangeRule {sc}{x}{x}{m}              %<-----
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {ebx}{b}{bx}{}
+\DeclareFontSeriesChangeRule {ebx}{c}{ebc}{}
+\DeclareFontSeriesChangeRule {ebx}{eb}{ebx}{}
+\DeclareFontSeriesChangeRule {ebx}{ec}{ebec}{}
+\DeclareFontSeriesChangeRule {ebx}{el}{elx}{}
+\DeclareFontSeriesChangeRule {ebx}{l}{lx}{}
+\DeclareFontSeriesChangeRule {ebx}{sb}{sbx}{}
+\DeclareFontSeriesChangeRule {ebx}{sc}{ebsc}{}
+\DeclareFontSeriesChangeRule {ebx}{sl}{slx}{}
+\DeclareFontSeriesChangeRule {ebx}{ub}{ubx}{}
+\DeclareFontSeriesChangeRule {ebx}{ul}{ulx}{}
+\DeclareFontSeriesChangeRule {ebx}{x}{ebx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {eb}{c}{ebc}{}
+\DeclareFontSeriesChangeRule {eb}{ec}{ebec}{}
+\DeclareFontSeriesChangeRule {eb}{sc}{ebsc}{}
+\DeclareFontSeriesChangeRule {eb}{x}{ebx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {elc}{b}{bc}{}
+\DeclareFontSeriesChangeRule {elc}{c}{elc}{}
+\DeclareFontSeriesChangeRule {elc}{eb}{ebc}{}
+\DeclareFontSeriesChangeRule {elc}{ec}{elec}{}
+\DeclareFontSeriesChangeRule {elc}{el}{elc}{}
+\DeclareFontSeriesChangeRule {elc}{l}{lc}{}
+\DeclareFontSeriesChangeRule {elc}{sb}{sbc}{}
+\DeclareFontSeriesChangeRule {elc}{sc}{elsc}{}
+\DeclareFontSeriesChangeRule {elc}{sl}{slc}{}
+\DeclareFontSeriesChangeRule {elc}{ub}{ubc}{}
+\DeclareFontSeriesChangeRule {elc}{ul}{ulc}{}
+\DeclareFontSeriesChangeRule {elc}{x}{elx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {elx}{b}{bx}{}
+\DeclareFontSeriesChangeRule {elx}{c}{elc}{}
+\DeclareFontSeriesChangeRule {elx}{eb}{ebx}{}
+\DeclareFontSeriesChangeRule {elx}{ec}{elec}{}
+\DeclareFontSeriesChangeRule {elx}{el}{elx}{}
+\DeclareFontSeriesChangeRule {elx}{l}{lx}{}
+\DeclareFontSeriesChangeRule {elx}{sb}{sbx}{}
+\DeclareFontSeriesChangeRule {elx}{sc}{elsc}{}
+\DeclareFontSeriesChangeRule {elx}{sl}{slx}{}
+\DeclareFontSeriesChangeRule {elx}{ub}{ubx}{}
+\DeclareFontSeriesChangeRule {elx}{ul}{ulx}{}
+\DeclareFontSeriesChangeRule {elx}{x}{elx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {el}{c}{elc}{}
+\DeclareFontSeriesChangeRule {el}{ec}{elec}{}
+\DeclareFontSeriesChangeRule {el}{sc}{elsc}{}
+\DeclareFontSeriesChangeRule {el}{x}{elx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {lc}{b}{bc}{}
+\DeclareFontSeriesChangeRule {lc}{c}{lc}{}
+\DeclareFontSeriesChangeRule {lc}{eb}{ebc}{}
+\DeclareFontSeriesChangeRule {lc}{ec}{lec}{}
+\DeclareFontSeriesChangeRule {lc}{el}{elc}{}
+\DeclareFontSeriesChangeRule {lc}{l}{lc}{}
+\DeclareFontSeriesChangeRule {lc}{sb}{sbc}{}
+\DeclareFontSeriesChangeRule {lc}{sc}{lsc}{}
+\DeclareFontSeriesChangeRule {lc}{sl}{slc}{}
+\DeclareFontSeriesChangeRule {lc}{ub}{ubc}{}
+\DeclareFontSeriesChangeRule {lc}{ul}{ulc}{}
+\DeclareFontSeriesChangeRule {lc}{x}{lx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {lx}{b}{bx}{}
+\DeclareFontSeriesChangeRule {lx}{c}{lc}{}
+\DeclareFontSeriesChangeRule {lx}{eb}{ebx}{}
+\DeclareFontSeriesChangeRule {lx}{ec}{lec}{}
+\DeclareFontSeriesChangeRule {lx}{el}{elx}{}
+\DeclareFontSeriesChangeRule {lx}{l}{lx}{}
+\DeclareFontSeriesChangeRule {lx}{sb}{sbx}{}
+\DeclareFontSeriesChangeRule {lx}{sc}{lsc}{}
+\DeclareFontSeriesChangeRule {lx}{sl}{slx}{}
+\DeclareFontSeriesChangeRule {lx}{ub}{ubx}{}
+\DeclareFontSeriesChangeRule {lx}{ul}{ulx}{}
+\DeclareFontSeriesChangeRule {lx}{x}{lx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {l}{bx} {bx}  {b}		%<-----
+\DeclareFontSeriesChangeRule {l}{b}  {b}   {bx}		%<-----
+\DeclareFontSeriesChangeRule {l}{c}  {lc}  {l}  % ?	%<-----
+\DeclareFontSeriesChangeRule {l}{ec}  {lec}  {l}  % ?	%<-----
+\DeclareFontSeriesChangeRule {l}{sb} {sb}  {b}  % ?	%<-----
+\DeclareFontSeriesChangeRule {l}{sc}  {lsc}  {l}  % ?	%<-----
+\DeclareFontSeriesChangeRule {l}{x}  {lx}  {l}  % ?	%<-----
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {m}{bx} {bx} {b}	  	%<-----
+\DeclareFontSeriesChangeRule {m}{b}  {b}  {bx}		%<-----
+\DeclareFontSeriesChangeRule {m}{c}  {c}  {m}		%<-----
+\DeclareFontSeriesChangeRule {m}{ec}  {ec}  {m}		%<-----
+\DeclareFontSeriesChangeRule {m}{l}  {l}  {m}		%<-----
+\DeclareFontSeriesChangeRule {m}{sb} {sb} {b}		%<-----
+\DeclareFontSeriesChangeRule {m}{sc}  {sc}  {m}		%<-----
+\DeclareFontSeriesChangeRule {m}{x}  {x}  {m}		%<-----
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {sbc}{b}{bc}{}
+\DeclareFontSeriesChangeRule {sbc}{c}{sbc}{}
+\DeclareFontSeriesChangeRule {sbc}{eb}{ebc}{}
+\DeclareFontSeriesChangeRule {sbc}{ec}{sbec}{sbc}
+\DeclareFontSeriesChangeRule {sbc}{el}{elc}{}
+\DeclareFontSeriesChangeRule {sbc}{l}{lc}{}
+\DeclareFontSeriesChangeRule {sbc}{sb}{sbc}{}
+\DeclareFontSeriesChangeRule {sbc}{sc}{sbsc}{sbc}
+\DeclareFontSeriesChangeRule {sbc}{sl}{slc}{}
+\DeclareFontSeriesChangeRule {sbc}{ub}{ubc}{}
+\DeclareFontSeriesChangeRule {sbc}{ul}{ulc}{}
+\DeclareFontSeriesChangeRule {sbc}{x}{sbx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {sbx}{b}{bx}{}
+\DeclareFontSeriesChangeRule {sbx}{c}{sbc}{}
+\DeclareFontSeriesChangeRule {sbx}{eb}{ebx}{}
+\DeclareFontSeriesChangeRule {sbx}{ec}{sbec}{}
+\DeclareFontSeriesChangeRule {sbx}{el}{elx}{}
+\DeclareFontSeriesChangeRule {sbx}{l}{lx}{}
+\DeclareFontSeriesChangeRule {sbx}{sb}{sbx}{}
+\DeclareFontSeriesChangeRule {sbx}{sc}{sbsc}{}
+\DeclareFontSeriesChangeRule {sbx}{sl}{slx}{}
+\DeclareFontSeriesChangeRule {sbx}{ub}{ubx}{}
+\DeclareFontSeriesChangeRule {sbx}{ul}{ulx}{}
+\DeclareFontSeriesChangeRule {sbx}{x}{sbx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {sb}{c}  {sbc} {bc} %?	%<-----
+\DeclareFontSeriesChangeRule {sb}{ec}  {sbec} {sbc} %?	%<-----
+\DeclareFontSeriesChangeRule {sb}{sc}  {sbsc} {sbc} %?	%<-----
+\DeclareFontSeriesChangeRule {sb}{x}  {sbx} {bx} %?	%<-----
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {slc}{b}{bc}{}
+\DeclareFontSeriesChangeRule {slc}{c}{slc}{}
+\DeclareFontSeriesChangeRule {slc}{eb}{ebc}{}
+\DeclareFontSeriesChangeRule {slc}{ec}{slec}{}
+\DeclareFontSeriesChangeRule {slc}{el}{elc}{}
+\DeclareFontSeriesChangeRule {slc}{l}{lc}{}
+\DeclareFontSeriesChangeRule {slc}{sb}{sbc}{}
+\DeclareFontSeriesChangeRule {slc}{sc}{slsc}{}
+\DeclareFontSeriesChangeRule {slc}{sl}{slc}{}
+\DeclareFontSeriesChangeRule {slc}{ub}{ubc}{}
+\DeclareFontSeriesChangeRule {slc}{ul}{ulc}{}
+\DeclareFontSeriesChangeRule {slc}{x}{slx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {slx}{b}{bx}{}
+\DeclareFontSeriesChangeRule {slx}{c}{slc}{}
+\DeclareFontSeriesChangeRule {slx}{eb}{ebx}{}
+\DeclareFontSeriesChangeRule {slx}{ec}{slec}{}
+\DeclareFontSeriesChangeRule {slx}{el}{elx}{}
+\DeclareFontSeriesChangeRule {slx}{l}{lx}{}
+\DeclareFontSeriesChangeRule {slx}{sb}{sbx}{}
+\DeclareFontSeriesChangeRule {slx}{sc}{slsc}{}
+\DeclareFontSeriesChangeRule {slx}{sl}{slx}{}
+\DeclareFontSeriesChangeRule {slx}{ub}{ubx}{}
+\DeclareFontSeriesChangeRule {slx}{ul}{ulx}{}
+\DeclareFontSeriesChangeRule {slx}{x}{slx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {sl}{c}{slc}{}
+\DeclareFontSeriesChangeRule {sl}{ec}{slec}{}
+\DeclareFontSeriesChangeRule {sl}{sc}{slsc}{}
+\DeclareFontSeriesChangeRule {sl}{x}{slx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {ubc}{b}{bc}{}
+\DeclareFontSeriesChangeRule {ubc}{c}{ubc}{}
+\DeclareFontSeriesChangeRule {ubc}{eb}{ebc}{}
+\DeclareFontSeriesChangeRule {ubc}{ec}{ubec}{}
+\DeclareFontSeriesChangeRule {ubc}{el}{elc}{}
+\DeclareFontSeriesChangeRule {ubc}{l}{lc}{}
+\DeclareFontSeriesChangeRule {ubc}{sb}{sbc}{}
+\DeclareFontSeriesChangeRule {ubc}{sc}{ubsc}{}
+\DeclareFontSeriesChangeRule {ubc}{sl}{slc}{}
+\DeclareFontSeriesChangeRule {ubc}{ub}{ubc}{}
+\DeclareFontSeriesChangeRule {ubc}{ul}{ulc}{}
+\DeclareFontSeriesChangeRule {ubc}{x}{ubx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {ubx}{b}{bx}{}
+\DeclareFontSeriesChangeRule {ubx}{c}{ubc}{}
+\DeclareFontSeriesChangeRule {ubx}{eb}{ebx}{}
+\DeclareFontSeriesChangeRule {ubx}{ec}{ubec}{}
+\DeclareFontSeriesChangeRule {ubx}{el}{elx}{}
+\DeclareFontSeriesChangeRule {ubx}{l}{lx}{}
+\DeclareFontSeriesChangeRule {ubx}{sb}{sbx}{}
+\DeclareFontSeriesChangeRule {ubx}{sc}{ubsc}{}
+\DeclareFontSeriesChangeRule {ubx}{sl}{slx}{}
+\DeclareFontSeriesChangeRule {ubx}{ub}{ubx}{}
+\DeclareFontSeriesChangeRule {ubx}{ul}{ulx}{}
+\DeclareFontSeriesChangeRule {ubx}{x}{ubx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {ub}{c}{ubc}{}
+\DeclareFontSeriesChangeRule {ub}{ec}{ubec}{}
+\DeclareFontSeriesChangeRule {ub}{sc}{ubsc}{}
+\DeclareFontSeriesChangeRule {ub}{x}{ubx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {ulc}{b}{bc}{}
+\DeclareFontSeriesChangeRule {ulc}{c}{ulc}{}
+\DeclareFontSeriesChangeRule {ulc}{eb}{ebc}{}
+\DeclareFontSeriesChangeRule {ulc}{ec}{ulec}{ulc}
+\DeclareFontSeriesChangeRule {ulc}{el}{elc}{}
+\DeclareFontSeriesChangeRule {ulc}{l}{lc}{}
+\DeclareFontSeriesChangeRule {ulc}{sb}{sbc}{}
+\DeclareFontSeriesChangeRule {ulc}{sc}{ulsc}{ulc}
+\DeclareFontSeriesChangeRule {ulc}{sl}{slc}{}
+\DeclareFontSeriesChangeRule {ulc}{ub}{ubc}{}
+\DeclareFontSeriesChangeRule {ulc}{ul}{ulc}{}
+\DeclareFontSeriesChangeRule {ulc}{x}{ulx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {ulx}{b}{bx}{}
+\DeclareFontSeriesChangeRule {ulx}{c}{ulc}{}
+\DeclareFontSeriesChangeRule {ulx}{eb}{ebx}{}
+\DeclareFontSeriesChangeRule {ulx}{ec}{ulec}{}
+\DeclareFontSeriesChangeRule {ulx}{el}{elx}{}
+\DeclareFontSeriesChangeRule {ulx}{l}{lx}{}
+\DeclareFontSeriesChangeRule {ulx}{sb}{sbx}{}
+\DeclareFontSeriesChangeRule {ulx}{sc}{ulsc}{}
+\DeclareFontSeriesChangeRule {ulx}{sl}{slx}{}
+\DeclareFontSeriesChangeRule {ulx}{ub}{ubx}{}
+\DeclareFontSeriesChangeRule {ulx}{ul}{ulx}{}
+\DeclareFontSeriesChangeRule {ulx}{x}{ulx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {ul}{c}{ulc}{}
+\DeclareFontSeriesChangeRule {ul}{ec}{ulec}{}
+\DeclareFontSeriesChangeRule {ul}{sc}{ulsc}{}
+\DeclareFontSeriesChangeRule {ul}{x}{ulx}{}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {x}{b}{bx}{}
+\DeclareFontSeriesChangeRule {x}{c}{c}{}
+\DeclareFontSeriesChangeRule {x}{eb}{ebx}{}
+\DeclareFontSeriesChangeRule {x}{ec}{ec}{}
+\DeclareFontSeriesChangeRule {x}{el}{elx}{}
+\DeclareFontSeriesChangeRule {x}{l}{lx}{}
+\DeclareFontSeriesChangeRule {x}{sb}{sbx}{}
+\DeclareFontSeriesChangeRule {x}{sc}{sc}{}
+\DeclareFontSeriesChangeRule {x}{sl}{slx}{}
+\DeclareFontSeriesChangeRule {x}{ub}{ubx}{}
+\DeclareFontSeriesChangeRule {x}{ul}{ulx}{}
+%    \end{macrocode}
+%
+%
+%    Special rules for \texttt{lm} etc.\ aren't needed because if the
+%    target \texttt{lm} is request it will used if there is no rule
+%    and that id then reduced to \texttt{l}
+%    automatically. Same for \texttt{mc} and friends. Only \texttt{?m}
+%    and \texttt{m?} need rules.
+%
+%    So here are the special rules for \texttt{m?}:
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {bc}{m?}{c}{}
+\DeclareFontSeriesChangeRule {bec}{m?}{ec}{}
+\DeclareFontSeriesChangeRule {bsc}{m?}{sc}{}
+\DeclareFontSeriesChangeRule {bx}{m?}{x}{}
+\DeclareFontSeriesChangeRule {b}{m?}{m}{}
+\DeclareFontSeriesChangeRule {c}{m?}{c}{}
+\DeclareFontSeriesChangeRule {ebc}{m?}{c}{}
+\DeclareFontSeriesChangeRule {ebec}{m?}{ec}{}
+\DeclareFontSeriesChangeRule {ebsc}{m?}{sc}{}
+\DeclareFontSeriesChangeRule {ebx}{m?}{x}{}
+\DeclareFontSeriesChangeRule {eb}{m?}{m}{}
+\DeclareFontSeriesChangeRule {ec}{m?}{ec}{}
+\DeclareFontSeriesChangeRule {elc}{m?}{c}{}
+\DeclareFontSeriesChangeRule {elec}{m?}{ec}{}
+\DeclareFontSeriesChangeRule {elsc}{m?}{sc}{}
+\DeclareFontSeriesChangeRule {elx}{m?}{x}{}
+\DeclareFontSeriesChangeRule {el}{m?}{m}{}
+\DeclareFontSeriesChangeRule {lc}{m?}{c}{}
+\DeclareFontSeriesChangeRule {lec}{m?}{ec}{}
+\DeclareFontSeriesChangeRule {lsc}{m?}{sc}{}
+\DeclareFontSeriesChangeRule {lx}{m?}{x}{}
+\DeclareFontSeriesChangeRule {l}{m?}{m}{}
+\DeclareFontSeriesChangeRule {m}{m?}{m}{}
+\DeclareFontSeriesChangeRule {sbc}{m?}{c}{}
+\DeclareFontSeriesChangeRule {sbec}{m?}{ec}{}
+\DeclareFontSeriesChangeRule {sbsc}{m?}{sc}{}
+\DeclareFontSeriesChangeRule {sbx}{m?}{x}{}
+\DeclareFontSeriesChangeRule {sb}{m?}{m}{}
+\DeclareFontSeriesChangeRule {sc}{m?}{sc}{}
+\DeclareFontSeriesChangeRule {slc}{m?}{c}{}
+\DeclareFontSeriesChangeRule {slec}{m?}{ec}{}
+\DeclareFontSeriesChangeRule {slsc}{m?}{sc}{}
+\DeclareFontSeriesChangeRule {slx}{m?}{x}{}
+\DeclareFontSeriesChangeRule {sl}{m?}{m}{}
+\DeclareFontSeriesChangeRule {ubc}{m?}{c}{}
+\DeclareFontSeriesChangeRule {ubec}{m?}{ec}{}
+\DeclareFontSeriesChangeRule {ubsc}{m?}{sc}{}
+\DeclareFontSeriesChangeRule {ubx}{m?}{x}{}
+\DeclareFontSeriesChangeRule {ub}{m?}{ub}{}
+\DeclareFontSeriesChangeRule {ulc}{m?}{c}{}
+\DeclareFontSeriesChangeRule {ulec}{m?}{ec}{}
+\DeclareFontSeriesChangeRule {ulsc}{m?}{sc}{}
+\DeclareFontSeriesChangeRule {ulx}{m?}{x}{}
+\DeclareFontSeriesChangeRule {ul}{m?}{m}{}
+\DeclareFontSeriesChangeRule {x}{m?}{x}{}
+%    \end{macrocode}
+%
+%    And there the special rules for \texttt{?m}:
+%    \begin{macrocode}
+\DeclareFontSeriesChangeRule {bc}{?m}{b}{}
+\DeclareFontSeriesChangeRule {bec}{?m}{b}{}
+\DeclareFontSeriesChangeRule {bsc}{?m}{b}{}
+\DeclareFontSeriesChangeRule {bsc}{?m}{b}{}
+\DeclareFontSeriesChangeRule {bx}{?m}{b}{}
+\DeclareFontSeriesChangeRule {b}{?m}{b}{}
+\DeclareFontSeriesChangeRule {c}{?m}{m}{}
+\DeclareFontSeriesChangeRule {ebc}{?m}{eb}{}
+\DeclareFontSeriesChangeRule {ebec}{?m}{eb}{}
+\DeclareFontSeriesChangeRule {ebsc}{?m}{eb}{}
+\DeclareFontSeriesChangeRule {ebsc}{?m}{eb}{}
+\DeclareFontSeriesChangeRule {ebx}{?m}{eb}{}
+\DeclareFontSeriesChangeRule {eb}{?m}{eb}{}
+\DeclareFontSeriesChangeRule {ec}{?m}{m}{}
+\DeclareFontSeriesChangeRule {elc}{?m}{el}{}
+\DeclareFontSeriesChangeRule {elec}{?m}{el}{}
+\DeclareFontSeriesChangeRule {elsc}{?m}{el}{}
+\DeclareFontSeriesChangeRule {elsc}{?m}{el}{}
+\DeclareFontSeriesChangeRule {elx}{?m}{el}{}
+\DeclareFontSeriesChangeRule {el}{?m}{el}{}
+\DeclareFontSeriesChangeRule {lc}{?m}{l}{}
+\DeclareFontSeriesChangeRule {lec}{?m}{l}{}
+\DeclareFontSeriesChangeRule {lsc}{?m}{l}{}
+\DeclareFontSeriesChangeRule {lsc}{?m}{l}{}
+\DeclareFontSeriesChangeRule {lx}{?m}{l}{}
+\DeclareFontSeriesChangeRule {l}{?m}{l}{}
+\DeclareFontSeriesChangeRule {m}{?m}{m}{}
+\DeclareFontSeriesChangeRule {sbc}{?m}{sb}{}
+\DeclareFontSeriesChangeRule {sbec}{?m}{sb}{}
+\DeclareFontSeriesChangeRule {sbsc}{?m}{sb}{}
+\DeclareFontSeriesChangeRule {sbsc}{?m}{sb}{}
+\DeclareFontSeriesChangeRule {sbx}{?m}{sb}{}
+\DeclareFontSeriesChangeRule {sb}{?m}{sb}{}
+\DeclareFontSeriesChangeRule {sc}{?m}{m}{}
+\DeclareFontSeriesChangeRule {sc}{?m}{m}{}
+\DeclareFontSeriesChangeRule {slc}{?m}{sl}{}
+\DeclareFontSeriesChangeRule {slec}{?m}{sl}{}
+\DeclareFontSeriesChangeRule {slsc}{?m}{sl}{}
+\DeclareFontSeriesChangeRule {slsc}{?m}{sl}{}
+\DeclareFontSeriesChangeRule {slx}{?m}{sl}{}
+\DeclareFontSeriesChangeRule {sl}{?m}{sl}{}
+\DeclareFontSeriesChangeRule {ubc}{?m}{ub}{}
+\DeclareFontSeriesChangeRule {ubec}{?m}{ub}{}
+\DeclareFontSeriesChangeRule {ubsc}{?m}{ub}{}
+\DeclareFontSeriesChangeRule {ubsc}{?m}{ub}{}
+\DeclareFontSeriesChangeRule {ubx}{?m}{ub}{}
+\DeclareFontSeriesChangeRule {ub}{?m}{m}{}
+\DeclareFontSeriesChangeRule {ulc}{?m}{ul}{}
+\DeclareFontSeriesChangeRule {ulec}{?m}{ul}{}
+\DeclareFontSeriesChangeRule {ulsc}{?m}{ul}{}
+\DeclareFontSeriesChangeRule {ulsc}{?m}{ul}{}
+\DeclareFontSeriesChangeRule {ulx}{?m}{ul}{}
+\DeclareFontSeriesChangeRule {ul}{?m}{ul}{}
+\DeclareFontSeriesChangeRule {x}{?m}{m}{}
+%    \end{macrocode}
+%
+%
+
+
+% \subsection{Changing to a new series}
+%
+
+%  \begin{macro}{\fontseriesforce}
+%    To change unconditionally to a new series you can use
+%    \cs{fontseriesforce}. If course, if the series doesn't exist for
+%    the current family substitution still happens, but there is not
+%    dependency on the current series.
+%    \begin{macrocode}
+\DeclareRobustCommand\fontseriesforce[1]{\edef\f@series{#1}}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\fontseries}
+%    The \cs{fontseries} command takes one argument which is the requested new
+%    font series. In the orginal implementation  it simply saved the
+%    expanded value in \cs{f@series}. Now we do a bit more processing
+%    and look up the final value in the font series data base. This is
+%    done by \cs{merge@font@series}.
+%    \begin{macrocode}
+\DeclareRobustCommand\fontseries[1]{\merge@font@series{#1}}
+%    \end{macrocode}
+%  \end{macro}
+
+
+%  \begin{macro}{\merge@font@series}
+%    We look up the data base value by expanding the right command
+%    twice. If no such value exist then the result will be \cs{relax}
+%    otherwise it will be the two brace groups: the desired result and
+%    the alternate result. The first case means that the third
+%    argument to \cs{merge@font@series} will be empty.
+%    \begin{macrocode}
+\def\merge@font@series#1{%
+  \expandafter\expandafter\expandafter
+  \merge@font@series@
+    \csname series@\f@series @#1\endcsname
+    {#1}%
+    \@nil
+}
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+%  \begin{macro}{\merge@font@series@}
+%    This now defines the new \cs{f@series}:
+%    \begin{macrocode}
+\def\merge@font@series@#1#2#3\@nil{%
+%    \end{macrocode}
+%    If the third argument is empty there is no database entry for the
+%    combination and the second argument holds the new series so we
+%    return that.
+%
+%    Originally the test was simply \verb=\ifx!#3!= but that actually
+%    dies if \texttt{\#3} starts with a conditional and in the
+%    definition of \cs{AmSfont} that is actually the case.
+%    \begin{macrocode}
+%\ifcat\expandafter X\detokenize{#1}X%
+  \def\@reserveda{#3}%
+  \ifx\@reserveda\@empty
+    \set@target@series{#2}%
+  \else
+%    \end{macrocode}
+%    Otherwise we check if the desired result for the series
+%    (\texttt{\#1}) exists for the font family and the current shape.
+%    As the \texttt{.fd} is perhaps not loaded yet, we first
+%    have to do that, otherwise the test would fail even if the face
+%    is actually available.
+%    \begin{macrocode}
+    \maybe@load@fontshape
+    \edef\@reserveda{\f@encoding /\f@family /#1/\f@shape}%
+     \ifcsname \@reserveda \endcsname
+%    \end{macrocode}
+%     If the desired result is available then we use that. However, we
+%    do need some post-processing because we need to drop surplus
+%    \texttt{m}s due to the way naming convention was designed in the
+%    '90s (sigh).
+%    \begin{macrocode}
+       \set@target@series{#1}%
+%    \end{macrocode}
+%    If not, then we try the alternate result (\texttt{\#2}).
+%    \begin{macrocode}
+    \else
+       \ifcsname \f@encoding /\f@family /#2/\f@shape \endcsname
+%    \end{macrocode}
+%    If the alternate result exist we use that and also issue a
+%    warning (or rather a log entry) that we didn't managed to change
+%    to the desired font.
+%    \begin{macrocode}
+         \set@target@series{#2}%
+         \@font@shape@subst@warning
+%    \end{macrocode}
+%    If that doesn't exist either, then we use the requested series unmodified
+%    (again with a warning).
+%    \begin{macrocode}
+       \else
+         \set@target@series{#3}%
+         \@font@shape@subst@warning
+       \fi
+    \fi
+  \fi
+}
+%    \end{macrocode}
+%    It is possible that the previous font and the new one are
+%    actually identical (and the font was not found because it still
+%    needs loading) in which case a warning  would look rather odd. So
+%    we make a quick check for that (which is the reason why we defined
+%    \cs{@reserveda} above.
+%    \begin{macrocode}
+\def\@font@shape@subst@warning{%
+   \edef\@reservedb{\curr@fontshape}%
+   \ifx\@reserveda\@reservedb \else
+     \@font@warning{Font shape `\@reserveda' undefined\MessageBreak
+                    using `\@reservedb' instead}%
+   \fi
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%  \begin{macro}{\maybe@load@fontshape}
+%    A small helper that we use a couple of times: try loading a
+%    fontshape (in a group because \cs{try@load@fontshape} normalizes
+%    catcodes).
+%    \begin{macrocode}
+\def\maybe@load@fontshape{\begingroup\try@load@fontshape\endgroup}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\set@target@series}
+%  \begin{macro}{\series@drop@one@m}
+%
+%    Finally the code for normalizing the \cs{f@series} value.
+%
+%    The combined series value determined by the mapping may still
+%    contain an \texttt{m} that we have to remove (as the \texttt{.fd}
+%    files use \texttt{c} not \texttt{mc} to denote a medium weight
+%    condensed series, etc.). We do this in all branches above because a user
+%    might have written
+%\begin{verbatim}
+\DeclareFontSeriesChangeRule {m}{sc}{msc}{mc}
+%\end{verbatim}
+%    instead of using \texttt{sc} and \texttt{c} as needed in the
+%    \texttt{.fd} file.
+%    \begin{macrocode}
+\def\set@target@series#1{%
+%    \end{macrocode}
+%    We need to \cs{edef} the argument first in case it starts with a
+%    conditional.
+%    \begin{macrocode}
+    \edef\f@series{#1}%
+    \edef\f@series{\expandafter\series@drop@one@m\f@series mm\series@drop@one@m}%
+}
+%    \end{macrocode}
+%    Drop up to two \texttt{m}s but keep one if that makes the series
+%    value empty.
+%    \begin{macrocode}
+\def\series@drop@one@m#1m#2m#3\series@drop@one@m{%
+  \ifx\relax#1#2\relax m\else#1#2\fi
+}
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
+
+
+
+% \section{Changing the shape}
+%
+%    Shapes are also split in two axes (though it could be more if
+%    that is desirable), essentially building in an ``sc''
+%    axis).
+%
+%
+%
+%  \begin{macro}{\DeclareFontShapeChangeRule}
+%    The database for shapes is done in exactly the same way, only
+%    that it is much smaller and we usually have no alternative shape
+%    (or rather it is empty thus not used).
+%    \begin{macrocode}
+\def\DeclareFontShapeChangeRule #1#2#3#4{%
+  \@namedef{shape@#1@#2}{{#3}{#4}}}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%    There is kind of the same problem with returning back from
+%    \texttt{sc} to normal. It sort of needs its own letter.  In
+%    \texttt{fontspec} this was solved by the first time \cs{upshape} changes
+%    \texttt{it} or \texttt{sl} back (so only \texttt{sc} remains) and
+%    second time it changes then \texttt{sc} back to normal.  Maybe
+%    that's not a bad way to handle it, but decided for a slightly
+%    different approach: \texttt{n} always returns to ``normal'', ie
+%    resets everything and \texttt{up} changes italic or slanted to
+%    upright and \texttt{ulc} undoes small caps.
+%
+%    So we now offer \cs{normalshape} (using \cs{shapedefault} which is normally the same as
+%    calling both \cs{ulcshape} and \cs{upshape}, only more efficient.
+%
+%
+%  \begin{macro}{\ulcshape}
+%  \begin{macro}{\textulc}
+%  \begin{macro}{\ulcdefault}
+%    To request going back to upper/lowercase we need a new
+%    command. It uses \texttt{ulc} as shape name but this shape is
+%    virtual, i.e., it doesn't exist as a real shape, it is only used
+%    as part of the database table entries and thus only appears in
+%    the second argument there (but not in the first).
+%    \begin{macrocode}
+\DeclareRobustCommand\ulcshape
+        {\not@math@alphabet\ulcshape\relax
+         \fontshape\ulcdefault\selectfont}
+\newcommand\ulcdefault{ulc}
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
+%  \end{macro}
+%
+%  \begin{macro}{\swshape}
+%  \begin{macro}{\textsw}
+%  \begin{macro}{\swdefault}
+%    New command to select a swash shape.  The standard rules put this
+%    in the same category as italics or slanted, i.e., if you ask for
+%    it then italics are undone. One could provide more complicated
+%    rules so that \texttt{it} + \texttt{sw} becomes \texttt{swit} but
+%    given that there are only very few fonts that have swash letters
+%    that level of flexibility (these days) would be just resulting in
+%    a lot of combinations that do not exist.
+%    \begin{macrocode}
+\DeclareRobustCommand\swshape
+        {\not@math@alphabet\swshape\relax
+         \fontshape\swdefault\selectfont}
+\newcommand\swdefault{sw}
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\sscshape}
+%  \begin{macro}{\textssc}
+%  \begin{macro}{\sscdefault}
+%    New command to select spaced small capitals. This is only here
+%    because \texttt{fontaxes} offered it. There isn't a single free
+%    font that supports it. However, some commercial ones do, so we
+%    offer it so that at some point \texttt{fontaxes} could be
+%    retired.
+%
+%    So far there aren't any rules for it---probably there should be
+%    some putting it in the same category as \texttt{sc}.
+%    \begin{macrocode}
+\DeclareRobustCommand\sscshape
+        {\not@math@alphabet\sscshape\relax
+         \fontshape\sscdefault\selectfont}
+\newcommand\sscdefault{ssc}
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
+%  \end{macro}
+%
+%
+%
+% \subsection{Mapping rules for shape combinations}
+%
+%    Many of the entries are commented out as we will get that result
+%    without any entry.
+%    \begin{macrocode}
+%\DeclareFontShapeChangeRule {n}{n}   {n}   {}
+\DeclareFontShapeChangeRule {n}{it}  {it}  {sl}
+\DeclareFontShapeChangeRule {n}{sl}  {sl}  {it}
+%\DeclareFontShapeChangeRule {n}{sw}  {sw}  {}
+%\DeclareFontShapeChangeRule {n}{sc}  {sc}  {}
+\DeclareFontShapeChangeRule {n}{ulc} {n}   {}
+\DeclareFontShapeChangeRule {n}{up} {n}    {}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%\DeclareFontShapeChangeRule {it}{n}   {n}     {}
+%\DeclareFontShapeChangeRule {it}{it}  {it}    {}
+\DeclareFontShapeChangeRule {it}{sl}  {sl}    {it}
+%\DeclareFontShapeChangeRule {it}{sw}  {sw}    {}
+%    \end{macrocode}
+%    If neither \texttt{scit} nor \texttt{scsl} exist then \texttt{sc}
+%    will be used as a fallback albeit with a log entry, so except for
+%    the latter there will be no change for CM or Latin Modern fonts.
+%    \begin{macrocode}
+\DeclareFontShapeChangeRule {it}{sc}  {scit}  {scsl}
+\DeclareFontShapeChangeRule {it}{ulc} {it}    {}
+\DeclareFontShapeChangeRule {it}{up} {n}      {}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%\DeclareFontShapeChangeRule {sl}{n}   {n}     {}
+\DeclareFontShapeChangeRule {sl}{it}  {it}    {sl}
+%\DeclareFontShapeChangeRule {sl}{sl}  {sl}    {}
+%\DeclareFontShapeChangeRule {sl}{sw}  {sw}    {}
+\DeclareFontShapeChangeRule {sl}{sc}  {scsl}  {scit}
+\DeclareFontShapeChangeRule {sl}{ulc} {sl}    {}
+\DeclareFontShapeChangeRule {sl}{up} {n}      {}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%\DeclareFontShapeChangeRule {sc}{n}   {n}     {}
+\DeclareFontShapeChangeRule {sc}{it}  {scit}  {scsl}
+\DeclareFontShapeChangeRule {sc}{sl}  {scsl}  {scit}
+\DeclareFontShapeChangeRule {sc}{sw}  {scsw}  {sw}
+%\DeclareFontShapeChangeRule {sc}{sc}  {sc}    {}
+\DeclareFontShapeChangeRule {sc}{ulc} {n}     {}
+%    \end{macrocode}
+%
+%    The next rule might be a bit surprising and rightly so. Correct
+%    would be that \texttt{sc} is not affected by \texttt{up}, i.e.,
+%    remains \texttt{sc} as showed in the commented out rule. However,
+%    for nearly three decades commands such as \upshape{sc} or
+%    \cs{textup} changed small caps back to the ``normal'' shape. So
+%    for backward compatibility we keep hat behavior.
+%
+%    As a result you are currently typesetting in \texttt{scit} or
+%    \texttt{scsl} using \cs{upshape} twice will return you to the
+%    normal shape too, the first will change to \texttt{sc} and the
+%    second (because of the rule below) change that to
+%    \texttt{n}. This is the way \texttt{fontspec} implemented its
+%    version on this interface, so this rule means we are also
+%    compatible with the way \texttt{fontspec} behaved. Still it
+%    remains an odditywhic I would rather liked to have avoided.
+%    \begin{macrocode}
+%\DeclareFontShapeChangeRule {sc}{up} {sc}     {}
+\DeclareFontShapeChangeRule {sc}{up} {n}     {}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%\DeclareFontShapeChangeRule {scit}{n}   {n}    {}
+\DeclareFontShapeChangeRule {scit}{it}  {scit}  {}
+\DeclareFontShapeChangeRule {scit}{sl}  {scsl}  {scit}
+\DeclareFontShapeChangeRule {scit}{sw}  {scsw}  {sc}    % or scit?
+\DeclareFontShapeChangeRule {scit}{sc}  {scit}  {}
+\DeclareFontShapeChangeRule {scit}{ulc} {it}    {}
+\DeclareFontShapeChangeRule {scit}{up} {sc}     {}
+%    \end{macrocode}
+%    The previous rule assumes that if \texttt{scit} exists then
+%    \texttt{it} exists as well. If not, the mechanism will save
+%    \texttt{ulc} in \cs{f@series} which most certainly doesn't
+%    exist. So when a font is later selected that would result in a
+%    substitution (so no harm done really). Alternatively, we could in
+%    this case use \texttt{n} as aternative, which may be a bit
+%    faster, but such a  setup would be so weird in the first place
+%    that this isn't worth the effort.
+%
+%    \begin{macrocode}
+%\DeclareFontShapeChangeRule {scsl}{n}   {n}     {}
+\DeclareFontShapeChangeRule {scsl}{it}  {scit}  {scsl}
+\DeclareFontShapeChangeRule {scsl}{sl}  {scsl}  {}
+\DeclareFontShapeChangeRule {scsl}{sw}  {scsw}  {sc}    % or scsl?
+\DeclareFontShapeChangeRule {scsl}{sc}  {scsl}  {}
+\DeclareFontShapeChangeRule {scsl}{ulc} {sl}    {}
+\DeclareFontShapeChangeRule {scsl}{up}   {sc}   {}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%\DeclareFontShapeChangeRule {scsw}{n}   {n}     {}
+\DeclareFontShapeChangeRule {scsw}{it}  {scit}  {scsw}
+\DeclareFontShapeChangeRule {scsw}{sl}  {scsl}  {}
+\DeclareFontShapeChangeRule {scsw}{sw}  {scsw}  {}
+\DeclareFontShapeChangeRule {scsw}{sc}  {scsw}  {}
+\DeclareFontShapeChangeRule {scsw}{ulc} {sw}    {}
+\DeclareFontShapeChangeRule {scsw}{up} {sc}     {}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%\DeclareFontShapeChangeRule {sw}{n}   {n}     {}
+%\DeclareFontShapeChangeRule {sw}{it}  {it}    {}
+%\DeclareFontShapeChangeRule {sw}{sl}  {sl}    {}
+%\DeclareFontShapeChangeRule {sw}{sw}  {sw}    {}
+\DeclareFontShapeChangeRule {sw}{sc}  {scsw}  {}
+\DeclareFontShapeChangeRule {sw}{ulc} {sw}    {}
+\DeclareFontShapeChangeRule {sw}{up} {n}      {}
+%    \end{macrocode}
+%
+%
+% \subsection{Changing to a new shape}
+%
+%  \begin{macro}{\fontshape}
+%    Again the \cs{fontshape} now has to do a lookup to get to its new
+%    value in \cs{f@shape}. The method is exactly the same as in
+%    \cs{fontseries}.
+%    \begin{macrocode}
+\DeclareRobustCommand\fontshape[1]{\merge@font@shape{#1}}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\fontshapeforce}
+%    The unconditional version:
+%    \begin{macrocode}
+\DeclareRobustCommand\fontshapeforce[1]{\edef\f@shape{#1}}
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\merge@font@shape}
+%    Look up the database entry (if existing) and act accordingly.
+%    \begin{macrocode}
+\def\merge@font@shape#1{%
+  \expandafter\expandafter\expandafter
+  \merge@font@shape@
+    \csname shape@\f@shape @#1\endcsname
+    {#1}%
+    \@nil
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+
+%  \begin{macro}{\merge@font@shape@}
+%    Same game now, except that we look at shapes not series values
+%    and we can set the shape without the complication of dropping
+%    ``m''s from the name as we had to for the series.
+%    \begin{macrocode}
+\def\merge@font@shape@#1#2#3\@nil{%
+  \def\@reserveda{#3}%
+  \ifx\@reserveda\@empty
+    \edef\f@shape{#2}%
+  \else
+    \maybe@load@fontshape
+    \edef\@reserveda{\f@encoding /\f@family /\f@series/#1}%
+     \ifcsname \@reserveda\endcsname
+       \edef\f@shape{#1}%
+    \else
+       \ifcsname \f@encoding /\f@family /\f@series/#2\endcsname
+         \edef\f@shape{#2}%
+         \@font@shape@subst@warning
+       \else
+         \edef\f@shape{#3}%
+         \@font@shape@subst@warning
+       \fi
+    \fi
+  \fi
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\normalshape}
+%
+%    \cs{normalshape} resets both sub-axes if the default rules are used.
+%    \begin{macrocode}
+\protected\def\normalshape
+    {\not@math@alphabet\normalshape\relax
+      \fontshape\shapedefault\selectfont}%
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+% \section{Make sure we win \ldots}
+%
+%    This code implements one aspect of what the package \textsf{fontaxes}
+%    provide. So its redefinitions for the various shape commands,
+%    such as \cs{itshape} should no longer happen. We therefore force
+%    the standard definitions at \cs{AtBeginDocument} (later when this
+%    is defined. Once
+%    \texttt{fontaxes} is no longer doing such redefinitions that could
+%    be taken out again.
+%
+%    We use a separate macro so that we can easily disable this (in
+%    case of rollback).
+%
+%  \begin{macro}{\reinstall@nfss@defs}
+%
+%    I use \cs{protected} here not \cs{DeclareRobustCommand} to avoid
+%    extra status lines.
+%    \begin{macrocode}
+\def\reinstall@nfss@defs{%
+  \protected\def\upshape
+          {\not@math@alphabet\upshape\relax
+           \fontshape\updefault\selectfont}%
+  \protected\def\slshape
+          {\not@math@alphabet\slshape\relax
+           \fontshape\sldefault\selectfont}%
+  \protected\def\scshape
+          {\not@math@alphabet\scshape\relax
+           \fontshape\scdefault\selectfont}%
+  \protected\def\itshape
+          {\not@math@alphabet\itshape\mathit
+           \fontshape\itdefault\selectfont}%
+  \protected\def\ulcshape
+          {\not@math@alphabet\ulcshape\relax
+           \fontshape{ulc}\selectfont}%
+  \protected\def\swshape
+          {\not@math@alphabet\swshape\relax
+           \fontshape\swdefault\selectfont}%
+  \protected\def\sscshape
+          {\not@math@alphabet\sscshape\relax
+           \fontshape\sscdefault\selectfont}%
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+% Supporting rollback \ldots
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000/00/00}%
+%<latexrelease>   {\DeclareFontSeriesChangeRule}{Series change rules}%
+%<latexrelease>
+%<latexrelease>\DeclareRobustCommand\fontseries[1]{\edef\f@series{#1}}
+%<latexrelease>\DeclareRobustCommand\fontshape [1]{\edef\f@shape{#1}}
+%<latexrelease>\let\fontseriesforce\@undefined
+%<latexrelease>\let\fontshapeforce\@undefined
+%<latexrelease>
+%<latexrelease>\let\DeclareFontSeriesChangeRule\@undefined
+%<latexrelease>\let\merge@font@series\@undefined
+%<latexrelease>\let\merge@font@series@\@undefined
+%<latexrelease>\let\@font@shape@subst@warning\@undefined
+%<latexrelease>\let\maybe@load@fontshape\@undefined
+%<latexrelease>\let\set@target@series\@undefined
+%<latexrelease>\let\series@drop@one@m\@undefined
+%<latexrelease>\let\DeclareFontShapeChangeRule\@undefined
+%<latexrelease>\let\merge@font@shape\@undefined
+%<latexrelease>\let\merge@font@shape@\@undefined
+%<latexrelease>\let\normalshape\@undefined
+%<latexrelease>\let\ulcshape\@undefined
+%<latexrelease>\let\ulcdefault\@undefined
+%<latexrelease>\let\swshape\@undefined
+%<latexrelease>\let\swdefault\@undefined
+%<latexrelease>\let\sscshape\@undefined
+%<latexrelease>\let\sscdefault\@undefined
+%<latexrelease>\let\normalshape\@undefined
+%    \end{macrocode}
+%    This is always called in \cs{document} so don't make it undefined.
+%    \begin{macrocode}
+%<latexrelease>
+%<latexrelease>\let\reinstall@nfss@defs\relax
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
+%</2ekernel>
+%    \end{macrocode}
+%
+% \Finale
+%
