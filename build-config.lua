@@ -117,7 +117,7 @@ function update_tag(file,content,tagname,tagdate)
       patch_level = "0"
     end
   else
-    if rev then
+    if rev and rev ~= 0 then
       tag = tag .. " pre-release " .. rev
       patch_level = "-" .. rev
     else
