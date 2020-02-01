@@ -6,7 +6,7 @@
 --
 -- l3luatex.dtx  (with options: `package,lua')
 -- 
--- Copyright (C) 1990-2019 The LaTeX3 Project
+-- Copyright (C) 1990-2020 The LaTeX3 Project
 -- 
 -- It may be distributed and/or modified under the conditions of
 -- the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -20,15 +20,17 @@
 -- 
 -- File: l3luatex.dtx
 l3kernel = l3kernel or { }
-local io      = io
-local kpse    = kpse
-local lfs     = lfs
-local math    = math
-local md5     = md5
-local os      = os
-local string  = string
-local tex     = tex
-local unicode = unicode
+local io       = io
+local kpse     = kpse
+local lfs      = lfs
+local math     = math
+local md5      = md5
+local os       = os
+local string   = string
+local tex      = tex
+local texio    = texio
+local tonumber = tonumber
+local unicode  = unicode
 local abs        = math.abs
 local byte       = string.byte
 local floor      = math.floor
@@ -39,11 +41,13 @@ local md5_sum    = md5.sum
 local open       = io.open
 local os_clock   = os.clock
 local os_date    = os.date
+local os_exec    = os.execute
 local setcatcode = tex.setcatcode
 local sprint     = tex.sprint
 local cprint     = tex.cprint
 local write      = tex.write
-local utf8_char = (utf and utf.char) or unicode.utf8.char
+local write_nl   = texio.write_nl
+local utf8_char = (utf8 and utf8.char) or (utf and utf.char) or unicode.utf8.char
 local kpse_find = (resolvers and resolvers.findfile) or kpse.find_file
 local function escapehex(str)
   write((gsub(str, ".",
@@ -67,6 +71,23 @@ local function resettimer()
   base_time = os_clock()
 end
 l3kernel.resettimer = resettimer
+local function filedump(name,offset,length)
+  local file = kpse_find(name,"tex",true)
+  if file then
+    local length = tonumber(length) or lfs_attr(file,"size")
+    local offset = tonumber(offset) or 0
+    local f = open(file,"rb")
+    if f then
+      if offset > 0 then
+        f:seek("set",offset)
+      end
+      local data = f:read(length)
+      escapehex(data)
+      f:close()
+    end
+  end
+end
+l3kernel.filedump = filedump
 local function filemdfivesum(name)
   local file =  kpse_find(name, "tex", true)
   if file then
@@ -144,3 +165,14 @@ local function strcmp(A, B)
   end
 end
 l3kernel.strcmp = strcmp
+local function shellescape(cmd)
+  local status,msg = os_exec(cmd)
+  if status == nil then
+    write_nl("log","runsystem(" .. cmd .. ")...(" .. msg .. ")\n")
+  elseif status == 0 then
+    write_nl("log","runsystem(" .. cmd .. ")...executed\n")
+  else
+    write_nl("log","runsystem(" .. cmd .. ")...failed " .. (msg or "") .. "\n")
+  end
+end
+l3kernel.shellescape = shellescape
