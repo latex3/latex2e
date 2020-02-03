@@ -67,23 +67,30 @@ end
 --
 -- This must be global as it is needed by the base file to set up MakeIndex
 master_branch = true
+-- To test for the branch, we need to allow for both Travis-CI and
+-- local set ups; on Travis-CI, tags are not on a branch as far as Git
+-- is concerned
+local branch = os.getenv("TRAVIS_BRANCH")
+-- Local set ups can use Git
 -- See stackoverflow.com/a/12142066/212001
-local errorlevel = os.execute("git rev-parse --abbrev-ref HEAD > branch.tmp")
-if errorlevel ~= 0 then
-  exit(1)
-else
-  local f = assert(io.open("branch.tmp", "rb"))
-  local branch = f:read("*all")
-  f:close()
-  os.remove("branch.tmp")
-  if not string.match(branch, "%s*master%s*") and
-     not string.match(branch, "^release/") then
-    master_branch = false
-    tdsroot = tdsroot or "latex-dev"
-    ctanpkg = ctanpkg or ""
-    ctanpkg = ctanpkg .. "-dev"
-    ctanzip = ctanpkg
+if not branch then
+  local errorlevel = os.execute("git rev-parse --abbrev-ref HEAD > branch.tmp")
+  if errorlevel ~= 0 then
+    exit(1)
+  else
+    local f = assert(io.open("branch.tmp", "rb"))
+    branch = f:read("*all")
+    f:close()
+    os.remove("branch.tmp")
   end
+end
+if not string.match(branch, "%s*master%s*") and
+   not string.match(branch, "^release/") then
+  master_branch = false
+  tdsroot = tdsroot or "latex-dev"
+  ctanpkg = ctanpkg or ""
+  ctanpkg = ctanpkg .. "-dev"
+  ctanzip = ctanpkg
 end
 
 -- Detail how to set the version automatically
