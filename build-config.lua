@@ -64,9 +64,11 @@ if unpacksearch == nil then
 end
 
 -- Allow for 'dev' release
+--
+-- This must be global as it is needed by the base file to set up MakeIndex
+master_branch = true
 -- See stackoverflow.com/a/12142066/212001
 local errorlevel = os.execute("git rev-parse --abbrev-ref HEAD > branch.tmp")
-local master_branch = true
 if errorlevel ~= 0 then
   exit(1)
 else
