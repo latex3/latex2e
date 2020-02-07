@@ -65,32 +65,27 @@ end
 
 -- Allow for 'dev' release
 --
--- This must be global as it is needed by the base file to set up MakeIndex
-master_branch = true
--- To test for the branch, we need to allow for both Travis-CI and
--- local set ups; on Travis-CI, tags are not on a branch as far as Git
--- is concerned
-local branch = os.getenv("TRAVIS_BRANCH")
--- Local set ups can use Git
 -- See stackoverflow.com/a/12142066/212001
-if not branch then
-  local errorlevel = os.execute("git rev-parse --abbrev-ref HEAD > branch.tmp")
-  if errorlevel ~= 0 then
-    exit(1)
+-- Also luaotfload build.lua: getting the Travis-CI version right is 'fun'
+local master_branch do
+  local tag = os.getenv'TRAVIS_TAG'
+  if tag and tag ~= "" then
+    master_branch = not string.match(tag, '-dev$')
   else
-    local f = assert(io.open("branch.tmp", "rb"))
-    branch = f:read("*all")
-    f:close()
-    os.remove("branch.tmp")
+    local branch = os.getenv'TRAVIS_BRANCH'
+    if not branch then
+      local f = io.popen'git rev-parse --abbrev-ref HEAD'
+      branch = f:read'*a':sub(1,-2)
+      assert(f:close())
+    end
+    master_branch = string.match(branch, '^master')
   end
-end
-if not string.match(branch, "%s*master%s*") and
-   not string.match(branch, "^release/") then
-  master_branch = false
-  tdsroot = tdsroot or "latex-dev"
-  ctanpkg = ctanpkg or ""
-  ctanpkg = ctanpkg .. "-dev"
-  ctanzip = ctanpkg
+  if not master_branch then
+    tdsroot = "latex-dev"
+    print("Creating/installing dev-version in " .. tdsroot)
+    ctanpkg = ctanpkg .. "-dev"
+    ctanzip = ctanpkg
+  end
 end
 
 -- Detail how to set the version automatically
