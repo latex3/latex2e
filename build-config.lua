@@ -83,6 +83,7 @@ local master_branch do
   if not master_branch then
     tdsroot = "latex-dev"
     print("Creating/installing dev-version in " .. tdsroot)
+    ctanpkg = ctanpkg or ""
     ctanpkg = ctanpkg .. "-dev"
     ctanzip = ctanpkg
   end
