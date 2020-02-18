@@ -36,7 +36,7 @@
 %
 %
 \ProvidesFile{ltfssini.dtx}
-             [2020/02/11 v3.1h LaTeX Kernel (NFSS Initialisation)]
+             [2020/02/18 v3.1i LaTeX Kernel (NFSS Initialisation)]
 % \iffalse
 \documentclass{ltxdoc}
 \begin{document}
@@ -414,18 +414,18 @@
 %    alternatives and therefore check if the current family
 %    (\cs{f@family}) is the current \cs{rmdef@ult}, \cs{sfdef@ult} or
 %    \cs{ttdef@ult}  and the select the correct family default in that case.
+% \changes{v3.1i}{2020/02/18}{Make the \cs{ifx} selection outside
+%            of \cs{fontseries} argument so that it is not done several times}
 %    \begin{macrocode}
   \expand@font@defaults
-  \fontseries{%
-    \ifx\f@family\rmdef@ult      \bfseries@rm
-    \else\ifx\f@family\sfdef@ult \bfseries@sf
-    \else\ifx\f@family\ttdef@ult \bfseries@tt
+    \ifx\f@family\rmdef@ult      \fontseries\bfseries@rm
+    \else\ifx\f@family\sfdef@ult \fontseries\bfseries@sf
+    \else\ifx\f@family\ttdef@ult \fontseries\bfseries@tt
 %    \end{macrocode}
 %    If not \cs{bfdefault} is used.
 %    \begin{macrocode}
-    \else                        \bfdefault
+    \else                        \fontseries\bfdefault
     \fi\fi\fi
-  }%
   \selectfont
 }
 %    \end{macrocode}
@@ -435,17 +435,17 @@
 
 %  \begin{macro}{\mdseries}
 %    This document command switches to the medium series.
+% \changes{v3.1i}{2020/02/18}{Make the \cs{ifx} selection outside
+%            of \cs{fontseries} argument so that it is not done several times}
 %    \begin{macrocode}
 \DeclareRobustCommand\mdseries{%
   \not@math@alphabet\mdseries\relax
   \expand@font@defaults
-  \fontseries{%
-    \ifx\f@family\rmdef@ult      \mdseries@rm
-    \else\ifx\f@family\sfdef@ult \mdseries@sf
-    \else\ifx\f@family\ttdef@ult \mdseries@tt
-    \else                        \mddefault
+    \ifx\f@family\rmdef@ult      \fontseries\mdseries@rm
+    \else\ifx\f@family\sfdef@ult \fontseries\mdseries@sf
+    \else\ifx\f@family\ttdef@ult \fontseries\mdseries@tt
+    \else                        \fontseries\mddefault
     \fi\fi\fi
-  }%
   \selectfont
 }
 %    \end{macrocode}
@@ -615,9 +615,25 @@
 %  \end{macro}
 %  \end{macro}
 %  \end{macro}
-
-
-
+%
+%
+%
+%
+%  \begin{macro}{\series@change@debug}
+%    For debugging, but right now none of this code is extracted. The
+%    idea is to have a separate package with debugging code
+%    one day.
+%    \begin{macrocode}
+%<*debug>
+\let\series@change@debug\typeout
+\let\series@change@debug\@gobble
+%</debug>
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
 %  \begin{macro}{\prepare@family@series@update}
 %    This is core command that prepares for the family update. The big
 %    difference to the documented code above is that the nested
@@ -635,6 +651,15 @@
 %
 %    \begin{macrocode}
 \def\prepare@family@series@update#1#2{%
+%    \end{macrocode}
+%    
+% \changes{v3.1i}{2020/02/18}{No series auto-update when forced (gh/277)}
+%    \begin{macrocode}
+ \if@forced@series
+%<+debug> \series@change@debug{No series preparation (forced \f@series)\on@line}%
+   \fontfamily#2%
+ \else
+%<+debug> \series@change@debug{Prepearing for switching to #1 (#2)\on@line}%
    \expand@font@defaults
 %    \end{macrocode}
 %    We prepare for changing the current series. We have to find it
@@ -643,11 +668,36 @@
    \let\target@series@value\@empty
    \def\target@meta@family@value{#1}%
 %    \end{macrocode}
+%    As the very last item in the meta family list we add
+%    \verb=\@elt{??}= and define this pseudo meta family to be the
+%    current font family. So if none of the real meta families matched then
+%    this will match. This will cover the following case:
+%    \begin{itemize}
+%    \item \cs{bfseries} is called  for a family using \texttt{bx}
+%       (e.g., CMR) 
+%    \item Switch to a font family that is none of the the meta
+%       families, e.g., via \verb=\fontfamily{ptm}\selectfont=
+%    \item Then none of the real meta families, match but the final
+%      \verb=\@elt{??}= will.
+%    \item Therefore if the current series is \cs{mddefault} or
+%    \cs{bfdefault} it will be detected and the corresponding target
+%    series selected.
+%    \end{itemize}
+% \changes{v3.1i}{2020/02/18}{Recognize current family if it is not a
+%    ``meta'' family and auto-update series using \cs{bfdefault} (gh/277)}
+%    \begin{macrocode}
+   \expandafter\edef\csname ??def@ult\endcsname{\f@family}%
+%    \end{macrocode}
 %    To find it we loop over the meta family list with a suitable
 %    definition of \cs{@elt}.
 %    \begin{macrocode}
    \let\@elt\update@series@target@value
       \@meta@family@list
+%    \end{macrocode}
+%    Last resort pseudo meta family. Will only be looked at f none of
+%    the real ones have matched.
+%    \begin{macrocode}
+      \@elt{??}%
    \let\@elt\relax
 %    \end{macrocode}
 %    That will figure out the correct series value to use without updating
@@ -659,10 +709,19 @@
 %    above.
 %    \begin{macrocode}
    \ifx\target@series@value\@empty
+%<+debug> \series@change@debug{Target series still empty ...}%
    \else
-     \maybe@load@fontshape
-     \let\f@series\target@series@value
+     \ifx \f@series\target@series@value
+%<+debug> \series@change@debug{Target series unchanged:
+%<+debug>                      \f@series \space = \target@series@value}%
+     \else
+       \maybe@load@fontshape
+%<+debug> \series@change@debug{Target series:
+%<+debug>                      \f@series \space -> \target@series@value}%
+       \let\f@series\target@series@value
+     \fi
    \fi
+ \fi
 }
 %    \end{macrocode}
 %  \end{macro}
@@ -686,6 +745,8 @@
   \def\reserved@a{#1}%
   \ifx\target@meta@family@value\reserved@a   % rm -> rm do nothing
   \else
+%<+debug> \series@change@debug{Trying to match #1: \csname#1def@ult\endcsname
+%<+debug>                      \space = \f@family\space ?}%
 %    \end{macrocode}
 %    We only ``do'' something if the current font family matches the
 %    current meta family.
@@ -707,6 +768,8 @@
                       \csname mdseries@\target@meta@family@value\endcsname
       \expandafter\let\expandafter\reserved@c
                       \csname bfseries@\target@meta@family@value\endcsname
+%<+debug>\series@change@debug{Targets for mdseries and bfseries:
+%<+debug>                     \reserved@b\space and \reserved@c}%
 %    \end{macrocode}
 %    This here is now identical to the nested \cs{ifx} block from the
 %    outline, except that it there appeared twice in
@@ -714,21 +777,21 @@
 %    loop when a match was found.
 %    \begin{macrocode}
       \expandafter\ifx\csname mdseries@#1\endcsname\f@series
+%<+debug>   \series@change@debug{mdseries@#1 matched -> \reserved@b}%
                                       \let\target@series@value\reserved@b
       \else\expandafter\ifx\csname bfseries@#1\endcsname\f@series
+%<+debug>  \series@change@debug{bfseries@#1 matched -> \reserved@c}%
                                       \let\target@series@value\reserved@c
       \else\ifx\f@series\mddef@ult    \let\target@series@value\reserved@b
+%<+debug>  \series@change@debug{mddef@ult matched -> \reserved@b}%
       \else\ifx\f@series\bfdef@ult    \let\target@series@value\reserved@c
+%<+debug>  \series@change@debug{bfdef@ult matched -> \reserved@c}%
       \fi\fi\fi\fi
     \fi
   \fi
 }
 %    \end{macrocode}
 %  \end{macro}
-%
-%
-%
-%
 %
 %
 %
