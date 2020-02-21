@@ -183,7 +183,6 @@ function bundleunpack ()
             .. " " .. unpackdir .. "/" .. j,"w"
         ):write(string.rep("y\n", 300)):close()
       if not success then
-        print("DRAT")
         return 1
       end
     end
