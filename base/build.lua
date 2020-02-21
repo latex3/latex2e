@@ -172,8 +172,7 @@ function bundleunpack ()
   end
   for _,i in ipairs (unpackfiles) do
     for _,j in ipairs (filelist (unpackdir, i)) do
-      os.execute (os_yes .. ">>" .. localdir .. "/yes")
-      errorlevel = os.execute (
+      local success = io.popen (
           -- Notice that os.execute is used from 'here' as this ensures that
           -- localdir points to the correct place: running 'inside'
           -- unpackdir would avoid the need for setting -output-directory
@@ -181,10 +180,11 @@ function bundleunpack ()
           -- of localdir w.r.t. unpackdir
           os_setenv .. " TEXINPUTS=" .. unpackdir .. os_concat ..
           unpackexe .. " " .. unpackopts .. " -output-directory=" .. unpackdir
-            .. " " .. unpackdir .. "/" .. j .. " < " .. localdir .. "/yes"
-        )
-      if errorlevel ~=0 then
-        return errorlevel
+            .. " " .. unpackdir .. "/" .. j,"w"
+        ):write(string.rep("y\n", 300)):close()
+      if not success then
+        print("DRAT")
+        return 1
       end
     end
   end
