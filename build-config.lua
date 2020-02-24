@@ -67,7 +67,7 @@ end
 --
 -- See stackoverflow.com/a/12142066/212001
 -- Also luaotfload build.lua: getting the Travis-CI version right is 'fun'
-local master_branch do
+do
   local tag = os.getenv'TRAVIS_TAG'
   if tag and tag ~= "" then
     master_branch = not string.match(tag, '^dev-')
