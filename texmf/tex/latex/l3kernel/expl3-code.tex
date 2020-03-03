@@ -67,7 +67,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: expl3.dtx
-\def\ExplFileDate{2020-02-21}%
+\def\ExplFileDate{2020-03-03}%
 \begingroup
   \def\next{\endgroup}%
   \expandafter\ifx\csname PackageError\endcsname\relax
@@ -928,6 +928,8 @@
   \__kernel_primitive:NN \dviextension          \tex_dviextension:D
   \__kernel_primitive:NN \dvifeedback           \tex_dvifeedback:D
   \__kernel_primitive:NN \dvivariable           \tex_dvivariable:D
+  \__kernel_primitive:NN \eTeXglueshrinkorder   \tex_eTeXglueshrinkorder:D
+  \__kernel_primitive:NN \eTeXgluestretchorder  \tex_eTeXgluestretchorder:D
   \__kernel_primitive:NN \etoksapp              \tex_etoksapp:D
   \__kernel_primitive:NN \etokspre              \tex_etokspre:D
   \__kernel_primitive:NN \exceptionpenalty      \tex_exceptionpenalty:D
@@ -1236,9 +1238,11 @@
   \__kernel_primitive:NN \hfi                   \tex_hfi:D
   \__kernel_primitive:NN \ifdbox                \tex_ifdbox:D
   \__kernel_primitive:NN \ifddir                \tex_ifddir:D
+  \__kernel_primitive:NN \ifjfont               \tex_ifjfont:D
   \__kernel_primitive:NN \ifmbox                \tex_ifmbox:D
   \__kernel_primitive:NN \ifmdir                \tex_ifmdir:D
   \__kernel_primitive:NN \iftbox                \tex_iftbox:D
+  \__kernel_primitive:NN \iftfont               \tex_iftfont:D
   \__kernel_primitive:NN \iftdir                \tex_iftdir:D
   \__kernel_primitive:NN \ifybox                \tex_ifybox:D
   \__kernel_primitive:NN \ifydir                \tex_ifydir:D
@@ -1280,6 +1284,7 @@
   \__kernel_primitive:NN \ybaselineshift        \tex_ybaselineshift:D
   \__kernel_primitive:NN \yoko                  \tex_yoko:D
   \__kernel_primitive:NN \vfi                   \tex_vfi:D
+  \__kernel_primitive:NN \currentcjktoken       \tex_currentcjktoken:D
   \__kernel_primitive:NN \disablecjktoken       \tex_disablecjktoken:D
   \__kernel_primitive:NN \enablecjktoken        \tex_enablecjktoken:D
   \__kernel_primitive:NN \forcecjktoken         \tex_forcecjktoken:D
@@ -8856,7 +8861,9 @@
       { \tl_to_str:n {#2} }
       { \char_generate:nn {#1} { 12 } }
   }
-\cs_if_exist:NF \tex_Uchar:D
+\bool_lazy_or:nnF
+  { \cs_if_exist_p:N \tex_luatexversion:D }
+  { \cs_if_exist_p:N \tex_XeTeXversion:D }
   {
     \cs_set:Npn \__char_str_change_case:nN #1#2
       { \tl_to_str:n {#2} }
@@ -12523,147 +12530,159 @@
 \muskip_new:N \g_tmpa_muskip
 \muskip_new:N \g_tmpb_muskip
 %% File: l3keys.dtx
-\tl_new:N \l__keyval_key_tl
-\tl_new:N \l__keyval_value_tl
-\tl_new:N \l__keyval_sanitise_tl
-\cs_new_protected:Npn \keyval_parse:NNn #1#2#3
-  {
-    \tl_set:Nn \l__keyval_sanitise_tl {#3}
-    \__keyval_sanitise_equals:
-    \__keyval_sanitise_comma:
-    \exp_after:wN \__keyval_loop:NNw \exp_after:wN #1 \exp_after:wN #2
-      \exp_after:wN \q_mark \l__keyval_sanitise_tl , \q_recursion_tail ,
-  }
+\scan_new:N \s__keyval_nil
+\scan_new:N \s__keyval_mark
+\scan_new:N \s__keyval_stop
+\scan_new:N \s__keyval_tail
 \group_begin:
-  \char_set_catcode_active:n { `\= }
+  \cs_set_protected:Npn \__keyval_tmp:NN #1#2
+    {
+      \cs_new:Npn \keyval_parse:NNn ##1 ##2 ##3
+        {
+          \__keyval_loop_active:NNw ##1 ##2 \s__keyval_mark ##3 #1 \s__keyval_tail #1
+        }
+      \cs_new:Npn \__keyval_loop_active:NNw ##1 ##2 ##3 #1
+        {
+          \__keyval_if_recursion_tail:w ##3
+            \__keyval_end_loop_active:w \s__keyval_mark \s__keyval_tail
+          \__keyval_loop_other:NNw ##1 ##2 ##3 , \s__keyval_tail ,
+          \__keyval_loop_active:NNw ##1 ##2 \s__keyval_mark
+        }
+      \cs_new:Npn \__keyval_loop_other:NNw ##1 ##2 ##3 ,
+        {
+          \__keyval_if_recursion_tail:w ##3
+            \__keyval_end_loop_other:w \s__keyval_mark \s__keyval_tail
+          \__keyval_if_has_equal_other:w ##3 = \s__keyval_stop
+            \__keyval_has_false:w \s__keyval_mark \s__keyval_stop \use_i:nn
+            {
+              \__keyval_if_has_equal_active:w ##3 #2 \s__keyval_stop
+                \__keyval_has_false:w \s__keyval_mark \s__keyval_stop \use_i:nn
+                \__keyval_misplaced_equal_error:
+                { \__keyval_split_other:w ##3 = \s__keyval_stop ##2 }
+            }
+            {
+              \__keyval_if_has_equal_active:w ##3 #2 \s__keyval_stop
+                \__keyval_has_false:w \s__keyval_mark \s__keyval_stop \use_i:nn
+                { \__keyval_split_active:w ##3 #2 \s__keyval_stop ##2 }
+                {
+                  \__keyval_if_blank:w ##3 \s__keyval_nil \s__keyval_stop
+                    \__keyval_blank_true:w \s__keyval_mark \s__keyval_stop \use:n
+                    { \__keyval_trim:nN { ##3 } \__keyval_key:nN ##1 }
+                }
+            }
+          \__keyval_loop_other:NNw ##1 ##2 \s__keyval_mark
+        }
+      \cs_new:Npn \__keyval_split_active:w ##1 #2
+        {
+          \__keyval_trim:nN { ##1 } \__keyval_split_active:nw \s__keyval_mark
+        }
+        \cs_new:Npn \__keyval_split_active:nw ##1 ##2 #2 ##3 \s__keyval_stop
+          {
+            \__keyval_if_empty:w \s__keyval_mark ##3 \s__keyval_stop
+              \__keyval_has_false:w \s__keyval_mark \s__keyval_stop \use_i:nn
+              { \__keyval_misplaced_equal_error: \use_none:n }
+              { \__keyval_trim:nN { ##2 } \__keyval_key_val:nnN { ##1 } }
+          }
+      \cs_new:Npn \__keyval_if_has_equal_active:w ##1 #2
+        {
+          \__keyval_if_empty:w \s__keyval_mark
+        }
+    }
   \char_set_catcode_active:n { `\, }
-  \cs_new_protected:Npn \__keyval_sanitise_equals:
-    {
-      \exp_after:wN \__keyval_sanitise_equals_auxi:w \l__keyval_sanitise_tl
-        \q_mark = \q_nil =
-      \exp_after:wN \__keyval_sanitise_aux:w \l__keyval_sanitise_tl
-    }
-    \cs_new_protected:Npn \__keyval_sanitise_equals_auxi:w #1 =
-      {
-        \tl_set:Nn \l__keyval_sanitise_tl {#1}
-        \__keyval_sanitise_equals_auxii:w
-      }
-    \cs_new_protected:Npn \__keyval_sanitise_equals_auxii:w #1 =
-      {
-        \if_meaning:w \q_nil #1 \scan_stop:
-        \else:
-          \tl_set:Nx \l__keyval_sanitise_tl
-            {
-              \exp_not:o \l__keyval_sanitise_tl
-              \token_to_str:N =
-              \exp_not:n {#1}
-            }
-          \exp_after:wN \__keyval_sanitise_equals_auxii:w
-        \fi:
-      }
-  \cs_new_protected:Npn \__keyval_sanitise_comma:
-    {
-      \exp_after:wN \__keyval_sanitise_comma_auxi:w \l__keyval_sanitise_tl
-        \q_mark , \q_nil ,
-      \exp_after:wN \__keyval_sanitise_aux:w \l__keyval_sanitise_tl
-    }
-    \cs_new_protected:Npn \__keyval_sanitise_comma_auxi:w #1 ,
-      {
-        \tl_set:Nn \l__keyval_sanitise_tl {#1}
-        \__keyval_sanitise_comma_auxii:w
-      }
-    \cs_new_protected:Npn \__keyval_sanitise_comma_auxii:w #1 ,
-      {
-        \if_meaning:w \q_nil #1 \scan_stop:
-        \else:
-          \tl_set:Nx \l__keyval_sanitise_tl
-            {
-              \exp_not:o \l__keyval_sanitise_tl
-              \token_to_str:N ,
-              \exp_not:n {#1}
-            }
-          \exp_after:wN \__keyval_sanitise_comma_auxii:w
-        \fi:
-      }
+  \char_set_catcode_active:n { `\= }
+  \__keyval_tmp:NN , =
 \group_end:
-\cs_new_protected:Npn \__keyval_sanitise_aux:w #1 \q_mark
-  { \tl_set:Nn \l__keyval_sanitise_tl {#1} }
-\cs_new_protected:Npn \__keyval_loop:NNw #1#2#3 ,
+\cs_new:Npn \__keyval_end_loop_active:w
+    \s__keyval_mark \s__keyval_tail
+    \__keyval_loop_other:NNw #1 , \s__keyval_tail ,
+    \__keyval_loop_active:NNw #2 \s__keyval_mark
+  {}
+\cs_new:Npn \__keyval_end_loop_other:w
+    \s__keyval_mark \s__keyval_tail
+    \__keyval_if_has_equal_other:w #1 = \s__keyval_stop
+    \__keyval_has_false:w \s__keyval_mark \s__keyval_stop \use_i:nn
+    #2
+    \__keyval_loop_other:NNw #3 \s__keyval_mark
+  {}
+\cs_new:Npn \__keyval_split_other:w #1 =
   {
-    \exp_after:wN \if_meaning:w \exp_after:wN \q_recursion_tail
-      \use_none:n #3 \prg_do_nothing:
-    \else:
-      \__keyval_split:NNw #1#2#3 == \q_stop
-      \exp_after:wN \__keyval_loop:NNw \exp_after:wN #1 \exp_after:wN #2
-        \exp_after:wN \q_mark
-    \fi:
+    \__keyval_trim:nN { #1 } \__keyval_split_other:nw \s__keyval_mark
   }
-\cs_new_protected:Npn \__keyval_split:NNw #1#2#3 =
+  \cs_new:Npn \__keyval_split_other:nw #1 #2 = #3 \s__keyval_stop
+    {
+      \__keyval_if_empty:w \s__keyval_mark #3 \s__keyval_stop
+        \__keyval_has_false:w \s__keyval_mark \s__keyval_stop \use_i:nn
+        { \__keyval_misplaced_equal_error: \use_none:n }
+        { \__keyval_trim:nN { #2 } \__keyval_key_val:nnN { #1 } }
+    }
+\cs_new:Npn \__keyval_key:nN #1 #2
   {
-    \__keyval_def:Nn \l__keyval_key_tl {#3}
-    \if_meaning:w \l__keyval_key_tl \c_empty_tl
-      \exp_after:wN \__keyval_split_tidy:w
-    \else:
-      \exp_after:wN \__keyval_split_value:NNw
-        \exp_after:wN #1
-        \exp_after:wN #2
-        \exp_after:wN \q_mark
-    \fi:
+    \exp_not:n { #2 { #1 } }
   }
-\cs_new_protected:Npn \__keyval_split_value:NNw #1#2#3 = #4 \q_stop
+\cs_new:Npn \__keyval_key_val:nnN #1 #2 #3
   {
-    \if:w \scan_stop: \tl_to_str:n {#4} \scan_stop:
-      \cs_set:Npx \__keyval_action:
-        { \exp_not:N #1 { \exp_not:o \l__keyval_key_tl } }
-    \else:
-      \if:w
-        \scan_stop:
-        \__kernel_tl_to_str:w \exp_after:wN { \use_none:n #4 }
-        \scan_stop:
-        \__keyval_def:Nn \l__keyval_value_tl {#3}
-        \cs_set:Npx \__keyval_action:
-          {
-            \exp_not:N #2
-              { \exp_not:o \l__keyval_key_tl }
-              { \exp_not:o \l__keyval_value_tl }
-          }
-      \else:
-        \cs_set:Npn \__keyval_action:
-          {
-            \__kernel_msg_error:nn { kernel }
-              { misplaced-equals-sign }
-          }
-      \fi:
-    \fi:
-    \__keyval_action:
+    \__keyval_if_empty:w \s__keyval_mark #2 \s__keyval_stop
+      \__keyval_empty_key:w \s__keyval_mark \s__keyval_stop
+    \exp_not:n { #3 { #2 } { #1 } }
   }
-\cs_new_protected:Npn \__keyval_split_tidy:w #1 \q_stop
+\cs_new:Npn \__keyval_if_empty:w #1 \s__keyval_mark \s__keyval_stop {}
+\cs_new:Npn \__keyval_if_blank:w \s__keyval_mark #1 { \__keyval_if_empty:w \s__keyval_mark }
+\cs_new:Npn \__keyval_if_recursion_tail:w #1 \s__keyval_mark \s__keyval_tail {}
+\cs_new:Npn \__keyval_has_false:w \s__keyval_mark \s__keyval_stop \use_i:nn #1 #2 { #2 }
+\cs_new:Npn \__keyval_blank_true:w \s__keyval_mark \s__keyval_stop \use:n #1 {}
+\cs_new:Npn \__keyval_empty_key:w \s__keyval_mark \s__keyval_stop \exp_not:n #1
   {
-    \if:w
-      \scan_stop:
-      \__kernel_tl_to_str:w \exp_after:wN { \use_none:n #1 }
-      \scan_stop:
-    \else:
-      \exp_after:wN \__keyval_empty_key:
-    \fi:
+    \__keyval_misplaced_equal_error:
   }
-\cs_new:Npn \__keyval_action: { }
-\cs_new_protected:Npn \__keyval_empty_key:
-  { \__kernel_msg_error:nn { kernel } { misplaced-equals-sign } }
-\cs_new_protected:Npn \__keyval_def:Nn #1#2
+\cs_new:Npn \__keyval_if_has_equal_other:w #1 =
   {
-    \tl_set:Nx #1
-      { \tl_trim_spaces_apply:oN { \use_none:n #2 } \__keyval_def_aux:n }
+    \__keyval_if_empty:w \s__keyval_mark
   }
-\cs_new:Npn \__keyval_def_aux:n #1
-  { \__keyval_def_aux:w #1 \q_stop }
-\cs_new:Npn \__keyval_def_aux:w #1 \q_stop { \exp_not:n {#1} }
-\__kernel_msg_new:nnnn { kernel } { misplaced-equals-sign }
+\cs_new:Npn \__keyval_misplaced_equal_error:
+  {
+    \__kernel_msg_expandable_error:nn { kernel } { misplaced-equals-sign }
+  }
+\__kernel_msg_new:nnn { kernel } { misplaced-equals-sign }
   { Misplaced~equals~sign~in~key-value~input~\msg_line_context: }
-  {
-    LaTeX~is~attempting~to~parse~some~key-value~input~but~found~
-    two~equals~signs~not~separated~by~a~comma.
-  }
+\group_begin:
+  \cs_set_protected:Npn \__keyval_tmp:n #1
+    {
+      \cs_new:Npn \__keyval_trim:nN ##1
+        {
+          \__keyval_trim_auxi:w
+            ##1
+            \s__keyval_nil
+            \s__keyval_mark #1 {}
+            \s__keyval_mark \__keyval_trim_auxii:w
+            \__keyval_trim_auxiii:w
+            #1 \s__keyval_nil
+            \__keyval_trim_auxiv:w
+          \s__keyval_stop
+        }
+      \cs_new:Npn \__keyval_trim_auxi:w ##1 \s__keyval_mark #1 ##2 \s__keyval_mark ##3
+        {
+          ##3
+          \__keyval_trim_auxi:w
+          \s__keyval_mark
+          ##2
+          \s__keyval_mark #1 {##1}
+        }
+      \cs_new:Npn \__keyval_trim_auxii:w \__keyval_trim_auxi:w \s__keyval_mark \s__keyval_mark ##1
+        {
+          \__keyval_trim_auxiii:w
+          ##1
+        }
+      \cs_new:Npn \__keyval_trim_auxiii:w ##1 #1 \s__keyval_nil ##2
+        {
+          ##2
+          ##1 \s__keyval_nil
+          \__keyval_trim_auxiii:w
+        }
+      \cs_new:Npn \__keyval_trim_auxiv:w \s__keyval_mark ##1 \s__keyval_nil ##2 \s__keyval_stop ##3
+        { ##3 { ##1 } }
+    }
+  \__keyval_tmp:n { ~ }
+\group_end:
 \str_const:Nn \c__keys_code_root_str     { key~code~>~ }
 \str_const:Nn \c__keys_default_root_str  { key~default~>~ }
 \str_const:Nn \c__keys_groups_root_str   { key~groups~>~ }
@@ -13590,7 +13609,6 @@
   {
     \exp_after:wN \__keys_trim_spaces_auxi:w \tl_to_str:n {#1}
       / \q_nil \q_stop
-
   }
 \cs_new:Npn \__keys_trim_spaces_auxi:w #1 / #2 \q_stop
   {
@@ -29167,6 +29185,83 @@
         { 01F4 } { 01F5 }
         { 0218 } { 0219 }
         { 021A } { 021B }
+        { 0400 } { 0450 }
+        { 0401 } { 0451 }
+        { 0402 } { 0452 }
+        { 0403 } { 0453 }
+        { 0404 } { 0454 }
+        { 0405 } { 0455 }
+        { 0406 } { 0456 }
+        { 0407 } { 0457 }
+        { 0408 } { 0458 }
+        { 0409 } { 0459 }
+        { 040A } { 045A }
+        { 040B } { 045B }
+        { 040C } { 045C }
+        { 040D } { 045D }
+        { 040E } { 045E }
+        { 040F } { 045F }
+        { 0410 } { 0430 }
+        { 0411 } { 0431 }
+        { 0412 } { 0432 }
+        { 0413 } { 0433 }
+        { 0414 } { 0434 }
+        { 0415 } { 0435 }
+        { 0416 } { 0436 }
+        { 0417 } { 0437 }
+        { 0418 } { 0438 }
+        { 0419 } { 0439 }
+        { 041A } { 043A }
+        { 041B } { 043B }
+        { 041C } { 043C }
+        { 041D } { 043D }
+        { 041E } { 043E }
+        { 041F } { 043F }
+        { 0420 } { 0440 }
+        { 0421 } { 0441 }
+        { 0422 } { 0442 }
+        { 0423 } { 0443 }
+        { 0424 } { 0444 }
+        { 0425 } { 0445 }
+        { 0426 } { 0446 }
+        { 0427 } { 0447 }
+        { 0428 } { 0448 }
+        { 0429 } { 0449 }
+        { 042A } { 044A }
+        { 042B } { 044B }
+        { 042C } { 044C }
+        { 042D } { 044D }
+        { 042E } { 044E }
+        { 042F } { 044F }
+        { 0391 } { 03B1 }
+        { 0392 } { 03B2 }
+        { 0393 } { 03B3 }
+        { 0394 } { 03B4 }
+        { 0395 } { 03B5 }
+        { 0396 } { 03B6 }
+        { 0397 } { 03B7 }
+        { 0398 } { 03B8 }
+        { 0399 } { 03B9 }
+        { 039A } { 03BA }
+        { 039B } { 03BB }
+        { 039C } { 03BC }
+        { 039D } { 03BD }
+        { 039E } { 03BE }
+        { 039F } { 03BF }
+        { 03A0 } { 03C0 }
+        { 03A1 } { 03C1 }
+        { 03A3 } { 03C3 }
+        { 03A4 } { 03C4 }
+        { 03A5 } { 03C5 }
+        { 03A6 } { 03C6 }
+        { 03A7 } { 03C7 }
+        { 03A8 } { 03C8 }
+        { 03A9 } { 03C9 }
+        { 03D8 } { 03D9 }
+        { 03DA } { 03DB }
+        { 03DC } { 03DD }
+        { 03DE } { 03DF }
+        { 03E0 } { 03E1 }
         \q_recursion_tail ?
         \q_recursion_stop
       \cs_set_protected:Npn \__text_tmp:w #1#2#3
