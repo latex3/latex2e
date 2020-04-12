@@ -33,8 +33,8 @@ tlmgr install l3build
 
 # Required to build plain and LaTeX formats:
 # TeX90 plain for unpacking, pdfLaTeX, LuaLaTeX and XeTeX for tests
-tlmgr install cm etex knuth-lib latex-bin tex tex-ini-files unicode-data \
-  xetex
+tlmgr install cm etex knuth-lib latex-bin luahbtex tex tex-ini-files \
+  unicode-data xetex
  
 # Assuming a 'basic' font set up, metafont is required to avoid
 # warnings with some packages and errors with others
