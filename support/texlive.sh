@@ -100,6 +100,7 @@ tlmgr install  \
   rerunfilecheck \
   sauter       \
   times        \
+  titlesec     \
   uniquecounter \
   vntex        \
   wasy         \
