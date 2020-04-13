@@ -100,7 +100,7 @@ tlmgr install  \
   rerunfilecheck \
   sauter       \
   times        \
-  titletox     \
+  titletoc     \
   uniquecounter \
   vntex        \
   wasy         \
