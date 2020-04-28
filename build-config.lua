@@ -30,6 +30,7 @@ checksuppfiles = checksuppfiles     or
     "xetex.def",
     "dvips.def",
     "lipsum.sty",
+    "*.fd",
     "*.txt",
     "load-unicode-xetex-classes.tex",
     "lualibs*.lua", 
