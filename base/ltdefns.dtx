@@ -32,7 +32,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltdefns.dtx}
-             [2020/02/27 v1.5g LaTeX Kernel (definition commands)]
+             [2020/02/27 v1.5h LaTeX Kernel (definition commands)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltdefns.dtx}
@@ -1261,8 +1261,228 @@
 % \end{macro}
 %
 %
+% \begin{macro}{\LetRobustCommand}
+% \changes{v1.5h}{2020/05/01}{Added macro (gh/239)}
 %
-
+%   With most document level commands being robust now there is more of a
+%   requirement to have a standard way of aliasing (or copying) a command to a
+%   new name, for example to save an original definition before changing a
+%   command.  \cs{LetRobustCommand} is analogous to \TeX's \cs{let}, except that
+%   it copes with the different types of robust commands defined by \LaTeX's
+%   mechanisms.
+%
+%   The current implementation is an almost exact copy of Heiko Oberdiek's
+%   \cs{LetLtxMacro}, with changed names and some simplifications thanks to
+%   $\epsilon$-\TeX.
+%    \begin{macrocode}
+%</2ekernel>
+%<latexrelease>\IncludeInRelease{2020/10/01}{\LetRobustCommand}{\LetRobustCommand}%
+%<*2ekernel|latexrelease>
+%    \end{macrocode}
+%   \cs{LetRobustCommand} just calls \cs{let@robustcommand} with a \cs{relax}
+%   which serves as a prefix for definitions.  Heiko's \pkg{letltxmacro} defines
+%   a global variant of \cs{LetLtxMacro}, but since none of our definition
+%   commands have a global version, this one won't either, for consistency.
+%    \begin{macrocode}
+\def\LetRobustCommand{\let@robustcommand\relax}
+%    \end{macrocode}
+%   Start by saving the current value of \cs{escapechar} and setting it to $-1$.
+%    \begin{macrocode}
+\def\let@robustcommand#1#2#3{%
+  \edef\reserved@a{\the\escapechar}%
+  \escapechar=-1 %
+%    \end{macrocode}
+%   First we do some normalisation, to cover the case where \verb=#3= expands to
+%   \verb*=\protect\#3 =.  This is the case when \verb=#3= is a multi-letter
+%   control sequence defined with \cs{DeclareRobustCommand}.  In this case we
+%   copy \verb*=\#3 = into \verb*=\#2 = and then call the inner
+%   \cs{let@robust@command} with \verb*=\#2 = and \verb*=\#3 = rather than
+%   \verb*=\#2= and \verb*=\#3=.
+%    \begin{macrocode}
+  \edef\reserved@b{%
+    \noexpand\protect
+    \expandafter\noexpand\csname\string#3 \endcsname
+  }%
+  \ifx\reserved@b#3\relax
+    #1\edef#2{%
+      \noexpand\protect
+      \expandafter\noexpand
+      \csname\string#2 \endcsname
+    }%
+    #1\expandafter\let
+    \csname\string#2 \expandafter\endcsname
+    \csname\string#3 \endcsname
+    \expandafter\let@robust@command
+      \csname\string#2 \expandafter\endcsname
+      \csname\string#3 \endcsname{#1}%
+%    \end{macrocode}
+%   Otherwise just call \cs{let@robust@command} with \verb*=\#2= and \verb*=\#3=
+%   to do the heavy-lifting.
+%    \begin{macrocode}
+  \else
+    \let@robust@command{#2}{#3}{#1}%
+  \fi
+%    \end{macrocode}
+%   Reset \cs{escapechar} when we're done.
+%    \begin{macrocode}
+  \escapechar=\reserved@a\relax
+}
+%    \end{macrocode}
+%   Check if the \verb=#2= is actually a macro, otherwise just use \cs{let}.
+%    \begin{macrocode}
+\def\let@robust@command#1#2#3{%
+  \escapechar=92 %
+  \expandafter\let@robust@chk@parm\meaning#2:->\@nil{%
+%    \end{macrocode}
+%   Now the real fun begins.  We'll redefine (in a group) some of \LaTeX's
+%   optional argument-processing macros because TODO
+%   Also make \cs{let@robust@testopt} equal to \cs{@empty} to signal no optional
+%   argument (may change).
+%    \begin{macrocode}
+    \begingroup
+      \def\@protected@testopt{%
+        \expandafter\@testopt\@gobble}%
+      \def\@testopt##1##2{%
+        \toks@={##2}}%
+      \let\let@robust@testopt\@empty
+%    \end{macrocode}
+%   Define \cs{reserved@c} as \verb=\@protected@testopt\#2\\#2=\ldots
+%    \begin{macrocode}
+      \edef\reserved@c{%
+        \noexpand\@protected@testopt
+        \noexpand#2%
+        \expandafter\noexpand\csname\string#2\endcsname
+      }%
+%    \end{macrocode}
+%   and define \cs{reserved@d} as the first three (or fewer) tokens in the
+%   expansion of \verb=#2=\ldots
+%    \begin{macrocode}
+      \edef\reserved@d{%
+        \unexpanded\expandafter\expandafter\expandafter
+          {\expandafter\let@robust@CarThree#2{}{}{}\@nil}}
+%    \end{macrocode}
+%   then compare both.  If they are equal, the macro contains a test for an
+%   optional argument, in which case \verb=#2= is executed, so that the default
+%   value of the optional argument is stored in \cs{toks@} and
+%   \cs{let@robust@testopt} is redefined accordingly.
+%    \begin{macrocode}
+      \ifx\reserved@c\reserved@d
+        #2%
+        \def\let@robust@testopt{%
+          \noexpand\@protected@testopt
+          \noexpand#1%
+        }%
+%    \end{macrocode}
+%   Otherwise we try again and redefine \cs{reserved@c} as
+%   \verb=\@testopt\\#2=\ldots
+%    \begin{macrocode}
+      \else
+        \edef\reserved@c{%
+          \noexpand\@testopt
+          \expandafter\noexpand
+          \csname\string#2\endcsname
+        }%
+%    \end{macrocode}
+%   and \cs{reserved@d} as the first two (or fewer) tokens in the expansion of
+%   \verb=#2=.  Now if they are equal, execute \verb=#2= so that the default
+%   value of the optional argument of \verb=#2= is stored in \cs{toks@}, and
+%   then reassign \cs{let@robust@testopt} to be \cs{@testopt}.
+%    \begin{macrocode}
+        \edef\reserved@d{%
+          \unexpanded\expandafter\expandafter\expandafter
+            {\expandafter\let@robust@CarTwo#2{}{}{}\@nil}}
+        \ifx\reserved@c\reserved@d
+          #2%
+          \def\let@robust@testopt{%
+            \noexpand\@testopt
+          }%
+        \fi
+      \fi
+%    \end{macrocode}
+%   Now, unless \cs{let@robust@testopt} is empty (that is, no optional argument)
+%   define \cs{let@robust@GlobalTemp} to be
+%   \meta{testopt}\cs{\#1}\{\meta{opt-default}\}, where
+%   \meta{testopt} is either \verb=\@protected@testopt\#2=, or \verb=\@testopt=.
+%    \begin{macrocode}
+      \ifx\let@robust@testopt\@empty
+      \else
+        \let@robust@protected\xdef\let@robust@GlobalTemp{%
+          \let@robust@testopt
+          \expandafter\noexpand
+          \csname\string#1\endcsname
+          {\the\toks@}%
+        }%
+      \fi
+%    \end{macrocode}
+%   We're almost done now.  If \cs{let@robust@testopt} remained empty all along,
+%   then the macro didn't have an optional argument and we just need to \cs{let}
+%   one to the other.
+%   Otherwise we \cs{let} \verb=\#1=, the top-level macro, to
+%   \cs{let@robust@GlobalTemp}, and then \cs{let} \verb=\\#1= to \verb=\\#2=,
+%   which is the actual definition of the macro.
+%    \begin{macrocode}
+    \expandafter\endgroup\ifx\let@robust@testopt\@empty
+      #3\let#1=#2\relax
+    \else
+      #3\let#1=\let@robust@GlobalTemp
+      #3\expandafter\let
+          \csname\string#1\expandafter\endcsname
+          \csname\string#2\endcsname
+    \fi
+  }{%
+    #3\let#1=#2\relax
+  }%
+}
+%    \end{macrocode}
+%   This auxiliary detects whether the argument is a macro (otherwise this
+%   entire process boils down to \TeX's \cs{let}), and in case of a
+%   \cs{protected} macro (using \pkg{etoolbox}'s \cs{newrobustcmd}), define
+%   \cs{let@robust@protected} accordingly.
+%    \begin{macrocode}
+\def\let@robust@chk@parm#1:->#2\@nil{%
+  \tmp@strifeq{#1}{macro}%
+    {%
+      \def\let@robust@protected{}%
+      \@firstoftwo
+    }{%
+      \tmp@strifeq{#1}{\protected macro}%
+        {%
+          \def\let@robust@protected{\protected}%
+          \@firstoftwo%
+        }
+        {\@secondoftwo}%
+    }%
+}
+%    \end{macrocode}
+%   This is just a temporary poor-man's string comparison macro to make things
+%   easier.  This should be replaced by \cs{@expl@str@if@eq@nnTF} once that's
+%   defined.
+%    \begin{macrocode}
+\def\tmp@strifeq#1#2{%
+  \begingroup
+    \edef\reserved@a{\detokenize{#1}}%
+    \edef\reserved@b{\detokenize{#2}}%
+  \expandafter\endgroup
+  \ifx\reserved@a\reserved@b
+    \expandafter\@firstoftwo
+  \else
+    \expandafter\@secondoftwo
+  \fi}
+%    \end{macrocode}
+%   Takes the first two or three tokens of the argument.
+%    \begin{macrocode}
+\def\let@robust@CarTwo#1#2#3\@nil{#1#2}%
+\def\let@robust@CarThree#1#2#3#4\@nil{#1#2#3}%
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000/00/00}{\LetRobustCommand}{\LetRobustCommand}%
+%<latexrelease>\let\LetRobustCommand\@undefined
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
+%    \end{macrocode}
+% \end{macro}
+%
+%
 %  \begin{macro}{\kernel@make@fragile}
 %    The opposite of |\MakeRobust| execpt that it doesn't do many
 %    checks as it is internal to the kernel. Why does one want such a
