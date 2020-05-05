@@ -39,6 +39,7 @@ installfiles   =
   }
 sourcefiles    =
   {
+    "lppl.tex",
     "ltnews.cls",
     "ltxguide.cls",
     "minimal.cls",
