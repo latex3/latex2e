@@ -645,7 +645,7 @@
 %  \begin{macro}{\@ifdefinable}
 %  \begin{macro}{\@@ifdefinable}
 %  \begin{macro}{\@rc@ifdefinable}
-%    Test is user is allowed to define a command.
+%    Test if user is allowed to define a command.
 %    \begin{macrocode}
 \long\def\@ifdefinable #1#2{%
       \edef\reserved@a{\expandafter\@gobble\string #1}%
@@ -1261,44 +1261,78 @@
 % \end{macro}
 %
 %
-% \begin{macro}{\DeclareCommandCopy}
-% \changes{v1.5h}{2020/05/01}{Added macro (gh/239)}
+% \begin{macro}{\NewCommandCopy,\RenewCommandCopy,
+%               \DeclareCommandCopy,\ProvideCommandCopy}
+% \changes{v1.5h}{2020/05/01}{Added \cs{DeclareCommandCopy} (gh/239)}
 %
 %   With most document level commands being robust now there is more of a
 %   requirement to have a standard way of aliasing (or copying) a command to a
 %   new name, for example to save an original definition before changing a
-%   command.  \cs{DeclareCommandCopy} is analogous to \TeX's \cs{let}, except that
-%   it copes with the different types of robust commands defined by \LaTeX's
-%   mechanisms.
+%   command.  \cs{DeclareCommandCopy} is analogous to \TeX's \cs{let}, except
+%   that it copes with the different types of robust commands defined by
+%   \LaTeX's mechanisms.
 %
 %   The current implementation is an almost exact copy of Heiko Oberdiek's
 %   \cs{LetLtxMacro}, with changed names and some simplifications thanks to
 %   $\epsilon$-\TeX.
 %    \begin{macrocode}
 %</2ekernel>
-%<latexrelease>\IncludeInRelease{2020/10/01}{\DeclareCommandCopy}{\DeclareCommandCopy}%
+%<latexrelease>\IncludeInRelease{2020-10-01}{\DeclareCommandCopy}
+%<latexrelease>{Add \NewCommandCopy, \RenewCommandCopy,
+%<latexrelease> \ProvideCommandCopy, and \DeclareCommandCopy}%
 %<*2ekernel|latexrelease>
 %    \end{macrocode}
-%   \cs{DeclareCommandCopy} just calls \cs{declare@commandcopy} with a \cs{relax}
+%   \cs{DeclareCommandCopy} just calls \cs{declare@command@copy} with \cs{relax},
 %   which serves as a prefix for definitions.  Heiko's \pkg{letltxmacro} defines
 %   a global variant of \cs{LetLtxMacro}, but since none of our definition
 %   commands have a global version, this one won't either, for consistency.
+%
+%   \cs{NewCommandCopy} checks if \verb=#1= is already defined, and raises an
+%   error if so, otherwise the definition is carried out.
+%   \cs{RenewCommandCopy} does (almost) the opposite.  If the command is
+%   \emph{not} defined, then an error is raised.  But the definition is carried
+%   out anyhow, so the behaviour is consistent with \cs{renewcommand}.
+%   \cs{ProvideCommandCopy} only carries out the definition if \verb=#1= is not
+%   yet defined, otherwise it does nothing.
 %    \begin{macrocode}
-\def\DeclareCommandCopy{\declare@commandcopy\relax}
+\def\NewCommandCopy#1{%
+  \declare@commandcopy#1%
+    {\@firstofone}%
+    {\@firstoftwo\@notdefinable}}
+\def\RenewCommandCopy#1{%
+  \declare@commandcopy#1%
+    {\@latex@error{Command \string#1 undefined}\@ehc
+     \@firstofone}%
+    {\@firstofone}}
+\def\ProvideCommandCopy#1{%
+  \declare@commandcopy#1%
+    {\@firstofone}%
+    {\@gobble}}
+\def\DeclareCommandCopy#1{%
+  \declare@commandcopy#1%
+    {\@firstofone}%
+    {\@firstofone}}
 %    \end{macrocode}
-%   Start by saving the current value of \cs{escapechar} and setting it to $-1$.
+%   Start by saving the current value of \cs{escapechar} and setting it to $-1$,
+%   then check if the command is already defined.  The proper action, if the
+%   command is defined or not is taken by each specific command above.
 %    \begin{macrocode}
-\def\declare@commandcopy#1#2#3{%
-  \edef\reserved@a{\the\escapechar}%
-  \escapechar=-1 %
+\def\declare@commandcopy#1#2#3#4{%
+  \@tempcnta=\escapechar
+  \escapechar=\m@ne
+  \edef\reserved@a{\string#1}%
+  \@ifundefined\reserved@a{#2}{#3}%
+    {\declare@command@copy\relax#1#4}%
+  \escapechar=\@tempcnta}
 %    \end{macrocode}
 %   First we do some normalisation, to cover the case where \verb=#3= expands to
 %   \verb*=\protect\#3 =.  This is the case when \verb=#3= is a multi-letter
 %   control sequence defined with \cs{DeclareRobustCommand}.  In this case we
 %   copy \verb*=\#3 = into \verb*=\#2 = and then call the inner
-%   \cs{declare@command@copy} with \verb*=\#2 = and \verb*=\#3 = rather than
+%   \cs{declare@@command@copy} with \verb*=\#2 = and \verb*=\#3 = rather than
 %   \verb*=\#2= and \verb*=\#3=.
 %    \begin{macrocode}
+\def\declare@command@copy#1#2#3{%
   \edef\reserved@b{%
     \noexpand\protect
     \expandafter\noexpand\csname\string#3 \endcsname
@@ -1312,26 +1346,21 @@
     #1\expandafter\let
     \csname\string#2 \expandafter\endcsname
     \csname\string#3 \endcsname
-    \expandafter\declare@command@copy
+    \expandafter\declare@@command@copy
       \csname\string#2 \expandafter\endcsname
       \csname\string#3 \endcsname{#1}%
 %    \end{macrocode}
-%   Otherwise just call \cs{declare@command@copy} with \verb*=\#2= and \verb*=\#3=
+%   Otherwise just call \cs{declare@@command@copy} with \verb*=\#2= and \verb*=\#3=
 %   to do the heavy-lifting.
 %    \begin{macrocode}
   \else
-    \declare@command@copy{#2}{#3}{#1}%
-  \fi
-%    \end{macrocode}
-%   Reset \cs{escapechar} when we're done.
-%    \begin{macrocode}
-  \escapechar=\reserved@a\relax
-}
+    \declare@@command@copy{#2}{#3}{#1}%
+  \fi}
 %    \end{macrocode}
 %   Check if the \verb=#2= is actually a macro, otherwise just use \cs{let}.
 %    \begin{macrocode}
-\def\declare@command@copy#1#2#3{%
-  \escapechar=92 %
+\def\declare@@command@copy#1#2#3{%
+  \escapechar=`\\
   \expandafter\declare@copy@chk@parm\meaning#2:->\@nil{%
 %    \end{macrocode}
 %   Now the real fun begins.  We'll redefine (in a group) some of \LaTeX's
@@ -1475,8 +1504,13 @@
 \def\declare@copy@CarThree#1#2#3#4\@nil{#1#2#3}%
 %</2ekernel|latexrelease>
 %<latexrelease>\EndIncludeInRelease
-%<latexrelease>\IncludeInRelease{0000/00/00}{\DeclareCommandCopy}{\DeclareCommandCopy}%
+%<latexrelease>\IncludeInRelease{0000-00-00}{\DeclareCommandCopy}
+%<latexrelease>{Undefine \NewCommandCopy, \RenewCommandCopy,
+%<latexrelease> \ProvideCommandCopy, and \DeclareCommandCopy}%
+%<latexrelease>\let\NewCommandCopy\@undefined
+%<latexrelease>\let\RenewCommandCopy\@undefined
 %<latexrelease>\let\DeclareCommandCopy\@undefined
+%<latexrelease>\let\ProvideCommandCopy\@undefined
 %<latexrelease>\EndIncludeInRelease
 %<*2ekernel>
 %    \end{macrocode}
