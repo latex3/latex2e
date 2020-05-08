@@ -1272,21 +1272,29 @@
 %   that it copes with the different types of robust commands defined by
 %   \LaTeX's mechanisms.
 %
-%   The current implementation is an almost exact copy of Heiko Oberdiek's
-%   \cs{LetLtxMacro}, with changed names and some simplifications thanks to
-%   $\epsilon$-\TeX.
+%   A couple of ``types of robustness'' are defined by the \LaTeXe{} kernel,
+%   namely robust commands defined with \cs{DeclareRobustCommand} and commands
+%   with optional arguments defined with \cs{newcommand}.  However there are
+%   other types of robust commands that are frequently used, which are not
+%   defined in the \LaTeXe{} kernel, like commands defined with
+%   \textsf{xparse}'s \cs{NewDocumentCommand} and \textsf{etoolbox}'s
+%   \cs{newrobustcmd}.  Here we will define a generic \cs{DeclareCommandCopy}
+%   that will check \LaTeXe's robust types out of the box, but that can be
+%   extended to work with other packages' robust commands.
+%
 %    \begin{macrocode}
 %</2ekernel>
 %<latexrelease>\IncludeInRelease{2020-10-01}{\DeclareCommandCopy}
-%<latexrelease>{Add \NewCommandCopy, \RenewCommandCopy,
-%<latexrelease> \ProvideCommandCopy, and \DeclareCommandCopy}%
+%<latexrelease>  {Add \NewCommandCopy, \RenewCommandCopy,
+%<latexrelease>   \ProvideCommandCopy, and \DeclareCommandCopy}%
 %<*2ekernel|latexrelease>
 %    \end{macrocode}
+%
 %   \cs{DeclareCommandCopy} just calls \cs{declare@command@copy} with \cs{relax},
-%   which serves as a prefix for definitions.  Heiko's \textsf{letltxmacro}
-%   defines a global variant of \cs{LetLtxMacro}, but since none of our
-%   definition commands have a global version, this one won't either, for
-%   consistency.
+%   which serves as a prefix for definitions.  Heiko Oberdiek's
+%   \textsf{letltxmacro} defines a global variant of \cs{LetLtxMacro}, but since
+%   none of our definition commands have a global version, this one won't either,
+%   for consistency.
 %
 %   \cs{NewCommandCopy} checks if \verb=#1= is already defined, and raises an
 %   error if so, otherwise the definition is carried out.
@@ -1296,220 +1304,99 @@
 %   \cs{ProvideCommandCopy} only carries out the definition if \verb=#1= is not
 %   yet defined, otherwise it does nothing.
 %    \begin{macrocode}
-\def\NewCommandCopy#1{%
-  \declare@commandcopy#1%
+\def\NewCommandCopy{%
+  \declare@commandcopy%
     {\@firstofone}%
     {\@firstoftwo\@notdefinable}}
-\def\RenewCommandCopy#1{%
-  \declare@commandcopy#1%
-    {\@latex@error{Command \string#1 undefined}\@ehc
+\def\RenewCommandCopy{%
+  \declare@commandcopy%
+    {\@latex@error{Command \@backslashchar\reserved@a\space undefined}\@ehc
      \@firstofone}%
     {\@firstofone}}
-\def\ProvideCommandCopy#1{%
-  \declare@commandcopy#1%
+\def\ProvideCommandCopy{%
+  \declare@commandcopy%
     {\@firstofone}%
     {\@gobble}}
-\def\DeclareCommandCopy#1{%
-  \declare@commandcopy#1%
+\def\DeclareCommandCopy{%
+  \declare@commandcopy%
     {\@firstofone}%
     {\@firstofone}}
 %    \end{macrocode}
 %
 % \begin{macro}{\declare@commandcopy}
-%   Start by saving the current value of \cs{escapechar} and setting it to $-1$,
-%   then check if the command is already defined.  The proper action, if the
-%   command is defined or not is taken by each specific command above.
+%   Start by setting \cs{escapechar} to $-1$, then check if the command is
+%   already defined.  The proper action, if the command is defined or not is
+%   taken by each specific command above.  If all's good, then
+%   \cs{declare@command@copy} is called with the command being defined and the
+%   command being copied.
 %    \begin{macrocode}
 \def\declare@commandcopy#1#2#3#4{%
-  \@tempcnta=\escapechar
-  \escapechar=\m@ne
-  \edef\reserved@a{\string#1}%
-  \@ifundefined\reserved@a{#2}{#3}%
-    {\declare@command@copy\relax#1#4}%
-  \escapechar=\@tempcnta}
-%    \end{macrocode}
-%   First we do some normalisation, to cover the case where \verb=#3= expands to
-%   \verb*=\protect\#3 =.  This is the case when \verb=#3= is a multi-letter
-%   control sequence defined with \cs{DeclareRobustCommand}.  In this case we
-%   copy \verb*=\#3 = into \verb*=\#2 = and then call the inner
-%   \cs{declare@@command@copy} with \verb*=\#2 = and \verb*=\#3 = rather than
-%   \verb*=\#2= and \verb*=\#3=.
-%    \begin{macrocode}
-\def\declare@command@copy#1#2#3{%
-  \edef\reserved@b{%
-    \noexpand\protect
-    \expandafter\noexpand\csname\string#3 \endcsname
-  }%
-  \ifx\reserved@b#3\relax
-    #1\edef#2{%
-      \noexpand\protect
-      \expandafter\noexpand
-      \csname\string#2 \endcsname
-    }%
-    #1\expandafter\let
-    \csname\string#2 \expandafter\endcsname
-    \csname\string#3 \endcsname
-    \expandafter\declare@@command@copy
-      \csname\string#2 \expandafter\endcsname
-      \csname\string#3 \endcsname{#1}%
-%    \end{macrocode}
-%   Otherwise just call \cs{declare@@command@copy} with \verb*=\#2= and \verb*=\#3=
-%   to do the heavy-lifting.
-%    \begin{macrocode}
-  \else
-    \declare@@command@copy{#2}{#3}{#1}%
-  \fi}
-%    \end{macrocode}
-%   Check if the \verb=#2= is actually a macro, otherwise just use \cs{let}.
-%    \begin{macrocode}
-\def\declare@@command@copy#1#2#3{%
-  \escapechar=`\\
-  \expandafter\declare@copy@chk@parm\meaning#2:->\@nil{%
-%    \end{macrocode}
-%   Now the real fun begins.  We'll redefine (in a group) some of \LaTeX's
-%   optional argument-processing macros because TODO
-%   Also make \cs{declare@copy@testopt} equal to \cs{@empty} to signal no optional
-%   argument (may change).
-%    \begin{macrocode}
-    \begingroup
-      \def\@protected@testopt{%
-        \expandafter\@testopt\@gobble}%
-      \def\@testopt##1##2{%
-        \toks@={##2}}%
-      \let\declare@copy@testopt\@empty
-%    \end{macrocode}
-%   Define \cs{reserved@c} as \verb=\@protected@testopt\#2\\#2=\ldots
-%    \begin{macrocode}
-      \edef\reserved@c{%
-        \noexpand\@protected@testopt
-        \noexpand#2%
-        \expandafter\noexpand\csname\string#2\endcsname
-      }%
-%    \end{macrocode}
-%   and define \cs{reserved@d} as the first three (or fewer) tokens in the
-%   expansion of \verb=#2=\ldots
-%    \begin{macrocode}
-      \edef\reserved@d{%
-        \unexpanded\expandafter\expandafter\expandafter
-          {\expandafter\declare@copy@CarThree#2{}{}{}\@nil}}
-%    \end{macrocode}
-%   then compare both.  If they are equal, the macro contains a test for an
-%   optional argument, in which case \verb=#2= is executed, so that the default
-%   value of the optional argument is stored in \cs{toks@} and
-%   \cs{declare@copy@testopt} is redefined accordingly.
-%    \begin{macrocode}
-      \ifx\reserved@c\reserved@d
-        #2%
-        \def\declare@copy@testopt{%
-          \noexpand\@protected@testopt
-          \noexpand#1%
-        }%
-%    \end{macrocode}
-%   Otherwise we try again and redefine \cs{reserved@c} as
-%   \verb=\@testopt\\#2=\ldots
-%    \begin{macrocode}
-      \else
-        \edef\reserved@c{%
-          \noexpand\@testopt
-          \expandafter\noexpand
-          \csname\string#2\endcsname
-        }%
-%    \end{macrocode}
-%   and \cs{reserved@d} as the first two (or fewer) tokens in the expansion of
-%   \verb=#2=.  Now if they are equal, execute \verb=#2= so that the default
-%   value of the optional argument of \verb=#2= is stored in \cs{toks@}, and
-%   then reassign \cs{declare@copy@testopt} to be \cs{@testopt}.
-%    \begin{macrocode}
-        \edef\reserved@d{%
-          \unexpanded\expandafter\expandafter\expandafter
-            {\expandafter\declare@copy@CarTwo#2{}{}{}\@nil}}
-        \ifx\reserved@c\reserved@d
-          #2%
-          \def\declare@copy@testopt{%
-            \noexpand\@testopt
-          }%
-        \fi
-      \fi
-%    \end{macrocode}
-%   Now, unless \cs{declare@copy@testopt} is empty (that is, no optional argument)
-%   define \cs{declare@copy@GlobalTemp} to be
-%   \meta{testopt}\cs{\#1}\{\meta{opt-default}\}, where
-%   \meta{testopt} is either \verb=\@protected@testopt\#2=, or \verb=\@testopt=.
-%    \begin{macrocode}
-      \ifx\declare@copy@testopt\@empty
-      \else
-        \declare@copy@protected\xdef\declare@copy@GlobalTemp{%
-          \declare@copy@testopt
-          \expandafter\noexpand
-          \csname\string#1\endcsname
-          {\the\toks@}%
-        }%
-      \fi
-%    \end{macrocode}
-%   We're almost done now.  If \cs{declare@copy@testopt} remained empty all along,
-%   then the macro didn't have an optional argument and we just need to \cs{let}
-%   one to the other.
-%   Otherwise we \cs{let} \verb=\#1=, the top-level macro, to
-%   \cs{declare@copy@GlobalTemp}, and then \cs{let} \verb=\\#1= to \verb=\\#2=,
-%   which is the actual definition of the macro.
-%    \begin{macrocode}
-    \expandafter\endgroup\ifx\declare@copy@testopt\@empty
-      #3\let#1=#2\relax
-    \else
-      #3\let#1=\declare@copy@GlobalTemp
-      #3\expandafter\let
-          \csname\string#1\expandafter\endcsname
-          \csname\string#2\endcsname
-    \fi
-  }{%
-    #3\let#1=#2\relax
-  }%
-}
-%    \end{macrocode}
-%   This auxiliary detects whether the argument is a macro (otherwise this
-%   entire process boils down to \TeX's \cs{let}), and in case of a
-%   \cs{protected} macro (using \textsf{etoolbox}'s \cs{newrobustcmd}), define
-%   \cs{declare@copy@protected} accordingly.
-%    \begin{macrocode}
-\def\declare@copy@chk@parm#1:->#2\@nil{%
-  \tmp@strifeq{#1}{macro}%
-    {%
-      \def\declare@copy@protected{}%
-      \@firstoftwo
-    }{%
-      \tmp@strifeq{#1}{\protected macro}%
-        {%
-          \def\declare@copy@protected{\protected}%
-          \@firstoftwo%
-        }
-        {\@secondoftwo}%
-    }%
-}
-%    \end{macrocode}
-%   This is just a temporary poor-man's string comparison macro to make things
-%   easier.  This should be replaced by \cs{@expl@str@if@eq@nnTF} once that's
-%   defined.
-%    \begin{macrocode}
-\def\tmp@strifeq#1#2{%
   \begingroup
-    \edef\reserved@a{\detokenize{#1}}%
-    \edef\reserved@b{\detokenize{#2}}%
-  \expandafter\endgroup
-  \ifx\reserved@a\reserved@b
-    \expandafter\@firstoftwo
-  \else
-    \expandafter\@secondoftwo
-  \fi}
+    \escapechar=\m@ne
+    \edef\reserved@a{\endgroup
+      \def\noexpand\reserved@a{\string#3}%
+      \noexpand\@ifundefined\noexpand\reserved@a}%
+  \reserved@a{#1}{#2}%
+    {\declare@command@copy#3#4}}
 %    \end{macrocode}
-%   Takes the first two or three tokens of the argument.
+%
+% \begin{macro}{\declare@command@copy}
+% \begin{macro}{\declare@command@copy@loop,\declare@command@copy@loop@aux,
+%     \declare@command@copy@do}
+% \begin{macro}{\@declarecommandcopylisthook}
+%   \cs{declare@command@copy@loop} will loop over the list of items in the
+%   \cs{@declarecommandcopylisthook} token list, and process each item with
+%   \verb=#1= (the command being defined) and \verb=#2= (the command being
+%   copied to \verb=#1=).  The token list \cs{@declarecommandcopylisthook}
+%   should be of the form
+% \begin{verbatim}
+%   {\IfTypeCommand \CopyTypeCommand}
+%   {\IfAnotherCommand \CopyAnotherCommand}
+%   ...
+% \end{verbatim}
+%   where each braced group represents one type of command, and within each
+%   the first token is a conditional which takes a command as argument, and
+%   tests that command, branching to true or false.  If this macro branched to
+%   true, then the second macro is used with the two macros (the one being
+%   copied to, and the one being copied from) to perform the assignment.
+%   If none of the tests in the \cs{@declarecommandcopylisthook} token list%
+%   resulted true, then both macros are just \cs{let} to one another.
 %    \begin{macrocode}
-\def\declare@copy@CarTwo#1#2#3\@nil{#1#2}%
-\def\declare@copy@CarThree#1#2#3#4\@nil{#1#2#3}%
+\def\declare@command@copy#1#2{%
+  \expandafter\declare@command@copy@loop\expandafter#2%
+    \@declarecommandcopylisthook{\@nnil\@nnil}%
+  \@declare@command@end#1#2}
+\def\declare@command@copy@loop#1#2{\declare@command@copy@loop@aux#1#2}
+\def\declare@command@copy@loop@aux#1#2#3{%
+  \ifx\@nnil#2%
+    \declare@command@copy@do\let
+  \else
+    #2{#1}%
+      {\declare@command@copy@do{#3}}%
+      {\expandafter\declare@command@copy@loop\expandafter#1}%
+  \fi}
+\def\declare@command@copy@do#1#2%
+  \fi#3%
+  \@declare@command@end#4#5{%
+  \fi
+  #1#4#5}
+%    \end{macrocode}
+%
+%   The initial definition of \cs{@declarecommandcopylisthook} contains the
+%   tests for the two types of robust command in the kernel.
+%    \begin{macrocode}
+\def\@declarecommandcopylisthook{%
+  {\IfKernelRobustCommand \CopyKernelRobustCommand}%
+  {\IfKernelCmdWithOptArg \CopyKernelCmdWithOptArg}}
+%    \end{macrocode}
+%
+%   Now the rollback code.
+%    \begin{macrocode}
 %</2ekernel|latexrelease>
 %<latexrelease>\EndIncludeInRelease
 %<latexrelease>\IncludeInRelease{0000-00-00}{\DeclareCommandCopy}
-%<latexrelease>{Undefine \NewCommandCopy, \RenewCommandCopy,
-%<latexrelease> \ProvideCommandCopy, and \DeclareCommandCopy}%
+%<latexrelease>  {Undefine \NewCommandCopy, \RenewCommandCopy,
+%<latexrelease>   \ProvideCommandCopy, and \DeclareCommandCopy}%
 %<latexrelease>\let\NewCommandCopy\@undefined
 %<latexrelease>\let\RenewCommandCopy\@undefined
 %<latexrelease>\let\DeclareCommandCopy\@undefined
@@ -1519,7 +1406,131 @@
 %    \end{macrocode}
 % \end{macro}
 % \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
 %
+%
+% \begin{macro}{\IfKernelRobustCommand,\CopyKernelRobustCommand}
+% \begin{macro}{copy@kernel@robust@command}
+% \changes{v1.5h}{2020/05/01}{Added \cs{DeclareCommandCopy} (gh/239)}
+%
+%   Now that we provided a generic way to copy one macro to another, we need to
+%   define a way to check if a command is one of \LaTeXe's robust types.  These
+%   tests are heavily based on Heiko's \cs{LetLtxMacro}, but chopped into
+%   separate macros.
+%
+%   \cs{IfKernelRobustCommand} checks if a command \verb=\cmd= was defined by
+%   \cs{DeclareRobustCommand}.  The test returns true if the expansion of
+%   \verb=\cmd= is exactly \verb*=\protect\cmd =.
+%
+%    \begin{macrocode}
+%</2ekernel>
+%<latexrelease>\IncludeInRelease{2020-10-01}{\IfKernelRobustCommand}
+%<latexrelease>  {Add \IfKernelRobustCommand, \CopyKernelRobustCommand,
+%<latexrelease>   \IfKernelCmdWithOptArg, and \CopyKernelCmdWithOptArg}%
+%<*2ekernel|latexrelease>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\def\IfKernelRobustCommand#1{%
+  \begingroup
+    \escapechar\m@ne
+    \xdef\@gtempa{\noexpand\protect
+      \expandafter\noexpand\csname\string#1 \endcsname}%
+  \endgroup
+  \ifx\@gtempa#1\relax
+    \expandafter\@firstoftwo
+  \else
+    \expandafter\@secondoftwo
+  \fi}
+%    \end{macrocode}
+%
+%   If a command was defined by \cs{DeclareRobustCommand} (that is,
+%   \cs{IfKernelRobustCommand} returns true), then to make a copy of \verb=\cmd=
+%   into \verb=\foo= we define the latter such that it expands to
+%   \verb*=\protect\foo =, then make \verb*=\foo = equal to \verb*=\cmd =.
+%
+%   There is one detail we need to take care of:  if a command was defined with
+%   \cs{DeclareRobustCommand} it may still have an optional argument, in which
+%   case there is one more macro layer before the actual definition of the
+%   command.  We use \cs{IfKernelCmdWithOptArg} to check that and
+%   \cs{CopyKernelCmdWithOptArg} to do the copying.
+%    \begin{macrocode}
+\def\CopyKernelRobustCommand#1#2{%
+  \begingroup
+    \escapechar=\m@ne
+    \edef\reserved@a{%
+  \endgroup
+  \def\noexpand#1{\noexpand\protect
+    \expandafter\noexpand\csname\string#1 \endcsname}%
+  \noexpand\copy@kernel@robust@command
+    \expandafter\noexpand\csname\string#1 \endcsname
+    \expandafter\noexpand\csname\string#2 \endcsname}%
+  \reserved@a}
+\def\copy@kernel@robust@command#1#2{%
+  \IfKernelCmdWithOptArg#2%
+    {\CopyKernelCmdWithOptArg#1#2}%
+    {\let#1#2}}
+%    \end{macrocode}
+%
+% \begin{macro}{\IfKernelCmdWithOptArg,\CopyKernelCmdWithOptArg}
+%
+%   A command \verb=\cmd= (or \verb*=\cmd =, if it was defined with
+%   \cs{DeclareRobustCommand}) with an optional argument will expand to
+%   \verb*=\@protected@testopt\cmd\\cmd{<opt>}=.  To check that we look at the
+%   first three tokens in the expansion of \verb=\cmd=, and return true or false
+%   accordingly.
+%    \begin{macrocode}
+\def\IfKernelCmdWithOptArg#1{%
+  \edef\reserved@a{%
+    \noexpand\@protected@testopt
+    \noexpand#1%
+    \expandafter\noexpand\csname\string#1\endcsname
+  }%
+  \edef\reserved@b{%
+    \unexpanded\expandafter\expandafter\expandafter
+      {\expandafter\@carcube#1{}{}{}\@nil}}%
+  \ifx\reserved@a\reserved@b
+    \expandafter\@firstoftwo
+  \else
+    \expandafter\@secondoftwo
+  \fi}
+%    \end{macrocode}
+%
+%   Then, if a command \verb=\cmd= takes an optional argument, we copy it to
+%   \verb=\foo= by defining the latter to expand to
+%   \verb=\@protected@testopt\foo\\foo{<opt>}=.
+%    \begin{macrocode}
+\def\CopyKernelCmdWithOptArg#1#2{%
+  \edef#1{%
+    \noexpand\@protected@testopt
+    \noexpand#1%
+    \expandafter\noexpand\csname\string#1\endcsname
+    \unexpanded\expandafter\expandafter\expandafter
+      {\expandafter\@gobblethree#2}}%
+  \expandafter\let
+    \csname\string#1\expandafter\endcsname
+    \csname\string#2\endcsname}
+%    \end{macrocode}
+%
+%   Now the rollback code.
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000-00-00}{\IfKernelRobustCommand}
+%<latexrelease>  {Undefine \IfKernelRobustCommand, \CopyKernelRobustCommand,
+%<latexrelease>   \IfKernelCmdWithOptArg, and \CopyKernelCmdWithOptArg}%
+%<latexrelease>\let\IfKernelRobustCommand\@undefined
+%<latexrelease>\let\CopyKernelRobustCommand\@undefined
+%<latexrelease>\let\IfKernelCmdWithOptArg\@undefined
+%<latexrelease>\let\CopyKernelCmdWithOptArg\@undefined
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
 %
 %  \begin{macro}{\kernel@make@fragile}
 %    The opposite of |\MakeRobust| execpt that it doesn't do many
@@ -1557,7 +1568,6 @@
 %</2ekernel|latexrelease>
 %<*2ekernel>
 %    \end{macrocode}
-%  \end{macro}
 %
 %
 %
