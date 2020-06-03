@@ -1331,8 +1331,7 @@
 %    \end{macrocode}
 %
 % \begin{macro}{\declare@commandcopy}
-%   Start by setting \cs{escapechar} to $-1$, then check if the command is
-%   already defined.  The proper action, if the command is defined or not is
+%   Start by checking if the command is already defined.  The proper action is
 %   taken by each specific command above.  If all's good, then
 %   \cs{declare@command@copy} is called with the command being defined and the
 %   command being copied.
@@ -1347,7 +1346,20 @@
 % \begin{macro}{\declare@command@copy@loop}
 % \begin{macro}{\declare@command@copy@loop@aux}
 % \begin{macro}{\declare@command@copy@do}
+% \begin{macro}{\declare@command@copy@let}
+% \begin{macro}{\declare@command@copy@chk@args}
 % \begin{macro}{\@declarecommandcopylisthook}
+%   \cs{declare@command@copy@loop} will start by using
+%   \cs{declare@command@copy@chk@args} to check if the macro being copied
+%   (\verb=#2=) is a parameterless (\cs{protected}) macro.  If it is not, a
+%   simple \cs{let} is used to copy the definition and we're done.  This is so
+%   because the high-level commands that are in the scope of this macro are
+%   always defined so that the top-level macro doesn't take any argument.  This
+%   first test is necessary because later on we need to be able to expand the
+%   \verb=#2= without the risk of it Breaking Badly, and as a bonus, this speeds
+%   up the process in case we used \cs{NewCommandCopy} in a ``normal'' macro.
+%
+%   If \cs{declare@command@copy@chk@args} branched to false, then
 %   \cs{declare@command@copy@loop} will loop over the list of items in the
 %   \cs{@declarecommandcopylisthook} token list, and process each item with
 %   \verb=#1= (the command being defined) and \verb=#2= (the command being
@@ -1363,17 +1375,20 @@
 %   tests that command, branching to true or false.  If this macro branched to
 %   true, then the second macro is used with the two macros (the one being
 %   copied to, and the one being copied from) to perform the assignment.
-%   If none of the tests in the \cs{@declarecommandcopylisthook} token list%
+%   If none of the tests in the \cs{@declarecommandcopylisthook} token list
 %   resulted true, then both macros are just \cs{let} to one another.
 %    \begin{macrocode}
 \def\declare@command@copy#1#2{%
-  \expandafter\declare@command@copy@loop\expandafter#2%
-    \@declarecommandcopylisthook{\@nnil\@nnil}%
-  \@declare@command@end#1#2}
+  \expandafter\declare@command@copy@chk@args\meaning#2:->\@nil
+    {\expandafter\declare@command@copy@loop\expandafter#2%
+       \@declarecommandcopylisthook{\@nnil\@nnil}%
+     \@declare@command@end}%
+    {\declare@command@copy@let}%
+  #1#2}%
 \def\declare@command@copy@loop#1#2{\declare@command@copy@loop@aux#1#2}
 \def\declare@command@copy@loop@aux#1#2#3{%
   \ifx\@nnil#2%
-    \declare@command@copy@do\let
+    \declare@command@copy@do\declare@command@copy@let
   \else
     #2{#1}%
       {\declare@command@copy@do{#3}}%
@@ -1384,6 +1399,16 @@
   \@declare@command@end#4#5{%
   \fi
   #1#4#5}
+\def\declare@command@copy@let#1#2{\let#1=#2\relax}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\def\declare@command@copy@chk@args#1:->#2\@nil{%
+  \@expl@str@if@eq@@nnTF{#1}{macro}%
+    {\@firstoftwo}%
+    {\@expl@str@if@eq@@nnTF{#1}{\protected macro}%
+      {\@firstoftwo}%
+      {\@secondoftwo}}}
 %    \end{macrocode}
 %
 %   The initial definition of \cs{@declarecommandcopylisthook} contains the
@@ -1492,7 +1517,7 @@
 \def\copy@kernel@robust@command#1#2{%
   \@if@newcommand#2%
     {\@copy@newcommand#1#2}%
-    {\let#1#2}}
+    {\declare@command@copy@let#1#2}}
 %    \end{macrocode}
 %
 % \begin{macro}{\@if@newcommand}
@@ -1543,6 +1568,22 @@
   \expandafter\@@expl@cs@to@str@@N\string}
 \def\@@expl@cs@to@str@@N#1{\z@}
 \def\@@expl@cs@to@str@@w#1\@@expl@cs@to@str@@N{-\number\fi\expandafter\z@}
+%    \end{macrocode}
+%
+%   Define a poorman's (not expandable) \cs{str\string_if\string_eq:nnTF} for a
+%   while.  This should disappear as soon as this macro is defined in
+%   \texttt{ltexpl.dtx} as a copy of \cs{str\string_if\string_eq:nnTF}.
+%    \begin{macrocode}
+\def\@expl@str@if@eq@@nnTF#1#2{%
+  \begingroup
+    \edef\x{\detokenize{#1}}%
+    \edef\y{\detokenize{#2}}%
+  \expandafter\endgroup
+  \ifx\x\y
+    \expandafter\@firstoftwo
+  \else
+    \expandafter\@secondoftwo
+  \fi}
 %    \end{macrocode}
 %
 %   Now the rollback code.
