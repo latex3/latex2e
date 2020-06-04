@@ -1233,6 +1233,159 @@
 %    \end{macrocode}
 % \end{macro}
 %
+% \subsubsection{Copying font commands}
+%
+% \begin{macro}{\@if@DeclareTextCommand}
+% \begin{macro}{\@copy@DeclareTextCommand}
+% \begin{macro}{\@copy@declaretextcommand}
+% \begin{macro}{\@copy@declaretextcommand@enc}
+% \changes{v1.5h}{2020/05/09}{Added \cs{DeclareCommandCopy} (gh/239)}
+%
+%   With the generic \cs{NewCommandCopy} macro defined earlier in
+%   \texttt{ltdefns.dtx}, we can make a |\@if@|--|\@copy@| pair for
+%   \cs{DeclareTextCommand}.
+%
+%    \begin{macrocode}
+%</2ekernel>
+%<latexrelease>\IncludeInRelease{2020-10-01}{\@if@DeclareTextCommand}
+%<latexrelease>  {Add \@if@DeclareTextCommand
+%<latexrelease>   and \@copy@DeclareTextCommand}%
+%<*2ekernel|latexrelease>
+%    \end{macrocode}
+%
+%   Checking if a command is defined with \cs{DeclareTextCommand} is a
+%   bit trickier than ones defined with \cs{DeclareRobustCommand}
+%   because the \cs{meaning} of the defined command doesn't only depend
+%   on the name of the command itself, but also on the default encoding
+%   declared for the command.  The \cs{meaning} of such a command
+%   |\foo| defined with \cs{DeclareTextCommand} is:
+%   |\<enc>-cmd \foo \<enc>\foo|.  Without knowing what encoding |<enc>|
+%   is we can't guess a definition for |\foo| and compare to check if
+%   they are equal.  The solution implemented here compares the
+%   \cs{meaning} of the command with the template above, and if it fits,
+%   then \cs{@if@DeclareTextCommand} will branch to true.
+%    \begin{macrocode}
+\def\@if@DeclareTextCommand#1{%
+  \begingroup
+    \escapechar`\\
+%    \end{macrocode}
+%   We need to take extra care about control symbols like |\'|: their
+%   meaning is something like \verb*=\?-cmd \'\?\' =, whereas control
+%   words have a space after the second token: \verb*=\?-cmd \x \?\x =.
+%   Here \cs{reserved@b} will expand to a space or to empty.
+%    \begin{macrocode}
+    \edef\reserved@a{\string#1}%
+    \edef\reserved@b{\detokenize{#1}}%
+    \edef\reserved@b{\ifx\reserved@a\reserved@b\else\space\fi}%
+%    \end{macrocode}
+%   Here we start an exhaustive expansion of the rest of the macro.
+%   \cs{reserved@a} is defined to have the template discussed above as
+%   \meta{parameter text} and then match the \cs{meaning} of the command
+%   being tested, and expand to \meta{true} or \meta{false} accordingly.
+%    \begin{macrocode}
+    \begingroup\edef\x{\endgroup
+    \def\noexpand\reserved@a####1%
+      \detokenize{macro}:->%
+        \@backslashchar####2\detokenize{-cmd }%
+        \string#1\reserved@b
+        \@backslashchar####3\string#1 \noexpand\@nil
+          ####4\noexpand\@nnil\unexpanded{{%
+  \endgroup
+  \if x\ifx\relax##2y\fi
+       \ifx\relax##3y\fi x%
+    \expandafter\@firstoftwo
+  \else
+    \expandafter\@secondoftwo
+  \fi}}%
+%    \end{macrocode}
+%   Now just call \cs{reserved@a} with the \cs{meaning} of |#1| and with
+%   a fallback text to match the definition of \cs{reserved@a}, but with
+%   \cs{relax} in place of the encoding to signal that the function
+%   should expand to false.
+%    \begin{macrocode}
+  \noexpand\reserved@a
+    \meaning#1\noexpand\@nil
+    \detokenize{macro}:->%
+      \@backslashchar\relax\detokenize{-cmd }%
+      \string#1\reserved@b
+      \@backslashchar\relax\string#1 \noexpand\@nil
+    \noexpand\@nnil}%
+  \x}
+%    \end{macrocode}
+%
+%   Commands defined with \cs{DeclareTextCommand} have multiple possible
+%   versions, depending on the encoding of the font used, and encoding
+%   defaults declared for that command.  To make sure we catch all
+%   possibilities, we list all encodings loaded by the \LaTeXe{} kernel
+%   by default, and extend it with \cs{@fontenc@load@list}:
+%    \begin{macrocode}
+\def\@loaded@encoding@list{OML,OMS,TS1}
+%    \end{macrocode}
+%
+%   To copy a command here, start by expanding (in a group) the list of
+%   loaded encodings, and then |x|-expand:
+%    \begin{macrocode}
+\def\@copy@DeclareTextCommand#1#2{%
+  \begingroup
+    \escapechar=`\\
+    \edef\@loaded@encoding@list{\@loaded@encoding@list,%
+      \expandafter\@secondoftwo\@fontenc@load@list}%
+    \edef\x{\endgroup
+%    \end{macrocode}
+%
+%   Here we define the top-level macro |#1| as:
+%   \verb*=\<enc>-cmd #1 \<enc>\#1=, using
+%   \cs{@copy@declaretextcommand@enc} to take the name of the default
+%   encoding from the command being copied (|#2|):
+%    \begin{macrocode}
+  \def\noexpand#1{%
+    \expandafter\noexpand\csname
+      \expandafter\@copy@declaretextcommand@enc
+        \meaning#2\@nil-cmd\endcsname
+    \noexpand#1%
+    \expandafter\noexpand\csname
+      \expandafter\@copy@declaretextcommand@enc
+        \meaning#2\@nil\string#1\endcsname}%
+%    \end{macrocode}
+%
+%   Finally, call \cs{@copy@declaretextcommand} in a loop to copy
+%   |\<enc>\#2| into |\<enc>\#1| for every \meta{enc} in
+%   \cs{@loaded@encoding@list}:
+%    \begin{macrocode}
+  \noexpand\@for\noexpand\@elt:=\@loaded@encoding@list\noexpand\do
+    {\unexpanded{%
+      \expandafter\@copy@declaretextcommand\expandafter{\@elt}}%
+        {\@expl@cs@to@str@@N#1}{\@expl@cs@to@str@@N#2}%
+    }%
+  }\x}
+%    \end{macrocode}
+%
+%   Now \cs{@copy@declaretextcommand} just checks if |\<enc>\#2| exists,
+%   and then copies it:
+%    \begin{macrocode}
+\def\@copy@declaretextcommand#1#2#3{%
+  \@ifundefined{#1\@backslashchar#3}{}{%
+    \expandafter\declare@command@copy@let
+      \csname#1\@backslashchar#2\expandafter\endcsname
+      \csname#1\@backslashchar#3\endcsname}}
+%    \end{macrocode}
+%
+%   Now the rollback code.
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000-00-00}{\@if@DeclareTextCommand}
+%<latexrelease>  {Undefine \@if@DeclareTextCommand
+%<latexrelease>   and \@copy@DeclareTextCommand}%
+%<latexrelease>\let\@if@DeclareTextCommand\@undefined
+%<latexrelease>\let\@copy@DeclareTextCommand\@undefined
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
 %
 % \subsubsection{Hyphenation}
 %
