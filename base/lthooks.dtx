@@ -1380,7 +1380,7 @@
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
-          { \@@_try_declaring_generic_hook:w #1///\scan_stop: {#1}{#2}{#3} }
+          { \@@_try_declaring_generic_hook:nnn {#1} {#2} {#3} }
       }
   }
 \cs_generate_variant:Nn \hook_gput_code:nnn { non, nnv, nov }
@@ -1412,21 +1412,47 @@
 % \end{macro}
 % \end{macro}
 
-%  \begin{macro}{\@@_try_declaring_generic_hook:w}
+%  \begin{macro}{\@@_try_declaring_generic_hook:nnn}
+%  \begin{macro}{\@@_try_declaring_generic_next_hook:nn}
+%  \begin{macro}[TF]{\@@_try_declaring_generic_hook:wn}
 %    We split the hook name at the first \texttt{/} (if any) and check
 %    if that component is one of a predefined set for generic
 %    names. We also split off the second component to see if we have
-%    to make a reversed hook. Then we  declare the hook to set up the necessary data
-%    structures and then call \cs{hook_gput_code:nnn}
-%    again. Otherwise, that is if there was no \texttt{/} or the first
-%    component is not a generic one, we complain about an undeclared hook.
+%    to make a reversed hook.  In either case the function returns
+%    \meta{true} for a generic hook and \meta{false} in other cases.
+%
+%    The wrapper \cs{@@_try_declaring_generic_hook:nnn} then defers
+%    \cs{hook_gput_code:nnn} if the generic hook was declared, or to
+%    \cs{@@_gput_undeclared_hook:nnn} otherwse (the hook was tested for
+%    existence before, so at this point if it isn't generic, it doesn't
+%    exist).
+%
+%    The wrapper \cs{@@_try_declaring_generic_next_hook:nn} for
+%    next-execution hooks does the same: it defers the code to
+%    \cs{hook_gput_next_code:nn} if the generic hook was declared, or
+%    to \cs{@@_gput_next_do:nn} otherwise.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_try_declaring_generic_hook:w #1/#2/#3/#4\scan_stop: #5#6#7 {
-  \tl_if_empty:nTF {#2}
-     { \@@_gput_undeclared_hook:nnn {#5} {#6} {#7} }
-     { \clist_if_in:NnTF \c_@@_generics_clist {#1}
+\cs_new_protected:Npn \@@_try_declaring_generic_hook:nnn #1
+  {
+    \@@_try_declaring_generic_hook:wnTF #1 / / / \scan_stop: {#1}
+      { \hook_gput_code:nnn {#1} }
+      { \@@_gput_undeclared_hook:nnn {#1} }
+  }
+\cs_new_protected:Npn \@@_try_declaring_generic_next_hook:nn #1
+  {
+    \@@_try_declaring_generic_hook:wnTF #1 / / / \scan_stop: {#1}
+      { \hook_gput_next_code:nn {#1} }
+      { \@@_gput_next_do:nn {#1} }
+  }
+\prg_new_protected_conditional:Npnn \@@_try_declaring_generic_hook:wn
+    #1 / #2 / #3 / #4 \scan_stop: #5 { TF }
+  {
+    \tl_if_empty:nTF {#2}
+      { \prg_return_false: }
+      {
+        \clist_if_in:NnTF \c_@@_generics_clist {#1}
           {
-            \hook_new:n{#5}
+            \hook_new:n {#5}
 %    \end{macrocode}
 %    After having declared the hook we check the second component (for
 %    file hooks) or the third component for environment hooks) and
@@ -1435,18 +1461,21 @@
 %    \begin{macrocode}
             \clist_if_in:NnTF \c_@@_generics_reversed_ii_clist {#2}
               { \tl_gset:cn { g_@@_#5_reversed_tl } { - } }
-              { \clist_if_in:NnT \c_@@_generics_reversed_iii_clist {#3}
-                { \tl_gset:cn { g_@@_#5_reversed_tl } { - } }
+              {
+                \clist_if_in:NnT \c_@@_generics_reversed_iii_clist {#3}
+                  { \tl_gset:cn { g_@@_#5_reversed_tl } { - } }
               }
 %    \end{macrocode}
 %    Now that we know that the hook is declared we can add the code to it.
 %    \begin{macrocode}
-            \hook_gput_code:nnn{#5}{#6}{#7}
+            \prg_return_true:
           }
-          { \@@_gput_undeclared_hook:nnn {#5}{#6}{#7} }
-     }
-}
+          { \prg_return_false: }
+      }
+  }
 %    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
 %  \end{macro}
 
 
@@ -2515,6 +2544,12 @@
 \cs_new_protected:Npn \hook_gput_next_code:nn #1 #2
   {
     \@@_declare:n {#1}
+    \hook_if_exist:nTF {#1}
+      { \@@_gput_next_do:nn {#1} {#2} }
+      { \@@_try_declaring_generic_next_hook:nn {#1} {#2} }
+  }
+\cs_new_protected:Npn \@@_gput_next_do:nn #1 #2
+  {
     \tl_gput_right:cn { g_@@_#1_next_code_tl }
       { #2 \tl_gclear:c { g_@@_#1_next_code_tl } }
   }
@@ -2984,7 +3019,7 @@
 %  \begin{macro}{\document}
 %    
 %    \begin{macrocode}
-\def\document{%
+\expandafter\def\expandafter\document\expandafter{%
 %    \end{macrocode}
 %    We do cancel the grouping as part of the \cs{begin} handling
 %    (this is now done inside \cs{begin} instead) so that the
@@ -2992,6 +3027,10 @@
 %    \texttt{...} \cs{endgroup}.
 %    \begin{macrocode}
 %  \endgroup
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \expandafter\let\csname g_hook_document_code_tl\endcsname\@empty
 %    \end{macrocode}
 %    
 %    \begin{macrocode}

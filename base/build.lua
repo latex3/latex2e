@@ -52,6 +52,7 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
+    "etoolbox-ltx.sty",
      "*-????-??-??.sty"
   }
 textfiles =
