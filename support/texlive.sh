@@ -99,8 +99,8 @@ tlmgr install  \
   mflogo       \
   palatino     \
   pdfescape    \
-  pifont       \
   pl           \
+  psnfss       \
   refcount     \
   rerunfilecheck \
   sauter       \
