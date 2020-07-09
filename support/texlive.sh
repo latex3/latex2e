@@ -99,6 +99,7 @@ tlmgr install  \
   mflogo       \
   palatino     \
   pdfescape    \
+  pifont       \
   pl           \
   refcount     \
   rerunfilecheck \
