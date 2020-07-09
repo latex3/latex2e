@@ -52,7 +52,8 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
-    "etoolbox-ltx.sty",
+    "etoolbox-ltx.sty",       -- temp
+    "filehook-ltx.sty",       -- temp
      "*-????-??-??.sty"
   }
 textfiles =
@@ -109,7 +110,13 @@ typesetfiles   =
     "ltx3info.tex",
     "modguide.tex",
     "usrguide.tex",
-    "latexchanges.tex"
+    "latexchanges.tex",
+    "lthooks-doc.tex",
+    "ltshipout-doc.tex",
+    "ltfilehook-doc.tex",
+    "lthooks-code.tex",
+    "ltshipout-code.tex",
+    "ltfilehook-code.tex",
   }
 dynamicfiles = {"*.tst"}
 
@@ -137,7 +144,8 @@ checkdeps   = { }
 typesetdeps =
   {
     maindir .. "/required/graphics",
-    maindir .. "/required/tools"
+    maindir .. "/required/tools",
+    maindir .. "/required/amsmath"    -- for l3doc.cls :-(
   }
 unpackdeps  = { }
 
