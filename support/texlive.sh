@@ -106,6 +106,7 @@ tlmgr install  \
   sauter       \
   times        \
   titlesec     \
+  underscore   \
   uniquecounter \
   vntex        \
   wasy         \
