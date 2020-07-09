@@ -68,6 +68,7 @@ tlmgr install  \
   bigintcalc   \
   bitset       \
   bookmark     \
+  booktabs     \
   cbfonts      \
   csquotes     \
   dvips        \
