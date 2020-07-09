@@ -70,6 +70,7 @@ tlmgr install  \
   bookmark     \
   booktabs     \
   cbfonts      \
+  colortbl     \
   csquotes     \
   dvips        \
   epstopdf     \
