@@ -59,6 +59,7 @@ tlmgr install   \
 
 # Additional support for typesetting
 tlmgr install  \
+  alphalph     \
   amscls       \
   atbegshi     \
   atveryend    \
