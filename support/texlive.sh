@@ -73,6 +73,7 @@ tlmgr install  \
   colortbl     \
   csquotes     \
   dvips        \
+  enumitem     \
   epstopdf     \
   epstopdf-pkg \
   etexcmds     \
