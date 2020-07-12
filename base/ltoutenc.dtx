@@ -44,7 +44,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltoutenc.dtx}
-             [2020/04/22 v2.0p LaTeX Kernel (font encodings)]
+             [2021/07/04 v2.0q LaTeX Kernel (font encodings)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltoutenc.dtx}
@@ -2869,28 +2869,70 @@
 %    \end{macrocode}
 %
 % LuaTeX.
+% For Lua\TeX~1.10+, define a Lua function to disable any handing by the font code.
+% Otherwise we reload the font without TeX ligatures.
+% \changes{v2.0q}{2020/07/04}{%
+%      Implement \cs{remove@tlig} in Lua\TeX without font reloading}
 %    \begin{macrocode}
     \def\UnicodeFontTeXLigatures{+tlig;}
+    \ifnum\luatexversion<110
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-    \def\reserved@a#1{%
-      \def\@remove@tlig##1{\@remove@tlig@##1\@nil#1\@nil\relax}
-      \def\@remove@tlig@##1#1{\@remove@tlig@@##1}}
-    \edef\reserved@b{\detokenize{+tlig;}}
-    \expandafter\reserved@a\expandafter{\reserved@b}
-    \def\@remove@tlig@@#1\@nil#2\relax{#1}
+      \def\reserved@a#1{%
+        \def\@remove@tlig##1{\@remove@tlig@##1\@nil#1\@nil\relax}
+        \def\@remove@tlig@##1#1{\@remove@tlig@@##1}}
+      \edef\reserved@b{\detokenize{+tlig;}}
+      \expandafter\reserved@a\expandafter{\reserved@b}
+      \def\@remove@tlig@@#1\@nil#2\relax{#1}
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-    \def\remove@tlig#1{%
-      \begingroup
-      \font\remove@tlig
-      \expandafter\@remove@tlig\expandafter{\fontname\font}%
-      \remove@tlig
-      \char#1\relax
-      \endgroup
-    }
+      \def\remove@tlig#1{%
+        \begingroup
+        \font\remove@tlig
+        \expandafter\@remove@tlig\expandafter{\fontname\font}%
+        \remove@tlig
+        \char#1\relax
+        \endgroup
+      }
+    \else
+      \newluafunction\@remove@tlig@@@@
+%    \end{macrocode}
+% We are in the format and Lua functions can not be dumped, so we have to repeat
+% the code during |\everyjob|. Therefore we first define a helper to both execute
+% some code and same it for |\everyjob|:
+%    \begin{macrocode}
+      \def\now@and@everyjob#1{\toksapp\everyjob{#1}#1}
+%    \end{macrocode}
+% Now we can define the function. Mostly we just have to insert a protected glyph
+% node, which is a glyph node with subtype 256. But we have to keep track of the
+% current mode to avoid inserting the glyph into a vlist.
+%    \begin{macrocode}
+      \now@and@everyjob{\directlua{
+        local rawchar_func = token.create'@remove@tlig@@@@'.index
+        local forcehmode = tex.forcehmode
+        local put_next = token.put_next
+        local glyph_id = node.id'glyph'
+        local rawchar_token = token.new(rawchar_func, token.command_id'lua_call')
+        lua.get_functions_table()[rawchar_func] = function()
+          local mode = tex.nest.top.mode
+          if mode == 1 or mode == -1 then
+            put_next(rawchar_token)
+            return forcehmode(true)
+          end
+          local n = node.new(glyph_id, 256)
+          n.font = font.current()
+          n.char = token.scan_int()
+          return node.write(n)
+        end
+        token.set_lua('@remove@tlig@@@', rawchar_func, 'global', 'protected')
+      }}
+%    \end{macrocode}
+% Now \verb+\remove@tlig+ can be implemented almost as in XeTeX.
+%    \begin{macrocode}
+      \def\remove@tlig#1{\@remove@tlig@@@#1\relax}
+    \fi
 %    \end{macrocode}
 %
 %    \begin{macrocode}
