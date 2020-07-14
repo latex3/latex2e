@@ -355,7 +355,46 @@
 %    \begin{macrocode}
 %<*2ekernel>
 %    \end{macrocode}
-
+%
+% \subsection{\pkg{expl3} helpers}
+%
+%    \begin{macrocode}
+%<@@=filehook>
+%    \end{macrocode}
+%
+%  \begin{macro}{\CurrentFile}
+%    User-level name for use in the file hooks.
+%    \begin{macrocode}
+\def\CurrentFile{}
+%    \end{macrocode}
+%  \end{macro}
+%
+% \begin{macro}{\@filehook@set@curr@file,\@@_normalise_file_name:n}
+%   This macro sets \cs{CurrentFile} so that it holds the name of the
+%   current input file.  This macro checks that the file exists, and
+%   if so sets \cs{CurrentFile} to expand to the actual file found
+%   (regardless, for example, if the user input a |.tex| file without
+%   typing in the extension).
+%    \begin{macrocode}
+\ExplSyntaxOn
+\tl_new:N \l_@@_internal_a_tl
+\tl_new:N \l_@@_internal_b_tl
+\tl_new:N \l_@@_internal_c_tl
+\cs_new_protected:Npn \@filehook@set@curr@file #1
+  { \exp_args:NV \@@_normalise_file_name:n #1 }
+\cs_new_protected:Npn \@@_normalise_file_name:n #1
+  {
+    \file_if_exist:nTF {#1}
+      {
+        \exp_args:Nx \file_parse_full_name:nNNN
+          { \file_full_name:n {#1} }
+      }
+      { \file_parse_full_name:nNNN {#1} }
+      \l_@@_internal_a_tl \l_@@_internal_b_tl \l_@@_internal_c_tl
+    \tl_set:Nx \CurrentFile { \l_@@_internal_b_tl \l_@@_internal_c_tl }
+  }
+\ExplSyntaxOff
+%    \end{macrocode}
 %
 % \subsection{Declaring the file-related hooks}
 %
@@ -365,10 +404,8 @@
 %  explicitly declare any hook in the code below.
 %
 %  Furthermore, those named \texttt{.../after} or \texttt{.../end} are
-%  automatically declared as reversed hooks if fill with code, s this
+%  automatically declared as reversed hooks if filled with code, so this
 %  is also automatically taken care of.
-%
-%    
 %
 % \subsection{Patching \LaTeX{} commands (need proper integration later)}
 %
@@ -377,8 +414,8 @@
 %    \begin{macrocode}
 %<@@=>
 %    \end{macrocode}
-%    
-%  \begin{macro}{\InputIfFileExists}
+%
+% \begin{macro}{\InputIfFileExists}
 %    \cs{InputIfFileExists} loads any file if it is available so we
 %    have to add the hooks \texttt{file/before} and
 %    \texttt{file/after} in the right places. If the file doesn't
@@ -387,97 +424,69 @@
 \let\InputIfFileExists\@undefined
 \DeclareRobustCommand \InputIfFileExists[2]{%
   \IfFileExists{#1}%
-   {%
+    {%
 %    \end{macrocode}
 %    If the file exists then \cs{@curr@file} holds its name. But we
 %    can't rely on that still being true after the file has been
 %    processed. Thus for using the name in the file hooks we need to
-%    preserve the name and then restored it for the \texttt{file/after/...} hook.
+%    preserve the name and then restored it for the
+%    \texttt{file/after/...} hook.
+%
+%    The hook always refers to the \emph{actual} file that will be
+%    operated on, regardless of how the user had it written in the
+%    document.  \pkg{expl3}'s \cs{file_full_name:n} normalises the file
+%    name (to factor out differences in the |.tex| extension), and
+%    then does a file lookup to take into account a possible path from
+%    \cs{l_file_search_path_seq} and \cs{input@path}.  However only
+%    the file name and extension are returned:  the path is removed so
+%    that (say) |\AddToHook{file/before/article.cls}{code}| works
+%    regardless of where |article.cls| is in the system.
 %    \begin{macrocode}
-     \edef\reserved@a{\@filef@und 
-       \def\noexpand\@curr@file{\@curr@file}%
-     }%
+      \edef\reserved@a{\@filef@und
+        \def\noexpand\CurrentFile{\CurrentFile}%
+      }%
       \expandafter\@swaptwoargs\expandafter
-         {\reserved@a}%
-         {%
-           #2%
-           \@addtofilelist{#1}%
-           \UseHook{file/before}%
+        {\reserved@a}%
+        {%
+          #2%
+          \@addtofilelist{#1}%
+          \UseHook{file/before}%
 %    \end{macrocode}
 %    The current file name is available in \cs{@curr@file} so we use
 %    that in the specific hook.
 %    \begin{macrocode}
-           \UseHook{file/before/\@curr@file}%
-           \@@input
-         }%
+          \UseHook{file/before/\CurrentFile}%
+          \@@input
+        }%
 %    \end{macrocode}
 %    And it is restored here so we can use it once more.
 %    \begin{macrocode}
-      \UseHook{file/after/\@curr@file}%
+      \UseHook{file/after/\CurrentFile}%
       \UseHook{file/after}%
     }%
 }
 %    \end{macrocode}
-%  \end{macro}
-
-
-
-%  \begin{macro}{\set@curr@file}
-%    The implicit \texttt{.tex} extension added by \cs{input},
-%    etc.\ is rather a nuisance than a help imho.
+% \end{macro}
 %
-%    So this is an attempt to get to a common state and internally
-%    always drop \texttt{.tex}. This works for all my test cases but I
-%    guess it rather has to be the other way around (always explicitly
-%    add \texttt{.tex} if it is missing and no extension given.
-%
-%    We have to do one or the other because otherwise
-%    \verb=\input{foo}=  and \verb=input{foo.tex}= would try to execute
-%    different specific hooks (\texttt{file/before/foo} and
-%    \texttt{file/before/foo.tex}) which isn't really what we want!
-%    \fmi{fix}
-%
+% \begin{macro}{\set@curr@file}
+%   Now we just hook into \cs{set@curr@file} to add
+%   \cs{@filehook@set@curr@file} at the end, after \cs{@curr@file} is
+%   set.
 %    \begin{macrocode}
-\begingroup
-  \catcode`T=12
-  \catcode`E=12
-  \catcode`X=12
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-\lowercase{
-  \gdef\set@curr@file#1{%
-    \begingroup
-      \escapechar\m@ne
-      \xdef\@curr@file{%
-        \expandafter\expandafter\expandafter\unquote@name
-        \expandafter\expandafter\expandafter{%
-        \expandafter\string
+\def\set@curr@file#1{%
+  \begingroup
+    \escapechar\m@ne
+    \xdef\@curr@file{%
+      \expandafter\expandafter\expandafter\unquote@name
+      \expandafter\expandafter\expandafter{%
+      \expandafter\string
         \csname\@firstofone#1\@empty\endcsname}}%
-      \expandafter
-      \drop@tex@extension@other\@curr@file.TEX\drop@tex@extension@other
-    \endgroup
-  }
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-  \gdef\drop@tex@extension@other#1.TEX#2\drop@tex@extension@other
-    {\gdef\@curr@file{#1}}
+  \endgroup
+  \@filehook@set@curr@file{\@curr@file}%
 }
-\endgroup
 %    \end{macrocode}
 %  \end{macro}
 %
-%
-
-%  \begin{macro}{\CurrentFile}
-%    User-level name for use in the file hooks.
-%    \begin{macrocode}
-\def\CurrentFile{\@curr@file}
-%    \end{macrocode}
-%  \end{macro}
-
-
 %  \begin{macro}{\load@onefilewithoptions}
 %    This macro is used when loading packages or classes.
 %    \begin{macrocode}
@@ -513,19 +522,21 @@
          {\@currname.\@currext}%
          {%
 %    \end{macrocode}
-%    When the current extension is \cs{@pkgextension} we are loading a
-%    package otherwise (let's hope) a class, so depending on that we
-%    execute different hooks.
+%    package otherwise, if it is \cs{@clsextension}, a class, so
+%    depending on that we execute different hooks.  If the extension is
+%    neither, then it is another type of file without special hooks.
 %    \begin{macrocode}
-%-----------------------------------------           
+%-----------------------------------------
            \ifx\@currext\@pkgextension
              \UseHook{package/before}%
              \UseHook{package/before/\@currname}%
            \else
-             \UseHook{class/before}%
-             \UseHook{class/before/\@currname}%
+             \ifx\@currext\@clsextension
+               \UseHook{class/before}%
+               \UseHook{class/before/\@currname}%
+             \fi
            \fi
-%-----------------------------------------           
+%-----------------------------------------
          }%
          {\@missingfileerror\@currname\@currext}%
     \let\@unprocessedoptions\@@unprocessedoptions
@@ -536,15 +547,17 @@
 %    And same procedure, James, when we are finished loading, except
 %    that the hook order is now reversed.
 %    \begin{macrocode}
-%-----------------------------------------           
+%-----------------------------------------
     \ifx\@currext\@pkgextension
       \UseHook{package/after/\@currname}%
       \UseHook{package/after}%
     \else
-      \UseHook{class/after/\@currname}%
-      \UseHook{class/after}%
+      \ifx\@currext\@clsextension
+        \UseHook{class/after/\@currname}%
+        \UseHook{class/after}%
+      \fi
     \fi
-%-----------------------------------------           
+%-----------------------------------------
     \@unprocessedoptions}%
     \@ifl@ter\@currext{#1}{#3}{}%
       {\@latex@warning@no@line
@@ -597,15 +610,17 @@
          {\@currname.\@currext}%
          {}%
          {\@missingfileerror\@currname\@currext}%
-%-----------------------------------------           
+%-----------------------------------------
            \ifx\@currext\@pkgextension
              \UseHook{package/before}%
              \UseHook{package/before/\@currname}%
            \else
-             \UseHook{class/before}%
-             \UseHook{class/before/\@currname}%
+             \ifx\@currext\@clsextension
+               \UseHook{class/before}%
+               \UseHook{class/before/\@currname}%
+             \fi
            \fi
-%-----------------------------------------           
+%-----------------------------------------
     \expandafter\let\csname unprocessedoptions-\@currname.\@currext\endcsname
                     \@@unprocessedoptions
     \csname\@currname.\@currext-h@@k\endcsname
@@ -619,15 +634,17 @@
     \expandafter\let
         \csname unprocessedoptions-\@currname.\@currext\endcsname
        \@undefined}%
-%-----------------------------------------           
+%-----------------------------------------
     \ifx\@currext\@pkgextension
       \UseHook{package/after/\@currname}%
       \UseHook{package/after}%
     \else
-      \UseHook{class/after/\@currname}%
-      \UseHook{class/after}%
+      \ifx\@currext\@clsextension
+        \UseHook{class/after/\@currname}%
+        \UseHook{class/after}%
+      \fi
     \fi
-%-----------------------------------------           
+%-----------------------------------------
     \@ifl@ter\@currext{#1}{#3}{}%
       {\@latex@warning@no@line
          {You have requested,\on@line,
@@ -641,22 +658,13 @@
     \@reset@ptions}%
   \reserved@a}
 }{}%
-
-
 %    \end{macrocode}
 %  \end{macro}
 
 
 
 
-%  \begin{macro}{\@include#1}
-%    This is for handling include hooks. As the code contains a
-%    \cs{@for} look we need to disable \texttt{expl3} conventions or
-%    chaos will happen :-(.
-%    \begin{macrocode}
-\ExplSyntaxOff  % code contains ":"
-%    \end{macrocode}
-%    
+%  \begin{macro}{\@include}
 %    \begin{macrocode}
 \def\@include#1 {%
   \clearpage
@@ -680,18 +688,18 @@
 %    Execute the \texttt{before} hooks just after we switched the
 %    \texttt{.aux} file \ldots
 %    \begin{macrocode}
-%-----------------------------------------           
+%-----------------------------------------
     \UseHook{include/before}%
     \UseHook{include/before/#1}%
-%-----------------------------------------           
+%-----------------------------------------
     \@input@{#1.tex}%
 %    \end{macrocode}
 %    \ldots{} then \texttt{end} hooks \ldots
 %    \begin{macrocode}
-%-----------------------------------------           
+%-----------------------------------------
     \UseHook{include/end/#1}%
     \UseHook{include/end}%
-%-----------------------------------------           
+%-----------------------------------------
     \clearpage
 %    \end{macrocode}
 %    \ldots{} and after the \cs{clearpage} the \texttt{after} hooks
@@ -699,7 +707,7 @@
 %    added (after all we need to be in  well defined state after the
 %    \cs{include}).
 %    \begin{macrocode}
-%-----------------------------------------           
+%-----------------------------------------
     \UseHook{include/after/#1}%
     \UseHook{include/after}%
 %    \end{macrocode}
@@ -708,7 +716,7 @@
 %    above hooks add further material.
 %    \begin{macrocode}
     \clearpage
-%-----------------------------------------           
+%-----------------------------------------
     \@writeckpt{#1}%
     \if@filesw
       \immediate\closeout\@partaux
@@ -744,21 +752,21 @@
       \immediate\openout\@partaux "#1.aux"
       \immediate\write\@partaux{\relax}%
     \fi
-%-----------------------------------------           
+%-----------------------------------------
     \UseHook{include/before}%
     \UseHook{include/before/#1}%
-%-----------------------------------------           
+%-----------------------------------------
     \@input@{#1.tex}%
-%-----------------------------------------           
+%-----------------------------------------
     \UseHook{include/end/#1}%
     \UseHook{include/end}%
-%-----------------------------------------           
+%-----------------------------------------
     \clearpage
-%-----------------------------------------           
+%-----------------------------------------
     \UseHook{include/after/#1}%
     \UseHook{include/after}%
     \clearpage
-%-----------------------------------------           
+%-----------------------------------------
     \@writeckpt{#1}%
     \if@filesw
       \immediate\closeout\@partaux
@@ -812,23 +820,6 @@
 %<*filehook-draft>
 %    \end{macrocode}
 %
-%  \begin{macro}{\drop@tex@extension}
-%    This is a helper should vanish. For one it is not correct (as it
-%    will do havoc to \texttt{foo.tex.bar.baz}) and dropping the
-%    extension is weird anyway.
-%    \fmi{fix! when default for .tex changes}
-%    \begin{macrocode}
-\def\drop@tex@extension#1{%
-  \edef\drop@tex@extension@result{%
-    \expandafter
-    \drop@tex@extension@\expanded{#1}.tex\drop@tex@extension@}%
-  }
-\def\drop@tex@extension@#1.tex#2\drop@tex@extension@{#1}%
-%    \end{macrocode}
-%  \end{macro}
-%
-%
-%    
 %    \begin{macrocode}
 \newcommand\AtBeginOfEveryFile [1]
   {\AddToHook{file/before}{#1}}
@@ -862,11 +853,9 @@
 %    For normal files we drop the \texttt{.tex} extension for now:
 %    \begin{macrocode}
 \newcommand\AtBeginOfFile [2]
-  {\drop@tex@extension{file/before/#1}%
-    \expandafter\AddToHook\expandafter{\drop@tex@extension@result}{#2}}
+  {\AddToHook{file/before/#1}{#2}}
 \newcommand\AtEndOfFile [2]
-  {\drop@tex@extension{file/after/#1}%
-   \expandafter\AddToHook\expandafter{\drop@tex@extension@result}{#2}}
+  {\AddToHook{file/after/#1}{#2}}
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
@@ -940,11 +929,11 @@
 %    is only a rough draft.
 %    \begin{macrocode}
 \newcommand\BeforeClass[2]
-  {\AddToHook{file/before/#1.cls}{#2} }
+  {\AddToHook{file/before/#1.cls}{#2}}
 \newcommand\AfterClass [2]
-  {\AddToHook{file/after/#1.cls}{#2} }
+  {\AddToHook{file/after/#1.cls}{#2}}
 \newcommand\AfterAtEndOfClass [2]
-  {\AddToHook{class/after/#1}{#2} }
+  {\AddToHook{class/after/#1}{#2}}
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -958,15 +947,13 @@
 %
 %    \begin{macrocode}
 \newcommand\BeforeFile [2]
-  {% 
+  {%
   \typeout{BeforeFile: #1!!!}%
-   \drop@tex@extension{file/before/#1}%
-    \expandafter\AddToHook\expandafter{\drop@tex@extension@result}{#2}}
+   \AddToHook{file/before/#1}{#2}}
 \newcommand\AfterFile [2]
   {%
     \typeout{AfterFile: #1!!!}%
-    \drop@tex@extension{file/after/#1}%
-    \expandafter\AddToHook\expandafter{\drop@tex@extension@result}{#2}}
+    \AddToHook{file/after/#1}{#2}}
 %    \end{macrocode}
 %
 %    This is missing some interfaces so disabling the package isn't
@@ -1000,24 +987,24 @@
 
 
 %    \begin{macrocode}
-\int_new:N \g_@@_nesting_level_int    
+\int_new:N \g_@@_nesting_level_int
 %    \end{macrocode}
 
 %    \begin{macrocode}
 \tl_new:N   \g_@@_nesting_prefix_tl
-\tl_gset:Nn \g_@@_nesting_prefix_tl {}
+\tl_gset:Nn \g_@@_nesting_prefix_tl { }
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
 \AddToHook{file/before}{
-  \int_gincr:N \g_@@_nesting_level_int    
+  \int_gincr:N \g_@@_nesting_level_int
   \tl_gput_right:Nn\g_@@_nesting_prefix_tl {=}
   \iow_term:x {
     \g_@@_nesting_prefix_tl \space
     ( LEVEL~ \int_use:N \g_@@_nesting_level_int \space START )~
-    \@curr@file  ^^J
+    \CurrentFile  ^^J
   }
-}                      
+}
 %    \end{macrocode}
 %    We don't want to install the \hook{file/after} hook immediately,
 %    because that would mean it is the first time executed when the
@@ -1030,13 +1017,13 @@
     \iow_term:x {
       \g_@@_nesting_prefix_tl \space
       ( LEVEL~ \int_use:N \g_@@_nesting_level_int \space STOP )~
-      \@curr@file  ^^J
+      \CurrentFile  ^^J
     }
-    \int_gdecr:N \g_@@_nesting_level_int    
+    \int_gdecr:N \g_@@_nesting_level_int
     \tl_gset:Nx \g_@@_nesting_prefix_tl
        {\exp_after:wN \use_none:n \g_@@_nesting_prefix_tl}
-  }                      
-}                      
+  }
+}
 %    \end{macrocode}
 %
 %    We have to manually increment the level because now that we have
