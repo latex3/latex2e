@@ -153,7 +153,7 @@ unpackdeps  = { }
 indexstyle = "source2e.ist"
 
 -- Allow for TU and other test configurations
-checkconfigs = {"build","config-TU","config-legacy"}
+checkconfigs = {"build","config-TU","config-legacy","config-lthooks"}
 
 update_tag = update_tag_base
 
