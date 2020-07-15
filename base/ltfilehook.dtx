@@ -17,8 +17,8 @@
 % for those people who are interested or want to report an issue.
 %
 %    \begin{macrocode}
-\providecommand\ltfilehookversion{v0.6c}
-\providecommand\ltfilehookdate{2020/07/13}
+\providecommand\ltfilehookversion{v0.6d}
+\providecommand\ltfilehookdate{2020/07/15}
 %    \end{macrocode}
 %
 %<*driver>
@@ -88,13 +88,7 @@
 %    all \enquote{packages},
 %    and there are also hooks that are specific to a single file,
 %    e.g., do something after the package \texttt{foo.sty} has been
-%    loaded. The latter type is only available for files that have an
-%    extension but not for those that are extensionless such as
-%    \texttt{Makefile} (even though they can be loaded on most \TeX{}
-%    in many cases).\footnote{For a number of reasons it is best to
-%    avoid extensionless files altogether, as they may or may not work
-%    depending on the circumstances and we can't guarantee that
-%    \LaTeX{} functions always work properly with them!}
+%    loaded.
 %
 %
 % \subsection{General hooks for file reading}
@@ -142,23 +136,54 @@
 %    \>\cs{UseHook}\marg{\hook{file/before/\meta{file name}}} \\
 %    \>\> \meta{file contents} \\
 %    \>\cs{UseHook}\marg{\hook{file/after/\meta{file name}}} \\
-%    \cs{UseHook}\marg{\hook{file/after}} 
+%    \>\cs{UseHook}\marg{\hook{file/after}}
 %  \end{tabbing}
-%
-%     At the momement a \meta{file-name} with the extension
-%    \texttt{.tex} must be given without extension, in all other cases
-%    you have to give the extension explicitly.
 %
 %     \fmi{With a higher-level interface that doesn't matter, but it
 %    is a bit weird, if you use \cs{AddToHook} or \cs{hook_gput:nnn}
 %    directly, so I guess that has to be done differently!}
 %
+%    The file hooks only refer to the file by its name and extension,
+%    so the \meta{file name} should be the file name as it is on the
+%    filesystem with extension (if any) and without paths.  Different
+%    from \cs{input} and similar commands, for hooks the \texttt{.tex}
+%    extension is not assumed, so \texttt{.tex} files must also be given
+%    with their extension.
+%    Files within subfolders should also be addressed by their name and
+%    extension only.
+%
+%    Extensionless files also work, and should then be given without
+%    extension.  Note however that \TeX{} prioritizes \texttt{.tex}
+%    files, so if two files \texttt{foo} and \texttt{foo.tex} exist in
+%    the search path, only the latter will be seen.
+%
+%    When a file is input, the \meta{file name} is available in
+%    \cs{CurrentFile}, which is then used when accessing the
+%    \hook{file/before/\meta{file name}} and
+%    \hook{file/after/\meta{file name}}.
+%
 %  \begin{variable}{\CurrentFile}
-%     The name of the file about to be read (or just finished) is
-%     available to the hook through \cs{CurrentFile} (there is no 
-%     \texttt{expl3} name for it.
+%    The name of the file about to be read (or just finished) is
+%    available to the hooks through \cs{CurrentFile} (there is no
+%    \texttt{expl3} name for it for now).  The file is always provided
+%    with its extension, i.e., how it appears on your hard drive, but
+%    without any specified path to it. For example,
+%    \verb=\input{sample}= and \verb=\input{app/sample.tex}= would
+%    both have \cs{CurrentFile} being \texttt{sample.tex}.
 %  \end{variable}
 %
+%  \begin{variable}{\CurrentFilePath}
+%    The path to the current file (complement to \cs{CurrentFile}) is
+%    available in \cs{CurrentFilePath} if needed.
+%    The paths returned in \cs{CurrentFilePath} are only user paths,
+%    given through \cs{input@path} (or \pkg{expl3}'s equivalent
+%    \cs{l_file_search_path_seq}) or by directly typing in the path
+%    in the \cs{input} command or equivalent.  Files located by
+%    \texttt{kpsewhich} get the path added internally by the \TeX{}
+%    implementation, so at the macro level it looks as if the file were
+%    in the current folder, so the path in \cs{CurrentFilePath} is empty
+%    in these cases (package and class files, mostly).
+%  \end{variable}
 %
 % \subsection{Hooks for package and class files}
 %
@@ -201,7 +226,7 @@
 %
 %    \end{description}
 %  \end{variable}
-%     All \hook{/after} hooksare implemented as reversed hooks.
+%     All \hook{/after} hooks are implemented as reversed hooks.
 %
 %     \noindent The overall sequence of execution for \cs{usepackage}
 %     and friends is therefore:
@@ -214,7 +239,7 @@
 %    \>\>\> \meta{package contents} \\
 %    \>\>\cs{UseHook}\marg{\hook{file/after/\meta{package name}.sty}} \\
 %    \>\>\cs{UseHook}\marg{\hook{file/after}} \\[5pt]
-%    \>\>\>\emph{code from \cs{AtEndOfPackage} if
+%    \>\>\emph{code from \cs{AtEndOfPackage} if
 %                used inside the package} \\[5pt]
 %    \>\cs{UseHook}\marg{\hook{package/after/\meta{package name}}} \\
 %    \>\cs{UseHook}\marg{\hook{package/after}} 
@@ -223,9 +248,8 @@
 %    is replaced by \texttt{class/} and \cs{AtEndOfPackage} by
 %    \cs{AtEndOfClass}.
 %
-%    If a package or class is not loaded (because it was loaded
-%    earlier) none of the hooks are executed!
-%
+%    If a package or class is not loaded (or it was loaded before the
+%    hooks were set) none of the hooks are executed!
 %
 % \subsection{Hooks for \cs{include} files}
 %
@@ -292,7 +316,6 @@
 %      normally does nothing, but starts a new page if further material
 %      got added this way.}
 %
-
 % \subsection{High-level interfaces for \LaTeX{}}
 %
 %    We do not provide any high-level \LaTeX{} commands (like
@@ -341,13 +364,12 @@
 %    == (LEVEL 2 STOP) t1lmss.fd
 %    = (LEVEL 1 STOP) ltfilehook.dtx
 %\end{verbatim}
-%    Thus if you instpect an issue in the \texttt{.log} it is easy to
-%    figure out in which file it occured, simply by searching back for
+%    Thus if you inspect an issue in the \texttt{.log} it is easy to
+%    figure out in which file it occurred, simply by searching back for
 %    \texttt{LEVEL} and if it is a \texttt{STOP} then remove 1 from
 %    the level value and search further for \texttt{LEVEL} with that value
-%    whih should then be the \texttt{START}  level of the file you are in.
+%    which should then be the \texttt{START}  level of the file you are in.
 %
-
 % \StopEventually{\setlength\IndexMin{200pt}  \PrintIndex  }
 %
 %
@@ -362,24 +384,33 @@
 %<@@=filehook>
 %    \end{macrocode}
 %
-%  \begin{macro}{\CurrentFile}
-%    User-level name for use in the file hooks.
+% \begin{macro}{\CurrentFile,\CurrentFilePath}
+%   User-level macros that hold the current file name and file path.
+%   These are used internally as well because the code takes care to
+%   protect against a possible redefinition of these macros in the loaded
+%   file (it's necessary anyway to make hooks work with nested
+%   \cs{input}).
 %    \begin{macrocode}
 \def\CurrentFile{}
+\def\CurrentFilePath{}
 %    \end{macrocode}
-%  \end{macro}
+% \end{macro}
 %
+% \begin{macro}{\l_@@_internal_tl}
 % \begin{macro}{\@filehook@set@curr@file,\@@_normalise_file_name:n}
-%   This macro sets \cs{CurrentFile} so that it holds the name of the
-%   current input file.  This macro checks that the file exists, and
-%   if so sets \cs{CurrentFile} to expand to the actual file found
-%   (regardless, for example, if the user input a |.tex| file without
-%   typing in the extension).
+%   When inputting a file, \cs{@filehook@set@curr@file} does a file
+%   lookup (in \cs{input@path} and \cs{l_file_search_path_seq}) and
+%   returns the actual file name (\meta{base} plus \meta{ext}) in
+%   \cs{CurrentFile}.  Only the base and extension are returned,
+%   regardless of the input (both \texttt{path/to/file.tex} and
+%   \texttt{file.tex} end up as \texttt{file.tex} in \cs{CurrentFile}).
+%   The path is returned in \cs{CurrentFilePath}, in case it's needed.
+%   \cs{CurrentFile} is then used to run the file hooks with
+%   \texttt{file/before/\cs{CurrentFile}} and
+%   \texttt{file/after/\cs{CurrentFile}}.
 %    \begin{macrocode}
 \ExplSyntaxOn
-\tl_new:N \l_@@_internal_a_tl
-\tl_new:N \l_@@_internal_b_tl
-\tl_new:N \l_@@_internal_c_tl
+\tl_new:N \l_@@_internal_tl
 \cs_new_protected:Npn \@filehook@set@curr@file #1
   { \exp_args:NV \@@_normalise_file_name:n #1 }
 \cs_new_protected:Npn \@@_normalise_file_name:n #1
@@ -390,13 +421,47 @@
           { \file_full_name:n {#1} }
       }
       { \file_parse_full_name:nNNN {#1} }
-      \l_@@_internal_a_tl \l_@@_internal_b_tl \l_@@_internal_c_tl
-    \tl_set:Nx \CurrentFile { \l_@@_internal_b_tl \l_@@_internal_c_tl }
+      \CurrentFilePath \CurrentFile \l_@@_internal_tl
+    \tl_set:Nx \CurrentFile { \CurrentFile \l_@@_internal_tl }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\g_@@_input_file_seq}
+% \begin{macro}{\@filehook@file@push,\@filehook@file@pop}
+% \begin{macro}{\@@_file_pop_assign:nn}
+%   Yet another stack, to keep track of \cs{CurrentFile} and
+%   \cs{CurrentFilePath} with nested \cs{input}s.  At the beginning of
+%   \cs{InputIfFileExists}, the current value of \cs{CurrentFilePath}
+%   and \cs{CurrentFile} is pushed to \cs{g_@@_input_file_seq}, and
+%   at the end, it is popped and the value reassigned.
+%   \cs{IfFileExists} does \cs{set@curr@file} internally, which changes
+%   \cs{CurrentFile}, so \cs{@filehook@file@push} has to be executed
+%   before \cs{IfFileExists}.
+%    \begin{macrocode}
+\seq_new:N \g_@@_input_file_seq
+\cs_new_protected:Npn \@filehook@file@push
+  {
+    \seq_gpush:Nx \g_@@_input_file_seq
+      { { \CurrentFilePath } { \CurrentFile } }
+  }
+\cs_new_protected:Npn \@filehook@file@pop
+  {
+    \seq_gpop:NNTF \g_@@_input_file_seq \l_@@_internal_tl
+      { \exp_after:wN \@@_file_pop_assign:nn \l_@@_internal_tl }
+      { \ERROR_should_not_happen }
+  }
+\cs_new_protected:Npn \@@_file_pop_assign:nn #1 #2
+  {
+    \tl_set:Nn \CurrentFilePath {#1}
+    \tl_set:Nn \CurrentFile {#2}
   }
 \ExplSyntaxOff
 %    \end{macrocode}
 % \end{macro}
-%
+% \end{macro}
+% \end{macro}
 %
 %
 % \subsection{Declaring the file-related hooks}
@@ -426,6 +491,7 @@
 %    \begin{macrocode}
 \let\InputIfFileExists\@undefined
 \DeclareRobustCommand \InputIfFileExists[2]{%
+  \@filehook@file@push
   \IfFileExists{#1}%
     {%
 %    \end{macrocode}
@@ -437,16 +503,17 @@
 %
 %    The hook always refers to the \emph{actual} file that will be
 %    operated on, regardless of how the user had it written in the
-%    document.  \pkg{expl3}'s \cs{file_full_name:n} normalises the file
+%    document.  \pkg{expl3}'s \cs{file_full_name:n} normalizes the file
 %    name (to factor out differences in the |.tex| extension), and
 %    then does a file lookup to take into account a possible path from
 %    \cs{l_file_search_path_seq} and \cs{input@path}.  However only
-%    the file name and extension are returned:  the path is removed so
-%    that (say) |\AddToHook{file/before/article.cls}{code}| works
-%    regardless of where |article.cls| is in the system.
+%    the file name and extension are returned so that file hooks can
+%    refer to the file by their name only.  The path to the file is
+%    returned in \cs{CurrentFilePath}.
 %    \begin{macrocode}
       \edef\reserved@a{\@filef@und
         \def\noexpand\CurrentFile{\CurrentFile}%
+        \def\noexpand\CurrentFilePath{\CurrentFilePath}%
       }%
       \expandafter\@swaptwoargs\expandafter
         {\reserved@a}%
@@ -466,7 +533,9 @@
 %    \begin{macrocode}
       \UseHook{file/after/\CurrentFile}%
       \UseHook{file/after}%
+      \@filehook@file@pop \@gobble
     }%
+    {\@filehook@file@pop \@firstofone}%
 }
 %    \end{macrocode}
 % \end{macro}
@@ -524,12 +593,13 @@
        \InputIfFileExists
          {\@currname.\@currext}%
          {%
+%-----------------------------------------
 %    \end{macrocode}
+%    When the current extension is \cs{@pkgextension} we are loading a
 %    package otherwise, if it is \cs{@clsextension}, a class, so
 %    depending on that we execute different hooks.  If the extension is
 %    neither, then it is another type of file without special hooks.
 %    \begin{macrocode}
-%-----------------------------------------
            \ifx\@currext\@pkgextension
              \UseHook{package/before}%
              \UseHook{package/before/\@currname}%
@@ -539,6 +609,18 @@
                \UseHook{class/before/\@currname}%
              \fi
            \fi
+%    \end{macrocode}
+%    The value of \cs{CurrentFile} holds during \cs{InputIfFileExists},
+%    so the hooks above have that available for using.  However at this
+%    point \cs{CurrentFile} is reset to its previous value by
+%    \cs{@filehook@file@pop} because it doesn't know that we'll have
+%    more hooks ahead.  So here (still in the \meta{true} branch of
+%    \cs{InputIfFileExists}, right after actually reading the file in)
+%    we'll cheat:  use \cs{@filehook@file@push} once more, so there are
+%    two entries for the current file in the name stack, so that when
+%    \cs{InputIfFileExists} pops it, there's still one (identical) left.
+%    \begin{macrocode}
+           \@filehook@file@push
 %-----------------------------------------
          }%
          {\@missingfileerror\@currname\@currext}%
@@ -546,11 +628,11 @@
     \csname\@currname.\@currext-h@@k\endcsname
     \expandafter\let\csname\@currname.\@currext-h@@k\endcsname
               \@undefined
+%-----------------------------------------
 %    \end{macrocode}
 %    And same procedure, James, when we are finished loading, except
 %    that the hook order is now reversed.
 %    \begin{macrocode}
-%-----------------------------------------
     \ifx\@currext\@pkgextension
       \UseHook{package/after/\@currname}%
       \UseHook{package/after}%
@@ -560,6 +642,12 @@
         \UseHook{class/after}%
       \fi
     \fi
+%    \end{macrocode}
+%    Now here we do \cs{@filehook@file@pop} to restore the
+%    \cs{CurrentFile} before this file being loaded and fix what we've
+%    done in the stack right above.
+%    \begin{macrocode}
+    \@filehook@file@pop
 %-----------------------------------------
     \@unprocessedoptions}%
     \@ifl@ter\@currext{#1}{#3}{}%
@@ -576,7 +664,7 @@
   \reserved@a}
 %    \end{macrocode}
 %
-%    The code for this macro has changed between 2020/02/02 nd
+%    The code for this macro has changed between 2020/02/02 and
 %    2020/10/01 so the never version is this:
 %    \begin{macrocode}
 \@ifl@t@r\fmtversion{2020/10/01}
@@ -623,6 +711,7 @@
                \UseHook{class/before/\@currname}%
              \fi
            \fi
+           \@filehook@file@push
 %-----------------------------------------
     \expandafter\let\csname unprocessedoptions-\@currname.\@currext\endcsname
                     \@@unprocessedoptions
@@ -647,6 +736,7 @@
         \UseHook{class/after}%
       \fi
     \fi
+    \@filehook@file@pop
 %-----------------------------------------
     \@ifl@ter\@currext{#1}{#3}{}%
       {\@latex@warning@no@line
@@ -687,11 +777,20 @@
       \immediate\openout\@partaux #1.aux
       \immediate\write\@partaux{\relax}%
     \fi
+%-----------------------------------------
+%    \end{macrocode}
+%    First we need to fix \cs{CurrentFile}, because due the pesky
+%    space-delimited \cs{@include}, \cs{CurrentFile} contains the
+%    \cs{include}'d file with a space.  To fix that, we re-do
+%    \cs{set@curr@file}.  The 2020/10/01 release doesn't need this as
+%    \cs{include} was changed to do \cs{set@curr@file} on the correct
+%    file name, rather than one with a trailing space.
+%    \begin{macrocode}
+    \set@curr@file{#1}%
 %    \end{macrocode}
 %    Execute the \texttt{before} hooks just after we switched the
 %    \texttt{.aux} file \ldots
 %    \begin{macrocode}
-%-----------------------------------------
     \UseHook{include/before}%
     \UseHook{include/before/#1}%
 %-----------------------------------------
@@ -732,7 +831,7 @@
 }
 %    \end{macrocode}
 %
-%    The code for this macro has changed between 2020/02/02 nd
+%    The code for this macro has changed between 2020/02/02 and
 %    2020/10/01 so the never version is this:
 %    \begin{macrocode}
 \@ifl@t@r\fmtversion{2020/10/01}
@@ -864,28 +963,37 @@
 %    \begin{macrocode}
 \DeclareDocumentCommand \AtBeginOfPackageFile {smm}
    {\IfBooleanTF{#1}%
-     {\@ifpackageloaded{#2}{#3}%
+     {\@ifpackageloaded{#2}%
+         {#3}%
          {\AddToHook{package/before/#2}{#3}}}%
      {\AddToHook{package/before/#2}{#3}}%
    }
 \DeclareDocumentCommand \AtEndOfPackageFile {smm}
    {\IfBooleanTF{#1}%
-     {\@ifpackageloaded{#2}{#3}%
+     {\@ifpackageloaded{#2}%
+         {#3}%
          {\AddToHook{package/after/#2}{#3}}}%
      {\AddToHook{package/after/#2}{#3}}%
    }
 %    \end{macrocode}
 %
-%    Are the * forms here of any use?   
+%    Are the * forms here of any use? I know they are use 3--4 times
+%    on CTAN but I wonder if those are real or mistaken usages.  
 %    \begin{macrocode}
 \DeclareDocumentCommand \AtBeginOfClassFile {smm}
    {\IfBooleanTF{#1}%
-      {\NOTSUPPORTED}%
-      {\AddToHook{class/before/#2}{#3}}}
+     {\@ifclassloaded{#2}%
+         {#3}%
+         {\AddToHook{class/before/#2}{#3}}}%
+     {\AddToHook{class/before/#2}{#3}}%
+   }
 \DeclareDocumentCommand \AtEndOfClassFile {smm}
    {\IfBooleanTF{#1}%
-      {\NOTSUPPORTED}%
-      {\AddToHook{class/after/#2}{#3}}}
+     {\@ifclassloaded{#2}%
+         {#3}%
+         {\AddToHook{class/after/#2}{#3}}}%
+     {\AddToHook{class/after/#2}{#3}}%
+   }
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
