@@ -609,7 +609,7 @@
 % That's it!
 
 %FMi temp addition until etoolbox is updated
-\RequirePackage{etoolbox-ltx}
+%\RequirePackage{etoolbox-ltx}
 %\AddToHook{env/document/begin}{\RemoveFromHook{env/document/begin}[*]} % done in \document
 
 \endinput
