@@ -52,7 +52,6 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
-    "etoolbox-ltx.sty",       -- temp
     "filehook-ltx.sty",       -- temp
      "*-????-??-??.sty"
   }
