@@ -131,7 +131,6 @@ unpacksuppfiles =
     "t1lmtt.fd",
     "ts1lmr.fd",
     "pdflatex.ini",
-    "l3docstrip.tex",
     "pdftexconfig.tex"
   }
 
