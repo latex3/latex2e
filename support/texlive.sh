@@ -59,6 +59,7 @@ tlmgr install   \
 
 # Additional support for typesetting
 tlmgr install  \
+  alphalph     \
   amscls       \
   atbegshi     \
   atveryend    \
@@ -67,9 +68,12 @@ tlmgr install  \
   bigintcalc   \
   bitset       \
   bookmark     \
+  booktabs     \
   cbfonts      \
+  colortbl     \
   csquotes     \
   dvips        \
+  enumitem     \
   epstopdf     \
   epstopdf-pkg \
   etexcmds     \
@@ -96,11 +100,13 @@ tlmgr install  \
   palatino     \
   pdfescape    \
   pl           \
+  psnfss       \
   refcount     \
   rerunfilecheck \
   sauter       \
   times        \
   titlesec     \
+  underscore   \
   uniquecounter \
   vntex        \
   wasy         \

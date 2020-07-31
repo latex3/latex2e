@@ -1,0 +1,1161 @@
+% \iffalse meta-comment
+%
+%% File: ltfilehook.dtx (C) Copyright 2020 Frank Mittelbach, LaTeX Team
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+%
+% The development version of the bundle can be found below
+%
+%    https://github.com/FrankMittelbach/...
+%
+% for those people who are interested or want to report an issue.
+%
+%    \begin{macrocode}
+\providecommand\ltfilehookversion{v0.9a}
+\providecommand\ltfilehookdate{2020/07/19}
+%    \end{macrocode}
+%
+%<*driver>
+
+\RequirePackage{lthooks}        % needed for structedlog if running old format
+
+\documentclass{l3doc}
+
+% bug fix fo l3doc.cls
+\ExplSyntaxOn
+\cs_set_protected:Npn \__codedoc_macro_typeset_one:nN #1#2
+  {
+    \vbox_set:Nn \l__codedoc_macro_box
+      {
+        \vbox_unpack_drop:N \l__codedoc_macro_box
+        \hbox { \llap { \__codedoc_print_macroname:nN {#1} #2
+            \MacroFont       % <----- without it the \ is in lmr10 if a link is made
+            \      
+        } }
+      }
+    \int_incr:N \l__codedoc_macro_int
+  }
+\ExplSyntaxOff
+
+\usepackage{structuredlog}  % for demonstration
+
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{ltfilehook.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+%
+% \long\def\fmi#1{\begin{quote}\itshape Todo: #1\end{quote}}
+%
+% \let\hook\texttt
+%
+% \title{The \texttt{ltfilehook} package\thanks{This package has version
+%    \ltfilehookversion\ dated \ltfilehookdate, \copyright\ \LaTeX\
+%    Project.}}
+%
+% \author{Frank Mittelbach}
+%
+% \maketitle
+%
+%
+%
+% \tableofcontents
+%
+% \section{Introduction}
+%
+%
+%
+% \subsection{Provided hooks}
+%
+%    The code offers a number of hooks into which packages (or the
+%    user) can add code to support different use cases.
+%    Many hooks are offered as pairs (i.e., the second hook is
+%    reversed. Also important to know is that these pairs are
+%    properly nested with respect to other pairs of hooks.
+%
+%    There are hooks that are executed for all files of a certain type
+%    (if they contain code), e.g., for all \enquote{include files} or
+%    all \enquote{packages},
+%    and there are also hooks that are specific to a single file,
+%    e.g., do something after the package \texttt{foo.sty} has been
+%    loaded.
+%
+%
+% \subsection{General hooks for file reading}
+% \label{sec:general-file-hooks}
+%
+%    There are four hooks that are called for each file that is read
+%    using document-level commands such as \cs{input}, \cs{include},
+%    \cs{usepackage}, etc.  They are not called for files read using
+%    internal low-level methods, such as \cs{@input} or \cs{openin}.
+%
+%  \begin{variable}{file/before,file/before/...,
+%                   file/after/...,file/after,
+%                   }
+%    These are:
+%    \begin{description}
+%    \item[\texttt{file/before}, \texttt{file/before/\meta{file-name}}]
+%
+%       These hooks are executed in that order just before the file is
+%       loaded for reading. The code of the first hook is used is used
+%       with every file, while the second is executed only for the
+%       file with matching \meta{file-name} allowing you to specify
+%       code that only applies to one file.
+%
+%    \item[\texttt{file/after/\meta{file-name}}, \texttt{file/after}]
+%
+%       These hooks are after the file with name \meta{file-name} has
+%       been fully consumed. The order is swapped (the specific one
+%       comes first) so that the \texttt{before} and \texttt{after}
+%       hooks nest properly, which is important if any of them involve
+%       grouping (e.g., contain environments, for example).
+%       furthermore both hooks are reversed hooks to support correct
+%       nesting of different packages add code to both
+%       \texttt{/before} and \texttt{/after} hooks.
+%
+%    \end{description}
+%  \end{variable}
+%
+%
+%     So the overall sequence of hook processing for any file read
+%     through the user interface commands of \LaTeX{} is:
+%
+%  \begin{tabbing}
+%    mm\=mm\=mm\=mm\=\kill
+%    \>\cs{UseHook}\marg{\hook{file/before}} \\
+%    \>\cs{UseHook}\marg{\hook{file/before/\meta{file name}}} \\
+%    \>\> \meta{file contents} \\
+%    \>\cs{UseHook}\marg{\hook{file/after/\meta{file name}}} \\
+%    \>\cs{UseHook}\marg{\hook{file/after}}
+%  \end{tabbing}
+%
+%     \fmi{With a higher-level interface that doesn't matter, but it
+%    is a bit weird, if you use \cs{AddToHook} or \cs{hook_gput:nnn}
+%    directly, so I guess that has to be done differently!}
+%
+%    The file hooks only refer to the file by its name and extension,
+%    so the \meta{file name} should be the file name as it is on the
+%    filesystem with extension (if any) and without paths.  Different
+%    from \cs{input} and similar commands, for hooks the \texttt{.tex}
+%    extension is not assumed, so \texttt{.tex} files must also be given
+%    with their extension.
+%    Files within subfolders should also be addressed by their name and
+%    extension only.
+%
+%    Extensionless files also work, and should then be given without
+%    extension.  Note however that \TeX{} prioritizes \texttt{.tex}
+%    files, so if two files \texttt{foo} and \texttt{foo.tex} exist in
+%    the search path, only the latter will be seen.
+%
+%    When a file is input, the \meta{file name} is available in
+%    \cs{CurrentFile}, which is then used when accessing the
+%    \hook{file/before/\meta{file name}} and
+%    \hook{file/after/\meta{file name}}.
+%
+%  \begin{variable}{\CurrentFile}
+%    The name of the file about to be read (or just finished) is
+%    available to the hooks through \cs{CurrentFile} (there is no
+%    \texttt{expl3} name for it for now).  The file is always provided
+%    with its extension, i.e., how it appears on your hard drive, but
+%    without any specified path to it. For example,
+%    \verb=\input{sample}= and \verb=\input{app/sample.tex}= would
+%    both have \cs{CurrentFile} being \texttt{sample.tex}.
+%  \end{variable}
+%
+%  \begin{variable}{\CurrentFilePath}
+%    The path to the current file (complement to \cs{CurrentFile}) is
+%    available in \cs{CurrentFilePath} if needed.
+%    The paths returned in \cs{CurrentFilePath} are only user paths,
+%    given through \cs{input@path} (or \pkg{expl3}'s equivalent
+%    \cs{l_file_search_path_seq}) or by directly typing in the path
+%    in the \cs{input} command or equivalent.  Files located by
+%    \texttt{kpsewhich} get the path added internally by the \TeX{}
+%    implementation, so at the macro level it looks as if the file were
+%    in the current folder, so the path in \cs{CurrentFilePath} is empty
+%    in these cases (package and class files, mostly).
+%  \end{variable}
+%
+% \subsection{Hooks for package and class files}
+%
+%    Commands to load package and class files (e.g., \cs{usepackage},
+%    \cs{RequirePackage}, \cs{LoadPackageWithOptions}, etc.) offer the
+%    hooks from section~\ref{sec:general-file-hooks} when they are
+%    used to load a  package or class file, e.g.,
+%    \texttt{file/after/array.sty} would be called after the
+%    \pkg{array} package got loaded. But as packages and classes form as special group
+%    of files, there are some additional hooks available that only
+%    apply when a package or class is loaded.
+%
+%
+%  \begin{variable}{
+%                   package/before,package/after,
+%                   package/before/...,package/after/...,
+%                   class/before,class/after,
+%                   class/before/...,class/after/...,
+%                   }
+%    These are:
+%    \begin{description}
+%    \item[\texttt{package/before}, \texttt{package/after}]
+%
+%      These hooks are called for each package being loaded.
+%
+%    \item[\texttt{package/before/\meta{name}},
+%    \texttt{package/after/\meta{name}}]
+%
+%      These hooks are additionally called if the package name is
+%      \meta{name} (without extension).
+%
+%    \item[\texttt{class/before}, \texttt{class/after}]
+%
+%      These hooks are called for each class being loaded.
+%
+%    \item[\texttt{class/before/\meta{name}}, \texttt{class/after/\meta{name}}]
+%
+%      These hooks are additionally called if the class name is
+%      \meta{name} (without extension).
+%
+%    \end{description}
+%  \end{variable}
+%     All \hook{/after} hooks are implemented as reversed hooks.
+%
+%     \noindent The overall sequence of execution for \cs{usepackage}
+%     and friends is therefore:
+%  \begin{tabbing}
+%    mm\=mm\=mm\=mm\=\kill
+%    \>\cs{UseHook}\marg{\hook{package/before}} \\
+%    \>\cs{UseHook}\marg{\hook{package/before/\meta{package name}}} \\[5pt]
+%    \>\>\cs{UseHook}\marg{\hook{file/before}} \\
+%    \>\>\cs{UseHook}\marg{\hook{file/before/\meta{package name}.sty}} \\
+%    \>\>\> \meta{package contents} \\
+%    \>\>\cs{UseHook}\marg{\hook{file/after/\meta{package name}.sty}} \\
+%    \>\>\cs{UseHook}\marg{\hook{file/after}} \\[5pt]
+%    \>\>\emph{code from \cs{AtEndOfPackage} if
+%                used inside the package} \\[5pt]
+%    \>\cs{UseHook}\marg{\hook{package/after/\meta{package name}}} \\
+%    \>\cs{UseHook}\marg{\hook{package/after}} 
+%  \end{tabbing}
+%    and similar for class file loading, except that \texttt{package/}
+%    is replaced by \texttt{class/} and \cs{AtEndOfPackage} by
+%    \cs{AtEndOfClass}.
+%
+%    If a package or class is not loaded (or it was loaded before the
+%    hooks were set) none of the hooks are executed!
+%
+% \subsection{Hooks for \cs{include} files}
+%
+%    To manage \cs{include} files, \LaTeX{} issues a \cs{clearpage}
+%    before and after loading such a file. Depending on the use case
+%    one may want to execute code before or after these
+%    \cs{clearpage}s especially for the one that is issued at the end.
+%
+%    Executing code before the final \cs{clearpage}, means that the
+%    code is processed while the last page of the included material is
+%    still under construction.  Executing code after it means that all
+%    floats from inside the include file are placed (which
+%    might have added further pages) and the final page has finished.
+%
+%    Because of these different scenarios we offer hooks in three
+%    places.\footnote{If you want to execute code before the first
+%     \cs{clearpage} there is no need to use a hook---you can write it
+%     directly in front of the \cs{include}.}
+%    None of the hooks are executed when an \cs{include} file is
+%    bypassed because of an \cs{includeonly} declaration. They are,
+%    however, all executed if \LaTeX{} makes an attempt to load the
+%    \cs{include} file (even if it doesn't exist and all that happens
+%    is \enquote{\texttt{No file \meta{filename}.tex}}).
+%
+%
+%  \begin{variable}{include/before,include/before/...,
+%                   include/end,include/end/...,
+%                   include/after,include/after/...,
+%                  }
+%    These are:
+%    \begin{description}
+%
+%    \item[\texttt{include/before}, \texttt{include/before/\meta{name}}]
+%
+%      These hooks are executed one after another after the initial
+%      \cs{clearpage} and after \texttt{.aux} file is changed to use
+%      \texttt{\meta{name}.aux}, but before the
+%      \texttt{\meta{name}.tex} file is loaded. In other words they are executed
+%      at the very beginning of the first page of the \cs{include}
+%      file.
+%
+%
+%    \item[\texttt{include/end/\meta{name}}, \texttt{include/end}]
+%
+%      These hooks are executed (in that order) after \LaTeX{} has
+%      stopped reading from the \cs{include} file, but before it has
+%      issued a \cs{clearpage} to output any deferred floats.
+%
+%
+%    \item[\texttt{include/after/\meta{name}}, \texttt{include/after}]
+%
+%      These hooks are executed (in that order) after \LaTeX{} has
+%      issued the \cs{clearpage} but before is has switched back
+%      writing to the main \texttt{.aux} file. Thus technically we are
+%      still inside the \cs{include} and if the hooks generate any
+%      further typeset material including anything that writes to the
+%      \texttt{.aux} file, then it would be considered part of the
+%      included material and bypassed if it is not loaded because of
+%      some \cs{includeonly} statement.\footnotemark
+%
+%    \end{description}
+%  \end{variable}\footnotetext{For that reason
+%      another \cs{clearpage} is executed after these hooks which
+%      normally does nothing, but starts a new page if further material
+%      got added this way.}
+%
+% \subsection{High-level interfaces for \LaTeX{}}
+%
+%    We do not provide any high-level \LaTeX{} commands (like
+%    \pkg{filehook} or \pkg{scrlfile} do) but think that for package
+%    writers the commands from for hook management are sufficient.
+%
+% \subsection{A sample package for structuring the log output}
+%
+%    As an application we provide the package \pkg{structuredlog} that
+%    adds lines to the \texttt{.log} when a file is opened and closed
+%    for reading keeping track of nesting level es well.
+%    For example, for the current document it adds the lines
+%\begin{verbatim}
+%    = (LEVEL 1 START) t1lmr.fd
+%    = (LEVEL 1 STOP) t1lmr.fd
+%    = (LEVEL 1 START) supp-pdf.mkii
+%    = (LEVEL 1 STOP) supp-pdf.mkii
+%    = (LEVEL 1 START) nameref.sty
+%    == (LEVEL 2 START) refcount.sty
+%    == (LEVEL 2 STOP) refcount.sty
+%    == (LEVEL 2 START) gettitlestring.sty
+%    == (LEVEL 2 STOP) gettitlestring.sty
+%    = (LEVEL 1 STOP) nameref.sty
+%    = (LEVEL 1 START) ltfilehook-doc.out
+%    = (LEVEL 1 STOP) ltfilehook-doc.out
+%    = (LEVEL 1 START) ltfilehook-doc.out
+%    = (LEVEL 1 STOP) ltfilehook-doc.out
+%    = (LEVEL 1 START) ltfilehook-doc.hd
+%    = (LEVEL 1 STOP) ltfilehook-doc.hd
+%    = (LEVEL 1 START) ltfilehook.dtx
+%    == (LEVEL 2 START) ot1lmr.fd
+%    == (LEVEL 2 STOP) ot1lmr.fd
+%    == (LEVEL 2 START) omllmm.fd
+%    == (LEVEL 2 STOP) omllmm.fd
+%    == (LEVEL 2 START) omslmsy.fd
+%    == (LEVEL 2 STOP) omslmsy.fd
+%    == (LEVEL 2 START) omxlmex.fd
+%    == (LEVEL 2 STOP) omxlmex.fd
+%    == (LEVEL 2 START) umsa.fd
+%    == (LEVEL 2 STOP) umsa.fd
+%    == (LEVEL 2 START) umsb.fd
+%    == (LEVEL 2 STOP) umsb.fd
+%    == (LEVEL 2 START) ts1lmr.fd
+%    == (LEVEL 2 STOP) ts1lmr.fd
+%    == (LEVEL 2 START) t1lmss.fd
+%    == (LEVEL 2 STOP) t1lmss.fd
+%    = (LEVEL 1 STOP) ltfilehook.dtx
+%\end{verbatim}
+%    Thus if you inspect an issue in the \texttt{.log} it is easy to
+%    figure out in which file it occurred, simply by searching back for
+%    \texttt{LEVEL} and if it is a \texttt{STOP} then remove 1 from
+%    the level value and search further for \texttt{LEVEL} with that value
+%    which should then be the \texttt{START}  level of the file you are in.
+%
+% \StopEventually{\setlength\IndexMin{200pt}  \PrintIndex  }
+%
+%
+% \section{The Implementation}
+%    \begin{macrocode}
+%<*2ekernel>
+%    \end{macrocode}
+%
+% \subsection{\pkg{expl3} helpers}
+%
+%    \begin{macrocode}
+%<@@=filehook>
+%    \end{macrocode}
+%
+% \begin{macro}{\CurrentFile,\CurrentFilePath}
+%   User-level macros that hold the current file name and file path.
+%   These are used internally as well because the code takes care to
+%   protect against a possible redefinition of these macros in the loaded
+%   file (it's necessary anyway to make hooks work with nested
+%   \cs{input}).
+%    \begin{macrocode}
+\def\CurrentFile{}
+\def\CurrentFilePath{}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\l_@@_internal_tl}
+% \begin{macro}{\@filehook@set@curr@file,\@@_normalise_file_name:n}
+%   When inputting a file, \cs{@filehook@set@curr@file} does a file
+%   lookup (in \cs{input@path} and \cs{l_file_search_path_seq}) and
+%   returns the actual file name (\meta{base} plus \meta{ext}) in
+%   \cs{CurrentFile}.  Only the base and extension are returned,
+%   regardless of the input (both \texttt{path/to/file.tex} and
+%   \texttt{file.tex} end up as \texttt{file.tex} in \cs{CurrentFile}).
+%   The path is returned in \cs{CurrentFilePath}, in case it's needed.
+%   \cs{CurrentFile} is then used to run the file hooks with
+%   \texttt{file/before/\cs{CurrentFile}} and
+%   \texttt{file/after/\cs{CurrentFile}}.
+%    \begin{macrocode}
+\ExplSyntaxOn
+\tl_new:N \l_@@_internal_tl
+\cs_new_protected:Npn \@filehook@set@curr@file #1
+  { \exp_args:NV \@@_normalise_file_name:n #1 }
+\cs_new_protected:Npn \@@_normalise_file_name:n #1
+  {
+    \file_if_exist:nTF {#1}
+      {
+        \exp_args:Nx \file_parse_full_name:nNNN
+          { \file_full_name:n {#1} }
+      }
+      { \file_parse_full_name:nNNN {#1} }
+      \CurrentFilePath \CurrentFile \l_@@_internal_tl
+    \tl_set:Nx \CurrentFile { \CurrentFile \l_@@_internal_tl }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\g_@@_input_file_seq}
+% \begin{macro}{\@filehook@file@push,\@filehook@file@pop}
+% \begin{macro}{\@@_file_pop_assign:nn}
+%   Yet another stack, to keep track of \cs{CurrentFile} and
+%   \cs{CurrentFilePath} with nested \cs{input}s.  At the beginning of
+%   \cs{InputIfFileExists}, the current value of \cs{CurrentFilePath}
+%   and \cs{CurrentFile} is pushed to \cs{g_@@_input_file_seq}, and
+%   at the end, it is popped and the value reassigned.
+%   \cs{IfFileExists} does \cs{set@curr@file} internally, which changes
+%   \cs{CurrentFile}, so \cs{@filehook@file@push} has to be executed
+%   before \cs{IfFileExists}.
+%    \begin{macrocode}
+\seq_new:N \g_@@_input_file_seq
+\cs_new_protected:Npn \@filehook@file@push
+  {
+    \seq_gpush:Nx \g_@@_input_file_seq
+      { { \CurrentFilePath } { \CurrentFile } }
+  }
+\cs_new_protected:Npn \@filehook@file@pop
+  {
+    \seq_gpop:NNTF \g_@@_input_file_seq \l_@@_internal_tl
+      { \exp_after:wN \@@_file_pop_assign:nn \l_@@_internal_tl }
+      { \ERROR_should_not_happen }
+  }
+\cs_new_protected:Npn \@@_file_pop_assign:nn #1 #2
+  {
+    \tl_set:Nn \CurrentFilePath {#1}
+    \tl_set:Nn \CurrentFile {#2}
+  }
+\ExplSyntaxOff
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+%
+% \subsection{Declaring the file-related hooks}
+%
+%  All hooks starting with \texttt{file/} \texttt{include/},
+%  \texttt{class/} or \texttt{package/} are generic and will be
+%  allocated if code is added to them. Thus there is no need to
+%  explicitly declare any hook in the code below.
+%
+%  Furthermore, those named \texttt{.../after} or \texttt{.../end} are
+%  automatically declared as reversed hooks if filled with code, so this
+%  is also automatically taken care of.
+%
+% \subsection{Patching \LaTeX{} commands (need proper integration later)}
+%
+%    Most of what we have to do is adding \cs{UseHook} into several
+%  \LaTeXe{} core commands, which is done for now by patching them.
+%    \begin{macrocode}
+%<@@=>
+%    \end{macrocode}
+%
+% \begin{macro}{\InputIfFileExists}
+%    \cs{InputIfFileExists} loads any file if it is available so we
+%    have to add the hooks \texttt{file/before} and
+%    \texttt{file/after} in the right places. If the file doesn't
+%    exist no hooks should be executed.
+%    \begin{macrocode}
+\let\InputIfFileExists\@undefined
+\DeclareRobustCommand \InputIfFileExists[3]{%
+  \@filehook@file@push
+  \IfFileExists{#1}%
+    {%
+%    \end{macrocode}
+%    If the file exists then \cs{@curr@file} holds its name. But we
+%    can't rely on that still being true after the file has been
+%    processed. Thus for using the name in the file hooks we need to
+%    preserve the name and then restored it for the
+%    \texttt{file/after/...} hook.
+%
+%    The hook always refers to the \emph{actual} file that will be
+%    operated on, regardless of how the user had it written in the
+%    document.  \pkg{expl3}'s \cs{file_full_name:n} normalizes the file
+%    name (to factor out differences in the |.tex| extension), and
+%    then does a file lookup to take into account a possible path from
+%    \cs{l_file_search_path_seq} and \cs{input@path}.  However only
+%    the file name and extension are returned so that file hooks can
+%    refer to the file by their name only.  The path to the file is
+%    returned in \cs{CurrentFilePath}.
+%    \begin{macrocode}
+      \edef\reserved@a{\@filef@und
+        \def\noexpand\CurrentFile{\CurrentFile}%
+        \def\noexpand\CurrentFilePath{\CurrentFilePath}%
+      }%
+      \expandafter\@swaptwoargs\expandafter
+        {\reserved@a}%
+        {%
+          #2%
+          \@addtofilelist{#1}%
+          \UseHook{file/before}%
+%    \end{macrocode}
+%    The current file name is available in \cs{@curr@file} so we use
+%    that in the specific hook.
+%    \begin{macrocode}
+          \UseHook{file/before/\CurrentFile}%
+          \@@input
+        }%
+%    \end{macrocode}
+%    And it is restored here so we can use it once more.
+%    \begin{macrocode}
+      \UseHook{file/after/\CurrentFile}%
+      \UseHook{file/after}%
+      \@filehook@file@pop
+    }%
+    {\@filehook@file@pop #3}%
+}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\set@curr@file}
+%   Now we just hook into \cs{set@curr@file} to add
+%   \cs{@filehook@set@curr@file} at the end, after \cs{@curr@file} is
+%   set.
+%    \begin{macrocode}
+\def\set@curr@file#1{%
+  \begingroup
+    \escapechar\m@ne
+    \xdef\@curr@file{%
+      \expandafter\expandafter\expandafter\unquote@name
+      \expandafter\expandafter\expandafter{%
+      \expandafter\string
+        \csname\@firstofone#1\@empty\endcsname}}%
+  \endgroup
+  \@filehook@set@curr@file{\@curr@file}%
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\load@onefilewithoptions}
+%    This macro is used when loading packages or classes.
+%    \begin{macrocode}
+\def\load@onefilewithoptions#1[#2][#3]#4{%
+  \@pushfilename
+  \xdef\@currname{#1}%
+  \global\let\@currext#4%
+  \let\CurrentOption\@empty
+  \@reset@ptions
+  \makeatletter
+  \def\reserved@a{%
+    \@ifl@aded\@currext{#1}%
+      {\@if@ptions\@currext{#1}{#2}{}%
+        {\@latex@error
+            {Option clash for \@cls@pkg\space #1}%
+            {The package #1 has already been loaded
+             with options:\MessageBreak
+             \space\space[\@ptionlist{#1.\@currext}]\MessageBreak
+             There has now been an attempt to load it
+              with options\MessageBreak
+             \space\space[#2]\MessageBreak
+             Adding the global options:\MessageBreak
+             \space\space
+                  \@ptionlist{#1.\@currext},#2\MessageBreak
+             to your \noexpand\documentclass declaration may fix this.%
+             \MessageBreak
+             Try typing \space <return> \space to proceed.}}}%
+      {\@pass@ptions\@currext{#2}{#1}%
+       \global\expandafter
+       \let\csname ver@\@currname.\@currext\endcsname\@empty
+       \expandafter\let\csname\@currname.\@currext-h@@k\endcsname\@empty
+       \InputIfFileExists
+         {\@currname.\@currext}%
+         {%
+%-----------------------------------------
+%    \end{macrocode}
+%    When the current extension is \cs{@pkgextension} we are loading a
+%    package otherwise, if it is \cs{@clsextension}, a class, so
+%    depending on that we execute different hooks.  If the extension is
+%    neither, then it is another type of file without special hooks.
+%    \begin{macrocode}
+           \ifx\@currext\@pkgextension
+             \UseHook{package/before}%
+             \UseHook{package/before/\@currname}%
+           \else
+             \ifx\@currext\@clsextension
+               \UseHook{class/before}%
+               \UseHook{class/before/\@currname}%
+             \fi
+           \fi
+%    \end{macrocode}
+%    The value of \cs{CurrentFile} holds during \cs{InputIfFileExists},
+%    so the hooks above have that available for using.  However at this
+%    point \cs{CurrentFile} is reset to its previous value by
+%    \cs{@filehook@file@pop} because it doesn't know that we'll have
+%    more hooks ahead.  So here (still in the \meta{true} branch of
+%    \cs{InputIfFileExists}, right after actually reading the file in)
+%    we'll cheat:  use \cs{@filehook@file@push} once more, so there are
+%    two entries for the current file in the name stack, so that when
+%    \cs{InputIfFileExists} pops it, there's still one (identical) left.
+%    \begin{macrocode}
+           \@filehook@file@push
+%-----------------------------------------
+         }%
+         {\@missingfileerror\@currname\@currext}%
+    \let\@unprocessedoptions\@@unprocessedoptions
+    \csname\@currname.\@currext-h@@k\endcsname
+    \expandafter\let\csname\@currname.\@currext-h@@k\endcsname
+              \@undefined
+%-----------------------------------------
+%    \end{macrocode}
+%    And same procedure, James, when we are finished loading, except
+%    that the hook order is now reversed.
+%    \begin{macrocode}
+    \ifx\@currext\@pkgextension
+      \UseHook{package/after/\@currname}%
+      \UseHook{package/after}%
+    \else
+      \ifx\@currext\@clsextension
+        \UseHook{class/after/\@currname}%
+        \UseHook{class/after}%
+      \fi
+    \fi
+%    \end{macrocode}
+%    Now here we do \cs{@filehook@file@pop} to restore the
+%    \cs{CurrentFile} before this file being loaded and fix what we've
+%    done in the stack right above.
+%    \begin{macrocode}
+    \@filehook@file@pop
+%-----------------------------------------
+    \@unprocessedoptions}%
+    \@ifl@ter\@currext{#1}{#3}{}%
+      {\@latex@warning@no@line
+         {You have requested,\on@line,
+          version\MessageBreak
+            `#3' of \@cls@pkg\space #1,\MessageBreak
+          but only version\MessageBreak
+           `\csname ver@#1.\@currext\endcsname'\MessageBreak
+          is available}}%
+    \ifx\@currext\@clsextension\let\LoadClass\@twoloadclasserror\fi
+    \@popfilename
+    \@reset@ptions}%
+  \reserved@a}
+%    \end{macrocode}
+%
+%    The code for this macro has changed between 2020/02/02 and
+%    2020/10/01 so the never version is this:
+%    \begin{macrocode}
+\@ifl@t@r\fmtversion{2020/10/01}
+{%
+\def\load@onefilewithoptions#1[#2][#3]#4{%
+  \@pushfilename
+  \xdef\@currname{#1}%
+  \global\let\@currext#4%
+  \let\CurrentOption\@empty
+  \@reset@ptions
+  \makeatletter
+  \def\reserved@a{%
+    \@ifl@aded\@currext{#1}%
+      {\@if@ptions\@currext{#1}{#2}{}%
+        {\@latex@error
+            {Option clash for \@cls@pkg\space #1}%
+            {The package #1 has already been loaded
+             with options:\MessageBreak
+             \space\space[\@ptionlist{#1.\@currext}]\MessageBreak
+             There has now been an attempt to load it
+              with options\MessageBreak
+             \space\space[#2]\MessageBreak
+             Adding the global options:\MessageBreak
+             \space\space
+                  \@ptionlist{#1.\@currext},#2\MessageBreak
+             to your \noexpand\documentclass declaration may fix this.%
+             \MessageBreak
+             Try typing \space <return> \space to proceed.}}}%
+      {\@pass@ptions\@currext{#2}{#1}%
+       \global\expandafter
+       \let\csname ver@\@currname.\@currext\endcsname\@empty
+       \expandafter\let\csname\@currname.\@currext-h@@k\endcsname\@empty
+       \InputIfFileExists
+         {\@currname.\@currext}%
+         {%
+%-----------------------------------------
+           \ifx\@currext\@pkgextension
+             \UseHook{package/before}%
+             \UseHook{package/before/\@currname}%
+           \else
+             \ifx\@currext\@clsextension
+               \UseHook{class/before}%
+               \UseHook{class/before/\@currname}%
+             \fi
+           \fi
+           \@filehook@file@push
+%-----------------------------------------
+         }%
+         {\@missingfileerror\@currname\@currext}%
+    \expandafter\let\csname unprocessedoptions-\@currname.\@currext\endcsname
+                    \@@unprocessedoptions
+    \csname\@currname.\@currext-h@@k\endcsname
+    \expandafter\let\csname\@currname.\@currext-h@@k\endcsname
+              \@undefined
+    \ifx\@unprocessedoptions\relax
+      \let\@unprocessedoptions\@undefined
+    \else
+      \csname unprocessedoptions-\@currname.\@currext\endcsname
+    \fi
+    \expandafter\let
+        \csname unprocessedoptions-\@currname.\@currext\endcsname
+       \@undefined
+%-----------------------------------------
+    \ifx\@currext\@pkgextension
+      \UseHook{package/after/\@currname}%
+      \UseHook{package/after}%
+    \else
+      \ifx\@currext\@clsextension
+        \UseHook{class/after/\@currname}%
+        \UseHook{class/after}%
+      \fi
+    \fi
+    \@filehook@file@pop
+%-----------------------------------------
+    }%
+    \@ifl@ter\@currext{#1}{#3}{}%
+      {\@latex@warning@no@line
+         {You have requested,\on@line,
+          version\MessageBreak
+            `#3' of \@cls@pkg\space #1,\MessageBreak
+          but only version\MessageBreak
+           `\csname ver@#1.\@currext\endcsname'\MessageBreak
+          is available}}%
+    \ifx\@currext\@clsextension\let\LoadClass\@twoloadclasserror\fi
+    \@popfilename
+    \@reset@ptions}%
+  \reserved@a}
+}{}%
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+
+%  \begin{macro}{\@include}
+%    \begin{macrocode}
+\def\@include#1 {%
+  \clearpage
+  \if@filesw
+    \immediate\write\@mainaux{\string\@input{#1.aux}}%
+  \fi
+  \@tempswatrue
+  \if@partsw
+    \@tempswafalse
+    \edef\reserved@b{#1}%
+    \@for\reserved@a:=\@partlist\do
+      {\ifx\reserved@a\reserved@b\@tempswatrue\fi}%
+  \fi
+  \if@tempswa
+    \let\@auxout\@partaux
+    \if@filesw
+      \immediate\openout\@partaux #1.aux
+      \immediate\write\@partaux{\relax}%
+    \fi
+%-----------------------------------------
+%    \end{macrocode}
+%    First we need to fix \cs{CurrentFile}, because due the pesky
+%    space-delimited \cs{@include}, \cs{CurrentFile} contains the
+%    \cs{include}'d file with a space.  To fix that, we re-do
+%    \cs{set@curr@file}.  The 2020/10/01 release doesn't need this as
+%    \cs{include} was changed to do \cs{set@curr@file} on the correct
+%    file name, rather than one with a trailing space.
+%    \begin{macrocode}
+    \set@curr@file{#1}%
+%    \end{macrocode}
+%    Execute the \texttt{before} hooks just after we switched the
+%    \texttt{.aux} file \ldots
+%    \begin{macrocode}
+    \UseHook{include/before}%
+    \UseHook{include/before/#1}%
+%-----------------------------------------
+    \@input@{#1.tex}%
+%    \end{macrocode}
+%    \ldots{} then \texttt{end} hooks \ldots
+%    \begin{macrocode}
+%-----------------------------------------
+    \UseHook{include/end/#1}%
+    \UseHook{include/end}%
+%-----------------------------------------
+    \clearpage
+%    \end{macrocode}
+%    \ldots{} and after the \cs{clearpage} the \texttt{after} hooks
+%    followed by another \cs{clearpage} just in case new material got
+%    added (after all we need to be in  well defined state after the
+%    \cs{include}).
+%    \begin{macrocode}
+%-----------------------------------------
+    \UseHook{include/after/#1}%
+    \UseHook{include/after}%
+%    \end{macrocode}
+%    The additional \cs{clearpage} is needed to ensure that switching
+%    the \texttt{.aux} files happen at a defined point even if the
+%    above hooks add further material.
+%    \begin{macrocode}
+    \clearpage
+%-----------------------------------------
+    \@writeckpt{#1}%
+    \if@filesw
+      \immediate\closeout\@partaux
+    \fi
+  \else
+    \deadcycles\z@
+    \@nameuse{cp@#1}%
+  \fi
+  \let\@auxout\@mainaux
+}
+%    \end{macrocode}
+%
+%    The code for this macro has changed between 2020/02/02 and
+%    2020/10/01 so the never version is this:
+%    \begin{macrocode}
+\@ifl@t@r\fmtversion{2020/10/01}
+{%
+\def\@include#1 {%
+  \clearpage
+  \if@filesw
+    \immediate\write\@mainaux{\string\@input{"#1.aux"}}%
+  \fi
+  \@tempswatrue
+  \if@partsw
+    \@tempswafalse
+    \edef\reserved@b{#1}%
+    \@for\reserved@a:=\@partlist\do
+      {\ifx\reserved@a\reserved@b\@tempswatrue\fi}%
+  \fi
+  \if@tempswa
+    \let\@auxout\@partaux
+    \if@filesw
+      \immediate\openout\@partaux "#1.aux"
+      \immediate\write\@partaux{\relax}%
+    \fi
+%-----------------------------------------
+    \UseHook{include/before}%
+    \UseHook{include/before/#1}%
+%-----------------------------------------
+    \@input@{#1.tex}%
+%-----------------------------------------
+    \UseHook{include/end/#1}%
+    \UseHook{include/end}%
+%-----------------------------------------
+    \clearpage
+%-----------------------------------------
+    \UseHook{include/after/#1}%
+    \UseHook{include/after}%
+    \clearpage
+%-----------------------------------------
+    \@writeckpt{#1}%
+    \if@filesw
+      \immediate\closeout\@partaux
+    \fi
+  \else
+    \deadcycles\z@
+    \@nameuse{cp@#1}%
+  \fi
+  \let\@auxout\@mainaux}
+}{}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+% \subsection{High-level interfaces for \LaTeX{}}
+%
+%    None so far and the general feeling for now is that the hooks are
+%    enough. Packages like \pkg{filehook}, etc., may use them to set
+%    up their interfaces (samples are given below) but for the now the
+%    kernel will not provide any.
+%
+%
+%
+%    \begin{macrocode}
+%</2ekernel>
+%    \end{macrocode}
+%
+%
+%
+% \section{Package emulation for compatibility}
+%
+%
+% \subsection{Package \pkg{filehook} emulation}
+%
+%    This is a partial implementation of the  \pkg{filehook}
+%    interfaces. It is only meant for guidance in case that package
+%    gets updated to use the hook management.
+%
+%    Not implemented are:
+%\begin{verbatim}
+%  \AtBeginOfFiles
+%  \AtEndOfFiles
+%  \AtBeginOfInputs
+%  \AtEndOfInputs
+%  \AtBeginOfInputFile
+%  \AtEndOfInputFile
+%\end{verbatim}
+%
+%    \begin{macrocode}
+%<*filehook-draft>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\newcommand\AtBeginOfEveryFile [1]
+  {\AddToHook{file/before}{#1}}
+\newcommand\AtEndOfEveryFile [1]
+  {\AddToHook{file/after}{#1}}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\newcommand\AtBeginOfIncludes [1]
+  {\AddToHook{include/before}{#1}}
+\newcommand\AtEndOfIncludes [1]
+  {\AddToHook{include/end}{#1}}
+\newcommand\AfterIncludes [1]
+  {\AddToHook{include/after}{#1}}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\newcommand\AtBeginOfPackages [1]
+  {\AddToHook{package/before}{#1}}
+\newcommand\AtEndOfPackages [1]
+  {\AddToHook{package/after}{#1}}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\newcommand\AtBeginOfClasses [1]
+  {\AddToHook{class/before}{#1}}
+\newcommand\AtEndOfClasses [1]
+  {\AddToHook{class/after}{#1}}
+%    \end{macrocode}
+%
+%    For normal files we drop the \texttt{.tex} extension for now:
+%    \begin{macrocode}
+\newcommand\AtBeginOfFile [2]
+  {\AddToHook{file/before/#1}{#2}}
+\newcommand\AtEndOfFile [2]
+  {\AddToHook{file/after/#1}{#2}}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\DeclareDocumentCommand \AtBeginOfPackageFile {smm}
+   {\IfBooleanTF{#1}%
+     {\@ifpackageloaded{#2}%
+         {#3}%
+         {\AddToHook{package/before/#2}{#3}}}%
+     {\AddToHook{package/before/#2}{#3}}%
+   }
+\DeclareDocumentCommand \AtEndOfPackageFile {smm}
+   {\IfBooleanTF{#1}%
+     {\@ifpackageloaded{#2}%
+         {#3}%
+         {\AddToHook{package/after/#2}{#3}}}%
+     {\AddToHook{package/after/#2}{#3}}%
+   }
+%    \end{macrocode}
+%
+%    Are the * forms here of any use? I know they are use 3--4 times
+%    on CTAN but I wonder if those are real or mistaken usages.  
+%    \begin{macrocode}
+\DeclareDocumentCommand \AtBeginOfClassFile {smm}
+   {\IfBooleanTF{#1}%
+     {\@ifclassloaded{#2}%
+         {#3}%
+         {\AddToHook{class/before/#2}{#3}}}%
+     {\AddToHook{class/before/#2}{#3}}%
+   }
+\DeclareDocumentCommand \AtEndOfClassFile {smm}
+   {\IfBooleanTF{#1}%
+     {\@ifclassloaded{#2}%
+         {#3}%
+         {\AddToHook{class/after/#2}{#3}}}%
+     {\AddToHook{class/after/#2}{#3}}%
+   }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\newcommand\AtBeginOfIncludeFile [2]
+  {\AddToHook{include/before/#1}{#2}}
+\newcommand\AtEndOfIncludeFile [2]
+  {\AddToHook{include/end/#1}{#2}}
+\newcommand\AfterIncludeFile [2]
+  {\AddToHook{include/after/#1}{#2}}
+%    \end{macrocode}
+%
+%
+%    This is missing some interfaces so disabling the package isn't
+%    really correct, but then this code above is not supposed to stay
+%    like this anyway.
+%    \begin{macrocode}
+\expandafter\let\csname ver@filehook.sty\endcsname\fmtversion
+\@namedef {ver@filehook.sty}{2020/10/01}
+%    \end{macrocode}
+%
+%
+%    \begin{macrocode}
+%</filehook-draft>
+%    \end{macrocode}
+%
+%
+%
+%
+% \subsection{Package \pkg{scrlfile} emulation}
+%
+%    This is a partial implementation of the  \pkg{scrlfile}
+%    interfaces. It is only meant for guidance in case that package
+%    gets updated to use the hook management.
+%
+%    \begin{macrocode}
+%<*scrlfile-draft>
+%    \end{macrocode}
+%
+%    I think this is roughly correct (using the \texttt{file/...}
+%    hooks rather than the class or package hooks at least for the
+%    \cs{After...} commands but it needs some further verification.
+%
+%    The star and plus variants haven't been implemented so far, this
+%    is only a rough draft.
+%    \begin{macrocode}
+\newcommand\BeforeClass[2]
+  {\AddToHook{file/before/#1.cls}{#2}}
+\newcommand\AfterClass [2]
+  {\AddToHook{file/after/#1.cls}{#2}}
+\newcommand\AfterAtEndOfClass [2]
+  {\AddToHook{class/after/#1}{#2}}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\newcommand\BeforePackage [2]
+  {\AddToHook{package/before/#1.sty}{#2}}
+\newcommand\AfterPackage [2]
+  {\AddToHook{file/after/#1.sty}{#2}}
+\newcommand\AfterEndOfPackage [2]
+  {\AddToHook{package/after/#1}{#2}}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\newcommand\BeforeFile [2]
+  {%
+  \typeout{BeforeFile: #1!!!}%
+   \AddToHook{file/before/#1}{#2}}
+\newcommand\AfterFile [2]
+  {%
+    \typeout{AfterFile: #1!!!}%
+    \AddToHook{file/after/#1}{#2}}
+%    \end{macrocode}
+%
+%    This is missing some interfaces so disabling the package isn't
+%    really correct, but then this code above is not supposed to stay
+%    like this anyway.
+%    \begin{macrocode}
+\expandafter\let\csname ver@scrlfile.sty\endcsname\fmtversion
+\@namedef {ver@scrlfile.sty}{2020/10/01}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%</scrlfile-draft>
+%    \end{macrocode}
+%
+%
+%
+% \section{A sample package for structuring the log output}
+%
+%    \begin{macrocode}
+%<*structuredlog>
+%<@@=filehook>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\ProvidesExplPackage
+    {structuredlog}{\ltfilehookdate}{\ltfilehookversion}
+    {Structuring the TeX transcript file}
+%    \end{macrocode}
+
+
+
+%    \begin{macrocode}
+\int_new:N \g_@@_nesting_level_int
+%    \end{macrocode}
+
+%    \begin{macrocode}
+\tl_new:N   \g_@@_nesting_prefix_tl
+\tl_gset:Nn \g_@@_nesting_prefix_tl { }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\AddToHook{file/before}{
+  \int_gincr:N \g_@@_nesting_level_int
+  \tl_gput_right:Nn\g_@@_nesting_prefix_tl {=}
+  \iow_term:x {
+    \g_@@_nesting_prefix_tl \space
+    ( LEVEL~ \int_use:N \g_@@_nesting_level_int \space START )~
+    \CurrentFile  ^^J
+  }
+}
+%    \end{macrocode}
+%    We don't want to install the \hook{file/after} hook immediately,
+%    because that would mean it is the first time executed when the
+%    package finishes. We therefore put the declaration inside
+%    \cs{AddToHookNext} so that it gets only installed when we have
+%    left the package. 
+%    \begin{macrocode}
+\AddToHookNext{file/after}{
+  \AddToHook{file/after}{
+    \iow_term:x {
+      \g_@@_nesting_prefix_tl \space
+      ( LEVEL~ \int_use:N \g_@@_nesting_level_int \space STOP )~
+      \CurrentFile  ^^J
+    }
+    \int_gdecr:N \g_@@_nesting_level_int
+    \tl_gset:Nx \g_@@_nesting_prefix_tl
+       {\exp_after:wN \use_none:n \g_@@_nesting_prefix_tl}
+  }
+}
+%    \end{macrocode}
+%
+%    We have to manually increment the level because now that we have
+%    installed the code in \texttt{file/after} it gets decremented
+%    when we leave the package without ever being incremented upon
+%    entry.
+%    \begin{macrocode}
+%\int_incr:N\g_@@_nesting_level_int
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%</structuredlog>
+%    \end{macrocode}
+
+%    \Finale
+%
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
+\endinput
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
+
+

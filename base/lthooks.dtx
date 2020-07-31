@@ -1,0 +1,3925 @@
+% \iffalse meta-comment
+%
+%% File: lthooks.dtx (C) Copyright 2020 Frank Mittelbach, LaTeX Team
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+%
+% The development version of the bundle can be found below
+%
+%    https://github.com/FrankMittelbach/...
+%
+% for those people who are interested or want to report an issue.
+%
+%    \begin{macrocode}
+\providecommand\lthooksversion{v0.9b}
+\providecommand\lthooksdate{2020/07/19}
+%    \end{macrocode}
+%
+%<*driver>
+\RequirePackage[debug]{lthooks}
+
+\documentclass{l3doc}
+
+% bug fix fo l3doc.cls
+\ExplSyntaxOn
+\cs_set_protected:Npn \__codedoc_macro_typeset_one:nN #1#2
+  {
+    \vbox_set:Nn \l__codedoc_macro_box
+      {
+        \vbox_unpack_drop:N \l__codedoc_macro_box
+        \hbox { \llap { \__codedoc_print_macroname:nN {#1} #2
+            \MacroFont       % <----- without it the \ is in lmr10 if a link is made
+            \      
+        } }
+      }
+    \int_incr:N \l__codedoc_macro_int
+  }
+\ExplSyntaxOff
+
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{lthooks.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+%
+% \long\def\fmi#1{\begin{quote}\itshape FMi: #1\end{quote}}
+% \long\def\pho#1{\begin{quote}\itshape PhO: #1\end{quote}}
+%
+% \newcommand\hook[1]{\texttt{#1}}
+%    
+%
+% \title{The \texttt{lthooks} package\thanks{This package has version
+%    \lthooksversion\ dated \lthooksdate, \copyright\ \LaTeX\
+%    Project.}}
+%
+% \author{Frank Mittelbach\thanks{Code improvements for speed and other goodies by Phelype Oleinik}}
+%
+% \maketitle
+%
+%
+% \tableofcontents
+%
+% \section{Introduction}
+%
+%    Hooks are points in the code of commands or environments where it
+%    is possible to add processing code into existing commands. This
+%    can be done by different packages that do not know about each
+%    other and to allow for hopefully safe processing it is necessary
+%    to sort different chunks of code added by different packages into
+%    a suitable processing order.
+%
+%    This is done by the packages adding chunks of code (via
+%    \cs{AddToHook}) and labeling their code with some label by
+%    default using the package name as a label.
+%
+%    At \verb=\begin{document}= all code for a hook is then sorted
+%    according to some rules (given by \cs{DeclareHookRule}) for fast
+%    execution without processing overhead. If the hook code is
+%    modified afterwards (or the rules are changed),
+%    a new version for fast processing is generated.
+%
+%    Some hooks are used already in the preamble of the document. If
+%    that happens then the hook is prepared for execution (and sorted)
+%    already at that point.
+%
+%
+% \section{Package writer interface}
+%
+%    The hook management system is offered as a set of CamelCase
+%    commands for traditional \LaTeXe{} packages (and for use in the
+%    document preamble if needed) as well as \texttt{expl3} commands
+%    for modern packages, that use the L3 programming layer of
+%    \LaTeX{}. Behind the scenes, a single set of data structures is
+%    accessed so that packages from both worlds can coexist and access
+%    hooks in other packages.
+%
+%
+%
+% \subsection{\LaTeXe\ interfaces}
+%
+% \subsubsection{Declaring hooks and using them in code}
+%
+%    With two exceptions, hooks have to be declared before they can be
+%    used. The exceptions are hooks in environments (i.e., executed at
+%    \cs{begin} and \cs{end}) and hooks run when loading files,
+%    e.g. before and after a package is loaded, etc. Their hook names
+%    depend on the environment or the file name and so declaring them
+%    beforehand is difficult.
+%
+%
+% \begin{function}{\NewHook}
+%   \begin{syntax}
+%     \cs{NewHook} \Arg{hook}
+%   \end{syntax}
+%   Creates a new \meta{hook}.
+%    If this is a hook provided as part of a package it is suggested
+%    that the \meta{hook} name is always structured as follows:
+%    \meta{package-name}\texttt{/}\meta{hook-name}. If necessary you
+%    can further subdivide the name by adding more \texttt{/} parts.
+%    If a hook name is already taken, an error is raised and the hook
+%    is not created.
+%
+%    The \meta{hook} can be specified using the dot-syntax to denote
+%    the current package name. See section~\ref{sec:default-label}.
+% \end{function}
+%
+% \begin{function}{\NewReversedHook}
+%   \begin{syntax}
+%     \cs{NewReversedHook} \Arg{hook}
+%   \end{syntax}
+%     Like \cs{NewHook} declares a new \meta{hook}.
+%     the difference is that the code chunks for this hook are in
+%     reverse order by default (those added last are executed first).
+%     Any rules for the hook are applied after the default ordering.
+%     See sections~\ref{sec:order} and \ref{sec:reversed-order}
+%    for further details.
+%
+%    The \meta{hook} can be specified using the dot-syntax to denote
+%    the current package name. See section~\ref{sec:default-label}.
+% \end{function}
+%
+%
+% \begin{function}{\NewMirroredHookPair}
+%   \begin{syntax}
+%     \cs{NewMirroredHookPair} \Arg{hook-1} \Arg{hook-2}
+%   \end{syntax}
+%     A shorthand for
+%    \cs{NewHook}\Arg{hook-1}\cs{NewReversedHook}\Arg{hook-2}.
+%
+%    The \meta{hooks} can be specified using the dot-syntax to denote
+%    the current package name. See section~\ref{sec:default-label}.
+% \end{function}
+%
+
+
+
+% \begin{function}{\UseHook}
+%   \begin{syntax}
+%     \cs{UseHook} \Arg{hook}
+%   \end{syntax}
+%    Execute the hook code inside a command or environment.\footnote{For
+%     legacy hooks such as \hook{begindocument} it is also
+%    possible to call \cs{@...hook}, e.g., \cs{@begindocumenthook},
+%    but this syntax is discouraged.}
+%
+%    Before \verb=\begin{document}= the fast execution code for a hook
+%    is not set up, so in order to use a hook there it is explicitly
+%    initialized first. As that involves assignments using a hook at
+%    those times is not 100\% the same as using it after
+%    \verb=\begin{document}=.
+%
+%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
+%    A leading |.| is treated literally.
+% \end{function}
+%
+% \begin{function}{\UseOneTimeHook}
+%   \begin{syntax}
+%     \cs{UseOneTimeHook} \Arg{hook}
+%   \end{syntax}
+%    Some hooks are only used (and can be only used) in one place, for
+%    example, those in \verb=\begin{document}= or
+%    \verb=\end{document}=. Once we have passed that point adding to
+%    the hook through a defined \cs{\meta{addto-cmd}} command (e.g.,
+%    \cs{AddToHook} or \cs{AtBeginDocument}, etc.\@) would have no
+%    effect (as would the use of such a command inside the hook code
+%    itself). It is therefore customary to redefine
+%    \cs{\meta{addto-cmd}} to simply  process its argument, i.e.,
+%    essentially make it behave like \cs{@firstofone}.
+%
+%    \cs{UseOneTimeHook} does that: it records that the hook has been
+%    consumed and any further attempt to add to it will result in
+%    executing the code to be added immediately.
+%
+%    \fmi{Maybe add an error version as well?}
+%
+%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
+%    A leading |.| is treated literally.
+% \end{function}
+%
+%
+% \subsubsection{Updating code for hooks}
+%
+% \begin{function}{\AddToHook}
+%   \begin{syntax}
+%     \cs{AddToHook} \Arg{hook}\oarg{label}\Arg{code}
+%   \end{syntax}
+%    Adds \meta{code} to the \meta{hook} labeled by \meta{label}. If
+%    the optional argument \meta{label} is not provided, if \cs{AddToHook}
+%    is used in a package/class, then the current
+%    package/class name is used, otherwise \hook{top-level} is
+%    used~(see section~\ref{sec:default-label}).
+%
+%    If there already exists code under the \meta{label} then the new
+%    \meta{code} is appended to the existing one (even if this is a reversed hook).
+%    If you want to replace existing code under the
+%    \meta{label}, first apply \cs{RemoveFromHook}.
+%
+%    The hook doesn't have to exist for code to be added to
+%    it. However, if it is not declared later then obviously the
+%    added \meta{code} will never be executed.  This
+%    allows for hooks to work regardless of package loading order and
+%    enables packages to add to hook of other packages without
+%    worrying whether they are actually used in the current document.
+%    See section~\ref{sec:querying}.
+%
+%    The \meta{hook} and \meta{label} can be specified using the
+%    dot-syntax to denote the current package name.
+%    See section~\ref{sec:default-label}.
+% \end{function}
+%
+% \begin{function}{\RemoveFromHook}
+%   \begin{syntax}
+%     \cs{RemoveFromHook} \Arg{hook}\oarg{label}
+%   \end{syntax}
+%    Removes any code labeled by \meta{label} from the \meta{hook}.
+%    If the optional
+%    argument \meta{label} is not provided, if \cs{AddToHook}
+%    is used in a package/class, then the current
+%    package/class name is used, otherwise \hook{top-level} is used.
+%
+%    If the optional argument is \texttt{*}, then all code chunks are
+%    removed. This is rather dangerous as it drops code from other
+%    packages one may not know about!
+%
+%    The \meta{hook} and \meta{label} can be specified using the
+%    dot-syntax to denote the current package name.
+%    See section~\ref{sec:default-label}.
+% \end{function}
+%
+% \medskip
+%
+% A useful application for this declaration inside the document body
+% is when one wants to temporarily add code to hooks and later remove
+% it again, e.g.,
+%\begin{verbatim}
+%   \AddToHook{env/quote/before}{\small}
+%   \begin{quote}
+%     A quote set in a smaller typeface
+%   \end{quote}
+%   ...
+%   \RemoveFromHook{env/quote/before}
+%   ... now back to normal for further quotes
+%\end{verbatim}
+% Note that you can't cancel the setting with
+%\begin{verbatim}
+%   \AddToHook{env/quote/before}{}
+%\end{verbatim}
+% because that only \enquote{adds} a further empty chunk of code to
+% the hook. Adding \cs{normalsize} would work but that means the hook
+% then contained \cs{small}\cs{normalsize} which means to font size
+% changes for no good reason.
+%
+% The above is only needed if one wants to typeset several quotes in a
+% smaller typeface. If the hook is only needed once then
+% \cs{AddToHookNext} is simpler, because it resets itself after one use.
+%
+%
+% \begin{function}{\AddToHookNext}
+%   \begin{syntax}
+%     \cs{AddToHookNext} \Arg{hook}\Arg{code}
+%   \end{syntax}
+%    Adds \meta{code} to the next invocation of the \meta{hook}.
+%    The code is executed after the normal hook code has finished and
+%    it is executed only once, i.e. it is deleted after it was used.
+%
+%    Using the declaration is a global operation, i.e., the code is
+%    not lost, even if the declaration is used inside a group and the
+%    next invocation happens after the group. If the declaration is
+%    used several times before the hook is executed then all code is
+%    executed in the order in which it was declared.\footnotemark
+%
+%    The hook doesn't have to exist for code to be added to it.  This
+%    allows for hooks to work regardless of package loading order.
+%    See section~\ref{sec:querying}.
+%
+%    The \meta{hook} can be specified using the dot-syntax to denote
+%    the current package name.  See section~\ref{sec:default-label}.
+% \end{function}\footnotetext{There is
+%    no mechanism to reorder such code chunks (or delete them).}
+%
+% \subsubsection{Hook names and default labels}
+% \label{sec:default-label}
+%
+% It is best practice to use \cs{AddToHook} in packages or classes
+% \emph{without specifying a \meta{label}} because then the package
+% or class name is automatically used, which is helpful if rules are
+% needed, and avoids mistyping the \meta{label}.
+%
+% Using an explicit \meta{label} is only necessary in very specific
+% situations, e.g., if you want to add several chunks of code into a
+% single hook and have them placed in different parts of the hook
+% (by providing some rules).
+%
+% The other case is when you develop a larger package with several
+% sub-packages. In that case you may want to use the same
+% \meta{label} throughout the sub-packages in order to avoid
+% that the labels change if you internally reorganize your code.
+%
+% It is not enforced, but highly recommended that the hooks defined by
+% a package, and the \meta{labels} used to add code to other hooks
+% contain the package name to easily identify the source of the code
+% chunk and to prevent clashes.  This should be the standard practice,
+% so this hook management code provides a shortcut to refer to the
+% current package in the name of a \meta{hook} and in a \meta{label}.
+% If \meta{hook} name or \meta{label} consist just of a single dot
+% (|.|), or starts with a dot followed by a slash (|./|) then the dot
+% denotes the \meta{default label} (usually the current package or class
+% name---see~\cs{DeclareDefaultHookLabel}).
+% A \enquote{|.|} or \enquote{|./|} anywhere else in a \meta{hook} or in
+% \meta{label} is treated literally and is not replaced.
+
+% For example,
+% inside the package \texttt{mypackage.sty}, the default label is
+% \texttt{mypackage}, so the instructions:
+% \begin{verbatim}
+%   \NewHook   {./hook}
+%   \AddToHook {./hook}[.]{code}     % Same as \AddToHook{./hook}{code}
+%   \AddToHook {./hook}[./sub]{code}
+%   \DeclareHookRule{begindocument}{.}{<}{babel}
+%   \AddToHook {file/after/foo.tex}{code}
+% \end{verbatim}
+%    are equivalent to:
+% \begin{verbatim}
+%   \NewHook   {mypackage/hook}[mypackage]{code}
+%   \AddToHook {mypackage/hook}[mypackage]{code}
+%   \AddToHook {mypackage/hook}[mypackage/sub]{code}
+%   \DeclareHookRule{begindocument}{mypackage}{<}{babel}
+%   \AddToHook {file/after/foo.tex}{code}                  % unchanged
+% \end{verbatim}
+%
+% The \meta{default label} is automatically set to the name of the
+% current package or class (using \cs{@currname}).  If \cs{@currname}
+% is not set (because the hook command is used outside of a package, or
+% the current file wasn't loaded with \cs{usepackage} or
+% \cs{documentclass}), then the \texttt{top-level} is used as the
+% \meta{default label}.
+%
+% This syntax is available in all \meta{label} arguments and most
+% \meta{hook}, both in the \LaTeXe{} interface, and the \LaTeX3
+% interface described in section~\ref{sec:l3hook-interface}.
+%
+% Note, however, that the replacement of |.| by the \meta{default label}
+% takes place when the hook command is executed, so actions that are
+% somehow executed after the package ends will have the wrong
+% \meta{default label} if the dot-syntax is used.  For that reason,
+% this syntax is not available in \cs{UseHook} (and \cs{hook_use:n})
+% because the hook is most of the time used outside of the package file
+% in which it was defined. This syntax is also not available in the hook
+% conditionals \cs{IfHookEmptyTF} (and \cs{hook_if_empty:nTF}) and
+% \cs{IfHookExistTF} (and \cs{hook_if_exist:nTF}) because these
+% conditionals are used in some performance-critical parts of the hook
+% management code, and because they are usually used to refer to other
+% package's hooks, so the dot-syntax doesn't make much sense.
+%
+% In some cases, for example in large packages, one may want to separate
+% it in logical parts, but still use the main package name as
+% \meta{label}, then the \meta{default label} can be set using
+% \cs{DeclareDefaultHookLabel}:
+%
+% \begin{function}{\DeclareDefaultHookLabel}
+%   \begin{syntax}
+%     \cs{DeclareDefaultHookLabel} \Arg{default label}
+%   \end{syntax}
+%   Sets the \meta{default label} to be used in \meta{label} arguments.
+%   If \cs{DeclareDefaultHookLabel} is not used in the
+%   current package, \cs{@currname} is used instead.  If \cs{@currname}
+%   is not set, the code is assumed to be in the main document, in which
+%   case \texttt{top-level} is used.
+%
+%   The effect of \cs{DeclareDefaultHookLabel} holds for the current
+%   file, and is reset to the previous value when the file is closed.
+% \end{function}
+%
+%
+% \subsubsection{Defining relations between hook code}
+%
+% The default assumption is that code added to hooks by different
+% packages is independent and the order in which it is executed is
+% irrelevant. While this is true in many case it is  obviously false
+% in many others.
+%
+% Before the hook management system was introduced
+% packages had to take elaborate precaution to determine of some other
+% package got loaded as well (before or after) and find some ways to
+% alter its behavior accordingly. In addition is was often the user's
+% responsibility to load packages in the right order so that code
+% added to hooks got added in the right order and some cases even
+% altering the loading order wouldn't resolve the conflicts.
+%
+% With the new hook management system it is now possible to define
+% rules (i.e., relationships) between code chunks added by different
+% packages and explicitly describe in which order they should be
+% processed.
+%
+% \begin{function}{\DeclareHookRule}
+%   \begin{syntax}
+%     \cs{DeclareHookRule} \Arg{hook}\Arg{label1}\Arg{relation}\Arg{label2}
+%   \end{syntax}
+%    Defines a relation between \meta{label1} and \meta{label2} for a
+%    given \meta{hook}. If \meta{hook} is \texttt{??} this defines a
+%    relation for all hooks that use the two labels, i.e., that have
+%    chunks of code labeled with \meta{label1} and \meta{label2}.
+%    Rules specific to a given hook take precedence over default
+%    rules that use \texttt{??} as the \meta{hook}.
+%
+%    Currently, the supported relations are the following:
+%    \begin{itemize}
+%
+%    \item[\texttt{before} or \texttt{\string<}]
+%
+%      Code for \meta{label1} comes before code for \meta{label2}.
+%
+%    \item[\texttt{after} or \texttt{\string>}]
+%      Code for \meta{label1} comes after code for \meta{label2}.
+%
+%    \item[\texttt{incompatible-warning}]
+%
+%      Only code for either \meta{label1} or \meta{label2} can appear
+%      for that hook (a way to say that two packages---or parts of
+%      them---are incompatible). A warning is raised if both labels
+%      appear in the same hook.
+%
+%    \item[\texttt{incompatible-error}]
+%
+%      Like \texttt{incompatible-error} but instead of a warning a
+%      \LaTeX{} error is raised, and the code for both labels are
+%      dropped from that hook until the conflict is resolved.
+%
+%    \item[\texttt{removes}]
+%
+%      Code for \meta{label1} overwrites code for \meta{label2}. More
+%      precisely, code for \meta{label2} is dropped for that
+%      hook. This can be used, for example if one package is a
+%      superset in functionality of another one and therefore wants to
+%      undo code in some hook and replace it with its own version.
+%
+%    \item[\texttt{unrelated}]
+%
+%       The order of code for \meta{label1} and \meta{label2} is
+%      irrelevant. This rule is there to undo an incorrect rule
+%      specified earlier.
+%
+%    \end{itemize}
+%
+%    The \meta{hook} and \meta{label} can be specified using the
+%    dot-syntax to denote the current package name.
+%    See section~\ref{sec:default-label}.
+% \end{function}
+%
+%
+% \begin{function}{\ClearHookRule}
+%   \begin{syntax}
+%     \cs{ClearHookRule}\Arg{hook}\Arg{label1}\Arg{label2}
+%   \end{syntax}
+%    Syntactic sugar for saying that \meta{label1} and \meta{label2}
+%    are unrelated for the given \meta{hook}.
+% \end{function}
+%
+%
+%
+% \begin{function}{\DeclareDefaultHookRule}
+%   \begin{syntax}
+%     \cs{DeclareDefaultHookRule}\Arg{label1}\Arg{relation}\Arg{label2}
+%   \end{syntax}
+%   This sets up a relation between \meta{label1} and \meta{label2}
+%    for all hooks unless overwritten by a specific rule for a hook.
+%    Useful for cases where one package has a specific relation to
+%    some other package, e.g., is \texttt{incompatible} or always
+%    needs a special ordering \texttt{before} or \texttt{after}.
+%    (Technically it is just a shorthand for using \cs{DeclareHookRule}
+%    with \texttt{??} as the hook name.)
+%
+%    Declaring default rules is only supported in the document
+%    preamble.\footnotemark{}
+%
+%    The \meta{label} can be specified using the dot-syntax to denote
+%    the current package name. See section~\ref{sec:default-label}.
+% \end{function}\footnotetext{Trying to do so, e.g., via
+%    \cs{DeclareHookRule} with \texttt{??}  has bad side-effects and
+%    is not supported (though not explicitly caught for performance
+%    reasons).}
+%
+%
+%
+% \subsubsection{Querying hooks}
+% \label{sec:querying}
+%
+% Simpler data types, like token lists, have three possible states; they
+% can:
+% \begin{itemize}
+%   \item exist and be empty;
+%   \item exist and be non-empty; and
+%   \item not exist (in which case emptiness doesn't apply);
+% \end{itemize}
+% Hooks are a bit more complicated: they have four possible states.
+% A hook may exist or not, and either way it may or may not be empty.
+% This means that even a hook that doesn't exist may be non-empty.
+%
+% This seemingly strange state may happen when, for example, package~$A$
+% defines hook \hook{A/foo}, and package $B$ adds some code to that
+% hook.  However, a document may load package $B$ before package $A$, or
+% may not load package $A$ at all.  In both cases some code is added to
+% hook \hook{A/foo} without that hook being defined yet, thus that
+% hook is said to be non-empty, whereas it doesn't exist.  Therefore,
+% querying the existence of a hook doesn't imply its emptiness, neither
+% does the other way around.
+%
+% A hook is said to be empty when no code was added to it, either to
+% its permanent code pool, or to its ``next'' token list.  The hook
+% doesn't need to be declared to have code added to its code pool.
+% A hook is said to exist when it was declared with \cs{NewHook} or
+% some variant thereof.
+%
+% \begin{function}[EXP]{\IfHookEmptyTF}
+%   \begin{syntax}
+%     \cs{IfHookEmptyTF} \Arg{hook} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%   Tests if the \meta{hook} is empty (\emph{i.e.}, no code was added to
+%   it using either \cs{AddToHook} or \cs{AddToHookNext}), and
+%   branches to either \meta{true code} or \meta{false code} depending
+%   on the result.
+%
+%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
+%    A leading |.| is treated literally.
+% \end{function}
+%
+% \begin{function}[EXP]{\IfHookExistTF}
+%   \begin{syntax}
+%     \cs{IfHookExistTF} \Arg{hook} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%   Tests if the \meta{hook} exists (if it was created with either
+%   \cs{NewHook}, \cs{NewReversedHook}, or \cs{NewMirroredHookPair}), and
+%   branches to either \meta{true code} or \meta{false code} depending
+%   on the result.
+%
+%   The existence of a hook usually doesn't mean much from the viewpoint
+%   of code that tries to add/remove code from that hook, since package
+%   loading order may vary, thus the creation of hooks is asynchronous
+%   to adding and removing code from it, so this test should be used
+%   sparingly.
+%
+%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
+%    A leading |.| is treated literally.
+% \end{function}
+%
+% \fmi{Would be helpful if we provide some use cases}
+%
+% \subsubsection{Displaying hook code}
+%
+%    If one has to adjust the code execution in a hook using a hook
+%    rule it is helpful to get some information about the code
+%    associated with a hook, its current order and the existing rules.
+%
+% \begin{function}{\ShowHook}
+%   \begin{syntax}
+%     \cs{ShowHook} \Arg{hook}
+%   \end{syntax}
+%   Displays information about the \meta{hook} such as
+%   \begin{itemize}
+%   \item
+%      the code chunks (and their labels) added to it,
+%   \item
+%      any rules set up to order them,
+%      \fmi{currently this is missing the default rules that apply,
+%      guess that needs fixing}
+%   \item
+%      the computed order (if already defined),
+%   \item
+%      any code executed on the next invocation only.
+%   \end{itemize}
+%
+%    The \meta{hook} can be specified using the dot-syntax to denote
+%    the current package name. See section~\ref{sec:default-label}.
+% \end{function}
+%
+%
+% \subsubsection{Debugging hook code}
+%
+% \begin{function}{\DebugHookOn,\DebugHookOff}
+%   \begin{syntax}
+%     \cs{DebugHookOn}
+%   \end{syntax}
+%    Turn the debugging of hook code on or off. This displays changes
+%    made to the hook data structures. The output is rather coarse and
+%      not really intended for normal use.
+% \end{function}
+%
+%
+% \subsection{L3 programming layer (\texttt{expl3}) interfaces}
+% \label{sec:l3hook-interface}
+%
+%
+% This is a quick summary of the \LaTeX3 programming interfaces for
+% use with packages written in \texttt{expl3}. In contrast to the
+% \LaTeXe{} interfaces they always use mandatory arguments only, e.g.,
+% you always have to specify the \meta{label} for a code chunk.  We
+% therefore suggest to use the declarations discussed in the previous
+% section even in \texttt{expl3} packages, but the choice is yours.
+%
+%
+% \begin{function}
+%   {\hook_new:n,\hook_new_reversed:n,\hook_new_pair:nn}
+%   \begin{syntax}
+%     \cs{hook_new:n}\Arg{hook}
+%     \cs{hook_new_pair:nn}\Arg{hook-1}\Arg{hook-2}
+%   \end{syntax}
+%   Creates a new \meta{hook} with normal or reverse ordering of code
+%    chunks. \cs{hook_new_pair:nn} creates a pair of such hooks with
+%    \Arg{hook-2} being a reversed hook.
+%    If a hook name is already taken, an error is raised and the hook
+%    is not created.
+%
+%    The \meta{hook} can be specified using the dot-syntax to denote
+%    the current package name. See section~\ref{sec:default-label}.
+% \end{function}
+%
+%
+%
+% \begin{function}{\hook_use:n}
+%   \begin{syntax}
+%     \cs{hook_use:n} \Arg{hook}
+%   \end{syntax}
+%    Executes the \Arg{hook} code followed (if set up) by the code for next
+%    invocation only, then empties that next invocation code.
+%
+%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
+%    A leading |.| is treated literally.
+% \end{function}
+%
+% \begin{function}{\hook_use_once:n}
+%   \begin{syntax}
+%     \cs{hook_use_once:n} \Arg{hook}
+%   \end{syntax}
+%     Changes the \Arg{hook} status so that from now on any addition to
+%     the hook code is executed immediately. Then execute any
+%     \Arg{hook} code already set up.
+%    \fmi{better L3 name?}
+%
+%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
+%    A leading |.| is treated literally.
+% \end{function}
+%
+% \begin{function}{\hook_gput_code:nnn}
+%   \begin{syntax}
+%     \cs{hook_gput_code:nnn} \Arg{hook} \Arg{label} \Arg{code}
+%   \end{syntax}
+%    Adds a chunk of \meta{code} to the \meta{hook} labeled
+%    \meta{label}. If the label already exists the \meta{code} is
+%    appended to the already existing code.
+%
+%    If code is added to an external \meta{hook} (of the kernel or
+%    another package) then the convention is to use the package name
+%    as the \meta{label} not some internal module name or some other
+%    arbitrary string.
+%
+%    The \meta{hook} and \meta{label} can be specified using the
+%    dot-syntax to denote the current package name.
+%    See section~\ref{sec:default-label}.
+% \end{function}
+%
+% \begin{function}
+%   {\hook_gput_next_code:nn}
+%   \begin{syntax}
+%     \cs{hook_gput_next_code:nn} \Arg{hook} \Arg{code}
+%   \end{syntax}
+%    Adds a chunk of \meta{code} for use only in the next invocation of the
+%    \meta{hook}. Once used it is gone.
+%
+%    This is simpler than \cs{hook_gput_code:nnn}, the code is simply
+%    appended to the hook in the order of declaration at the very end,
+%    i.e., after all standard code for the hook got executed.
+%
+%    Thus if one needs to undo what the standard does one has to do
+%    that as part of \meta{code}.
+%
+%    The \meta{hook} can be specified using the dot-syntax to denote
+%    the current package name. See section~\ref{sec:default-label}.
+% \end{function}
+%
+
+
+%  \begin{function}{\hook_gremove_code:nn}
+%   \begin{syntax}
+%     \cs{hook_gremove_code:nn} \Arg{hook} \Arg{label}
+%   \end{syntax}
+%    Removes any code for \meta{hook} labeled \meta{label}.
+%
+%    If the code for that \meta{label} wasn't yet added to the
+%    \meta{hook}, an order is set so that when some code attempts to add
+%    that label, the removal order takes action and the code is not
+%    added.
+%
+%    If the second argument is \texttt{*}, then all code chunks are
+%    removed. This is rather dangerous as it drops code from other
+%    packages one may not know about, so think twice before using
+%    that!
+%
+%    The \meta{hook} and \meta{label} can be specified using the
+%    dot-syntax to denote the current package name.
+%    See section~\ref{sec:default-label}.
+% \end{function}
+
+
+%  \begin{function}{\hook_gset_rule:nnnn}
+%   \begin{syntax}
+%     \cs{hook_gset_rule:nnnn} \Arg{hook} \Arg{label1} \Arg{relation} \Arg{label2}
+%   \end{syntax}
+%    Relate \meta{label1} with \meta{label2} when used in \meta{hook}.
+%    See \cs{DeclareHookRule} for the allowed \meta{relation}s.
+%    If \meta{hook} is \texttt{??} a default rule is specified.
+%
+%    The \meta{hook} and \meta{label} can be specified using the
+%    dot-syntax to denote the current package name.
+%    See section~\ref{sec:default-label}.
+%    The dot-syntax is parsed in both \meta{label} arguments, but it
+%    usually makes sense to be used in only one of them.
+% \end{function}
+%
+% \begin{function}[pTF]{\hook_if_empty:n}
+%   \begin{syntax}
+%     \cs{hook_if_empty:n} \Arg{hook} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%   Tests if the \meta{hook} is empty (\emph{i.e.}, no code was added to
+%   it using either \cs{AddToHook} or \cs{AddToHookNext}), and
+%   branches to either \meta{true code} or \meta{false code} depending
+%   on the result.
+%
+%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
+%    A leading |.| is treated literally.
+% \end{function}
+%
+% \begin{function}[pTF]{\hook_if_exist:n}
+%   \begin{syntax}
+%     \cs{hook_if_exist:n} \Arg{hook} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%   Tests if the \meta{hook} exists (if it was created with either
+%   \cs{NewHook}, \cs{NewReversedHook}, or \cs{NewMirroredHookPair}), and
+%   branches to either \meta{true code} or \meta{false code} depending
+%   on the result.
+%
+%  \fmi{what are the results for generic hooks that do not need to be declared?}
+%
+%   The existence of a hook usually doesn't mean much from the viewpoint
+%   of code that tries to add/remove code from that hook, since package
+%   loading order may vary, thus the creation of hooks is asynchronous
+%   to adding and removing code from it, so this test should be used
+%   sparingly.
+%
+%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
+%    A leading |.| is treated literally.
+% \end{function}
+%
+%
+% \begin{function}{\hook_debug_on:,\hook_debug_off:}
+%   \begin{syntax}
+%     \cs{hook_debug_on:}
+%   \end{syntax}
+%    Turns the debugging of hook code on or off. This displays changes
+%    to the hook data.
+% \end{function}
+%
+%
+%
+% \subsection{On the order of hook code execution} \label{sec:order}
+%
+%    Chunks of code for a \meta{hook} under different labels are supposed
+%    to be independent if there are no special rules set up that
+%    define a relation between the chunks. This means that you can't
+%    make assumptions about the order of execution!
+%
+%    Suppose you have the following declarations:
+%\begin{verbatim}
+%    \NewHook{myhook}
+%    \AddToHook{myhook}[packageA]{\typeout{A}}
+%    \AddToHook{myhook}[packageB]{\typeout{B}}
+%    \AddToHook{myhook}[packageC]{\typeout{C}}
+%\end{verbatim}
+%    then executing the hook with \cs{UseHook} will produce the
+%    typeout \texttt{A} \texttt{B} \texttt{C} in that order.  In other
+%    words, the execution order is computed to be \texttt{packageA},
+%    \texttt{packageB}, \texttt{packageC} which you can verify with
+%    \cs{ShowHook}\texttt{\{myhook\}}:
+%\begin{verbatim}
+%   The hook 'myhook':
+%    Code chunks:
+%       packageA -> \typeout {A}
+%       packageB -> \typeout {B}
+%       packageC -> \typeout {C}
+%    Extra code next invocation:
+%       ---
+%    Rules:
+%       ---
+%    Execution order:
+%       packageA, packageB, packageC
+%\end{verbatim}
+%    The reason is that the code chunks are internally saved in a property list
+%    and the initial order of such a property list is the order in
+%    which key-value pairs got added. However, that is only true if
+%    nothing other than adding happens!
+%
+%    Suppose, or example, you want to replace the code chunk for
+%    \texttt{packageA}, e.g.,
+%\begin{verbatim}
+%    \RemoveFromHook{myhook}[packageA]
+%    \AddToHook{myhook}[packageA]{\typeout{A alt}}
+%\end{verbatim}
+%    then your order becomes  \texttt{packageB},
+%    \texttt{packageC}, \texttt{packageA} because the label got removed
+%    from the property list and then re-added (at its end).
+%
+%    While that may not be too surprising,  the execution order is
+%    also sometimes altered if you add a redundant rule, e.g. if you specify
+%\begin{verbatim}
+%    \DeclareHookRule{myhook}{packageA}{before}{packageB}
+%\end{verbatim}
+%    instead of the previous lines we get
+%\begin{verbatim}
+%   The hook 'myhook':
+%    Code chunks:
+%       packageA -> \typeout {A}
+%       packageB -> \typeout {B}
+%       packageC -> \typeout {C}
+%    Extra code next invocation:
+%       ---
+%    Rules:
+%       packageA|packageB with relation before
+%    Execution order (after applying rules):
+%       packageA, packageC, packageB
+%\end{verbatim}
+%    As you can see the code chunks are still in the same order, but
+%    in the execution order for the labels \texttt{packageB} and
+%    \texttt{packageC} have
+%    swapped places.
+%    The reason is that, with the rule there are two orders that
+%    satisfy it, and the algorithm for sorting happened to pick a
+%    different one compared to the case without rules (where it
+%    doesn't run at all as there is nothing to resolve).
+%    Incidentally, if we had instead specified the redundant rule
+%\begin{verbatim}
+%    \DeclareHookRule{myhook}{packageB}{before}{label-3}
+%\end{verbatim}
+%    the execution order would not have changed.
+%
+%    In summary: it is not possible to rely on the order of execution
+%    unless there are rules that partially or fully define the order
+%    (in which you can rely on them being fulfilled).
+%
+%
+% \subsection{The use of \enquote{reversed} hooks} \label{sec:reversed-order}
+%
+%    You may have wondered why you can declare a \enquote{reversed} hook
+%    with \cs{NewReversedHook} and what that does exactly.
+%
+%    In short: the execution order of a reversed hook (without any
+%    rules!) is exactly reversed to the order you would have gotten for
+%    a hook declared with \cs{NewHook}.
+%
+%    This is helpful if you have a pair of hooks where you expect to see
+%    code added that involves grouping, e.g., starting an environment
+%    in the first and closing that environment in the second hook.
+%    To give a somewhat contrived example\footnote{there are simpler
+%    ways to achieve the same effect.}, suppose there is a package
+%    adding the following:
+%\begin{verbatim}
+%    \AddToHook{env/quote/before}[package-1]{\begin{itshape}}
+%    \AddToHook{env/quote/after} [package-1]{\end{itshape}}
+%\end{verbatim}
+%    As a result, all quotes will be in italics.
+%    Now suppose further that the user wants the quotes also in blue
+%    and therefore adds:
+%\begin{verbatim}
+%    \usepackage{color}
+%    \AddToHook{env/quote/before}{\begin{color}{blue}}
+%    \AddToHook{env/quote/after} {\end{color}}
+%\end{verbatim}
+%    Now if the \hook{env/quote/after} hook would be a normal hook we
+%    would get the same execution order in  both hooks, namely:
+%\begin{verbatim}
+%    package-1, top-level
+%\end{verbatim}
+%    (or vice versa) and as a result, would get:
+%\begin{verbatim}
+%    \begin{itshape}\begin{color}{blue} ...
+%    \end{itshape}\end{color}
+%\end{verbatim}
+%   and an error message that \verb=\begin{color}= ended by
+%    \verb=\end{itshape}=.
+%    With \hook{env/quote/after} declared as a reversed hook the
+%    execution order is reversed and so all environments are closed in
+%    the correct sequence and \cs{ShowHook} would give us the
+%    following output:
+%\begin{verbatim}
+%   The hook 'env/quote/after':
+%    Code chunks:
+%       package-1 -> \end {itshape}
+%       top-level -> \end {color}
+%    Extra code next invocation:
+%       ---
+%    Rules:
+%       ---
+%    Execution order (after reversal):
+%       top-level, package-1
+%\end{verbatim}
+%
+%    The reversal of the execution order happens before applying any
+%    rules, so if you alter the order you will probably have to alter
+%    it in both hooks, not just in one, but that depends on the use case.
+%
+%
+%
+%
+% \subsection{Private \LaTeX{} kernel hooks}
+%
+%    There are a few places where it is absolutely essential for
+%    \LaTeX{} to function correctly that code is executed in a precisely
+%    defined order. Even that could have been implemented with the
+%    hook management (by adding various rules to ensure the
+%    appropriate ordering with respect to other code added by
+%    packages). However, this makes every document unnecessary
+%    slow, because there has to be sorting even through the result is
+%    predetermined. Furthermore it forces package writers to
+%    unnecessarily add such rules if they add further code to the hook
+%    (or break \LaTeX{}).
+%
+%    For that reason such code is not using the hook management, but
+%    instead private kernel commands directly before or after a public
+%    hook with the following naming
+%    convention: \cs{@kernel@before@\meta{hookname}} or
+%    \cs{@kernel@after@\meta{hookname}}. For example, in
+%    \cs{enddocument} you find
+%\begin{verbatim}
+%   \UseHook{enddocument}%
+%   \@kernel@after@enddocument
+%\end{verbatim}
+%    which means first the user/package-accessible \hook{enddocument}
+%    hook is executed and then the internal kernel hook. As their name
+%    indicates these kernel commands should not be altered by third-party
+%    packages, so please refrain from that in the interest of
+%    stability and instead use the public hook next to it.\footnote{As
+%    with everything in \TeX{} there is not enforcement of this rule,
+%    and by looking at the code it is easy to find out how the kernel
+%    adds to them. The main reason of this section is therefore to say
+%    \enquote{please don't do that, this is unconfigurable code!}}
+%
+%
+%
+% \subsection{Legacy \LaTeXe{} interfaces}
+%
+%  \LaTeXe{} offered a small number of hooks together with commands to
+%    add to them. They are listed here and are retained for backwards
+%    compatibility.
+%
+%  With the new hook management several additional hooks have been added
+%    to \LaTeX\ and more will follow. See the next section for what
+%    is already available.
+%
+%
+% \begin{function}{\AtBeginDocument}
+%   \begin{syntax}
+%     \cs{AtBeginDocument} \oarg{label} \Arg{code}
+%   \end{syntax}
+%   If used without the optional argument \meta{label}, it works essentially
+%    like before, i.e., it is adding \meta{code} to the hook
+%    \hook{begindocument} 
+%    (which is executed inside \verb=\begin{document}=).
+%    However, all code added this way is labeled with the label
+%    \hook{top-level} if done outside of a package or class or with the
+%    package/class name if called inside such a file.
+%
+%    This way one can add further code to the hook using
+%    \cs{AddToHook} or \cs{AtBeginDocument} using a different label
+%    and explicitly order the code chunks as necessary, e.g., run some
+%    code before or after the \hook{top-level} code.  When using the
+%    optional argument the call is equivalent to running
+%    \cs{AddToHook} \texttt{\{begindocument\}} \oarg{label}
+%    \Arg{code}.
+%
+%    For important packages with known order requirement we may over
+%    time add rules to the kernel (or to those packages) so that they
+%    work regardless of the loading-order in the document.
+% \end{function}
+%
+% \begin{function}{\AtEndDocument}
+%   \begin{syntax}
+%     \cs{AtEndDocument} \oarg{label} \Arg{code}
+%   \end{syntax}
+%   Like \cs{AtBeginDocument} but for the \hook{enddocument} hook.
+% \end{function}
+%
+%
+%
+% \begin{function}{\AtBeginDvi}
+%   \begin{syntax}
+%     \cs{AtBeginDvi} \oarg{label} \Arg{code}
+%   \end{syntax}
+%   This hook is discussed in conjunction with the shipout hooks.
+% \end{function}
+%
+%
+%
+% \subsection{\LaTeXe{} commands and environments augmented by
+%    hooks}
+%
+%  \emph{intro to be written}
+%
+% \subsubsection{Generic hooks for all environments}
+%
+%    Every environment \meta{env} has now four associated hooks coming
+%    with it:
+%    \begin{description}
+%    \item[\hook{env/\meta{env}/before}]
+%
+%       This hook is executed as part of \cs{begin} as the very first
+%       action, in particular prior to starting the environment group.
+%       Its scope is therefore not restricted by the environment.
+%
+%    \item[\hook{env/\meta{env}/begin}]
+%
+%       This hook is executed as part of \cs{begin} directly in front
+%       of the code specific to the environment start (e.g., the
+%       second argument of \cs{newenvironment}).  Its scope is the
+%       environment body.
+%
+%    \item[\hook{env/\meta{env}/end}]
+%
+%       This is executed as part of \cs{end} directly in front of the
+%       code specific to the end of the environment (e.g., the third
+%       argument of \cs{newenvironment}).
+%
+%    \item[\hook{env/\meta{env}/after}]
+%
+%       This is executed as part of \cs{end} after the
+%       code specific to the environment end and after the environment
+%       group has ended.
+%       Its scope is therefore not restricted by the environment.
+%
+%       This hook is implemented as a reversed hook so if two packages
+%       add code to \hook{env/\meta{env}/before} and to
+%       \hook{env/\meta{env}/after} they can add surrounding
+%       environments and the order of closing them happens in the
+%       right sequence.
+%
+%    \end{description}
+%    In contrast to other hooks these hooks do not need to be declared
+%    using \cs{NewHook}.
+%
+%    The hooks are only executed if \cs{begin}\Arg{env} and
+%    \cs{end}\Arg{env} is used. If the environment code is executed
+%    via low-level calls to \cs{\meta{env}} and \cs{end\meta{env}}
+%    (e.g., to avoid the environment grouping) they are not
+%    available. If you want them available in code using this method,
+%    you would need to add them yourself, i.e., write something like
+%\begin{verbatim}
+%  \UseHook{env/quote/before}\quote
+%      ...
+%  \endquote\UseHook{env/quote/after}
+%\end{verbatim}
+%    to add the outer hooks, etc.
+%
+%
+%
+% \subsubsection{Hooks provided by \cs{begin}\texttt{\{document\}}}
+%
+%    Until 2020 \cs{begin}\texttt{\{document\}} offered exactly one
+%    hook that one had to fill using \cs{AtBeginDocument}. Experience
+%    has shown that this single hook in one place was not enough and
+%    as part of adding the general hook management system a number of
+%    additional hooks have been added at this point. The places for
+%    hooks have been chosen to provide the same support as offered by
+%    external packages, such as \pkg{etoolbox} and others that
+%    augmented \cs{document} to gain better control.
+%
+%    Supported are now the following hooks:
+%    \begin{description}
+%
+%    \item[\hook{env/document/before}]
+%
+%      This is the generic environment hook executed effectively
+%      before \verb=\begin{document}= starts, i.e., one can think of
+%      it as a hook for code at the end of the preamble section.
+%
+%    \item[\hook{env/document/begin}]
+%
+%      This is the second generic environment hook that is executed
+%      after the environment has started its group. But given that for the
+%      \texttt{document} environment this group is canceled there is
+%      little difference to the previous one as the two are directly
+%      executed one after another (the only difference is that in this
+%      hook \cs{@currenvir} is now set to \texttt{document} but
+%      anybody adding to this hook would know that already).
+%
+%
+%    \item[\hook{begindocument}]
+%
+%      This hook is added to by \cs{AtBeginDocument} and is executed
+%      after the \texttt{.aux} file as be read in and most
+%      initialization are done, so they can be altered and inspected by
+%      the hook code. It is followed by a small number of further
+%      initializations that shouldn't be altered and are therefore
+%      coming later.
+%
+%    \item[\hook{begindocument/end}]
+%
+%      This hook is executed at the end of the \cs{document} code in
+%      other words at the beginning of the document body. The only
+%      command that follows it is \cs{ignorespaces}.
+%
+%    \end{description}
+%
+%
+%
+%
+% \subsubsection{Hooks provided by \cs{end}\texttt{\{document\}}}
+%
+%    \LaTeXe{} always provided \cs{AtEndDocument} to add code to the
+%    execution of \verb=\end{document}= just in front of the code that
+%    is normally executed there. While this was a big improvement over
+%    the situation in \LaTeX\,2.09 it was not flexible enough for a
+%    number of use cases and so packages, such as \pkg{etoolbox},
+%    \pkg{atveryend} and others patched \cs{enddocument} to add
+%    additional points where code could be hooked into.
+%
+%    Patching using packages is always problematical as leads to
+%    conflicts (code availability, ordering of patches, incompatible
+%    patches, etc.).  For this reason a number of additional hooks
+%    have been added to the \cs{enddocument} code to allow packages
+%    to add code in various places in a controlled way without the
+%    need for overwriting or patching the core code.
+%
+%    Supported are now the following hooks:
+%    \begin{description}
+%
+%    \item[\hook{env/document/end}] The generic hook inside \cs{end}.
+%
+%    \item[\hook{enddocument}]
+
+%      The hook associated with \cs{AtEndDocument}. It is immediately
+%      called after the previous hook so there could be just
+%      one.\footnote{We could make \cs{AtEndDocument} just fill the
+%      \hook{env/document/end} but maybe that is a bit confusing.}
+%
+%      When this hook is executed there may be still unprocessed
+%      material (e.g., floats on the deferlist) and the hook may add
+%      further material to be typeset. After it, \cs{clearpage} is
+%      called to ensure that all such material gets typeset. If there
+%      is nothing waiting the \cs{clearpage} has no effect.
+%
+%
+%    \item[\hook{enddocument/afterlastpage}]
+%
+%      As the name indicates this hook should not receive code that
+%      generates material for further pages. It is the right place to
+%      do some final housekeeping and possibly write out some
+%      information to the \texttt{.aux} file (which is still open at
+%      this point to receive data). It is also the correct place to
+%      set up any testing code to be run when the \texttt{.aux} file
+%      is re-read in the next step.
+%
+%
+%      After this hook has been executed the \texttt{.aux} file is
+%      closed for writing and then read back in to do some tests
+%      (e.g., looking for missing references or duplicated labels, etc.).
+%
+%    \item[\hook{enddocument/afteraux}]
+%
+%      At this point, the \texttt{.aux} file has been reprocessed and so
+%      this is a possible place for final checks and display of
+%      information to the user. However, for the latter you might
+%      prefer the next hook, so that your information is displayed after the
+%      (possibly longish) list of files if that got requested via \cs{listfiles}.
+%
+%    \item[\hook{enddocument/info}]
+%
+%      This hook is meant to receive code that write final information
+%      messages to the terminal. It follows immediately after the
+%      previous hook (so both could have been combined, but then
+%      packages adding further code would always need to also supply
+%      an explicit rule to specify where it should go.
+%
+%      This hook already contains some code added by the kernel (under
+%      the labels \texttt{kernel/filelist} and
+%      \texttt{kernel/warnings}), namely the list of files when
+%      \cs{listfiles} has been used and the warnings for duplicate
+%      labels, missing references, font substitutions etc.
+%
+%    \item[\hook{enddocument/end}]
+%
+%      Finally, this hook is executed just in front of the final call
+%      to \cs{@{}@end}.
+%
+%    \end{description}
+%
+%
+%    There is also the hook \hook{shipout/lastpage}. This hook is
+%    executed as part of the last \cs{shipout} in the document to
+%    allow package to add final \cs{special}'s to that page. Where
+%    this hook is executed in relation to those from the above list
+%    can vary from document to document. Furthermore to determine correctly
+%    which of the \cs{shipout}s is the last one, \LaTeX{} needs to be run
+%    several times, so initially it might get executed on the wrong
+%    page. See section~\ref{sec:shipout} for where to find the details.
+%
+%
+% \subsubsection{Hooks provided \cs{shipout} operations}
+% \label{sec:shipout}
+%
+%    There are several hooks and mechanisms added to \LaTeX{}'s
+%    process of generating pages. These are documented in
+%    \texttt{ltshipout-doc.pdf} or with code in
+%    \texttt{ltshipout-code.pdf}.
+%
+%
+% \subsubsection{Hooks provided file loading operations}
+%
+%    There are several hooks added to \LaTeX{}'s
+%    process of loading file via its high-level interfaces such as
+%    \cs{input}, \cs{include}, \cs{usepackage}, etc. These are documented in
+%    \texttt{ltfilehook-doc.pdf} or with code in
+%    \texttt{ltfilehook-code.pdf}.
+%
+%
+
+% \StopEventually{\setlength\IndexMin{200pt}  \PrintIndex  }
+%
+%
+% \section{The Implementation}
+%    \begin{macrocode}
+%<@@=hook>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<*2ekernel>
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\ExplSyntaxOn
+%    \end{macrocode}
+%
+%
+%  \subsection{Debugging}
+%
+%  \begin{macro}{\g_@@_debug_bool}
+%    Holds the current debugging state.
+%    \begin{macrocode}
+\bool_new:N \g_@@_debug_bool
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\hook_debug_on:,\hook_debug_off:}
+%  \begin{macro}{\@@_debug:n}
+%  \begin{macro}{\@@_debug_gset:}
+%    Turns debugging on and off by redefining \cs{@@_debug:n}.
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_debug:n \use_none:n
+\cs_new_protected:Npn \hook_debug_on:
+  {
+    \bool_gset_true:N \g_@@_debug_bool
+    \@@_debug_gset:
+  }
+\cs_new_protected:Npn \hook_debug_off:
+  {
+    \bool_gset_false:N \g_@@_debug_bool
+    \@@_debug_gset:
+  }
+\cs_new_protected:Npn \@@_debug_gset:
+  {
+    \cs_gset_protected:Npx \@@_debug:n ##1
+      { \bool_if:NT \g_@@_debug_bool {##1} }
+  }
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
+%  \end{macro}
+
+%
+%
+%  \subsection{Borrowing from internals of other kernel modules}
+%
+%
+% \begin{macro}[EXP]{\@@_str_compare:nn}
+%   Private copy of \cs{__str_if_eq:nn}
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_str_compare:nn \__str_if_eq:nn
+%    \end{macrocode}
+% \end{macro}
+%
+%  \subsection{Declarations}
+%
+%  \begin{macro}{\l_@@_return_tl,\l_@@_tmpa_tl,\l_@@_tmpb_tl}
+%    Scratch variables used throughout the package.
+%    \begin{macrocode}
+\tl_new:N \l_@@_return_tl
+\tl_new:N \l_@@_tmpa_tl
+\tl_new:N \l_@@_tmpb_tl
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\g_@@_all_seq}
+%    In a few places we need a list of all hook names ever defined so
+%    we keep track if them in this sequence.
+%    \begin{macrocode}
+\seq_new:N \g_@@_all_seq
+%    \end{macrocode}
+%  \end{macro}
+%
+% \begin{macro}{\g_@@_removal_list_prop}
+%   A property list to hold delayed removals.
+%    \begin{macrocode}
+\tl_new:N \g_@@_removal_list_tl
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\l_@@_cur_hook_tl}
+%   Stores the name of the hook currently being sorted.
+%    \begin{macrocode}
+\tl_new:N \l_@@_cur_hook_tl
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\g_@@_code_temp_prop}
+%   A property list to temporarily save the original one so that it
+%   isn't permanently changed during sorting.
+%    \begin{macrocode}
+\prop_new:N \g_@@_code_temp_prop
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\g_@@_hook_curr_name_tl,\g_@@_name_stack_seq}
+%   Default label used for hook commands, and a stack to keep track of
+%   packages within packages.
+%    \begin{macrocode}
+\tl_new:N \g_@@_hook_curr_name_tl
+\seq_new:N \g_@@_name_stack_seq
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_tmp:w}
+%   Temporary macro for generic usage.
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_tmp:w ?
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\tl_gremove_once:Nx}
+%   Some variants of \pkg{expl3} functions. \fmi{should be moved to expl3}
+%    \begin{macrocode}
+\cs_generate_variant:Nn \tl_gremove_once:Nn { Nx }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\s_@@_mark}
+%   Scan mark used for delimited arguments.
+%    \begin{macrocode}
+\scan_new:N \s_@@_mark
+%    \end{macrocode}
+% \end{macro}
+%
+%
+% \subsection{Providing new hooks}
+%
+%  \begin{macro}{\g_@@_..._code_prop,\g_@@_..._rules_prop,
+%                \g_@@_..._code_tl,\g_@@_..._next_code_tl}
+%
+%    Hooks have a \meta{name} and for each hook we have to provide a number of
+%    data structures. These are
+%    \begin{description}
+%    \item[\cs{g_@@_\meta{name}_code_prop}] A property list holding the code
+%    for the hook in separate chunks. The keys are by default the
+%    package names that add code to the hook, but it is possible
+%    for packages to define other keys. 
+%
+%    \item[\cs{g_@@_\meta{name}_rules_prop}] A property listing holding
+%    relation info how the code chunks should be ordered within a
+%    hook. This is used for debugging only. The actual rule for a
+%    \meta{hook} is stored in a separate token lists named
+%    \cs[no-index]{g_@@_\meta{hook}_rule_\meta{label1}\string|\meta{label2}_tl}
+%    for a pair of labels.
+%
+%    \item[\cs{g_@@_\meta{name}_code_tl}] The code that is actually executed
+%    when the hook is called in the document is stored in this token
+%    list. It is constructed from the code chunks applying the
+%    information.
+%
+%    \item[\cs{g_@@_\meta{name}_next_code_tl}] Finally there is extra code
+%    (normally empty) that is used on the next invocation of the hook
+%    (and then deleted). This can be used to define some special
+%    behavior for a single occasion from within the document.
+%
+%    \end{description}
+%  \end{macro}
+
+
+%
+%
+%  \begin{macro}{\hook_new:n}
+%    The \cs{hook_new:n} declaration declare a new hook and expects
+%    the hook \meta{name} as its argument, e.g.,
+%    \hook{begindocument}.
+%    \begin{macrocode}
+\cs_new_protected:Npn \hook_new:n #1
+  {
+    \exp_args:Nx \@@_new:n
+      { \@@_parse_label_default:nn {#1} { top-level } }
+  }
+\cs_new_protected:Npn \@@_new:n #1 {
+%    \end{macrocode}
+%    We check for one of the internal data structures and if it
+%    already exists we complain.
+%    \begin{macrocode}
+  \hook_if_exist:nTF {#1}
+     { \ErrorHookExists }
+%    \end{macrocode}
+%    Otherwise we add the hook name to the list of all hooks and
+%    allocate the necessary data structures for the new hook.
+%    \begin{macrocode}
+     { \seq_gput_right:Nn \g_@@_all_seq {#1}
+%    \end{macrocode}
+%    This is only used by the actual code of the current hook, so
+%    declare it normally:
+%    \begin{macrocode}
+       \tl_new:c { g_@@_#1_code_tl }
+%    \end{macrocode}
+%    Now ensure that the base data structure for the hook exists:
+%    \begin{macrocode}
+       \@@_declare:n {#1}
+%    \end{macrocode}
+%    The \cs{g_@@_\meta{hook}_labels_clist} holds the sorted list of
+%    labels (once it got sorted). This is used only for debugging.
+%    \begin{macrocode}
+       \clist_new:c {g_@@_#1_labels_clist}
+%    \end{macrocode}
+%    Some hooks should reverse the default order of code chunks. To
+%    signal this we have a token list which is empty for normal hooks
+%    and contains a \verb=-= for reversed hooks.
+%    \begin{macrocode}
+       \tl_new:c { g_@@_#1_reversed_tl }
+%    \end{macrocode}
+%    The above is all in L3 convention, but we also provide an
+%    interface to legacy \LaTeXe{} for use in the current kernel. This
+%    is done in a separate macro.
+%    \begin{macrocode}
+       \@@_provide_legacy_interface:n {#1}
+     }
+}
+%    \end{macrocode}
+%  \end{macro}
+
+%
+%
+% \begin{macro}{\@@_declare:n}
+%   This function declares the basic data structures for a hook without
+%   actually declaring the hook itself.  This is needed to allow adding
+%   to undeclared hooks.  Here it is unnecessary to check whether both
+%   variables exist, since both are declared at the same time (either
+%   both exist, or neither).
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_declare:n #1
+  {
+    \@@_if_exist:nF {#1}
+      {
+        \prop_new:c { g_@@_#1_code_prop }
+        \tl_new:c { g_@@_#1_next_code_tl }
+        \prop_new:c { g_@@_#1_rules_prop } % only for debugging
+      }
+  }
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+%  \begin{macro}{\hook_new_reversed:n}
+%
+%    Declare a new hook. The default ordering of code chunks is
+%    reversed, signaled by setting the token list to a minus sign.
+%    \begin{macrocode}
+\cs_new_protected:Npn \hook_new_reversed:n #1 {
+  \hook_new:n {#1}
+  \tl_gset:cn { g_@@_#1_reversed_tl } { - }
+}
+%    \end{macrocode}
+%  \end{macro}
+
+%  \begin{macro}{\hook_new_pair:nn}
+%    A shorthand for declaring a normal and a (matching) reversed hook in one go.
+%    \begin{macrocode}
+\cs_new_protected:Npn \hook_new_pair:nn #1#2 {
+  \hook_new:n {#1}  \hook_new_reversed:n {#2}
+}
+%    \end{macrocode}
+%  \end{macro}
+
+
+% \begin{macro}{\@@_provide_legacy_interface:n}
+%    The \LaTeX{} legacy concept for hooks uses with hooks the
+%    following naming scheme in the code: \cs{@...hook}.
+%
+%    We follow this convention and insert the hook code using this
+%    naming scheme in \LaTeXe{}. At least as long as this code is in a
+%    package, some such hooks are already filled with data when we move
+%    them over to the new scheme. We therefore insert already existing
+%    code under the label \texttt{legacy} into the hook management
+%    machinery and then replace the \cs{@...hook} with its counterpart
+%    which is \cs{g_@@_\#1_code_tl}.\footnote{This means one extra
+%    unnecessary expansion on each invocation in the document but
+%    keeps the \LaTeXe{} and the L3 coding side properly separated.}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_provide_legacy_interface:n #1
+  {
+%    \end{macrocode}
+%    If the \pkg{expl3} code is run with checking on then assigning or
+%    using non L3 names such as \cs{@enddocumenthook} with \pkg{expl3}
+%    functions will trigger warnings so we run this code with
+%    debugging explicitly suspended.
+%    \begin{macrocode}
+    \debug_suspend:
+    \tl_if_exist:cT { @#1hook }
+%    \end{macrocode}
+%    Of course if the hook exists but is still empty, there is no need
+%    to add anything under \texttt{legacy} or the current package name.
+%    \begin{macrocode}
+      {
+        \tl_if_empty:cF { @#1hook }
+          {
+            \@@_gput_code:nxv {#1}
+              { \@@_parse_label_default:Vn \c_novalue_tl { legacy } }
+              { @#1hook }
+          }
+      }
+%    \end{macrocode}
+%    We need a global definition in case the declaration is done
+%    inside a group (which happens below at the end of the file).
+%    This is another reason why need to suspend checking, otherwise
+%    \cs{tl_gset:co} would complain about \cs{@...hook} not starting
+%    with \cs{g_}.
+%    \begin{macrocode}
+    \tl_gset:co{@#1hook}{\cs:w g_@@_#1_code_tl\cs_end:}
+    \debug_resume:
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Parsing a label}
+%
+% \begin{macro}[EXP]{\@@_parse_label_default:nn,\@@_parse_label_default:Vn}
+%   This macro checks if a label was given (not \cs{c_novalue_tl}), and
+%   if so, tries to parse the label looking for a leading \verb|.| to
+%   replace for \cs{@currname}.  Otherwise \cs{@@_currname_or_default:n}
+%   is used to pick \cs{@currname} or the fallback value.
+%    \begin{macrocode}
+\cs_new:Npn \@@_parse_label_default:nn #1 #2
+  {
+    \tl_if_novalue:nTF {#1}
+      { \@@_currname_or_default:n {#2} }
+      { \tl_trim_spaces_apply:nN {#1} \@@_parse_dot_label:nn {#2} }
+  }
+\cs_generate_variant:Nn \@@_parse_label_default:nn { V }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}[EXP]{\@@_parse_dot_label:nn}
+% \begin{macro}[EXP]{
+%     \@@_parse_dot_label:nw,
+%     \@@_parse_dot_label_cleanup:w,
+%     \@@_parse_dot_label_aux:nw
+%   }
+%   Start by checking if the label is empty, which raises an error, and
+%   uses the fallback value.  If not,
+%   split the label at a \verb|./|, if any, and check if no tokens are
+%   before the \verb|./|, or if the only character is a \verb|.|.
+%   If these requirements are fulfilled, the leading
+%   \verb|.| is replaced with \cs{@@_currname_or_default:n}.  Otherwise
+%   the label is returned unchanged.
+%    \begin{macrocode}
+\cs_new:Npn \@@_parse_dot_label:nn #1 #2
+  {
+    \tl_if_empty:nTF {#1}
+      {
+        \msg_expandable_error:nnn { hooks } { empty-label } {#2}
+        #2
+      }
+      {
+        \str_if_eq:nnTF {#1} { . }
+          { \@@_currname_or_default:n {#1} }
+          { \@@_parse_dot_label:nw {#2} #1 ./ \s_@@_mark }
+      }
+  }
+\cs_new:Npn \@@_parse_dot_label:nw #1 #2 ./ #3 \s_@@_mark
+  {
+    \tl_if_empty:nTF {#2}
+      { \@@_parse_dot_label_aux:nw {#1} #3 \s_@@_mark }
+      {
+        \tl_if_empty:nTF {#3}
+          {#2}
+          { \@@_parse_dot_label_cleanup:w #2 ./ #3 \s_@@_mark }
+      }
+  }
+\cs_new:Npn \@@_parse_dot_label_cleanup:w #1 ./ \s_@@_mark {#1}
+\cs_new:Npn \@@_parse_dot_label_aux:nw #1 #2 ./ \s_@@_mark
+  { \@@_currname_or_default:n {#1} / #2 }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}[EXP]{\@@_currname_or_default:n}
+%   Uses \cs{g_@@_hook_curr_name_tl} if it is set, otherwise tries
+%   \cs{@currname}.  If neither is set, uses the fallback value
+%   \verb|#1| (usually \texttt{top-level}).
+%    \begin{macrocode}
+\cs_new:Npn \@@_currname_or_default:n #1
+  {
+    \tl_if_empty:NTF \g_@@_hook_curr_name_tl
+      {
+        \tl_if_empty:NTF \@currname
+          {#1}
+          { \@currname }
+      }
+      { \g_@@_hook_curr_name_tl }
+  }
+%    \end{macrocode}
+% \end{macro}
+
+
+
+
+% \begin{macro}{\hook_gput_code:nnn}
+% \begin{macro}{\@@_gput_code:nnn,\@@_gput_code:nxv,\@@_hook_gput_code_do:nnn}
+%
+%    With \cs{hook_gput_code:nnn}\Arg{hook}\Arg{label}\Arg{code} a
+%    chunk of \meta{code} is added to an existing \meta{hook} labeled
+%    with \meta{label}.
+%    \begin{macrocode}
+\cs_new_protected:Npn \hook_gput_code:nnn #1 #2
+  {
+    \exp_args:Nxx \@@_gput_code:nnn
+      { \@@_parse_label_default:nn {#1} { top-level } }
+      { \@@_parse_label_default:nn {#2} { top-level } }
+  }
+\cs_new_protected:Npn \@@_gput_code:nnn #1 #2 #3
+  {
+%    \end{macrocode}
+%    First we check if the hook exists.
+%    \begin{macrocode}
+    \@@_if_marked_removal:nnTF {#1} {#2}
+      { \@@_unmark_removal:nn {#1} {#2} }
+      {
+%    \end{macrocode}
+%    First we check if the hook exists.
+%    \begin{macrocode}
+        \hook_if_exist:nTF {#1}
+%    \end{macrocode}
+%    If so we simply add (or append) the new code to the property list
+%    holding different chunks for the hook. At \verb=\begin{document}=
+%    this is then sorted into a token list for fast execution.
+%    \begin{macrocode}
+          {
+            \@@_hook_gput_code_do:nnn {#1} {#2} {#3}
+%    \end{macrocode}
+%    However, if there is an update within the document we need to alter
+%    this execution code which is done by
+%    \cs{@@_update_hook_code:n}. In the preamble this does nothing.
+%    \begin{macrocode}
+            \@@_update_hook_code:n {#1}
+          }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+          { \@@_try_declaring_generic_hook:nnn {#1} {#2} {#3} }
+      }
+  }
+\cs_generate_variant:Nn \@@_gput_code:nnn { nxv }
+%    \end{macrocode}
+%
+%   This macro will unconditionally add a chunk of code to the given hook.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_hook_gput_code_do:nnn #1 #2 #3
+  {
+%   However, first some debugging info if debugging is enabled:
+%    \begin{macrocode}
+    \@@_debug:n{\iow_term:x{****~ Add~ to~
+                      \hook_if_exist:nF {#1} { undeclared~ }
+                      hook~ #1~ (#2)
+                      \on@line\space <-~ \tl_to_str:n{#3}} }
+%    \end{macrocode}
+%   Then try to get the code chunk labeled \verb=#2= from the hook.
+%   If there's code already there, then append \verb=#3= to that,
+%   otherwise just put \verb=#3=.
+%    \begin{macrocode}
+    \prop_get:cnNTF { g_@@_#1_code_prop } {#2} \l_@@_return_tl
+      {
+        \prop_gput:cno { g_@@_#1_code_prop } {#2}
+          { \l_@@_return_tl #3 }
+      }
+      { \prop_gput:cnn { g_@@_#1_code_prop } {#2} {#3} }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_gput_undeclared_hook:nnn}
+%   Often it may happen that a package $A$ defines a hook \verb=foo=,
+%   but package $B$, that adds code to that hook, is loaded before $A$.
+%   In such case we need to add code to the hook before its declared.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_gput_undeclared_hook:nnn #1 #2 #3
+  {
+    \@@_declare:n {#1}
+    \@@_hook_gput_code_do:nnn {#1} {#2} {#3}
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_try_declaring_generic_hook:nnn}
+% \begin{macro}{\@@_try_declaring_generic_next_hook:nn}
+%   These entry-level macros just pass the arguments along to the
+%   common \cs{@@_try_declaring_generic_hook:nNNnn} with the right
+%   functions to execute when some action is to be taken.
+%
+%   The wrapper \cs{@@_try_declaring_generic_hook:nnn} then defers
+%   \cs{hook_gput_code:nnn} if the generic hook was declared, or to
+%   \cs{@@_gput_undeclared_hook:nnn} otherwise (the hook was tested for
+%   existence before, so at this point if it isn't generic, it doesn't
+%   exist).
+%
+%   The wrapper \cs{@@_try_declaring_generic_next_hook:nn} for
+%   next-execution hooks does the same: it defers the code to
+%   \cs{hook_gput_next_code:nn} if the generic hook was declared, or
+%   to \cs{@@_gput_next_do:nn} otherwise.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_try_declaring_generic_hook:nnn #1
+  {
+    \@@_try_declaring_generic_hook:nNNnn {#1}
+      \hook_gput_code:nnn \@@_gput_undeclared_hook:nnn
+  }
+\cs_new_protected:Npn \@@_try_declaring_generic_next_hook:nn #1
+  {
+    \@@_try_declaring_generic_hook:nNNnn {#1}
+      \hook_gput_next_code:nn \@@_gput_next_do:nn
+  }
+%    \end{macrocode}
+%
+% \begin{macro}{
+%     \@@_try_declaring_generic_hook:nNNnn,
+%     \@@_try_declaring_generic_hook_split:nNNnn
+%   }
+% \begin{macro}[TF]{\@@_try_declaring_generic_hook:wn}
+%   \cs{@@_try_declaring_generic_hook:nNNnn} now splits the hook name
+%   at the first \texttt{/} (if any) and first checks if it is a
+%   file-specific hook (they require some normalization) using
+%   \cs{@@_if_file_hook:wTF}. If not then check it is one of a
+%   predefined set for generic names. We also split off the second
+%   component to see if we have to make a reversed hook.  In either case
+%   the function returns \meta{true} for a generic hook and \meta{false}
+%   in other cases.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_try_declaring_generic_hook:nNNnn #1
+  {
+    \@@_if_file_hook:wTF #1 / / \s_@@_mark
+      {
+        \exp_args:Ne \@@_try_declaring_generic_hook_split:nNNnn
+          { \exp_args:Ne \@@_file_hook_normalise:n {#1} }
+      }
+      { \@@_try_declaring_generic_hook_split:nNNnn {#1} }
+  }
+\cs_new_protected:Npn \@@_try_declaring_generic_hook_split:nNNnn #1 #2 #3
+  {
+    \@@_try_declaring_generic_hook:wnTF #1 / / / \scan_stop: {#1}
+      { #2 }
+      { #3 } {#1}
+  }
+\prg_new_protected_conditional:Npnn \@@_try_declaring_generic_hook:wn
+    #1 / #2 / #3 / #4 \scan_stop: #5 { TF }
+  {
+    \tl_if_empty:nTF {#2}
+      { \prg_return_false: }
+      {
+        \prop_if_in:NnTF \c_@@_generics_prop {#1}
+          {
+            \hook_if_exist:nF {#5} { \hook_new:n {#5} }
+%    \end{macrocode}
+%    After having declared the hook we check the second component (for
+%    file hooks) or the third component for environment hooks) and
+%    if it is on the list of components for which we should have declared
+%    a reversed hook we alter the hook data structure accordingly.
+%    \begin{macrocode}
+            \prop_if_in:NnTF \c_@@_generics_reversed_ii_prop {#2}
+              { \tl_gset:cn { g_@@_#5_reversed_tl } { - } }
+              {
+                \prop_if_in:NnT \c_@@_generics_reversed_iii_prop {#3}
+                  { \tl_gset:cn { g_@@_#5_reversed_tl } { - } }
+              }
+%    \end{macrocode}
+%    Now that we know that the hook is declared we can add the code to it.
+%    \begin{macrocode}
+            \prg_return_true:
+          }
+          { \prg_return_false: }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}[pTF]{\@@_if_file_hook:w}
+%   \cs{@@_if_file_hook:wTF} checks if the argument is a valid
+%   file-specific hook (not, for example, |file/before|, but
+%   |file/before/foo.tex|).  If it is a file-specific hook, then it
+%   executes the \meta{true} branch, otherwise \meta{false}.
+%
+%   A file-specific hook is \texttt{file/\meta{position}/\meta{name}}.
+%   If any of these parts don't exist, it is a general file hook or not
+%   a file hook at all, so the conditional evaluates to \meta{false}.
+%   Otherwise, it checks that the first part is |file| and that the
+%   \meta{position} is in the \cs{c_@@_generics_file_prop}.
+%
+%   A property list is used here to avoid having to worry with catcodes,
+%   because \pkg{expl3}'s file name parsing turns all characters into
+%   catcode-12 tokens, which might differ from hand-input letters.
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \@@_if_file_hook:w
+    #1 / #2 / #3 \s_@@_mark { TF }
+  {
+    \str_if_eq:nnTF {#1} { file }
+      {
+        \bool_lazy_or:nnTF
+            { \tl_if_empty_p:n {#3} }
+            { \str_if_eq_p:nn {#3} { / } }
+          { \prg_return_false: }
+          {
+            \prop_if_in:NnTF \c_@@_generics_file_prop {#2}
+              { \prg_return_true: }
+              { \prg_return_false: }
+          }
+      }
+      { \prg_return_false: }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}[EXP]{\@@_file_hook_normalise:n}
+% \begin{macro}[EXP]{\@@_strip_double_slash:n,\@@_strip_double_slash:w}
+%   When a file-specific hook is found, before being declared it is
+%   lightly normalized by \cs{@@_file_hook_normalise:n}.  The current
+%   implementation just replaces two consecutive slashes (|//|) by a
+%   single one, to cope with simple cases where the user did something
+%   like \verb|\def\input@path{{./mypath/}}|, in which case a hook would
+%   have to be \verb|\AddToHook{file/after/./mypath//file.tex}|.
+%    \begin{macrocode}
+\cs_new:Npn \@@_file_hook_normalise:n #1
+  { \@@_strip_double_slash:n {#1} }
+\cs_new:Npn \@@_strip_double_slash:n #1
+  { \@@_strip_double_slash:w #1 // \s_@@_mark }
+\cs_new:Npn \@@_strip_double_slash:w #1 // #2 \s_@@_mark
+  {
+    \tl_if_empty:nTF {#2}
+      {#1}
+      { \@@_strip_double_slash:w #1 / #2 \s_@@_mark }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+
+
+
+
+
+%  \begin{macro}{\c_@@_generics_prop}
+%    Clist holding the generic names. We don't provide any user
+%    interface to this as this is meant to be static.
+%    \begin{description}
+%    \item[\texttt{env}]
+%      The generic hooks used in \cs{begin} and \cs{end}.
+%    \item[\texttt{file}]
+%      The generic hooks used when loading a file
+%    \end{description}
+%    \begin{macrocode}
+\prop_const_from_keyval:Nn \c_@@_generics_prop
+  {env=,file=,package=,class=,include=}
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\c_@@_generics_reversed_ii_prop,
+%                \c_@@_generics_reversed_iii_prop,
+%                \c_@@_generics_file_prop}
+%    Some of the generic hooks are supposed to use reverse ordering, these are
+%    the following (only the second or third sub-component is checked):
+%    \begin{macrocode}
+\prop_const_from_keyval:Nn \c_@@_generics_reversed_ii_prop {after=,end=}
+\prop_const_from_keyval:Nn \c_@@_generics_reversed_iii_prop {after=}
+\prop_const_from_keyval:Nn \c_@@_generics_file_prop {before=,after=}
+%    \end{macrocode}
+%  \end{macro}
+
+
+%  \begin{macro}{\@@_update_hook_code:n}
+%    Before \verb=\begin{document}=  this does nothing, in the body it
+%    reinitializes the hook code using the altered data.
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_update_hook_code:n \use_none:n
+%    \end{macrocode}
+%  \end{macro}
+
+
+% \begin{macro}{\hook_gremove_code:nn}
+% \begin{macro}{\@@_gremove_code:nn}
+%    
+%    With \cs{hook_gremove_code:nn}\Arg{hook}\Arg{label} any code
+%    for \meta{hook} stored under \meta{label} is removed.
+%    \begin{macrocode}
+\cs_new_protected:Npn \hook_gremove_code:nn #1 #2
+  {
+    \exp_args:Nxx \@@_gremove_code:nn
+      { \@@_parse_label_default:nn {#1} { top-level } }
+      { \@@_parse_label_default:nn {#2} { top-level } }
+  }
+\cs_new_protected:Npn \@@_gremove_code:nn #1 #2
+  {
+%    \end{macrocode}
+%    First check that the hook code pool exists.  \cs{hook_if_exist:nTF}
+%    isn't used here because it should be possible to remove code from a
+%    hook before its defined (see section~\ref{sec:querying}).
+%    \begin{macrocode}
+    \@@_if_exist:nTF {#1}
+%    \end{macrocode}
+%    Then remove the chunk and run \cs{@@_update_hook_code:n} so
+%    that the execution token list reflects the change if we are after
+%    \verb=\begin{document}=.
+%    \begin{macrocode}
+      {
+        \str_if_eq:nnTF {#2} {*}
+          {
+            \prop_gclear:c { g_@@_#1_code_prop }
+            \clist_gclear:c { g_@@_#1_labels_clist } % for debugging only
+          }
+          {
+%    \end{macrocode}
+%    Check if the label being removed exists in the code pool.  If it does,
+%    just call \cs{@@_gremove_code_do:nn} to do the removal, otherwise mark it
+%    to be removed.
+%    \begin{macrocode}
+            \prop_get:cnNTF { g_@@_#1_code_prop } {#2} \l_@@_return_tl
+              { \@@_gremove_code_do:nn }
+              { \@@_mark_removal:nn }
+                  {#1} {#2}
+          }
+%    \end{macrocode}
+%    Finally update the code, if the hook exists.
+%    \begin{macrocode}
+        \hook_if_exist:nT {#1}
+          { \@@_update_hook_code:n {#1} }
+      }
+      { \@@_mark_removal:nn {#1} {#2} }
+  }
+%    \end{macrocode}
+%
+% \begin{macro}{\@@_gremove_code_do:nn}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_gremove_code_do:nn #1 #2
+  {
+    \prop_gremove:cn { g_@@_#1_code_prop } {#2}
+%    \end{macrocode}
+%    Removing the dropped label from \verb=\g_@@_#1_labels_clist= is
+%    rather tricky, because that clists holds the labels as strings
+%    (i.e., not ordinary text which is what we have in \verb=#2=).
+%    \begin{macrocode}
+    \exp_args:Nco \clist_gremove_all:Nn
+      { g_@@_#1_labels_clist } { \tl_to_str:n {#2} } % for debugging only
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+
+
+%
+% \begin{macro}{\@@_mark_removal:nn}
+%   Marks \meta{label} (\verb=#2=) to be removed from \meta{hook}
+%   (\verb=#1=).
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_mark_removal:nn #1 #2
+  {
+    \tl_gput_right:Nx \g_@@_removal_list_tl
+      { \@@_removal_tl:nn {#1} {#2} }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_unmark_removal:nn}
+%   Unmarks \meta{label} (\verb=#2=) to be removed from \meta{hook}
+%   (\verb=#1=).  \cs{tl_gremove_once:Nx} is used rather than
+%   \cs{tl_gremove_all:Nx} so that two additions are needed to cancel
+%   two marked removals, rather than only one.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_unmark_removal:nn #1 #2
+  {
+    \tl_gremove_once:Nx \g_@@_removal_list_tl
+      { \@@_removal_tl:nn {#1} {#2} }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}[TF]{\@@_if_marked_removal:nn}
+%   Checks if the \cs{g_@@_removal_list_tl} contains the current
+%   \meta{label} (\verb=#2=) and \meta{hook} (\verb=#1=).
+%    \begin{macrocode}
+\prg_new_protected_conditional:Npnn \@@_if_marked_removal:nn #1 #2 { TF }
+  {
+    \exp_args:NNx \tl_if_in:NnTF \g_@@_removal_list_tl
+      { \@@_removal_tl:nn {#1} {#2} }
+      { \prg_return_true: } { \prg_return_false: }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}[rEXP]{\@@_removal_tl:nn}
+%   Builds a token list with \verb=#1= and \verb=#2= which can only be
+%   matched by \verb=#1= and \verb=#2=.
+%    \begin{macrocode}
+\cs_new:Npn \@@_removal_tl:nn #1 #2
+  { & \tl_to_str:n {#2} $ \tl_to_str:n {#1} $ }
+%    \end{macrocode}
+% \end{macro}
+
+
+
+
+%
+%
+%
+% \begin{macro}{
+%     \g_@@_??_rules_prop,
+%     \g_@@_??_code_prop,
+%     \g_@@_??_code_tl,
+%     \g_@@_??_reversed_tl,
+%   }
+%
+%    Default rules applying to all hooks are stored in this property
+%    list. Initially it simply used an empty ``label'' name (not two
+%    question marks). This was a bit unfortunate, because then
+%    \texttt{l3doc} complains about \verb=__= in the middle of a
+%    command name when trying to typeset the documentation. However
+%    using a ``normal'' name such as \texttt{default} has the
+%    disadvantage of that being not really distinguishable from a real
+%    hook name. I now have settled for \texttt{??} which needs some
+%    gymnastics to get it into the csname, but since this is used a
+%    lot things should be fast, so this is not done with \texttt{c}
+%    expansion in the code later on.
+%
+%    \cs{g_@@_??_code_tl} isn't used, but it has to be defined to trick
+%    the code into thinking that \verb=??= is actually a hook.
+%    \begin{macrocode}
+\prop_new:c {g_@@_??_rules_prop}
+\prop_new:c {g_@@_??_code_prop}
+\prop_new:c {g_@@_??_code_tl}
+%    \end{macrocode}
+%
+%    Default rules are always given in normal ordering (never in
+%    reversed ordering). If such a rule is applied to a reversed
+%    hook it behaves as if the rule is reversed (e.g.,
+%    \texttt{after} becomes \texttt{before})
+%    because those rules are applied first and then the order is reversed.
+%    \begin{macrocode}
+\tl_new:c {g_@@_??_reversed_tl}
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+%  \begin{macro}{\@@_debug_gset_rule:nnnn}
+%
+%    \fmi{this needs cleanup and docu correction!}
+%
+%    With
+%    \cs{@@_debug_gset_rule:nnnn}\Arg{hook}\Arg{label1}\Arg{relation}\Arg{label2}
+%    a relation is defined between the two code labels for the given
+%    \meta{hook}.  The special hook \texttt{??} stands for \emph{any}
+%    hook describing a default rule.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_debug_gset_rule:nnnn #1#2#3#4
+  {
+%    \end{macrocode}
+%    If so we drop any existing rules with the two labels (in case
+%    there are any).
+%    \begin{macrocode}
+    \prop_gremove:cn{g_@@_#1_rules_prop}{#2|#4}
+    \prop_gremove:cn{g_@@_#1_rules_prop}{#4|#2}
+%    \end{macrocode}
+%    Then  we add the new one (normalizing the input a bit, e.g., we
+%    always use \texttt{before} and not \texttt{after} and
+%    instead reorder the labels):
+%    \begin{macrocode}
+    \str_case_e:nnF {#3}
+       {
+         {before} { \prop_gput:cnn {g_@@_#1_rules_prop}{#2|#4}{<} }
+         {after}  { \prop_gput:cnn {g_@@_#1_rules_prop}{#4|#2}{<} }
+%    \end{macrocode}
+%    More special rule types \ldots
+%    \begin{macrocode}
+         {incompatible-error}   { \prop_gput:cnn {g_@@_#1_rules_prop}{#2|#4}{xE} }
+         {incompatible-warning} { \prop_gput:cnn {g_@@_#1_rules_prop}{#2|#4}{xW} }
+         {removes}      { \prop_gput:cnn {g_@@_#1_rules_prop}{#2|#4}{->} }
+%    \end{macrocode}
+%    Undo a setting:
+%    \begin{macrocode}
+         {unrelated}{ \prop_gremove:cn {g_@@_#1_rules_prop}{#2|#4} 
+                      \prop_gremove:cn {g_@@_#1_rules_prop}{#4|#2} }
+       }
+       { \ERRORunknownrule }
+  }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \subsection{Setting rules for hooks code}
+%
+%  \begin{macro}{\hook_gset_rule:nnnn}
+%  \begin{macro}{\@@_gset_rule:nnnn}
+%
+%    \fmi{needs docu correction given new implementation}
+%
+%    With
+%    \cs{hook_gset_rule:nnnn}\Arg{hook}\Arg{label1}\Arg{relation}\Arg{label2}
+%    a relation is defined between the two code labels for the given
+%    \meta{hook}.  The special hook \texttt{??} stands for \emph{any}
+%    hook describing a default rule.
+%    \begin{macrocode}
+\cs_new_protected:Npn \hook_gset_rule:nnnn #1#2#3#4
+  {
+    \use:x
+      {
+        \@@_gset_rule:nnnn
+          { \@@_parse_label_default:nn {#1} { top-level } }
+          { \@@_parse_label_default:nn {#2} { top-level } }
+          {#3}
+          { \@@_parse_label_default:nn {#4} { top-level } }
+      }
+  }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_gset_rule:nnnn #1#2#3#4
+  {
+%    \end{macrocode}
+%    First we ensure the basic data structure of the hook exists:
+%    \begin{macrocode}
+    \@@_declare:n {#1}
+%    \end{macrocode}
+%    Then we clear any previous relationship between both labels.
+%    \begin{macrocode}
+    \@@_rule_gclear:nnn {#1} {#2} {#4}
+%    \end{macrocode}
+%    Then we call the function to handle the given rule. Throw an error if the
+%    rule is invalid.
+%    \begin{macrocode}
+    \debug_suspend:
+    \cs_if_exist_use:cTF { @@_rule_#3_gset:nnn }
+      {
+          {#1} {#2} {#4}
+        \@@_update_hook_code:n {#1}
+      }
+      { \ERRORunknownrule }
+    \debug_resume:
+    \@@_debug_gset_rule:nnnn {#1} {#2} {#3} {#4} % for debugging
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_rule_before_gset:nnn, \@@_rule_after_gset:nnn,
+%               \@@_rule_<_gset:nnn, \@@_rule_>_gset:nnn}
+%    Then we add the new rule.  We need to normalize the rules here to
+%    allow for faster processing later.  Given a pair of labels
+%    $l_A$ and $l_B$, the rule $l_A>l_B$ is the same as $l_B<l_A$\fmi{}
+%    said differently.  But normalizing the
+%    forms of the rule to a single representation, say, $l_B<l_A$, then
+%    the time spent looking for the rules later is considerably reduced.
+%
+%    Here we do that normalization by using \cs[no-index]{(pdf)strcmp} to
+%    lexically sort labels $l_A$ and $l_B$ to a fixed order.  This order
+%    is then enforced every time these two labels are used together.
+%
+%    Here we use \cs{@@_label_pair:nn}~\Arg{hook}~\Arg{l_A}~\Arg{l_B}
+%    to build a string \texttt{$l_B$\string|$l_A$} with a fixed order, and
+%    use \cs{@@_label_ordered:nnTF} to apply the correct rule to the pair
+%    of labels, depending if it was sorted or not.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_rule_before_gset:nnn #1#2#3
+  {
+    \tl_gset:cx { g_@@_#1_rule_ \@@_label_pair:nn {#2} {#3} _tl }
+      { \@@_label_ordered:nnTF {#2} {#3} { < } { > } }
+  }
+\cs_new_eq:cN { @@_rule_<_gset:nnn } \@@_rule_before_gset:nnn
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_rule_after_gset:nnn #1#2#3
+  {
+    \tl_gset:cx { g_@@_#1_rule_ \@@_label_pair:nn {#3} {#2} _tl }
+      { \@@_label_ordered:nnTF {#3} {#2} { < } { > } }
+  }
+\cs_new_eq:cN { @@_rule_>_gset:nnn } \@@_rule_after_gset:nnn
+%    \end{macrocode}
+%  \end{macro}
+%
+% \begin{macro}{\@@_rule_removes_gset:nnn}
+%   This rule removes (clears, actually) the code from label |#3| if
+%   label |#2| is in the hook |#1|.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_rule_removes_gset:nnn #1#2#3
+  {
+    \tl_gset:cx { g_@@_#1_rule_ \@@_label_pair:nn {#2} {#3} _tl }
+      { \@@_label_ordered:nnTF {#2} {#3} { -> } { <- } }
+  }
+%    \end{macrocode}
+%  \end{macro}
+%
+% \begin{macro}{
+%     \@@_rule_incompatible-error_gset:nnn,
+%     \@@_rule_incompatible-warning_gset:nnn,
+%   }
+%   These relations make an error/warning if labels |#2| and |#3| appear
+%   together in hook |#1|.
+%    \begin{macrocode}
+\cs_new_protected:cpn { @@_rule_incompatible-error_gset:nnn } #1#2#3
+  { \tl_gset:cn { g_@@_#1_rule_ \@@_label_pair:nn {#2} {#3} _tl } { xE } }
+\cs_new_protected:cpn { @@_rule_incompatible-warning_gset:nnn } #1#2#3
+  { \tl_gset:cn { g_@@_#1_rule_ \@@_label_pair:nn {#2} {#3} _tl } { xW } }
+%    \end{macrocode}
+%  \end{macro}
+%
+% \begin{macro}{\@@_rule_unrelated_gset:nnn, \@@_rule_gclear:nnn}
+%    Undo a setting. \cs{@@_rule_unrelated_gset:nnn} doesn't need to do anything,
+%    since we use \cs{@@_rule_gclear:nnn} before setting any rule.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_rule_unrelated_gset:nnn #1#2#3 { }
+\cs_new_protected:Npn \@@_rule_gclear:nnn #1#2#3
+  { \cs_undefine:c { g_@@_#1_rule_ \@@_label_pair:nn {#2} {#3} _tl } }
+%    \end{macrocode}
+%  \end{macro}
+%
+% \begin{macro}[EXP]{\@@_label_pair:nn}
+%   Ensure that the lexically greater label comes first.
+%    \begin{macrocode}
+\cs_new:Npn \@@_label_pair:nn #1#2
+  {
+    \if_case:w \@@_str_compare:nn {#1} {#2} \exp_stop_f:
+           #1 | #1 %  0
+    \or:   #1 | #2 % +1
+    \else: #2 | #1 % -1
+    \fi:
+  }
+%    \end{macrocode}
+%  \end{macro}
+%
+% \begin{macro}[pTF]{\@@_label_ordered:nn}
+%   Check that labels |#1| and |#2| are in the correct order (as
+%   returned by \cs{@@_label_pair:nn}) and if so return true, else
+%   return false.
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \@@_label_ordered:nn #1#2 { TF }
+  {
+    \if_int_compare:w \@@_str_compare:nn {#1} {#2} > 0 \exp_stop_f:
+      \prg_return_true:
+    \else
+      \prg_return_false:
+    \fi:
+  }
+%    \end{macrocode}
+%  \end{macro}
+%
+% \begin{macro}[EXP]{\@@_if_label_case:nnnnn}
+%   To avoid doing the string comparison twice in \cs{@@_initialize_single:NNNNn}
+%   (once with \cs{str_if_eq:nn} and again with \cs{@@_label_ordered:nn}),
+%   we use a three-way branching macro that will compare |#1| and |#2|
+%   and expand to \cs{use_i:nnn} if they are equal, \cs{use_ii:nn} if
+%   |#1| is lexically greater, and \cs{use_iii:nn} otherwise.
+%    \begin{macrocode}
+\cs_new:Npn \@@_if_label_case:nnnnn #1#2
+   {
+     \cs:w use_
+       \if_case:w \@@_str_compare:nn {#1} {#2}
+          i \or: ii \else: iii \fi: :nnn
+     \cs_end:
+   }
+%    \end{macrocode}
+%  \end{macro}
+
+
+%  \begin{macro}{\@@_initialize_all:}
+%    Initialize all known hooks (at \verb=\begin{document}=), i.e.,
+%    update the fast execution token lists to hold the necessary code
+%    in the right  order.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_initialize_all: {
+%    \end{macrocode}
+%    First we change \cs{@@_update_hook_code:n} which so far was a
+%    no-op to now initialize one hook. This way any later updates to
+%    the hook will run that code and also update the execution token
+%    list.
+%    \begin{macrocode}
+  \cs_gset_eq:NN \@@_update_hook_code:n \@@_initialize_hook_code:n
+%    \end{macrocode}
+%    Now we loop over all hooks that have been defined and update each
+%    of them.
+%    \begin{macrocode}
+  \@@_debug:n { \prop_gclear:N \g_@@_used_prop }
+  \seq_map_inline:Nn \g_@@_all_seq
+      {
+        \@@_update_hook_code:n {##1}
+      }
+%    \end{macrocode}
+%    If we are debugging we show results hook by hook for all hooks
+%    that have data. 
+%    \begin{macrocode}
+  \@@_debug:n
+     { \iow_term:x{^^JAll~ initialized~ (non-empty)~ hooks:}
+       \prop_map_inline:Nn \g_@@_used_prop
+           { \iow_term:x{^^J~ ##1~ ->~
+               \exp_not:v {g_@@_##1_code_tl}~ }
+           }
+     }
+%    
+%    \end{macrocode}
+%    After all hooks are initialized we change the ``use'' to just
+%    call the hook code and not initialize it (as it was done in the
+%    preamble.
+%    \begin{macrocode}
+  \cs_gset_eq:NN \hook_use:n \@@_use_initialized:n
+  \cs_gset_eq:NN \@@_preamble_hook:n \use_none:n
+}
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+%  \begin{macro}{\@@_initialize_hook_code:n}
+%    Initializing or reinitializing the fast execution hook code. In
+%    the preamble this is selectively done in case a hook gets used
+%    and at \verb=\begin{document}= this is done for all hooks and
+%    afterwards only if the hook code changes.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_initialize_hook_code:n #1 {
+  \@@_debug:n{ \iow_term:x{^^JUpdate~ code~ for~ hook~
+                                  '#1' \on@line :^^J} }
+%    \end{macrocode}
+%    This does the sorting and the updates. If there aren't any code
+%    chunks for the current hook, there is no point in even starting
+%    the sorting routine so we make a quick test for that and in that
+%    case just update \cs{g_@@_\meta{hook}_code_tl} to hold the next
+%    code. If there are code chunks we call
+%    \cs{@@_initialize_single:NNNNn} and pass to it ready made csnames
+%    as they are needed several times inside. This way we save a bit
+%    on processing time if we do that up front.
+%    \begin{macrocode}
+  \hook_if_exist:nT {#1}
+    {
+      \prop_if_empty:cTF {g_@@_#1_code_prop}
+        { \tl_gset:co {g_@@_#1_code_tl}
+                      {\cs:w g_@@_#1_next_code_tl \cs_end: } }
+        {
+%    \end{macrocode}
+%    By default the algorithm sorts the code chunks and then saves the
+%    result in a token list for fast execution by adding the code one
+%    after another using \cs{tl_gput_right:NV}. When we sort code for
+%    a reversed hook, all we have to do is to add the code chunks in
+%    the opposite order into the token list. So all we have to do
+%    in preparation is to change two definitions used later on.
+%    \begin{macrocode}
+          \@@_if_reversed:nTF {#1}
+            { \cs_set_eq:NN \@@_tl_gput:NV    \tl_gput_left:NV
+              \cs_set_eq:NN \@@_clist_gput:NV \clist_gput_left:NV  }
+            { \cs_set_eq:NN \@@_tl_gput:NV    \tl_gput_right:NV
+              \cs_set_eq:NN \@@_clist_gput:NV \clist_gput_right:NV }
+%    \end{macrocode}
+%
+%    When sorting, some relations (namely \verb|->| \verb|<-|) need to
+%    act destructively on the code property lists to remove code that
+%    shouldn't appear in the sorted hook token list.
+%    \begin{macrocode}
+          \prop_gset_eq:Nc \g_@@_code_temp_prop { g_@@_#1_code_prop }
+          \@@_initialize_single:ccccn
+            { g_@@_#1_code_prop } { g_@@_#1_code_tl }
+            { g_@@_#1_next_code_tl } { g_@@_#1_labels_clist }
+            {#1}
+          \prop_gset_eq:cN { g_@@_#1_code_prop } \g_@@_code_temp_prop
+%    \end{macrocode}
+%    For debug display we want to keep track of those hooks that
+%    actually got code added to them, so we record that in plist. We
+%    use a plist to ensure that we record each hook name only once,
+%    i.e., we are only interested in storing the keys and the value is arbitrary
+%    \begin{macrocode}
+          \@@_debug:n{ \exp_args:NNx \prop_gput:Nnn \g_@@_used_prop {#1}{} }
+        }
+    }
+}
+%    \end{macrocode}
+%  \end{macro}
+
+
+%  \begin{macro}{\g_@@_used_prop}
+%    All hooks that receive code (for use in debugging display).
+%    \begin{macrocode}
+\prop_new:N\g_@@_used_prop
+%    \end{macrocode}
+%  \end{macro}
+
+
+%
+% \begin{macro}[EXP]{\@@_tl_csname:n,\@@_seq_csname:n}
+%   It is faster to pass a single token and expand it when necessary
+%   than to pass a bunch of character tokens around.
+%   \fmi{note to myself: verify}
+%    \begin{macrocode}
+\cs_new:Npn \@@_tl_csname:n #1 { l_@@_label_#1_tl }
+\cs_new:Npn \@@_seq_csname:n #1 { l_@@_label_#1_seq }
+%    \end{macrocode}
+% \end{macro}
+%
+
+%
+%
+%  \begin{macro}{\l_@@_labels_seq,\l_@@_labels_int,\l_@@_front_tl,
+%      \l_@@_rear_tl,\l_@@_label_0_tl}
+%
+%    For the sorting I am basically implementing Knuth's algorithm for
+%    topological sorting as given in TAOCP volume 1 pages 263--266.
+%    For this algorithm we need a number of local variables:
+%    \begin{itemize}
+%    \item
+%       List of labels used in the current hook to label code chunks:
+%    \begin{macrocode}
+\seq_new:N \l_@@_labels_seq
+%    \end{macrocode}
+%    \item
+%      Number of labels used in the current hook. In Knuth's algorithm
+%      this is called $N$:
+%    \begin{macrocode}
+\int_new:N \l_@@_labels_int
+%    \end{macrocode}
+%    \item
+%      The sorted code list to be build is managed using two pointers
+%      one to the front of the queue and one to the rear. We model this
+%      using token list pointers. Knuth calls them $F$ and $R$:
+%    \begin{macrocode}
+\tl_new:N \l_@@_front_tl
+\tl_new:N \l_@@_rear_tl
+%    \end{macrocode}
+%    \item
+%      The data for the start of the queue is kept in this token list,
+%      it corresponds to what Don calls \texttt{QLINK[0]} but since we
+%      aren't manipulating individual words in memory it is slightly
+%      differently done:
+%    \begin{macrocode}
+\tl_new:c { \@@_tl_csname:n { 0 } }
+%    \end{macrocode}
+%
+%    \end{itemize}
+%  \end{macro}
+
+
+%  \begin{macro}{\@@_initialize_single:NNNNn,\@@_initialize_single:ccccn}
+%
+%    \cs{@@_initialize_single:NNNNn} implements the sorting of the code
+%    chunks for a hook and saves the result in the token list for fast
+%    execution (\verb=#3=). The arguments are \meta{hook-code-plist},
+%    \meta{hook-code-tl}, \meta{hook-next-code-tl},
+%    \meta{hook-ordered-labels-clist} and \meta{hook-name} (the latter
+%    is only used for debugging---the \meta{hook-rule-plist} is accessed
+%    using the \meta{hook-name}).
+%
+%    The additional complexity compared to Don's algorithm is that we
+%    do not use simple positive integers but have arbitrary
+%    alphanumeric labels. As usual Don's data structures are chosen in
+%    a way that one can omit a lot of tests and I have mimicked that as
+%    far as possible. The result is a restriction I do not test for at
+%    the moment: a label can't be equal to the number 0!  \fmi{Needs
+%    checking for, just in case}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_initialize_single:NNNNn #1#2#3#4#5 {
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \debug_suspend:
+%    \end{macrocode}
+%    Step T1: Initialize the data structure \ldots
+%    \begin{macrocode}
+  \seq_clear:N \l_@@_labels_seq
+  \int_zero:N  \l_@@_labels_int
+%    \end{macrocode}
+%
+%    Store the name of the hook:
+%    \begin{macrocode}
+  \tl_set:Nn \l_@@_cur_hook_tl {#5}
+%    \end{macrocode}
+%    
+%    We loop over the property list holding the code and record all
+%    labels listed there. Only rules for those labels are of interest
+%    to us. While we are at it we count them (which gives us the $N$
+%    in Knuth's algorithm.  The prefix |label_| is added to the variables
+%    to ensure that labels named |front|, |rear|, |labels|, or |return|
+%    don't interact with our code.
+%    \begin{macrocode}
+  \prop_map_inline:Nn #1
+     {
+       \int_incr:N \l_@@_labels_int
+       \seq_put_right:Nn \l_@@_labels_seq {##1}
+       \tl_set:cn { \@@_tl_csname:n {##1} }{0}     % the counter k for number of
+                                                   % j before k rules
+       \seq_clear_new:c { \@@_seq_csname:n {##1} } % sequence of successors to k
+                                                   % i.e., k before j rules (stores
+                                                   % the names of the j's)
+     }
+%    \end{macrocode}
+%    Steps T2 and T3: Sort the relevant rules into the data structure\ldots
+%    
+%    This loop constitutes a square matrix of the labels in |#1| in the
+%    vertical and the horizontal directions.  However since the rule
+%    $l_A\meta{rel}l_B$ is the same as $l_B\meta{rel}^{-1}l_A$ we can cut
+%    the loop short at the diagonal of the matrix (\emph{i.e.}, when
+%    both labels are equal), saving a good amount of time.  The way the
+%    rules were set up (see the implementation of \cs{@@_rule_before_gset:nnn}
+%    above) ensures that we have no rule in the ignored side of the
+%    matrix, and all rules are seen.  The rules are applied in
+%    \cs{@@_apply_label_pair:nnn}, which takes the properly-ordered pair
+%    of labels as argument.
+%    \begin{macrocode}
+  \prop_map_inline:Nn #1
+    {
+      \prop_map_inline:Nn #1
+        {
+          \@@_if_label_case:nnnnn {##1} {####1}
+            { \prop_map_break: }
+            { \@@_apply_label_pair:nnn {##1} {####1} }
+            { \@@_apply_label_pair:nnn {####1} {##1} }
+                {#5}
+        }
+    }
+%    \end{macrocode}
+%    Take a breath and take a look at the data structures that have
+%    been set up:
+%    \begin{macrocode}
+  \@@_debug:n { \@@_debug_label_data:N #1 }
+%    \end{macrocode}
+%    
+%
+%    Step T4:
+%    \begin{macrocode}
+  \tl_set:Nn \l_@@_rear_tl { 0 }
+  \tl_set:cn { \@@_tl_csname:n { 0 } } { 0 } % really {l_@@_label_ \l_@@_rear_tl _tl}
+  \seq_map_inline:Nn \l_@@_labels_seq
+      {
+        \int_compare:nNnT { \cs:w \@@_tl_csname:n {##1} \cs_end: } = 0
+            {
+              \tl_set:cn { \@@_tl_csname:n { \l_@@_rear_tl } }{##1}
+              \tl_set:Nn \l_@@_rear_tl {##1}
+            }
+      }
+  \tl_set_eq:Nc \l_@@_front_tl { \@@_tl_csname:n { 0 } }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \tl_gclear:N #2
+  \clist_gclear:N #4
+%    \end{macrocode}
+%
+%    The whole loop combines steps T5--T7:
+%    \begin{macrocode}
+  \bool_while_do:nn { ! \str_if_eq_p:Vn \l_@@_front_tl { 0 } }
+       {
+%    \end{macrocode}
+%    This part is step T5:
+%    \begin{macrocode}
+         \int_decr:N \l_@@_labels_int
+         \prop_get:NVN #1 \l_@@_front_tl \l_@@_return_tl
+         \@@_tl_gput:NV #2 \l_@@_return_tl
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+         \@@_clist_gput:NV #4 \l_@@_front_tl
+         \@@_debug:n{ \iow_term:x{Handled~ code~ for~ \l_@@_front_tl} }
+%    \end{macrocode}
+%
+%    This is step T6 except that we don't use a pointer $P$ to move
+%    through the successors, but instead use \verb=##1= of the mapping
+%    function.
+%    \begin{macrocode}
+         \seq_map_inline:cn { \@@_seq_csname:n { \l_@@_front_tl } }
+             {
+               \tl_set:cx { \@@_tl_csname:n {##1} }
+                   { \int_eval:n { \cs:w \@@_tl_csname:n {##1} \cs_end: - 1 } }
+               \int_compare:nNnT { \cs:w \@@_tl_csname:n {##1} \cs_end: } = 0
+                   {
+                     \tl_set:cn { \@@_tl_csname:n { \l_@@_rear_tl } } {##1}
+                     \tl_set:Nn \l_@@_rear_tl            {##1}
+                   }
+             }
+%    \end{macrocode}
+%    and step T7:
+%    \begin{macrocode}
+         \tl_set_eq:Nc \l_@@_front_tl { \@@_tl_csname:n { \l_@@_front_tl } }
+%    \end{macrocode}
+%
+%    This is step T8: If we haven't moved the code for all labels
+%    (i.e., if \cs{l_@@_labels_int} is still greater than zero) we
+%    have a loop and our partial order can't be flattened out.
+%    \begin{macrocode}
+       }
+  \int_compare:nNnF \l_@@_labels_int = 0
+      {
+        \iow_term:x{====================}
+        \iow_term:x{Error:~ label~ rules~ are~ incompatible:}
+%    \end{macrocode}
+%
+%    This is not really the information one needs in the error case
+%    but will do for now \ldots \fmi{fix}
+%    \begin{macrocode}
+        \@@_debug_label_data:N #1
+        \iow_term:x{====================}
+      }
+%    \end{macrocode}
+%    After we have added all hook code to \verb=#2= we finish it off
+%    with adding extra code for a one time execution. That is stored
+%    in \verb=#3= but is normally empty.
+%    \begin{macrocode}
+  \tl_gput_right:Nn #2 {#3}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \debug_resume:
+}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\cs_generate_variant:Nn \@@_initialize_single:NNNNn {cccc}
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+%  \begin{macro}{\@@_tl_gput:NV,\@@_clist_gput:NV}
+%    These append either on the right (normal hook) or on the left
+%    (reversed hook). This is setup up in
+%    \cs{@@_initialize_hook_code:n}, elsewhere their behavior is undefined.
+%    \begin{macrocode}
+\cs_new:Npn \@@_tl_gput:NV     {\ERROR}
+\cs_new:Npn \@@_clist_gput:NV  {\ERROR}
+%    \end{macrocode}
+%  \end{macro}
+
+
+%
+%  \begin{macro}{\@@_apply_label_pair:nnn,\@@_label_if_exist_apply:nnnF}
+%
+%    This is the payload of steps T2 and T3 executed in the loop described
+%    above. This macro assumes |#1| and |#2| are ordered, which means that
+%    any rule pertaining the pair |#1| and |#2| is
+%    \cs{g_@@_\meta{hook}_rule_\#1\string|\#2_tl}, and not
+%    \cs{g_@@_\meta{hook}_rule_\#2\string|\#1_tl}.  This also saves a great deal
+%    of time since we only need to check the order of the labels once.
+%
+%    The arguments here are \meta{label1}, \meta{label2}, \meta{hook}, and
+%    \meta{hook-code-plist}.  We are about to apply the next rule and
+%    enter it into the data structure.  \cs{@@_apply_label_pair:nnn} will
+%    just call \cs{@@_label_if_exist_apply:nnnF} for the \meta{hook}, and
+%    if no rule is found, also try the \meta{hook} name \verb=??=
+%    denoting a default hook rule.
+%
+%    \cs{@@_label_if_exist_apply:nnnF} will check if the rule exists for
+%    the given hook, and if so call \cs{@@_apply_rule:nnn}.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_apply_label_pair:nnn #1#2#3
+  {
+%    \end{macrocode}
+%    Extra complication: as we use default rules and local hook specific
+%    rules we first have to check if there is a local rule and if that
+%    exist use it. Otherwise check if there is a default rule and use
+%    that.
+%    \begin{macrocode}
+    \@@_label_if_exist_apply:nnnF {#1} {#2} {#3}
+      {
+%    \end{macrocode}
+%    If there is no hook-specific rule we check for a default one and
+%    use that if it exists.
+%    \begin{macrocode}
+        \@@_label_if_exist_apply:nnnF {#1} {#2} { ?? } { }
+      }
+  }
+\cs_new_protected:Npn \@@_label_if_exist_apply:nnnF #1#2#3
+  {
+    \if_cs_exist:w g_@@_ #3 _rule_ #1 | #2 _tl \cs_end:
+%    \end{macrocode}
+%    What to do precisely depends on the type of rule we have
+%    encountered. If it is a \texttt{before} rule it will be handled by the
+%    algorithm but other types need to be managed differently. All
+%    this is done in \cs{@@_apply_rule:nnnN}.
+%    \begin{macrocode}
+      \@@_apply_rule:nnn {#1} {#2} {#3}
+      \exp_after:wN \use_none:n
+    \else:
+      \use:nn
+    \fi:
+  }
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+
+%  \begin{macro}{\@@_apply_rule:nnn}
+%    This is the code executed in steps T2 and T3 while looping through
+%    the matrix  This is part of step T3. We are about to apply the next
+%    rule and enter it into the data structure. The arguments are
+%    \meta{label1}, \meta{label2}, \meta{hook-name}, and \meta{hook-code-plist}.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_apply_rule:nnn #1#2#3
+  {
+    \cs:w @@_apply_
+      \cs:w g_@@_#3_reversed_tl \cs_end: rule_
+        \cs:w g_@@_ #3 _rule_ #1 | #2 _tl \cs_end: :nnn \cs_end:
+      {#1} {#2} {#3}
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+%  \begin{macro}{\@@_apply_rule_<:nnn,\@@_apply_rule_>:nnn}
+%    The most common cases are \texttt{\string<} and \texttt{\string>} so we handle
+%    that first.  They are relations $\prec$ and $\succ$ in TAOCP, and
+%    they dictate sorting.
+%    \begin{macrocode}
+\cs_new_protected:cpn { @@_apply_rule_<:nnn } #1#2#3
+  {
+    \@@_debug:n { \@@_msg_pair_found:nnn {#1} {#2} {#3} }
+    \tl_set:cx { \@@_tl_csname:n {#2} }
+       { \int_eval:n{ \cs:w \@@_tl_csname:n {#2} \cs_end: + 1 } }
+    \seq_put_right:cn{ \@@_seq_csname:n {#1} }{#2}
+  }
+\cs_new_protected:cpn { @@_apply_rule_>:nnn } #1#2#3
+  {
+    \@@_debug:n { \@@_msg_pair_found:nnn {#1} {#2} {#3} }
+    \tl_set:cx { \@@_tl_csname:n {#1} }
+       { \int_eval:n{ \cs:w \@@_tl_csname:n {#1} \cs_end: + 1 } }
+    \seq_put_right:cn{ \@@_seq_csname:n {#2} }{#1}
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_apply_rule_xE:nnn,\@@_apply_rule_xW:nnn}
+%   These relations make two labels incompatible within a hook.
+%   |xE| makes raises an error if the labels are found in the same
+%   hook, and |xW| makes it a warning.
+%    \begin{macrocode}
+\cs_new_protected:cpn { @@_apply_rule_xE:nnn } #1#2#3
+  {
+    \@@_debug:n { \@@_msg_pair_found:nnn {#1} {#2} {#3} }
+    \msg_error:nnnnnn { hooks } { labels-incompatible }
+      {#1} {#2} {#3} { 1 }
+    \use:c { @@_apply_rule_->:nnn } {#1} {#2} {#3}
+    \use:c { @@_apply_rule_<-:nnn } {#1} {#2} {#3}
+  }
+\cs_new_protected:cpn { @@_apply_rule_xW:nnn } #1#2#3
+  {
+    \@@_debug:n { \@@_msg_pair_found:nnn {#1} {#2} {#3} }
+    \msg_warning:nnnnnn { hooks } { labels-incompatible }
+      {#1} {#2} {#3} { 0 }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+%  \begin{macro}{\@@_apply_rule_->:nnn,\@@_apply_rule_<-:nnn}
+%    If we see \texttt{\detokenize{->}} we have to drop code for label
+%    \verb=#3= and carry on. We could do a little better and trop
+%    everything for that label since it doesn't matter where we sort
+%    in the empty code. However that would complicate the algorithm a
+%    lot with little gain. So we still unnecessarily try to sort it in
+%    and depending on the rules that might result in a loop that is
+%    otherwise resolved. If that turns out to be a real issue, we can
+%    improve the code.
+%
+%    Here the code is removed from \cs{l_@@_cur_hook_tl} rather than
+%    \verb=#3= because the latter may be \verb=??=, and the default
+%    hook doesn't store any code.  Removing from \cs{l_@@_cur_hook_tl}
+%    makes default rules \verb=->= and  \verb=<-= work properly.
+%    \begin{macrocode}
+\cs_new_protected:cpn { @@_apply_rule_->:nnn } #1#2#3
+  {
+    \@@_debug:n
+       {
+         \@@_msg_pair_found:nnn {#1} {#2} {#3}
+         \iow_term:x{--->~ Drop~ '#2'~ code~ from~
+           \iow_char:N \\ g_@@_ \l_@@_cur_hook_tl _code_prop ~ because~ of~ '#1' }
+       }
+    \prop_gput:cnn { g_@@_ \l_@@_cur_hook_tl _code_prop } {#2} { }
+  }
+\cs_new_protected:cpn { @@_apply_rule_<-:nnn } #1#2#3
+  {
+    \@@_debug:n
+       {
+         \@@_msg_pair_found:nnn {#1} {#2} {#3}
+         \iow_term:x{--->~ Drop~ '#1'~ code~ from~
+           \iow_char:N \\ g_@@_ \l_@@_cur_hook_tl _code_prop ~ because~ of~ '#2' }
+       }
+    \prop_gput:cnn { g_@@_ \l_@@_cur_hook_tl _code_prop } {#1} { }
+  }
+%    \end{macrocode}
+%  \end{macro}
+
+% \begin{macro}{
+%     \@@_apply_-rule_<:nnn,
+%     \@@_apply_-rule_>:nnn,
+%     \@@_apply_-rule_<-:nnn,
+%     \@@_apply_-rule_->:nnn,
+%     \@@_apply_-rule_x:nnn,
+%   }
+%   Reversed rules.
+%    \begin{macrocode}
+\cs_new_eq:cc { @@_apply_-rule_<:nnn  } { @@_apply_rule_>:nnn }
+\cs_new_eq:cc { @@_apply_-rule_>:nnn  } { @@_apply_rule_<:nnn }
+\cs_new_eq:cc { @@_apply_-rule_<-:nnn } { @@_apply_rule_<-:nnn }
+\cs_new_eq:cc { @@_apply_-rule_->:nnn } { @@_apply_rule_->:nnn }
+\cs_new_eq:cc { @@_apply_-rule_xE:nnn  } { @@_apply_rule_xE:nnn }
+\cs_new_eq:cc { @@_apply_-rule_xW:nnn  } { @@_apply_rule_xW:nnn }
+%    \end{macrocode}
+% \end{macro}
+
+
+% \begin{macro}{\@@_msg_pair_found:nnn}
+%   A macro to avoid moving this many tokens around.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_msg_pair_found:nnn #1#2#3
+  {
+    \iow_term:x{~ \str_if_eq:nnTF {#3} {??} {default} {~normal} ~
+               rule~ \@@_label_pair:nn {#1} {#2}:~
+             \use:c { g_@@_#3_rule_ \@@_label_pair:nn {#1} {#2} _tl } ~ found}
+  }
+%    \end{macrocode}
+% \end{macro}
+
+
+%  \begin{macro}{\@@_debug_label_data:N}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_debug_label_data:N #1 {
+  \iow_term:x{Code~ labels~ for~ sorting:}
+  \iow_term:x{~ \seq_use:Nnnn\l_@@_labels_seq {~and~}{,~}{~and~} }  % fix name!
+  \iow_term:x{^^J Data~ structure~ for~ label~ rules:}
+  \prop_map_inline:Nn #1
+       {
+         \iow_term:x{~ ##1~ =~ \tl_use:c{ \@@_tl_csname:n {##1} }~ ->~
+           \seq_use:cnnn{ \@@_seq_csname:n {##1} }{~->~}{~->~}{~->~}
+         }
+       }
+  \iow_term:x{}
+}
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+%  \begin{macro}{\hook_log:n}
+%    This writes out information about the hook given in its argument
+%    onto the terminal and the \texttt{.log} file.
+%    \begin{macrocode}
+\cs_new_protected:Npn \hook_log:n #1
+  {
+    \exp_args:Nx \@@_log:n
+      { \@@_parse_label_default:nn {#1} { top-level } }
+  }
+\cs_new_protected:Npn \@@_log:n #1
+  {
+    \iow_term:x{^^JThe~ hook~ '#1':}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+    \hook_if_exist:nF {#1}
+      { \iow_term:x {~Hook~ is~ not~ declared!} }
+    \@@_if_exist:nTF {#1}
+      {
+        \iow_term:x{~Code~ chunks:}
+        \prop_if_empty:cTF {g_@@_#1_code_prop}
+          { \iow_term:x{\@spaces ---} }
+          {
+            \prop_map_inline:cn {g_@@_#1_code_prop}
+              { \iow_term:x{\@spaces ##1~ ->~ \tl_to_str:n{##2} } }
+          }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+        \iow_term:x{~Extra~ code~ next~ invocation:}
+        \iow_term:x{\@spaces
+          \tl_if_empty:cTF { g_@@_#1_next_code_tl }
+            {---} {->~ \str_use:c{g_@@_#1_next_code_tl} } }
+%    \end{macrocode}
+%
+%    \fmi{This is currently only displaying the local rules, but it
+%         should also show the matching global rules!}
+%
+%    \begin{macrocode}
+        \iow_term:x{~Rules:}
+        \prop_if_empty:cTF {g_@@_#1_rules_prop}
+          { \iow_term:x{\@spaces ---} }
+          { \prop_map_inline:cn {g_@@_#1_rules_prop}
+              { \iow_term:x{\@spaces ##1~ with~ relation~ ##2} }
+          }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+        \hook_if_exist:nT {#1}
+          { \iow_term:x { ~Execution~ order
+               \prop_if_empty:cTF {g_@@_#1_rules_prop}
+                 { \@@_if_reversed:nT {#1}
+                        { ~ (after~ reversal) }
+                 }
+                 { ~ (after~
+                   \@@_if_reversed:nT {#1} {reversal~ and~}
+                   applying~ rules)
+                 }
+               :    
+              }
+            \iow_term:x { \@spaces
+              \clist_if_empty:cTF{g_@@_#1_labels_clist}
+                 {not~ set~ yet}
+                 { \clist_use:cnnn {g_@@_#1_labels_clist}
+                                   { ,~ } { ,~ } { ,~ }   }
+            }
+          }
+      }
+      { \iow_term:n { ~The~hook~is~empty. } }
+    \iow_term:n { }
+  }
+%    \end{macrocode}
+%    
+%  \end{macro}
+
+
+
+%  \subsection{Specifying code for next invocation}
+%
+%
+%
+%
+%
+%  \begin{macro}{\hook_gput_next_code:nn}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \hook_gput_next_code:nn #1
+  {
+    \exp_args:Nx \@@_gput_next_code:nn
+      { \@@_parse_label_default:nn {#1} { top-level } }
+  }
+\cs_new_protected:Npn \@@_gput_next_code:nn #1 #2
+  {
+    \@@_declare:n {#1}
+    \hook_if_exist:nTF {#1}
+      { \@@_gput_next_do:nn {#1} {#2} }
+      { \@@_try_declaring_generic_next_hook:nn {#1} {#2} }
+  }
+\cs_new_protected:Npn \@@_gput_next_do:nn #1 #2
+  {
+    \tl_gput_right:cn { g_@@_#1_next_code_tl }
+      { #2 \tl_gclear:c { g_@@_#1_next_code_tl } }
+  }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+% \subsection{Using the hook}
+%
+% \begin{macro}{\hook_use:n}
+% \begin{macro}[EXP]{\@@_use_initialized:n}
+% \begin{macro}{\@@_preamble_hook:n}
+%   \cs{hook_use:n} as defined here is used in the preamble, where
+%   hooks aren't initialized by default.  \cs{@@_use_initialized:n} is
+%   also defined, which is the non-\tn{protected} version for use within
+%   the document.  Their definition is identical, except for the
+%   \cs{@@_preamble_hook:n} (which wouldn't hurt in the expandable
+%   version, but it would be an unnecessary extra expansion).
+%
+%   \cs{@@_use_initialized:n} holds the expandable definition while in
+%   the preamble. \cs{@@_preamble_hook:n} initializes the hook in the
+%   preamble, and is redefined to \cs{use_none:n} at |\begin{document}|.
+%
+%   Both versions do the same internally:  check if the hook exist as
+%   given, and if so use it as quickly as possible.  If it doesn't
+%   exist, the a call to \cs{@@_use:wn} checks for file hooks.
+%
+%   At |\begin{document}|, all hooks are initialized, and any change in
+%   them causes an update, so \cs{hook_use:n} can be made expandable.
+%   This one is better not protected so that it can expand into nothing
+%   if containing no code. Also important in case of generic hooks that
+%   we do not generate a \cs{relax} as a side effect of checking for a
+%   csname. In contrast to the \TeX{} low-level
+%   \verb=\csname ...\endcsname= construct \cs{tl_if_exist:c} is
+%   careful to avoid this.
+%    \begin{macrocode}
+\cs_new_protected:Npn \hook_use:n #1
+  {
+    \tl_if_exist:cTF { g_@@_#1_code_tl }
+      {
+        \@@_preamble_hook:n {#1}
+        \cs:w g_@@_#1_code_tl \cs_end:
+      }
+      { \@@_use:wn #1 / \s_@@_mark {#1} }
+  }
+\cs_new:Npn \@@_use_initialized:n #1
+  {
+    \tl_if_exist:cTF { g_@@_#1_code_tl }
+      { \cs:w g_@@_#1_code_tl \cs_end: }
+      { \@@_use:wn #1 / \s_@@_mark {#1} }
+  }
+\cs_new_protected:Npn \@@_preamble_hook:n #1
+  { \@@_initialize_hook_code:n {#1} }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}[EXP]{\@@_use:wn}
+% \begin{macro}{\@@_try_file_hook:n,\@@_if_exist_use:n}
+%   \cs{@@_use:wn} does a quick check to test if the current hook is a
+%   file hook: those need a special treatment.  If it is not, the hook
+%   does not exist.  If it is, then \cs{@@_try_file_hook:n} is called,
+%   and checks that the current hook is a file-specific hook using
+%   \cs{@@_if_file_hook:wTF}.  If it's not, then it's a generic |file/|
+%   hook and is used if it exist.
+%
+%   If it is a file-specific hook, it passes through the same
+%   normalization as during declaration, and then it is used if defined.
+%   \cs{@@_if_exist_use:n} checks if the hook exist, and calls
+%   \cs{@@_preamble_hook:n} if so, then uses the hook.
+%    \begin{macrocode}
+\cs_new:Npn \@@_use:wn #1 / #2 \s_@@_mark #3
+  {
+    \str_if_eq:nnTF {#1} { file }
+      { \@@_try_file_hook:n {#3} }
+      { } % Hook doesn't exist
+  }
+\cs_new_protected:Npn \@@_try_file_hook:n #1
+  {
+    \@@_if_file_hook:wTF #1 / / \s_@@_mark
+      {
+        \exp_args:Ne \@@_if_exist_use:n
+          { \exp_args:Ne \@@_file_hook_normalise:n {#1} }
+      }
+      { \@@_if_exist_use:n {#1} } % file/ generic hook (e.g. file/before)
+  }
+\cs_new_protected:Npn \@@_if_exist_use:n #1
+  {
+    \tl_if_exist:cT { g_@@_#1_code_tl }
+      {
+        \@@_preamble_hook:n {#1}
+        \cs:w g_@@_#1_code_tl \cs_end:
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+%  \begin{macro}{\hook_use_once:n}
+%    For hooks that can and should be used only once we have a special
+%    use command that remembers the hook name in
+%    \cs{g_@@_execute_immediately_clist}. This has the effect that any
+%    further code added to the hook is executed immediately rather
+%    than stored in the hook.
+%    \begin{macrocode}
+\cs_new_protected:Npn \hook_use_once:n #1
+  {
+    \tl_if_exist:cT { g_@@_#1_code_tl }
+      {
+        \clist_gput_left:Nn \g_@@_execute_immediately_clist {#1}
+        \hook_use:n {#1}
+      }
+  }
+%    \end{macrocode}
+%  \end{macro}
+
+% \subsection{Querying a hook}
+%
+% Simpler data types, like token lists, have three possible states; they
+% can exist and be empty, exist and be non-empty, and they may not
+% exist, in which case emptiness doesn't apply (though
+% \cs{tl_if_empty:N} returns false in this case).
+%
+% Hooks are a bit more complicated: they have four possible states.
+% A hook may exist or not, and either way it may or may not be empty
+% (even a hook that doesn't exist may be non-empty).
+%
+% A hook is said to be empty when no code was added to it, either to
+% its permanent code pool, or to its ``next'' token list.  The hook
+% doesn't need to be declared to have code added to its code pool
+% (it may happen that a package $A$ defines a hook \hook{foo}, but
+% it's loaded after package $B$, which adds some code to that hook.
+% In this case it is important that the code added by package $B$ is
+% remembered until package $A$ is loaded).
+%
+% A hook is said to exist when it was declared with \cs{hook_new:n} or
+% some variant thereof.
+%
+% \begin{macro}[pTF]{\hook_if_empty:n}
+%   Test if a hook is empty (that is, no code was added to that hook).
+%   A hook being empty means that \emph{both} its
+%   \cs[no-index]{g_@@_\meta{hook}_code_prop} and its
+%   \cs[no-index]{g_@@_\meta{hook}_next_code_tl} are empty.
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \hook_if_empty:n #1 { p , T , F , TF }
+  {
+    \@@_if_exist:nTF {#1}
+      {
+        \bool_lazy_and:nnTF
+            { \prop_if_empty_p:c { g_@@_#1_code_prop } }
+            { \tl_if_empty_p:c { g_@@_#1_next_code_tl } }
+          { \prg_return_true: }
+          { \prg_return_false: }
+      }
+      { \prg_return_true: }
+  }
+%    \end{macrocode}
+% \end{macro}
+
+% \begin{macro}[pTF]{\hook_if_exist:n}
+%   A canonical way to test if a hook exists.  A hook exists if the
+%   token list that stores the sorted code for that hook,
+%   \cs[no-index]{g_@@_\meta{hook}_code_tl}, exists.  The property list
+%   \cs[no-index]{g_@@_\meta{hook}_code_prop} cannot be used here
+%   because often it is necessary to add code to a hook without knowing
+%   if such hook was already declared, or even if it will ever be
+%   (for example, in case the package that defines it isn't loaded).
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \hook_if_exist:n #1 { p , T , F , TF }
+  {
+    \tl_if_exist:cTF { g_@@_#1_code_tl }
+      { \prg_return_true: }
+      { \prg_return_false: }
+  }
+%    \end{macrocode}
+% \end{macro}
+
+% \begin{macro}[pTF]{\@@_if_exist:n}
+%   An internal check if the hook has already been declared with
+%   \cs{@@_declare:n}.  This means that the hook was already used somehow
+%   (a code chunk or rule was added to it), but it still wasn't declared
+%   with \cs{hook_new:n}.
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \@@_if_exist:n #1 { p , T , F , TF }
+  {
+    \prop_if_exist:cTF { g_@@_#1_code_prop }
+      { \prg_return_true: }
+      { \prg_return_false: }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}[pTF]{\@@_if_reversed:n}
+%   An internal conditional that checks if a hook is reversed.
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \@@_if_reversed:n #1 { p , T , F , TF }
+  {
+    \if_int_compare:w \cs:w g_@@_#1_reversed_tl \cs_end: 1 < 0 \exp_stop_f:
+      \prg_return_true:
+    \else:
+      \prg_return_false:
+    \fi:
+  }
+%    \end{macrocode}
+% \end{macro}
+
+
+%  \begin{macro}{\g_@@_execute_immediately_clist}
+%    List of hooks that from no on should not longer receive code.
+%    \begin{macrocode}
+\clist_new:N \g_@@_execute_immediately_clist
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \subsection{Messages}
+%
+%    \begin{macrocode}
+\msg_new:nnnn { hooks } { labels-incompatible }
+  {
+    Labels~`#1'~and~`#2'~are~incompatible
+    \str_if_eq:nnF {#3} {??} { ~in~hook~`#3' } .~
+    \int_compare:nNnT {#4} = { 1 }
+      { The~code~for~both~labels~will~be~dropped. }
+  }
+  {
+    LaTeX~found~two~incompatible~labels~in~the~same~hook.~
+    This~indicates~an~incompatibility~between~packages.
+  }
+\msg_new:nnn { hooks } { empty-label }
+  { Empty~code~label~\msg_line_context:.~Using~`#1'~instead. }
+%    \end{macrocode}
+%
+%  \subsection{\LaTeXe{} package interface commands}
+%
+
+
+%  \begin{macro}{\NewHook,\NewReversedHook,\NewMirroredHookPair}
+%    Declaring new hooks \ldots
+%    \begin{macrocode}
+\NewDocumentCommand \NewHook             { m }{ \hook_new:n {#1} }
+\NewDocumentCommand \NewReversedHook     { m }{ \hook_new_reversed:n {#1} }
+\NewDocumentCommand \NewMirroredHookPair { mm }{ \hook_new_pair:nn {#1}{#2} }
+%    \end{macrocode}
+%  \end{macro}
+
+%  \begin{macro}{\AddToHook}
+%    
+%    \begin{macrocode}
+\NewDocumentCommand \AddToHook { m o +m }
+  {
+    \clist_if_in:NnTF \g_@@_execute_immediately_clist {#1}
+      {#3}
+      { \hook_gput_code:nnn {#1} {#2} {#3} }
+  }
+%    \end{macrocode}
+%  \end{macro}
+
+%  \begin{macro}{\AddToHookNext}
+%    
+%    \begin{macrocode}
+\NewDocumentCommand \AddToHookNext { m +m }
+  { \hook_gput_next_code:nn {#1} {#2} }
+%    \end{macrocode}
+%  \end{macro}
+
+
+%  \begin{macro}{\RemoveFromHook}
+%    
+%    \begin{macrocode}
+\NewDocumentCommand \RemoveFromHook { m o }
+  { \hook_gremove_code:nn {#1} {#2} }
+%    \end{macrocode}
+%  \end{macro}
+%
+% \begin{macro}{\DeclareDefaultHookLabel}
+% \begin{macro}{\@@_curr_name_push:n,\@@_curr_name_pop:}
+%   The token list \cs{g_@@_hook_curr_name_tl} stores the name of the
+%   current package/file to be used as label for hooks.
+%   Providing a consistent interface is tricky, because packages can
+%   be loaded within packages, and some packages may not use
+%   \cs{DeclareDefaultHookLabel} to change the default label (in which case
+%   \cs{@currname} is used, if set).
+%
+%   To pull that off, we keep a stack that contains the default label
+%   for each level of input.  The bottom of the stack contains the
+%   default label for the top-level.  Since the string \verb|top-level|
+%   is hardcoded, here this item of the stack is empty.  Also, since
+%   we're in an input level, add \verb|lthooks| to the stack as well.
+%   This stack should never go empty, so we loop through \LaTeXe's
+%   file name stack, and add empty entries to \cs{g_@@_name_stack_seq}
+%   for each item in that stack.  The last item is the \verb|top-level|,
+%   which also gets an empty entry.
+%
+%   Also check for the case we're loading \texttt{lthooks} in the
+%   \LaTeXe{} kernel.  In that case, \cs{@currname} isn't \verb|lthooks|
+%   and just the top-level is added to the stack as an empty entry.
+%    \begin{macrocode}
+\str_if_eq:VnTF \@currname { lthooks }
+  {
+    \seq_gpush:Nn \g_@@_name_stack_seq { lthooks }
+    \cs_set_protected:Npn \@@_tmp:w #1 #2 #3
+      {
+        \quark_if_recursion_tail_stop:n {#1}
+        \seq_gput_right:Nn \g_@@_name_stack_seq { }
+        \@@_tmp:w
+      }
+    \exp_after:wN \@@_tmp:w
+      \@currnamestack
+      \q_recursion_tail \q_recursion_tail
+      \q_recursion_tail \q_recursion_stop
+  }
+  { \seq_gpush:Nn \g_@@_name_stack_seq { } }
+%    \end{macrocode}
+%
+%   Two commands keep track of the stack: when a file is input,
+%   \cs{@@_curr_name_push:n} pushes an (empty by default) label to the
+%   stack:
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_curr_name_push:n #1
+  {
+    \seq_gpush:Nn \g_@@_name_stack_seq {#1}
+    \tl_gset:Nn \g_@@_hook_curr_name_tl {#1}
+  }
+%
+%    \end{macrocode}
+%   and when an input is over, the topmost item of the stack is popped,
+%   since the label will not be used again, and \cs{g_@@_hook_curr_name_tl}
+%   is updated to the now topmost item of the stack:
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_curr_name_pop:
+  {
+    \seq_gpop:NN \g_@@_name_stack_seq \l_@@_return_tl
+    \seq_get:NNTF \g_@@_name_stack_seq \l_@@_return_tl
+      { \tl_gset_eq:NN \g_@@_hook_curr_name_tl \l_@@_return_tl }
+      { \ERROR_should_not_happen }
+  }
+%    \end{macrocode}
+%
+%   The token list \cs{g_@@_hook_curr_name_tl} is but a mirror of the top
+%   of the stack.
+%
+%   Now define a wrapper that replaces the top of the stack with the
+%   argument, and updates \cs{g_@@_hook_curr_name_tl} accordingly.
+%    \begin{macrocode}
+\NewDocumentCommand \DeclareDefaultHookLabel { m }
+  {
+    \seq_gpop:NN \g_@@_name_stack_seq \l_@@_return_tl
+    \@@_curr_name_push:n {#1}
+  }
+%    \begin{macrocode}
+%
+%   The push and pop macros are injected in \cs{@pushfilename} and
+%   \cs{@popfilename} so that they correctly keep track of the label.s
+%    \begin{macrocode}
+% TODO! \pho{Properly integrate in the kernel}
+\tl_gput_left:Nn \@pushfilename { \@@_curr_name_push:n { } }
+\tl_gput_left:Nn \@popfilename { \@@_curr_name_pop: }
+% TODO! \pho{Properly integrate in the kernel}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+%
+%
+%
+%  \begin{macro}{\UseHook}
+%    Avoid the overhead of \pkg{xparse} and its protection that we
+%    don't want here (since the hook should vanish without trace if empty)!
+%    \begin{macrocode}
+\newcommand \UseHook { \hook_use:n }
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\UseOneTimeHook}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \UseOneTimeHook { \hook_use_once:n }
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+%  \begin{macro}{\ShowHook}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \ShowHook { \hook_log:n }
+%    \end{macrocode}
+%  \end{macro}
+
+%  \begin{macro}{\DebugHookOn,\DebugHookOff}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \DebugHookOn { \hook_debug_on: }
+\cs_new_protected:Npn \DebugHookOff { \hook_debug_off: }
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+%  \begin{macro}{\DeclareHookRule}
+%    
+%    \begin{macrocode}
+\NewDocumentCommand \DeclareHookRule { m m m m }
+{ \hook_gset_rule:nnnn {#1}{#2}{#3}{#4} }
+%    \end{macrocode}
+%  \end{macro}
+
+%  \begin{macro}{\DeclareDefaultHookRule}
+%    This declaration is only supported before \verb=\begin{document}=.
+%    \begin{macrocode}
+\NewDocumentCommand \DeclareDefaultHookRule { m m m }
+                    { \hook_gset_rule:nnnn {??}{#1}{#2}{#3} }
+\@onlypreamble\DeclareDefaultHookRule                    
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\ClearHookRule}
+%    A special setup rule that removes an existing relation.
+%    Basically {@@_rule_gclear:nnn} plus fixing the property list for debugging.
+%    \fmi{Need an L3 interface, or maybe it should get dropped}
+%    \begin{macrocode}
+\NewDocumentCommand \ClearHookRule { m m m }
+{ \hook_gset_rule:nnnn {#1}{#2}{unrelated}{#3} }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+% \begin{macro}{\IfHookExistTF,\IfHookEmptyTF}
+%    \begin{macrocode}
+\NewExpandableDocumentCommand \IfHookExistTF { m }
+  { \hook_if_exist:nTF {#1} }
+\NewExpandableDocumentCommand \IfHookEmptyTF { m }
+  { \hook_if_empty:nTF {#1} }
+%    \end{macrocode}
+% \end{macro}
+
+
+
+
+%  \begin{macro}{\AtBeginDocument}
+%    
+%    \begin{macrocode}
+\renewcommand\AtBeginDocument{\AddToHook{begindocument}}
+%    \end{macrocode}
+%  \end{macro}
+
+%  \begin{macro}{\AtEndDocument}
+%    
+%    \begin{macrocode}
+\renewcommand\AtEndDocument {\AddToHook{enddocument}}
+%\renewcommand\AtEndDocument {\AddToHook{env/document/end}} % alternative impl
+%    \end{macrocode}
+%    
+%  \end{macro}
+
+
+
+%  \subsection{Set up existing \LaTeXe{} hooks}
+%
+%    As we are in a package calling \cs{NewHook} would label any
+%    already set up hook code under the package name, but we want it
+%    under the name \hook{top-level} so we pretend that \cs{@currname}
+%    is empty.
+%    \begin{macrocode}
+\begingroup
+  \def\@currname{}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \NewHook{begindocument}
+  \NewHook{enddocument}
+%    \end{macrocode}
+%    We need to initialize the mechanism at \verb=\begin{document}=
+%    but obviously before everything else, so we sneak\footnote{This
+%    needs to move to \cs{document} directly.}
+%    \cs{@@_initialize_all:} into the \LaTeXe{} hook name.
+%
+%    We can't use \cs{tl_gput_left:Nn} because that complains about
+%    \cs{@begindocumenthook} not starting with \cs{g_} so we do this
+%    through the backdoor.
+%    \begin{macrocode}
+%  \tex_global:D\tl_put_left:Nn \@begindocumenthook
+%      {\@@_initialize_all:}
+%    \end{macrocode}
+%    There aren't many other hooks at the moment:
+%    \begin{macrocode}
+  \NewHook{rmfamily}
+  \NewHook{sffamily}
+  \NewHook{ttfamily}
+  \NewHook{defaultfamily}
+%    \end{macrocode}
+%    Not checked what this one does and whether it should be there (or
+%    is a real ``hook''.
+%    \begin{macrocode}
+  \NewHook{documentclass}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\endgroup
+%    \end{macrocode}
+%
+%
+%
+% \section{Generic hooks for environments}
+%
+%
+%    \begin{macrocode}
+\let\begin\relax  % avoid redeclaration message
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\DeclareRobustCommand*\begin[1]{%
+  \UseHook{env/#1/before}%
+  \@ifundefined{#1}%
+    {\def\reserved@a{\@latex@error{Environment~#1~undefined}\@eha}}%
+    {\def\reserved@a{\def\@currenvir{#1}%
+        \edef\@currenvline{\on@line}%
+        \@execute@begin@hook{#1}%
+        \csname #1\endcsname}}%
+  \@ignorefalse
+  \begingroup\@endpefalse\reserved@a}
+%    \end{macrocode}
+%
+%    Before the \cs{document} code is executed we have to first undo
+%    the \cs{endgroup} as there should be none for this environment to
+%    avoid that changes on top-level unnecessarily go to \TeX's
+%    savestack, and we have to initialize all hooks in the hook system.
+%    So we need to test for this environment name. But once it has be
+%    found all this testing is no longer needed and so we redefine
+%    \cs{@execute@begin@hook} to simply use the hook
+%    \begin{macrocode}
+\def\@execute@begin@hook #1{%
+  \expandafter\ifx\csname #1\endcsname\document
+    \endgroup
+    \gdef\@execute@begin@hook##1{\UseHook{env/##1/begin}}%
+    \@@_initialize_all:
+    \@execute@begin@hook{#1}%
+%    \end{macrocode}
+%    If this is an environment before \verb=\begin{document}= we just
+%    run the hook.
+%    \begin{macrocode}
+  \else
+    \UseHook{env/#1/begin}%
+  \fi
+}    
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\@namedef{end~}#1{%
+  \UseHook{env/#1/end}%
+  \csname end#1\endcsname\@checkend{#1}%
+  \expandafter\endgroup\if@endpe\@doendpe\fi
+  \UseHook{env/#1/after}%
+  \if@ignore\@ignorefalse\ignorespaces\fi}%
+%    \end{macrocode}
+%    Version that fixes tlb3722 but the change should perhaps be made in
+%    \pkg{tabularx} instead.
+%    \begin{macrocode}
+\@namedef{end~}#1{%
+\romannumeral
+\IfHookEmptyTF{env/#1/end}%
+  {\expandafter\z@}%
+  {\z@\UseHook{env/#1/end}}%
+\csname end#1\endcsname\@checkend{#1}%
+\expandafter\endgroup\if@endpe\@doendpe\fi
+\UseHook{env/#1/after}%
+\if@ignore\@ignorefalse\ignorespaces\fi}%
+%    \end{macrocode}
+%    
+%    
+%
+%    We provide 4 high-level hook interfaces directly, the others only when
+%    etoolbox is loaded
+%    \begin{macrocode}
+\newcommand\AtBeginEnvironment[1]    {\AddToHook{env/#1/begin}}
+\newcommand\AtEndEnvironment[1]      {\AddToHook{env/#1/end}}
+\newcommand\BeforeBeginEnvironment[1]{\AddToHook{env/#1/before}}
+\newcommand\AfterEndEnvironment[1]   {\AddToHook{env/#1/after}}
+%    \end{macrocode}
+%    
+%    
+%    
+%    
+%    
+%    
+%    
+%    
+%    
+%    
+%
+% \section{Generic hooks for file loads}
+%
+%
+%
+%
+%
+%    
+%
+% \section{Hooks in \cs{begin} document}
+%
+%    Can't have \texttt{@{}@} notation here as this is \LaTeXe{} code
+%    \ldots{} and makes for puzzling errors if the double \texttt{@}
+%    signs get substituted.
+%    \begin{macrocode}
+%<@@=>
+\ExplSyntaxOff
+%    \end{macrocode}
+%
+%    The \hook{begindocument} hook was already set up earlier, here is now
+%    the additional one (which was originally from the \pkg{etoolbox}
+%    package under the name \texttt{afterpreamble}.
+%    \begin{macrocode}
+\NewHook{begindocument/end}
+%    \end{macrocode}
+%
+%
+
+%  \begin{macro}{\document}
+%    
+%    \begin{macrocode}
+\def\document{%
+%    \end{macrocode}
+%    We do cancel the grouping as part of the \cs{begin} handling
+%    (this is now done inside \cs{begin} instead) so that the
+%    \hook{env/\meta{env}/begin} hook is not hidden inside \cs{begingroup}
+%    \texttt{...} \cs{endgroup}.
+%    \begin{macrocode}
+%  \endgroup
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \@kernel@after@env@document@begin
+%    \end{macrocode}
+%
+% Added hook to load \textsf{l3backend} code:
+%    \begin{macrocode}
+  \@expl@sys@load@backend@@
+  \ifx\@unusedoptionlist\@empty\else
+    \@latex@warning@no@line{Unused global option(s):^^J%
+            \@spaces[\@unusedoptionlist]}%
+  \fi
+  \@colht\textheight
+  \@colroom\textheight \vsize\textheight
+  \columnwidth\textwidth
+  \@clubpenalty\clubpenalty
+  \if@twocolumn
+    \advance\columnwidth -\columnsep
+    \divide\columnwidth\tw@ \hsize\columnwidth \@firstcolumntrue
+  \fi
+  \hsize\columnwidth \linewidth\hsize
+  \begingroup\@floatplacement\@dblfloatplacement
+    \makeatletter\let\@writefile\@gobbletwo
+    \global \let \@multiplelabels \relax
+    \@input{\jobname.aux}%
+  \endgroup
+  \if@filesw
+    \immediate\openout\@mainaux\jobname.aux
+    \immediate\write\@mainaux{\relax}%
+  \fi
+  \process@table
+  \let\glb@currsize\@empty  % Force math initialization.
+  \normalsize
+  \everypar{}%
+  \ifx\normalsfcodes\@empty
+    \ifnum\sfcode`\.=\@m
+      \let\normalsfcodes\frenchspacing
+    \else
+      \let\normalsfcodes\nonfrenchspacing
+    \fi
+  \fi
+  \ifx\document@default@language\m@ne
+    \chardef\document@default@language\language
+  \fi
+  \@noskipsecfalse
+  \let \@refundefined \relax
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+%  \let\AtBeginDocument\@firstofone
+%  \@begindocumenthook
+  \UseOneTimeHook{begindocument}%
+  \@kernel@after@begindocument
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \ifdim\topskip<1sp\global\topskip 1sp\relax\fi
+  \global\@maxdepth\maxdepth
+  \global\let\@begindocumenthook\@undefined
+  \ifx\@listfiles\@undefined
+    \global\let\@filelist\relax
+    \global\let\@addtofilelist\@gobble
+  \fi
+  \gdef\do##1{\global\let ##1\@notprerr}%
+  \@preamblecmds
+  \global\let \@nodocument \relax
+  \global\let\do\noexpand
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \UseOneTimeHook{begindocument/end}%
+  \ignorespaces}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\let\@kernel@after@begindocument\@empty
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\@kernel@after@env@document@begin,\@kernel@hook@begindocument}
+%    
+%    \begin{macrocode}
+\edef \@kernel@after@env@document@begin{%
+  \let\expandafter\noexpand\csname
+       g__hook_env/document/begin_code_tl\endcsname
+  \noexpand\@empty}
+%    \end{macrocode}
+%    \begin{macrocode}
+\let\@kernel@hook@begindocument\@empty
+%    \end{macrocode}
+%    
+%  \end{macro}
+%
+%
+% \section{Hooks in \cs{enddocument}}
+%
+%
+%    
+%    The \hook{enddocument} hook was already set up earlier, here are now
+%    the additional ones:
+%    \begin{macrocode}
+\NewHook{enddocument/afterlastpage}
+\NewHook{enddocument/afteraux}
+\NewHook{enddocument/info}
+\NewHook{enddocument/end}
+%    \end{macrocode}
+
+
+
+%  \begin{macro}{\enddocument}
+%    
+%    
+%    \begin{macrocode}
+\def\enddocument{%
+   \UseHook{enddocument}%
+   \@kernel@after@enddocument
+   \@checkend{document}%
+   \clearpage
+   \UseHook{enddocument/afterlastpage}%
+   \@kernel@after@enddocument@afterlastpage
+   \begingroup
+     \if@filesw
+       \immediate\closeout\@mainaux
+       \let\@setckpt\@gobbletwo
+       \let\@newl@bel\@testdef
+       \@tempswafalse
+       \makeatletter \@@input\jobname.aux
+     \fi
+     \UseHook{enddocument/afteraux}%
+%    \end{macrocode}
+%    Next hook is expect to contain only code for writing info
+%    messages on the terminal.
+%    \begin{macrocode}
+     \UseHook{enddocument/info}%
+   \endgroup
+   \UseHook{enddocument/end}%
+   \deadcycles\z@\@@end}
+%    \end{macrocode}
+%    The two kernel hooks above are used by the shipout code.   
+%    \begin{macrocode}
+\let\@kernel@after@enddocument\@empty
+\let\@kernel@after@enddocument@afterlastpage\@empty
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\@enddocument@kernel@warnings}
+%    
+%    \begin{macrocode}
+\def\@enddocument@kernel@warnings{%
+   \ifdim \font@submax >\fontsubfuzz\relax
+     \@font@warning{Size substitutions with differences\MessageBreak
+                up to \font@submax\space have occurred.\@gobbletwo}%
+   \fi
+   \@defaultsubs
+   \@refundefined
+   \if@filesw
+     \ifx \@multiplelabels \relax
+       \if@tempswa
+         \@latex@warning@no@line{Label(s) may have changed.
+             Rerun to get cross-references right}%
+       \fi
+     \else
+       \@multiplelabels
+     \fi
+   \fi
+}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\AddToHook{enddocument/info}[kernel/filelist]{\@dofilelist}
+\AddToHook{enddocument/info}[kernel/warnings]{\@enddocument@kernel@warnings}
+\DeclareHookRule{enddocument/info}{kernel/filelist}{before}{kernel/warnings}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+% \subsection{Adjusting at \pkg{atveryend} interfaces}
+%
+%    With the new hook management all of \pkg{atveryend} is taken care
+%    of.
+%
+%    We therefore prevent the package from loading:
+%    \begin{macrocode}
+\expandafter\let\csname ver@atveryend.sty\endcsname\fmtversion
+%    \end{macrocode}
+%
+%
+%    Here are new definitions for its interfaces now pointing to the
+%    hooks in \cs{enddocument}
+%    \begin{macrocode}
+\newcommand\AfterLastShipout  {\AddToHook{enddocument/afterlastpage}}
+\newcommand\AtVeryEndDocument {\AddToHook{enddocument/afteraux}}
+%    \end{macrocode}
+%    Next one is a bit of a fake, but the result should normally be as
+%    expected. If not one needs to add a rule to sort the code chunks
+%    in \hook{enddocument/info}.
+%    \begin{macrocode}
+\newcommand\AtEndAfterFileList{\AddToHook{enddocument/info}}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\newcommand\AtVeryVeryEnd     {\AddToHook{enddocument/end}}
+%    \end{macrocode}
+
+%  \begin{macro}{\BeforeClearDocument}
+%    This one is the only one we don't implement or rather don't have
+%    a dedicated hook in the code.
+%    \begin{macrocode}
+\ExplSyntaxOn
+\newcommand\BeforeClearDocument[1]
+  { \AtEndDocument{#1}
+    \@DEPRECATED{BeforeClearDocument \tl_to_str:n{#1}}
+  }
+\cs_new:Npn\@DEPRECATED #1
+   {\iow_term:x{======~DEPRECATED~USAGE~#1~==========}}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\ExplSyntaxOff
+%    \end{macrocode}
+%  \end{macro}
+%
+%    \begin{macrocode}
+%</2ekernel>
+%    \end{macrocode}
+
+%
+% \section{A package version of the code for testing}
+%
+
+%    \begin{macrocode}
+%<*package>
+%    \end{macrocode}
+
+
+
+%    \begin{macrocode}
+\RequirePackage{xparse}
+\ProvidesExplPackage{lthooks}{\lthooksdate}{\lthooksversion}
+                    {Hook management interface for LaTeX2e}
+%    \end{macrocode}
+%
+%
+% \subsection{Core hook management code (kernel part)}
+%
+%    This should run in older formats so we can't use
+%    \cs{IfFormatAtLeastTF} right now.
+%    \begin{macrocode}
+\@ifl@t@r\fmtversion{2020/10/01}
+                    {}
+                    {\input{lthooks.ltx}
+                     \input{ltshipout.ltx}
+                     \input{ltfilehook.ltx}
+                    }
+%    \end{macrocode}
+%
+%  \subsection{Package options}
+%
+%    For now we offer a simple debug option which turns on a lot of
+%    strange \cs{typeout} messages, nothing fancy.
+%    \begin{macrocode}
+\ExplSyntaxOn
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\hook_debug_off:
+\DeclareOption { debug } { \hook_debug_on:
+                           \shipout_debug_on: }
+%    \end{macrocode}
+%
+%
+%    For now we offer a simple debug option which turns on a lot of
+%    strange \cs{typeout} messages, nothing fancy.
+%    \begin{macrocode}
+\shipout_debug_off:
+\DeclareOption { debug-shipout } { \shipout_debug_on: }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\ProcessOptions
+%    \end{macrocode}
+%
+%
+%  \subsection{Temporarily patching package until changed}
+%
+%
+%
+%    \pkg{filehook} support until that package is patched:
+%    \begin{macrocode}
+\RequirePackage{filehook-ltx}
+%    \end{macrocode}
+%
+%
+%
+%    \begin{macrocode}
+%</package>
+%    \end{macrocode}
+%
+%
+%
+% \Finale
+%
+
+

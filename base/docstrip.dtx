@@ -29,9 +29,9 @@
 \catcode`\{=1
 \catcode`\}=2
 \def\filename{docstrip.dtx}
-\def\fileversion{v2.5h}
-\def\filedate{2020/04/18}
-\def\docdate {2018/05/03}
+\def\fileversion{v2.6a}
+\def\filedate{2020-07-07}
+\def\docdate {2020-07-11}
 %%
 %
 %\iffalse
@@ -42,7 +42,7 @@
 %%                         Frank Mittelbach
 %% Copyright (C) 1995 Marcin Woli\'nski
 %% Copyright (C) 1996-1997 Mark Wooding, Marcin Woli\'nski
-%% Copyright (C) 1998-2003 LaTeX3 project and the above authors
+%% Copyright (C) 1998-2020 LaTeX3 project and the above authors
 %% All rights are reserved.
 %%
 %
@@ -82,6 +82,8 @@
 % \changes{2.3e}{1996/10/02}{Introduced ``open lists''}
 % \changes{2.4a}{1996/06/06}{Add stream limits (MDW)}
 % \changes{2.4c}{1996/06/11}{Add initex support (DPC)}
+% \changes{v2.6a}{2020-07-07}{Added the handling of @@-modules from
+%    \texttt{l3docstrip.dtx} (gh/337)} 
 %
 % \DoNotIndex{\#,\$,\%,\&,\@,\\,\{,\},\^,\_,\~,\ }
 % \DoNotIndex{\@ne}
@@ -785,6 +787,57 @@
 %    When a block of code is {\em not\/} included, any guards that occur
 %    within that block are {\em not\/} evaluated.
 %
+% \section{Internal functions and variables}
+%
+%    An important consideration for \LaTeX3 development is separating
+%    out public and internal functions. Functions and variables which
+%    are private to one module should not be used or modified by any
+%    other module. As \TeX{} does not have any formal namespacing
+%    system, this requires a convention for indicating which functions
+%    in a code-level module are public and which are private. 
+%
+%    Using \ds\ allows internal functions to be indicated
+%    using a `two part' system. Within the \texttt{.dtx} file,
+%    internal functions may be indicated using |@@| in place of the
+%    module name, for example 
+% \begin{verbatim}
+%    \cs_new_protected:Npn \@@_some_function:nn #1#2
+%      {
+%        % Some code here
+%      }
+%    \tl_new:N \l_@@_internal_tl
+% \end{verbatim}
+%
+%    To extract the code using \ds, the original `guard'
+%    mecahnism is extended by the introduction of the syntax
+%    \texttt{\%<@@=\meta{module}>}. The \meta{module} name then
+%    replaces the |@@| when the code is extracted, so that
+% \begin{verbatim}
+%   %<*package>
+%   %<@@=foo>
+%   \cs_new_protected:Npn \@@_some_function:nn #1#2
+%      {
+%        % Some code here
+%      }
+%   \tl_new:N \l_@@_internal_tl
+%   %</package>
+% \end{verbatim}
+%    is extracted as
+% \begin{verbatim}
+%   \cs_new_protected:Npn \__foo_some_function:nn #1#2
+%      {
+%        % Some code here
+%      }
+%   \tl_new:N \l__foo_internal_tl
+% \end{verbatim}
+%    where the |__| indicates that the functions and variables are
+%    internal to the \texttt{foo} module.
+%
+%    Use |@@@@| to obtain |@@| in the output (|@@@@@| to get |@@@|).
+%    For longer pieces of code the replacement can be completely
+%    suppressed by giving an empty module name, namely using the
+%    syntax \texttt{\%<@@=>}.
+%
 % \section{Those other languages}
 %    Since \TeX\ is an open system some of \TeX\ packages include
 %    non-\TeX\ files. Some authors use \ds\ to generate PostScript
@@ -853,7 +906,7 @@
 %
 % \subsection{Verbatim mode}
 %    If your programming language uses some construct that can
-%    interferes badly with \ds\ (e.g., percent in column one) you may
+%    interfere badly with \ds\ (e.g., percent in column one) you may
 %    need a way for preventing it from being stripped off. For that
 %    purpose \ds\ features `verbatim mode'.
 %
@@ -1655,7 +1708,7 @@ Z
 % \changes{v2.5h}{2020/04/18}{Allow spaces in filenames by enclosing
 %    them in quotes (gh/221)}
 % \changes{v2.5h}{2020/04/18}{Added two times two \cs{expandafters} to
-%    make the case with a filename in quotes wqork as well} 
+%    make the case with a filename in quotes work as well} 
 %    \begin{macrocode}
 \chardef\stream@closed=16
 \def\StreamOpen#1{%
@@ -2245,9 +2298,14 @@ Z
 % \subsection{Processing the input lines}
 %
 % \begin{macro}{\normalLine}
+% \changes{v2.6a}{2020-07-07}{The search-and-replace macro
+%    \cs{replaceModuleInLine} added from \textsf{l3docstrip.dtx}
+%    (gh/337)} 
 %    The macro |\normalLine| writes its argument (which has to be
 %    delimited with |\endLine|) on all active output files i.e.
-%    those with off-counters equal to zero.
+%    those with off-counters equal to zero. It uses the
+%    search-and-replace macro \cs{replaceModuleInLine} to replace any
+%    occurences of \texttt{@@} with the current module name.
 %    If statistics are included, the counter
 %    |\codeLinesPassed| is incremented by $1$.
 %    \begin{macrocode}
@@ -2257,6 +2315,7 @@ Z
 %</stats>
   \maybeMsg{.}%
   \def\inLine{#1}%
+  \replaceModuleInLine
   \let\do\putline@do
   \activefiles
   }
@@ -2417,14 +2476,17 @@ Z
 %    \changes{2.3a}{1995/08/18}{Adapted to concurrent version}
 %  \changes{2.3a}{1995/08/20}{Trying to avoid assignments}
 %  \changes{2.3e}{1996/09/16}{Verbatim mode}
+% \changes{v2.6a}{2020-07-07}{Add the @-sign option from
+%    \textsf{l3docstrip.dtx} (gh/337)}
+%
 %    When the macros that process a line have found that the line
 %    starts with `\texttt{\%<}', a guard line has been encountered.
 %    The first character of a guard can be an asterisk (\texttt{*}), a
 %    slash (\texttt{/}) a plus (\texttt{+}), a minus (\texttt{-}), a
-%    less-than sign (\texttt{<}) starting verbatim mode or
-%    any other character that can be found in an option name. This
-%    means that we have to peek at the next token and
-%    decide what kind of guard we have.
+%    less-than sign (\texttt{<}) starting verbatim mode, a commercial
+%    at (\texttt{@}) or any other character that can be found in an
+%    option name. This means that we have to peek at the next token
+%    and decide what kind of guard we have.
 %
 %    We reinsert |#1| as it may be needed by |\doOption|.
 %    \begin{macrocode}
@@ -2432,12 +2494,13 @@ Z
   \ifcase
     \ifx*#10\else \ifx/#11\else
     \ifx+#12\else \ifx-#13\else
-    \ifx<#14\else 5\fi\fi\fi\fi\fi\relax
+    \ifx<#14\else \ifx @#15\else 6\fi\fi\fi\fi\fi\fi\relax
   \expandafter\starOption\or
   \expandafter\slashOption\or
   \expandafter\plusOption\or
   \expandafter\minusOption\or
   \expandafter\verbOption\or
+  \expandafter\moduleOption\or
   \expandafter\doOption\fi
   #1}
 %    \end{macrocode}
@@ -2452,12 +2515,17 @@ Z
 %    result of the  test |\if1\Expr{|\meta{options}|}|,  the  current
 %    line is either copied to the output stream or removed. Then
 %    the test is computed for all active output files.
+% \changes{v2.6a}{2020-07-07}{Now use \cs{InLine} and call
+%    \cs{replaceModuleInline} (gh/337)} 
 %    \begin{macrocode}
 \def\doOption#1>#2\endLine{%
   \maybeMsg{<#1 . >}%
   \Evaluate{#1}%
   \def\do##1##2##3{%
-    \if1\Expr{##2}\StreamPut##1{#2}\fi
+    \if1\Expr{##2}%
+      \def\inLine{#2}%
+      \replaceModuleInLine
+      \StreamPut##1{\inLine}\fi
     }%
   \activefiles
   }
@@ -2680,6 +2748,94 @@ Z
   }}
 %    \end{macrocode}
 %  \end{macro}
+%
+% \begin{macro}{\moduleOption}
+%    \changes{v2.6a}{2020-07-07}{Macro added from
+%      \textsf{l3docstrip.dtx} (gh/337)}
+%
+%   In the case where the line starts |%<@|: the defined syntax requires that
+%   this continues to |%<@@=|. At the moment, we assume that the syntax is
+%   correct and |#1| here is the module name for substitution into any
+%   internal functions in the extracted material.
+%    \begin{macrocode}
+\def\moduleOption @@=#1>#2\endLine{%
+  \maybeMsg{<@@=#1>}%
+  \prepareActiveModule{#1}%
+}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\prepareActiveModule}
+%    \changes{v2.6a}{2020-07-07}{Macro added from
+%      \textsf{l3docstrip.dtx} (gh/337)}
+% \begin{macro}{\replaceModuleInLine}
+%    \changes{v2.6a}{2020-07-07}{Macro added from
+%      \textsf{l3docstrip.dtx} (gh/337)}
+%    Here, we set up to do the search-and-replace when doing the
+%    extraction. The argument (|#1|) is the replacement text to use,
+%    or if empty an indicator that no replacement should be done. The
+%    search material is one of |__@@|, |_@@| or |@@|, done in order
+%    such that all three end up the same in the output. The string
+%    |@@@@| is hidden from these replacements by temporarily turning
+%    it into a pair of letters with different category codes, not
+%    produced by \ds; this allows to get |@@| in the
+%    output. The replacement function is initialised as a do-nothing
+%    for the case where |%<@@=| is never seen. 
+%    \begin{macrocode}
+\begingroup
+  \catcode`\_ = 12 %
+  \long\gdef\prepareActiveModule#1{%
+    \ifx\relax#1\relax
+       \let\replaceModuleInLine\empty
+    \else
+      \edef\replaceModuleInLine{%
+        \noexpand\replaceAllIn\noexpand\inLine{@@@@}{\string aa}%
+        \noexpand\replaceAllIn\noexpand\inLine{__@@}{__#1}%
+        \noexpand\replaceAllIn\noexpand\inLine{_@@}{__#1}%
+        \noexpand\replaceAllIn\noexpand\inLine{@@}{__#1}%
+        \noexpand\replaceAllIn\noexpand\inLine{\string aa}{@@}%
+      }%
+    \fi
+  }
+\endgroup
+\let\replaceModuleInLine\empty
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\replaceAllIn}
+%    \changes{v2.6a}{2020-07-07}{Macro added from
+%      \textsf{l3docstrip.dtx} (gh/337)}
+% \begin{macro}{\replaceAllInAuxI}
+%    \changes{v2.6a}{2020-07-07}{Macro added from
+%      \textsf{l3docstrip.dtx} (gh/337)}
+% \begin{macro}{\replaceAllInAuxII}
+%    \changes{v2.6a}{2020-07-07}{Macro added from
+%      \textsf{l3docstrip.dtx} (gh/337)}
+% \begin{macro}{\replaceAllInAuxIII}
+%    \changes{v2.6a}{2020-07-07}{Macro added from
+%      \textsf{l3docstrip.dtx} (gh/337)}
+%    The code here is a simple search-and-replace routine for a macro
+%    |#1|, replacing |#2| by |#3|. As set up here, there is an
+%    assumption that nothing is going to be expandable, which is
+%    reasonable as \ds\ deals with `string' material.
+%    \begin{macrocode}
+\long\def\replaceAllIn#1#2#3{%
+  \long\def\tempa##1##2#2{%
+    ##2\qMark\replaceAllInAuxIII#3##1%
+  }%
+  \edef#1{\expandafter\replaceAllInAuxI#1\qMark#2\qStop}%
+}
+\def\replaceAllInAuxI{%
+  \expandafter\replaceAllInAuxII\tempa\replaceAllInAuxI\empty
+}
+\long\def\replaceAllInAuxII#1\qMark#2{#1}
+\long\def\replaceAllInAuxIII#1\qStop{}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
 %
 % \subsection{Batchfile commands}
 % \changes{2.3e}{1996/10/02}{Added doc}

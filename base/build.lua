@@ -52,6 +52,7 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
+    "filehook-ltx.sty",       -- temp
      "*-????-??-??.sty"
   }
 textfiles =
@@ -108,7 +109,13 @@ typesetfiles   =
     "ltx3info.tex",
     "modguide.tex",
     "usrguide.tex",
-    "latexchanges.tex"
+    "latexchanges.tex",
+    "lthooks-doc.tex",
+    "ltshipout-doc.tex",
+    "ltfilehook-doc.tex",
+    "lthooks-code.tex",
+    "ltshipout-code.tex",
+    "ltfilehook-code.tex",
   }
 dynamicfiles = {"*.tst"}
 
@@ -135,7 +142,8 @@ checkdeps   = { }
 typesetdeps =
   {
     maindir .. "/required/graphics",
-    maindir .. "/required/tools"
+    maindir .. "/required/tools",
+    maindir .. "/required/amsmath"    -- for l3doc.cls :-(
   }
 unpackdeps  = { }
 
@@ -143,7 +151,8 @@ unpackdeps  = { }
 indexstyle = "source2e.ist"
 
 -- Allow for TU and other test configurations
-checkconfigs = {"build","config-TU","config-legacy"}
+checkconfigs = {"build","config-TU","config-legacy","config-lthooks",
+                "config-lthooks2"}
 
 update_tag = update_tag_base
 

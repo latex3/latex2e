@@ -33,10 +33,10 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltexpl.dtx}
-             [2020-03-05 v1.1 LaTeX Kernel (expl3-dependent code)]
+             [2020-07-08 v1.2d LaTeX Kernel (expl3-dependent code)]
 % \iffalse
 \documentclass{ltxdoc}
-\GetFileInfo{ltfinal.dtx}
+\GetFileInfo{ltexpl.dtx}
 \title{\filename}
 \date{\filedate}
 \author{%
@@ -44,7 +44,7 @@
 \begin{document}
  \MaintainedByLaTeXTeam{latex}
  \maketitle
- \DocInput{ltfinal.dtx}
+ \DocInput{ltexpl.dtx}
 \end{document}
 %</driver>
 % \fi
@@ -55,67 +55,202 @@
 %
 % \changes{v0.0}{2019-10-02}{Initial version}
 %
+% \subsection{Loader}
+%
+% \changes{v1.0a}{2020/03/02}
+%         {Don't load expl3 if already in the format (gh/295)}
+% \changes{v1.1}{2020/03/05}
+%         {Load xparse.ltx if \cs{NewDocumentCommand} is not defined
+%         by expl3.ltx}
+% \changes{v1.2c}{2020/06/04}
+%         {Define a local version of some \LaTeXe{} basic macros to support
+%          package loading}
+%
+% First define some blank commands, so that in case something goes wrong while
+% loading \textsf{expl3}, we won't get strange \texttt{Undefined control
+% sequence} errors.
 %    \begin{macrocode}
 %<*2ekernel>
+\def\@expl@sys@load@backend@@{}
+\def\@expl@push@filename@@{}
+\def\@expl@push@filename@aux@@{}
+\def\@expl@pop@filename@@{}
+%</2ekernel>
 %    \end{macrocode}
 %
-% \subsection{Loader}
+% \changes{v1.2d}{2020/07/08}
+%         {Add a last-minute hook for \textsf{expl3}}
+% Create a hook for last-minute \pkg{expl3} material.
+%    \begin{macrocode}
+%<*2ekernel>
+\def\@expl@finalise@setup@@{}
+%</2ekernel>
+%    \end{macrocode}
+%
+% Now define some basics to support loading \textsf{expl3}.  These macros can
+% be defined here safely, because they are redefined later on by the kernel,
+% so we define simpler versions just to suit our needs.
+%    \begin{macrocode}
+%<*2ekernel>
+\long\def\@gobble#1{}
+\long\def\@firstofone#1{#1}
+\long\def\@firstoftwo#1#2{#1}
+\long\def\@secondoftwo#1#2{#2}
+\long\def\IfFileExists#1{%
+  \openin\@inputcheck"#1" %
+  \ifeof\@inputcheck
+    \expandafter\@secondoftwo
+  \else
+    \closein\@inputcheck
+    \expandafter\@firstoftwo
+  \fi}
+\long\def\@ifnextchar#1#2#3{%
+  \let\reserved@d=#1%
+  \def\reserved@a{#2}%
+  \def\reserved@b{#3}%
+  \futurelet\@let@token\@ifnch}
+\def\@ifnch{%
+  \ifx\@let@token\reserved@d
+    \expandafter\reserved@a
+  \else
+    \expandafter\reserved@b
+  \fi}
+%</2ekernel>
+%    \end{macrocode}
+%
+%    If we are doing a rollback with a format containing expl3 we
+%    aren't reloading it as that creates havoc. This may need a
+%    refined version!
+%    \begin{macrocode}
+%<*2ekernel|latexrelease>
+%<latexrelease>\IncludeInRelease{2020/10/01}%
+%<latexrelease>                 {expl3}{Pre-load expl3}%
+\expandafter\ifx\csname tex\string _let:D\endcsname\relax
+  \expandafter\@firstofone
+\else
+  \GenericInfo{}{Skipping: expl3 code already part of the format}%
+%<2ekernel>  \expandafter\endinput
+%<latexrelease>  \expandafter\@gobble
+\fi
+%    \end{macrocode}
 %
 %  Check for the required primitive/engine support and the existence of
 %  a loader.
 %    \begin{macrocode}
+  {%
+    \IfFileExists{expl3.ltx}
+      {%
+        \ifnum0%
+          \ifdefined\pdffilesize 1\fi
+          \ifdefined\filesize 1\fi
+          \ifdefined\luatexversion\ifnum\luatexversion>94 1\fi\fi
+          \ifdefined\kanjiskip 1\fi
+            >0 %
+          \expandafter\@firstofone
+        \else
+%    \end{macrocode}
+%
+% In \texttt{2ekernel} mode, an error is fatal and building the format
+% is aborted. Use \verb=\batchmode \read -1 to \tokenlist=, which errors
+% with
+% \verb=! Emergency stop. (cannot \read from terminal in nonstop modes)=
+% and aborts the \TeX{} run.  In \texttt{latexrelease} mode, raise an
+% error and do nothing.  Both ways, the error message shows the minimum
+% \textsf{expl3} engine requirements.
+%    \begin{macrocode}
+%<2ekernel>          \def~{ }\def\MessageBreak{^^J~~~~~~~~~~~~~~~}%
+%<2ekernel>          \errmessage{LaTeX Error:
+%<latexrelease>          \@latex@error{%
+            LaTeX requires the e-TeX primitives and additional\MessageBreak
+            functionality available in the engines:\MessageBreak
+              - pdfTeX v1.40\MessageBreak
+              - XeTeX v0.99992\MessageBreak
+              - LuaTeX v0.95\MessageBreak
+              - e-(u)pTeX mid-2012\MessageBreak
+            or later%
+%<latexrelease>          }\@ehd \expandafter\@gobble
+%<2ekernel>          }\batchmode \read -1 to \reserved@a
+        \fi
+      }
+      {%
+%<*2ekernel>
+        \errmessage{LaTeX requires expl3}%
+        \batchmode \read -1 to \reserved@a
 %</2ekernel>
-%<*2ekernel|latexrelease>
+%<*latexrelease>
+        \@latex@error{LaTeX requires expl3}\@ehd
+        \@gobble
+%</latexrelease>
+      }%
+      {%
+        \input expl3.ltx
+        \ifdefined\NewDocumentCommand
+        \else
+          \IfFileExists{xparse.ltx}
+            {\input xparse.ltx }
+            {}%
+         \fi
+      }%
+  }
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>
 %<latexrelease>\IncludeInRelease{2020/02/02}%
 %<latexrelease>                 {expl3}{Pre-load expl3}%
-%    \end{macrocode}
-%    If we are doing a rollback with a format containing expl3 we
-%    aren't reloading it as that creates havoc. This may need a
-%    refined version!
-% \changes{v1.0a}{2020/03/02}
-%         {Don't load expl3 if already in the format (gh/295)}
-% \changes{v1.1}{2020/03/05}
-%         {Load xparse.ltx if \cs{NewDocumentCommand} is not defined by expl3.ltx}
-%    \begin{macrocode}
-\expandafter\ifx\csname tex\string _let:D\endcsname\relax
-  \IfFileExists{expl3.ltx}
-    {%
-      \ifnum0%
-        \ifdefined\pdffilesize 1\fi
-        \ifdefined\filesize 1\fi
-        \ifdefined\luatexversion\ifnum\luatexversion>94 1\fi\fi
-        >0 %
-        \expandafter\@firstofone
-      \else
-        \message{Skipping expl3-dependent extensions}
-%<2ekernel>      \expandafter\endinput
-%<latexrelease>      \expandafter\@gobble
-      \fi
-    }
-    {%
-      \message{Skipping expl3-dependent extensions}%
-%<2ekernel>    \endinput
-%<latexrelease>    \@gobble
-    }%
-    {%
-      \input{expl3.ltx}
-      \ifdefined\NewDocumentCommand
-      \else
-        \IfFileExists{xparse.ltx}
-          {\input{xparse.ltx}}
-          {}%
-       \fi
-    }%
-\else
-  \GenericInfo{}{Skipping: expl3 code already part of the format}
-\fi
-%</2ekernel|latexrelease>
+%<latexrelease>\IfFileExists{expl3.ltx}
+%<latexrelease>  {%
+%<latexrelease>    \ifnum0%
+%<latexrelease>      \ifdefined\pdffilesize 1\fi
+%<latexrelease>      \ifdefined\filesize 1\fi
+%<latexrelease>      \ifdefined\luatexversion\ifnum\luatexversion>94 1\fi\fi
+%<latexrelease>      >0 %
+%<latexrelease>    \else
+%<latexrelease>      \message{Skipping expl3-dependent extensions}
+%<latexrelease>      \expandafter\@gobbletwo
+%<latexrelease>    \fi
+%<latexrelease>  }
+%<latexrelease>  {%
+%<latexrelease>    \message{Skipping expl3-dependent extensions}%
+%<latexrelease>    \@gobbletwo
+%<latexrelease>  }%
+%<latexrelease>\input{expl3.ltx}
 %<latexrelease>\EndIncludeInRelease
-%<*2ekernel>
+%    \end{macrocode}
+%
+%    \subsection{Using expl3 code}
+%
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2020/10/01}%
+%<latexrelease>                 {\@expl@tl@trim@spaces@apply@@nN}
+%<latexrelease>                 {l3 macro for use in include}%
+%    \end{macrocode}
+%    In order to ease the implemantation of some new features in
+%    \LaTeXe\ we may (temporarily) use some coding based on the
+%    \pkg{expl3}-code.
+%    Such macros will eventually vanish and may be changed
+%    unannounced. They are there for internal use in the \LaTeXe\
+%    kernel and are not meant to be used in third-party
+%    packages. These macros will always have the \verb|@expl@|
+%    prefix in their name.
+%
+% \changes{v1.2a}{2020/05/02}
+%         {Define a macro based on l3 language to support inclusion of
+%         files with space in the name (gh/217)}
+%    \begin{macrocode}
+\ExplSyntaxOn
+\cs_new_eq:NN \@expl@tl@trim@spaces@apply@@nN \tl_trim_spaces_apply:nN
+\ExplSyntaxOff
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-%</2ekernel>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000/00/00}%
+%<latexrelease>                 {\@expl@tl@trim@spaces@apply@@nN}
+%<latexrelease>                 {l3 macro for use in include}%
+%<latexrelease>
+%<latexrelease>\let\@expl@tl@trim@spaces@apply@@nN\@undefined
+%<latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%</2ekernel|latexrelease>
 %    \end{macrocode}
 %
 % \Finale

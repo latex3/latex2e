@@ -27,6 +27,7 @@ checksuppfiles = checksuppfiles     or
     "graphics.cfg",
     "test209.tex",
     "test2e.tex",
+    "regression-test.tex",
     "xetex.def",
     "dvips.def",
     "lipsum.sty",
