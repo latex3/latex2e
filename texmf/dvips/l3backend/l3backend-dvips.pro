@@ -19,10 +19,11 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: l3backend-header.dtx
+/color.sc { } def
+/color.fc { } def
 true setglobal
 /pdf.globaldict 4 dict def
 false setglobal
-
 /pdf.cvs { 65534 string cvs } def
 /pdf.dvi.pt { 72.27 mul Resolution div } def
 /pdf.pt.dvi { 72.27 div Resolution mul } def
@@ -221,7 +222,7 @@ false setglobal
         /x
           {
             0 exch rmoveto
-            SDict~
+            SDict
             begin
             currentpoint
             pdf.originy ne exch pdf.originx ne or
