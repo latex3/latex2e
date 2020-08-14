@@ -185,6 +185,18 @@
 %    in these cases (package and class files, mostly).
 %  \end{variable}
 %
+%  \begin{variable}{\CurrentFileUsed,\CurrentFilePathUsed}
+%    In normal circumstances these are identical to \cs{CurrentFile} and
+%    \cs{CurrentFilePath}.  They will differ when a file substitution
+%    has occurred for \cs{CurrentFile}.  In that case,
+%    \cs{CurrentFileUsed} and \cs{CurrentFilePathUsed} will hold the
+%    actual file name and path loaded by \LaTeX, while \cs{CurrentFile}
+%    and \cs{CurrentFilePath} will hold the names that were
+%    \emph{asked for}.  Unless doing very specific work on the file
+%    being read, \cs{CurrentFile} and \cs{CurrentFilePath} should be
+%    enough.
+%  \end{variable}
+%
 % \subsection{Hooks for package and class files}
 %
 %    Commands to load package and class files (e.g., \cs{usepackage},
@@ -382,87 +394,104 @@
 %
 %    \begin{macrocode}
 %<@@=filehook>
+\ExplSyntaxOn
 %    \end{macrocode}
 %
 % \begin{macro}{\CurrentFile,\CurrentFilePath}
+% \begin{macro}{\CurrentFileUsed,\CurrentFilePathUsed}
 %   User-level macros that hold the current file name and file path.
 %   These are used internally as well because the code takes care to
-%   protect against a possible redefinition of these macros in the loaded
-%   file (it's necessary anyway to make hooks work with nested
-%   \cs{input}).
+%   protect against a possible redefinition of these macros in the
+%   loaded file (it's necessary anyway to make hooks work with nested
+%   \cs{input}).  The versions |\...Used| hold the \emph{actual} file
+%   name and path that is loaded by \LaTeX, whereas the other two hold
+%   the name as requested.  They will differ in case there's a file
+%   substitution.
 %    \begin{macrocode}
-\def\CurrentFile{}
-\def\CurrentFilePath{}
+\tl_new:N \CurrentFile
+\tl_new:N \CurrentFilePath
+\tl_new:N \CurrentFileUsed
+\tl_new:N \CurrentFilePathUsed
 %    \end{macrocode}
 % \end{macro}
+% \end{macro}
 %
-% \begin{macro}{\l_@@_internal_tl}
-% \begin{macro}{\@filehook@set@curr@file,\@@_normalise_file_name:n}
-%   When inputting a file, \cs{@filehook@set@curr@file} does a file
-%   lookup (in \cs{input@path} and \cs{l_file_search_path_seq}) and
-%   returns the actual file name (\meta{base} plus \meta{ext}) in
-%   \cs{CurrentFile}.  Only the base and extension are returned,
-%   regardless of the input (both \texttt{path/to/file.tex} and
-%   \texttt{file.tex} end up as \texttt{file.tex} in \cs{CurrentFile}).
-%   The path is returned in \cs{CurrentFilePath}, in case it's needed.
-%   \cs{CurrentFile} is then used to run the file hooks with
-%   \texttt{file/before/\cs{CurrentFile}} and
-%   \texttt{file/after/\cs{CurrentFile}}.
+% \begin{macro}{
+%     \@@_file_parse_full_name:nN,
+%     \@@_full_name:nn,
+%     \@@_set_curr_file_assign:nnnNN
+%   }
+%   A utility macro to trigger \pkg{expl3}'s file-parsing and lookup,
+%   and return a normalised representation of the file name.  If the
+%   queried file doesn't exist, no normalisation takes place.
+%   The output of \cs{@@_file_parse_full_name:nN} is passed on to the
+%   |#2|---a 3-argument macro that takes the \meta{path}, \meta{base},
+%   and \meta{ext} parts of the file name.
 %    \begin{macrocode}
-\ExplSyntaxOn
-\tl_new:N \l_@@_internal_tl
-\cs_new_protected:Npn \@filehook@set@curr@file #1
-  { \exp_args:NV \@@_normalise_file_name:n #1 }
-\cs_new_protected:Npn \@@_normalise_file_name:n #1
+\cs_new:Npn \@@_file_parse_full_name:nN #1
   {
-    \file_if_exist:nTF {#1}
+    \exp_args:Nf \file_parse_full_name_apply:nN
       {
-        \exp_args:Nx \file_parse_full_name:nNNN
-          { \file_full_name:n {#1} }
+        \exp_args:Nf \@@_full_name:nn
+          { \file_full_name:n {#1} } {#1}
       }
-      { \file_parse_full_name:nNNN {#1} }
-      \CurrentFilePath \CurrentFile \l_@@_internal_tl
-    \tl_set:Nx \CurrentFile { \CurrentFile \l_@@_internal_tl }
+  }
+\cs_new:Npn \@@_full_name:nn #1 #2
+  {
+    \tl_if_empty:nTF {#1}
+      { \tl_trim_spaces:n {#2} }
+      { \tl_trim_spaces:n {#1} }
   }
 %    \end{macrocode}
 % \end{macro}
-% \end{macro}
 %
-% \begin{macro}{\g_@@_input_file_seq}
+% \begin{macro}{\g_@@_input_file_seq,\l_@@_internal_tl}
 % \begin{macro}{\@filehook@file@push,\@filehook@file@pop}
-% \begin{macro}{\@@_file_pop_assign:nn}
+% \begin{macro}{\@@_file_pop_assign:nnnn}
 %   Yet another stack, to keep track of \cs{CurrentFile} and
 %   \cs{CurrentFilePath} with nested \cs{input}s.  At the beginning of
 %   \cs{InputIfFileExists}, the current value of \cs{CurrentFilePath}
 %   and \cs{CurrentFile} is pushed to \cs{g_@@_input_file_seq}, and
-%   at the end, it is popped and the value reassigned.
-%   \cs{IfFileExists} does \cs{set@curr@file} internally, which changes
-%   \cs{CurrentFile}, so \cs{@filehook@file@push} has to be executed
-%   before \cs{IfFileExists}.
+%   at the end, it is popped and the value reassigned.  Some other
+%   places don't use \cs{InputIfFileExists} directly (\cs{include}) or
+%   need \cs{CurrentFile} earlier (\cs{@onefilewithoptions}), so these
+%   are manually used elsewhere as well.
 %    \begin{macrocode}
+\tl_new:N \l_@@_internal_tl
 \seq_new:N \g_@@_input_file_seq
 \cs_new_protected:Npn \@filehook@file@push
   {
     \seq_gpush:Nx \g_@@_input_file_seq
-      { { \CurrentFilePath } { \CurrentFile } }
+      {
+        { \CurrentFilePathUsed } { \CurrentFileUsed }
+        { \CurrentFilePath     } { \CurrentFile     }
+      }
   }
 \cs_new_protected:Npn \@filehook@file@pop
   {
     \seq_gpop:NNTF \g_@@_input_file_seq \l_@@_internal_tl
-      { \exp_after:wN \@@_file_pop_assign:nn \l_@@_internal_tl }
-      { \ERROR_should_not_happen }
+      { \exp_after:wN \@filehook@file@pop@assign \l_@@_internal_tl }
+      {
+        \msg_error:nnn { hooks } { should-not-happen }
+          { Tried~to~pop~from~an~empty~file~name~stack. }
+      }
   }
-\cs_new_protected:Npn \@@_file_pop_assign:nn #1 #2
+\cs_new_protected:Npn \@filehook@file@pop@assign #1 #2 #3 #4
   {
-    \tl_set:Nn \CurrentFilePath {#1}
-    \tl_set:Nn \CurrentFile {#2}
+    \tl_set:Nn \CurrentFilePathUsed {#1}
+    \tl_set:Nn \CurrentFileUsed {#2}
+    \tl_set:Nn \CurrentFilePath {#3}
+    \tl_set:Nn \CurrentFile {#4}
   }
-\ExplSyntaxOff
 %    \end{macrocode}
 % \end{macro}
 % \end{macro}
 % \end{macro}
 %
+%    \begin{macrocode}
+\ExplSyntaxOff
+%<@@=>
+%    \end{macrocode}
 %
 % \subsection{Declaring the file-related hooks}
 %
@@ -479,9 +508,6 @@
 %
 %    Most of what we have to do is adding \cs{UseHook} into several
 %  \LaTeXe{} core commands, which is done for now by patching them.
-%    \begin{macrocode}
-%<@@=>
-%    \end{macrocode}
 %
 % \begin{macro}{\InputIfFileExists}
 %    \cs{InputIfFileExists} loads any file if it is available so we
@@ -490,10 +516,11 @@
 %    exist no hooks should be executed.
 %    \begin{macrocode}
 \let\InputIfFileExists\@undefined
-\DeclareRobustCommand \InputIfFileExists[3]{%
-  \@filehook@file@push
+\DeclareRobustCommand \InputIfFileExists[2]{%
   \IfFileExists{#1}%
     {%
+     \@filehook@file@push
+     \@filehook@set@CurrentFile
 %    \end{macrocode}
 %    If the file exists then \cs{@curr@file} holds its name. But we
 %    can't rely on that still being true after the file has been
@@ -501,9 +528,14 @@
 %    preserve the name and then restored it for the
 %    \texttt{file/after/...} hook.
 %
-%    The hook always refers to the \emph{actual} file that will be
-%    operated on, regardless of how the user had it written in the
-%    document.  \pkg{expl3}'s \cs{file_full_name:n} normalizes the file
+%    The hook always refers to the file requested by the user.  The hook
+%    is \emph{always} loaded for \cs{CurrentFile} which usually is the
+%    same as \cs{CurrentFileUsed}.  In the case of a file replacement,
+%    the \cs{CurrentFileUsed} holds the actual file loaded.  In any case
+%    the file names are normalised so that the hooks work on the real
+%    file name, rather than what the user typed in.
+%
+%    \pkg{expl3}'s \cs{file_full_name:n} normalizes the file
 %    name (to factor out differences in the |.tex| extension), and
 %    then does a file lookup to take into account a possible path from
 %    \cs{l_file_search_path_seq} and \cs{input@path}.  However only
@@ -512,9 +544,11 @@
 %    returned in \cs{CurrentFilePath}.
 %    \begin{macrocode}
       \edef\reserved@a{\@filef@und
-        \def\noexpand\CurrentFile{\CurrentFile}%
-        \def\noexpand\CurrentFilePath{\CurrentFilePath}%
-      }%
+        \@filehook@file@pop@assign
+          {\CurrentFilePathUsed}%
+          {\CurrentFileUsed}%
+          {\CurrentFilePath}%
+          {\CurrentFile}}%
       \expandafter\@swaptwoargs\expandafter
         {\reserved@a}%
         {%
@@ -535,64 +569,515 @@
       \UseHook{file/after}%
       \@filehook@file@pop
     }%
-    {\@filehook@file@pop #3}%
 }
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{\set@curr@file}
-%   Now we just hook into \cs{set@curr@file} to add
-%   \cs{@filehook@set@curr@file} at the end, after \cs{@curr@file} is
-%   set.
+% \subsection{Declaring a file substitution}
+%
+%    \begin{macrocode}
+\ExplSyntaxOn
+%<@@=filehook>
+%    \end{macrocode}
+%
+% \begin{macro}[int]{\use_ii_iii:nnn}
+%   A variant of \cs[no-index]{use_...} to discard the first of three
+%   arguments.
+%    \begin{macrocode}
+\cs_gset:Npn \use_ii_iii:nnn #1 #2 #3 {#2 #3}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\declare@file@substitution}
+% \begin{macro}{\undeclare@file@substitution}
+% \begin{macro}{\@@_subst_file_normalise:n,\@@_subst_empty_name_chk:NN}
+%   \cs{declare@file@substitution} declares a file substitution by
+%   doing a (global) definition of the form
+%   |\def|\cs{@file-subst@\meta{file}}|{|\meta{replacement}|}|.
+%   The file names are properly sanitised, and normalised with the same
+%   treatment done for the file hooks.  That is, a file replacement is
+%   declared by using the file name (and extension, if any) only, and
+%   the file path should not be given.  If a file name is empty it is
+%   replaced by |.tex| (the empty csname is used to check that).
+%    \begin{macrocode}
+\cs_new_protected:Npn \declare@file@substitution #1 #2
+  {
+    \group_begin:
+      \cs_set:cpx { } { \exp_not:o { \cs:w\cs_end: } }
+      \int_set:Nn \tex_escapechar:D { -1 }
+      \cs_gset:cpx { @file-subst@ \@@_subst_file_normalise:n {#1} }
+        { \@@_subst_file_normalise:n {#2} }
+    \group_end:
+  }
+\cs_new_protected:Npn \undeclare@file@substitution #1
+  {
+    \group_begin:
+      \cs_set:cpx { } { \exp_not:o { \cs:w\cs_end: } }
+      \int_set:Nn \tex_escapechar:D { -1 }
+      \cs_undefine:c { @file-subst@ \@@_subst_file_normalise:n {#1} }
+    \group_end:
+  }
+\cs_new:Npn \@@_subst_file_normalise:n #1
+  {
+    \exp_after:wN \@@_subst_empty_name_chk:NN
+      \cs:w \exp_after:wN \cs_end:
+        \cs:w \@@_file_parse_full_name:nN {#1} \use_ii_iii:nnn \cs_end:
+  }
+\cs_new:Npn \@@_subst_empty_name_chk:NN #1 #2
+  { \if_meaning:w #1 #2 .tex \else: \token_to_str:N #2 \fi: }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+%    \begin{macrocode}
+%<@@=>
+\ExplSyntaxOff
+%    \end{macrocode}
+%
+% \subsection{Selecting a file (\cs{set@curr@file})}
+%
+% \begin{macro}{\set@curr@file,\@filehook@set@CurrentFile}
+% \begin{macro}{\@kernel@make@file@csname,\@set@curr@file@aux}
+%   Now we hook into \cs{set@curr@file} to resolve a possible file
+%   substitution, and add \cs{@filehook@set@curr@file} at the end, after
+%   \cs{@curr@file} is set.
+%
+%   A file name is built using
+%   \cs{expandafter}\cs{string}\cs{csname}\meta{filename}\cs{endcsname}
+%   to avoid expanding utf8 active characters.  The \cs{csname} expands
+%   the normalisation machinery and the routine to resolve a file
+%   substitution, returning a control sequence with the same name as the
+%   file.
+%
+%   It happens that when \meta{filename} is empty, the generated control
+%   sequence is \cs{csname\cs{endcsname}}, and doing \cs{string} on
+%   that results in the file |csnameendcsname.tex|.  To guard against
+%   that we \cs{ifx}-compare the generated control sequence with the
+%   empty csname.  To do so, \cs{csname\cs{endcsname}} has to be
+%   defined, otherwise it would be equal to \cs{relax} and we would have
+%   false positives.  Here we define \cs{csname\cs{endcsname}} to
+%   expand to itself to avoid it matching the definition of some other
+%   control sequence.
 %    \begin{macrocode}
 \def\set@curr@file#1{%
   \begingroup
     \escapechar\m@ne
-    \xdef\@curr@file{%
-      \expandafter\expandafter\expandafter\unquote@name
-      \expandafter\expandafter\expandafter{%
-      \expandafter\string
-        \csname\@firstofone#1\@empty\endcsname}}%
-  \endgroup
-  \@filehook@set@curr@file{\@curr@file}%
-}
+    \expandafter\def\csname\expandafter\endcsname
+      \expandafter{\csname\endcsname}%
 %    \end{macrocode}
-%  \end{macro}
+%   Two file names are set here: \cs{@curr@file@reqd} which is the file
+%   requested by the user, and \cs{@curr@file} which should be the same,
+%   except when we have a file substitution, in which case it holds the
+%   actual loaded file.  \cs{@curr@file} is resolved first, to check if
+%   a substitution happens.  If it doesn't,
+%   \cs{@kernel@if@file@replacedTF} short-cuts and just copies
+%   \cs{@curr@file}, otherwise the full normalisation procedure is
+%   executed.
+%    \begin{macrocode}
+    \@kernel@make@file@csname\@curr@file
+      \@kernel@resolve@file@subst{#1}%
+    \@kernel@if@file@replacedTF
+      {\@kernel@make@file@csname\@curr@file@reqd
+         \@kernel@normalise@file@name{#1}}%
+      {\global\let\@curr@file@reqd\@curr@file}%
+  \endgroup}
+\def\@kernel@make@file@csname#1#2#3{%
+  \xdef#1{\expandafter\@set@curr@file@aux
+    \csname\expandafter#2\@firstofone#3\@nil\endcsname}}
+%    \end{macrocode}
+%   This auxiliary compares \cs{\meta{filename}} with
+%   \cs{csname\cs{endcsname}} to check if the empty |.tex| file was
+%   requested.
+%    \begin{macrocode}
+\def\@set@curr@file@aux#1{%
+  \expandafter\ifx\csname\endcsname#1%
+    .tex\else\string#1\fi}
+%    \end{macrocode}
 %
-%  \begin{macro}{\load@onefilewithoptions}
-%    This macro is used when loading packages or classes.
+%   Then we call \cs{@filehook@set@curr@file} once for \cs{@curr@file}
+%   to set \cs[no-index]{CurrentFile(Path)Used} and once for
+%   \cs{@curr@file@reqd} to set \cs[no-index]{CurrentFile(Path)}.
+%   Here too the slower route is only used if a substitution happened,
+%   but here \cs{@kernel@if@file@replacedTF} can't be used because the
+%   flag is reset at the \cs{endgroup} above, so we check if
+%   \cs{@curr@file} and \cs{@curr@file@reqd} differ.  This macro is
+%   issued separate from \cs{set@curr@file} because it changes
+%   \cs{CurrentFile}, and side-effects would quickly get out of control.
+%    \begin{macrocode}
+\def\@filehook@set@CurrentFile{%
+  \@filehook@set@curr@file{\@curr@file}%
+    \CurrentFileUsed\CurrentFilePathUsed
+  \ifx\@curr@file@reqd\@curr@file
+    \let\CurrentFile\CurrentFileUsed
+    \let\CurrentFilePath\CurrentFilePathUsed
+  \else
+    \@filehook@set@curr@file{\@curr@file@reqd}%
+      \CurrentFile\CurrentFilePath
+  \fi}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@filehook@set@curr@file,\@@_set_curr_file:nNN}
+%   When inputting a file, \cs{set@curr@file} does a file lookup
+%   (in \cs{input@path} and \cs{l_file_search_path_seq}) and returns the
+%   actual file name (\meta{base} plus \meta{ext}) in
+%   \cs{CurrentFileUsed}, and in case there's a file substitution, the
+%   requested file in \cs{CurrentFile} (otherwise both are the same).
+%   Only the base and extension are returned,
+%   regardless of the input (both \texttt{path/to/file.tex} and
+%   \texttt{file.tex} end up as \texttt{file.tex} in \cs{CurrentFile}).
+%   The path is returned in \cs{CurrentFilePath}, in case it's needed.
+%    \begin{macrocode}
+\ExplSyntaxOn
+%<@@=filehook>
+\cs_new_protected:Npn \@filehook@set@curr@file #1
+  { \exp_args:NV \@@_set_curr_file:nNN #1 }
+\cs_new_protected:Npn \@@_set_curr_file:nNN #1
+  {
+    \file_parse_full_name_apply:nN {#1}
+      \@@_set_curr_file_assign:nnnNN
+  }
+\cs_new_protected:Npn \@@_set_curr_file_assign:nnnNN #1 #2 #3 #4 #5
+  {
+    \str_set:Nn #5 {#1}
+    \str_set:Nn #4 {#2#3}
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Replacing a file and detecting loops}
+%
+% \begin{macro}{\@kernel@resolve@file@subst}
+% \begin{macro}{\@kernel@normalise@file@name}
+% \begin{macro}{\@@_file_name_compose:nnn}
+%   Start by sanitising the file with \cs{@@_file_parse_full_name:nN}
+%   then do \cs{@@_file_subst_begin:nnn}\Arg{path}\Arg{name}\Arg{ext}.
+%    \begin{macrocode}
+\cs_new:Npn \@kernel@resolve@file@subst #1 \@nil
+  { \@@_file_parse_full_name:nN {#1} \@@_file_subst_begin:nnn }
+\cs_new:Npn \@kernel@normalise@file@name #1 \@nil
+  { \@@_file_parse_full_name:nN {#1} \@@_file_name_compose:nnn }
+\cs_new:Npn \@@_file_name_compose:nnn #1 #2 #3
+  { \tl_if_empty:nF {#1} { #1 / } #2#3 }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{flag @@_file_replaced}
+% \begin{macro}{\@kernel@if@file@replacedTF}
+%   Since the file replacement is done expandably in a \cs{csname}, use
+%   a flag to remember if a substitution happened.  We use this in
+%   \cs{set@curr@file} to short-circuit some of it in case no
+%   substitution happened (by far the most common case, so it's worth
+%   optimising).
+%    \begin{macrocode}
+\flag_new:n { @@_file_replaced }
+\cs_new:Npn \@kernel@if@file@replacedTF #1 #2
+  { \flag_if_raised:nTF { @@_file_replaced } {#1} {#2} }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_file_subst_begin:nnn}
+%   First off, start by checking if the current file ($\meta{name} +
+%   \meta{ext}$) has a declared substitution.  If not, then just put
+%   that as the name (including a possible \meta{path} in this case):
+%   this is the default case with no substitutions, so it's the first to
+%   be checked.  The auxiliary \cs{@@_file_subst_tortoise_hare:nn} sees
+%   that there's no replacement for |#2#3| and does nothing else.
+%    \begin{macrocode}
+\cs_new:Npn \@@_file_subst_begin:nnn #1 #2 #3
+  {
+    \@@_file_subst_tortoise_hare:nn { #2#3 } { #2#3 }
+      { \@@_file_name_compose:nnn {#1} {#2} {#3} }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsubsection{The Tortoise and Hare algorithm}
+%
+% \begin{macro}{\@@_file_subst_tortoise_hare:nn}
+% \begin{macro}{\@@_file_subst_loop:NN,\@@_file_subst_loop:cc}
+%   If there is a substitution (\meta{true} in the first
+%   \cs{cs_if_exist:cTF} below), then first check if there is no
+%   substitution down the line:  this should be the second most common
+%   case, of one file replaced by another.  In that case just leave the
+%   substitution there and the job is done.  If any substitution
+%   happens, then the \cs{flag @@_file_replaced} is raised
+%   (conditionally, because checking if a flag is raised is much faster
+%   than raising it over and over again).
+%
+%   If, however there are more substitutions, then we need to check for
+%   a possible loop in the substitutions, which would otherwise put
+%   \TeX{} in an infinite loop if just an exhaustive expansion was used.
+%
+%   To detect a loop, the \emph{Tortoise and Hare} algorithm is used.
+%   The name of the algorithm is an analogy to Aesop's fable, in which
+%   the Hare outruns a Tortoise.  The two pointers here are the csnames
+%   which contains each file replacement, both of which start at the
+%   position zero, which is the file requested.  In the inner part of
+%   the macro below, \cs{@@_file_subst_loop:cc} is called with
+%   \cs[no-index]{@file-subst@\meta{file}} and
+%   \cs[no-index]{@file-subst@\cs[no-index]{@file-subst@\meta{file}}};
+%   that is, the substitution of \meta{file} and the substution of that
+%   substution:  the Tortoise walks one step while the Hare walks two.
+%
+%   Within \cs{@@_file_subst_loop:NN} the two substitutions are
+%   compared, and if they lead to the same file it means that there is
+%   a loop in the substitutions.  If there's no loop,
+%   \cs{@@_file_subst_tortoise_hare:nn} is called again with the
+%   Tortoise at position~1 and the hare at~2.  Again, the substitutions
+%   are checked ahead of the Hare pointer to check that it won't run too
+%   far;  in case there is no loop in the declarations, eventually one
+%   of the \cs{cs_if_exist:cTF} below will go \meta{false} and the
+%   algorithm will end;  otherwise it will run until the Hare reaches
+%   the same spot as the tortoise and a loop is detected.
+%    \begin{macrocode}
+\cs_new:Npn \@@_file_subst_tortoise_hare:nn #1 #2 #3
+  {
+    \cs_if_exist:cTF { @file-subst@ #2 }
+      {
+        \flag_if_raised:nF { @@_file_replaced }
+          { \flag_raise:n { @@_file_replaced } }
+        \cs_if_exist:cTF { @file-subst@ \use:c { @file-subst@ #2 } }
+          {
+            \@@_file_subst_loop:cc
+              { @file-subst@ #1 }
+              { @file-subst@ \use:c { @file-subst@ #2 } }
+          }
+          { \use:c { @file-subst@ #2 } }
+      }
+      { #3 }
+  }
+%    \end{macrocode}
+%   This is just an auxiliary to check if a loop was found, and continue
+%   the algorithm otherwise.  If a loop is found, the |.tex| file is
+%   used as fallback and \cs{@@_file_subst_cycle_error:cN} is called to
+%   report the error.
+%    \begin{macrocode}
+\cs_new:Npn \@@_file_subst_loop:NN #1 #2
+  {
+    \token_if_eq_meaning:NNTF #1 #2
+      {
+        .tex
+        \@@_file_subst_cycle_error:cN { @file-subst@ #1 } #1
+      }
+      { \@@_file_subst_tortoise_hare:nn {#1} {#2} {#2} }
+  }
+\cs_generate_variant:Nn \@@_file_subst_loop:NN { cc }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{
+%     \@@_file_subst_cycle_error:NN,
+%     \@@_file_subst_cycle_error:cN,
+%   }
+%   Showing this type of error expandably is tricky, as we have a very
+%   limited amount of characters to show and a potentially large list.
+%   As a work around, several errors are printed, each showing one step
+%   of the loop, until all the error messages combined show the loop.
+%    \begin{macrocode}
+\cs_new:Npn \@@_file_subst_cycle_error:NN #1 #2
+  {
+    \__kernel_msg_expandable_error:nnff { kernel } { file-cycle }
+      {#1} { \use:c { @file-subst@ #1 } }
+    \token_if_eq_meaning:NNF #1 #2
+      { \@@_file_subst_cycle_error:cN { @file-subst@ #1 } #2 }
+  }
+\cs_generate_variant:Nn \@@_file_subst_cycle_error:NN { c }
+%    \end{macrocode}
+%
+%   And the error message:
+%    \begin{macrocode}
+\__kernel_msg_new:nnn { kernel } { file-cycle }
+  { File~loop!~#1~replaced~by~#2... }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+%    \begin{macrocode}
+\ExplSyntaxOff
+%<@@=>
+%    \end{macrocode}
+%
+% \begin{macro}{\@missingfileerror}
+%   Changes to \cs{@missingfileerror}:  rather than trying to input the
+%   file by force, now \cs{@missingfileerror} just returns three
+%   \cs[no-index]{@missingfile@\meta{part}} and the caller macro is
+%   responsible for doing the right thing with it.
+%    \begin{macrocode}
+\gdef\@missingfileerror#1#2{%
+     \typeout{^^J! LaTeX Error: File `#1.#2' not found.^^J^^J%
+      Type X to quit or <RETURN> to proceed,^^J%
+      or enter new name. (Default extension: #2)^^J}%
+     \message{Enter file name: }%
+      {\endlinechar\m@ne
+       \global\read\m@ne to\@gtempa}%
+    \ifx\@gtempa\@empty
+%    \end{macrocode}
+%   If the user answers with \meta{return}, fallback to the |.tex| file
+%   (previously it did nothing).
+%    \begin{macrocode}
+      \let\@missingfile@area\@empty
+      \let\@missingfile@base\@empty
+      \def\@missingfile@ext{tex}%
+    \else
+%    \end{macrocode}
+%   Use \cs{batchmode}\cs{read}|-1 to |\meta{tl} to end the \TeX{} run,
+%   same as \pkg{expl3} does (it was \cs{batchmode}\cs{@@end} before).
+%    \begin{macrocode}
+      \def\reserved@b{\batchmode\read-1 to \reserved@a}%
+      \def\reserved@a{x}\ifx\reserved@a\@gtempa\reserved@b\fi
+      \def\reserved@a{X}\ifx\reserved@a\@gtempa\reserved@b\fi
+      \filename@parse\@gtempa
+      \edef\filename@ext{%
+        \ifx\filename@ext\relax#2\else\filename@ext\fi}%
+     \edef\reserved@a{%
+%    \end{macrocode}
+%   Only check \cs{IfFileExists} (it was \cs{InputIfFileExists}).
+%    \begin{macrocode}
+       \noexpand\IfFileExists
+         {\filename@area\filename@base.\filename@ext}%
+%    \end{macrocode}
+%   If the file exists, define \cs[no-index]{@missingfile@\meta{part}}.
+%    \begin{macrocode}
+         {\def\noexpand\@missingfile@area{\filename@area}%
+          \def\noexpand\@missingfile@base{\filename@base}%
+          \def\noexpand\@missingfile@ext {\filename@ext}}%
+         {\noexpand\@missingfileerror
+            {\filename@area\filename@base}{\filename@ext}}}%
+      \reserved@a
+    \fi}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@iinput}
+%   Changes to \cs{@iinput}: adapt to the changes to
+%   \cs{@missingfileerror}.
+%    \begin{macrocode}
+\def\@iinput#1{%
+  \InputIfFileExists{#1}{}%
+  {\filename@parse\@curr@file
+   \edef\reserved@a{\noexpand\@missingfileerror
+     {\filename@area\filename@base}%
+     {\ifx\filename@ext\relax tex\else\filename@ext\fi}}%
+%    \end{macrocode}
+%   This line now just sets \cs[no-index]{@missingfile@\meta{part}}:
+%    \begin{macrocode}
+   \reserved@a
+%    \end{macrocode}
+%   Now here we have to use it.  The file here is guaranteed to exist,
+%   because \cs{@missingfileerror} ensures so, but we have to use
+%   \cs{InputIfFileExists} because it executes the file hooks.
+%    \begin{macrocode}
+   \edef\reserved@a{\noexpand\@iinput{%
+     \@missingfile@area\@missingfile@base.\@missingfile@ext}}%
+   \reserved@a}}
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Preventing a package/class from loading}
+%
+% \begin{macro}{\disable@package@load}
+% \begin{macro}{\@disable@packageload@do}
+%   \cs{disable@package@load} defines
+%   \cs[no-index]{@pkg-disable@\meta{package}} to expand to some code |#2|
+%   instead of loading the package.
+%    \begin{macrocode}
+\def\disable@package@load#1#2{%
+  \global\@namedef{@pkg-disable@#1.\@pkgextension}{#2}}
+\def\@disable@packageload@do#1#2{%
+  \@ifundefined{@pkg-disable@#1}{#2}%
+     {\@nameuse{@pkg-disable@#1}}}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\load@onefilewithoptions,\load@onefile@withoptions}
+% \begin{macro}{\@missing@onefilewithoptions}
+%   This macro is used when loading packages or classes.
 %    \begin{macrocode}
 \def\load@onefilewithoptions#1[#2][#3]#4{%
   \@pushfilename
   \xdef\@currname{#1}%
   \global\let\@currext#4%
-  \let\CurrentOption\@empty
   \@reset@ptions
   \makeatletter
+%    \end{macrocode}
+%   First we take the \meta{name} and \meta{ext} given in the argument
+%   and check if the file exists, and issue an error otherwise asking
+%   for a correction with \cs{@missingfileerror}.
+%    \begin{macrocode}
+  \IfFileExists{\@currname.\@currext}{}%
+    {\@missing@onefilewithoptions{#2}}%
+%    \end{macrocode}
+%   If \cs{@currname} is empty (the user replied to the ``Enter file
+%   name'' prompt with \meta{RETURN}), so stop here
+%   (do \cs{@popfilename} to pop the item just added above).
+%    \begin{macrocode}
+  \ifx\@currname\@empty
+    \@popfilename
+    \expandafter\@gobble
+  \else
+    \expandafter\@firstofone
+  \fi
+%    \end{macrocode}
+%   If the file exists, check if it was load-prevented, and otherwise
+%   do the bookkeeping with \cs{@filehook@file@push}
+%   then call \cs{set@curr@file} to set \cs{@curr@file} (and do any
+%   required substitution), then actually load the class/package with
+%   \cs{load@onefile@withoptions}.
+%    \begin{macrocode}
+    {\@disable@packageload@do{\@currname.\@currext}%
+       {\@filehook@file@push
+        \set@curr@file{\@currname.\@currext}%
+        \@filehook@set@CurrentFile
+        \load@onefile@withoptions{#2}{#3}%
+%    \end{macrocode}
+%   Now just clean up and exit.
+%    \begin{macrocode}
+        \@filehook@file@pop}%
+     \@popfilename
+     \@reset@ptions}}
+%    \end{macrocode}
+%
+%   Now the action taken when a file is not found.
+%    \begin{macrocode}
+\def\@missing@onefilewithoptions#1{%
+  \@missingfileerror\@currname\@currext
+  \xdef\@currname{\@missingfile@area\@missingfile@base}%
+  \global\let\@currext\@missingfile@ext}
+%    \end{macrocode}
+%
+%   Now the code that actually does the file loading:
+%    \begin{macrocode}
+\def\load@onefile@withoptions#1#2{%
+  \let\CurrentOption\@empty
+  \@reset@ptions
   \def\reserved@a{%
-    \@ifl@aded\@currext{#1}%
-      {\@if@ptions\@currext{#1}{#2}{}%
+    \@ifl@aded\@currext{\@currname}%
+      {\@if@ptions\@currext{\@currname}{#1}{}%
         {\@latex@error
-            {Option clash for \@cls@pkg\space #1}%
-            {The package #1 has already been loaded
+            {Option clash for \@cls@pkg\space \@currname}%
+            {The package \@currname\space has already been loaded
              with options:\MessageBreak
-             \space\space[\@ptionlist{#1.\@currext}]\MessageBreak
+             \space\space[\@ptionlist{\@currname.\@currext}]\MessageBreak
              There has now been an attempt to load it
               with options\MessageBreak
-             \space\space[#2]\MessageBreak
+             \space\space[#1]\MessageBreak
              Adding the global options:\MessageBreak
              \space\space
-                  \@ptionlist{#1.\@currext},#2\MessageBreak
+                  \@ptionlist{\@currname.\@currext},#1\MessageBreak
              to your \noexpand\documentclass declaration may fix this.%
              \MessageBreak
              Try typing \space <return> \space to proceed.}}}%
-      {\@pass@ptions\@currext{#2}{#1}%
+      {\@pass@ptions\@currext{#1}{\@currname}%
        \global\expandafter
        \let\csname ver@\@currname.\@currext\endcsname\@empty
        \expandafter\let\csname\@currname.\@currext-h@@k\endcsname\@empty
-       \InputIfFileExists
-         {\@currname.\@currext}%
-         {%
 %-----------------------------------------
 %    \end{macrocode}
 %    When the current extension is \cs{@pkgextension} we are loading a
@@ -600,67 +1085,49 @@
 %    depending on that we execute different hooks.  If the extension is
 %    neither, then it is another type of file without special hooks.
 %    \begin{macrocode}
-           \ifx\@currext\@pkgextension
-             \UseHook{package/before}%
-             \UseHook{package/before/\@currname}%
-           \else
-             \ifx\@currext\@clsextension
-               \UseHook{class/before}%
-               \UseHook{class/before/\@currname}%
-             \fi
-           \fi
+       \ifx\@currext\@pkgextension
+         \UseHook{package/before}%
+         \UseHook{package/before/\@currname}%
+       \else
+         \ifx\@currext\@clsextension
+           \UseHook{class/before}%
+           \UseHook{class/before/\@currname}%
+         \fi
+       \fi
 %    \end{macrocode}
-%    The value of \cs{CurrentFile} holds during \cs{InputIfFileExists},
-%    so the hooks above have that available for using.  However at this
-%    point \cs{CurrentFile} is reset to its previous value by
-%    \cs{@filehook@file@pop} because it doesn't know that we'll have
-%    more hooks ahead.  So here (still in the \meta{true} branch of
-%    \cs{InputIfFileExists}, right after actually reading the file in)
-%    we'll cheat:  use \cs{@filehook@file@push} once more, so there are
-%    two entries for the current file in the name stack, so that when
-%    \cs{InputIfFileExists} pops it, there's still one (identical) left.
+%    Now actually load the file (at this point we are certain it exists,
+%    but use \cs{InputIfFileExists} so tha file hooks are executed):
 %    \begin{macrocode}
-           \@filehook@file@push
-%-----------------------------------------
-         }%
-         {\@missingfileerror\@currname\@currext}%
-    \let\@unprocessedoptions\@@unprocessedoptions
-    \csname\@currname.\@currext-h@@k\endcsname
-    \expandafter\let\csname\@currname.\@currext-h@@k\endcsname
-              \@undefined
+       \InputIfFileExists{\@currname.\@currext}{}{}%
+       \let\@unprocessedoptions\@@unprocessedoptions
+       \csname\@currname.\@currext-h@@k\endcsname
+       \expandafter\let\csname\@currname.\@currext-h@@k\endcsname
+                 \@undefined
 %-----------------------------------------
 %    \end{macrocode}
 %    And same procedure, James, when we are finished loading, except
 %    that the hook order is now reversed.
 %    \begin{macrocode}
-    \ifx\@currext\@pkgextension
-      \UseHook{package/after/\@currname}%
-      \UseHook{package/after}%
-    \else
-      \ifx\@currext\@clsextension
-        \UseHook{class/after/\@currname}%
-        \UseHook{class/after}%
-      \fi
-    \fi
-%    \end{macrocode}
-%    Now here we do \cs{@filehook@file@pop} to restore the
-%    \cs{CurrentFile} before this file being loaded and fix what we've
-%    done in the stack right above.
-%    \begin{macrocode}
-    \@filehook@file@pop
+       \ifx\@currext\@pkgextension
+         \UseHook{package/after/\@currname}%
+         \UseHook{package/after}%
+       \else
+         \ifx\@currext\@clsextension
+           \UseHook{class/after/\@currname}%
+           \UseHook{class/after}%
+         \fi
+       \fi
 %-----------------------------------------
-    \@unprocessedoptions}%
-    \@ifl@ter\@currext{#1}{#3}{}%
+       \@unprocessedoptions}%
+    \@ifl@ter\@currext{\@currname}{#2}{}%
       {\@latex@warning@no@line
          {You have requested,\on@line,
           version\MessageBreak
-            `#3' of \@cls@pkg\space #1,\MessageBreak
+            `#2' of \@cls@pkg\space \@currname,\MessageBreak
           but only version\MessageBreak
-           `\csname ver@#1.\@currext\endcsname'\MessageBreak
+           `\csname ver@\@currname.\@currext\endcsname'\MessageBreak
           is available}}%
-    \ifx\@currext\@clsextension\let\LoadClass\@twoloadclasserror\fi
-    \@popfilename
-    \@reset@ptions}%
+    \ifx\@currext\@clsextension\let\LoadClass\@twoloadclasserror\fi}%
   \reserved@a}
 %    \end{macrocode}
 %
@@ -669,95 +1136,142 @@
 %    \begin{macrocode}
 \@ifl@t@r\fmtversion{2020/10/01}
 {%
-\def\load@onefilewithoptions#1[#2][#3]#4{%
-  \@pushfilename
-  \xdef\@currname{#1}%
-  \global\let\@currext#4%
+\def\load@onefile@withoptions#1#2{%
   \let\CurrentOption\@empty
   \@reset@ptions
   \makeatletter
   \def\reserved@a{%
-    \@ifl@aded\@currext{#1}%
-      {\@if@ptions\@currext{#1}{#2}{}%
+    \@ifl@aded\@currext{\@currname}%
+      {\@if@ptions\@currext{\@currname}{#1}{}%
         {\@latex@error
-            {Option clash for \@cls@pkg\space #1}%
-            {The package #1 has already been loaded
+            {Option clash for \@cls@pkg\space \@currname}%
+            {The package \@currname\space has already been loaded
              with options:\MessageBreak
-             \space\space[\@ptionlist{#1.\@currext}]\MessageBreak
+             \space\space[\@ptionlist{\@currname.\@currext}]\MessageBreak
              There has now been an attempt to load it
               with options\MessageBreak
-             \space\space[#2]\MessageBreak
+             \space\space[#1]\MessageBreak
              Adding the global options:\MessageBreak
              \space\space
-                  \@ptionlist{#1.\@currext},#2\MessageBreak
+                  \@ptionlist{\@currname.\@currext},#1\MessageBreak
              to your \noexpand\documentclass declaration may fix this.%
              \MessageBreak
              Try typing \space <return> \space to proceed.}}}%
-      {\@pass@ptions\@currext{#2}{#1}%
+      {\@pass@ptions\@currext{#1}{\@currname}%
        \global\expandafter
        \let\csname ver@\@currname.\@currext\endcsname\@empty
        \expandafter\let\csname\@currname.\@currext-h@@k\endcsname\@empty
-       \InputIfFileExists
-         {\@currname.\@currext}%
-         {%
 %-----------------------------------------
-           \ifx\@currext\@pkgextension
-             \UseHook{package/before}%
-             \UseHook{package/before/\@currname}%
-           \else
-             \ifx\@currext\@clsextension
-               \UseHook{class/before}%
-               \UseHook{class/before/\@currname}%
-             \fi
-           \fi
-           \@filehook@file@push
+       \ifx\@currext\@pkgextension
+         \UseHook{package/before}%
+         \UseHook{package/before/\@currname}%
+       \else
+         \ifx\@currext\@clsextension
+           \UseHook{class/before}%
+           \UseHook{class/before/\@currname}%
+         \fi
+       \fi
+       \InputIfFileExists{\@currname.\@currext}{}{}%
 %-----------------------------------------
-         }%
-         {\@missingfileerror\@currname\@currext}%
-    \expandafter\let\csname unprocessedoptions-\@currname.\@currext\endcsname
-                    \@@unprocessedoptions
-    \csname\@currname.\@currext-h@@k\endcsname
-    \expandafter\let\csname\@currname.\@currext-h@@k\endcsname
-              \@undefined
-    \ifx\@unprocessedoptions\relax
-      \let\@unprocessedoptions\@undefined
-    \else
-      \csname unprocessedoptions-\@currname.\@currext\endcsname
-    \fi
-    \expandafter\let
-        \csname unprocessedoptions-\@currname.\@currext\endcsname
-       \@undefined
+       \expandafter\let\csname unprocessedoptions-\@currname.\@currext\endcsname
+                       \@@unprocessedoptions
+       \csname\@currname.\@currext-h@@k\endcsname
+       \expandafter\let\csname\@currname.\@currext-h@@k\endcsname
+                 \@undefined
+       \ifx\@unprocessedoptions\relax
+         \let\@unprocessedoptions\@undefined
+       \else
+         \csname unprocessedoptions-\@currname.\@currext\endcsname
+       \fi
+       \expandafter\let
+           \csname unprocessedoptions-\@currname.\@currext\endcsname
+          \@undefined
 %-----------------------------------------
-    \ifx\@currext\@pkgextension
-      \UseHook{package/after/\@currname}%
-      \UseHook{package/after}%
-    \else
-      \ifx\@currext\@clsextension
-        \UseHook{class/after/\@currname}%
-        \UseHook{class/after}%
-      \fi
-    \fi
-    \@filehook@file@pop
+       \ifx\@currext\@pkgextension
+         \UseHook{package/after/\@currname}%
+         \UseHook{package/after}%
+       \else
+         \ifx\@currext\@clsextension
+           \UseHook{class/after/\@currname}%
+           \UseHook{class/after}%
+         \fi
+       \fi
 %-----------------------------------------
-    }%
-    \@ifl@ter\@currext{#1}{#3}{}%
+       }%
+    \@ifl@ter\@currext{\@currname}{#2}{}%
       {\@latex@warning@no@line
          {You have requested,\on@line,
           version\MessageBreak
-            `#3' of \@cls@pkg\space #1,\MessageBreak
+            `#2' of \@cls@pkg\space \@currname,\MessageBreak
           but only version\MessageBreak
-           `\csname ver@#1.\@currext\endcsname'\MessageBreak
+           `\csname ver@\@currname.\@currext\endcsname'\MessageBreak
           is available}}%
-    \ifx\@currext\@clsextension\let\LoadClass\@twoloadclasserror\fi
-    \@popfilename
-    \@reset@ptions}%
+    \ifx\@currext\@clsextension\let\LoadClass\@twoloadclasserror\fi}%
   \reserved@a}
 }{}%
 %    \end{macrocode}
 %  \end{macro}
+%  \end{macro}
 
 
 
+%  \begin{macro}{\include,\includeonly}
+%    With space stripping in place in \cs{set@curr@file} we need to
+%    add the space after it has acted to keep the legacy interface of
+%    \cs{@include}.
+%    \begin{macrocode}
+\def\include#1{\relax
+  \ifnum\@auxout=\@partaux
+    \@latex@error{\string\include\space cannot be nested}\@eha
+  \else
+%    \end{macrocode}
+%    Here the normalisation will add |.tex| for all files, (it uses the
+%    the same normalisation as the hooks), so we need to remove that
+%    manually.  \cs{@strip@tex@ext} does that.
+%    \begin{macrocode}
+    \set@curr@file{#1}%
+    \edef\@curr@file{\@strip@tex@ext\@curr@file}%
+    \expandafter\@include\expandafter{\@curr@file} % deliberate space
+  \fi}
+%    \end{macrocode}
+%    Here in \cs{includeonly} we also need to strip |.tex| after
+%    normalisation:
+%    \begin{macrocode}
+\def\includeonly#1{%
+  \@partswtrue
+  \let\@partlist\@empty
+  \@for\reserved@a:=#1 \do
+    {%
+      \expandafter\set@curr@file\expandafter{\reserved@a}%
+      \ifx\@partlist\@empty
+        \edef\@partlist{\@strip@tex@ext\@curr@file}%
+      \else
+        \edef\@partlist{\@partlist,\@strip@tex@ext\@curr@file}%
+      \fi
+    }%
+  }
+%    \end{macrocode}
+%
+%  \begin{macro}{\@strip@tex@ext,\@strip@tex@ext@aux}
+%    These macros take a (\cs{detokenize}d file name and remove any
+%    |.tex| extension).  Extra care is taken to not remove the string
+%    |.tex| from the middle of a file name:  it is only removed if it's
+%    the very last thing in the file name.
+%    \begin{macrocode}
+\def\reserved@a#1{%
+\def\@strip@tex@ext##1{%
+  \expandafter\@strip@tex@ext@aux
+    ##1\@nil\@nil
+     #1\@nil\relax\@nnil}
+\def\@strip@tex@ext@aux##1#1\@nil##2\@nnil{%
+  \ifx\relax##2\@empty
+    \expandafter\@cdr\expandafter\@empty\@cdr{}##1%
+  \else##1\fi}}%
+\expandafter\reserved@a
+\expandafter{\detokenize{.tex}}
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
 
 %  \begin{macro}{\@include}
 %    \begin{macrocode}
@@ -781,14 +1295,9 @@
     \fi
 %-----------------------------------------
 %    \end{macrocode}
-%    First we need to fix \cs{CurrentFile}, because due the pesky
-%    space-delimited \cs{@include}, \cs{CurrentFile} contains the
-%    \cs{include}'d file with a space.  To fix that, we re-do
-%    \cs{set@curr@file}.  The 2020/10/01 release doesn't need this as
-%    \cs{include} was changed to do \cs{set@curr@file} on the correct
-%    file name, rather than one with a trailing space.
+%    Now before going to the hooks we need to set \cs{CurrentFile}:
 %    \begin{macrocode}
-    \set@curr@file{#1}%
+    \@filehook@set@CurrentFile
 %    \end{macrocode}
 %    Execute the \texttt{before} hooks just after we switched the
 %    \texttt{.aux} file \ldots
@@ -857,6 +1366,10 @@
       \immediate\write\@partaux{\relax}%
     \fi
 %-----------------------------------------
+%    \end{macrocode}
+%    Now before going to the hooks we need to set \cs{CurrentFile}:
+%    \begin{macrocode}
+    \@filehook@set@CurrentFile
     \UseHook{include/before}%
     \UseHook{include/before/#1}%
 %-----------------------------------------
@@ -1095,56 +1608,61 @@
     {structuredlog}{\ltfilehookdate}{\ltfilehookversion}
     {Structuring the TeX transcript file}
 %    \end{macrocode}
-
-
-
+%
+% \begin{macro}{\g_@@_nesting_level_int}
+%   Stores the current package nesting level.
 %    \begin{macrocode}
 \int_new:N \g_@@_nesting_level_int
 %    \end{macrocode}
-
+%   Initialise the counter with the number of files in the
+%   \cs{@currnamestack} (the number of items divided by $3$) minus one,
+%   because this package is skipped when printing to the log.
 %    \begin{macrocode}
-\tl_new:N   \g_@@_nesting_prefix_tl
-\tl_gset:Nn \g_@@_nesting_prefix_tl { }
+\int_gset:Nn \g_@@_nesting_level_int
+  { ( \tl_count:N \@currnamestack ) / 3 - 1 }
 %    \end{macrocode}
-%    
+% \end{macro}
+%
+% \begin{macro}{\@@_log_file_record:n}
+%   This macro is responsible for increasing and decresing the file
+%   nesting level, as well as printing to the log.  The argument is
+%   either |STOPTART| or |STOP| and the action it takes on the nesting
+%   integer depends on that.
 %    \begin{macrocode}
-\AddToHook{file/before}{
-  \int_gincr:N \g_@@_nesting_level_int
-  \tl_gput_right:Nn\g_@@_nesting_prefix_tl {=}
-  \iow_term:x {
-    \g_@@_nesting_prefix_tl \space
-    ( LEVEL~ \int_use:N \g_@@_nesting_level_int \space START )~
-    \CurrentFile  ^^J
-  }
-}
+\cs_new_protected:Npn \@@_log_file_record:n #1
+  {
+    \str_if_eq:nnT {#1} {START} { \int_gincr:N \g_@@_nesting_level_int }
+    \iow_term:x
+      {
+        \prg_replicate:nn { \g_@@_nesting_level_int } { = } ~
+        ( LEVEL ~ \int_use:N \g_@@_nesting_level_int \c_space_tl #1 ) ~
+        \CurrentFileUsed
 %    \end{macrocode}
-%    We don't want to install the \hook{file/after} hook immediately,
-%    because that would mean it is the first time executed when the
-%    package finishes. We therefore put the declaration inside
-%    \cs{AddToHookNext} so that it gets only installed when we have
-%    left the package. 
+%   If there was a file replacement, show that as well:
 %    \begin{macrocode}
-\AddToHookNext{file/after}{
-  \AddToHook{file/after}{
-    \iow_term:x {
-      \g_@@_nesting_prefix_tl \space
-      ( LEVEL~ \int_use:N \g_@@_nesting_level_int \space STOP )~
-      \CurrentFile  ^^J
-    }
-    \int_gdecr:N \g_@@_nesting_level_int
-    \tl_gset:Nx \g_@@_nesting_prefix_tl
-       {\exp_after:wN \use_none:n \g_@@_nesting_prefix_tl}
+        \str_if_eq:NNF \CurrentFileUsed \CurrentFile
+          { ~ ( \CurrentFile \space requested ) }
+        \iow_newline:
+      }
+    \str_if_eq:nnT {#1} {STOP} { \int_gdecr:N \g_@@_nesting_level_int }
   }
-}
 %    \end{macrocode}
 %
-%    We have to manually increment the level because now that we have
-%    installed the code in \texttt{file/after} it gets decremented
-%    when we leave the package without ever being incremented upon
-%    entry.
+%   Now just hook the macro above in the generic |file/before|\ldots
 %    \begin{macrocode}
-%\int_incr:N\g_@@_nesting_level_int
+\AddToHook{file/before}{ \@@_log_file_record:n { START } }
 %    \end{macrocode}
+%   \ldots and |file/after| hooks.
+%   We don't want to install the \hook{file/after} hook immediately,
+%   because that would mean it is the first time executed when the
+%   package finishes. We therefore put the declaration inside
+%   \cs{AddToHookNext} so that it gets only installed when we have
+%   left this package.
+%    \begin{macrocode}
+\AddToHookNext{file/after}
+  { \AddToHook{file/after}{ \@@_log_file_record:n { STOP } } }
+%    \end{macrocode}
+% \end{macro}
 %
 %    \begin{macrocode}
 %</structuredlog>
