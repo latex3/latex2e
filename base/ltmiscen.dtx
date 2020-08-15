@@ -32,7 +32,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltmiscen.dtx}
-             [2020/05/31 v1.1u LaTeX Kernel (Misc. Environments)]
+             [2020/08/15 v1.1v LaTeX Kernel (Misc. Environments)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltmiscen.dtx}
@@ -525,16 +525,108 @@
 %    \begin{macrocode}
 %</2ekernel>
 %<*2ekernel|latexrelease>
-%<latexrelease>\IncludeInRelease{2019/10/01}%
-%<latexrelease>                 {\begin}{Making \begin/\end robust}%
-\DeclareRobustCommand\begin[1]{%
+%<latexrelease>\IncludeInRelease{2020/10/01}%
+%<latexrelease>                 {\begin}{Use hook system}%
+\DeclareRobustCommand*\begin[1]{%
+  \UseHook{env/#1/before}%
   \@ifundefined{#1}%
     {\def\reserved@a{\@latex@error{Environment #1 undefined}\@eha}}%
     {\def\reserved@a{\def\@currenvir{#1}%
-     \edef\@currenvline{\on@line}%
-     \csname #1\endcsname}}%
+        \edef\@currenvline{\on@line}%
+        \@execute@begin@hook{#1}%
+        \csname #1\endcsname}}%
   \@ignorefalse
   \begingroup\@endpefalse\reserved@a}
+%    \end{macrocode}
+%
+%    Before the \cs{document} code is executed we have to first undo
+%    the \cs{endgroup} as there should be none for this environment to
+%    avoid that changes on top-level unnecessarily go to \TeX's
+%    savestack, and we have to initialize all hooks in the hook system.
+%    So we need to test for this environment name. But once it has be
+%    found all this testing is no longer needed and so we redefine
+%    \cs{@execute@begin@hook} to simply use the hook.
+%    \begin{macrocode}
+\ExplSyntaxOn
+\def\@execute@begin@hook #1{
+  \expandafter\ifx\csname #1\endcsname\document
+    \endgroup
+    \gdef\@execute@begin@hook##1{\UseHook{env/##1/begin}}
+    \__hook_initialize_all:
+  \fi
+%    \end{macrocode}
+%    If this is an environment before \verb=\begin{document}= we just
+%    run the hook so this can be outside the test.
+%    \begin{macrocode}
+  \UseHook{env/#1/begin}
+}
+\ExplSyntaxOff
+%    \end{macrocode}
+%
+%    The top level definition for \cs{end}. for an explanation see
+%    below (this is the same as the 2019 version where it was
+%    introduced, but for rollback we have to repeat it). 
+%    \begin{macrocode}
+\edef\end
+  {\unexpanded{%
+     \romannumeral
+       \ifx\protect\@typeset@protect
+       \expandafter       %1
+         \expandafter        %2
+       \expandafter       %1
+           \expandafter         %3 expands the \csname inside \end<space>
+       \expandafter       %1
+         \expandafter        %2  expands \end<space>
+       \expandafter       %1     expands the \else
+           \z@
+       \else
+         \expandafter\z@\expandafter\protect
+       \fi
+   }%
+   \expandafter\noexpand\csname end \endcsname
+  }
+%    \end{macrocode}
+%    Version that adds hooks (so different from the 2019 version). It
+%    fixes tlb3722 but the change should perhaps be made in
+%    \pkg{tabularx} instead.
+%    \begin{macrocode}
+\@namedef{end }#1{%
+  \romannumeral
+    \IfHookEmptyTF{env/#1/end}%
+        {\expandafter\z@}%
+        {\z@\UseHook{env/#1/end}}%
+    \csname end#1\endcsname\@checkend{#1}%
+    \expandafter\endgroup\if@endpe\@doendpe\fi
+    \UseHook{env/#1/after}%
+    \if@ignore\@ignorefalse\ignorespaces\fi
+}
+%    \end{macrocode}
+%    Version without the fix for tlb3722 for the record:
+%    \begin{macrocode}
+%\@namedef{end }#1{%
+%  \UseHook{env/#1/end}%
+%  \csname end#1\endcsname\@checkend{#1}%
+%  \expandafter\endgroup\if@endpe\@doendpe\fi
+%  \UseHook{env/#1/after}%
+%  \if@ignore\@ignorefalse\ignorespaces\fi}%
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2019/10/01}%
+%<latexrelease>                 {\begin}{Making \begin/\end robust}%
+%<latexrelease>\DeclareRobustCommand\begin[1]{%
+%<latexrelease>  \@ifundefined{#1}%
+%<latexrelease>    {\def\reserved@a{\@latex@error{Environment #1 undefined}\@eha}}%
+%<latexrelease>    {\def\reserved@a{\def\@currenvir{#1}%
+%<latexrelease>     \edef\@currenvline{\on@line}%
+%<latexrelease>     \csname #1\endcsname}}%
+%<latexrelease>  \@ignorefalse
+%<latexrelease>  \begingroup\@endpefalse\reserved@a}
 %    \end{macrocode}
 %    A version that doesn't start out with \cs{relax} when in
 %    typesetting mode would be the following, but since \cs{begin}
@@ -608,33 +700,32 @@
 % \changes{v1.1p}{2019/08/27}{Make command robust}
 %
 %    \begin{macrocode}
-\edef\end
-  {\unexpanded{%
-     \romannumeral
-       \ifx\protect\@typeset@protect
-       \expandafter       %1
-         \expandafter        %2
-       \expandafter       %1
-           \expandafter         %3 expands the \csname inside \end<space>
-       \expandafter       %1
-         \expandafter        %2  expands \end<space>
-       \expandafter       %1     expands the \else
-           \z@
-       \else
-         \expandafter\z@\expandafter\protect
-       \fi
-   }%
-   \expandafter\noexpand\csname end \endcsname
-  }
+%<latexrelease>\edef\end
+%<latexrelease>  {\unexpanded{%
+%<latexrelease>     \romannumeral
+%<latexrelease>       \ifx\protect\@typeset@protect
+%<latexrelease>       \expandafter       %1
+%<latexrelease>         \expandafter        %2
+%<latexrelease>       \expandafter       %1
+%<latexrelease>           \expandafter         %3 expands the \csname inside \end<space>
+%<latexrelease>       \expandafter       %1
+%<latexrelease>         \expandafter        %2  expands \end<space>
+%<latexrelease>       \expandafter       %1     expands the \else
+%<latexrelease>           \z@
+%<latexrelease>       \else
+%<latexrelease>         \expandafter\z@\expandafter\protect
+%<latexrelease>       \fi
+%<latexrelease>   }%
+%<latexrelease>   \expandafter\noexpand\csname end \endcsname
+%<latexrelease>  }
 %    \end{macrocode}
 %    And here is the original definition of \cs{end} the way it was in
 %    \LaTeX{} for several decades now hidden in \verb*=\end =.
 %    \begin{macrocode}
-\@namedef{end }#1{%
-  \csname end#1\endcsname\@checkend{#1}%
-  \expandafter\endgroup\if@endpe\@doendpe\fi
-  \if@ignore\@ignorefalse\ignorespaces\fi}
-%</2ekernel|latexrelease>
+%<latexrelease>\@namedef{end }#1{%
+%<latexrelease>  \csname end#1\endcsname\@checkend{#1}%
+%<latexrelease>  \expandafter\endgroup\if@endpe\@doendpe\fi
+%<latexrelease>  \if@ignore\@ignorefalse\ignorespaces\fi}
 %<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 %    An here the rollback in case that is ever needed.
