@@ -25,6 +25,8 @@ checkdeps =
     maindir .. "/required/graphics"
   }
 
+checkruns = 3  -- some tests need 3 runs to settle!
+
 -- Allow for TU and other tests test
 checkconfigs = {"build","config-TU","config-legacy","config-search"}
 
