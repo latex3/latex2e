@@ -1,12 +1,10 @@
 
 % This class is buggy and needs fixing
 
-\ProvidesClass{source2edoc}
-              [2020/08/16 v0.1 Quick hack to typeset source2.tex
-               (not usable for anything else and buggy -- will vanish again)!]
+%\ProvidesClass{source2edoc}
+%              [2020/08/16 v0.1 Quick hack to typeset source2.tex
+%               (not usable for anything else and buggy -- will vanish again)!]
 
-\tracingnone
-              
 \LoadClass{l3doc}
 
 \RemoveFromHook{begindocument}[l3doc]
