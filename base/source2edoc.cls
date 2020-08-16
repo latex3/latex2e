@@ -12,6 +12,7 @@
 
 %\ShowHook{begindocument}
 
+\typeout{========== catcode of @:\the\catcode`\@ }   % why is @ catcode 12?
 \makeatletter
 
 \def\partname{File}
@@ -190,6 +191,12 @@ Bug reports can be opened (category \texttt{#1}) at\\%
     {\oc@ttf\char`\%}#1^^M%
     \fi}%
 \endgroup%
+
+\InputIfFileExists{ltxdoc.cfg}
+           {\typeout{*************************************^^J%
+                     * Local config file ltxdoc.cfg used^^J%
+                     *************************************}}
+           {}
 
 \errorstopmode  
 
