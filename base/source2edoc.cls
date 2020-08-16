@@ -12,6 +12,8 @@
 
 %\ShowHook{begindocument}
 
+{\scrollmode\showthe\catcode`\@ }
+\makeatletter
 
 \def\partname{File}
 \renewcommand*{\DocInclude}[1]{%
