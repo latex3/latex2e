@@ -198,6 +198,7 @@ Bug reports can be opened (category \texttt{#1}) at\\%
                      *************************************}}
            {}
 
-\errorstopmode  
+%\errorstopmode
+\batchmode
 
 \endinput
