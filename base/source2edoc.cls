@@ -1,19 +1,17 @@
 
 % This class is buggy and needs fixing
 
-%\ProvidesClass{source2edoc}
-%              [2020/08/16 v0.1 Quick hack to typeset source2.tex
-%               (not usable for anything else and buggy -- will vanish again)!]
+\ProvidesClass{source2edoc}
+              [2020/08/16 v0.1 Quick hack to typeset source2.tex
+               (not usable for anything else and buggy -- will vanish again)!]
 
 \LoadClass{l3doc}
 
-\RemoveFromHook{begindocument}[l3doc]
-\AddToHook{begindocument}{\MakeShortVerb \|}
+\RemoveFromHook{begindocument}[l3doc]          % drop the standard setting  making " a shortverb
+\AddToHook{begindocument}{\MakeShortVerb \|}   % but readd | as one
 
 %\ShowHook{begindocument}
 
-\typeout{========== catcode of @:\the\catcode`\@ }   % why is @ catcode 12?
-\makeatletter
 
 \def\partname{File}
 \renewcommand*{\DocInclude}[1]{%
@@ -198,7 +196,5 @@ Bug reports can be opened (category \texttt{#1}) at\\%
                      *************************************}}
            {}
 
-%\errorstopmode
-\batchmode
 
 \endinput
