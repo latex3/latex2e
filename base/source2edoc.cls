@@ -12,7 +12,6 @@
 
 %\ShowHook{begindocument}
 
-{\scrollmode\showthe\catcode`\@ }
 \makeatletter
 
 \def\partname{File}
