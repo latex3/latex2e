@@ -73,7 +73,6 @@ textfiles =
   }
 typesetfiles   =
   {
-    "source2edoc.cls",        -- temp
     "source2e.tex", -- Has to be first: source2e.ist creation!
     "alltt.dtx",
     "classes.dtx",
