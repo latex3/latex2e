@@ -15,21 +15,6 @@
 
 \def\partname{File}
 
-%
-%  \begin{macro}{\set@curr@file@trim@spaces}
-%
-%    For |\include| and |\includeonly| we need a variant that removes
-%    any leading and trailing spaces from the filename, while leaving
-%    any spaces \emph{inside} the filename intact. In order simplify
-%    the implementaion we borrow some code from the \texttt{expl3}
-%    language, \textbf{\emph{beware}: this may change unannounced}.
-%    \begin{macrocode}
-\def\set@curr@file@trim@spaces#1{%
-  \@expl@tl@trim@spaces@apply@@nN {#1} \set@curr@file }
-%    \end{macrocode}
-%  \end{macro}
-%
-
 
 \renewcommand*{\DocInclude}[1]{%
   \relax
