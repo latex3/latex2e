@@ -610,44 +610,19 @@
 \let\@auxout=\@mainaux
 %    \end{macrocode}
 %
-%
-% \begin{macro}{\includeonly}
-% \changes{v1.0p}{1995/04/22}{Allow blanks in argument}
-% \changes{v1.2a}{2019/07/01}{Support UTF-8}
-% \changes{v1.2g}{2020/05/02}{Improved support for spaces in filenames
-%    (gh/217)}
-%    \begin{macrocode}
 %</2ekernel>
 %<*2ekernel|latexrelease>
 %<latexrelease>\IncludeInRelease{2020/10/01}%
 %<latexrelease>                 {\includeonly}{Spaces in file names}%
-\def\includeonly#1{%
-  \@partswtrue
-%    \end{macrocode}
-%    Because the argument to |\includeonly| is a comma-separated list
-%    of filenames where there may be comma's precedeing some of the
-%    filenames or trailing them. Therefore we need to take the list
-%    apart, remove the unwanted spaces while leaving the spaces
-%    \emph{in} the filenames intact.
-%    \begin{macrocode}
-  \let\@partlist\@empty
-  \@for\reserved@a:=#1 \do
-    {
-      \expandafter\set@curr@file@trim@spaces\expandafter{\reserved@a}%
-      \ifx\@partlist\@empty
-        \edef\@partlist{\@curr@file}%
-      \else
-        \edef\@partlist{\@partlist,\@curr@file}%
-      \fi
-    }%
-  }
-\@onlypreamble\includeonly
-%    \end{macrocode}
-% \end{macro}
 %
-% \begin{macro}{\include}
+%  \begin{macro}{\include,\includeonly}
 % \changes{v0.9p}{1994/01/18}
 %         {Use \cs{@input@} so include files are listed.}
+% \changes{v1.0p}{1995/04/22}{Allow blanks in argument}
+% \changes{v1.2a}{2019/07/01}{Support UTF-8}
+% \changes{v1.2g}{2020/05/02}{Improved support for spaces in filenames
+%    (gh/217)}
+%
 % In the definition of |\include|, |\def\reserved@b| changed to
 % |\edef\reserved@b| to be consistent with the |\edef| in
 % |\includeonly|.
@@ -665,12 +640,22 @@
 %    from the filename (gh/217)}
 % \changes{v1.2g}{2020-05-02}{Pass the filename to \cs{@include} by
 %    value instead of by reference (gh/217)} 
+%
+%    With space stripping in place in \cs{set@curr@file} we need to
+%    add the space after it has acted to keep the legacy interface of
+%    \cs{@include}.
 %    \begin{macrocode}
 \def\include#1{\relax
   \ifnum\@auxout=\@partaux
     \@latex@error{\string\include\space cannot be nested}\@eha
   \else
-    \set@curr@file@trim@spaces{#1}%
+%    \end{macrocode}
+%    Here the normalisation will add |.tex| for all files, (it uses the
+%    the same normalisation as the hooks), so we need to remove that
+%    manually.  \cs{@strip@tex@ext} does that.
+%    \begin{macrocode}
+    \set@curr@file{#1}%
+    \edef\@curr@file{\@strip@tex@ext\@curr@file}%
 %    \end{macrocode}
 %    For historical reasons \cs{@include} expects an argument
 %    delimited by a space. This is kept (though uncessary now) to avoid
@@ -679,24 +664,53 @@
     \expandafter\@include\expandafter{\@curr@file} % deliberate space
   \fi}
 %    \end{macrocode}
+%
+%    Here in \cs{includeonly} we also need to strip |.tex| after
+%    normalisation:
+%    \begin{macrocode}
+\def\includeonly#1{%
+  \@partswtrue
+%    \end{macrocode}
+%    Because the argument to |\includeonly| is a comma-separated list
+%    of filenames where there may be comma's precedeing some of the
+%    filenames or trailing them. Therefore we need to take the list
+%    apart, remove the unwanted spaces while leaving the spaces
+%    \emph{in} the filenames intact.
+%    \begin{macrocode}
+  \let\@partlist\@empty
+  \@for\reserved@a:=#1 \do
+    {%
+      \expandafter\set@curr@file\expandafter{\reserved@a}%
+      \ifx\@partlist\@empty
+        \edef\@partlist{\@strip@tex@ext\@curr@file}%
+      \else
+        \edef\@partlist{\@partlist,\@strip@tex@ext\@curr@file}%
+      \fi
+    }%
+  }
+\@onlypreamble\includeonly
+%    \end{macrocode}
 % \end{macro}
 %
-%
-%
-%  \begin{macro}{\set@curr@file@trim@spaces}
-%
-%    For |\include| and |\includeonly| we need a variant that removes
-%    any leading and trailing spaces from the filename, while leaving
-%    any spaces \emph{inside} the filename intact. In order simplify
-%    the implementaion we borrow some code from the \texttt{expl3}
-%    language, \textbf{\emph{beware}: this may change unannounced}.
+%  \begin{macro}{\@strip@tex@ext,\@strip@tex@ext@aux}
+%    These macros take a (\cs{detokenize}d file name and remove any
+%    |.tex| extension).  Extra care is taken to not remove the string
+%    |.tex| from the middle of a file name:  it is only removed if it's
+%    the very last thing in the file name.
 %    \begin{macrocode}
-\def\set@curr@file@trim@spaces#1{%
-  \@expl@tl@trim@spaces@apply@@nN {#1} \set@curr@file }
+\def\reserved@a#1{%
+\def\@strip@tex@ext##1{%
+  \expandafter\@strip@tex@ext@aux
+    ##1\@nil\@nil
+     #1\@nil\relax\@nnil}
+\def\@strip@tex@ext@aux##1#1\@nil##2\@nnil{%
+  \ifx\relax##2\@empty
+    \expandafter\@cdr\expandafter\@empty\@cdr{}##1%
+  \else##1\fi}}%
+\expandafter\reserved@a
+\expandafter{\detokenize{.tex}}
 %    \end{macrocode}
 %  \end{macro}
-%
-%
 %
 %    \begin{macrocode}
 %</2ekernel|latexrelease>
@@ -718,7 +732,9 @@
 %<latexrelease>    \expandafter\@include\@curr@file
 %<latexrelease>  \fi}
 %<latexrelease>
-%<latexrelease>\let\set@curr@file@trim@spaces\@undefined
+%<latexrelease>\let\@strip@tex@ext\@undefined
+%<latexrelease>\let\@strip@tex@ext@aux\@undefined
+%<latexrelease>
 %<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 %    
@@ -768,19 +784,57 @@
       \immediate\openout\@partaux "#1.aux"
       \immediate\write\@partaux{\relax}%
     \fi
+%    \end{macrocode}
+%    Now before going to the hooks we need to set \cs{CurrentFile}:
+%    \begin{macrocode}
+%-----------------------------------------
+    \@filehook@set@CurrentFile
+%    \end{macrocode}
+%    Execute the \texttt{before} hooks just after we switched the
+%    \texttt{.aux} file \ldots
+%    \begin{macrocode}
+    \UseHook{include/before}%
+    \UseHook{include/before/#1}%
+%-----------------------------------------
     \@input@{#1.tex}%
+%-----------------------------------------
+%    \end{macrocode}
+%    \ldots{} then \texttt{end} hooks \ldots
+%    \begin{macrocode}
+    \UseHook{include/end/#1}%
+    \UseHook{include/end}%
+%-----------------------------------------
     \clearpage
+%-----------------------------------------
+%    \end{macrocode}
+%    \ldots{} and after the \cs{clearpage} the \texttt{after} hooks
+%    followed by another \cs{clearpage} just in case new material got
+%    added (after all we need to be in  well defined state after the
+%    \cs{include}).
+%    \begin{macrocode}
+    \UseHook{include/after/#1}%
+    \UseHook{include/after}%
+    \clearpage
+%-----------------------------------------
     \@writeckpt{#1}%
     \if@filesw
       \immediate\closeout\@partaux
     \fi
   \else
+%    \end{macrocode}
+% If the file is not included, reset |\deadcycles|, so that a long
+% list of non-included files does not generate an `Output loop'
+% error.
+% \changes{v1.1j}{1997/01/08}{reset \cs{deadcycles} latex/2365}
+%    \begin{macrocode}
     \deadcycles\z@
     \@nameuse{cp@#1}%
   \fi
   \let\@auxout\@mainaux}
 %<latexrelease>\EndIncludeInRelease
-%<latexrelease>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
 %<latexrelease>\IncludeInRelease{0000/00/00}%
 %<latexrelease>                 {\@include}{Spaces in file names}%
 %<latexrelease>\def\@include#1 {%
