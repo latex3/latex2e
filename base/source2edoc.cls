@@ -16,43 +16,6 @@
 \def\partname{File}
 
 
-\renewcommand*{\DocInclude}[1]{%
-  \relax
-  \clearpage
-  \docincludeaux
-  \IfFileExists{#1.fdd}%
-    {\def\currentfile{#1.fdd}}%
-    {\def\currentfile{#1.dtx}}%
-  \ifnum\@auxout=\@partaux
-    \@latexerr{\string\include\space cannot be nested}\@eha
-  \else
-    \set@curr@file@trim@spaces{#1}%
-    \expandafter\@docinclude\expandafter{\@curr@file}
- \fi}
-\def\@docinclude#1 {\clearpage
-\if@filesw \immediate\write\@mainaux{\string\@input{"#1.aux"}}\fi
-\@tempswatrue\if@partsw \@tempswafalse\edef\@tempb{#1}\@for
-\@tempa:=\@partlist\do{\ifx\@tempa\@tempb\@tempswatrue\fi}\fi
-\if@tempswa \let\@auxout\@partaux \if@filesw
-\immediate\openout\@partaux "#1.aux"
-\immediate\write\@partaux{\relax}\fi
-\let\@ltxdoc@PrintIndex\PrintIndex
-\let\PrintIndex\relax
-\let\@ltxdoc@PrintChanges\PrintChanges
-\let\PrintChanges\relax
-\let\@ltxdoc@theglossary\theglossary
-\let\@ltxdoc@endtheglossary\endtheglossary
-\part{\currentfile}%
-  {\let\ttfamily\relax
-  \xdef\filekey{\filekey, \thepart={\ttfamily\currentfile}}}%
-\DocInput{\currentfile}%
-\let\PrintIndex\@ltxdoc@PrintIndex
-\let\PrintChanges\@ltxdoc@PrintChanges
-\let\theglossary\@ltxdoc@theglossary
-\let\endtheglossary\@ltxdoc@endtheglossary
-\clearpage
-\@writeckpt{#1}\if@filesw \immediate\closeout\@partaux \fi
-\else\@nameuse{cp@#1}\fi\let\@auxout\@mainaux}
 \gdef\codeline@wrindex#1{\if@filesw
       \begingroup
         \let\protect\noexpand
