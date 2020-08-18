@@ -615,8 +615,6 @@
 %      the code chunks (and their labels) added to it,
 %   \item
 %      any rules set up to order them,
-%      \fmi{currently this is missing the default rules that apply,
-%      guess that needs fixing}
 %   \item
 %      the computed order (if already defined),
 %   \item
@@ -1113,6 +1111,21 @@
 %   This hook is discussed in conjunction with the shipout hooks.
 % \end{function}
 %
+%    \bigskip
+%
+%    The few hooks that existed previously in \LaTeXe{} used internally
+%    commands such as \cs{@begindocumenthook} and packages sometimes
+%    augemented them directly rather than working through
+%    \cs{AtBeginDocumement}. For that reason the is currently support
+%    for this, that is if the system detects that such an internal
+%    legacy hook command contains code it adds it to the new hook
+%    system under the label \texttt{legacy} so that it doesn't get
+%    lost.
+%
+%    However, over time the remaining cases of direct usage need
+%    updating because in one of the future release of \LaTeX{} we will
+%    turn this legacy support off, as it does unnecessary slow down
+%    the processing.
 %
 %
 % \subsection{\LaTeXe{} commands and environments augmented by
@@ -1578,14 +1591,19 @@
        \tl_new:c { g_@@_#1_reversed_tl }
 %    \end{macrocode}
 %    The above is all in L3 convention, but we also provide an
-%    interface to legacy \LaTeXe{} for use in the current kernel. This
-%    is done in a separate macro.
+%    interface to legacy \LaTeXe{} hooks of the form \cs{@...hook},
+%    e.g., \cs{@begindocumenthook}.
+%    there have been a few of them and they have been added to
+%    using \cs{g@addto@macro}. If there exists such a macro matching
+%    the name of the new hook, i.e.,
+%    \verb+\@+\meta{hook-name}\texttt{hook} and it is not empty then
+%    we add its contents as a code chunk under the label \texttt{legacy}.
 %    \begin{quote}
 %       \textbf{Warning: this support will vanish in future releases!}
 %    \end{quote}
 %
 %    \begin{macrocode}
-       \@@_provide_legacy_interface:n {#1}
+       \@@_include_legacy_code_chunk:n {#1}
      }
 }
 %    \end{macrocode}
@@ -1640,25 +1658,19 @@
 %  \end{macro}
 
 
-% \begin{macro}{\@@_provide_legacy_interface:n}
+% \begin{macro}{\@@_include_legacy_code_chunk:n}
 %    The \LaTeX{} legacy concept for hooks uses with hooks the
 %    following naming scheme in the code: \cs{@...hook}.
 %
-%    We follow this convention and insert the hook code using this
-%    naming scheme in \LaTeXe{}.
+%    If this macro is not empty we add it under the label
+%    \texttt{legacy} to the current hook and then empty it globally.
+%    This way packages or classes directly manipulating commands such
+%    as \cs{@begindocumenthook} still get their hook data added.
 %    \begin{quote}
 %       \textbf{Warning: this support will vanish in future releases!}
 %    \end{quote}
-%    At least as long as this code is in a
-%    package, some such hooks are already filled with data when we move
-%    them over to the new scheme. We therefore insert already existing
-%    code under the label \texttt{legacy} into the hook management
-%    machinery and then replace the \cs{@...hook} with its counterpart
-%    which is \cs{g_@@_\#1_code_tl}.\footnote{This means one extra
-%    unnecessary expansion on each invocation in the document but
-%    keeps the \LaTeXe{} and the L3 coding side properly separated.}
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_provide_legacy_interface:n #1
+\cs_new_protected:Npn \@@_include_legacy_code_chunk:n #1
   {
 %    \end{macrocode}
 %    If the \pkg{expl3} code is run with checking on then assigning or
@@ -1667,31 +1679,33 @@
 %    debugging explicitly suspended.
 %    \begin{macrocode}
     \debug_suspend:
+%    \end{macrocode}
+%    If the macro doesn't exist (which is the usual case) then nothing
+%    needs to be done.
+%    \begin{macrocode}
     \tl_if_exist:cT { @#1hook }
 %    \end{macrocode}
-%    Of course if the hook exists but is still empty, there is no need
-%    to add anything under \texttt{legacy} or the current package name.
+%    Of course if the legacy hook exists but is empty, there is no need
+%    to add anything under \texttt{legacy} the legacy label.
 %    \begin{macrocode}
       {
         \tl_if_empty:cF { @#1hook }
           {
-            \@@_gput_code:nxv {#1}
-              { \@@_parse_label_default:Vn \c_novalue_tl { legacy } }
-              { @#1hook }
-          }
-      }
+            \exp_args:Nnnv \@@_hook_gput_code_do:nnn {#1}
+                                  { legacy } { @#1hook }
 %    \end{macrocode}
-%    We need a global definition in case the declaration is done
-%    inside a group (which happens below at the end of the file).
-%    This is another reason why need to suspend checking, otherwise
-%    \cs{tl_gset:co} would complain about \cs{@...hook} not starting
-%    with \cs{g_}.
+%    Once added to the hook, we need to clear it otherwise it might
+%    get added again  later if the hook data gets updated.
 %    \begin{macrocode}
-    \tl_gset:co{@#1hook}{\cs:w g_@@_#1_code_tl\cs_end:}
+            \tl_gclear:c { @#1hook }
+           }
+      }
     \debug_resume:
   }
 %    \end{macrocode}
 % \end{macro}
+%
+%
 %
 % \subsection{Parsing a label}
 %
@@ -1792,7 +1806,7 @@
 \cs_new_protected:Npn \@@_gput_code:nnn #1 #2 #3
   {
 %    \end{macrocode}
-%    First we check if the hook exists.
+%    First we check if the hook exists.\pho{correct docu}
 %    \begin{macrocode}
     \@@_if_marked_removal:nnTF {#1} {#2}
       { \@@_unmark_removal:nn {#1} {#2} }
@@ -2409,9 +2423,9 @@
 }
 %    \end{macrocode}
 %  \end{macro}
-
-
-
+%
+%
+%
 %  \begin{macro}{\@@_initialize_hook_code:n}
 %    Initializing or reinitializing the fast execution hook code. In
 %    the preamble this is selectively done in case a hook gets used
@@ -2422,7 +2436,15 @@
   \@@_debug:n{ \iow_term:x{^^JUpdate~ code~ for~ hook~
                                   '#1' \on@line :^^J} }
 %    \end{macrocode}
-%    This does the sorting and the updates. If there aren't any code
+%    This does the sorting and the updates.
+%    First thing we do is to check if a legacy hook macro exists and
+%    if so we add it to the hook under the label \texttt{legacy}. This
+%    might make the hook non-empty so we have to do this before
+%    the then following test.
+%    \begin{macrocode}
+  \@@_include_legacy_code_chunk:n {#1}  
+%    \end{macrocode}
+%    If there aren't any code
 %    chunks for the current hook, there is no point in even starting
 %    the sorting routine so we make a quick test for that and in that
 %    case just update \cs{g_@@_\meta{hook}_code_tl} to hold the next
@@ -3773,77 +3795,6 @@
 %    \begin{macrocode}
 %</2ekernel>
 %    \end{macrocode}
-
-%
-% \section{A package version of the code for testing}
-%
-
-%    \begin{macrocode}
-%<*package>
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-\ProvidesExplPackage{lthooks}{\lthooksdate}{\lthooksversion}
-                    {Hook management interface for LaTeX2e}
-%    \end{macrocode}
-%
-%
-% \subsection{Core hook management code (kernel part)}
-%
-%    This should run in older formats so we can't use
-%    \cs{IfFormatAtLeastTF} right now.
-%    \begin{macrocode}
-\@ifl@t@r\fmtversion{2020/10/01}
-                    {}
-                    {\RequirePackage{xparse}
-                     \input{lthooks.ltx}
-                     \input{ltshipout.ltx}
-                     \input{ltfilehook.ltx}
-                    }
-%    \end{macrocode}
-%
-%  \subsection{Package options}
-%
-%    For now we offer a simple debug option which turns on a lot of
-%    strange \cs{typeout} messages, nothing fancy.
-%    \begin{macrocode}
-\ExplSyntaxOn
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-\hook_debug_off:
-\DeclareOption { debug } { \hook_debug_on:
-                           \shipout_debug_on: }
-%    \end{macrocode}
-%
-%
-%    For now we offer a simple debug option which turns on a lot of
-%    strange \cs{typeout} messages, nothing fancy.
-%    \begin{macrocode}
-\shipout_debug_off:
-\DeclareOption { debug-shipout } { \shipout_debug_on: }
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-\ProcessOptions
-%    \end{macrocode}
-%
-%
-%  \subsection{Temporarily patching package until changed}
-%
-%
-%
-%    \pkg{filehook} support until that package is patched:
-%    \begin{macrocode}
-\RequirePackage{filehook-ltx}
-%    \end{macrocode}
-%
-%
-%
-%    \begin{macrocode}
-%</package>
-%    \end{macrocode}
-%
 %
 %
 % \Finale
