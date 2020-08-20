@@ -1286,7 +1286,7 @@
 %    \end{macrocode}
 % \end{macro}
 %
-% \subsection{Acting on robust definitions}
+% \subsection{Acting on robust commands}
 %
 %   With most document level commands being robust now there is more of a
 %   requirement to have a standard way of aliasing (or copying) a command to a
@@ -1309,11 +1309,19 @@
 %   that definition, if \cs{DeclareCommandCopy} (or similar) is used, or show
 %   the definition of the command, if \cs{ShowCommmand} is used.
 %
+% \begin{macro}{\robust@command@act}
+% \begin{macro}{\robust@command@act@loop}
+% \begin{macro}{\robust@command@act@loop@aux}
+% \begin{macro}{\robust@command@act@do}
+% \begin{macro}{\robust@command@act@end}
+% \changes{v1.5k}{2020/08/19}{Made \cs{robust@command@act}
+%     (was \cs{declare@command@copy}) more generic}
+%
 %   The looping machinery is generic and knows nothing about what is to be done
 %   for each case.  The syntax of the main macro \cs{robust@command@act} is:
 %   \begin{quote}
-%     |\robust@command@act|\meta{action-list}\meta{fallback-action}\\
-%       \meta{robust-cmd}\meta{act-arg}
+%     |\robust@command@act|\meta{action-list}\meta{robust-cmd}\\
+%       \meta{fallback-action}\meta{act-arg}
 %   \end{quote}
 %   \meta{action-list} is a token list of the form:
 %   \begin{quote}
@@ -1331,8 +1339,73 @@
 %   \meta{fallback-action}\meta{act-arg} is executed before
 %   \cs{robust@command@act} exits.
 %
-%   \cs{NewCommandCopy} checks if \verb=#1= is already defined, and raises an
-%   error if so, otherwise the definition is carried out.
+%   \cs{robust@command@act} will start by using \cs{robust@command@act@chk@args}
+%   to check if the \meta{robust-cmd} (|#2|) is a parameterless (possibly
+%   \cs{protected}) macro.  If it is not, the command is not a robust command:
+%   these always start with a parameterless user-level macro;  in that case,
+%   \cs{robust@command@act@end} is used to short-circuit the process and do the
+%   \meta{fallback-action} (|#3|).  This first test is necessary because later
+%   on we need to be able to expand the \meta{robust-cmd} without the risk of it
+%   Breaking Badly, and as a bonus, this speeds up the process in case we used
+%   \cs{NewCommandCopy} in a ``normal'' macro.
+%    \begin{macrocode}
+\def\robust@command@act#1#2#3#4{%
+  \begingroup
+    \escapechar=`\\
+  \expandafter\endgroup\expandafter
+  \robust@command@act@chk@args\meaning#2:->\@nil
+    {\expandafter\robust@command@act@loop
+       \expandafter#2%
+         #1{\@nnil\@nnil}%
+     \robust@command@act@end}%
+    {\robust@command@act@end}%
+      {#3}{#4}}%
+\def\robust@command@act@loop#1#2{\robust@command@act@loop@aux#1#2}
+%    \end{macrocode}
+%
+%   If \cs{robust@command@act@chk@args} branched to false, then
+%   \cs{robust@command@act@loop} will loop over the list of items in the
+%   \meta{action-list} (|#1|), and process each item as described earlier.
+%   If the \meta{if-type-$n$} command expands to \meta{true} then
+%   \cs{robust@command@act@do} is used to execute \meta{act-type-$n$} on the
+%   \meta{act-arg}, otherwise the loop resumes with the next item.
+%    \begin{macrocode}
+\def\robust@command@act@loop@aux#1#2#3{%
+  \ifx\@nnil#2%
+  \else
+    #2{#1}%
+      {\robust@command@act@do{#3}}%
+      {\expandafter\robust@command@act@loop\expandafter#1}%
+  \fi}
+\def\robust@command@act@do#1%
+  \fi#2%
+  \robust@command@act@end#3#4{%
+  \fi
+  #1#4}
+%    \end{macrocode}
+%
+%   If the end is reached and no action was taken, then do
+%   \meta{fallback-action}\meta{act-arg}.
+%    \begin{macrocode}
+\def\robust@command@act@end#1#2{#1#2}
+%    \end{macrocode}
+%
+% \begin{macro}{\robust@command@act@chk@args}
+%    \begin{macrocode}
+\def\robust@command@act@chk@args#1:->#2\@nil{%
+  \@expl@str@if@eq@@nnTF{#1}{macro}%
+    {\@firstoftwo}%
+    {\@expl@str@if@eq@@nnTF{#1}{\protected macro}%
+      {\@firstoftwo}%
+      {\@secondoftwo}}}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
 %   \cs{RenewCommandCopy} does (almost) the opposite.  If the command is
 %   \emph{not} defined, then an error is raised.  But the definition is carried
 %   out anyhow, so the behaviour is consistent with \cs{renewcommand}.
@@ -1377,83 +1450,7 @@
     {\declare@command@copy#3#4}}
 %    \end{macrocode}
 %
-% \begin{macro}{\declare@command@copy}
-% \begin{macro}{\declare@command@copy@loop}
-% \begin{macro}{\declare@command@copy@loop@aux}
-% \begin{macro}{\declare@command@copy@do}
-% \begin{macro}{\declare@command@copy@let}
-% \begin{macro}{\declare@command@copy@chk@args}
 % \begin{macro}{\@declarecommandcopylisthook}
-%   \cs{declare@command@copy@loop} will start by using
-%   \cs{declare@command@copy@chk@args} to check if the macro being copied
-%   (\verb=#2=) is a parameterless (\cs{protected}) macro.  If it is not, a
-%   simple \cs{let} is used to copy the definition and we're done.  This is so
-%   because the high-level commands that are in the scope of this macro are
-%   always defined so that the top-level macro doesn't take any argument.  This
-%   first test is necessary because later on we need to be able to expand the
-%   \verb=#2= without the risk of it Breaking Badly, and as a bonus, this speeds
-%   up the process in case we used \cs{NewCommandCopy} in a ``normal'' macro.
-%
-%   If \cs{declare@command@copy@chk@args} branched to false, then
-%   \cs{declare@command@copy@loop} will loop over the list of items in the
-%   \cs{@declarecommandcopylisthook} token list, and process each item with
-%   \verb=#1= (the command being defined) and \verb=#2= (the command being
-%   copied to \verb=#1=).  The token list \cs{@declarecommandcopylisthook}
-%   should be of the form
-% \begin{verbatim}
-%   {\IfTypeCommand \CopyTypeCommand}
-%   {\IfAnotherCommand \CopyAnotherCommand}
-%   ...
-% \end{verbatim}
-%   where each braced group represents one type of command, and within each
-%   the first token is a conditional which takes a command as argument, and
-%   tests that command, branching to true or false.  If this macro branched to
-%   true, then the second macro is used with the two macros (the one being
-%   copied to, and the one being copied from) to perform the assignment.
-%   If none of the tests in the \cs{@declarecommandcopylisthook} token list
-%   resulted true, then both macros are just \cs{let} to one another.
-%    \begin{macrocode}
-\def\declare@command@copy#1#2{%
-  \expandafter\declare@command@copy@chk@args\meaning#2:->\@nil
-    {\expandafter\declare@command@copy@loop\expandafter#2%
-       \@declarecommandcopylisthook{\@nnil\@nnil}%
-     \@declare@command@end}%
-    {\declare@command@copy@let}%
-  #1#2}%
-\def\declare@command@copy@loop#1#2{\declare@command@copy@loop@aux#1#2}
-\def\declare@command@copy@loop@aux#1#2#3{%
-  \ifx\@nnil#2%
-    \declare@command@copy@do\declare@command@copy@let
-  \else
-    #2{#1}%
-      {\declare@command@copy@do{#3}}%
-      {\expandafter\declare@command@copy@loop\expandafter#1}%
-  \fi}
-\def\declare@command@copy@do#1#2%
-  \fi#3%
-  \@declare@command@end#4#5{%
-  \fi
-  #1#4#5}
-\def\declare@command@copy@let#1#2{\let#1=#2\relax}
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-\def\declare@command@copy@chk@args#1:->#2\@nil{%
-  \@expl@str@if@eq@@nnTF{#1}{macro}%
-    {\@firstoftwo}%
-    {\@expl@str@if@eq@@nnTF{#1}{\protected macro}%
-      {\@firstoftwo}%
-      {\@secondoftwo}}}
-%    \end{macrocode}
-%
-%
-%    \begin{macrocode}
-%</2ekernel>
-%<latexrelease>\IncludeInRelease{2020-10-01}{\DeclareCommandCopy}
-%<latexrelease>  {Add \NewCommandCopy, \RenewCommandCopy, and \DeclareCommandCopy}%
-%<*2ekernel|latexrelease>
-%    \end{macrocode}
-%
 % \begin{macro}{\NewCommandCopy}
 % \begin{macro}{\RenewCommandCopy}
 % \begin{macro}{\DeclareCommandCopy}
