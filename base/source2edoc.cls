@@ -13,6 +13,66 @@
 %\ShowHook{begindocument}
 
 
+
+% l3doc's def are buggy (already fixed there but not distributed yet)
+\ExplSyntaxOn
+\RenewDocumentCommand \DocInclude { m }
+  {
+    \relax\clearpage
+    \docincludeaux
+    \IfFileExists{#1.fdd}
+      { \cs_set:Npn \currentfile{#1.fdd} }
+      { \cs_set:Npn \currentfile{#1.dtx} }
+    \int_compare:nNnTF \@auxout = \@partaux
+      { \@latexerr{\string\include\space cannot~be~nested}\@eha }
+      { \@docinclude {#1} }  % <--- braces needed!
+  }
+\cs_gset:Npn \@docinclude #1
+  {
+    \clearpage
+    \immediate\write\@mainaux{\string\@input{#1.aux}}
+    \@tempswatrue
+    \if@partsw
+      \@tempswafalse
+      \cs_set:Npx \@tempb {#1}
+      \clist_map_inline:Nn \@partlist
+        {
+          \if_meaning:w \@tempa \@tempb
+            \@tempswatrue
+          \fi:
+        }
+    \fi
+    \if@tempswa
+      \cs_set_eq:NN \@auxout                 \@partaux
+      \immediate\openout\@partaux #1.aux
+      \immediate\write\@partaux{\relax}
+      \cs_set_eq:NN \@ltxdoc@PrintIndex      \PrintIndex
+      \cs_set_eq:NN \PrintIndex              \relax
+      \cs_set_eq:NN \@ltxdoc@PrintChanges    \PrintChanges
+      \cs_set_eq:NN \PrintChanges            \relax
+      \cs_set_eq:NN \@ltxdoc@theglossary     \theglossary
+      \cs_set_eq:NN \@ltxdoc@endtheglossary  \endtheglossary
+      \part{\currentfile}
+      {
+        \cs_set_eq:NN \ttfamily\relax
+        \cs_gset:Npx \filekey
+          { \filekey,~ \thepart = { \ttfamily \currentfile } } % <-- mising spaces considered harmful
+      }
+      \DocInput{\currentfile}
+      \cs_set_eq:NN \PrintIndex              \@ltxdoc@PrintIndex
+      \cs_set_eq:NN \PrintChanges            \@ltxdoc@PrintChanges
+      \cs_set_eq:NN \theglossary             \@ltxdoc@theglossary
+      \cs_set_eq:NN \endtheglossary          \@ltxdoc@endtheglossary
+      \clearpage
+      \@writeckpt{#1}
+      \immediate \closeout \@partaux
+    \else
+      \@nameuse{cp@#1}
+    \fi
+    \cs_set_eq:NN \@auxout \@mainaux
+  }
+\ExplSyntaxOff
+
 \def\partname{File}
 
 
