@@ -52,7 +52,7 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
-    "filehook-ltx.sty",       -- temp
+    "source2edoc.cls",        -- temp
      "*-????-??-??.sty"
   }
 textfiles =
