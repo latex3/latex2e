@@ -21,6 +21,9 @@
 %% File: l3backend-header.dtx
 /color.sc { } def
 /color.fc { } def
+TeXDict begin
+/TeXcolorsetspotcolor { setcustomcolor } def
+end
 true setglobal
 /pdf.globaldict 4 dict def
 false setglobal

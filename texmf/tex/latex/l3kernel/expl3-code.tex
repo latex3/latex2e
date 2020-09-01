@@ -69,7 +69,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: expl3.dtx
-\def\ExplFileDate{2020-08-07}%
+\def\ExplFileDate{2020-09-01}%
 \begingroup
   \def\next{\endgroup}%
   \expandafter\ifx\csname PackageError\endcsname\relax
@@ -2452,6 +2452,13 @@
     \exp_after:wN #2
     \exp_after:wN #3
     \exp_after:wN { \exp:w \__exp_eval_register:N #4 }
+  }
+\cs_new:Npn \exp_args:NNNv #1#2#3#4
+  {
+    \exp_after:wN #1
+    \exp_after:wN #2
+    \exp_after:wN #3
+    \exp_after:wN { \exp:w \__exp_eval_register:c {#4} }
   }
 \cs_new:Npn \exp_args:NcNc #1#2#3#4
   {
@@ -7160,6 +7167,55 @@
     \__sys_const:nn { sys_if_engine_ #1 }
       { \str_if_eq_p:Vn \c_sys_engine_str {#1} }
   }
+\str_const:Nx \c_sys_engine_exec_str
+  {
+    \sys_if_engine_pdftex:T { pdf }
+    \sys_if_engine_xetex:T  { xe  }
+    \sys_if_engine_ptex:T   { ep  }
+    \sys_if_engine_uptex:T  { eup }
+    \sys_if_engine_luatex:T
+      {
+        lua \lua_now:e
+          {
+            if (pcall(require, 'luaharfbuzz')) then ~
+              tex.print("hb") ~
+            end
+          }
+      }
+    tex
+  }
+\str_const:Nx \c_sys_engine_format_str
+  {
+    \cs_if_exist:NTF \fmtname
+      {
+        \bool_lazy_or:nnTF
+          { \str_if_eq_p:Vn \fmtname { plain } }
+          { \str_if_eq_p:Vn \fmtname { LaTeX2e } }
+          {
+            \sys_if_engine_pdftex:T
+              { \int_compare:nNnT { \tex_pdfoutput:D } = { 1 } { pdf } }
+            \sys_if_engine_xetex:T  { xe }
+            \sys_if_engine_ptex:T   { p  }
+            \sys_if_engine_uptex:T  { up }
+            \sys_if_engine_luatex:T
+              {
+                \int_compare:nNnT { \tex_pdfoutput:D } = { 0 } { dvi }
+                lua
+              }
+            \str_if_eq:VnTF \fmtname { LaTeX2e }
+              { latex }
+              {
+                \bool_lazy_and:nnT
+                  { \sys_if_engine_pdftex_p: }
+                  { \int_compare_p:nNn { \tex_pdfoutput:D } = { 0 } }
+                    { e }
+                tex
+              }
+          }
+          { \fmtname }
+      }
+      { unknown }
+  }
 \__sys_const:nn { sys_if_rand_exist }
   { \cs_if_exist_p:N \tex_uniformdeviate:D }
 \cs_new_protected:Npn \sys_load_backend:n #1
@@ -7186,22 +7242,35 @@
         \str_case:VnF #1
           {
             { dvisvgm }   { }
-            { xdvipdfmx } { }
+            { xdvipdfmx } { \tl_gset:Nn #1 { xetex } }
+            { xetex }     { }
           }
           {
             \__kernel_msg_error:nnxx { sys } { wrong-backend }
-              #1 { xdvipdfmx }
-            \tl_gset:Nn #1 { xdvipdfmx }
+              #1 { xetex }
+            \tl_gset:Nn #1 { xetex }
           }
       }
       {
         \sys_if_output_pdf:TF
           {
-            \str_if_eq:VnF #1 { pdfmode }
+            \str_if_eq:VnTF #1 { pdfmode }
               {
-                \__kernel_msg_error:nnxx { sys } { wrong-backend }
-                  #1 { pdfmode }
-                \tl_gset:Nn #1 { pdfmode }
+                \sys_if_engine_luatex:TF
+                  { \tl_gset:Nn #1 { luatex } }
+                  { \tl_gset:Nn #1 { pdftex } }
+              }
+              {
+                \bool_lazy_or:nnF
+                  { \str_if_eq_p:Vn #1 { luatex } }
+                  { \str_if_eq_p:Vn #1 { pdftex } }
+                  {
+                    \__kernel_msg_error:nnxx { sys } { wrong-backend }
+                      #1 { \sys_if_engine_luatex:TF { luatex } { pdftex } }
+                    \sys_if_engine_luatex:TF
+                      { \tl_gset:Nn #1 { luatex } }
+                      { \tl_gset:Nn #1 { pdftex } }
+                  }
               }
           }
           {
@@ -11280,10 +11349,7 @@
     \__kernel_ior_open:No \g__file_internal_ior \l__file_full_name_tl
     \ior_if_eof:NF \g__file_internal_ior { #2 { \prg_break: } }
   }
-\bool_lazy_or:nnF
-  { \cs_if_exist_p:N \tex_filesize:D }
-  { \sys_if_engine_luatex_p: }
-  { \ior_new:N \g__file_internal_ior }
+\ior_new:N \g__file_internal_ior
 \cs_new:Npn \file_mdfive_hash:n #1
   { \__file_details:nn {#1} { mdfivesum } }
 \cs_new:Npn \file_size:n #1
@@ -11521,7 +11587,7 @@
       }
   }
   { \cs_new_eq:NN \__file_timestamp:n \tex_filemoddate:D }
-\cs_if_exist:NF \tex_filemoddate:D
+\cs_if_exist:NF \__file_timestamp:n
   {
     \prg_set_conditional:Npnn \file_compare_timestamp:nNn #1#2#3
       { p , T , F , TF }
@@ -11724,6 +11790,78 @@
   }
 \cs_new_protected:Npn \__file_id_info_auxiii:w #1 - #2 - #3 - #4 \s__file_stop
   { \tl_set:Nn \ExplFileDate { #1/#2/#3 } }
+\cs_new_protected:Npn \__kernel_dependency_version_check:Nn #1
+  { \exp_args:NV \__kernel_dependency_version_check:nn #1 }
+\cs_new_protected:Npn \__kernel_dependency_version_check:nn #1
+  {
+    \cs_if_exist:NTF \c__kernel_expl_date_tl
+      {
+        \exp_args:NV \__file_kernel_dependency_compare:nnn
+          \c__kernel_expl_date_tl {#1}
+       }
+       { \__file_kernel_dependency_compare:nnn { 0000-00-00 } {#1} }
+  }
+\cs_new_protected:Npn \__file_kernel_dependency_compare:nnn #1 #2 #3
+  {
+    \int_compare:nNnT
+        { \__file_parse_version:w #1 \s__file_stop } <
+        { \__file_parse_version:w #2 \s__file_stop }
+      { \__file_mismatched_dependency_error:nn {#2} {#3} }
+  }
+\cs_new:Npn \__file_parse_version:w #1 - #2 - #3 \s__file_stop {#1#2#3}
+\cs_new_protected:Npn \__file_mismatched_dependency_error:nn #1 #2
+  {
+    \exp_args:NNx \ior_shell_open:Nn \g__file_internal_ior
+      {
+        kpsewhich ~ --all ~
+          --engine = \c_sys_engine_exec_str
+          \c_space_tl \c_sys_engine_format_str
+            \tl_if_empty:NF \development@branch@name { -dev } .fmt
+      }
+    \seq_clear:N \l__file_tmp_seq
+    \ior_map_inline:Nn \g__file_internal_ior
+      { \seq_put_right:Nn \l__file_tmp_seq {##1} }
+    \ior_close:N \g__file_internal_ior
+    \group_begin:
+      \cs_set:Npn \\ { \MessageBreak }
+      \cs_set_eq:NN \  \c_space_tl
+      \@latex@error
+        {
+          Mismatched~LaTeX~support~files~detected. \\
+          Loading~'#2'~aborted!
+          \tl_if_exist:NT \c__kernel_expl_date_tl
+            {
+              \\ \\
+              The~L3~programming~layer~in~the~LaTeX~format \\
+              is~dated~\c__kernel_expl_date_tl,~but~in~your~TeX~
+              tree~the~files~require \\ at~least~#1.
+            }
+          \use_none:n
+        }
+        {
+          \int_compare:nNnTF { \seq_count:N \l__file_tmp_seq } > 1
+            {
+              The~cause~seems~to~be~an~old~format~file~in~the~user~tree. \\
+              LaTeX~found~these~files:
+              \seq_map_tokens:Nn \l__file_tmp_seq { \\~-~\use:n } \\
+              Try~deleting~the~file~in~the~user~tree~then~run~LaTeX~again.
+            }
+            {
+              The~most~likely~causes~are:
+              \\~-~A~recent~format~generation~failed;
+              \\~-~A~stray~format~file~in~the~user~tree~which~needs~
+                   to~be~removed~or~rebuilt;
+              \\~-~You~are~running~a~manually~installed~version~of~#2 \\
+              \ \ \ which~is~incompatible~with~the~version~in~LaTeX. \\
+            }
+          \\
+          LaTeX~will~abort~loading~the~incompatible~support~files~
+          but~this~may~lead~to \\ later~errors.~Please~ensure~that~
+          your~LaTeX~format~is~correctly~regenerated.
+        }
+    \group_end:
+    \tex_endinput:D
+  }
 \__kernel_msg_new:nnnn { kernel } { file-not-found }
   { File~'#1'~not~found. }
   {
@@ -20894,7 +21032,6 @@
 %% File: l3str-convert.dtx
 \cs_new_protected:Npn \__str_tmp:w { }
 \tl_new:N \l__str_internal_tl
-\int_new:N \l__str_internal_int
 \tl_new:N \g__str_result_tl
 \int_const:Nn \c__str_replacement_char_int { "FFFD }
 \int_const:Nn \c__str_max_byte_int { 255 }
@@ -21294,106 +21431,109 @@
     \tl_gset:Nx \g__str_result_tl { \tl_tail:N \g__str_result_tl }
   }
 \cs_new:Npn \__str_encode_clist_char:n #1 { , #1 }
-\cs_new_protected:Npn \str_declare_eight_bit_encoding:nnn #1#2#3
+\cs_new_protected:Npn \__str_declare_eight_bit_encoding:nnnn #1
   {
     \tl_set:Nn \l__str_internal_tl {#1}
     \cs_new_protected:cpn { __str_convert_decode_#1: }
       { \__str_convert_decode_eight_bit:n {#1} }
     \cs_new_protected:cpn { __str_convert_encode_#1: }
       { \__str_convert_encode_eight_bit:n {#1} }
-    \tl_const:cn { c__str_encoding_#1_tl } {#2}
-    \tl_const:cn { c__str_encoding_#1_missing_tl } {#3}
+    \exp_args:Ncc \__str_declare_eight_bit_aux:NNnnn
+      { g__str_decode_#1_intarray } { g__str_encode_#1_intarray }
+  }
+\cs_new_protected:Npn \__str_declare_eight_bit_aux:NNnnn #1#2#3#4#5
+  {
+    \intarray_new:Nn #1 { 256 }
+    \int_step_inline:nnn { 0 } { 255 }
+      { \intarray_gset:Nnn #1 { 1 + ##1 } {##1} }
+    \__str_declare_eight_bit_loop:Nnn #1
+      #4 { \s__str_stop \prg_break: } { }
+    \prg_break_point:
+    \__str_declare_eight_bit_loop:Nn #1
+      #5 { \s__str_stop \prg_break: }
+    \prg_break_point:
+    \intarray_new:Nn #2 {#3}
+    \int_step_inline:nnn { 0 } { 255 }
+      {
+        \int_compare:nNnF { \intarray_item:Nn #1 { 1 + ##1 } } = { -1 }
+          {
+            \intarray_gset:Nnn #2
+              {
+                1 +
+                \int_mod:nn { \intarray_item:Nn #1 { 1 + ##1 } }
+                  { \intarray_count:N #2 }
+              }
+              {##1}
+          }
+      }
+  }
+\cs_new_protected:Npn \__str_declare_eight_bit_loop:Nnn #1#2#3
+  {
+    \__str_use_none_delimit_by_s_stop:w #2 \s__str_stop
+    \intarray_gset:Nnn #1 { 1 + "#2 } { "#3 }
+    \__str_declare_eight_bit_loop:Nnn #1
+  }
+\cs_new_protected:Npn \__str_declare_eight_bit_loop:Nn #1#2
+  {
+    \__str_use_none_delimit_by_s_stop:w #2 \s__str_stop
+    \intarray_gset:Nnn #1 { 1 + "#2 } { -1 }
+    \__str_declare_eight_bit_loop:Nn #1
   }
 \cs_new_protected:Npn \__str_convert_decode_eight_bit:n #1
   {
-    \group_begin:
-      \int_zero:N \l__str_internal_int
-      \exp_last_unbraced:Nx \__str_decode_eight_bit_load:nn
-        { \tl_use:c { c__str_encoding_#1_tl } }
-        { \s__str_stop \prg_break: } { }
-      \prg_break_point:
-      \exp_last_unbraced:Nx \__str_decode_eight_bit_load_missing:n
-        { \tl_use:c { c__str_encoding_#1_missing_tl } }
-        { \s__str_stop \prg_break: }
-      \prg_break_point:
-      \flag_clear:n { str_error }
-      \__str_convert_gmap:N \__str_decode_eight_bit_char:N
-      \__str_if_flag_error:nnx { str_error } { decode-8-bit } {#1}
-    \group_end:
+    \cs_set:Npx \__str_tmp:w
+      {
+        \exp_not:N \__str_decode_eight_bit_aux:Nn
+        \exp_not:c { g__str_decode_#1_intarray }
+      }
+    \flag_clear:n { str_error }
+    \__str_convert_gmap:N \__str_tmp:w
+    \__str_if_flag_error:nnx { str_error } { decode-8-bit } {#1}
   }
-\cs_new_protected:Npn \__str_decode_eight_bit_load:nn #1#2
+\cs_new:Npn \__str_decode_eight_bit_aux:Nn #1#2
   {
-    \__str_use_none_delimit_by_s_stop:w #1 \s__str_stop
-    \tex_dimen:D "#1 = \l__str_internal_int sp \scan_stop:
-    \tex_skip:D \l__str_internal_int = "#1 sp \scan_stop:
-    \tex_toks:D \l__str_internal_int \exp_after:wN { \int_value:w "#2 }
-    \int_incr:N \l__str_internal_int
-    \__str_decode_eight_bit_load:nn
+    #2 \s__str
+    \exp_args:Nf \__str_decode_eight_bit_aux:n
+      { \intarray_item:Nn #1 { 1 + `#2 } }
+    \s__str
   }
-\cs_new_protected:Npn \__str_decode_eight_bit_load_missing:n #1
+\cs_new:Npn \__str_decode_eight_bit_aux:n #1
   {
-    \__str_use_none_delimit_by_s_stop:w #1 \s__str_stop
-    \tex_dimen:D "#1 = \l__str_internal_int sp \scan_stop:
-    \tex_skip:D \l__str_internal_int = "#1 sp \scan_stop:
-    \tex_toks:D \l__str_internal_int \exp_after:wN
-      { \int_use:N \c__str_replacement_char_int }
-    \int_incr:N \l__str_internal_int
-    \__str_decode_eight_bit_load_missing:n
-  }
-\cs_new:Npn \__str_decode_eight_bit_char:N #1
-  {
-    #1 \s__str
-    \if_int_compare:w \tex_dimen:D `#1 < \l__str_internal_int
-      \if_int_compare:w \tex_skip:D \tex_dimen:D `#1 = `#1 \exp_stop_f:
-        \tex_the:D \tex_toks:D \tex_dimen:D
-      \fi:
+    \if_int_compare:w #1 < \c_zero_int
+      \flag_raise:n { str_error }
+      \int_value:w \c__str_replacement_char_int
+    \else:
+      #1
     \fi:
-    \int_value:w `#1 \s__str
   }
+\int_new:N \l__str_modulo_int
 \cs_new_protected:Npn \__str_convert_encode_eight_bit:n #1
   {
-    \group_begin:
-      \int_zero:N \l__str_internal_int
-      \exp_last_unbraced:Nx \__str_encode_eight_bit_load:nn
-        { \tl_use:c { c__str_encoding_#1_tl } }
-        { \s__str_stop \prg_break: } { }
-      \prg_break_point:
-      \flag_clear:n { str_error }
-      \__str_convert_gmap_internal:N \__str_encode_eight_bit_char:n
-      \__str_if_flag_error:nnx { str_error } { encode-8-bit } {#1}
-    \group_end:
+    \cs_set:Npx \__str_tmp:w
+      {
+        \exp_not:N \__str_encode_eight_bit_aux:NNn
+        \exp_not:c { g__str_encode_#1_intarray }
+        \exp_not:c { g__str_decode_#1_intarray }
+      }
+    \flag_clear:n { str_error }
+    \__str_convert_gmap_internal:N \__str_tmp:w
+    \__str_if_flag_error:nnx { str_error } { encode-8-bit } {#1}
   }
-\cs_new_protected:Npn \__str_encode_eight_bit_load:nn #1#2
+\cs_new:Npn \__str_encode_eight_bit_aux:NNn #1#2#3
   {
-    \__str_use_none_delimit_by_s_stop:w #1 \s__str_stop
-    \tex_dimen:D "#2 = \l__str_internal_int sp \scan_stop:
-    \tex_skip:D \l__str_internal_int = "#2 sp \scan_stop:
-    \exp_args:NNf \tex_toks:D \l__str_internal_int
-      { \__str_output_byte:n { "#1 } }
-    \int_incr:N \l__str_internal_int
-    \__str_encode_eight_bit_load:nn
+    \exp_args:Nf \__str_encode_eight_bit_aux:nnN
+      {
+        \intarray_item:Nn #1
+          { 1 + \int_mod:nn {#3} { \intarray_count:N #1 } }
+      }
+      {#3}
+      #2
   }
-\cs_new:Npn \__str_encode_eight_bit_char:n #1
+\cs_new:Npn \__str_encode_eight_bit_aux:nnN #1#2#3
   {
-    \if_int_compare:w #1 > \c_max_register_int
-      \flag_raise:n { str_error }
-    \else:
-      \if_int_compare:w \tex_dimen:D #1 < \l__str_internal_int
-        \if_int_compare:w \tex_skip:D \tex_dimen:D #1 = #1 \exp_stop_f:
-          \tex_the:D \tex_toks:D \tex_dimen:D #1 \exp_stop_f:
-          \exp_after:wN \exp_after:wN \exp_after:wN \use_none:nn
-        \fi:
-      \fi:
-      \__str_encode_eight_bit_char_aux:n {#1}
-    \fi:
-  }
-\cs_new:Npn \__str_encode_eight_bit_char_aux:n #1
-  {
-    \if_int_compare:w #1 > \c__str_max_byte_int
-      \flag_raise:n { str_error }
-    \else:
-      \__str_output_byte:n {#1}
-    \fi:
+    \int_compare:nNnTF { \intarray_item:Nn #3 { 1 + #1 } } = {#2}
+      { \__str_output_byte:n {#1} }
+      { \flag_raise:n { str_error } }
   }
 \__kernel_msg_new:nnn { str } { unknown-esc }
   { Escaping~scheme~'#1'~(filtered:~'#2')~unknown. }
@@ -26076,6 +26216,8 @@
     \tex_hbox:D to \c_zero_dim
       { \color_group_begin: #1 \color_group_end: }
   }
+\cs_new_protected:Npn \hbox_overlap_center:n  #1
+  { \hbox_to_zero:n { \tex_hss:D #1 \tex_hss:D } }
 \cs_new_protected:Npn \hbox_overlap_left:n  #1
   { \hbox_to_zero:n { \tex_hss:D #1 } }
 \cs_new_protected:Npn \hbox_overlap_right:n #1
@@ -28376,7 +28518,7 @@
   {
     \__text_if_recursion_tail_stop_do:Nn #2
       { \__text_expand_letterlike:N #1 }
-    \cs_if_eq:NNTF #2 #1
+    \str_if_eq:nnTF {#1} {#2}
       {
         \__text_use_i_delimit_by_q_recursion_stop:nw
           { \__text_expand_exclude:Nn #1 }
@@ -28691,7 +28833,7 @@
   {
     \__text_if_recursion_tail_stop_do:Nn #4
       { \use:c { __text_change_case_letterlike_ #1 :nnN } {#1} {#2} #3 }
-    \cs_if_eq:NNTF #3 #4
+    \str_if_eq:nnTF {#3} {#4}
       {
         \__text_use_i_delimit_by_q_recursion_stop:nw
           { \__text_change_case_exclude:nnNn {#1} {#2} #3 }
