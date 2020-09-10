@@ -32,7 +32,7 @@
 %
 %    \begin{macrocode}
 \def\lthooksversion{v1.0a}
-\def\lthooksdate{2020/08/31}
+\def\lthooksdate{2020/09/10}
 %    \end{macrocode}
 %
 %<*driver>
@@ -350,6 +350,19 @@
 % sub-packages. In that case you may want to use the same
 % \meta{label} throughout the sub-packages in order to avoid
 % that the labels change if you internally reorganize your code.
+%
+% Except for \cs{UseHook} and \cs{UseOneTimeHook} (and their \pkg{expl3}
+% interfaces \cs{hook_use:n} and \cs{hook_use_once:n}), all \meta{hook}
+% and \meta{label} arguments are processed in the same way: first,
+% spaces are trimmed around the argument, then it is fully expanded
+% until only character tokens remain.  If the full expansion of the
+% \meta{hook} or \meta{label} contains a non-expandable non-character
+% token, a low-level \TeX{} error is raised (namely, the \meta{hook} is
+% expanded using \TeX's \cs{csname}\ldots\cs{endcsname}, as such,
+% Unicode characters are allowed in \meta{hook} and \meta{label}
+% arguments).  The arguments of \cs{UseHook} and \cs{UseOneTimeHook} are
+% processed much in the same way except that spaces are not trimmed
+% around the argument, for better performance.
 %
 % It is not enforced, but highly recommended that the hooks defined by
 % a package, and the \meta{labels} used to add code to other hooks
@@ -1592,6 +1605,20 @@
 %    \end{macrocode}
 % \end{macro}
 %
+%  \begin{macro}{\g_@@_execute_immediately_prop}
+%    List of hooks that from no on should not longer receive code.
+%    \begin{macrocode}
+\prop_new:N \g_@@_execute_immediately_prop
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\g_@@_used_prop}
+%    All hooks that receive code (for use in debugging display).
+%    \begin{macrocode}
+\prop_new:N \g_@@_used_prop
+%    \end{macrocode}
+%  \end{macro}
+%
 % \begin{macro}{\g_@@_hook_curr_name_tl,\g_@@_name_stack_seq}
 %   Default label used for hook commands, and a stack to keep track of
 %   packages within packages.
@@ -1625,7 +1652,7 @@
 %
 % \subsection{Providing new hooks}
 %
-% \begin{macro}{\g_@@_..._code_prop,\g_@@_..._code_tl,\g_@@_..._code_next_tl}
+% \begin{macro}{\g_@@_..._code_prop,\@@~...,\@@_next~...}
 %
 %    Hooks have a \meta{name} and for each hook we have to provide a number of
 %    data structures. These are
@@ -1641,10 +1668,14 @@
 %    (reverse) sorted to ensure that two labels always point to the same
 %    token list.  For global rules, the \meta{name} is |??|.
 %
-%    \item[\cs{g_@@_\meta{name}_code_tl}] The code that is actually executed
+%    \item[\cs{@@~\meta{name}}] The code that is actually executed
 %    when the hook is called in the document is stored in this token
 %    list. It is constructed from the code chunks applying the
 %    information.
+%    This token list is named like that so that in case of an error
+%    inside the hook, the reported token list in the error is shorter,
+%    and to make it simpler to normalize hook names in
+%    \cs{@@_make_name:n}.
 %
 %    \item[\cs{g_@@_\meta{name}_reversed_tl}] Some hooks are
 %    \enquote{reversed}.  This token list stores a |-| for such hook
@@ -1652,14 +1683,15 @@
 %    $\meta{reversed}1$ is $+1$ for normal hooks and $-1$ for reversed
 %    ones.
 %
-%    \item[\cs{g_@@_\meta{name}_code_next_tl}] Finally there is extra code
+%    \item[\cs{@@_next~\meta{name}}] Finally there is extra code
 %    (normally empty) that is used on the next invocation of the hook
 %    (and then deleted). This can be used to define some special
 %    behavior for a single occasion from within the document.  This token
-%    list is called |code_next| rather than |next_code| because otherwise
-%    a hook called \meta{name}|_next| would have its code-token list
-%    named \cs[no-index]{g_@@_\meta{name}_code_next_tl}, which would
-%    clash with the next code-token list of a hook called \meta{name}.
+%    list follows the same naming scheme than the main \cs{@@~\meta{name}}
+%    token list.  It is called \cs{@@_next~\meta{name}} rather than
+%    \cs{@@~next_\meta{name}} because otherwise a hook whose name is
+%    |next_|\meta{name} would clash with the next code-token list of the
+%    hook called \meta{name}.
 %
 %    \end{description}
 %  \end{macro}
@@ -1673,42 +1705,41 @@
 %    \hook{begindocument}.
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_new:n #1
+  { \@@_normalize_hook_args:Nn \@@_new:n {#1} }
+\cs_new_protected:Npn \@@_new:n #1
   {
-    \exp_args:Nx \@@_new:n
-      { \@@_parse_label_default:nn {#1} { top-level } }
-  }
-\cs_new_protected:Npn \@@_new:n #1 {
 %    \end{macrocode}
 %    We check for one of the internal data structures and if it
 %    already exists we complain.
 %    \begin{macrocode}
-  \hook_if_exist:nTF {#1}
-       { \msg_error:nnn { hooks } { exists } {#1} }
+    \hook_if_exist:nTF {#1}
+      { \msg_error:nnn { hooks } { exists } {#1} }
 %    \end{macrocode}
 %    Otherwise we add the hook name to the list of all hooks and
 %    allocate the necessary data structures for the new hook.
 %    \begin{macrocode}
-     { \seq_gput_right:Nn \g_@@_all_seq {#1}
+      {
+        \seq_gput_right:Nn \g_@@_all_seq {#1}
 %    \end{macrocode}
 %    This is only used by the actual code of the current hook, so
 %    declare it normally:
 %    \begin{macrocode}
-       \tl_new:c { g_@@_#1_code_tl }
+        \tl_new:c { @@~#1 }
 %    \end{macrocode}
 %    Now ensure that the base data structure for the hook exists:
 %    \begin{macrocode}
-       \@@_declare:n {#1}
+        \@@_declare:n {#1}
 %    \end{macrocode}
 %    The \cs{g_@@_\meta{hook}_labels_clist} holds the sorted list of
 %    labels (once it got sorted). This is used only for debugging.
 %    \begin{macrocode}
-       \clist_new:c {g_@@_#1_labels_clist}
+        \clist_new:c {g_@@_#1_labels_clist}
 %    \end{macrocode}
 %    Some hooks should reverse the default order of code chunks. To
 %    signal this we have a token list which is empty for normal hooks
 %    and contains a \verb=-= for reversed hooks.
 %    \begin{macrocode}
-       \tl_new:c { g_@@_#1_reversed_tl }
+        \tl_new:c { g_@@_#1_reversed_tl }
 %    \end{macrocode}
 %    The above is all in L3 convention, but we also provide an
 %    interface to legacy \LaTeXe{} hooks of the form \cs{@...hook},
@@ -1723,9 +1754,9 @@
 %    \end{quote}
 %
 %    \begin{macrocode}
-       \@@_include_legacy_code_chunk:n {#1}
+        \@@_include_legacy_code_chunk:n {#1}
      }
-}
+  }
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -1743,7 +1774,7 @@
     \@@_if_exist:nF {#1}
       {
         \prop_new:c { g_@@_#1_code_prop }
-        \tl_new:c { g_@@_#1_code_next_tl }
+        \tl_new:c { @@_next~#1 }
       }
   }
 %    \end{macrocode}
@@ -1751,29 +1782,31 @@
 %
 %
 %
-%  \begin{macro}{\hook_new_reversed:n}
+%  \begin{macro}{\hook_new_reversed:n,\@@_new_reversed:n}
 %
 %    Declare a new hook. The default ordering of code chunks is
 %    reversed, signaled by setting the token list to a minus sign.
 %    \begin{macrocode}
-\cs_new_protected:Npn \hook_new_reversed:n #1 {
-  \hook_new:n {#1}
+\cs_new_protected:Npn \hook_new_reversed:n #1
+  { \@@_normalize_hook_args:Nn \@@_new_reversed:n {#1} }
+\cs_new_protected:Npn \@@_new_reversed:n #1
+  {
+    \@@_new:n {#1}
 %    \end{macrocode}
 %    If the hook already exists the above will generate an error
 %    message, so the next line should be executed (but it is --- too
 %    bad).
 %    \begin{macrocode}
-  \tl_gset:cn { g_@@_#1_reversed_tl } { - }
-}
+    \tl_gset:cn { g_@@_#1_reversed_tl } { - }
+  }
 %    \end{macrocode}
 %  \end{macro}
 %
 %  \begin{macro}{\hook_new_pair:nn}
 %    A shorthand for declaring a normal and a (matching) reversed hook in one go.
 %    \begin{macrocode}
-\cs_new_protected:Npn \hook_new_pair:nn #1#2 {
-  \hook_new:n {#1}  \hook_new_reversed:n {#2}
-}
+\cs_new_protected:Npn \hook_new_pair:nn #1#2
+  { \hook_new:n {#1} \hook_new_reversed:n {#2} }
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -1829,19 +1862,24 @@
 %
 % \subsection{Parsing a label}
 %
-% \begin{macro}[EXP]{\@@_parse_label_default:nn,\@@_parse_label_default:Vn}
+% \begin{macro}[EXP]{\@@_parse_label_default:n}
 %   This macro checks if a label was given (not \cs{c_novalue_tl}), and
 %   if so, tries to parse the label looking for a leading \verb|.| to
 %   replace for \cs{@currname}.  Otherwise \cs{@@_currname_or_default:n}
 %   is used to pick \cs{@currname} or the fallback value.
+%
+%   The default |top-level| is hard-coded here.  It once was an
+%   argument, but it's no longer needed. \pho{can't remember why}
 %    \begin{macrocode}
-\cs_new:Npn \@@_parse_label_default:nn #1 #2
+\cs_new:Npn \@@_parse_label_default:n #1
   {
     \tl_if_novalue:nTF {#1}
-      { \@@_currname_or_default:n {#2} }
-      { \tl_trim_spaces_apply:nN {#1} \@@_parse_dot_label:nn {#2} }
+      { \@@_currname_or_default:n { top-level } }
+      {
+        \tl_trim_spaces_apply:nN {#1}
+          \@@_parse_dot_label:nn { top-level }
+      }
   }
-\cs_generate_variant:Nn \@@_parse_label_default:nn { V }
 %    \end{macrocode}
 % \end{macro}
 %
@@ -1868,7 +1906,7 @@
       }
       {
         \str_if_eq:nnTF {#1} { . }
-          { \@@_currname_or_default:n {#1} }
+          { \@@_currname_or_default:n {#2} }
           { \@@_parse_dot_label:nw {#2} #1 ./ \s_@@_mark }
       }
   }
@@ -1878,13 +1916,13 @@
       { \@@_parse_dot_label_aux:nw {#1} #3 \s_@@_mark }
       {
         \tl_if_empty:nTF {#3}
-          {#2}
+          { \@@_make_name:n {#2} }
           { \@@_parse_dot_label_cleanup:w #2 ./ #3 \s_@@_mark }
       }
   }
 \cs_new:Npn \@@_parse_dot_label_cleanup:w #1 ./ \s_@@_mark {#1}
 \cs_new:Npn \@@_parse_dot_label_aux:nw #1 #2 ./ \s_@@_mark
-  { \@@_currname_or_default:n {#1} / #2 }
+  { \@@_currname_or_default:n {#1} / \@@_make_name:n {#2} }
 %    \end{macrocode}
 % \end{macro}
 % \end{macro}
@@ -1899,7 +1937,7 @@
     \tl_if_empty:NTF \g_@@_hook_curr_name_tl
       {
         \tl_if_empty:NTF \@currname
-          {#1}
+          { \@@_make_name:n {#1} }
           { \@currname }
       }
       { \g_@@_hook_curr_name_tl }
@@ -1907,7 +1945,73 @@
 %    \end{macrocode}
 % \end{macro}
 %
+% \begin{macro}[EXP]{\@@_make_name:n,\@@_make_name:w}
+%   Provides a standard sanitisation of a hook's name.
+%   It uses \cs{cs:w} to build a control sequence out of the hook name,
+%   then uses \cs{cs_to_str:N} to get the string representation of that,
+%   without the escape character.  \cs{cs:w}-based expansion is used
+%   instead of |e|-based because Unicode characters don't behave well
+%   inside \cs{expanded}.  The macro adds the \cs{@@~} prefix to the
+%   hook name to reuse the hook's code token list to build the csname
+%   and avoid leaving \enquote{public} control sequences defined
+%   (as~\cs{relax}) in TeX's memory.
+%    \begin{macrocode}
+\cs_new:Npn \@@_make_name:n #1
+  {
+    \exp_after:wN \exp_after:wN \exp_after:wN \@@_make_name:w
+    \exp_after:wN \token_to_str:N \cs:w @@~ #1 \cs_end:
+  }
+\exp_last_unbraced:NNNNo
+\cs_new:Npn \@@_make_name:w #1 \tl_to_str:n { @@~ } { }
+%    \end{macrocode}
+% \end{macro}
 %
+% \begin{macro}{\@@_normalize_hook_args:Nn}
+% \begin{macro}{\@@_normalize_hook_args:Nnn}
+% \begin{macro}{\@@_normalize_hook_rule_args:Nnnnn}
+% \begin{macro}{\@@_normalize_hook_args_aux:Nn}
+%   Standard route for normalising hook and label arguments.  The main
+%   macro does the entire operation within a group so that csnames made
+%   by \cs{@@_make_name:n} are wiped off before continuing.  This means
+%   that this function cannot be used for \cs{hook_use:n}!
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_normalize_hook_args_aux:Nn #1 #2
+  {
+    \group_begin:
+    \use:e
+      {
+        \group_end:
+        \exp_not:N #1 #2
+      }
+  }
+\cs_new_protected:Npn \@@_normalize_hook_args:Nn #1 #2
+  {
+    \@@_normalize_hook_args_aux:Nn #1
+      { { \@@_parse_label_default:n {#2} } }
+  }
+\cs_new_protected:Npn \@@_normalize_hook_args:Nnn #1 #2 #3
+  {
+    \@@_normalize_hook_args_aux:Nn #1
+      {
+        { \@@_parse_label_default:n {#2} }
+        { \@@_parse_label_default:n {#3} }
+      }
+  }
+\cs_new_protected:Npn \@@_normalize_hook_rule_args:Nnnnn #1 #2 #3 #4 #5
+  {
+    \@@_normalize_hook_args_aux:Nn #1
+      {
+        { \@@_parse_label_default:n {#2} }
+        { \@@_parse_label_default:n {#3} }
+        { \tl_trim_spaces:n {#4} }
+        { \@@_parse_label_default:n {#5} }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
 %
 %
 % \begin{macro}{\hook_gput_code:nnn}
@@ -1918,50 +2022,53 @@
 %    with \meta{label}.
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_gput_code:nnn #1 #2
-  {
-    \exp_args:Nxx \@@_gput_code:nnn
-      { \@@_parse_label_default:nn {#1} { top-level } }
-      { \@@_parse_label_default:nn {#2} { top-level } }
-  }
+  { \@@_normalize_hook_args:Nnn \@@_gput_code:nnn {#1} {#2} }
 \cs_new_protected:Npn \@@_gput_code:nnn #1 #2 #3
   {
 %    \end{macrocode}
-%    First check if the current \meta{hook}/\meta{label} pair was marked
+%    First check if the hook was used as a one-time hook:
+%    \begin{macrocode}
+    \prop_if_in:NnTF \g_@@_execute_immediately_prop {#1}
+      {#3}
+      {
+%    \end{macrocode}
+%    Then check if the current \meta{hook}/\meta{label} pair was marked
 %    for removal, in which case \cs{@@_unmark_removal:nn} is used to
 %    remove that mark (once).  This may happen when a package removes
 %    code from another package which was not yet loaded:  the removal
 %    order is stored, and at this stage it is executed by not adding to
 %    the hook.
 %    \begin{macrocode}
-    \@@_if_marked_removal:nnTF {#1} {#2}
-      { \@@_unmark_removal:nn {#1} {#2} }
-      {
+        \@@_if_marked_removal:nnTF {#1} {#2}
+          { \@@_unmark_removal:nn {#1} {#2} }
+          {
 %    \end{macrocode}
 %    If no removal is queued, we are free to add.  Start by checking if
 %    the hook exists.
 %    \begin{macrocode}
-        \hook_if_exist:nTF {#1}
+            \hook_if_exist:nTF {#1}
 %    \end{macrocode}
 %    If so we simply add (or append) the new code to the property list
 %    holding different chunks for the hook. At \verb=\begin{document}=
 %    this is then sorted into a token list for fast execution.
 %    \begin{macrocode}
-          {
-            \@@_hook_gput_code_do:nnn {#1} {#2} {#3}
+              {
+                \@@_hook_gput_code_do:nnn {#1} {#2} {#3}
 %    \end{macrocode}
 %    However, if there is an update within the document we need to alter
 %    this execution code which is done by
 %    \cs{@@_update_hook_code:n}. In the preamble this does nothing.
 %    \begin{macrocode}
-            \@@_update_hook_code:n {#1}
-          }
+                \@@_update_hook_code:n {#1}
+              }
 %    \end{macrocode}
 %
 %    If the hook does not exist, however, before giving up try to
 %    declare it as a generic hook, if its name matches one of the valid
 %    patterns.
 %    \begin{macrocode}
-          { \@@_try_declaring_generic_hook:nnn {#1} {#2} {#3} }
+              { \@@_try_declaring_generic_hook:nnn {#1} {#2} {#3} }
+          }
       }
   }
 \cs_generate_variant:Nn \@@_gput_code:nnn { nxv }
@@ -2193,11 +2300,7 @@
 %    for \meta{hook} stored under \meta{label} is removed.
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_gremove_code:nn #1 #2
-  {
-    \exp_args:Nxx \@@_gremove_code:nn
-      { \@@_parse_label_default:nn {#1} { top-level } }
-      { \@@_parse_label_default:nn {#2} { top-level } }
-  }
+  { \@@_normalize_hook_args:Nnn \@@_gremove_code:nn {#1} {#2} }
 \cs_new_protected:Npn \@@_gremove_code:nn #1 #2
   {
 %    \end{macrocode}
@@ -2256,6 +2359,10 @@
 %   \cs{tl_gremove_once:Nx} is fairly efficient even for longer token
 %   lists, so we use a single global token list, rather than one for
 %   each hook.
+%
+%   A hand-crafted token list is used here because property lists don't
+%   hold repeated items, so multiple usages of \cs{@@_mark_removal:nn}
+%   would be cancelled by a single \cs{@@_unmark_removal:nn}.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_mark_removal:nn #1 #2
   {
@@ -2306,7 +2413,7 @@
 %
 % \begin{macro}{
 %     \g_@@_??_code_prop,
-%     \g_@@_??_code_tl,
+%     \@@~??,
 %     \g_@@_??_reversed_tl,
 %   }
 %
@@ -2321,11 +2428,11 @@
 %    lot things should be fast, so this is not done with \texttt{c}
 %    expansion in the code later on.
 %
-%    \cs{g_@@_??_code_tl} isn't used, but it has to be defined to trick
+%    \cs{@@~??} isn't used, but it has to be defined to trick
 %    the code into thinking that \verb=??= is actually a hook.
 %    \begin{macrocode}
 \prop_new:c {g_@@_??_code_prop}
-\prop_new:c {g_@@_??_code_tl}
+\prop_new:c {@@~??}
 %    \end{macrocode}
 %
 %    Default rules are always given in normal ordering (never in
@@ -2353,14 +2460,8 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_gset_rule:nnnn #1#2#3#4
   {
-    \use:x
-      {
-        \@@_gset_rule:nnnn
-          { \@@_parse_label_default:nn {#1} { top-level } }
-          { \@@_parse_label_default:nn {#2} { top-level } }
-          {#3}
-          { \@@_parse_label_default:nn {#4} { top-level } }
-      }
+    \@@_normalize_hook_rule_args:Nnnnn \@@_gset_rule:nnnn
+      {#1} {#2} {#3} {#4}
   }
 %    \end{macrocode}
 %    
@@ -2550,7 +2651,7 @@
      { \iow_term:x{^^JAll~ initialized~ (non-empty)~ hooks:}
        \prop_map_inline:Nn \g_@@_used_prop
            { \iow_term:x{^^J~ ##1~ ->~
-               \exp_not:v {g_@@_##1_code_tl}~ }
+               \exp_not:v {@@~##1}~ }
            }
      }
 %    \end{macrocode}
@@ -2572,9 +2673,11 @@
 %    and at \verb=\begin{document}= this is done for all hooks and
 %    afterwards only if the hook code changes.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_initialize_hook_code:n #1 {
-  \@@_debug:n{ \iow_term:x{^^JUpdate~ code~ for~ hook~
-                                  '#1' \on@line :^^J} }
+\cs_new_protected:Npn \@@_initialize_hook_code:n #1
+  {
+    \debug_suspend:
+    \@@_debug:n{ \iow_term:x{^^JUpdate~ code~ for~ hook~
+                                    '#1' \on@line :^^J} }
 %    \end{macrocode}
 %    This does the sorting and the updates.
 %    First thing we do is to check if a legacy hook macro exists and
@@ -2582,23 +2685,23 @@
 %    might make the hook non-empty so we have to do this before
 %    the then following test.
 %    \begin{macrocode}
-  \@@_include_legacy_code_chunk:n {#1}  
+    \@@_include_legacy_code_chunk:n {#1}
 %    \end{macrocode}
 %    If there aren't any code
 %    chunks for the current hook, there is no point in even starting
 %    the sorting routine so we make a quick test for that and in that
-%    case just update \cs{g_@@_\meta{hook}_code_tl} to hold the next
+%    case just update \cs{@@~\meta{hook}} to hold the next
 %    code. If there are code chunks we call
 %    \cs{@@_initialize_single:NNNn} and pass to it ready made csnames
 %    as they are needed several times inside. This way we save a bit
 %    on processing time if we do that up front.
 %    \begin{macrocode}
-  \hook_if_exist:nT {#1}
-    {
-      \prop_if_empty:cTF {g_@@_#1_code_prop}
-        { \tl_gset:co {g_@@_#1_code_tl}
-                      {\cs:w g_@@_#1_code_next_tl \cs_end: } }
-        {
+    \hook_if_exist:nT {#1}
+      {
+        \prop_if_empty:cTF {g_@@_#1_code_prop}
+          { \tl_gset:co { @@~#1 }
+                        { \cs:w @@_next~#1 \cs_end: } }
+          {
 %    \end{macrocode}
 %    By default the algorithm sorts the code chunks and then saves the
 %    result in a token list for fast execution by adding the code one
@@ -2607,11 +2710,11 @@
 %    the opposite order into the token list. So all we have to do
 %    in preparation is to change two definitions used later on.
 %    \begin{macrocode}
-          \@@_if_reversed:nTF {#1}
-            { \cs_set_eq:NN \@@_tl_gput:NV    \tl_gput_left:NV
-              \cs_set_eq:NN \@@_clist_gput:NV \clist_gput_left:NV  }
-            { \cs_set_eq:NN \@@_tl_gput:NV    \tl_gput_right:NV
-              \cs_set_eq:NN \@@_clist_gput:NV \clist_gput_right:NV }
+            \@@_if_reversed:nTF {#1}
+              { \cs_set_eq:NN \@@_tl_gput:NV    \tl_gput_left:NV
+                \cs_set_eq:NN \@@_clist_gput:NV \clist_gput_left:NV  }
+              { \cs_set_eq:NN \@@_tl_gput:NV    \tl_gput_right:NV
+                \cs_set_eq:NN \@@_clist_gput:NV \clist_gput_right:NV }
 %    \end{macrocode}
 %
 %    When sorting, some relations (namely \verb|voids|) need to
@@ -2619,10 +2722,10 @@
 %    shouldn't appear in the sorted hook token list, so we temporarily
 %    save the old code property list so that it can be restored later.
 %    \begin{macrocode}
-          \prop_set_eq:Nc \l_@@_work_prop { g_@@_#1_code_prop }
-          \@@_initialize_single:cccn
-            { g_@@_#1_code_tl } { g_@@_#1_code_next_tl }
-            { g_@@_#1_labels_clist } {#1}
+            \prop_set_eq:Nc \l_@@_work_prop { g_@@_#1_code_prop }
+            \@@_initialize_single:cccn
+              { @@~#1 } { @@_next~#1 }
+              { g_@@_#1_labels_clist } {#1}
 %    \end{macrocode}
 %    For debug display we want to keep track of those hooks that
 %    actually got code added to them, so we record that in plist. We
@@ -2630,22 +2733,14 @@
 %    i.e., we are only interested in storing the keys and the value is
 %    arbitrary.
 %    \begin{macrocode}
-          \@@_debug:n{ \exp_args:NNx \prop_gput:Nnn
-                                     \g_@@_used_prop {#1}{} }
-        }
-    }
-}
+            \@@_debug:n{ \exp_args:NNx \prop_gput:Nnn
+                                       \g_@@_used_prop {#1}{} }
+          }
+      }
+    \debug_resume:
+  }
 %    \end{macrocode}
 %  \end{macro}
-%
-%
-%  \begin{macro}{\g_@@_used_prop}
-%    All hooks that receive code (for use in debugging display).
-%    \begin{macrocode}
-\prop_new:N\g_@@_used_prop
-%    \end{macrocode}
-%  \end{macro}
-%
 %
 %
 % \begin{macro}[EXP]{\@@_tl_csname:n,\@@_seq_csname:n}
@@ -2657,8 +2752,6 @@
 \cs_new:Npn \@@_seq_csname:n #1 { l_@@_label_#1_seq }
 %    \end{macrocode}
 % \end{macro}
-%
-%
 %
 %
 %  \begin{macro}{\l_@@_labels_seq,\l_@@_labels_int,\l_@@_front_tl,
@@ -2718,21 +2811,18 @@
 %    the moment: a label can't be equal to the number 0!  \fmi{Needs
 %    checking for, just in case}
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_initialize_single:NNNn #1#2#3#4 {
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-  \debug_suspend:
+\cs_new_protected:Npn \@@_initialize_single:NNNn #1#2#3#4
+  {
 %    \end{macrocode}
 %    Step T1: Initialize the data structure \ldots
 %    \begin{macrocode}
-  \seq_clear:N \l_@@_labels_seq
-  \int_zero:N  \l_@@_labels_int
+    \seq_clear:N \l_@@_labels_seq
+    \int_zero:N  \l_@@_labels_int
 %    \end{macrocode}
 %
 %    Store the name of the hook:
 %    \begin{macrocode}
-  \tl_set:Nn \l_@@_cur_hook_tl {#4}
+    \tl_set:Nn \l_@@_cur_hook_tl {#4}
 %    \end{macrocode}
 %    
 %    We loop over the property list holding the code and record all
@@ -2742,13 +2832,13 @@
 %    to ensure that labels named |front|, |rear|, |labels|, or |return|
 %    don't interact with our code.
 %    \begin{macrocode}
-  \prop_map_inline:Nn \l_@@_work_prop
-     {
-       \int_incr:N \l_@@_labels_int
-       \seq_put_right:Nn \l_@@_labels_seq {##1}
-       \tl_set:cn { \@@_tl_csname:n {##1} }{0}
-       \seq_clear_new:c { \@@_seq_csname:n {##1} }
-     }
+    \prop_map_inline:Nn \l_@@_work_prop
+       {
+         \int_incr:N \l_@@_labels_int
+         \seq_put_right:Nn \l_@@_labels_seq {##1}
+         \tl_set:cn { \@@_tl_csname:n {##1} }{0}
+         \seq_clear_new:c { \@@_seq_csname:n {##1} }
+       }
 %    \end{macrocode}
 %    Steps T2 and T3: Sort the relevant rules into the data structure\ldots
 %    
@@ -2764,30 +2854,30 @@
 %    \cs{@@_apply_label_pair:nnn}, which takes the properly-ordered pair
 %    of labels as argument.
 %    \begin{macrocode}
-  \prop_map_inline:Nn \l_@@_work_prop
-    {
-      \prop_map_inline:Nn \l_@@_work_prop
-        {
-          \@@_if_label_case:nnnnn {##1} {####1}
-            { \prop_map_break: }
-            { \@@_apply_label_pair:nnn {##1} {####1} }
-            { \@@_apply_label_pair:nnn {####1} {##1} }
-                {#4}
-        }
-    }
+    \prop_map_inline:Nn \l_@@_work_prop
+      {
+        \prop_map_inline:Nn \l_@@_work_prop
+          {
+            \@@_if_label_case:nnnnn {##1} {####1}
+              { \prop_map_break: }
+              { \@@_apply_label_pair:nnn {##1} {####1} }
+              { \@@_apply_label_pair:nnn {####1} {##1} }
+                  {#4}
+          }
+      }
 %    \end{macrocode}
 %    Take a breath and take a look at the data structures that have
 %    been set up:
 %    \begin{macrocode}
-  \@@_debug:n { \@@_debug_label_data:N \l_@@_work_prop }
+    \@@_debug:n { \@@_debug_label_data:N \l_@@_work_prop }
 %    \end{macrocode}
 %    
 %
 %    Step T4:
 %    \begin{macrocode}
-  \tl_set:Nn \l_@@_rear_tl { 0 }
-  \tl_set:cn { \@@_tl_csname:n { 0 } } { 0 }
-  \seq_map_inline:Nn \l_@@_labels_seq
+    \tl_set:Nn \l_@@_rear_tl { 0 }
+    \tl_set:cn { \@@_tl_csname:n { 0 } } { 0 }
+    \seq_map_inline:Nn \l_@@_labels_seq
       {
         \int_compare:nNnT { \cs:w \@@_tl_csname:n {##1} \cs_end: } = 0
             {
@@ -2795,61 +2885,61 @@
               \tl_set:Nn \l_@@_rear_tl {##1}
             }
       }
-  \tl_set_eq:Nc \l_@@_front_tl { \@@_tl_csname:n { 0 } }
+    \tl_set_eq:Nc \l_@@_front_tl { \@@_tl_csname:n { 0 } }
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
-  \tl_gclear:N #1
-  \clist_gclear:N #3
+    \tl_gclear:N #1
+    \clist_gclear:N #3
 %    \end{macrocode}
 %
 %    The whole loop combines steps T5--T7:
 %    \begin{macrocode}
-  \bool_while_do:nn { ! \str_if_eq_p:Vn \l_@@_front_tl { 0 } }
-       {
+    \bool_while_do:nn { ! \str_if_eq_p:Vn \l_@@_front_tl { 0 } }
+      {
 %    \end{macrocode}
 %    This part is step T5:
 %    \begin{macrocode}
-         \int_decr:N \l_@@_labels_int
-         \prop_get:NVN \l_@@_work_prop \l_@@_front_tl \l_@@_return_tl
-         \@@_tl_gput:NV #1 \l_@@_return_tl
+        \int_decr:N \l_@@_labels_int
+        \prop_get:NVN \l_@@_work_prop \l_@@_front_tl \l_@@_return_tl
+        \@@_tl_gput:NV #1 \l_@@_return_tl
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
-         \@@_clist_gput:NV #3 \l_@@_front_tl
-         \@@_debug:n{ \iow_term:x{Handled~ code~ for~ \l_@@_front_tl} }
+        \@@_clist_gput:NV #3 \l_@@_front_tl
+        \@@_debug:n{ \iow_term:x{Handled~ code~ for~ \l_@@_front_tl} }
 %    \end{macrocode}
 %
 %    This is step T6 except that we don't use a pointer $P$ to move
 %    through the successors, but instead use \verb=##1= of the mapping
 %    function.
 %    \begin{macrocode}
-         \seq_map_inline:cn { \@@_seq_csname:n { \l_@@_front_tl } }
-             {
-               \tl_set:cx { \@@_tl_csname:n {##1} }
-                          { \int_eval:n
-                              { \cs:w \@@_tl_csname:n {##1} \cs_end: - 1 }
-                          }
-               \int_compare:nNnT
-                   { \cs:w \@@_tl_csname:n {##1} \cs_end: } = 0
-                   {
-                     \tl_set:cn { \@@_tl_csname:n { \l_@@_rear_tl } } {##1}
-                     \tl_set:Nn \l_@@_rear_tl            {##1}
-                   }
-             }
+        \seq_map_inline:cn { \@@_seq_csname:n { \l_@@_front_tl } }
+          {
+            \tl_set:cx { \@@_tl_csname:n {##1} }
+                       { \int_eval:n
+                           { \cs:w \@@_tl_csname:n {##1} \cs_end: - 1 }
+                       }
+            \int_compare:nNnT
+                { \cs:w \@@_tl_csname:n {##1} \cs_end: } = 0
+                {
+                  \tl_set:cn { \@@_tl_csname:n { \l_@@_rear_tl } } {##1}
+                  \tl_set:Nn \l_@@_rear_tl            {##1}
+                }
+          }
 %    \end{macrocode}
 %    and step T7:
 %    \begin{macrocode}
-          \tl_set_eq:Nc \l_@@_front_tl
-                        { \@@_tl_csname:n { \l_@@_front_tl } }
+        \tl_set_eq:Nc \l_@@_front_tl
+                      { \@@_tl_csname:n { \l_@@_front_tl } }
 %    \end{macrocode}
 %
 %    This is step T8: If we haven't moved the code for all labels
 %    (i.e., if \cs{l_@@_labels_int} is still greater than zero) we
 %    have a loop and our partial order can't be flattened out.
 %    \begin{macrocode}
-       }
-  \int_compare:nNnF \l_@@_labels_int = 0
+      }
+    \int_compare:nNnF \l_@@_labels_int = 0
       {
         \iow_term:x{====================}
         \iow_term:x{Error:~ label~ rules~ are~ incompatible:}
@@ -2866,12 +2956,8 @@
 %    with adding extra code for a one time execution. That is stored
 %    in \verb=#2= but is normally empty.
 %    \begin{macrocode}
-  \tl_gput_right:Nn #1 {#2}
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-  \debug_resume:
-}
+    \tl_gput_right:Nn #1 {#2}
+  }
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
@@ -3110,10 +3196,7 @@
 %    onto the terminal and the \texttt{.log} file.
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_log:n #1
-  {
-    \exp_args:Nx \@@_log:n
-      { \@@_parse_label_default:nn {#1} { top-level } }
-  }
+  { \@@_normalize_hook_args:Nn \@@_log:n {#1} }
 \cs_new_protected:Npn \@@_log:n #1
   {
     \@@_preamble_hook:n {#1}
@@ -3137,7 +3220,7 @@
 %    \begin{macrocode}
         \iow_term:x{~Extra~ code~ next~ invocation:}
         \iow_term:x{\@spaces
-          \tl_if_empty:cTF { g_@@_#1_code_next_tl }
+          \tl_if_empty:cTF { @@_next~#1 }
              {---}
 %    \end{macrocode}
 %    If the token list is not empty we want to display it but without
@@ -3145,7 +3228,7 @@
 %    command to  get rid of them.
 %    \begin{macrocode}
              {->~  \exp_args:Nv
-                   \@@_log_next_code:n {g_@@_#1_code_next_tl} } }
+                   \@@_log_next_code:n {@@_next~#1} } }
 %    \end{macrocode}
 %
 %   Loop through the rules in a hook and for every rule found, print it.
@@ -3272,25 +3355,29 @@
 %
 %  \subsection{Specifying code for next invocation}
 %
-%  \begin{macro}{\hook_gput_next_code:nn}
-%    
+% \begin{macro}{\hook_gput_next_code:nn}
+% \begin{macro}{%
+%     \@@_gput_next_code:nn,
+%     \@@_gput_next_do:nn,
+%     \@@_gput_next_do:Nnn,
+%     \@@_clear_next:n
+%   }
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_gput_next_code:nn #1
-  {
-    \exp_args:Nx \@@_gput_next_code:nn
-      { \@@_parse_label_default:nn {#1} { top-level } }
-  }
+  { \@@_normalize_hook_args:Nn \@@_gput_next_code:nn {#1} }
 \cs_new_protected:Npn \@@_gput_next_code:nn #1 #2
   {
+    \debug_suspend:
     \@@_declare:n {#1}
     \hook_if_exist:nTF {#1}
       { \@@_gput_next_do:nn {#1} {#2} }
       { \@@_try_declaring_generic_next_hook:nn {#1} {#2} }
+    \debug_resume:
   }
 \cs_new_protected:Npn \@@_gput_next_do:nn #1
   {
     \exp_args:Nc \@@_gput_next_do:Nnn
-      { g_@@_#1_code_next_tl } {#1}
+      { @@_next~#1 } {#1}
   }
 %    \end{macrocode}
 %   First check if the ``next code'' token list is empty:  if so we need
@@ -3305,13 +3392,16 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_gput_next_do:Nnn #1 #2
   {
-    \tl_if_empty:cT { g_@@_#2_code_tl }
+    \tl_if_empty:cT { @@~#2 }
       { \@@_update_hook_code:n {#2} }
     \tl_if_empty:NT #1
-      { \tl_gset:Nn #1 { \tl_gclear:c { g_@@_#2_code_next_tl } } }
+      { \tl_gset:Nn #1 { \@@_clear_next:n {#2} } }
     \tl_gput_right:Nn #1
   }
+\cs_new_protected:Npn \@@_clear_next:n #1
+  { \cs_gset_eq:cN { @@_next~#1 } \c_empty_tl }
 %    \end{macrocode}
+%  \end{macro}
 %  \end{macro}
 %
 %
@@ -3319,6 +3409,7 @@
 %
 % \begin{macro}{\hook_use:n}
 % \begin{macro}[EXP]{\@@_use_initialized:n}
+% \begin{macro}{\@@_use_undefined:w,\@@_use_end:}
 % \begin{macro}{\@@_preamble_hook:n}
 %   \cs{hook_use:n} as defined here is used in the preamble, where
 %   hooks aren't initialized by default.  \cs{@@_use_initialized:n} is
@@ -3346,22 +3437,31 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_use:n #1
   {
-    \tl_if_exist:cTF { g_@@_#1_code_tl }
+    \tl_if_exist:cTF { @@~#1 }
       {
         \@@_preamble_hook:n {#1}
-        \cs:w g_@@_#1_code_tl \cs_end:
+        \cs:w @@~#1 \cs_end:
       }
       { \@@_use:wn #1 / \s_@@_mark {#1} }
   }
 \cs_new:Npn \@@_use_initialized:n #1
   {
-    \tl_if_exist:cTF { g_@@_#1_code_tl }
-      { \cs:w g_@@_#1_code_tl \cs_end: }
-      { \@@_use:wn #1 / \s_@@_mark {#1} }
+    \if_cs_exist:w @@~#1 \cs_end:
+    \else:
+      \@@_use_undefined:w
+    \fi:
+    \cs:w @@~#1 \@@_use_end:
+  }
+\cs_new:Npn \@@_use_undefined:w #1 #2 @@~#3 \@@_use_end:
+  {
+    #1 % fi
+    \@@_use:wn #3 / \s_@@_mark {#3}
   }
 \cs_new_protected:Npn \@@_preamble_hook:n #1
   { \@@_initialize_hook_code:n {#1} }
+\cs_new_eq:NN \@@_use_end: \cs_end:
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 % \end{macro}
@@ -3397,10 +3497,10 @@
   }
 \cs_new_protected:Npn \@@_if_exist_use:n #1
   {
-    \tl_if_exist:cT { g_@@_#1_code_tl }
+    \tl_if_exist:cT { @@~#1 }
       {
         \@@_preamble_hook:n {#1}
-        \cs:w g_@@_#1_code_tl \cs_end:
+        \cs:w @@~#1 \cs_end:
       }
   }
 %    \end{macrocode}
@@ -3410,18 +3510,28 @@
 %  \begin{macro}{\hook_use_once:n}
 %    For hooks that can and should be used only once we have a special
 %    use command that remembers the hook name in
-%    \cs{g_@@_execute_immediately_clist}. This has the effect that any
+%    \cs{g_@@_execute_immediately_prop}. This has the effect that any
 %    further code added to the hook is executed immediately rather
 %    than stored in the hook.
+%
+%    The code needs some gymnastics to prevent space trimming from the
+%    hook name, since \cs{hook_use:n} and \cs{hook_use_once:n} are
+%    documented to not trim spaces.
+%
+%    \pho{Should this raise an error if the hook doesn't exist?}
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_use_once:n #1
   {
-    \tl_if_exist:cT { g_@@_#1_code_tl }
+    \tl_if_exist:cT { @@~#1 }
       {
-        \clist_gput_left:Nn \g_@@_execute_immediately_clist {#1}
+        \tl_set:Nn \l_@@_return_tl {#1}
+        \@@_normalize_hook_args:Nn \@@_use_once_store:n
+          { \l_@@_return_tl }
         \hook_use:n {#1}
       }
   }
+\cs_new_protected:Npn \@@_use_once_store:n #1
+  { \prop_gput:Nnn \g_@@_execute_immediately_prop {#1} { } }
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -3451,7 +3561,7 @@
 %   Test if a hook is empty (that is, no code was added to that hook).
 %   A hook being empty means that \emph{both} its
 %   \cs[no-index]{g_@@_\meta{hook}_code_prop} and its
-%   \cs[no-index]{g_@@_\meta{hook}_code_next_tl} are empty.
+%   \cs[no-index]{@@_next~\meta{hook}} are empty.
 %    \begin{macrocode}
 \prg_new_conditional:Npnn \hook_if_empty:n #1 { p , T , F , TF }
   {
@@ -3459,7 +3569,7 @@
       {
         \bool_lazy_and:nnTF
             { \prop_if_empty_p:c { g_@@_#1_code_prop } }
-            { \tl_if_empty_p:c { g_@@_#1_code_next_tl } }
+            { \tl_if_empty_p:c { @@_next~#1 } }
           { \prg_return_true: }
           { \prg_return_false: }
       }
@@ -3471,7 +3581,7 @@
 % \begin{macro}[pTF]{\hook_if_exist:n}
 %   A canonical way to test if a hook exists.  A hook exists if the
 %   token list that stores the sorted code for that hook,
-%   \cs[no-index]{g_@@_\meta{hook}_code_tl}, exists.  The property list
+%   \cs[no-index]{@@~\meta{hook}}, exists.  The property list
 %   \cs[no-index]{g_@@_\meta{hook}_code_prop} cannot be used here
 %   because often it is necessary to add code to a hook without knowing
 %   if such hook was already declared, or even if it will ever be
@@ -3479,7 +3589,7 @@
 %    \begin{macrocode}
 \prg_new_conditional:Npnn \hook_if_exist:n #1 { p , T , F , TF }
   {
-    \tl_if_exist:cTF { g_@@_#1_code_tl }
+    \tl_if_exist:cTF { @@~#1 }
       { \prg_return_true: }
       { \prg_return_false: }
   }
@@ -3515,13 +3625,6 @@
 %    \end{macrocode}
 % \end{macro}
 %
-%
-%  \begin{macro}{\g_@@_execute_immediately_clist}
-%    List of hooks that from no on should not longer receive code.
-%    \begin{macrocode}
-\clist_new:N \g_@@_execute_immediately_clist
-%    \end{macrocode}
-%  \end{macro}
 %
 %  \subsection{Messages}
 %
@@ -3594,11 +3697,7 @@
 %    
 %    \begin{macrocode}
 \NewDocumentCommand \AddToHook { m o +m }
-  {
-    \clist_if_in:NnTF \g_@@_execute_immediately_clist {#1}
-      {#3}
-      { \hook_gput_code:nnn {#1} {#2} {#3} }
-  }
+  { \hook_gput_code:nnn {#1} {#2} {#3} }
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -3691,8 +3790,8 @@
 %    Avoid the overhead of \pkg{xparse} and its protection that we
 %    don't want here (since the hook should vanish without trace if empty)!
 %    \begin{macrocode}
-\newcommand \UseHook        { \hook_use:n }
-\newcommand \UseOneTimeHook { \hook_use_once:n }
+\cs_new:Npn \UseHook        { \hook_use:n }
+\cs_new:Npn \UseOneTimeHook { \hook_use_once:n }
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -3728,7 +3827,7 @@
 %    \begin{macrocode}
 \NewDocumentCommand \DeclareDefaultHookRule { m m m }
                     { \hook_gset_rule:nnnn {??}{#1}{#2}{#3} }
-\@onlypreamble\DeclareDefaultHookRule                    
+\@onlypreamble\DeclareDefaultHookRule
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -3772,12 +3871,12 @@
 %    
 %    \begin{macrocode}
 \cs_new_eq:NN \@expl@@@initialize@all@@
-              \__hook_initialize_all:  
+              \__hook_initialize_all:
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-\cs_new_eq:NN \@expl@@@hook@curr@name@push@@n 
-              \__hook_curr_name_push:n 
+\cs_new_eq:NN \@expl@@@hook@curr@name@push@@n
+              \__hook_curr_name_push:n
 %    \end{macrocode}
 %
 %    \begin{macrocode}
