@@ -1635,11 +1635,12 @@
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{\tl_gremove_once:Nx,\tl_show:x}
+% \begin{macro}{\tl_gremove_once:Nx,\tl_show:x,\tl_log:x}
 %   Some variants of \pkg{expl3} functions. \fmi{should be moved to expl3}
 %    \begin{macrocode}
 \cs_generate_variant:Nn \tl_gremove_once:Nn { Nx }
 \cs_generate_variant:Nn \tl_show:n { x }
+\cs_generate_variant:Nn \tl_log:n { x }
 %    \end{macrocode}
 % \end{macro}
 %
@@ -3193,49 +3194,60 @@
 %
 %
 % \begin{macro}{\hook_show:n,\hook_log:n}
+% \begin{macro}{\@@_log_line:x,\@@_log_line_indent:x}
+% \begin{macro}{\@@_log:nN}
 %   This writes out information about the hook given in its argument
 %   onto the \texttt{.log} file and the terminal, if \cs{show_hook:n} is
 %   used.  Internally both share the same structure, except that at the
 %   end, \cs{hook_show:n} triggers \TeX's prompt.
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_log:n #1
-  { \@@_normalize_hook_args:Nn \@@_log:nN {#1} \iow_log:x }
+  {
+    \cs_set_eq:NN \@@_log_cmd:x \iow_log:x
+    \@@_normalize_hook_args:Nn \@@_log:nN {#1} \tl_log:x
+  }
 \cs_new_protected:Npn \hook_show:n #1
-  { \@@_normalize_hook_args:Nn \@@_log:nN {#1} \tl_show:x }
+  {
+    \cs_set_eq:NN \@@_log_cmd:x \iow_term:x
+    \@@_normalize_hook_args:Nn \@@_log:nN {#1} \tl_show:x
+  }
+\cs_new_protected:Npn \@@_log_line:x #1
+  { \@@_log_cmd:x { >~#1 } }
+\cs_new_protected:Npn \@@_log_line_indent:x #1
+  { \@@_log_cmd:x { >~\@spaces #1 } }
 \cs_new_protected:Npn \@@_log:nN #1 #2
   {
     \@@_preamble_hook:n {#1}
-    \iow_term:x{^^JThe~ hook~ '#1':}
+    \iow_term:x { ^^J ->~The~hook~'#1': }
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
     \hook_if_exist:nF {#1}
-      { \iow_term:x {~Hook~ is~ not~ declared!} }
+      { \@@_log_line:x { is~not~declared! } }
     \@@_if_exist:nTF {#1}
       {
-        \iow_term:x{~Code~ chunks:}
-        \prop_if_empty:cTF {g_@@_#1_code_prop}
-          { \iow_term:x{\@spaces ---} }
+        \@@_log_line:x { Code~chunks: }
+        \prop_if_empty:cTF { g_@@_#1_code_prop }
+          { \@@_log_line_indent:x { --- } }
           {
-            \prop_map_inline:cn {g_@@_#1_code_prop}
-              { \iow_term:x{\@spaces ##1~ ->~ \tl_to_str:n{##2} } }
+            \prop_map_inline:cn { g_@@_#1_code_prop }
+              { \@@_log_line_indent:x { ##1~->~\tl_to_str:n {##2} } }
           }
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
-        \iow_term:x{~Extra~ code~ next~ invocation:}
-        \iow_term:x
+        \@@_log_line:x { Extra~code~for~next~invocation:}
+        \@@_log_line_indent:x
           {
-            \@spaces
             \tl_if_empty:cTF { @@_next~#1 }
-              {---}
+              { --- }
 %    \end{macrocode}
+%
 %    If the token list is not empty we want to display it but without
 %    the first tokens (the code to clear itself) so we call a helper
 %    command to  get rid of them.
 %    \begin{macrocode}
-              {->~ \exp_args:Nv
-                   \@@_log_next_code:n {@@_next~#1} }
+              { ->~ \exp_args:Nv \@@_log_next_code:n { @@_next~#1 } }
           }
 %    \end{macrocode}
 %
@@ -3243,36 +3255,38 @@
 %   If no rule is there, print |---|.  The boolean \cs{l_@@_tmpa_bool}
 %   here indicates if the hook has no rules.
 %    \begin{macrocode}
-        \iow_term:x { ~Rules: }
+        \@@_log_line:x { Rules: }
         \bool_set_true:N \l_@@_tmpa_bool
         \@@_list_rules:nn {#1}
           {
             \bool_set_false:N \l_@@_tmpa_bool
-            \iow_term:x
+            \@@_log_line_indent:x
               {
-                \@spaces ##2~ with~
+                ##2~ with~
                 \str_if_eq:nnT {##3} {??} { default~ }
                 relation~ ##1
               }
           }
         \bool_if:NT \l_@@_tmpa_bool
-          { \iow_term:x { \@spaces --- } }
+          { \@@_log_line_indent:x { --- } }
 %    \end{macrocode}
-%    
+%
+%   When the hook is declared (that is, the sorting algorithm is applied
+%   to that hook) and not empty
 %    \begin{macrocode}
         \bool_lazy_and:nnTF
             { \hook_if_exist_p:n {#1} }
             { ! \hook_if_empty_p:n {#1} }
-          { \iow_term:x { ~Execution~ order
-               \bool_if:NTF \l_@@_tmpa_bool
-                 { \@@_if_reversed:nT {#1}
-                        { ~ (after~ reversal) }
-                 }
-                 { ~ (after~
-                   \@@_if_reversed:nT {#1} {reversal~ and~}
-                   applying~ rules)
-                 }
-               :
+          {
+            \@@_log_line:x
+              {
+                Execution~order
+                \bool_if:NTF \l_@@_tmpa_bool
+                  { \@@_if_reversed:nT {#1} { ~(after~reversal) } }
+                  { ~(after~
+                    \@@_if_reversed:nT {#1} { reversal~and~ }
+                    applying~rules)
+                  } :
               }
             #2 % \tl_show:n
               {
@@ -3282,20 +3296,31 @@
                   { \clist_use:cn {g_@@_#1_labels_clist} { ,~ } }
               }
           }
-          { #2 { ~Execution~order~not~set~yet. } }
+          {
+            #2
+              {
+                Hook~ \hook_if_exist:nTF {#1}
+                  {code~pool~empty} {not~declared}
+              }
+          }
       }
-      { #2 { ~The~hook~is~empty. } }
+      { #2 { The~hook~is~empty. } }
   }
 %    \end{macrocode}
 %
+% \begin{macro}{\@@_log_next_code:n}
 %    To display the code for next invocation only (i.e., from
 %    \cs{AddToHookNext} we have to remove the first two tokens at the
 %    front which are \cs{tl_gclear:N} and the token list to clear.
 %    \begin{macrocode}
 \cs_new:Npn \@@_log_next_code:n #1
- { \exp_args:No \tl_to_str:n { \use_none:nn #1 } }
+  { \exp_args:No \tl_to_str:n { \use_none:nn #1 } }
 %    \end{macrocode}
-%  \end{macro}
+% \end{macro}
+%
+% \end{macro}
+% \end{macro}
+% \end{macro}
 %
 % \begin{macro}{\@@_list_rules:nn}
 % \begin{macro}{\@@_list_one_rule:nnn,\@@_list_if_rule_exists:nnnF}
