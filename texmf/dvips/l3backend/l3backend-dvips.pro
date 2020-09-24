@@ -22,7 +22,7 @@
 /color.sc { } def
 /color.fc { } def
 TeXDict begin
-/TeXcolorsetspotcolor { setcustomcolor } def
+/TeXcolorseparation { setcolor } def
 end
 true setglobal
 /pdf.globaldict 4 dict def
