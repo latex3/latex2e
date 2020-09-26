@@ -57,6 +57,12 @@ tlmgr install   \
   stringenc     \
   url
 
+# special testing
+tlmgr install   \
+  bidi          \
+  dinbrief      \
+  filehook
+
 # Additional support for typesetting
 tlmgr install  \
   alphalph     \
