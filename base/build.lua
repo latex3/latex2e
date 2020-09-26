@@ -140,14 +140,14 @@ unpacksuppfiles =
 testsuppdir = "testfiles/helpers"
 
 -- No dependencies at all (other than l3build and for typesetting)
-checkdeps   = { }
+checkdeps   = { maindir .. "/required/firstaid"  }
 typesetdeps =
   {
     maindir .. "/required/graphics",
     maindir .. "/required/tools",
     maindir .. "/required/amsmath"    -- for l3doc.cls :-(
   }
-unpackdeps  = { }
+unpackdeps  = {}
 
 -- Customise typesetting
 indexstyle = "source2e.ist"
