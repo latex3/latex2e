@@ -25,7 +25,7 @@
 %% 
 %% File: l3backend-basics.dtx
 \ProvidesExplFile
-  {l3backend-dvips.def}{2020-09-01}{}
+  {l3backend-dvips.def}{2020-09-24}{}
   {L3 backend support: dvips}
 \cs_if_exist:NTF \__kernel_dependency_version_check:nn
   {
@@ -111,40 +111,176 @@
 \cs_new_protected:Npn \__color_backend_reset:
   { \__kernel_backend_literal:n { color~pop } }
 \cs_new_protected:Npn \__color_backend_select_separation:nn #1#2
-  { \__color_backend_select:n { setspotcolor ~ #1 ~ #2 } }
+  { \__color_backend_select:n { separation ~ #1 ~ #2 } }
+\cs_new_eq:NN \__color_backend_select_devicen:nn \__color_backend_select_separation:nn
 \cs_new_protected:Npx \__color_backend_separation_init:nnnnn #1#2#3#4#5
   {
     \bool_if:NT \g__kernel_backend_header_bool
       {
         \cs_if_exist:NTF \AtBeginDvi
-          { \AtBeginDvi }
+          { \exp_not:N \AtBeginDvi }
           { \use:n }
             {
-                \exp_not:N \__color_backend_separation_init:nnn
-                  {#1} {#2} {#5}
+              \exp_not:N \__color_backend_separation_init_aux:nnnnn
+                {#1} {#2} {#3} {#4} {#5}
             }
       }
   }
-\cs_new_protected:Npn \__color_backend_separation_init:nnn #1#2#3
+\cs_generate_variant:Nn \__color_backend_separation_init:nnnnn { nxx }
+\cs_new_protected:Npn \__color_backend_separation_init_aux:nnnnn #1#2#3#4#5
   {
     \__kernel_backend_literal:e
       {
         !
         TeXDict ~ begin ~
-        /color \int_use:N \g__color_separation_int \c_space_tl
-        [#3] ~ aload ~ pop ~ ( \str_convert_pdfname:n {#1} ) ~
-        find \__color_backend_separation_init:n {#2} customcolor ~ def ~
+        /color \int_use:N \g__color_model_int
+          {
+            [ ~
+              /Separation ~ ( \str_convert_pdfname:n {#1} ) ~
+              [ ~ #2 ~ ] ~
+                {
+                  \cs_if_exist_use:cF { __color_backend_separation_init_ #2 :nnn }
+                    { \__color_backend_separation_init:nnn }
+                      {#3} {#4} {#5}
+                }
+            ] ~ setcolorspace
+          } ~ def ~
         end
       }
   }
-\cs_new:Npn \__color_backend_separation_init:n #1
+\cs_new:cpn { __color_backend_separation_init_ /DeviceCMYK :nnn } #1#2#3
+  { \__color_backend_separation_init_Device:Nn 4 {#3} }
+\cs_new:cpn { __color_backend_separation_init_ /DeviceGray :nnn } #1#2#3
+  { \__color_backend_separation_init_Device:Nn 1 {#3} }
+\cs_new:cpn { __color_backend_separation_init_ /DeviceRGB :nnn } #1#2#3
+  { \__color_backend_separation_init_Device:Nn 2 {#3} }
+\cs_new:Npn \__color_backend_separation_init_Device:Nn #1#2
   {
-    \__color_backend_separation_init:w #1 /Device #1 /Device \s__color_stop
+    #2 ~
+    \prg_replicate:nn {#1}
+      { #1 ~ index ~ mul ~ #1 ~ 1 ~ roll ~ }
+    \int_eval:n { #1 + 1 } ~ -1 ~ roll ~ pop
   }
-\cs_new:Npn \__color_backend_separation_init:w #1 /Device #2 /Device #3 \s__color_stop
-  { \str_lowercase:n {#2} }
-\cs_new_protected:Npn \__color_backend_separation_init_cielab:nnnnn #1#2#3#4#5 { }
-\cs_new_protected:Npn \__color_backend_separation_init_cielab:n #1 { }
+\cs_new:Npn \__color_backend_separation_init:nnn #1#2#3
+  {
+   \exp_args:Ne \__color_backend_separation_init:nnnn
+     { \__color_backend_separation_init_count:n {#2} }
+     {#1} {#2} {#3}
+  }
+\cs_new:Npn \__color_backend_separation_init_count:n #1
+  { \int_eval:n { 0 \__color_backend_separation_init_count:w #1 ~ \s__color_stop } }
+\cs_new:Npn \__color_backend_separation_init_count:w #1 ~ #2 \s__color_stop
+  {
+    +1
+    \tl_if_blank:nF {#2}
+      { \__color_backend_separation_init_count:w #2 \s__color_stop }
+  }
+\cs_new:Npn \__color_backend_separation_init:nnnn #1#2#3#4
+  {
+    \__color_backend_separation_init:w #3 ~ \s__color_stop #4 ~ \s__color_stop
+    \prg_replicate:nn {#1}
+      {
+        pop ~ 1 ~ index ~ neg ~ 1 ~ index ~ add ~
+        \int_eval:n { 3 * #1 } ~ index ~ mul ~
+        2 ~ index ~ add ~
+        \int_eval:n { 3 * #1 } ~ #1 ~ roll ~
+      }
+    \int_step_function:nnnN {#1} { -1 } { 1 }
+      \__color_backend_separation_init:n
+    \int_eval:n { 4 * #1 + 1 } ~ #1 ~ roll ~
+    \prg_replicate:nn { 3 * #1 + 1 } { pop ~ }
+    \tl_if_blank:nF {#2}
+      { \__color_backend_separation_init:nw {#1} #2 ~ \s__color_stop }
+  }
+\cs_new:Npn \__color_backend_separation_init:w
+  #1 ~ #2 \s__color_stop #3 ~ #4 \s__color_stop
+  {
+    #1 ~ #3 ~ 0 ~
+    \tl_if_blank:nF {#2}
+      { \__color_backend_separation_init:w #2 \s__color_stop #4 \s__color_stop }
+  }
+\cs_new:Npn \__color_backend_separation_init:n #1
+  { \int_eval:n { #1 * 2 } ~ index ~ }
+\cs_new:Npn \__color_backend_separation_init:nw #1#2 ~ #3 ~ #4 \s__color_stop
+  {
+     #2 ~ #3 ~
+     2 ~ index ~ 2 ~ index ~ lt ~
+       { ~ pop ~ exch ~ pop ~ } ~
+       { ~
+         2 ~ index ~ 1 ~ index ~ gt ~
+           { ~ exch ~ pop ~ exch ~ pop ~ } ~
+           { ~ pop ~ pop ~ } ~
+         ifelse ~
+       }
+    ifelse ~
+    #1 ~ 1 ~ roll ~
+    \tl_if_blank:nF {#4}
+      { \__color_backend_separation_init:nw {#1} #4 \s__color_stop }
+  }
+\cs_new_protected:Npn \__color_backend_separation_init_CIELAB:nnn #1#2#3
+  {
+    \__color_backend_separation_init:nxxnn
+      {#2}
+      {
+        /CIEBasedABC ~
+            << ~
+              /RangeABC ~ [ ~ \c__color_model_range_CIELAB_tl \c_space_tl ] ~
+              /DecodeABC ~
+                [ ~
+                  { ~ 16 ~ add ~ 116 ~ div ~ } ~ bind ~
+                  { ~ 500 ~ div ~ } ~ bind ~
+                  { ~ 200 ~ div ~ } ~ bind ~
+                ] ~
+              /MatrixABC ~ [ ~ 1 ~ 1 ~ 1 ~ 1 ~ 0 ~ 0 ~ 0 ~ 0 ~ -1 ~ ] ~
+              /DecodeLMN ~
+                [ ~
+                  { ~
+                    dup ~ 6 ~ 29 ~ div ~ ge ~
+                      { ~ dup ~ dup ~ mul ~ mul ~ ~ } ~
+                      { ~ 4 ~ 29 ~ div ~ sub ~ 108 ~ 841 ~ div ~ mul ~ } ~
+                    ifelse ~
+                    0.9505 ~ mul ~
+                  } ~ bind ~
+                  { ~
+                    dup ~ 6 ~ 29 ~ div ~ ge ~
+                      { ~ dup ~ dup ~ mul ~ mul ~ } ~
+                      { ~ 4 ~ 29 ~ div ~ sub ~ 108 ~ 841 ~ div ~ mul ~ } ~
+                    ifelse ~
+                  } ~ bind ~
+                  { ~
+                    dup ~ 6 ~ 29 ~ div ~ ge ~
+                      { ~ dup ~ dup ~ mul ~ mul ~ } ~
+                      { ~ 4 ~ 29 ~ div ~ sub ~ 108 ~ 841 ~ div ~ mul ~ } ~
+                    ifelse ~
+                    1.0890 ~ mul ~
+                  } ~ bind
+                ] ~
+              /WhitePoint ~
+                [ ~ \tl_use:c { c__color_model_whitepoint_CIELAB_ #1 _tl } ~ ] ~
+            >>
+      }
+      { \c__color_model_range_CIELAB_tl }
+      { 100 ~ 0 ~ 0 }
+      {#3}
+  }
+\cs_new_protected:Npn \__color_backend_devicen_init:nnn #1#2#3
+  {
+    \__kernel_backend_literal:e
+      {
+        !
+        TeXDict ~ begin ~
+        /color \int_use:N \g__color_model_int
+          {
+            [ ~
+              /DeviceN ~
+              [ ~ #1 ~ ] ~
+              #2 ~
+              { ~ #3 ~ } ~
+            ] ~ setcolorspace
+          } ~ def ~
+        end
+      }
+  }
 \cs_new_protected:Npn \__color_backend_fill_cmyk:n #1
   { \__kernel_backend_postscript:n { /color.fc { #1 ~ setcmykcolor } def } }
 \cs_new_protected:Npn \__color_backend_fill_gray:n #1
@@ -161,6 +297,8 @@
   { \__kernel_backend_postscript:n { /color.fc { #1 } def } }
 \cs_new_protected:Npn \__color_backend_stroke_separation:nn #1#2
   { \__kernel_backend_postscript:n { /color.sc { #1 } def } }
+\cs_new_eq:NN \__color_backend_fill_devicen:nn \__color_backend_fill_separation:nn
+\cs_new_eq:NN \__color_backend_stroke_devicen:nn \__color_backend_stroke_separation:nn
 %% File: l3backend-box.dtx
 \cs_new_protected:Npn \__box_backend_clip:N #1
   {

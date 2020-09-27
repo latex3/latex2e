@@ -25,7 +25,7 @@
 %% 
 %% File: l3backend-basics.dtx
 \ProvidesExplFile
-  {l3backend-luatex.def}{2020-09-01}{}
+  {l3backend-luatex.def}{2020-09-24}{}
   {L3 backend support: PDF output (LuaTeX)}
 \cs_if_exist:NTF \__kernel_dependency_version_check:nn
   {
@@ -123,25 +123,28 @@
   }
 \cs_new_protected:Npn \__color_backend_select_separation:nn #1#2
   { \__color_backend_select:n { /#1 ~ cs ~ /#1 ~ CS ~ #2 ~ scn ~ #2 ~ SCN } }
+\cs_new_eq:NN \__color_backend_select_devicen:nn \__color_backend_select_separation:nn
 \cs_new_protected:Npn \__color_backend_separation_init:nnnnn #1#2#3#4#5
   {
+    \pdf_object_now:nx { dict }
+      {
+        /FunctionType ~ 2
+        /Domain ~ [0 ~ 1]
+        \tl_if_blank:nF {#3} { /Range ~ [#3] }
+        /C0 ~ [#4] ~
+        /C1 ~ [#5] /N ~ 1
+      }
     \__color_backend_separation_init:n
       {
-        /Separation
+        /Separation ~
         / \str_convert_pdfname:n {#1} ~ #2 ~
-        <<
-          /FunctionType ~ 2
-          /Domain ~ [0 ~ 1]
-          \tl_if_blank:nF {#3} { /Range ~ [#3] }
-          /C0 ~ [#4] ~
-          /C1 ~ [#5] /N ~ 1
-        >>
+        \pdf_object_last:
       }
     \use:x
       {
         \pdfcoredict_gput:nnn
           { Page / Resources / ColorSpace }
-          { color \int_use:N \g__color_separation_int }
+          { color \int_use:N \g__color_model_int }
           { \pdf_object_last: }
       }
   }
@@ -151,32 +154,81 @@
   {
     \pdf_object_now:nx { array } {#1}
   }
-\cs_new_protected:Npn \__color_backend_separation_init_cielab:nnnnn #1#2#3#4#5
+\cs_new_protected:Npn \__color_backend_separation_init_CIELAB:nnn #1#2#3
   {
+    \pdf_object_if_exist:nF { __color_illuminant_CIELAB_ #1 }
+      {
+        \pdf_object_new:nn { __color_illuminant_CIELAB_ #1 } { array }
+        \pdf_object_write:nx { __color_illuminant_CIELAB_ #1 }
+          {
+            /Lab ~
+            <<
+             /WhitePoint ~
+               [ \tl_use:c { c__color_model_whitepoint_CIELAB_ #1 _tl } ]
+             /Range ~ [ \c__color_model_range_CIELAB_tl ]
+            >>
+          }
+      }
     \__color_backend_separation_init:nnnnn
       {#2}
-      { \pdf_object_ref:n { __color_illuminant_cielab_ #1 } }
-      { \c__color_model_range_lab_tl }
+      { \pdf_object_ref:n { __color_illuminant_CIELAB_ #1 } }
+      { \c__color_model_range_CIELAB_tl }
       { 100 ~ 0 ~ 0 }
-      { #3 ~ #4 ~ #5 }
+      {#3}
   }
 \cs_if_exist:NF \pdf_object_now:nn
-  { \cs_gset_protected:Npn \__color_backend_separation_init_cielab:nnnnn #1#2#3#4#5 { } }
-\cs_new_protected:Npn \__color_backend_separation_init_cielab:n #1
   {
-    \pdf_object_new:nn { __color_illuminant_cielab_ #1 } { array }
-    \pdf_object_write:nx { __color_illuminant_cielab_ #1 }
-      {
-        /Lab ~
-        <<
-         /WhitePoint ~
-           [ \tl_use:c { c__color_model_whitepoint_cielab_ #1 _tl } ]
-         /Range ~ [ \c__color_model_range_lab_tl ]
-        >>
-     }
+    \cs_gset_protected:Npn \__color_backend_separation_init_CIELAB:nnn #1#2#3
+      { }
   }
-\cs_if_exist:NF \pdf_object_new:nn
-  { \cs_gset_protected:Npn \__color_backend_separation_init_cielab:n #1 { } }
+\cs_new_protected:Npn \__color_backend_devicen_init:nnn #1#2#3
+  {
+    \pdf_object_now:nx { stream }
+      {
+        {
+          /FunctionType ~ 4 ~
+          /Domain ~
+            [ ~
+              \prg_replicate:nn
+                { 0 \__color_backend_devicen_init:w #1 ~ \s__color_stop }
+                { 0 ~ 1 ~ } ~
+            ] ~
+          /Range ~
+            [ ~
+              \str_case:nn {#2}
+                {
+                  { /DeviceCMYK } { 0 ~ 1 ~ 0 ~ 1 ~ 0 ~ 1 ~ 0 ~ 1 }
+                  { /DeviceGray } { 0 ~ 1 }
+                  { /DeviceRGB }  { 0 ~ 1 ~ 0 ~ 1 ~ 0 ~ 1 }
+                } ~
+            ]
+        }
+        {#3}
+     }
+    \__color_backend_separation_init:n
+      {
+        /DeviceN ~
+        [ ~ #1 ~ ] ~
+        #2 ~
+        \pdf_object_last:
+      }
+    \use:x
+      {
+        \pdfcoredict_gput:nnn
+          { Page / Resources / ColorSpace }
+          { color \int_use:N \g__color_model_int }
+          { \pdf_object_last: }
+      }
+  }
+\cs_if_exist:NF \pdf_object_now:nn
+  { \cs_gset_protected:Npn \__color_backend_devicen_init:nnn #1#2#3 { } }
+\cs_new:Npn \__color_backend_devicen_init:w #1 ~ #2 \s__color_stop
+  {
+    + 1
+    \tl_if_blank:nF {#2}
+      { \__color_backend_devicen_init:w #2 \s__color_stop }
+  }
+\cs_new_eq:NN \__color_backend_devicen_init:n \__color_backend_separation_init:n
 \cs_new_protected:Npn \__color_backend_fill_cmyk:n #1
   { \__kernel_backend_literal_pdf:n { #1 ~ k } }
 \cs_new_protected:Npn \__color_backend_fill_gray:n #1
@@ -193,6 +245,8 @@
   { \__kernel_backend_literal_pdf:n { /#1 ~ cs ~ #2 ~ scn } }
 \cs_new_protected:Npn \__color_backend_stroke_separation:nn #1#2
   { \__kernel_backend_literal_pdf:n { /#1 ~ CS ~ #2 ~ SCN } }
+\cs_new_eq:NN \__color_backend_fill_devicen:nn \__color_backend_fill_separation:nn
+\cs_new_eq:NN \__color_backend_stroke_devicen:nn \__color_backend_stroke_separation:nn
 %% File: l3backend-box.dtx
 \cs_new_protected:Npn \__box_backend_clip:N #1
   {
@@ -479,7 +533,7 @@
 \cs_new:Npx \__pdf_backend_annotation_last:
   {
     \exp_not:N \int_value:w
-      \exp_not:N \tex_pdffeedback:D lastannot
+      \exp_not:N \tex_pdffeedback:D lastannot ~
       \c_space_tl 0 ~ R
   }
 \cs_new_protected:Npn \__pdf_backend_link_begin_goto:nnw #1#2
@@ -499,7 +553,7 @@
 \cs_new:Npx \__pdf_backend_link_last:
   {
     \exp_not:N \int_value:w
-      \exp_not:N \tex_pdffeedback:D lastlink
+      \exp_not:N \tex_pdffeedback:D lastlink ~
       \c_space_tl 0 ~ R
   }
 \cs_new_protected:Npn \__pdf_backend_link_margin:n #1
@@ -555,7 +609,7 @@
       \int_const:cn
         { c__pdf_backend_object_ \tl_to_str:n {#1} _int }
         { \tex_pdffeedback:D lastobj }
-    \prop_gput:Nnn \exp_not:N \g__pdf_backend_object_prop {#1} {#2}
+    \prop_gput:Nnn \g__pdf_backend_object_prop {#1} {#2}
   }
 \cs_new:Npn \__pdf_backend_object_ref:n #1
   { \int_use:c { c__pdf_backend_object_ \tl_to_str:n {#1} _int } ~ 0 ~ R }
