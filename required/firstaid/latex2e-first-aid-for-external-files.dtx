@@ -29,7 +29,7 @@
 %
 %
 % \providecommand\pkg[1]{\texttt{#1}}
-
+%
 % \title{First aid for external files and packages that need updating\thanks{}}
 % \author{Frank Mittelbach, \LaTeX{} Project}
 %
@@ -78,7 +78,7 @@
 %    are done from the ``outside'', they usually add some burden and
 %    slow down \LaTeX{} processing, even if the package/class is not
 %    used in the document.
-
+%
 %    We will therefore remove such code as soon as possible
 %    again. In practice this means that if some package never gets
 %    updated/corrected, then it will eventually fail to work, because
@@ -99,8 +99,8 @@
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-\def\LaTeXFirstAidDate{2020/09/27}     
-\def\LaTeXFirstAidVersion{v1.0a}     
+\def\LaTeXFirstAidDate{2020/09/28}
+\def\LaTeXFirstAidVersion{v1.0b}
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -108,8 +108,195 @@
              [\LaTeXFirstAidDate\space \LaTeXFirstAidVersion\space
                LaTeX kernel fixes to external files and packages]
 %    \end{macrocode}
-%    
 %
+% \subsection{Package version peeking}
+%
+%    \begin{macrocode}
+%<@@=firstaid>
+\ExplSyntaxOn
+%    \end{macrocode}
+%
+% \begin{macro}{\l_@@_line_tl}
+% \begin{macro}{\g_@@_pkg_ior}
+% \begin{macro}{\l_@@_needs_bool}
+%   Some variables needed.
+%    \begin{macrocode}
+\tl_new:N \l_@@_line_tl
+\tl_new:N \l_@@_stored_tl
+\tl_new:N \l_@@_target_tl
+\ior_new:N \g_@@_pkg_ior
+\bool_new:N \l_@@_needs_bool
+\scan_new:N \s_@@
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}[TF]{\firstaid_if_needed:nn}
+%   \cs{firstaid_if_needed:nn} will check if version |#2| of package
+%   |#1| requires first-aid treatment (that is, if the version installed
+%   matches |#2|).  It returns \meta{true} or \meta{false}, accordingly.
+%    \begin{macrocode}
+\prg_new_protected_conditional:Npnn \firstaid_if_needed:nn #1 #2
+    { T, F, TF }
+  {
+    \cs_if_exist:cTF { ver@#1.sty }
+      {
+%    \end{macrocode}
+%
+%   If the file is already loaded, check if the loaded version matches,
+%   and return \meta{true} or \meta{false}.
+%    \begin{macrocode}
+        \str_if_eq:eeTF { \use:c { ver@#1.sty } } {#2}
+          { \prg_return_true: }
+          { \prg_return_false: }
+      }
+      {
+%    \end{macrocode}
+%
+%   If the package is not read yet (\cs[no-index]{ver@\#1} is not
+%   defined), then we will silently open the file and peek through its
+%   contents with \cs{@@_peek_file:}.
+%    \begin{macrocode}
+        \tl_set:Nn \l_@@_target_tl { {#1}[#2] }
+        \tl_clear:N \l_@@_stored_tl
+        \ior_open:Nn \g_@@_pkg_ior { #1.sty }
+        \@@_peek_file:
+        \ior_close:N \g_@@_pkg_ior
+        \bool_if:NTF \l_@@_needs_bool
+          { \prg_return_true: }
+          { \prg_return_false: }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_peek_file:}
+%   If the file isn't loaded yet, we'll read it looking for
+%   \cs{ProvidesPackage} and read the argument to that and then check
+%   the available version.  There are a few limitations of when this
+%   will work:  the \cs{ProvidesPackage} cannot be within braces, and it
+%   must be the first occurrence of the control sequence in the file.
+%
+%   The file is read line by line, looking for \cs{ProvidesPackage}.
+%   If the end of the file is reached, the boolean \cs{l_@@_needs_bool}
+%   is set to false (a package without a \cs{ProvidesPackage} line is
+%   set to \emph{not} need first-aid;  this could be changed if needed).
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_peek_file:
+  {
+    \ior_get:NNTF \g_@@_pkg_ior \l_@@_line_tl
+      {
+        \tl_if_in:NnTF \l_@@_line_tl { \ProvidesPackage }
+          { \exp_after:wN \@@_scan_provides_args:w \l_@@_line_tl \s_@@ }
+          { \@@_peek_file: }
+      }
+      { \bool_set_false:N \l_@@_needs_bool }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{
+%     \@@_scan_provides_args:w,
+%     \@@_scan_provides_marg:,
+%     \@@_marg_check:n,
+%     \@@_put_provides_marg:w,
+%   }
+%   Now extract the tokens after \cs{ProvidesPackage}, and look for the
+%   mandatory argument;  the package name.  Once done, call
+%   \cs{@@_put_provides_marg:w} to put the mandatory argument into the
+%   storage token list and call \cs{@@_start_opt_check:n} to look for
+%   the optional argument.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_scan_provides_args:w
+    #1 \ProvidesPackage #2 \s_@@
+  { \@@_marg_check:n {#2} }
+\cs_new_protected:Npn \@@_scan_provides_marg:
+  {
+    \ior_get:NNTF \g_@@_pkg_ior \l_@@_line_tl
+      { \exp_args:NV \@@_marg_check:n \l_@@_line_tl }
+      { \bool_set_false:N \l_@@_needs_bool }
+  }
+\cs_new_protected:Npn \@@_marg_check:n #1
+  {
+    \tl_if_blank:nTF {#1}
+      { \@@_scan_provides_marg: }
+      { \@@_put_provides_marg:w #1 \s_@@ }
+  }
+\cs_new_protected:Npn \@@_put_provides_marg:w #1 #2 \s_@@
+  {
+    \tl_put_right:Nn \l_@@_stored_tl { {#1} }
+    \@@_start_opt_check:n {#2}
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{
+%     \@@_start_opt_check:n,
+%     \@@_start_provides_opt:,
+%     \@@_end_opt_check:n,
+%     \@@_scan_provides_opt:,
+%     \@@_empty_provides_opt:,
+%   }
+%   Look for the optional argument by checking that the first non-blank
+%   token is a |[|, then grabbing lines one by one looking for an
+%   unbraced |]| which ends the optional argument.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_start_opt_check:n #1
+  {
+    \tl_if_blank:nTF {#1}
+      { \@@_start_provides_opt: }
+      {
+        \str_if_eq:eeTF { \use_i_delimit_by_q_nil:nw #1 \q_nil } { [ }
+          { \@@_end_opt_check:n {#1} }
+          { \@@_empty_provides_opt: }
+      }
+  }
+\cs_new_protected:Npn \@@_start_provides_opt:
+  {
+    \ior_get:NNTF \g_@@_pkg_ior \l_@@_line_tl
+      { \exp_args:NV \@@_start_opt_check:n \l_@@_line_tl }
+      { \@@_empty_provides_opt: }
+  }
+\cs_new_protected:Npn \@@_scan_provides_opt:
+  {
+    \ior_get:NNTF \g_@@_pkg_ior \l_@@_line_tl
+      { \exp_args:NV \@@_end_opt_check:n \l_@@_line_tl }
+      { \bool_set_false:N \l_@@_needs_bool }
+  }
+\cs_new_protected:Npn \@@_end_opt_check:n #1
+  {
+    \tl_if_in:nnTF {#1} { ] }
+      { \@@_put_opt_arg_end:w #1 \s_@@ }
+      {
+        \tl_put_right:Nn \l_@@_stored_tl {#1}
+        \@@_scan_provides_opt:
+      }
+  }
+\cs_new_protected:Npn \@@_empty_provides_opt:
+  { \use:x { \@@_put_opt_arg_end:w [ \c_novalue_tl ] \s_@@ } }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_put_opt_arg_end:w}
+%   When a |]| is found, add everything up to it to the storage token
+%   list and compare it with the target token list saved earler.
+%   If they are the same, return true, otherwise false.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_put_opt_arg_end:w #1 ] #2 \s_@@
+  {
+    \tl_put_right:Nn \l_@@_stored_tl { #1] }
+    \str_if_eq:NNTF \l_@@_target_tl \l_@@_stored_tl
+      { \bool_set_true:N \l_@@_needs_bool }
+      { \bool_set_false:N \l_@@_needs_bool }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+%    \begin{macrocode}
+\ExplSyntaxOff
+%<@@=>
+%    \end{macrocode}
 %
 % \subsection{The \pkg{filehook} package first aid}
 %     
@@ -325,5 +512,3 @@
 %
 % \Finale
 %
-
-
