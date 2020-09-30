@@ -6,7 +6,7 @@
 %%
 %% l3doc.dtx  (with options: `class')
 %% 
-%% Copyright (C) 1990-2019 The LaTeX3 Project
+%% Copyright (C) 1990-2020 The LaTeX3 Project
 %% 
 %% It may be distributed and/or modified under the conditions of
 %% the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -1486,7 +1486,10 @@
     \vbox_set:Nn \l__codedoc_macro_box
       {
         \vbox_unpack_drop:N \l__codedoc_macro_box
-        \hbox { \llap { \__codedoc_print_macroname:nN {#1} #2 \ } }
+        \hbox { \llap { \__codedoc_print_macroname:nN {#1} #2
+            \MacroFont       % <----- without it the \ is in lmr10 if a link is made
+            \
+        } }
       }
     \int_incr:N \l__codedoc_macro_int
   }
@@ -1618,7 +1621,7 @@
   {
     \seq_set_map:NNn \l__codedoc_tmpa_seq
       \g__codedoc_nested_names_seq
-      { \exp_not:n { \__codedoc_macro_end_wrap_item:n {##1} } }
+      { \__codedoc_macro_end_wrap_item:n {##1} }
     End~ definition~ for~
     \int_compare:nTF { \seq_count:N \l__codedoc_tmpa_seq <= 3 }
       {
@@ -1834,7 +1837,7 @@
       { \cs_set:Npn \currentfile{#1.dtx} }
     \int_compare:nNnTF \@auxout = \@partaux
       { \@latexerr{\string\include\space cannot~be~nested}\@eha }
-      { \@docinclude #1 }
+      { \@docinclude {#1} }
   }
 \cs_gset:Npn \@docinclude #1
   {
@@ -1865,7 +1868,7 @@
       {
         \cs_set_eq:NN \ttfamily\relax
         \cs_gset:Npx \filekey
-          { \filekey, \thepart = { \ttfamily \currentfile } }
+          { \filekey,~ \thepart = { \ttfamily \currentfile } }
       }
       \DocInput{\currentfile}
       \cs_set_eq:NN \PrintIndex              \@ltxdoc@PrintIndex

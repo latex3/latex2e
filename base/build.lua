@@ -39,6 +39,7 @@ installfiles   =
   }
 sourcefiles    =
   {
+    "lppl.tex",
     "ltnews.cls",
     "ltxguide.cls",
     "minimal.cls",
@@ -51,6 +52,7 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
+    "source2edoc.cls",        -- temp
      "*-????-??-??.sty"
   }
 textfiles =
@@ -107,8 +109,16 @@ typesetfiles   =
     "ltx3info.tex",
     "modguide.tex",
     "usrguide.tex",
-    "latexchanges.tex"
+    "latexchanges.tex",
+    "lthooks-doc.tex",
+    "ltshipout-doc.tex",
+    "ltfilehook-doc.tex",
+    "lthooks-code.tex",
+    "ltshipout-code.tex",
+    "ltfilehook-code.tex",
   }
+
+-- Files that should be removed after running a test
 dynamicfiles = {"*.tst"}
 
 -- A few special file for unpacking
@@ -130,19 +140,21 @@ unpacksuppfiles =
 testsuppdir = "testfiles/helpers"
 
 -- No dependencies at all (other than l3build and for typesetting)
-checkdeps   = { }
+checkdeps   = { maindir .. "/required/firstaid"  }
 typesetdeps =
   {
     maindir .. "/required/graphics",
-    maindir .. "/required/tools"
+    maindir .. "/required/tools",
+    maindir .. "/required/amsmath"    -- for l3doc.cls :-(
   }
-unpackdeps  = { }
+unpackdeps  = {}
 
 -- Customise typesetting
 indexstyle = "source2e.ist"
 
--- Allow for TU and other tests test
-checkconfigs = {"build","config-TU","config-legacy"}
+-- Allow for TU and other test configurations
+checkconfigs = {"build","config-1run","config-TU","config-legacy","config-lthooks",
+                "config-lthooks2"}
 
 update_tag = update_tag_base
 
@@ -172,8 +184,7 @@ function bundleunpack ()
   end
   for _,i in ipairs (unpackfiles) do
     for _,j in ipairs (filelist (unpackdir, i)) do
-      os.execute (os_yes .. ">>" .. localdir .. "/yes")
-      errorlevel = os.execute (
+      local success = io.popen (
           -- Notice that os.execute is used from 'here' as this ensures that
           -- localdir points to the correct place: running 'inside'
           -- unpackdir would avoid the need for setting -output-directory
@@ -181,10 +192,10 @@ function bundleunpack ()
           -- of localdir w.r.t. unpackdir
           os_setenv .. " TEXINPUTS=" .. unpackdir .. os_concat ..
           unpackexe .. " " .. unpackopts .. " -output-directory=" .. unpackdir
-            .. " " .. unpackdir .. "/" .. j .. " < " .. localdir .. "/yes"
-        )
-      if errorlevel ~=0 then
-        return errorlevel
+            .. " " .. unpackdir .. "/" .. j,"w"
+        ):write(string.rep("y\n", 300)):close()
+      if not success then
+        return 1
       end
     end
   end

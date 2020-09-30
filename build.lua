@@ -8,7 +8,7 @@ module  = ""
 
 -- A couple of custom variables: the order here is set up for 'importance'
 bundles  = {"base"}
-required = {"cyrillic", "graphics", "tools", "amsmath"}
+required = {"cyrillic", "graphics", "tools", "amsmath", "firstaid"}
 
 -- Location of main directory: use Unix-style path separators
 maindir = "."

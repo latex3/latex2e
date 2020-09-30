@@ -1,7 +1,7 @@
 The LaTeX kernel
 ================
 
-Release 2020-02-02 patch level 5
+Release 2020-10-01
 
 Overview
 --------
@@ -34,16 +34,12 @@ the most significant of these files are
 - `README.md` is this file
 - `manifest.txt` lists all the files in this LaTeX distribution,
    with one line of information about the contents
-- `unpacked.txt` lists all the files in the unpacked LaTeX distribution
 - `legal.txt` and `lppl.txt` (LaTeX Project Public License) describe the
    LaTeX copyright, warranty and copying restrictions.
-- `patches.txt` describes the how important changes will be distributed
-   between releases
 - `texpert.txt` contains information about the system that may still be
    useful for TeX experts
 - `tex2.txt` contains important information for users of extremely
    old versions of TeX (pre 1990)
-- `autoload.txt` describes a variant of LaTeX that is no longer supported
 - `bugs.txt` describes how to submit a bug report for LaTeX
 
 Other documentation files include files with names of the form:

@@ -27,9 +27,11 @@ checksuppfiles = checksuppfiles     or
     "graphics.cfg",
     "test209.tex",
     "test2e.tex",
+    "regression-test.tex",
     "xetex.def",
     "dvips.def",
     "lipsum.sty",
+    "*.fd",
     "*.txt",
     "load-unicode-xetex-classes.tex",
     "lualibs*.lua", 
@@ -193,6 +195,8 @@ local function fmt(engines,dest)
     if fileexists(supportdir .. "/" .. ini) then
       src = ini
     end
+    local cmd = engine
+    if engine == "luatex" then cmd = "luahbtex" end
     print("Building format for " .. engine)
     local errorlevel = os.execute(
       os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
@@ -200,7 +204,7 @@ local function fmt(engines,dest)
       .. os_concat ..
       os_setenv .. " LUAINPUTS=" .. unpackdir .. os_pathsep .. localdir
       .. os_pathsep .. texmfdir .. "//" .. (fmtsearch and os_pathsep or "")
-      .. os_concat .. engine .. " -etex -ini -output-directory=" .. unpackdir
+      .. os_concat .. cmd .. " -etex -ini -output-directory=" .. unpackdir
       .. " " .. src 
       .. (hide and (" > " .. os_null) or ""))
     if errorlevel ~= 0 then return errorlevel end

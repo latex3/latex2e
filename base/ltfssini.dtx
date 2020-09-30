@@ -36,7 +36,7 @@
 %
 %
 \ProvidesFile{ltfssini.dtx}
-             [2020/02/18 v3.1i LaTeX Kernel (NFSS Initialisation)]
+             [2020/09/30 v3.2d LaTeX Kernel (NFSS Initialisation)]
 % \iffalse
 \documentclass{ltxdoc}
 \begin{document}
@@ -244,7 +244,7 @@
 %  \DescribeMacro\DeclareFontSeriesDefault
 %    We now support this concept directly from within \LaTeX{} and for
 %    use in font packages (or the document preamble) we offer
-%    \cs{DeclareSeriesDefault}. This declaration takes three
+%    \cs{DeclareFontSeriesDefault}. This declaration takes three
 %    arguments:
 %   \begin{description}
 %   \item[document family interface:] Can either be \texttt{rm},
@@ -278,6 +278,7 @@
 %    The command to declare font series defaults for the ``rm'', ``sf'' or
 %    ``tt'' family.
 %    \begin{macrocode}
+\let\DeclareFontSeriesDefault\@undefined      % for rollback
 \newcommand\DeclareFontSeriesDefault[3][]{%
   \def\reserved@a{#1}%
 %    \end{macrocode}
@@ -287,11 +288,19 @@
   \ifx\reserved@a\@empty
     \ifcsname #2series\endcsname           % supported are
                                            % \[md/bf]default
+%    \end{macrocode}
+%    Adding \cs{@empty} allows us to detect if the default gets
+%    redefined with \cs{renewcommand} or \cs{def} by the user.
+% \changes{v3.1k}{2020/03/19}{Support legacy use of \cs{bfdefault}
+%        and \cs{mddefault} (gh/306)}
+%    \begin{macrocode}
       \expandafter\def
-         \csname #2default\endcsname{#3}%
+        \csname #2default\endcsname{#3\@empty}%
+      \expandafter\def
+        \csname #2default@previous\endcsname{#3\@empty}%
     \else
 %    \end{macrocode}
-%    
+%
 % \changes{v3.1g}{2020/02/05}{Clarrified error text}
 %    \begin{macrocode}
        \@latex@error{Wrong syntax for \string\DeclareFontSeriesDefault}%
@@ -379,7 +388,364 @@
 
 
 
+%
+%
+%
+%  \begin{macro}{\series@change@debug}
+%    For debugging, but right now none of this code is extracted. The
+%    idea is to have a separate package with debugging code
+%    one day.
+%    \begin{macrocode}
+%<*debug>
+\let\series@change@debug\typeout
+\let\series@change@debug\@gobble
+%</debug>
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%  \begin{macro}{\prepare@family@series@update}
+%    This is core command that prepares for the family update. The big
+%    difference to the documented code above is that the nested
+%    \cs{ifx} statements seem to be missing. Instead we loop through
+%    an internal list that holds the names of the three meta
+%    families. This approach allows us to extend the mechanism at a
+%    later stage to allow for additional named meta families.
+%
+%  \begin{macro}{\@meta@family@list}
+%    Here is the current definition of that list:
+%    \begin{macrocode}
+\def\@meta@family@list{\@elt{rm}\@elt{sf}\@elt{tt}}
+%    \end{macrocode}
+%  \end{macro}
+%
+%    \begin{macrocode}
+\def\prepare@family@series@update#1#2{%
+%    \end{macrocode}
+%    
+% \changes{v3.1i}{2020/02/18}{No series auto-update when forced (gh/277)}
+%    \begin{macrocode}
+ \if@forced@series
+%<+debug> \series@change@debug{No series preparation (forced \f@series)\on@line}%
+   \fontfamily#2%
+ \else
+%<+debug> \series@change@debug{Prepearing for switching to #1 (#2)\on@line}%
+   \expand@font@defaults
+%    \end{macrocode}
+%    We prepare for changing the current series. We have to find it
+%    before changing the family as discussed above.
+%    \begin{macrocode}
+   \let\target@series@value\@empty
+   \def\target@meta@family@value{#1}%
+%    \end{macrocode}
+%    As the very last item in the meta family list we add
+%    \verb=\@elt{??}= and define this pseudo meta family to be the
+%    current font family. So if none of the real meta families matched then
+%    this will match. This will cover the following case:
+%    \begin{itemize}
+%    \item \cs{bfseries} is called  for a family using \texttt{bx}
+%       (e.g., CMR) 
+%    \item Switch to a font family that is none of the meta
+%       families, e.g., via \verb=\fontfamily{ptm}\selectfont=
+%    \item Then none of the real meta families, match but the final
+%      \verb=\@elt{??}= will.
+%    \item Therefore if the current series is \cs{mddefault} or
+%    \cs{bfdefault} it will be detected and the corresponding target
+%    series selected.
+%    \end{itemize}
+% \changes{v3.1i}{2020/02/18}{Recognize current family if it is not a
+%    ``meta'' family and auto-update series using \cs{bfdefault} (gh/277)}
+%    \begin{macrocode}
+   \expandafter\edef\csname ??def@ult\endcsname{\f@family}%
+%    \end{macrocode}
+%    To find it we loop over the meta family list with a suitable
+%    definition of \cs{@elt}.
+%    \begin{macrocode}
+   \let\@elt\update@series@target@value
+      \@meta@family@list
+%    \end{macrocode}
+%    Last resort pseudo meta family. Will only be looked at f none of
+%    the real ones have matched.
+%    \begin{macrocode}
+      \@elt{??}%
+   \let\@elt\relax
+%    \end{macrocode}
+%    That will figure out the correct series value to use without updating
+%    it. Now we can change the family.
+%    \begin{macrocode}
+   \fontfamily#2%
+%    \end{macrocode}
+%    After that we update the series. That code is again like the one
+%    above.
+%    \begin{macrocode}
+   \ifx\target@series@value\@empty
+%<+debug> \series@change@debug{Target series still empty ...}%
+   \else
+     \ifx \f@series\target@series@value
+%<+debug> \series@change@debug{Target series unchanged:
+%<+debug>                      \f@series \space = \target@series@value}%
+     \else
+       \maybe@load@fontshape
+%<+debug> \series@change@debug{Target series:
+%<+debug>                      \f@series \space -> \target@series@value}%
+%    \end{macrocode}
+%    The \cs{target@series@value} may contain something like
+%    \texttt{cm} (coming from a default) and so we can't directly
+%    asign it to \cs{f@series} be have to drop any surplus \texttt{m}
+%    first.
+% \changes{v3.1j}{2020/02/25}{Drop surplus ``m'' from
+%                             \cs{target@series@value} (gh/291)}
+%    \begin{macrocode}
+%      \let\f@series\target@series@value
+       \series@maybe@drop@one@m\target@series@value\f@series
+     \fi
+   \fi
+ \fi
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\update@series@target@value}
+%    In this macro used in the look you basically find the nested
+%    \cs{ifx}s from the outline above. The only difference is that is
+%    it is parameterized instead of being written out and only for one
+%    block of tests because the code is called reatedly when looping
+%    over the meta family list. From the list we get each meta family
+%    name in turn.
+%    \begin{macrocode}
+\def\update@series@target@value#1{%
+%    \end{macrocode}
+%    There is one additional test at the beginning, because the list
+%    contains all meta families and we need to ignore the case where
+%    current one from the list and target one are identical.
+%    \begin{macrocode}
+  \def\reserved@a{#1}%
+  \ifx\target@meta@family@value\reserved@a   % rm -> rm do nothing
+  \else
+%<+debug> \series@change@debug{Trying to match #1: \csname#1def@ult\endcsname
+%<+debug>                      \space = \f@family\space ?}%
+%    \end{macrocode}
+%    We only ``do'' something if the current font family matches the
+%    current meta family.
+%    \begin{macrocode}
+    \expandafter\ifx\csname#1def@ult\endcsname\f@family
+%    \end{macrocode}
+%    If that's the case we know that this is the block that applies
+%    (only one meta family can match). So  to speed things up we
+%    change \cs{@elt} so that the rest of the loop gets gobbled.
+%    \begin{macrocode}
+      \let\@elt\@gobble
+%    \end{macrocode}
+%    Then we try to find the right new value for the series (as
+%    explained above). The two macros defined first are only there
+%    because we now need to use \cs{csname} and this way the code will
+%    be a little faster.
+%    \begin{macrocode}
+      \expandafter\let\expandafter\reserved@b
+                      \csname mdseries@\target@meta@family@value\endcsname
+      \expandafter\let\expandafter\reserved@c
+                      \csname bfseries@\target@meta@family@value\endcsname
+%<+debug>\series@change@debug{Targets for mdseries and bfseries:
+%<+debug>                     \reserved@b\space and \reserved@c}%
+%    \end{macrocode}
+%    This here is now identical to the nested \cs{ifx} block from the
+%    outline, except that it there appeared twice in
+%    \cs{rmfamily}. This is now covered by looping and stopping the
+%    loop when a match was found.
+%    \begin{macrocode}
+%    \end{macrocode}
+%    We have to sanitize the default value first because it may
+%    contain something like \texttt{mc} and that would never match
+%    \cs{f@series} because there it would be called \texttt{c} with
+%    the \texttt{m} dropped. It would be probably better to do that
+%    differently these days, but it is hard to adjust without causing
+%    a lot of issues, so we do the dropping in various places instead.
+% \changes{v3.1j}{2020/02/25}{Drop surplus ``m'' from \cs{reserved@d}
+%                                (gh/291)}
+%    \begin{macrocode}
+      \expandafter\series@maybe@drop@one@m
+          \csname mdseries@#1\endcsname\reserved@d
+      \ifx\reserved@d\f@series
+%<+debug>   \series@change@debug{mdseries@#1 matched -> \reserved@b}%
+                                      \let\target@series@value\reserved@b
+      \else
+%    \end{macrocode}
+%    Again do some sanitizing.
+% \changes{v3.1j}{2020/02/25}{Drop surplus ``m'' from \cs{reserved@d}
+%                                (gh/291)}
+%    \begin{macrocode}
+        \expandafter\series@maybe@drop@one@m
+           \csname bfseries@#1\endcsname\reserved@d
+        \ifx\reserved@d\f@series
+%<+debug>  \series@change@debug{bfseries@#1 matched -> \reserved@c}%
+                                      \let\target@series@value\reserved@c
+      \else\ifx\f@series\mddef@ult    \let\target@series@value\reserved@b
+%<+debug>  \series@change@debug{mddef@ult matched -> \reserved@b}%
+      \else\ifx\f@series\bfdef@ult    \let\target@series@value\reserved@c
+%<+debug>  \series@change@debug{bfdef@ult matched -> \reserved@c}%
+      \fi\fi\fi\fi
+    \fi
+  \fi
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%
+%  \begin{macro}{\init@series@setup}
+%    This is code to be run at begin document \ldots
+%    \begin{macrocode}
+\def\init@series@setup{%
+%    \end{macrocode}
+%
+%    We only want \texttt{bx} in \cs{bfseries@rm} if the roman font is
+%    Computer Modern or Latin Modern, otherwise it should be
+%    \texttt{b}. It was set to \texttt{bx} in the kernel so that any
+%    font use with the default families in the preamble get this
+%    value. Now at the real document start we check if the fonts have
+%    been changed. If there was a \cs{DeclareFontSeriesDefault}
+%    declaration or \cs{bfseries@rm} was directly altered then it
+%    differs from \cs{bfseries@rm@kernel} and we do nothing.
+%    Otherwise we check if \cs{rmdefault} is one of the CM/LM font
+%    families and if so we keep \texttt{bx} otherwise we change it to
+%    \texttt{b}.
+%
+%    This approach doesn't cover one case: CM/LM got changed to a
+%    different family that supports \texttt{bx}, but the support
+%    package for that family used \verb=\def\bfseries@rm{bx}= instead
+%    of using  \cs{DeclareFontSeriesDefault}. In that case the code
+%    here changes it to \texttt{b}. Solution: use the
+%    \cs{DeclareFontSeriesDefault} interface.
+%    \begin{macrocode}
+  \ifx\bfseries@rm@kernel\bfseries@rm
+     \expandafter\in@\expandafter{\rmdefault}%
+                     {cmr,cmss,cmtt,lcmss,lcmtt,lmr,lmss,lmtt}%
+    \ifin@ \else \def\bfseries@rm{b}\fi\fi
+%    \end{macrocode}
+%    Same approach for \cs{bfseries@sf} and \cs{bfseries@tt}:
+%    \begin{macrocode}
+  \ifx\bfseries@sf@kernel\bfseries@sf
+    \expandafter\in@\expandafter{\sfdefault}%
+                    {cmr,cmss,cmtt,lcmss,lcmtt,lmr,lmss,lmtt}%
+    \ifin@ \else \def\bfseries@sf{b}\fi\fi
+  \ifx\bfseries@tt@kernel\bfseries@tt
+    \expandafter\in@\expandafter{\ttdefault}%
+                    {cmr,cmss,cmtt,lcmss,lcmtt,lmr,lmss,lmtt}%
+    \ifin@ \else \def\bfseries@tt{b}\fi\fi
+%    \end{macrocode}
+%
+%    If the document preamble has changed the \cs{familydefault} or if
+%    the if the \cs{rmdefault} contains a new font family, we may have to
+%    adjust the series defaults accordingly, before starting
+%    typesetting.
+%    
+%    Similarly, if the user has changed the \cs{mddefault} or the
+%    medium series for the family selected as document font we may
+%    also have to adjust the \cs{seriesdefault}.    
+%
+%    On the other hand if the document font is still CM or LM then
+%    \cs{bfdefault} is wrong, because it is now saying \texttt{b} and not
+%    \texttt{bx} as it should for such fonts.
+%
+%    To fix all this we first run \cs{reset@font} (the internal kernel
+%    name for \cs{normalfont}). This will set up the document encoding,
+%    family, series and shape based on the current values of
+%    \cs{encodingdefault}, \cs{familydefault}, \cs{seriesdefault} and
+%    \cs{shapedefault}.
+%    However, if the family (from \cs{familydefault}) has special medium
+%    default we should switch to that (and not use what is current
+%    value from \cs{seriesdefault}). This can be achieved by afterwards
+%    calling \cs{mediumseries} and then changing \cs{seriesdefault} to
+%    the now current series value (in \cs{f@series}).
+%
+%    But what should happen if \cs{seriesdefault} got explicitly
+%    changed?  In that case the explicit change should surive and we
+%    should not alter \cs{seriesdefault}. This is solved by comparing
+%    the current value of \cs{seriesdefault} with a kernel version
+%    saved in the format and if they differ we do not call
+%    \cs{mdseries} or change \cs{seriesdefault}.
+% \changes{v3.1n}{2020/04/13}{Handling \cs{seriesdefault} changes (gh/315)}
+%    \begin{macrocode}
+  \reset@font
+  \ifx\seriesdefault\seriesdefault@kernel
+    \mdseries
+    \let\seriesdefault\f@series
+  \fi
+}%
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%    As the kernel code now implements the same functionality as
+%    \textsf{mweights}, albeit internally coded slightly differently,
+%    that package shouldn't be loaded any more.  We therefore pretend
+%    that it already got loaded. Thus, a font package that tries to
+%    load it and then sets \cs{mdseries@..}, etc.\ will continue to
+%    work but will now use the kernel code.
+%
+%    Of course, mid-term such package should probably use
+%    \cs{DeclareFontSeriesDefault} instead of making using low-level
+%    definitions.
+%
+%    \begin{macrocode}
+\expandafter\let\csname ver@mweights.sty\endcsname\fmtversion
+%    \end{macrocode}
+%
+%
+%
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000/00/00}%
+%<latexrelease>                 {\DeclareFontSeriesDefault}{Custom series}%
+%<latexrelease>
+%<latexrelease>\let\DeclareFontSeriesDefault\@undefined
+%<latexrelease>\let\bfseries@rm\@undefined
+%<latexrelease>\let\bfseries@sf\@undefined
+%<latexrelease>\let\bfseries@tt\@undefined
+%<latexrelease>\let\bfseries@rm@kernel\@undefined
+%<latexrelease>\let\bfseries@sf@kernel\@undefined
+%<latexrelease>\let\bfseries@tt@kernel\@undefined
+%<latexrelease>\let\mdseries@rm\@undefined
+%<latexrelease>\let\mdseries@sf\@undefined
+%<latexrelease>\let\mdseries@tt\@undefined
+%<latexrelease>\expandafter\let\csname ver@mweights.sty\endcsname\@undefined
+%<latexrelease>
+%<latexrelease>\let\@meta@family@list\@undefined
+%<latexrelease>\let\prepare@family@series@update\@undefined
+%<latexrelease>\let\update@series@target@value\@undefined
+%<latexrelease>
+%    \end{macrocode}
+%    This is always called in \cs{document} so don't make it undefined.
+%    \begin{macrocode}
+%<latexrelease>\let\init@series@setup\relax
+%<latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
+%    \end{macrocode}
+%
+%
+%    \begin{macrocode}
+%</2ekernel>
+%<*2ekernel|latexrelease>
+%<latexrelease>\IncludeInRelease{2020/10/01}%
+%<latexrelease>                 {\bfseries}{Custom series with hooks}%
+%    \end{macrocode}
+
+
 %  \begin{macro}{\expand@font@defaults}
+%  \begin{macro}{\rm@def@ult}
+%  \begin{macro}{\sf@def@ult}
+%  \begin{macro}{\tt@def@ult}
+%  \begin{macro}{\md@def@ult}
+%  \begin{macro}{\bf@def@ult}
 %
 %    The family specific defaults are fully expanded, i.e., they are
 %    defined via \cs{edef} inside \cs{DeclareFontSeriesDefault}.
@@ -393,14 +759,29 @@
   \edef\rmdef@ult{\rmdefault}%
   \edef\sfdef@ult{\sfdefault}%
   \edef\ttdef@ult{\ttdefault}%
-  \edef\bfdef@ult{\bfdefault}%
-  \edef\mddef@ult{\mddefault}%
-  \edef\famdef@ult{\familydefault}%
+%    \end{macrocode}
+%    The series defaults may contain some surplus \texttt{m} that we
+%    need to drop here.
+% \changes{v3.1j}{2020/02/25}{Drop surplus ``m'' from \cs{bfdef@ult}
+%                             and \cs{mddef@ult} (gh/291)}
+%    \begin{macrocode}
+  \series@maybe@drop@one@m\bfdefault\bfdef@ult
+  \series@maybe@drop@one@m\mddefault\mddef@ult
+%    \end{macrocode}
+%    Formats that set up parallel fonts, e.g., for Japanese, can use
+%    this hook to add additional code here.
+% \changes{v3.1m}{2020/04/06}{Hook added (gh/306)}
+% \changes{v3.2b}{2020/08/21}{Integration of new hook management interface}
+%    \begin{macrocode}
+  \UseHook{expand@font@defaults}%
 }
 %    \end{macrocode}
-%
 %  \end{macro}
-
+%  \end{macro}
+%  \end{macro}
+%  \end{macro}
+%  \end{macro}
+%  \end{macro}
 
 
 %  \begin{macro}{\bfseries}
@@ -418,6 +799,45 @@
 %            of \cs{fontseries} argument so that it is not done several times}
 %    \begin{macrocode}
   \expand@font@defaults
+%    \end{macrocode}
+%    If \cs{bfdefault} and \cs{bfdefault@previous} are different then
+%    the default got changed directly through the legacy interface
+%    (i.e., via \cs{def} or \cs{renewcommand}. In that case we reset
+%    all meta family defaults so that the document behaves like it was
+%    the case before the new mechanism was introduced.
+% \changes{v3.1k}{2020/03/19}{Support legacy use of \cs{bfdefault}
+%        and \cs{mddefault} (gh/306)}
+%    \begin{macrocode}
+  \ifx\bfdefault\bfdefault@previous\else
+%    \end{macrocode}
+%    We add \cs{@empty} and then let \cs{bfdefault@previous} to
+%    \cs{bfdefault} so that we can detect any further change.
+% \changes{v3.2d}{2020/09/30}{\cs{bfdefault@previous} not \cs{bfseries@previous}
+%        (gh/395)}
+%    \begin{macrocode}
+    \expandafter\def\expandafter\bfdefault
+                    \expandafter{\bfdefault\@empty}%
+    \let\bfdefault@previous\bfdefault
+%    \end{macrocode}
+%    And we reset the meta family defaults (\cs{bfdef@ult} is an
+%    expanded version of \cs{bfdefault}.
+%    \begin{macrocode}
+    \let\bfseries@rm\bfdef@ult
+    \let\bfseries@sf\bfdef@ult
+    \let\bfseries@tt\bfdef@ult
+%    \end{macrocode}
+%    
+%    Formats that set up parallel fonts, e.g., for Japanese, can use
+%    this hook to add resets here. Not that this hook is only run when
+%    resets are necessary.
+% \changes{v3.1m}{2020/04/06}{Hook added (gh/306)}
+% \changes{v3.2b}{2020/08/21}{Integration of new hook management interface}
+%    \begin{macrocode}
+    \UseHook{bfseries/defaults}%
+  \fi
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
     \ifx\f@family\rmdef@ult      \fontseries\bfseries@rm
     \else\ifx\f@family\sfdef@ult \fontseries\bfseries@sf
     \else\ifx\f@family\ttdef@ult \fontseries\bfseries@tt
@@ -426,6 +846,10 @@
 %    \begin{macrocode}
     \else                        \fontseries\bfdefault
     \fi\fi\fi
+%    \end{macrocode}
+%    This hook in contrast is always executed.
+%    \begin{macrocode}
+  \UseHook{bfseries}%
   \selectfont
 }
 %    \end{macrocode}
@@ -437,15 +861,35 @@
 %    This document command switches to the medium series.
 % \changes{v3.1i}{2020/02/18}{Make the \cs{ifx} selection outside
 %            of \cs{fontseries} argument so that it is not done several times}
+% \changes{v3.1k}{2020/03/19}{Support legacy use of \cs{bfdefault}
+%        and \cs{mddefault} (gh/306)}
+% \changes{v3.2d}{2020/09/30}{\cs{mddefault@previous} not \cs{mdseries@previous}
+%        (gh/395)}
 %    \begin{macrocode}
 \DeclareRobustCommand\mdseries{%
   \not@math@alphabet\mdseries\relax
   \expand@font@defaults
+  \ifx\mddefault\mddefault@previous\else
+    \expandafter\def\expandafter\mddefault\expandafter{\mddefault\@empty}%
+    \let\mddefault@previous\mddefault
+    \let\mdseries@rm\mddef@ult
+    \let\mdseries@sf\mddef@ult
+    \let\mdseries@tt\mddef@ult
+%    \end{macrocode}
+%    
+%    Formats that set up parallel fonts, e.g., for Japanese, can use
+%    this hook to add resets here.
+% \changes{v3.1m}{2020/04/06}{Hook added (gh/306)}
+% \changes{v3.2b}{2020/08/21}{Integration of new hook management interface}
+%    \begin{macrocode}
+    \UseHook{mdseries/defaults}%
+  \fi
     \ifx\f@family\rmdef@ult      \fontseries\mdseries@rm
     \else\ifx\f@family\sfdef@ult \fontseries\mdseries@sf
     \else\ifx\f@family\ttdef@ult \fontseries\mdseries@tt
     \else                        \fontseries\mddefault
     \fi\fi\fi
+  \UseHook{mdseries}%
   \selectfont
 }
 %    \end{macrocode}
@@ -572,8 +1016,9 @@
 %    \end{macrocode}
 %    Then comes the hook code (by default a no-op) and finally the call
 %    to \cs{selectfont}.
+% \changes{v3.2b}{2020/08/21}{Integration of new hook management interface}
 %    \begin{macrocode}
-   \@rmfamilyhook
+   \UseHook{rmfamily}%
    \selectfont}
 %    \end{macrocode}
 %
@@ -582,20 +1027,22 @@
 %    The definitions for \cs{sffamily} and \cs{ttfamily} are similar,
 %    the differences are only in what font families get checked.
 % \changes{v3.1f}{2020/01/11}{Streamlined implementation with hook}
+% \changes{v3.2b}{2020/08/21}{Integration of new hook management interface}
 %    \begin{macrocode}
 \DeclareRobustCommand\sffamily{%
    \not@math@alphabet\sffamily\mathsf
    \prepare@family@series@update{sf}\sfdefault
-   \@sffamilyhook
+   \UseHook{sffamily}%
    \selectfont}
 %    \end{macrocode}
 %
 % \changes{v3.1f}{2020/01/11}{Streamlined implementation with hook}
+% \changes{v3.2b}{2020/08/21}{Integration of new hook management interface}
 %    \begin{macrocode}
 \DeclareRobustCommand\ttfamily{%
    \not@math@alphabet\ttfamily\mathtt
    \prepare@family@series@update{tt}\ttdefault
-   \@ttfamilyhook
+   \UseHook{ttfamily}%
    \selectfont}
 %    \end{macrocode}
 %  \end{macro}
@@ -603,298 +1050,100 @@
 %  \end{macro}
 %
 %
+%  \begin{macro}{rmfamily,sffamily,ttfamily,normalfont,expand@font@defaults,
+%                bfseries,bfseries/defaults,mdseries,mdseries/defaults}
+%    Declare the hooks used above.
+% \changes{v3.2b}{2020/08/21}{Integration of new hook management interface}
+%    \begin{macrocode}
+\NewHook{rmfamily}
+\NewHook{sffamily}
+\NewHook{ttfamily}
+\NewHook{normalfont}
+\NewHook{expand@font@defaults}
+\NewHook{bfseries}
+\NewHook{bfseries/defaults}
+\NewHook{mdseries}
+\NewHook{mdseries/defaults}
+%    \end{macrocode}
+%  \end{macro}
+%
 %  \begin{macro}{\@rmfamilyhook}
 %  \begin{macro}{\@sffamilyhook}
 %  \begin{macro}{\@ttfamilyhook}
-%    By default the hooks do nothing.
+%     These four hooks have legacy versions used in 2020/02/02 so we
+%    should support them until they aren't any longer used.
 %    \begin{macrocode}
 \let\@rmfamilyhook\@empty
 \let\@sffamilyhook\@empty
 \let\@ttfamilyhook\@empty
+\let\@defaulfamilyhook\@empty
 %    \end{macrocode}
 %  \end{macro}
 %  \end{macro}
 %  \end{macro}
-%
-%
-%
-%
-%  \begin{macro}{\series@change@debug}
-%    For debugging, but right now none of this code is extracted. The
-%    idea is to have a separate package with debugging code
-%    one day.
-%    \begin{macrocode}
-%<*debug>
-\let\series@change@debug\typeout
-\let\series@change@debug\@gobble
-%</debug>
-%    \end{macrocode}
-%  \end{macro}
-%
-%
-%
-%
-%  \begin{macro}{\prepare@family@series@update}
-%    This is core command that prepares for the family update. The big
-%    difference to the documented code above is that the nested
-%    \cs{ifx} statements seem to be missing. Instead we loop through
-%    an internal list that holds the names of the three meta
-%    families. This approach allows us to extend the mechanism at a
-%    later stage to allow for additional named meta families.
-%
-%  \begin{macro}{\@meta@family@list}
-%    Here is the current definition of that list:
-%    \begin{macrocode}
-\def\@meta@family@list{\@elt{rm}\@elt{sf}\@elt{tt}}
-%    \end{macrocode}
-%  \end{macro}
-%
-%    \begin{macrocode}
-\def\prepare@family@series@update#1#2{%
-%    \end{macrocode}
-%    
-% \changes{v3.1i}{2020/02/18}{No series auto-update when forced (gh/277)}
-%    \begin{macrocode}
- \if@forced@series
-%<+debug> \series@change@debug{No series preparation (forced \f@series)\on@line}%
-   \fontfamily#2%
- \else
-%<+debug> \series@change@debug{Prepearing for switching to #1 (#2)\on@line}%
-   \expand@font@defaults
-%    \end{macrocode}
-%    We prepare for changing the current series. We have to find it
-%    before changing the family as discussed above.
-%    \begin{macrocode}
-   \let\target@series@value\@empty
-   \def\target@meta@family@value{#1}%
-%    \end{macrocode}
-%    As the very last item in the meta family list we add
-%    \verb=\@elt{??}= and define this pseudo meta family to be the
-%    current font family. So if none of the real meta families matched then
-%    this will match. This will cover the following case:
-%    \begin{itemize}
-%    \item \cs{bfseries} is called  for a family using \texttt{bx}
-%       (e.g., CMR) 
-%    \item Switch to a font family that is none of the the meta
-%       families, e.g., via \verb=\fontfamily{ptm}\selectfont=
-%    \item Then none of the real meta families, match but the final
-%      \verb=\@elt{??}= will.
-%    \item Therefore if the current series is \cs{mddefault} or
-%    \cs{bfdefault} it will be detected and the corresponding target
-%    series selected.
-%    \end{itemize}
-% \changes{v3.1i}{2020/02/18}{Recognize current family if it is not a
-%    ``meta'' family and auto-update series using \cs{bfdefault} (gh/277)}
-%    \begin{macrocode}
-   \expandafter\edef\csname ??def@ult\endcsname{\f@family}%
-%    \end{macrocode}
-%    To find it we loop over the meta family list with a suitable
-%    definition of \cs{@elt}.
-%    \begin{macrocode}
-   \let\@elt\update@series@target@value
-      \@meta@family@list
-%    \end{macrocode}
-%    Last resort pseudo meta family. Will only be looked at f none of
-%    the real ones have matched.
-%    \begin{macrocode}
-      \@elt{??}%
-   \let\@elt\relax
-%    \end{macrocode}
-%    That will figure out the correct series value to use without updating
-%    it. Now we can change the family.
-%    \begin{macrocode}
-   \fontfamily#2%
-%    \end{macrocode}
-%    After that we update the series. That code is again like the one
-%    above.
-%    \begin{macrocode}
-   \ifx\target@series@value\@empty
-%<+debug> \series@change@debug{Target series still empty ...}%
-   \else
-     \ifx \f@series\target@series@value
-%<+debug> \series@change@debug{Target series unchanged:
-%<+debug>                      \f@series \space = \target@series@value}%
-     \else
-       \maybe@load@fontshape
-%<+debug> \series@change@debug{Target series:
-%<+debug>                      \f@series \space -> \target@series@value}%
-       \let\f@series\target@series@value
-     \fi
-   \fi
- \fi
-}
-%    \end{macrocode}
-%  \end{macro}
-%
-%
-%
-%  \begin{macro}{\update@series@target@value}
-%    In this macro used in the look you basically find the nested
-%    \cs{ifx}s from the outline above. The only difference is that is
-%    it is parameterized instead of being written out and only for one
-%    block of tests because the code is called reatedly when looping
-%    over the meta family list. From the list we get each meta family
-%    name in turn.
-%    \begin{macrocode}
-\def\update@series@target@value#1{%
-%    \end{macrocode}
-%    There is one additional test at the beginning, because the list
-%    contains all meta families and we need to ignore the case where
-%    current one from the list and target one are identical.
-%    \begin{macrocode}
-  \def\reserved@a{#1}%
-  \ifx\target@meta@family@value\reserved@a   % rm -> rm do nothing
-  \else
-%<+debug> \series@change@debug{Trying to match #1: \csname#1def@ult\endcsname
-%<+debug>                      \space = \f@family\space ?}%
-%    \end{macrocode}
-%    We only ``do'' something if the current font family matches the
-%    current meta family.
-%    \begin{macrocode}
-    \expandafter\ifx\csname#1def@ult\endcsname\f@family
-%    \end{macrocode}
-%    If that's the case we know that this is the block that applies
-%    (only one meta family can match). So  to speed things up we
-%    change \cs{@elt} so that the rest of the loop gets gobbled.
-%    \begin{macrocode}
-      \let\@elt\@gobble
-%    \end{macrocode}
-%    Then we try to find the right new value for the series (as
-%    explained above). The two macros defined first are only there
-%    because we now need to use \cs{csname} and this way the code will
-%    be a little faster.
-%    \begin{macrocode}
-      \expandafter\let\expandafter\reserved@b
-                      \csname mdseries@\target@meta@family@value\endcsname
-      \expandafter\let\expandafter\reserved@c
-                      \csname bfseries@\target@meta@family@value\endcsname
-%<+debug>\series@change@debug{Targets for mdseries and bfseries:
-%<+debug>                     \reserved@b\space and \reserved@c}%
-%    \end{macrocode}
-%    This here is now identical to the nested \cs{ifx} block from the
-%    outline, except that it there appeared twice in
-%    \cs{rmfamily}. This is now covered by looping and stopping the
-%    loop when a match was found.
-%    \begin{macrocode}
-      \expandafter\ifx\csname mdseries@#1\endcsname\f@series
-%<+debug>   \series@change@debug{mdseries@#1 matched -> \reserved@b}%
-                                      \let\target@series@value\reserved@b
-      \else\expandafter\ifx\csname bfseries@#1\endcsname\f@series
-%<+debug>  \series@change@debug{bfseries@#1 matched -> \reserved@c}%
-                                      \let\target@series@value\reserved@c
-      \else\ifx\f@series\mddef@ult    \let\target@series@value\reserved@b
-%<+debug>  \series@change@debug{mddef@ult matched -> \reserved@b}%
-      \else\ifx\f@series\bfdef@ult    \let\target@series@value\reserved@c
-%<+debug>  \series@change@debug{bfdef@ult matched -> \reserved@c}%
-      \fi\fi\fi\fi
-    \fi
-  \fi
-}
-%    \end{macrocode}
-%  \end{macro}
-%
-%
-%
-%
-%
-%  \begin{macro}{\init@series@setup}
-%    This is code to be run at begin document \ldots
-%    \begin{macrocode}
-\def\init@series@setup{%
-%    \end{macrocode}
-%
-%    We only want \texttt{bx} in \cs{bfseries@rm} if the roman font is
-%    Computer Modern or Latin Modern, otherwise it should be
-%    \texttt{b}. It was set to \texttt{bx} in the kernel so that any
-%    font use with the default families in the preamble get this
-%    value. Now at the real document start we check if the fonts have
-%    been changed. If there was a \cs{DeclareFontSeriesDefault}
-%    declaration or \cs{bfseries@rm} was directly altered then it
-%    differs from \cs{bfseries@rm@kernel} and we do nothing.
-%    Otherwise we check if \cs{rmdefault} is one of the CM/LM font
-%    families and if so we keep \texttt{bx} otherwise we change it to
-%    \texttt{b}.
-%
-%    This approach doesn't cover one case: CM/LM got changed to a
-%    different family that supports \texttt{bx}, but the support
-%    package for that family used \verb=\def\bfseries@rm{bx}= instead
-%    of using  \cs{DeclareFontSeriesDefault}. In that case the code
-%    here changes it to \texttt{b}. Solution: use the
-%    \cs{DeclareFontSeriesDefault} interface.
-%    \begin{macrocode}
-  \ifx\bfseries@rm@kernel\bfseries@rm
-    \expandafter\in@\expandafter{\rmdefault}{cmr,cmss,cmtt,lcmss,lcmtt,lmr,lmss,lmtt}%
-    \ifin@ \else \def\bfseries@rm{b}\fi\fi
-%    \end{macrocode}
-%    Same approach for \cs{bfseries@sf} and \cs{bfseries@tt}:
-%    \begin{macrocode}
-  \ifx\bfseries@sf@kernel\bfseries@sf
-    \expandafter\in@\expandafter{\sfdefault}{cmr,cmss,cmtt,lcmss,lcmtt,lmr,lmss,lmtt}%
-    \ifin@ \else \def\bfseries@sf{b}\fi\fi
-  \ifx\bfseries@tt@kernel\bfseries@tt
-    \expandafter\in@\expandafter{\ttdefault}{cmr,cmss,cmtt,lcmss,lcmtt,lmr,lmss,lmtt}%
-    \ifin@ \else \def\bfseries@tt{b}\fi\fi
-%    \end{macrocode}
-%
-%    If the document preamble has changed the \cs{familydefault} or if
-%    the if the \cs{rmdefault} contains a new font family, we have to
-%    adjust the series defaults accordingly, before starting
-%    typesetting.
-%
-%    On the other hand if we still typeset in CM or LM then
-%    \cs{bfdefault} is wrong since it is now saying \texttt{b} and not
-%    \texttt{bx}.
-
-%    To fix this we run \cs{rmfamily}, \cs{sffamily} or
-%    \cs{ttfamily} depending on the situation and this will correct
-%    the setup for us.
-%    \begin{macrocode}
-  \expand@font@defaults
-  \ifx\famdef@ult\rmdef@ult      \rmfamily
-  \else\ifx\famdef@ult\sfdef@ult \sffamily
-  \else\ifx\famdef@ult\ttdef@ult \ttfamily
-  \fi\fi\fi
-}%
-%    \end{macrocode}
-%  \end{macro}
-%
-%
-%
-%    As the kernel code now implements the same functionality as
-%    \textsf{mweights}, albeit internally coded slightly differently,
-%    that package shouldn't be loaded any more.  We therefore pretend
-%    that it already got loaded. Thus, a font package that tries to
-%    load it and then sets \cs{mdseries@..}, etc.\ will continue to
-%    work but will now use the kernel code.
-%
-%    Of course, mid-term such package should probably use
-%    \cs{DeclareFontSeriesDefault} instead of making using low-level
-%    definitions.
-%
-%    \begin{macrocode}
-\expandafter\let\csname ver@mweights.sty\endcsname\fmtversion
-%    \end{macrocode}
-%
-%
 %
 %    \begin{macrocode}
 %</2ekernel|latexrelease>
 %<latexrelease>\EndIncludeInRelease
-%<latexrelease>\IncludeInRelease{0000/00/00}%
-%<latexrelease>                 {\DeclareFontSeriesDefault}{Custom series}%
+%<latexrelease>\IncludeInRelease{2020/02/02}%
+%<latexrelease>                 {\bfseries}{Custom series with hooks}%
 %<latexrelease>
-%<latexrelease>\let\DeclareFontSeriesDefault\@undefined
-%<latexrelease>\let\bfseries@rm\@undefined
-%<latexrelease>\let\bfseries@sf\@undefined
-%<latexrelease>\let\bfseries@tt\@undefined
-%<latexrelease>\let\bfseries@rm@kernel\@undefined
-%<latexrelease>\let\bfseries@sf@kernel\@undefined
-%<latexrelease>\let\bfseries@tt@kernel\@undefined
-%<latexrelease>\let\mdseries@rm\@undefined
-%<latexrelease>\let\mdseries@sf\@undefined
-%<latexrelease>\let\mdseries@tt\@undefined
+%<latexrelease>\def\expand@font@defaults{%
+%<latexrelease>  \edef\rmdef@ult{\rmdefault}%
+%<latexrelease>  \edef\sfdef@ult{\sfdefault}%
+%<latexrelease>  \edef\ttdef@ult{\ttdefault}%
+%<latexrelease>  \edef\bfdef@ult{\bfdefault}%
+%<latexrelease>  \edef\mddef@ult{\mddefault}%
+%<latexrelease>  \edef\famdef@ult{\familydefault}%
+%<latexrelease>}
+%<latexrelease>
+%<latexrelease>\DeclareRobustCommand\bfseries{%
+%<latexrelease>  \not@math@alphabet\bfseries\mathbf
+%<latexrelease>  \expand@font@defaults
+%<latexrelease>    \ifx\f@family\rmdef@ult      \fontseries\bfseries@rm
+%<latexrelease>    \else\ifx\f@family\sfdef@ult \fontseries\bfseries@sf
+%<latexrelease>    \else\ifx\f@family\ttdef@ult \fontseries\bfseries@tt
+%<latexrelease>    \else                        \fontseries\bfdefault
+%<latexrelease>    \fi\fi\fi
+%<latexrelease>  \selectfont
+%<latexrelease>}
+%<latexrelease>
+%<latexrelease>\DeclareRobustCommand\mdseries{%
+%<latexrelease>  \not@math@alphabet\mdseries\relax
+%<latexrelease>  \expand@font@defaults
+%<latexrelease>    \ifx\f@family\rmdef@ult      \fontseries\mdseries@rm
+%<latexrelease>    \else\ifx\f@family\sfdef@ult \fontseries\mdseries@sf
+%<latexrelease>    \else\ifx\f@family\ttdef@ult \fontseries\mdseries@tt
+%<latexrelease>    \else                        \fontseries\mddefault
+%<latexrelease>    \fi\fi\fi
+%<latexrelease>  \selectfont
+%<latexrelease>}
+%<latexrelease>
+%<latexrelease>\DeclareRobustCommand\rmfamily{%
+%<latexrelease>   \not@math@alphabet\rmfamily\mathrm
+%<latexrelease>   \prepare@family@series@update{rm}\rmdefault
+%<latexrelease>   \@rmfamilyhook
+%<latexrelease>   \selectfont}
+%<latexrelease>\DeclareRobustCommand\sffamily{%
+%<latexrelease>   \not@math@alphabet\sffamily\mathsf
+%<latexrelease>   \prepare@family@series@update{sf}\sfdefault
+%<latexrelease>   \@sffamilyhook
+%<latexrelease>   \selectfont}
+%<latexrelease>\DeclareRobustCommand\ttfamily{%
+%<latexrelease>   \not@math@alphabet\ttfamily\mathtt
+%<latexrelease>   \prepare@family@series@update{tt}\ttdefault
+%<latexrelease>   \@ttfamilyhook
+%<latexrelease>   \selectfont}
+%<latexrelease>
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+%<latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000/00/00}%
+%<latexrelease>                 {\bfseries}{Custom series with hooks}%
+%<latexrelease>
 %<latexrelease>\let\expand@font@defaults\@undefined
-%<latexrelease>\expandafter\let\csname ver@mweights.sty\endcsname\@undefined
 %<latexrelease>
 %<latexrelease>\DeclareRobustCommand\bfseries
 %<latexrelease>        {\not@math@alphabet\bfseries\mathbf
@@ -915,21 +1164,173 @@
 %<latexrelease>\let\@rmfamilyhook\@undefined
 %<latexrelease>\let\@sffamilyhook\@undefined
 %<latexrelease>\let\@ttfamilyhook\@undefined
-%<latexrelease>\let\@meta@family@list\@undefined
-%<latexrelease>\let\prepare@family@series@update\@undefined
-%<latexrelease>\let\update@series@target@value\@undefined
-%<latexrelease>
-%    \end{macrocode}
-%    This is always called in \cs{document} so don't make it undefined.
-%    \begin{macrocode}
-%<latexrelease>\let\init@series@setup\relax
 %<latexrelease>
 %<latexrelease>\EndIncludeInRelease
 %<*2ekernel>
 %    \end{macrocode}
+%
+%
+%
+%  \begin{macro}{\IfFontSeriesContextTF}
+%
+%    With the ability for \cs{bfseries} or \cs{mdseries} to be mapped
+%    to different NFSS axis values it becomes important to have the
+%    ability to determine the current context as we can no longer look
+%    at \cs{f@series} to answer a question such as ``am I currently
+%    typsetting in a bold typeface?''
+%
+%    This is provided by the test \cs{IfFontSeriesContextTF}. It takes
+%    three arguments:
+%    \begin{itemize}
+%    \item
+%      The context we try to check (either \texttt{bf} for bold or
+%      \texttt{md} for medium, i.e., the same that can go into the
+%      first mandatory argument of \cs{DeclareFontSeriesDefault}),
+%
+%    \item
+%      what to do if we are in this context (true case) and
+%
+%    \item
+%      what to do if we are not (false case).
+%    \end{itemize}
+%    This allows you to define commands like \cs{IfBold}, e.g.,
+%\begin{verbatim}
+%    \newcommand\IfBold[2]{\IfSeriesContextTF{bf}{#1}{#2}}
+%\end{verbatim}
+%    and then do
+%\begin{verbatim}
+%    This is \IfBold{bold}{non-bold} text.
+%\end{verbatim}
+%    and get the appropriate result.
+%    
+% \changes{v3.2a}{2020/05/19}{Macros added (gh/335)}
+%    \begin{macrocode}
+%</2ekernel>
+%<*2ekernel|latexrelease>
+%<latexrelease>\IncludeInRelease{2020/10/01}%
+%<latexrelease>                 {\IfFontSeriesContextTF}{Font series context}%
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareRobustCommand\IfFontSeriesContextTF[1]{%
+  \expand@font@defaults
+%    \end{macrocode}
+%    In the beginning we haven't found the context we are loking for.
+%    \begin{macrocode}
+  \@font@series@contextfalse
+%    \end{macrocode}
+%    We store the requested context away for use in the tests.
+%    \begin{macrocode}
+  \def\requested@test@context{#1}%
+%    \end{macrocode}
+%    The next definition is there to ensure that get a final match
+%    during testing
+%    even if the current family is non of the meta families
+%    (\texttt{rm}, \texttt{sf} or \texttt{tt}). This will then
+%    basically tests if the current font family matches the overall default.
+%    \begin{macrocode}
+  \expandafter\edef\csname ??def@ult\endcsname{\f@family}%
+%    \end{macrocode}
+%    Then we run through the meta family list (currently containing
+%    just the three values) followed by the artifical meta family
+%    \texttt{??} and test each of them in turn using
+%    \cs{test@font@series@context} as the testing command.
+%    \begin{macrocode}
+  \let\@elt\test@font@series@context
+      \@meta@family@list
+      \@elt{??}%
+  \let\@elt\relax
+%    \end{macrocode}
+%    Following that we evaluate the status of
+%    \cs{if@font@series@context} to determine which of the remaining
+%    arguments (true/false case) we have to execute.
+%    \begin{macrocode}
+  \if@font@series@context
+  \expandafter\@firstoftwo
+  \else
+  \expandafter\@secondoftwo
+  \fi
+}
+%    \end{macrocode}
+%  \end{macro}
 
+
+
+%  \begin{macro}{\test@font@series@context}
+%    This tests the context (stored in \cs{requested@test@context})
+%    and updates the bookean if the right context is found.
+%    \begin{macrocode}
+\def\test@font@series@context#1{%
+%    \end{macrocode}
+%    First task is to figure out whether the current family matches
+%    \cs{rmfamily}, \cs{sffamily}, etc.\ so in \cs{reserved@a} we
+%    store the value of \cs{rmdef@ult} (or whatever the given meta
+%    family is) and compare that to \cs{f@family}.
+%    \begin{macrocode}
+  \edef\reserved@a{\csname #1def@ult\endcsname}%
+  \ifx\f@family\reserved@a
+%    \end{macrocode}
+%    If they match we have found the right meta family so we don't
+%    need to test any of the remaining  meta family and therefore
+%    change \cs{@elt} to \cs{@gobble}.
+%    \begin{macrocode}
+    \let\@elt\@gobble
+%    \end{macrocode}
+%    Now we have to test if \cs{f@series} matches the requested
+%    context (e.g., whether \cs{bfseries@rm} has that value if the
+%    current meta family is \texttt{rm} and we are looking for the
+%    \texttt{bf} context).
+%    \begin{macrocode}
+    \expandafter\ifx
+                \csname\requested@test@context series@#1\endcsname\f@series
+%    \end{macrocode}
+%    If yes we change the boolean and are done.
+%    \begin{macrocode}
+      \@font@series@contexttrue
+%    \end{macrocode}
+%    If not then maybe the reason is that nothing special was set up
+%    for that meta family so we also check now check if \cs{f@series}
+%    matches the overall default (e.g., \cs{bfdef@ult} if we are
+%    looking for the bold context). If that matches we change the boolean.
+%    \begin{macrocode}
+    \else
+      \expandafter\ifx
+                  \csname\requested@test@context def@ult\endcsname\f@series
+        \@font@series@contexttrue
+  \fi\fi\fi
+}
+%    \end{macrocode}
+%  \end{macro}
+
+
+%  \begin{macro}{\if@font@series@context}
+%    The boolean to signal if we found the requested font series context.
+%    \begin{macrocode}
+\newif\if@font@series@context
+%    \end{macrocode}
+%  \end{macro}
 %
 %
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{0000/00/00}%
+%<latexrelease>                 {\IfFontSeriesContextTF}{Font series context}%
+%<latexrelease>
+%<latexrelease>\let\IfFontSeriesContextTF\@undefined
+%<latexrelease>\let\test@font@series@context\@undefined
+%<latexrelease>\let\if@font@series@context\@undefined
+%<latexrelease>\let\@font@series@contexttrue\@undefined
+%<latexrelease>\let\@font@series@contextfalse\@undefined
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
+%    \end{macrocode}
+
+
+
 %
 % \section{Supporting nested emphasis}
 %
@@ -1201,26 +1602,50 @@
 \def\math@version{normal}
 %    \end{macrocode}
 %
-% \subsection{Miscellaneous}
+% \subsection{Legacy}
 %
-% \begin{macro}{\newfont}
-% \changes{v1.2g}{1991/03/30}{Definition added.}
-% \changes{v2.2e}{1995/05/23}{Font assignment made local again.}
-% \begin{macro}{\symbol}
-% \changes{v1.2g}{1991/03/30}{Definition added.}
 %    We start by defining a few macros that are part of
 %    standard \LaTeX's user interface. The use of these functions is
 %    not encouraged, but they will allow to process older documents
 %    without changes to the source.
+%
+% \begin{macro}{\newfont}
+% \changes{v1.2g}{1991/03/30}{Definition added.}
+% \changes{v2.2e}{1995/05/23}{Font assignment made local again.}
 %    \begin{macrocode}
 \def\newfont#1#2{\@ifdefinable#1{\font#1=#2\relax}}
 %    \end{macrocode}
+% \end{macro}
 %
+% \begin{macro}{\symbol}
+% \changes{v1.2g}{1991/03/30}{Definition added.}
+% \changes{v3.1h}{2020/02/07}{XeTeX-specific version to avoid bug in maths mode.}
 %    \begin{macrocode}
-\DeclareRobustCommand\symbol[1]{\char #1\relax}
+%</2ekernel>
+%<*2ekernel|latexrelease>
+%<latexrelease>\IncludeInRelease{2020/10/01}%
+%<latexrelease>                 {\symbol}{XeTeX change for math}%
+\ifdefined\XeTeXversion
+  \DeclareRobustCommand\symbol[1]{\Ucharcat#1 12\relax}
+\else
+  \DeclareRobustCommand\symbol[1]{\char#1\relax}
+\fi
+%</2ekernel|latexrelease>
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000/00/00}%
+%<latexrelease>                 {\symbol}{XeTeX change for math}%
+%<latexrelease>
+%<latexrelease>\DeclareRobustCommand\symbol[1]{\char#1\relax}
+%<latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
 %    \end{macrocode}
 % \end{macro}
-% \end{macro}
+%
+% \subsection{Miscellaneous}
 %
 % \begin{macro}{\@setfontsize}
 % \begin{macro}{\@setsize}
@@ -1344,8 +1769,14 @@
    \edef\f@shape{\shapedefault}%
 %    \end{macrocode}
 %    
+% \changes{v3.2b}{2020/08/21}{Integration of new hook management interface}
 %    \begin{macrocode}
-   \@defaultfamilyhook
+   \UseHook{normalfont}%
+%    \end{macrocode}
+%    This is the old name for the hook introduced in 2020/02/02.
+%    It will be removed in one of the future releases!
+%    \begin{macrocode}
+   \@defaultfamilyhook        % hookname from 2020/02 will vanish
    \selectfont}
 %    \end{macrocode}
 %    
@@ -1360,7 +1791,7 @@
 %    By default the hooks do nothing.
 % \changes{v3.1h}{2020/02/10}{Add \cs{@defaultfamilyhook} to \cs{normalfont} (gh/269)}
 %    \begin{macrocode}
-\let\@defaultfamilyhook\@empty
+\let\@defaultfamilyhook\@empty  %FMi sort out
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -1503,6 +1934,26 @@
            {\input{preload.ltx}}
 \let\@addtofilelist\@gobble
 %    \end{macrocode}
+%
+%
+%
+%  \begin{macro}{\seriesdefault}
+%  \begin{macro}{\seriesdefault@kernel}
+%    After \cs{seriesdefault} got defined inside \texttt{fonttext.ltx}
+%    or a \texttt{.cfg} file overwriting it, we alter its value by
+%    appending \cs{@empty} to it. This will vanish if expanded but
+%    allows us to check if the default gets altered (even to the same
+%    value) in the document preamble. All we have to do is to save the
+%    current value somewhere and later compare the two. For this we
+%    use \cs{seriesdefault@kernel}.
+% \changes{v3.1n}{2020/04/13}{Handling \cs{seriesdefault} changes (gh/315)}
+%    \begin{macrocode}
+\expandafter\def\expandafter\seriesdefault\expandafter{\seriesdefault\@empty}
+\let\seriesdefault@kernel\seriesdefault
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
+%
 %
 %
 % \begin{macro}{\@acci}
