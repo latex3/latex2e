@@ -259,12 +259,17 @@ local luacmd do
   end
 end
 -- File: l3names.dtx
+local minus_tok = token.new(string.byte'-', 12)
+local zero_tok = token.new(string.byte'0', 12)
+local one_tok = token.new(string.byte'1', 12)
 luacmd('tex_strcmp:D', function()
   local first = scan_string()
   local second = scan_string()
-  write(first == second and '0'
-     or first < second and '-1'
-     or '1')
+  if first < second then
+    put_next(minus_tok, one_tok)
+  else
+    put_next(first == second and zero_tok or one_tok)
+  end
 end, 'global')
 local cprint = tex.cprint
 luacmd('tex_Ucharcat:D', function()
