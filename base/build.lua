@@ -52,7 +52,7 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
-    "filehook-ltx.sty",       -- temp
+    "source2edoc.cls",        -- temp
      "*-????-??-??.sty"
   }
 textfiles =
@@ -117,6 +117,8 @@ typesetfiles   =
     "ltshipout-code.tex",
     "ltfilehook-code.tex",
   }
+
+-- Files that should be removed after running a test
 dynamicfiles = {"*.tst"}
 
 -- A few special file for unpacking
@@ -138,20 +140,20 @@ unpacksuppfiles =
 testsuppdir = "testfiles/helpers"
 
 -- No dependencies at all (other than l3build and for typesetting)
-checkdeps   = { }
+checkdeps   = { maindir .. "/required/firstaid"  }
 typesetdeps =
   {
     maindir .. "/required/graphics",
     maindir .. "/required/tools",
     maindir .. "/required/amsmath"    -- for l3doc.cls :-(
   }
-unpackdeps  = { }
+unpackdeps  = {}
 
 -- Customise typesetting
 indexstyle = "source2e.ist"
 
 -- Allow for TU and other test configurations
-checkconfigs = {"build","config-TU","config-legacy","config-lthooks",
+checkconfigs = {"build","config-1run","config-TU","config-legacy","config-lthooks",
                 "config-lthooks2"}
 
 update_tag = update_tag_base

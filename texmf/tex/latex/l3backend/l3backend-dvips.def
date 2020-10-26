@@ -25,8 +25,22 @@
 %% 
 %% File: l3backend-basics.dtx
 \ProvidesExplFile
-  {l3backend-dvips.def}{2020-06-18}{}
+  {l3backend-dvips.def}{2020-09-24}{}
   {L3 backend support: dvips}
+\cs_if_exist:NTF \__kernel_dependency_version_check:nn
+  {
+    \__kernel_dependency_version_check:nn {2020-09-01}
+      {l3backend-dvips.def}
+  }
+  {
+    \cs_if_exist_use:cF { @latex@error } { \errmessage }
+      {
+        Mismatched~LaTeX~support~files~detected. \MessageBreak
+        Loading~aborted!
+      }
+      { \use:c { @ehd } }
+    \tex_endinput:D
+  }
 \cs_new_eq:NN \__kernel_backend_literal:e \tex_special:D
 \cs_new_protected:Npn \__kernel_backend_literal:n #1
   { \__kernel_backend_literal:e { \exp_not:n {#1} } }
@@ -37,15 +51,13 @@
 \cs_new_protected:Npn \__kernel_backend_postscript:n #1
   { \__kernel_backend_literal:n { ps: SDict ~ begin ~ #1 ~ end } }
 \cs_generate_variant:Nn \__kernel_backend_postscript:n { x }
-\cs_if_exist:NTF \AtBeginDvi
-  { \AtBeginDvi }
-  { \use:n }
-    {
-      \bool_lazy_and:nnT
-        { \cs_if_exist_p:N \g__kernel_backend_header_bool }
-        { \g__kernel_backend_header_bool }
+\bool_if:NT \g__kernel_backend_header_bool
+  {
+    \cs_if_exist:NTF \AtBeginDvi
+      { \AtBeginDvi }
+      { \use:n }
         { \__kernel_backend_literal:n { header = l3backend-dvips.pro } }
-    }
+  }
 \cs_new_protected:Npn \__kernel_backend_align_begin:
   {
     \__kernel_backend_literal:n { ps::[begin] }
@@ -63,45 +75,230 @@
   { \__kernel_backend_literal:n { ps:grestore } }
 %% File: l3backend-color.dtx
 \cs_new_protected:Npn \__color_backend_pickup:N #1 { }
-\AtBeginDocument
+\cs_if_exist:cT { ver@color.sty }
   {
-    \cs_if_exist:cT { ver@color.sty }
+     \cs_set_protected:Npn \__color_backend_pickup:N #1
       {
-        \cs_set_protected:Npn \__color_backend_pickup:N #1
+        \exp_args:NV \tl_if_head_is_space:nTF \current@color
           {
-            \exp_args:NV \tl_if_head_is_space:nTF \current@color
-              {
-                \tl_set:Nx #1
-                   {
-                     { spot }
-                     { \exp_after:wN \use:n \current@color \c_space_tl 1 }
-                   }
-              }
-              {
-                \exp_last_unbraced:Nx \__color_backend_pickup:w
-                  { \current@color } \s__color_stop #1
-              }
+            \tl_set:Nx #1
+               {
+                 { \exp_after:wN \use:n \current@color }
+                 { 1 }
+               }
           }
-        \cs_new_protected:Npn \__color_backend_pickup:w #1 ~ #2 \s__color_stop #3
-          { \tl_set:Nn #3 { {#1} {#2} } }
+          {
+            \exp_last_unbraced:Nx \__color_backend_pickup:w
+              { \current@color } \s__color_stop #1
+          }
       }
+    \cs_new_protected:Npn \__color_backend_pickup:w #1 ~ #2 \s__color_stop #3
+      { \tl_set:Nn #3 { {#1} {#2} } }
   }
-\cs_new_protected:Npn \__color_backend_cmyk:n #1
+\cs_new_protected:Npn \__color_backend_select_cmyk:n #1
   { \__color_backend_select:n { cmyk ~ #1 } }
-\cs_new_protected:Npn \__color_backend_gray:n #1
+\cs_new_protected:Npn \__color_backend_select_gray:n #1
   { \__color_backend_select:n { gray ~ #1 } }
-\cs_new_protected:Npn \__color_backend_rgb:n #1
+\cs_new_protected:Npn \__color_backend_select_rgb:n #1
   { \__color_backend_select:n { rgb ~ #1 } }
-\cs_new_protected:Npn \__color_backend_spot:n #1
-  { \__color_backend_select:n {#1} }
 \cs_new_protected:Npn \__color_backend_select:n #1
   {
     \__kernel_backend_literal:n { color~push~ #1 }
-    \__kernel_backend_postscript:n { /color.fc~{ }~def }
+    \__kernel_backend_postscript:n { /color.sc~ { ~ } ~def }
+    \__kernel_backend_postscript:n { /color.fc~ { ~ } ~def }
     \group_insert_after:N \__color_backend_reset:
   }
 \cs_new_protected:Npn \__color_backend_reset:
   { \__kernel_backend_literal:n { color~pop } }
+\cs_new_protected:Npn \__color_backend_select_separation:nn #1#2
+  { \__color_backend_select:n { separation ~ #1 ~ #2 } }
+\cs_new_eq:NN \__color_backend_select_devicen:nn \__color_backend_select_separation:nn
+\cs_new_protected:Npx \__color_backend_separation_init:nnnnn #1#2#3#4#5
+  {
+    \bool_if:NT \g__kernel_backend_header_bool
+      {
+        \cs_if_exist:NTF \AtBeginDvi
+          { \exp_not:N \AtBeginDvi }
+          { \use:n }
+            {
+              \exp_not:N \__color_backend_separation_init_aux:nnnnn
+                {#1} {#2} {#3} {#4} {#5}
+            }
+      }
+  }
+\cs_generate_variant:Nn \__color_backend_separation_init:nnnnn { nxx }
+\cs_new_protected:Npn \__color_backend_separation_init_aux:nnnnn #1#2#3#4#5
+  {
+    \__kernel_backend_literal:e
+      {
+        !
+        TeXDict ~ begin ~
+        /color \int_use:N \g__color_model_int
+          {
+            [ ~
+              /Separation ~ ( \str_convert_pdfname:n {#1} ) ~
+              [ ~ #2 ~ ] ~
+                {
+                  \cs_if_exist_use:cF { __color_backend_separation_init_ #2 :nnn }
+                    { \__color_backend_separation_init:nnn }
+                      {#3} {#4} {#5}
+                }
+            ] ~ setcolorspace
+          } ~ def ~
+        end
+      }
+  }
+\cs_new:cpn { __color_backend_separation_init_ /DeviceCMYK :nnn } #1#2#3
+  { \__color_backend_separation_init_Device:Nn 4 {#3} }
+\cs_new:cpn { __color_backend_separation_init_ /DeviceGray :nnn } #1#2#3
+  { \__color_backend_separation_init_Device:Nn 1 {#3} }
+\cs_new:cpn { __color_backend_separation_init_ /DeviceRGB :nnn } #1#2#3
+  { \__color_backend_separation_init_Device:Nn 2 {#3} }
+\cs_new:Npn \__color_backend_separation_init_Device:Nn #1#2
+  {
+    #2 ~
+    \prg_replicate:nn {#1}
+      { #1 ~ index ~ mul ~ #1 ~ 1 ~ roll ~ }
+    \int_eval:n { #1 + 1 } ~ -1 ~ roll ~ pop
+  }
+\cs_new:Npn \__color_backend_separation_init:nnn #1#2#3
+  {
+   \exp_args:Ne \__color_backend_separation_init:nnnn
+     { \__color_backend_separation_init_count:n {#2} }
+     {#1} {#2} {#3}
+  }
+\cs_new:Npn \__color_backend_separation_init_count:n #1
+  { \int_eval:n { 0 \__color_backend_separation_init_count:w #1 ~ \s__color_stop } }
+\cs_new:Npn \__color_backend_separation_init_count:w #1 ~ #2 \s__color_stop
+  {
+    +1
+    \tl_if_blank:nF {#2}
+      { \__color_backend_separation_init_count:w #2 \s__color_stop }
+  }
+\cs_new:Npn \__color_backend_separation_init:nnnn #1#2#3#4
+  {
+    \__color_backend_separation_init:w #3 ~ \s__color_stop #4 ~ \s__color_stop
+    \prg_replicate:nn {#1}
+      {
+        pop ~ 1 ~ index ~ neg ~ 1 ~ index ~ add ~
+        \int_eval:n { 3 * #1 } ~ index ~ mul ~
+        2 ~ index ~ add ~
+        \int_eval:n { 3 * #1 } ~ #1 ~ roll ~
+      }
+    \int_step_function:nnnN {#1} { -1 } { 1 }
+      \__color_backend_separation_init:n
+    \int_eval:n { 4 * #1 + 1 } ~ #1 ~ roll ~
+    \prg_replicate:nn { 3 * #1 + 1 } { pop ~ }
+    \tl_if_blank:nF {#2}
+      { \__color_backend_separation_init:nw {#1} #2 ~ \s__color_stop }
+  }
+\cs_new:Npn \__color_backend_separation_init:w
+  #1 ~ #2 \s__color_stop #3 ~ #4 \s__color_stop
+  {
+    #1 ~ #3 ~ 0 ~
+    \tl_if_blank:nF {#2}
+      { \__color_backend_separation_init:w #2 \s__color_stop #4 \s__color_stop }
+  }
+\cs_new:Npn \__color_backend_separation_init:n #1
+  { \int_eval:n { #1 * 2 } ~ index ~ }
+\cs_new:Npn \__color_backend_separation_init:nw #1#2 ~ #3 ~ #4 \s__color_stop
+  {
+     #2 ~ #3 ~
+     2 ~ index ~ 2 ~ index ~ lt ~
+       { ~ pop ~ exch ~ pop ~ } ~
+       { ~
+         2 ~ index ~ 1 ~ index ~ gt ~
+           { ~ exch ~ pop ~ exch ~ pop ~ } ~
+           { ~ pop ~ pop ~ } ~
+         ifelse ~
+       }
+    ifelse ~
+    #1 ~ 1 ~ roll ~
+    \tl_if_blank:nF {#4}
+      { \__color_backend_separation_init:nw {#1} #4 \s__color_stop }
+  }
+\cs_new_protected:Npn \__color_backend_separation_init_CIELAB:nnn #1#2#3
+  {
+    \__color_backend_separation_init:nxxnn
+      {#2}
+      {
+        /CIEBasedABC ~
+            << ~
+              /RangeABC ~ [ ~ \c__color_model_range_CIELAB_tl \c_space_tl ] ~
+              /DecodeABC ~
+                [ ~
+                  { ~ 16 ~ add ~ 116 ~ div ~ } ~ bind ~
+                  { ~ 500 ~ div ~ } ~ bind ~
+                  { ~ 200 ~ div ~ } ~ bind ~
+                ] ~
+              /MatrixABC ~ [ ~ 1 ~ 1 ~ 1 ~ 1 ~ 0 ~ 0 ~ 0 ~ 0 ~ -1 ~ ] ~
+              /DecodeLMN ~
+                [ ~
+                  { ~
+                    dup ~ 6 ~ 29 ~ div ~ ge ~
+                      { ~ dup ~ dup ~ mul ~ mul ~ ~ } ~
+                      { ~ 4 ~ 29 ~ div ~ sub ~ 108 ~ 841 ~ div ~ mul ~ } ~
+                    ifelse ~
+                    0.9505 ~ mul ~
+                  } ~ bind ~
+                  { ~
+                    dup ~ 6 ~ 29 ~ div ~ ge ~
+                      { ~ dup ~ dup ~ mul ~ mul ~ } ~
+                      { ~ 4 ~ 29 ~ div ~ sub ~ 108 ~ 841 ~ div ~ mul ~ } ~
+                    ifelse ~
+                  } ~ bind ~
+                  { ~
+                    dup ~ 6 ~ 29 ~ div ~ ge ~
+                      { ~ dup ~ dup ~ mul ~ mul ~ } ~
+                      { ~ 4 ~ 29 ~ div ~ sub ~ 108 ~ 841 ~ div ~ mul ~ } ~
+                    ifelse ~
+                    1.0890 ~ mul ~
+                  } ~ bind
+                ] ~
+              /WhitePoint ~
+                [ ~ \tl_use:c { c__color_model_whitepoint_CIELAB_ #1 _tl } ~ ] ~
+            >>
+      }
+      { \c__color_model_range_CIELAB_tl }
+      { 100 ~ 0 ~ 0 }
+      {#3}
+  }
+\cs_new_protected:Npn \__color_backend_devicen_init:nnn #1#2#3
+  {
+    \__kernel_backend_literal:e
+      {
+        !
+        TeXDict ~ begin ~
+        /color \int_use:N \g__color_model_int
+          {
+            [ ~
+              /DeviceN ~
+              [ ~ #1 ~ ] ~
+              #2 ~
+              { ~ #3 ~ } ~
+            ] ~ setcolorspace
+          } ~ def ~
+        end
+      }
+  }
+\cs_new_protected:Npn \__color_backend_fill_cmyk:n #1
+  { \__kernel_backend_postscript:n { /color.fc { #1 ~ setcmykcolor } def } }
+\cs_new_protected:Npn \__color_backend_fill_gray:n #1
+  { \__kernel_backend_postscript:n { /color.fc { #1 ~ setgray } def } }
+\cs_new_protected:Npn \__color_backend_fill_rgb:n #1
+  { \__kernel_backend_postscript:n { /color.fc { #1 ~ setrgbcolor } def } }
+  \cs_new_protected:Npn \__color_backend_stroke_cmyk:n #1
+  { \__kernel_backend_postscript:n { /color.sc { #1 ~ setcmykcolor } def } }
+\cs_new_protected:Npn \__color_backend_stroke_gray:n #1
+  { \__kernel_backend_postscript:n { /color.sc { #1 ~ setgray } def } }
+\cs_new_protected:Npn \__color_backend_stroke_rgb:n #1
+  { \__kernel_backend_postscript:n { /color.sc { #1 ~ setrgbcolor } def } }
+\cs_new_protected:Npn \__color_backend_fill_separation:nn #1#2
+  { \__kernel_backend_postscript:n { /color.fc { #1 } def } }
+\cs_new_protected:Npn \__color_backend_stroke_separation:nn #1#2
+  { \__kernel_backend_postscript:n { /color.sc { #1 } def } }
+\cs_new_eq:NN \__color_backend_fill_devicen:nn \__color_backend_fill_separation:nn
+\cs_new_eq:NN \__color_backend_stroke_devicen:nn \__color_backend_stroke_separation:nn
 %% File: l3backend-box.dtx
 \cs_new_protected:Npn \__box_backend_clip:N #1
   {
@@ -163,7 +360,6 @@
   {
     \__kernel_backend_literal:n { ps::[begin] }
     \__draw_backend_literal:n { @beginspecial }
-    \__draw_backend_literal:n { SDict ~ begin ~ /color.fc ~ { } ~ def ~ end }
   }
 \cs_new_protected:Npn \__draw_backend_end:
   {
@@ -218,7 +414,10 @@
   { \__draw_backend_literal:n { closepath } }
 \cs_new_protected:Npn \__draw_backend_stroke:
   {
+    \__draw_backend_literal:n { gsave }
+    \__draw_backend_literal:n { color.sc }
     \__draw_backend_literal:n { stroke }
+    \__draw_backend_literal:n { grestore }
     \bool_if:NT \g__draw_draw_clip_bool
       {
         \__draw_backend_literal:x
@@ -259,6 +458,7 @@
 \cs_new_protected:Npn \__draw_backend_fillstroke:
   {
     \__draw_backend_literal:n { gsave }
+    \__draw_backend_literal:n { color.sc }
     \__draw_backend_literal:n { color.fc }
     \__draw_backend_literal:x
       {
@@ -326,28 +526,6 @@
   { \__draw_backend_literal:n { 1 ~ setlinejoin } }
 \cs_new_protected:Npn \__draw_backend_join_bevel:
   { \__draw_backend_literal:n { 2 ~ setlinejoin } }
-\cs_new_protected:Npn \__draw_backend_color_fill_cmyk:n #1
-  { \__draw_backend_color_fill:n { #1 ~ setcmykcolor } }
-\cs_new_protected:Npn \__draw_backend_color_stroke_cmyk:n #1
-  { \__draw_backend_color_stroke:n { cmyk ~ #1 } }
-\cs_new_protected:Npn \__draw_backend_color_stroke_gray:n #1
-  { \__draw_backend_color_fill:n { #1 ~ setgray } }
-\cs_new_protected:Npn \__draw_backend_color_fill_gray:n #1
-  { \__draw_backend_color_stroke:n { gray ~ #1 } }
-\cs_new_protected:Npn \__draw_backend_color_fill_rgb:n #1
-  { \__draw_backend_color_fill:n { #1 ~ setrgbcolor } }
-\cs_new_protected:Npn \__draw_backend_color_stroke_rgb:n #1
-  { \__draw_backend_color_stroke:n { rgb ~ #1 } }
-\cs_new_protected:Npn \__draw_backend_color_fill:n #1
-  {
-    \__kernel_backend_postscript:n
-      { /color.fc ~ { #1 } ~ def }
-  }
-\cs_new_protected:Npn \__draw_backend_color_stroke:n #1
-  {
-    \__kernel_backend_literal:n { color~push~#1 }
-    \group_insert_after:N \__draw_color_reset:
-  }
 \cs_new_protected:Npn \__draw_backend_cm:nnnn #1#2#3#4
   {
     \__draw_backend_literal:n
@@ -374,8 +552,7 @@
     \__draw_backend_literal:n { @beginspecial }
   }
 %% File: l3backend-graphics.dtx
-\AtBeginDocument
-  { \cs_new_eq:NN \__graphics_backend_getbb_eps:n \graphics_read_bb:n }
+\cs_new_eq:NN \__graphics_backend_getbb_eps:n \graphics_read_bb:n
 \cs_new_protected:Npn \__graphics_backend_include_eps:n #1
   {
     \__kernel_backend_literal:x

@@ -1486,7 +1486,10 @@
     \vbox_set:Nn \l__codedoc_macro_box
       {
         \vbox_unpack_drop:N \l__codedoc_macro_box
-        \hbox { \llap { \__codedoc_print_macroname:nN {#1} #2 \ } }
+        \hbox { \llap { \__codedoc_print_macroname:nN {#1} #2
+            \MacroFont       % <----- without it the \ is in lmr10 if a link is made
+            \
+        } }
       }
     \int_incr:N \l__codedoc_macro_int
   }
@@ -1834,7 +1837,7 @@
       { \cs_set:Npn \currentfile{#1.dtx} }
     \int_compare:nNnTF \@auxout = \@partaux
       { \@latexerr{\string\include\space cannot~be~nested}\@eha }
-      { \@docinclude #1 }
+      { \@docinclude {#1} }
   }
 \cs_gset:Npn \@docinclude #1
   {
@@ -1865,7 +1868,7 @@
       {
         \cs_set_eq:NN \ttfamily\relax
         \cs_gset:Npx \filekey
-          { \filekey, \thepart = { \ttfamily \currentfile } }
+          { \filekey,~ \thepart = { \ttfamily \currentfile } }
       }
       \DocInput{\currentfile}
       \cs_set_eq:NN \PrintIndex              \@ltxdoc@PrintIndex

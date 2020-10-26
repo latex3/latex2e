@@ -32,7 +32,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltdefns.dtx}
-             [2020/06/04 v1.5i LaTeX Kernel (definition commands)]
+             [2020/09/25 v1.5n LaTeX Kernel (definition commands)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltdefns.dtx}
@@ -90,6 +90,7 @@
 % \changes{v1.0p}{1995/07/13}{Updates to documentation}
 % \changes{v1.4b}{2015/02/21}
 %         {Removed autoload support}
+% \changes{v1.5l}{2020/08/21}{Integration of new hook management interface}
 %
 % \section{Definitions}
 %
@@ -101,15 +102,6 @@
 %<*2ekernel>
 %    \end{macrocode}
 %
-% \subsection{Loading further extensions}
-%
-% \changes{v1.5i}{2020-06-04}{Load \textsf{ltexpl} in \texttt{ltdefns}}
-% Simply load further code: it's deliberately separate.
-% This is done as soon as possible here in \texttt{ltdefns.dtx} so that
-% we have the extensions as soon as possible.
-%    \begin{macrocode}
-\input ltexpl.ltx
-%    \end{macrocode}
 %
 % \subsection{Initex initialisations}
 %
@@ -392,8 +384,9 @@
 %
 %  \begin{macro}{\@carcube}
 % |\@carcube T1 ... Tn\@nil| = |T1| |T2| |T3| , $n > 3$
+% \changes{v1.5k}{2020/08/19}{Made \cs{long} for \cs{NewCommandCopy}}
 %    \begin{macrocode}
-\def\@carcube#1#2#3#4\@nil{#1#2#3}
+\long\def\@carcube#1#2#3#4\@nil{#1#2#3}
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -671,7 +664,7 @@
 %  \begin{macro}{\@ifdefinable}
 %  \begin{macro}{\@@ifdefinable}
 %  \begin{macro}{\@rc@ifdefinable}
-%    Test is user is allowed to define a command.
+%    Test if user is allowed to define a command.
 %    \begin{macrocode}
 \long\def\@ifdefinable #1#2{%
       \edef\reserved@a{\expandafter\@gobble\string #1}%
@@ -1006,7 +999,7 @@
 %    evaluates its argument fully.
 % \end{itemize}
 % The method \LaTeX{} uses for making fragile commands robust is to
-% precede them with |\protect|.  This can have one of five possible
+% precede them with |\protect|.  This can have one of four possible
 % values:
 % \begin{itemize}
 % \item |\relax|, for normal typesetting.  So |\protect\foo| will
@@ -1200,6 +1193,8 @@
 % \changes{v1.4a}{2015/01/08}{Added macro}
 % \changes{v1.5f}{2019/08/27}{Make the assignments global as we may
 %   need to apply them inside a group}
+% \changes{v1.5m}{2020/08/21}{Make \cs{MakeRobust} produce the same
+%   command structure as \cs{DeclareRobustCommand}}
 %
 %    This macro makes an existing fragile macro robust, but only if it
 %    hasn't been robust in the past, i.e., it checks for the existence
@@ -1218,9 +1213,11 @@
 %    at all.
 %    \begin{macrocode}
 %</2ekernel>
-%<latexrelease>\IncludeInRelease{2019/10/01}{\MakeRobust}{\MakeRobust}%
+%<latexrelease>\IncludeInRelease{2020/10/01}{\MakeRobust}{\MakeRobust}%
 %<*2ekernel|latexrelease>
 \def\MakeRobust#1{%
+  \count@=\escapechar
+  \escapechar=`\\
   \@ifundefined{\expandafter\@gobble\string#1}{%
     \@latex@error{The control sequence `\string#1' is undefined!%
       \MessageBreak There is nothing here to make robust}%
@@ -1232,12 +1229,15 @@
 % \verb*=\foo =. If it is already defined do nothing, otherwise set
 % \verb*=\foo = equal to \verb*=\foo= and redefine \verb*=\foo= so
 % that it acts like a macro defined with \verb=\DeclareRobustCommand=.
+% We use \cs{@kernel@rename@newcommand} to copy \verb*=\foo= over to
+% \verb*=\foo =, including a possible default optional argument.
 %    \begin{macrocode}
   {%
     \@ifundefined{\expandafter\@gobble\string#1\space}%
     {%
-      \global\expandafter\let\csname
-      \expandafter\@gobble\string#1\space\endcsname=#1%
+      \expandafter\@kernel@rename@newcommand
+        \csname\expandafter\@gobble\string#1\space\endcsname
+        #1%
       \edef\reserved@a{\string#1}%
       \def\reserved@b{#1}%
       \edef\reserved@b{\expandafter\strip@prefix\meaning\reserved@b}%
@@ -1249,10 +1249,72 @@
         \csname\expandafter\@gobble\string#1\space\endcsname}%
     }%
     {\@latex@info{The control sequence `\string#1' is already robust}}%
-   }%
+  }%
+  \escapechar=\count@
 }%
+%    \end{macrocode}
+%
+%  \begin{macro}{\@kernel@rename@newcommand}
+%    This macro renames a command, possibly with an optional argument (defined
+%    with \cs{newcommand}) from |#2| to |#1|, by renaming the internal macro
+%    \verb=\\#2= to \verb=\\#1= and defining \verb=\#1= appropriately, then
+%    undefining \verb=\#2= and \verb=\\#2=.  The \cs{afterassignment} trick is
+%    to make both definitions in \cs{@copy@newcommand} global (which are local
+%    by default).
+%
+%    In case the macro was defined with \cs{newcommand} and an optional
+%    argument, to replicate exactly the behaviour of \cs{DeclareRobustCommand}
+%    we have to move also the internal \verb*=\\foo= to \verb*=\\foo =.  In that
+%    case, \verb=#1= will be a parameterless macro (\cs{robust@command@chk@safe}
+%    checks that), and \cs{@if@newcommand} will return true (both defined below
+%    in this file).  If so, we can use \cs{@copy@newcommand} rather than plain
+%    \cs{let} to copy the command over.  \cs{@kernel@rename@newcommand} does
+%    this test and carries out the renaming.
+%    \begin{macrocode}
+\def\@kernel@rename@newcommand#1#2{%
+  \robust@command@chk@safe#2%
+    {\@if@newcommand#2%
+      {\afterassignment\global
+       \global\@copy@newcommand#1#2%
+       \global\let#2\@undefined
+       \global\expandafter\let\csname\string#2\endcsname\@undefined}%
+      {\global\let#1=#2}}%
+    {\global\let#1=#2}}
+%    \end{macrocode}
+%  \end{macro}
+%
+%    \begin{macrocode}
 %</2ekernel|latexrelease>
 %<latexrelease>\EndIncludeInRelease
+%
+%<latexrelease>\IncludeInRelease{2019/10/01}{\MakeRobust}{\MakeRobust}%
+%<latexrelease>\def\MakeRobust#1{%
+%<latexrelease>  \@ifundefined{\expandafter\@gobble\string#1}{%
+%<latexrelease>    \@latex@error{The control sequence `\string#1' is undefined!%
+%<latexrelease>      \MessageBreak There is nothing here to make robust}%
+%<latexrelease>    \@eha
+%<latexrelease>  }%
+%<latexrelease>  {%
+%<latexrelease>    \@ifundefined{\expandafter\@gobble\string#1\space}%
+%<latexrelease>    {%
+%<latexrelease>      \global\expandafter\let\csname
+%<latexrelease>      \expandafter\@gobble\string#1\space\endcsname=#1%
+%<latexrelease>      \edef\reserved@a{\string#1}%
+%<latexrelease>      \def\reserved@b{#1}%
+%<latexrelease>      \edef\reserved@b{\expandafter\strip@prefix\meaning\reserved@b}%
+%<latexrelease>      \xdef#1{%
+%<latexrelease>        \ifx\reserved@a\reserved@b
+%<latexrelease>          \noexpand\x@protect\noexpand#1%
+%<latexrelease>        \fi
+%<latexrelease>        \noexpand\protect\expandafter\noexpand
+%<latexrelease>        \csname\expandafter\@gobble\string#1\space\endcsname}%
+%<latexrelease>    }%
+%<latexrelease>    {\@latex@info{The control sequence `\string#1' is already robust}}%
+%<latexrelease>   }%
+%<latexrelease>}%
+%<latexrelease>\let\@kernel@rename@newcommand\@undefined
+%<latexrelease>\EndIncludeInRelease
+%
 %<latexrelease>\IncludeInRelease{2015/01/01}{\MakeRobust}{\MakeRobust}%
 %<latexrelease>\def\MakeRobust#1{%
 %<latexrelease>  \@ifundefined{\expandafter\@gobble\string#1}{%
@@ -1278,17 +1340,17 @@
 %<latexrelease>    {\@latex@info{The control sequence `\string#1' is already robust}}%
 %<latexrelease>   }%
 %<latexrelease>}%
+%<latexrelease>\let\@kernel@rename@newcommand\@undefined
 %<latexrelease>\EndIncludeInRelease
+%
 %<latexrelease>\IncludeInRelease{0000/00/00}{\MakeRobust}{\MakeRobust}%
 %<latexrelease>\let\MakeRobust\@undefined
+%<latexrelease>\let\@kernel@rename@newcommand\@undefined
 %<latexrelease>\EndIncludeInRelease
 %<*2ekernel>
 %    \end{macrocode}
 % \end{macro}
 %
-%
-%
-
 %  \begin{macro}{\kernel@make@fragile}
 %    The opposite of |\MakeRobust| execpt that it doesn't do many
 %    checks as it is internal to the kernel. Why does one want such a
@@ -1302,7 +1364,7 @@
 %    \begin{macrocode}
 %</2ekernel>
 %<*2ekernel|latexrelease>
-%<latexrelease>\IncludeInRelease{0000/00/00}%
+%<latexrelease>\IncludeInRelease{2020/10/01}%
 %<latexrelease>                 {\kernel@make@fragile}{Undo robustness}%
 \def\kernel@make@fragile#1{%
   \@ifundefined{\expandafter\@gobble\string#1\space}%
@@ -1311,22 +1373,591 @@
 %    \begin{macrocode}
      {}%
 %    \end{macrocode}
-%    Otherwise copy \verb*=\foo = back to \verb=\foo= and then undefine
-%    the payload command.
+%    Otherwise copy \verb*=\foo = back to \verb=\foo=.
+%    Then use \cs{@kernel@rename@newcommand} to check and copy
+%    \verb*=\\foo = back to \verb*=\\foo= in case the command has an optional
+%    argument.  If so, also undefine \verb*=\\foo =, and at the end undefine
+%    \verb*=\foo =.
 %    \begin{macrocode}
      {%
       \global\expandafter\let\expandafter #1\csname
-      \expandafter\@gobble\string#1\space\endcsname
+        \expandafter\@gobble\string#1\space\endcsname
+      \expandafter\@kernel@rename@newcommand
+        \csname\expandafter\@gobble\string#1\expandafter\endcsname
+        \csname\expandafter\@gobble\string#1\space\endcsname
       \global\expandafter\let\csname
-      \expandafter\@gobble\string#1\space\endcsname\@undefined
+        \expandafter\@gobble\string#1\space\endcsname\@undefined
      }%
 }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<latexrelease>\EndIncludeInRelease
+%
+%<latexrelease>\IncludeInRelease{0000/00/00}%
+%<latexrelease>                 {\kernel@make@fragile}{Undo robustness}%
+%<latexrelease>\def\kernel@make@fragile#1{%
+%<latexrelease>  \@ifundefined{\expandafter\@gobble\string#1\space}%
+%<latexrelease>     {}%
+%<latexrelease>     {%
+%<latexrelease>      \global\expandafter\let\expandafter #1\csname
+%<latexrelease>      \expandafter\@gobble\string#1\space\endcsname
+%<latexrelease>      \global\expandafter\let\csname
+%<latexrelease>      \expandafter\@gobble\string#1\space\endcsname\@undefined
+%<latexrelease>     }%
+%<latexrelease>}
 %<latexrelease>\EndIncludeInRelease
 %</2ekernel|latexrelease>
 %<*2ekernel>
 %    \end{macrocode}
 %  \end{macro}
 %
+%
+% \subsection{Acting on robust commands}
+%
+%    \begin{macrocode}
+%</2ekernel>
+%<latexrelease>\IncludeInRelease{2020-10-01}{\robust@command@act}
+%<latexrelease>  {Add \robust@command@act}%
+%<*2ekernel|latexrelease>
+%    \end{macrocode}
+%
+%   With most document level commands being robust now there is more of a
+%   requirement to have a standard way of aliasing (or copying) a command to a
+%   new name, for example to save an original definition before changing a
+%   command.  \cs{DeclareCommandCopy} is analogous to \TeX's \cs{let}, except
+%   that it copes with the different types of robust commands defined by
+%   \LaTeX's mechanisms.
+%
+%   A couple of ``types of robustness'' are defined by the \LaTeXe{} kernel,
+%   namely robust commands defined with \cs{DeclareRobustCommand} and commands
+%   with optional arguments defined with \cs{newcommand}.  However there are
+%   other types of robust commands that are frequently used, which are not
+%   defined in the \LaTeXe{} kernel, like commands defined with
+%   \textsf{xparse}'s \cs{NewDocumentCommand} and \textsf{etoolbox}'s
+%   \cs{newrobustcmd}.
+%
+%   In this section we will define a generic extensible machinery to act on
+%   robust commands.  This code will then be used to test if a command is
+%   robust, considered the different types of robustness, and then either copy
+%   that definition, if \cs{DeclareCommandCopy} (or similar) is used, or show
+%   the definition of the command, if \cs{ShowCommmand} is used.
+%
+% \begin{macro}{\robust@command@act}
+% \changes{v1.5k}{2020/08/19}{Made \cs{robust@command@act}
+%     (was \cs{declare@command@copy}) more generic}
+%
+%   The looping machinery is generic and knows nothing about what is to be done
+%   for each case.  The syntax of the main macro \cs{robust@command@act} is:
+%   \begin{quote}
+%     |\robust@command@act|\meta{action-list}\meta{robust-cmd}\\
+%       \meta{fallback-action}\meta{act-arg}
+%   \end{quote}
+%   \meta{action-list} is a token list of the form:
+%   \begin{quote}
+%     |{|\meta{if-type-1} \meta{act-type-1}|}|\\
+%     |{|\meta{if-type-2} \meta{act-type-2}|}|\\
+%     \ldots
+%   \end{quote}
+%   \cs{robust@command@act} will iterate over the \meta{action-list}, evaluating
+%   each \meta{if-type-$n$}\meta{robust-cmd}|{|\meta{true}|}{|\meta{false}|}|.
+%   If the \meta{if-type-$n$} conditional returns \meta{true}, then
+%   \meta{act-type-$n$}\meta{act-arg} is executed, and the loop ends.  If the
+%   conditional returns \meta{false}, then \meta{if-type-$n+1$} is executed in
+%   the same way, until either one of the conditionals return \meta{true}, or
+%   the end of the \meta{action-list} is reached.  If the end is reached, then
+%   \meta{fallback-action}\meta{act-arg} is executed before
+%   \cs{robust@command@act} exits.
+%
+%   \cs{robust@command@act} will start by using \cs{robust@command@act@chk@args}
+%   to check if the \meta{robust-cmd} (|#2|) is a parameterless (possibly
+%   \cs{protected}) macro.  If it is not, the command is not a robust command:
+%   these always start with a parameterless user-level macro;  in that case,
+%   \cs{robust@command@act@end} is used to short-circuit the process and do the
+%   \meta{fallback-action} (|#3|).  This first test is necessary because later
+%   on we need to be able to expand the \meta{robust-cmd} without the risk of it
+%   Breaking Badly, and as a bonus, this speeds up the process in case we used
+%   \cs{NewCommandCopy} in a ``normal'' macro.
+%    \begin{macrocode}
+\long\def\robust@command@act#1#2#3#4{%
+  \robust@command@chk@safe#2%
+    {\expandafter\robust@command@act@loop
+       \expandafter#2%
+         #1{\@nnil\@nnil}%
+     \robust@command@act@end}%
+    {\robust@command@act@end}%
+      {#3}{#4}}%
+%    \end{macrocode}
+%
+% \begin{macro}{\robust@command@act@loop}
+% \begin{macro}{\robust@command@act@loop@aux}
+% \begin{macro}{\robust@command@act@do}
+%   If \cs{robust@command@act@chk@args} branched to false, then
+%   \cs{robust@command@act@loop} will loop over the list of items in the
+%   \meta{action-list} (|#1|), and process each item as described earlier.
+%   If the \meta{if-type-$n$} command expands to \meta{true} then
+%   \cs{robust@command@act@do} is used to execute \meta{act-type-$n$} on the
+%   \meta{act-arg}, otherwise the loop resumes with the next item.
+%    \begin{macrocode}
+\long\def\robust@command@act@loop#1#2{\robust@command@act@loop@aux#1#2}
+\long\def\robust@command@act@loop@aux#1#2#3{%
+  \ifx\@nnil#2%
+  \else
+    #2{#1}%
+      {\robust@command@act@do{#3}}%
+      {\expandafter\robust@command@act@loop\expandafter#1}%
+  \fi}
+\long\def\robust@command@act@do#1%
+  \fi#2%
+  \robust@command@act@end#3#4{%
+  \fi
+  #1#4}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\robust@command@act@end}
+%   If the end is reached and no action was taken, then do
+%   \meta{fallback-action}\meta{act-arg}.
+%    \begin{macrocode}
+\long\def\robust@command@act@end#1#2{#1#2}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\robust@command@chk@safe}
+% \begin{macro}{\robust@command@act@chk@args}
+%    \begin{macrocode}
+\long\def\robust@command@chk@safe#1{%
+  \begingroup
+    \escapechar=`\\
+  \expandafter\endgroup\expandafter
+  \robust@command@act@chk@args\meaning#1:->\@nil}
+\def\robust@command@act@chk@args#1:->#2\@nil{%
+  \@expl@str@if@eq@@nnTF{#1}{macro}%
+    {\@firstoftwo}%
+    {\@expl@str@if@eq@@nnTF{#1}{\protected macro}%
+      {\@firstoftwo}%
+      {\@secondoftwo}}}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000-00-00}{\robust@command@act}
+%<latexrelease>  {Add \robust@command@act}%
+%<latexrelease>\let\robust@command@act\@undefined
+%<latexrelease>\let\robust@command@act@loop\@undefined
+%<latexrelease>\let\robust@command@act@loop@aux\@undefined
+%<latexrelease>\let\robust@command@act@do\@undefined
+%<latexrelease>\let\robust@command@act@end\@undefined
+%<latexrelease>\let\robust@command@chk@safe\@undefined
+%<latexrelease>\let\robust@command@act@chk@args\@undefined
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
+%    \end{macrocode}
+%
+% \end{macro}
+%
+%
+% \subsubsection{Copying robust commands}
+%
+%    \begin{macrocode}
+%</2ekernel>
+%<latexrelease>\IncludeInRelease{2020-10-01}{\DeclareCommandCopy}
+%<latexrelease>  {Add \NewCommandCopy, \RenewCommandCopy, and \DeclareCommandCopy}%
+%<*2ekernel|latexrelease>
+%    \end{macrocode}
+%
+% \begin{macro}{\NewCommandCopy}
+% \begin{macro}{\RenewCommandCopy}
+% \begin{macro}{\DeclareCommandCopy}
+% \changes{v1.5j}{2020/05/09}{Added \cs{DeclareCommandCopy} (gh/239)}
+%
+%   \cs{NewCommandCopy} starts by checking if \verb=#1= is already defined, and
+%   raises an error if so, otherwise the definition is carried out.
+%   \cs{RenewCommandCopy} does (almost) the opposite.  If the command is
+%   \emph{not} defined, then an error is raised.  But the definition is carried
+%   out anyhow, so the behaviour is consistent with \cs{renewcommand}.
+%
+%   A \cs{ProvideCommandCopy} isn't defined because it's not reasonably useful.
+%   \verb=\provide...= commands mean ``define this if there's no other
+%   definition'', but copying a command (usually) implies that the command being
+%   copied is defined, so \cs{ProvideCommandCopy} doesn't make a lot of sense.
+%   But more importantly, the most common use case of copying a command is to
+%   redefine it later, while preserving the old definition, as in:
+% \begin{verbatim}
+%   \ProvideComandCopy \A \B
+%   \renewcommand \B { ... \A ... }
+% \end{verbatim}
+%   then, if \verb=\A= is already defined the first line is skipped, an in this
+%   case \verb=\B= won't work as expected.
+%
+%   The three versions call the internal \cs{declare@commandcopy} with the
+%   proper action.  \cs{@firstofone} will carry out the copy.  The only case
+%   when the copy is not made is the \meta{false} case for \cs{NewCommandCopy},
+%   in which the command already exists and the definition is aborted.
+%    \begin{macrocode}
+\def\NewCommandCopy{%
+  \declare@commandcopy
+    {\@firstofone}%
+    {\@firstoftwo\@notdefinable}}
+\def\RenewCommandCopy{%
+  \declare@commandcopy
+    {\@latex@error{Command \@backslashchar\reserved@a\space undefined}\@ehc
+     \@firstofone}%
+    {\@firstofone}}
+\def\DeclareCommandCopy{%
+  \declare@commandcopy
+    {\@firstofone}%
+    {\@firstofone}}
+%    \end{macrocode}
+%
+% \begin{macro}{\declare@commandcopy}
+%   Start by checking if the command is already defined.  The proper action is
+%   taken by each specific command above.  If all's good, then
+%   \cs{robust@command@act} is called with the proper arguments as described
+%   earlier, with \cs{@declarecommandcopylisthook} as the \meta{action-list} and
+%   \cs{declare@commandcopy@let} as the \meta{fallback-action}.
+%    \begin{macrocode}
+\long\def\declare@commandcopy#1#2#3#4{%
+  \edef\reserved@a{\@expl@cs@to@str@@N#3}%
+  \@ifundefined\reserved@a{#1}{#2}%
+    {\robust@command@act
+       \@declarecommandcopylisthook#4%
+       \declare@commandcopy@let{#3#4}}}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@declarecommandcopylisthook}
+%   The initial definition of \cs{@declarecommandcopylisthook} contains the
+%   tests for the two types of robust command in the kernel.
+%    \begin{macrocode}
+\def\@declarecommandcopylisthook{%
+  {\@if@DeclareRobustCommand \@copy@DeclareRobustCommand}%
+  {\@if@newcommand \@copy@newcommand}}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\declare@commandcopy@let}
+%   The initial definition of \cs{@declarecommandcopylisthook} contains the
+%   tests for the two types of robust command in the kernel.
+%    \begin{macrocode}
+\long\def\declare@commandcopy@let#1#2{\let#1=#2\relax}
+%    \end{macrocode}
+% \end{macro}
+%
+%   Now the rollback code.
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000-00-00}{\DeclareCommandCopy}
+%<latexrelease>  {Undefine \NewCommandCopy, \RenewCommandCopy, and \DeclareCommandCopy}%
+%<latexrelease>\let\NewCommandCopy\@undefined
+%<latexrelease>\let\RenewCommandCopy\@undefined
+%<latexrelease>\let\DeclareCommandCopy\@undefined
+%<latexrelease>\let\declare@commandcopy\@undefined
+%<latexrelease>\let\@declarecommandcopylisthook\@undefined
+%<latexrelease>\let\declare@commandcopy@let\@undefined
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+%
+% \subsubsection{Showing robust commands}
+%
+% \begin{macro}{\ShowCommand}
+% \changes{v1.5k}{2020/08/19}{Added \cs{ShowCommand} (gh/373)}
+%
+%   Most of the machinery defined for \cs{NewCommandCopy} can be used to show
+%   the definition of a robust command, in a similar fashion to \texttt{texdef}.
+%   The difference is that after the command's is detected to has a given type
+%   of robustness, rather than making a copy, we use a separate routine to show
+%   its definition.
+%
+%   With all the machinery in place, \cs{ShowCommand} itself is quite simple:
+%   use \cs{robust@command@act} to iterate through the \cs{@showcommandlisthook}
+%   list, and if nothing is found, fallback to \cs{show}.
+%    \begin{macrocode}
+%</2ekernel>
+%<latexrelease>\IncludeInRelease{2020-10-01}{\ShowCommand}%
+%<latexrelease>  {Add \ShowCommand}%
+%<*2ekernel|latexrelease>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\long\def\ShowCommand#1{%
+  \robust@command@act
+    \@showcommandlisthook#1%
+    \show#1}
+%    \end{macrocode}
+%
+% \begin{macro}{\@showcommandlisthook}
+%   The initial definition of \cs{@showcommandlisthook} contains the same tests
+%   as used for copying, but \cs{@show@...} commands instead of \cs{@copy@...}.
+%   Same as before, it is initialised to cope with \cs{DeclareRobustCommand} and
+%   \cs{newcommand} with optional arguments.
+%    \begin{macrocode}
+\def\@showcommandlisthook{%
+  {\@if@DeclareRobustCommand \@show@DeclareRobustCommand}%
+  {\@if@newcommand \@show@newcommand}}
+%    \end{macrocode}
+% \end{macro}
+%
+%   Now the rollback code.
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000-00-00}{\ShowCommand}
+%<latexrelease>  {Undefine \ShowCommand}%
+%<latexrelease>\let\ShowCommand\@undefined
+%<latexrelease>\let\@showcommandlisthook\@undefined
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
+%    \end{macrocode}
+% \end{macro}
+%
+%
+%    \begin{macrocode}
+%</2ekernel>
+%<latexrelease>\IncludeInRelease{2020-10-01}{\@if@DeclareRobustCommand}
+%<latexrelease>  {Add \@if@DeclareRobustCommand, \@if@newcommand,
+%<latexrelease>       \@copy@DeclareRobustCommand, \@copy@newcommand,
+%<latexrelease>       \@show@DeclareRobustCommand, \@show@newcommand}%
+%<*2ekernel|latexrelease>
+%    \end{macrocode}
+%
+% \subsubsection{Commands defined with \cs{DeclareRobustCommand}}
+%
+% \begin{macro}{\@if@DeclareRobustCommand}
+% \changes{v1.5j}{2020/05/09}{Added \cs{DeclareCommandCopy} (gh/239)}
+%
+%   Now that we provided a generic way to copy one macro to another, we need to
+%   define a way to check if a command is one of \LaTeXe's robust types.  These
+%   tests are heavily based on Heiko's \cs{LetLtxMacro}, but chopped into
+%   separate macros.
+%
+%   \cs{@if@DeclareRobustCommand} checks if a command \verb=\cmd= was defined by
+%   \cs{DeclareRobustCommand}.  The test returns true if the expansion of
+%   \verb=\cmd= is exactly \verb*=\protect\cmd =.
+%
+%    \begin{macrocode}
+\long\def\@if@DeclareRobustCommand#1{%
+  \begingroup
+    \escapechar=`\\
+    \edef\reserved@a{\string#1}%
+    \edef\reserved@b{\detokenize{#1}}%
+    \xdef\@gtempa{%
+      \ifx\reserved@a\reserved@b
+         \noexpand\x@protect
+         \noexpand#1%
+      \fi
+      \noexpand\protect
+      \expandafter\noexpand\csname\@expl@cs@to@str@@N#1 \endcsname}%
+  \endgroup
+  \ifx\@gtempa#1\relax
+    \expandafter\@firstoftwo
+  \else
+    \expandafter\@secondoftwo
+  \fi}
+%    \end{macrocode}
+%
+% \begin{macro}{\@copy@DeclareRobustCommand}
+% \begin{macro}{\copy@kernel@robust@command}
+%   If a command was defined by \cs{DeclareRobustCommand} (that is,
+%   \cs{@if@DeclareRobustCommand} returns true), then to make a copy of \verb=\cmd=
+%   into \verb=\foo= we define the latter such that it expands to
+%   \verb*=\protect\foo =, then make \verb*=\foo = equal to \verb*=\cmd =.
+%
+%   There is one detail we need to take care of:  if a command was defined with
+%   \cs{DeclareRobustCommand} it may still have an optional argument, in which
+%   case there is one more macro layer before the actual definition of the
+%   command.  We use \cs{@if@newcommand} to check that and
+%   \cs{@copy@newcommand} to do the copying.
+%    \begin{macrocode}
+\long\def\@copy@DeclareRobustCommand#1#2{%
+  \begingroup
+    \escapechar=`\\
+    \edef\reserved@a{\string#1}%
+    \edef\reserved@b{\detokenize{#1}}%
+    \edef\reserved@a{%
+  \endgroup
+  \def\noexpand#1{%
+    \ifx\reserved@a\reserved@b
+       \noexpand\x@protect
+       \noexpand#1%
+    \fi
+    \noexpand\protect
+    \expandafter\noexpand\csname\@expl@cs@to@str@@N#1 \endcsname}%
+  \noexpand\copy@kernel@robust@command
+    \expandafter\noexpand\csname\@expl@cs@to@str@@N#1 \endcsname
+    \expandafter\noexpand\csname\@expl@cs@to@str@@N#2 \endcsname}%
+  \reserved@a}
+\long\def\copy@kernel@robust@command#1#2{%
+  \robust@command@chk@safe#2%
+    {\@if@newcommand#2%
+       {\@copy@newcommand}%
+       {\declare@commandcopy@let}}
+    {\declare@commandcopy@let}%
+  #1#2}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@show@DeclareRobustCommand}
+% \begin{macro}{\show@kernel@robust@command}
+%   Showing the command is pretty simple.  This command prints the top-level
+%   expansion as \TeX's \cs{show} would, but with |robust macro:| rather than
+%   just |macro:|, then a blank line and then \cs{show} the inner command.
+%   For a macro defined with, say, |\DeclareRobustCommand\foo[1]{bar}|, it will
+%   print:
+% \begin{verbatim}
+%   > \foo=robust macro:
+%   ->\protect \foo  .
+%   
+%   > \foo =\long macro:
+%   #1->bar.
+% \end{verbatim}
+%   If the inner command is defined with an optional argument, then
+%   \cs{@show@newcommand} is also used.
+%
+%   The value of \cs{escapechar} is deliberately not enforced, so
+%   \cs{ShowCommand} behaves more like \cs{show}.
+%    \begin{macrocode}
+\long\def\@show@DeclareRobustCommand#1{%
+  \typeout{> \string#1=robust macro:}%
+  \typeout{->\@expl@cs@replacement@spec@@N#1.^^J}%
+  \expandafter\show@kernel@robust@command
+    \csname\@expl@cs@to@str@@N#1 \endcsname}
+\long\def\show@kernel@robust@command#1{%
+  \robust@command@chk@safe#1%
+    {\@if@newcommand#1%
+       {\@show@newcommand}%
+       {\show}}%
+    {\show}%
+  #1}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \end{macro}
+%
+% \subsubsection{Commands defined with \cs{newcommand} (with optional argument)}
+%
+% \begin{macro}{\@if@newcommand}
+%   A command \verb=\cmd= (or \verb*=\cmd =, if it was defined with
+%   \cs{DeclareRobustCommand}) with an optional argument will expand to
+%   \verb*=\@protected@testopt\cmd\\cmd{<opt>}=.  To check that we look at the
+%   first three tokens in the expansion of \verb=\cmd=, and return true or false
+%   accordingly.
+%
+%   This test \emph{requires} that the command be a parameterless macro,
+%   otherwise it will not work (and probably break).  This is ensured with
+%   \cs{robust@command@chk@safe} before calling \cs{@if@newcommand}.
+%    \begin{macrocode}
+\long\def\@if@newcommand#1{%
+  \edef\reserved@a{%
+    \noexpand\@protected@testopt
+    \noexpand#1%
+    \expandafter\noexpand\csname\@backslashchar\@expl@cs@to@str@@N#1\endcsname}%
+  \edef\reserved@b{%
+    \unexpanded\expandafter\expandafter\expandafter
+      {\expandafter\@carcube#1{}{}{}\@nil}}%
+  \ifx\reserved@a\reserved@b
+    \expandafter\@firstoftwo
+  \else
+    \expandafter\@secondoftwo
+  \fi}
+%    \end{macrocode}
+%
+% \begin{macro}{\@copy@newcommand}
+%   Then, if a command \verb=\cmd= takes an optional argument, we copy it to
+%   \verb=\foo= by defining the latter to expand to
+%   \verb=\@protected@testopt\foo\\foo{<opt>}=.
+%    \begin{macrocode}
+\long\def\@copy@newcommand#1#2{%
+  \edef#1{\noexpand\@protected@testopt
+    \noexpand#1%
+    \expandafter\noexpand\csname\@backslashchar\@expl@cs@to@str@@N#1\endcsname
+    \unexpanded\expandafter\expandafter\expandafter
+      {\expandafter\@gobblethree#2}}%
+  \expandafter
+  \let\csname\@backslashchar\@expl@cs@to@str@@N#1\expandafter\endcsname
+      \csname\@backslashchar\@expl@cs@to@str@@N#2\endcsname}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@show@newcommand}
+% \begin{macro}{\@show@newcommand@aux}
+%   A command being \cs{show}n here is guaranteed to have an optional argument.
+%   Start by showing the top-level expansion of the command (using \cs{typeout}
+%   to avoid TeX asking for interaction and extra context lines), then call
+%   \cs{@show@newcommand@aux} with the internal command, which contains the
+%   actual definition, and with the expansion of the command to extract the
+%   default value of the optional argument.
+%    \begin{macrocode}
+\long\def\@show@newcommand#1{%
+  \typeout{> \string#1=robust macro:}%
+  \typeout{->\@expl@cs@replacement@spec@@N#1.^^J}%
+  \expandafter\@show@newcommand@aux
+    \csname\@backslashchar\@expl@cs@to@str@@N#1\expandafter\endcsname
+    \expandafter{#1}}
+%    \end{macrocode}
+%
+%   For a macro defined with, say, |\newcommand\foo[1][opt]{bar}|, it will
+%   print:
+% \begin{verbatim}
+%   > \foo=robust macro:
+%   ->\@protected@testopt \foo \\foo {opt}.
+%   
+%   > \\foo=\long macro:
+%   > default #1=opt.
+%   [#1]->bar.
+% \end{verbatim}
+%   If the command was defined with \cs{DeclareRobustCommand}, then another pair
+%   of lines show the top-level expansion \verb*|\protect \foo  |.
+%
+%   The extra gymnastics with \cs{showtokens} ensures that \cs{showtokens}
+%   itself, and the internals of this macro aren't showed in the context lines.
+%    \begin{macrocode}
+\long\def\@show@newcommand@aux#1#2{%
+  \typeout{> \string#1=\@expl@cs@prefix@spec@@N#1macro:}%
+  \edef\reserved@a{%
+    default \string##1=\expandafter\detokenize\@gobblethree#2.^^J%
+    \@expl@cs@argument@spec@@N#1->\@expl@cs@replacement@spec@@N#1}%
+  \showtokens\expandafter\expandafter\expandafter{\expandafter\reserved@a}}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+%   Now the rollback code.
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000-00-00}{\@if@DeclareRobustCommand}
+%<latexrelease>  {Undefine \@if@DeclareRobustCommand, \@if@newcommand,
+%<latexrelease>            \@copy@DeclareRobustCommand, \@copy@newcommand,
+%<latexrelease>            \@show@DeclareRobustCommand, \@show@newcommand}%
+%<latexrelease>\let\@if@DeclareRobustCommand\@undefined
+%<latexrelease>\let\@copy@DeclareRobustCommand\@undefined
+%<latexrelease>\let\@show@DeclareRobustCommand\@undefined
+%<latexrelease>\let\@if@newcommand\@undefined
+%<latexrelease>\let\@copy@newcommand\@undefined
+%<latexrelease>\let\@show@newcommand\@undefined
+%
+%<latexrelease>\let\copy@kernel@robust@command\@undefined
+%<latexrelease>\let\show@kernel@robust@command\@undefined
+%<latexrelease>\let\@show@newcommand@aux\@undefined
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
+%    \end{macrocode}
+%
+% \end{macro}
 %
 %
 % \subsection{Internal defining commands}
@@ -1563,6 +2194,56 @@
 %  \end{macro}
 %
 %
+% \begin{macro}{\string@makeletter}
+% \begin{macro}{\@string@makeletter}
+% \begin{macro}{\char@if@alph}
+%   Iterates through a string, turning each alphabetic character into
+%   a catcode-11 token (partly undoes a \cs{detokenize}).  Useful for
+%   \cs{ifx}-based string comparisons where \cs{detokenize}-ing the
+%   other string would break too much code.
+%
+%   \changes{v1.5n}{2020/09/06}
+%         {Macro added}
+%
+%   The macro uses \textsf{expl3}'s \cs{@expl@str@map@function@@NN} to
+%   iterate on the string (without losing spaces) and applies
+%   \cs{@string@makeletter} on each character.  The latter checks if
+%   character is between a--z or A--Z, and uses \cs{@alph} or \cs{@Alph}
+%   to get the corresponding catcode-11 token.  Other tokens are passed
+%   through unchanged.
+%    \begin{macrocode}
+%</2ekernel>
+%<latexrelease>\IncludeInRelease{2020/10/01}{\string@makeletter}
+%<latexrelease>  {Add \string@makeletter}%
+%<*2ekernel|latexrelease>
+\def\string@makeletter#1{%
+  \@expl@str@map@function@@NN#1\@string@makeletter}
+\def\@string@makeletter#1{%
+  \char@if@alph{#1}%
+    {\@expl@char@generate@@nn{`#1}{11}}%
+    {#1}}
+\def\char@if@alph#1{%
+  \ifnum0\ifnum`#1<`A 1\fi\ifnum`#1>`z 1\fi
+      \if\ifnum`#1>`Z @\fi\ifnum`#1<`a @\fi01\fi>0
+    \expandafter\@secondoftwo
+  \else
+    \expandafter\@firstoftwo
+  \fi}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%
+%<latexrelease>\IncludeInRelease{0000/00/00}{\string@makeletter}
+%<latexrelease>  {Undefine \string@makeletter}%
+%<latexrelease>\let\string@makeletter\@undefined
+%<latexrelease>\let\@string@makeletter\@undefined
+%<latexrelease>\let\char@if@alph\@undefined
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
 %
 % \begin{macro}{\makeatletter}
 % \begin{macro}{\makeatother}
@@ -1576,7 +2257,6 @@
 % \end{macro}
 % \end{macro}
 %
-
 %
 % \section{Discretionary Hyphenation}
 % \begin{macro}{\-}
@@ -1586,7 +2266,7 @@
 % \changes{v1.0g}{1994/04/12}
 %         {Define \cs{@dischyph}, was previously in ltboxes.dtx}
 % \changes{v1.5b}{2017/03/27}{Define \cs{@dischyph} after \cs{-}}
-% \changes{v1.5h}{2020/05/11}{Do not overwrite \cs{-} under Lua\TeX}
+% \changes{v1.5j}{2020/05/11}{Do not overwrite \cs{-} under Lua\TeX}
 % \end{macro}
 % Moved here to be after the definition of |\DeclareRobustCommand|.
 %
@@ -1725,6 +2405,28 @@
 %<latexrelease>\EndIncludeInRelease
 %<*2ekernel>
 %    \end{macrocode}
+%
+%
+% \begin{macro}{\g@addto@macro}
+% Globally add to the end of a macro.
+% \changes{v0.2a}{1993/11/14}{Made global}
+% \changes{v0.2w}{1994/01/31}
+%     {Use toks register to avoid `hash' problems}
+% \changes{v1.0o}{1995/05/17}
+%     {Make long for latex/1522}
+% \changes{v1.0w}{1996/12/17}
+%     {Use \cs{begingroup} to save making a mathord}
+% \changes{v1.0x}{1997/02/05}
+%     {missing percent /2402}
+%    \begin{macrocode}
+\long\def\g@addto@macro#1#2{%
+  \begingroup
+    \toks@\expandafter{#1#2}%
+    \xdef#1{\the\toks@}%
+  \endgroup}
+%    \end{macrocode}
+% \end{macro}
+%
 %
 %    \begin{macrocode}
 %</2ekernel>
