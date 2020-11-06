@@ -524,6 +524,14 @@
 %    \end{macrocode}
 %  \end{macro}
 %
+% \begin{macro}{\@currpath}
+%   Path to the current file if explicitly given.
+%   \changes{v1.3u}{2020/11/05}{Macro added}
+%    \begin{macrocode}
+\let\@currpath\@empty
+%    \end{macrocode}
+% \end{macro}
+%
 %  \begin{macro}{\@currname}
 %    Name of current package or option.
 %    \begin{macrocode}
@@ -1719,8 +1727,32 @@
 %<latexrelease>\IncludeInRelease{2020/10/01}%
 %<latexrelease>      {\@onefilewithoptions}{Hooks and unused options issue}%
 \def\@onefilewithoptions#1[#2][#3]#4{%
+%    \end{macrocode}
+%    We have to sanitise file names, so that something like
+% \begin{verbatim}
+%   \usepackage{some/local/path/array}
+%   \usepackage{array}
+% \end{verbatim}
+%    won't load \file{array.sty} twice.  It is remotely possible that
+%    those are two different files, but as a matter of principles, we
+%    will consider that the base file name uniquely identifies a
+%    package, regardless of where it lives.  This assumption already
+%    holds for file hooks, for example, which address the hook to a file
+%    by its base name only.
+%
+%    We'll use \cs{@expl@@@filehook@set@curr@file@@nNN} to parse the
+%    file name and return the \meta{path} and \meta{base+ext} in
+%    separate token lists.  Further ahead, most operations use
+%    \cs{@currname} which doesn't have a path attached to it;  only few
+%    actions prepend \cs{@currpath} to \cs{@currname} (namely loading,
+%    as we have to respect the given path).
+%    \begin{macrocode}
+  \@expl@@@filehook@set@curr@file@@nNN
+    {\@expl@@@filehook@resolve@file@subst@@w #1.#4\@nil}%
+      \reserved@a\reserved@b
   \@pushfilename
-  \xdef\@currname{#1}%
+  \xdef\@currname{\string@makeletter\reserved@a}%
+  \xdef\@currpath{\ifx\reserved@b\@empty\else\reserved@b/\fi}%
   \global\let\@currext#4%
 %    \end{macrocode}
 %    The command \cs{ver@\meta{file}.\meta{ext}} is used to signal that
@@ -1765,10 +1797,12 @@
 %    \end{macrocode}
 %    First we take the \meta{name} and \meta{ext} given in the argument
 %    and check if the file exists, and issue an error otherwise asking
-%    for a correction with \cs{@missingfileerror}.
+%    for a correction with \cs{@missingfileerror}.  For checking if the
+%    file exists we use \cs{@currpath} (usually empty) before
+%    \cs{@currname}.
 %    \begin{macrocode}
-     \IfFileExists{\@currname.\@currext}{}%
-       {\@missing@onefilewithoptions{#2}}%
+     \IfFileExists{\@currpath\@currname.\@currext}{}%
+       {\tracingnone\@missing@onefilewithoptions{#2}}%
 %    \end{macrocode}
 %    If \cs{@currname} is empty (the user replied to the ``Enter file
 %    name'' prompt with \meta{RETURN}), so stop here
@@ -1784,11 +1818,12 @@
 %    do the bookkeeping with \cs{@filehook@file@push}
 %    then call \cs{set@curr@file} to set \cs{@curr@file} (and do any
 %    required substitution), then actually load the class/package with
-%    \cs{load@onefile@withoptions}.
+%    \cs{load@onefile@withoptions}.  \cs{set@curr@file} also needs the
+%    file path.
 %    \begin{macrocode}
        \@disable@packageload@do{\@currname.\@currext}%
          {\@expl@@@filehook@file@push@@
-          \set@curr@file{\@currname.\@currext}%
+          \set@curr@file{\@currpath\@currname.\@currext}%
           \@filehook@set@CurrentFile
 %    \end{macrocode}
 %    \changes{v1.3q}{2020/09/06}
@@ -1812,10 +1847,15 @@
           \expandafter\@swaptwoargs\expandafter
             {\expandafter{\@currpkg@reqd}}%
             {% <
+%    \end{macrocode}
+%    \cs{@currpkg@reqd} doesn't take a path because it is used later to
+%    assign \cs[no-index]{opt@...} and \cs[no-index]{ver@...}.
+%    \begin{macrocode}
           \edef\@currpkg@reqd{\@currname.\@currext}%
           \ifx\CurrentFile\CurrentFileUsed
           \else
             \filename@parse\@curr@file
+            \edef\@currpath{\string@makeletter\filename@area}%
             \edef\@currname{\string@makeletter\filename@base}%
             \edef\@currext{\string@makeletter\filename@ext}%
           \fi
@@ -1864,11 +1904,13 @@
 % \end{macro}
 %
 % \begin{macro}{\@missing@onefilewithoptions}
-%    Now the action taken when a file is not found.
+%    Now the action taken when a file is not found.  Path must be
+%    included here as it eventually leads to a file lookup.
 %    \begin{macrocode}
 \def\@missing@onefilewithoptions#1{%
-  \@missingfileerror\@currname\@currext
-  \xdef\@currname{\@missingfile@area\@missingfile@base}%
+  \@missingfileerror{\@currpath\@currname}\@currext
+  \global\let\@currpath\@missingfile@area
+  \global\let\@currname\@missingfile@base
   \global\let\@currext\@missingfile@ext}
 %    \end{macrocode}
 % \end{macro}
@@ -1912,11 +1954,12 @@
     \fi
 %    \end{macrocode}
 %    Now actually load the file (at this point we are certain it exists,
-%    but use \cs{InputIfFileExists} so that file hooks are executed):
+%    but use \cs{InputIfFileExists} so that file hooks are executed).
+%    \cs{@currpath} is needed here too.
 %    \begin{macrocode}
-    \InputIfFileExists{\@currpkg@reqd}{}%
+    \InputIfFileExists{\@currpath\@currpkg@reqd}{}%
       {\@latex@error
-        {The \@cls@pkg\space\@currpkg@reqd\space failed to load.}\@ehd}%
+        {The \@cls@pkg\space\@currpkg@reqd\space failed to load}\@ehd}%
 %-----------------------------------------
 %    \end{macrocode}
 %    In older versions of the code |\@unprocessedoptions| would
