@@ -699,6 +699,8 @@
 %  kernel we  do this only now and not in \texttt{ltfiles}.
 %
 % \begin{macro}{\InputIfFileExists}
+% \begin{macro}{\@input@file@exists@with@hooks}
+% \begin{macro}{\unqu@tefilef@und}
 %    \cs{InputIfFileExists} loads any file if it is available so we
 %    have to add the hooks \texttt{file/before} and
 %    \texttt{file/after} in the right places. If the file doesn't
@@ -721,7 +723,7 @@
 %    If the file exists then \cs{CurrentFile} holds its name. But we
 %    can't rely on that still being true after the file has been
 %    processed. Thus for using the name in the file hooks we need to
-%    preserve the name and then restored it for the
+%    preserve the name and then restore it for the
 %    \texttt{file/after/...} hook.
 %
 %    The hook always refers to the file requested by the user.  The hook
@@ -739,33 +741,68 @@
 %    refer to the file by their name only.  The path to the file is
 %    returned in \cs{CurrentFilePath}.
 %    \begin{macrocode}
-      \edef\reserved@a{\@filef@und
+      \edef\reserved@a{%
         \@expl@@@filehook@file@pop@assign@@nnnn
           {\CurrentFilePathUsed}%
           {\CurrentFileUsed}%
           {\CurrentFilePath}%
-          {\CurrentFile}}%
+          {\CurrentFile}%
+%    \end{macrocode}
+%
+%    We pre-expand \cs{@filef@und} so that in case another file is
+%    loaded in the true branch of \cs{InputIfFileExists}, these don't
+%    change their value meanwhile. This isn't a worry with
+%    \cs[no-index]{CurrentFile...} because they are kept in a stack.
+%
+% \changes{v1.0d}{2020/11/20}
+%   {Move loading to \cs{@input@file@exists@with@hooks} and expand
+%    \cs{@filef@und} to avoid getting the wrong file name in the case of
+%    a substitution.}
+%    \begin{macrocode}
+        \noexpand\@input@file@exists@with@hooks{\@filef@und}}%
       \expandafter\@swaptwoargs\expandafter
         {\reserved@a}%
-        {%
-          #2%
-          \@addtofilelist{#1}%
-          \UseHook{file/before}%
+        {#2}%
+      \@expl@@@filehook@file@pop@@
+    }%
+}
+%    \end{macrocode}
+%
+% Before adding to the file list we need to make all (letter) characters
+% catcode~11, because several packages use constructions like
+% \begin{verbatim}
+% \filename@parse{<filename>}
+% \ifx\filename@ext\@clsextension
+%   ...
+% \fi
+% \end{verbatim}
+% and that doesn't work if \cs{filename@ext} is \cs{detokenize}d.
+% Making \cs{@clsextension} a string doesn't help much because some
+% packages define their own \cs[no-index]{<prefix>@someextension} with
+% normal catcodes.  This is not entirely correct because packages loaded
+% (somehow) with catcode~12 alphabetic tokens (say, as the result of
+% a \cs{string} or \cs{detokenize} command, or from a \TeX{} string like
+% \cs{jobname}) will have these character tokens incorrectly turned into
+% letter tokens.  This however is rare, so we'll go for the all-letters
+% approach (grepping the packages in \TeX{} Live didn't bring up any
+% obvious candidate for breaking with this catcode change).
+%    \begin{macrocode}
+\def\@input@file@exists@with@hooks#1{%
+  \edef\reserved@a{\unqu@tefilef@und#1\@nil}%
+  \@addtofilelist{\string@makeletter\reserved@a}%
+  \UseHook{file/before}%
 %    \end{macrocode}
 %    The current file name is available in \cs{CurrentFile} so we use
 %    that in the specific hook.
 %    \begin{macrocode}
-          \UseHook{file/before/\CurrentFile}%
-          \@@input
-        }%
+  \UseHook{file/before/\CurrentFile}%
+  \@@input #1% <- trailing space comes from \@filef@und
 %    \end{macrocode}
 %    And it is restored here so we can use it once more.
 %    \begin{macrocode}
-      \UseHook{file/after/\CurrentFile}%
-      \UseHook{file/after}%
-      \@expl@@@filehook@file@pop@@
-    }%
-}
+  \UseHook{file/after/\CurrentFile}%
+  \UseHook{file/after}}
+\def\unqu@tefilef@und"#1" \@nil{#1}
 %<latexrelease>\EndIncludeInRelease
 %</2ekernel|latexrelease>
 %    \end{macrocode}
@@ -793,6 +830,8 @@
 %<latexrelease>    {%
 %<latexrelease>  \expandafter\@swaptwoargs\expandafter
 %<latexrelease>      {\@filef@und}{#2\@addtofilelist{#1}\@@input}}}
+%<latexrelease>\let\@input@file@exists@with@hooks\@undefined
+%<latexrelease>\let\unqu@tefilef@und\@undefined
 %<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 %
@@ -802,9 +841,13 @@
 %<latexrelease>\long\def \InputIfFileExists#1#2{%
 %<latexrelease>  \IfFileExists{#1}%
 %<latexrelease>    {#2\@addtofilelist{#1}\@@input \@filef@und}}
+%<latexrelease>\let\@input@file@exists@with@hooks\@undefined
+%<latexrelease>\let\unqu@tefilef@und\@undefined
 %<latexrelease>\EndIncludeInRelease
 %<*2ekernel>
 %    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
 %  \end{macro}
 %
 %
@@ -828,8 +871,8 @@
 %
 %
 % \begin{macro}{\@@_subst_add:nn,\@@_subst_remove:n,
-%               \@@_subst_file_normalize:n,\@@_subst_empty_name_chk:NN}
-%   \cs{@@_substitution_lthooadd:nn} declares a file substitution by
+%               \@@_subst_file_normalize:Nn,\@@_subst_empty_name_chk:NN}
+%   \cs{@@_subst_add:nn} declares a file substitution by
 %   doing a (global) definition of the form
 %   |\def|\cs{@file-subst@\meta{file}}|{|\meta{replacement}|}|.
 %   The file names are properly sanitised, and normalized with the same
@@ -843,8 +886,12 @@
     \group_begin:
       \cs_set:cpx { } { \exp_not:o { \cs:w\cs_end: } }
       \int_set:Nn \tex_escapechar:D { -1 }
-      \cs_gset:cpx { @file-subst@ \@@_subst_file_normalize:n {#1} }
-        { \@@_subst_file_normalize:n {#2} }
+      \cs_gset:cpx
+        {
+          @file-subst@
+          \@@_subst_file_normalize:Nn \use_ii_iii:nnn {#1}
+        }
+        { \@@_subst_file_normalize:Nn \@@_file_name_compose:nnn {#2} }
     \group_end:
   }
 \cs_new_protected:Npn \@@_subst_remove:n #1
@@ -852,14 +899,18 @@
     \group_begin:
       \cs_set:cpx { } { \exp_not:o { \cs:w\cs_end: } }
       \int_set:Nn \tex_escapechar:D { -1 }
-      \cs_undefine:c { @file-subst@ \@@_subst_file_normalize:n {#1} }
+      \cs_undefine:c
+        {
+          @file-subst@
+          \@@_subst_file_normalize:Nn \use_ii_iii:nnn {#1}
+        }
     \group_end:
   }
-\cs_new:Npn \@@_subst_file_normalize:n #1
+\cs_new:Npn \@@_subst_file_normalize:Nn #1 #2
   {
     \exp_after:wN \@@_subst_empty_name_chk:NN
       \cs:w \exp_after:wN \cs_end:
-        \cs:w \@@_file_parse_full_name:nN {#1} \use_ii_iii:nnn \cs_end:
+        \cs:w \@@_file_parse_full_name:nN {#2} #1 \cs_end:
   }
 \cs_new:Npn \@@_subst_empty_name_chk:NN #1 #2
   { \if_meaning:w #1 #2 .tex \else: \token_to_str:N #2 \fi: }
@@ -985,6 +1036,7 @@
        \if@tempswa \@expl@@@filehook@drop@extension@@N\@curr@file@reqd \fi}%
       {\if@tempswa \@expl@@@filehook@drop@extension@@N\@curr@file \fi
        \global\let\@curr@file@reqd\@curr@file}%
+    \@expl@@@filehook@clear@replacement@flag@@
   \endgroup}
 %</2ekernel|latexrelease>
 %<latexrelease>\EndIncludeInRelease
@@ -1135,16 +1187,23 @@
 %
 % \begin{macro}{flag @@_file_replaced}
 % \begin{macro}{\@@_if_file_replaced:TF}
+% \begin{macro}{\@@_clear_replacement_flag:}
 %   Since the file replacement is done expandably in a \cs{csname}, use
 %   a flag to remember if a substitution happened.  We use this in
 %   \cs{set@curr@file} to short-circuit some of it in case no
 %   substitution happened (by far the most common case, so it's worth
-%   optimising).
+%   optimising).  The flag raised during the file substitution algorithm
+%   must be explicitly cleared after the \cs{@@_if_file_replaced:TF}
+%   conditional is no longer needed, otherwise further uses of
+%   \cs{@@_if_file_replaced:TF} will wrongly return true.
 %    \begin{macrocode}
 \flag_new:n { @@_file_replaced }
 \cs_new:Npn \@@_if_file_replaced:TF #1 #2
-   { \flag_if_raised:nTF { @@_file_replaced } {#1} {#2} }
+  { \flag_if_raised:nTF { @@_file_replaced } {#1} {#2} }
+\cs_new_protected:Npn \@@_clear_replacement_flag:
+  { \flag_clear:n { @@_file_replaced } }
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 %
@@ -1399,7 +1458,12 @@
 \cs_new_eq:NN \@expl@@@filehook@if@file@replaced@@TF
               \__filehook_if_file_replaced:TF
 %    \end{macrocode}
-%    
+%
+%    \begin{macrocode}
+\cs_new_eq:NN \@expl@@@filehook@clear@replacement@flag@@
+              \__filehook_clear_replacement_flag:
+%    \end{macrocode}
+%
 %    \begin{macrocode}
 \cs_new_eq:NN \@expl@@@filehook@drop@extension@@N
               \__filehook_drop_extension:N
