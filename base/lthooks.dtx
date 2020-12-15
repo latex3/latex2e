@@ -4013,18 +4013,26 @@
 %   Providing a consistent interface is tricky, because packages can
 %   be loaded within packages, and some packages may not use
 %   \cs{SetDefaultHookLabel} to change the default label (in which
-%   case \cs{@currname} is used, if set).
+%   case \cs{@currname} is used).
 %
-%   To pull that off, we keep a stack that contains the default label
-%   for each level of input.  The bottom of the stack contains the
-%   default label for the |top-level|.  This stack should never go empty.
+%   To pull that one off, we keep a stack that contains the default
+%   label for each level of input.  The bottom of the stack contains the
+%   default label for the |top-level| (this stack should never go
+%   empty). If we're building the format, set the default label to be
+%   |top-level|:
+%    \begin{macrocode}
+\tl_gset:Nn \g_@@_hook_curr_name_tl { top-level }
+%    \end{macrocode}
 %
-%   But first, in case we're in \pkg{latexrelease} we push something on
+%   Then, in case we're in \pkg{latexrelease} we push something on
 %   the stack to support roll forward.  But in some rare cases,
 %   \pkg{latexrelease} may be loaded inside another package (notably
-%   \pkg{platexrelease}), so we'll dissect the \cs{@currnamestack},
-%   adding empty items to the stack (empty so that defaults can kick in
-%   if needed):
+%   \pkg{platexrelease}), so we'll first push the |top-level| entry:
+%    \begin{macrocode}
+%<latexrelease>\seq_gput_right:Nn \g_@@_name_stack_seq { top-level }
+%    \end{macrocode}
+%   then we dissect the \cs{@currnamestack}, adding \cs{@currname} to
+%   the stack:
 % \changes{v1.0f}{2020/11/24}{Support for roll forward (gh/434)}
 %    \begin{macrocode}
 %<latexrelease>\cs_set_protected:Npn \@@_tmp:w #1 #2 #3
@@ -4037,16 +4045,14 @@
 %<latexrelease>  \q_recursion_tail \q_recursion_tail
 %<latexrelease>  \q_recursion_tail \q_recursion_stop
 %    \end{macrocode}
-%
-%   Finally, \verb|top-level| is added to the stack for the document
-%   body.
+%   and finalle set the default label to be the \cs{@currname}:
 %    \begin{macrocode}
-\seq_gpush:Nn \g_@@_name_stack_seq { top-level }
+%<latexrelease>\tl_gset:Nx \g_@@_hook_curr_name_tl { \@currname }
 %    \end{macrocode}
 %
 %   Two commands keep track of the stack: when a file is input,
-%   \cs{@@_curr_name_push:n} pushes a (\cs{@currname} by default) label
-%   to the stack:
+%   \cs{@@_curr_name_push:n} pushes the current default label to the
+%   stack, and sets the new default label in one go:
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_curr_name_push:n #1
   { \exp_args:Nx \@@_curr_name_push_aux:n { \@@_make_name:n {#1} } }
@@ -4055,7 +4061,7 @@
     \tl_if_blank:nTF {#1}
       { \msg_error:nn { hooks } { no-default-label } }
       {
-        \seq_gpush:Nn \g_@@_name_stack_seq {#1}
+        \seq_gpush:NV \g_@@_name_stack_seq \g_@@_hook_curr_name_tl
         \tl_gset:Nn \g_@@_hook_curr_name_tl {#1}
       }
   }
@@ -4066,8 +4072,7 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_curr_name_pop:
   {
-    \seq_gpop:NN \g_@@_name_stack_seq \l_@@_return_tl
-    \seq_get:NNTF \g_@@_name_stack_seq \l_@@_return_tl
+    \seq_gpop:NNTF \g_@@_name_stack_seq \l_@@_return_tl
       { \tl_gset_eq:NN \g_@@_hook_curr_name_tl \l_@@_return_tl }
       {
         \msg_error:nnn { hooks } { should-not-happen }
@@ -4083,20 +4088,20 @@
 %   argument, and updates \cs{g_@@_hook_curr_name_tl} accordingly.
 %    \begin{macrocode}
 \NewDocumentCommand \SetDefaultHookLabel { m }
-  {
-    \seq_gpop:NN \g_@@_name_stack_seq \l_@@_return_tl
-    \@@_curr_name_push:n {#1}
-  }
+  { \tl_gset:Nx \g_@@_hook_curr_name_tl { \@@_make_name:n {#1} } }
 \NewDocumentCommand \DeclareDefaultHookLabel { m }
   {
     \msg_error:nn { hooks } { ddhl-deprecated }
     \SetDefaultHookLabel {#1}
   }
 %    \end{macrocode}
-%   \LaTeX's \cs{@currnamestack} holds data on all files \emph{but} the
-%   current one, but the current label stack holds \emph{all} files, so
-%   we need to look ahead to get the info we need.  \pkg{expl3} also
-%   requires the current file in \cs{@pushfilename}, so here we abuse
+%   The current label stack holds the labels for all files but the
+%   current one (more or less like \cs{@currnamestack}), and the current
+%   label token list, \cs{g_@@_hook_curr_name_tl}, holds the label for
+%   the current file.  However \cs{@pushfilename} happens before
+%   \cs{@currname} is set, so we need to look ahead to get the
+%   \cs{@currname} for the label.  \pkg{expl3} also requires the current
+%   file in \cs{@pushfilename}, so here we abuse
 %   \cs{@expl@push@filename@aux@@@@} to do \cs{@@_curr_name_push:n}.
 %    \begin{macrocode}
 \cs_gset_protected:Npn \@expl@push@filename@aux@@@@ #1#2#3
