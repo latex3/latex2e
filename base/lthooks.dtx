@@ -4054,7 +4054,7 @@
 \msg_new:nnn { hooks } { set-top-level }
   {
     You~cannot~change~the~default~label~#1~`top-level'.~Illegal \\
-    \use:nn { ~ } { ~ } \iow_char:N \\SetDefaultHookLabel{#2} \\
+    \use:nn { ~ } { ~ } \iow_char:N \\#2{#3} \\
     \msg_line_context:.
   }
 %    \end{macrocode}
@@ -4065,6 +4065,19 @@
     \iow_char:N \\DeclareDefaultHookLabel~is~deprecated.\\
     Use~\iow_char:N \\SetDefaultHookLabel~instead.\\ \\
     The~deprecated~name~will~be~removed~in~the~next~release.
+  }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\msg_new:nnn { hooks } { extra-pop-label }
+  {
+    Extra~\iow_char:N \\PopDefaultHookLabel. \\
+    This~command~will~be~ignored.
+  }
+\msg_new:nnn { hooks } { missing-pop-label }
+  {
+    Missing~\iow_char:N \\PopDefaultHookLabel. \\
+    The~label~`#1'~was~pushed~but~never~popped.~Something~is~wrong.
   }
 %    \end{macrocode}
 %
@@ -4120,6 +4133,7 @@
 % \begin{macro}{\DeclareDefaultHookLabel}
 % \begin{macro}{\@@_curr_name_push:n,\@@_curr_name_push_aux:n}
 % \begin{macro}{\@@_curr_name_pop:}
+% \begin{macro}{\@@_end_document_label_check:}
 %   The token list \cs{g_@@_hook_curr_name_tl} stores the name of the
 %   current package/file to be used as label for hooks.
 %   Providing a consistent interface is tricky, because packages can
@@ -4173,8 +4187,15 @@
     \tl_if_blank:nTF {#1}
       { \msg_error:nn { hooks } { no-default-label } }
       {
-        \seq_gpush:NV \g_@@_name_stack_seq \g_@@_hook_curr_name_tl
-        \tl_gset:Nn \g_@@_hook_curr_name_tl {#1}
+        \str_if_eq:nnTF {#1} { top-level }
+          {
+            \msg_error:nnnnn { hooks } { set-top-level }
+              { to } { PushDefaultHookLabel } {#1}
+          }
+          {
+            \seq_gpush:NV \g_@@_name_stack_seq \g_@@_hook_curr_name_tl
+            \tl_gset:Nn \g_@@_hook_curr_name_tl {#1}
+          }
       }
   }
 %    \end{macrocode}
@@ -4186,9 +4207,24 @@
   {
     \seq_gpop:NNTF \g_@@_name_stack_seq \l_@@_return_tl
       { \tl_gset_eq:NN \g_@@_hook_curr_name_tl \l_@@_return_tl }
+      { \msg_error:nn { hooks } { extra-pop-label } }
+  }
+%    \end{macrocode}
+%
+%   At the end of the document we want to check if there was no
+%   \cs{@@_curr_name_push:} without a matching \cs{@@_curr_name_pop:}
+%   (not a critical error, but it might indicate that something else is
+%   not quite right):
+%    \begin{macrocode}
+\hook_gput_code:nnn { enddocument/end } { kernel/hooks }
+  { \@@_end_document_label_check: }
+\cs_new_protected:Npn \@@_end_document_label_check:
+  {
+    \seq_gpop:NNT \g_@@_name_stack_seq \l_@@_return_tl
       {
-        \msg_error:nnn { hooks } { should-not-happen }
-          { Tried~to~pop~from~an~empty~default~label~stack. }
+        \msg_error:nnx { hooks } { missing-pop-label }
+          { \l_@@_return_tl }
+        \@@_end_document_label_check:
       }
   }
 %    \end{macrocode}
@@ -4202,7 +4238,10 @@
 \NewDocumentCommand \SetDefaultHookLabel { m }
   {
     \seq_if_empty:NTF \g_@@_name_stack_seq
-      { \msg_error:nnnn { hooks } { set-top-level } { for } {#1} }
+      {
+        \msg_error:nnnnn { hooks } { set-top-level }
+          { for } { SetDefaultHookLabel } {#1}
+      }
       { \exp_args:Nx \@@_set_default_label:n { \@@_make_name:n {#1} } }
   }
 \cs_new_protected:Npn \@@_set_default_label:n #1
@@ -4249,6 +4288,7 @@
     #1 #2 {#3}
   }
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 % \end{macro}
