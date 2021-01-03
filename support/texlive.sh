@@ -61,6 +61,8 @@ tlmgr install   \
 tlmgr install   \
   bidi          \
   dinbrief      \
+  pgfmorepages  \
+  pgf           \
   filehook
 
 # Additional support for typesetting
