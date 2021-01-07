@@ -514,7 +514,6 @@
 % \begin{macro}{
 %     \@@_file_parse_full_name:nN,
 %     \@@_full_name:nn,
-%     \@@_set_curr_file_assign:nnnNN
 %   }
 %   A utility macro to trigger \pkg{expl3}'s file-parsing and lookup,
 %   and return a normalized representation of the file name.  If the
@@ -711,14 +710,33 @@
 %<latexrelease>          {\InputIfFileExists}{Hook management (files)}%
 %<*2ekernel|latexrelease>
 %    \end{macrocode}
-%    
+%
 %    \begin{macrocode}
 \let\InputIfFileExists\@undefined
 \DeclareRobustCommand \InputIfFileExists[2]{%
   \IfFileExists{#1}%
     {%
-     \@expl@@@filehook@file@push@@
-     \@filehook@set@CurrentFile
+      \@expl@@@filehook@file@push@@
+      \@filehook@set@CurrentFile
+%    \end{macrocode}
+%    We pre-expand \cs{@filef@und} so that in case another file is
+%    loaded in the true branch of \cs{InputIfFileExists}, these don't
+%    change their value meanwhile. This isn't a worry with
+%    \cs[no-index]{CurrentFile...} because they are kept in a stack.
+%
+% \changes{v1.0d}{2020/11/20}
+%   {Move loading to \cs{@input@file@exists@with@hooks} and expand
+%    \cs{@filef@und} to avoid getting the wrong file name in the case of
+%    a substitution.}
+%    \begin{macrocode}
+      \expandafter\@swaptwoargs\expandafter
+        {\expandafter\@input@file@exists@with@hooks
+          \expandafter{\@filef@und}}%
+        {#2}%
+      \@expl@@@filehook@file@pop@@
+    }%
+}
+\def\@input@file@exists@with@hooks#1{%
 %    \end{macrocode}
 %    If the file exists then \cs{CurrentFile} holds its name. But we
 %    can't rely on that still being true after the file has been
@@ -740,32 +758,16 @@
 %    the file name and extension are returned so that file hooks can
 %    refer to the file by their name only.  The path to the file is
 %    returned in \cs{CurrentFilePath}.
+%    \changes{v1.0e}{2021/01/07}{Restore \cs[no-index]{CurrentFile(Path)(Used)}
+%      after the input (gh/464)}
 %    \begin{macrocode}
-      \edef\reserved@a{%
-        \@expl@@@filehook@file@pop@assign@@nnnn
-          {\CurrentFilePathUsed}%
-          {\CurrentFileUsed}%
-          {\CurrentFilePath}%
-          {\CurrentFile}%
-%    \end{macrocode}
-%
-%    We pre-expand \cs{@filef@und} so that in case another file is
-%    loaded in the true branch of \cs{InputIfFileExists}, these don't
-%    change their value meanwhile. This isn't a worry with
-%    \cs[no-index]{CurrentFile...} because they are kept in a stack.
-%
-% \changes{v1.0d}{2020/11/20}
-%   {Move loading to \cs{@input@file@exists@with@hooks} and expand
-%    \cs{@filef@und} to avoid getting the wrong file name in the case of
-%    a substitution.}
-%    \begin{macrocode}
-        \noexpand\@input@file@exists@with@hooks{\@filef@und}}%
-      \expandafter\@swaptwoargs\expandafter
-        {\reserved@a}%
-        {#2}%
-      \@expl@@@filehook@file@pop@@
-    }%
-}
+  \edef\reserved@a{%
+    \@expl@@@filehook@file@pop@assign@@nnnn
+      {\CurrentFilePathUsed}%
+      {\CurrentFileUsed}%
+      {\CurrentFilePath}%
+      {\CurrentFile}}%
+  \expandafter\@swaptwoargs\expandafter{\reserved@a}%
 %    \end{macrocode}
 %
 % Before adding to the file list we need to make all (letter) characters
@@ -787,18 +789,19 @@
 % approach (grepping the packages in \TeX{} Live didn't bring up any
 % obvious candidate for breaking with this catcode change).
 %    \begin{macrocode}
-\def\@input@file@exists@with@hooks#1{%
-  \edef\reserved@a{\unqu@tefilef@und#1\@nil}%
-  \@addtofilelist{\string@makeletter\reserved@a}%
-  \UseHook{file/before}%
+    {\edef\reserved@a{\unqu@tefilef@und#1\@nil}%
+     \@addtofilelist{\string@makeletter\reserved@a}%
+     \UseHook{file/before}%
 %    \end{macrocode}
 %    The current file name is available in \cs{CurrentFile} so we use
 %    that in the specific hook.
 %    \begin{macrocode}
-  \UseHook{file/before/\CurrentFile}%
-  \@@input #1% <- trailing space comes from \@filef@und
+     \UseHook{file/before/\CurrentFile}%
+     \@@input #1% <- trailing space comes from \@filef@und
+    }%
 %    \end{macrocode}
-%    And it is restored here so we can use it once more.
+%    And here, \cs{CurrentFile} is restored
+%    (by \cs{@expl@@@filehook@file@pop@assign@@nnnn}) so we can use it once more.
 %    \begin{macrocode}
   \UseHook{file/after/\CurrentFile}%
   \UseHook{file/after}}
