@@ -135,7 +135,7 @@
 \cs_new_protected:Npn \__codedoc_trim_right:Nn #1#2
   {
     \cs_set:Npn \__codedoc_tmp:w ##1 #2 ##2 \q_stop { \exp_not:n {##1} }
-    \tl_set:Nx #1 { \exp_after:wN \__codedoc_tmp:w #1 #2 \q_stop }
+    \__kernel_tl_set:Nx #1 { \exp_after:wN \__codedoc_tmp:w #1 #2 \q_stop }
   }
 \cs_generate_variant:Nn \__codedoc_trim_right:Nn { No }
 \prg_new_protected_conditional:Npnn \__codedoc_str_if_begin:nn #1#2 { TF , T , F }
@@ -270,14 +270,14 @@
     \__codedoc_if_almost_str:nTF {#1}
       {
         \__codedoc_key_get_base_TF:nN {#1} \l__codedoc_tmpa_tl
-        \tl_set:Nx #2
+        \__kernel_tl_set:Nx #2
           { \__codedoc_split_function_do:on \l__codedoc_tmpa_tl { \__codedoc_base_form_aux:nnN } }
       }
       { \tl_set:Nn #2 {#1} }
   }
 \cs_new:Npx \__codedoc_key_get_base_TF:nN #1#2
   {
-    \tl_set:Nx #2 { \exp_not:N \tl_to_str:n {#1} }
+    \__kernel_tl_set:Nx #2 { \exp_not:N \tl_to_str:n {#1} }
     \tl_if_in:NoF #2 { \tl_to_str:n {:} }
       { \exp_not:N \prg_break: }
     \tl_if_in:onT { #2 z } { \tl_to_str:n {TF} z }
@@ -709,7 +709,7 @@
         \verbatim@font
         \__codedoc_if_almost_str:VT \l__codedoc_cmd_tl
           {
-            \tl_set:Nx \l__codedoc_cmd_tl { \tl_to_str:N \l__codedoc_cmd_tl }
+            \__kernel_tl_set:Nx \l__codedoc_cmd_tl { \tl_to_str:N \l__codedoc_cmd_tl }
             \bool_if:NT \g__codedoc_cs_break_bool
               {
                 \regex_replace_all:nnN
@@ -726,14 +726,14 @@
       {
         \quark_if_no_value:NF \l__codedoc_cmd_index_tl
           {
-            \tl_set:Nx \l__codedoc_cmd_tl
+            \__kernel_tl_set:Nx \l__codedoc_cmd_tl
               { \c_backslash_str \exp_not:o { \l__codedoc_cmd_index_tl } }
           }
 
         \exp_args:No \__codedoc_key_get:n { \l__codedoc_cmd_tl }
         \quark_if_no_value:NF \l__codedoc_cmd_module_tl
           {
-            \tl_set:Nx \l__codedoc_index_module_tl
+            \__kernel_tl_set:Nx \l__codedoc_index_module_tl
               { \tl_to_str:N \l__codedoc_cmd_module_tl }
           }
         \__codedoc_special_index_module:ooonN
@@ -810,7 +810,7 @@
   }
 \cs_new_protected:Npn \__codedoc_get_hyper_target:nN #1#2
   {
-    \tl_set:Nx #2 { \tl_to_str:n {#1} }
+    \__kernel_tl_set:Nx #2 { \tl_to_str:n {#1} }
     \tl_replace_all:Nxn #2 { \c_underscore_str } { / }
     \tl_remove_all:Nx   #2 { \c_backslash_str }
     \tl_put_left:Nn #2 { doc/function// }
@@ -818,7 +818,7 @@
 \cs_generate_variant:Nn \__codedoc_get_hyper_target:nN { o , x }
 \cs_new_protected:Npn \__codedoc_names_get_seq:nN #1#2
   {
-    \tl_set:Nx \l__codedoc_tmpa_tl { \tl_to_str:n {#1} }
+    \__kernel_tl_set:Nx \l__codedoc_tmpa_tl { \tl_to_str:n {#1} }
     \bool_if:NTF \l__codedoc_names_verb_bool
       {
         \seq_clear:N #2
@@ -1417,7 +1417,7 @@
           \l__codedoc_macro_do_not_index_tl
         \exp_args:NNV \seq_set_from_clist:Nn
           \l__codedoc_tmpa_seq \l__codedoc_macro_do_not_index_tl
-        \tl_set:Nx \l__codedoc_macro_do_not_index_tl
+        \__kernel_tl_set:Nx \l__codedoc_macro_do_not_index_tl
           { \seq_use:Nn \l__codedoc_tmpa_seq { , } }
         \exp_args:NV \DoNotIndex \l__codedoc_macro_do_not_index_tl
       }
@@ -2207,7 +2207,7 @@
   }
 \cs_new_protected:Npn \__codedoc_special_index_set:Nn #1#2
   {
-    \tl_set:Nx #1 { \tl_to_str:n {#2} }
+    \__kernel_tl_set:Nx #1 { \tl_to_str:n {#2} }
     \__codedoc_if_almost_str:nTF {#2}
       {
         \tl_replace_all:Non #1 { \tl_to_str:n { __ } }
@@ -2225,7 +2225,7 @@
                 \token_to_str:N \verb * \verbatimchar
               }
           }
-        \tl_set:Nx #1
+        \__kernel_tl_set:Nx #1
           {
             \token_to_str:N \verb * \verbatimchar
             #1 \verbatimchar
@@ -2250,7 +2250,7 @@
 \cs_new_protected:Npn \__codedoc_key_get:n #1
   {
     \__codedoc_key_get_base:nN {#1} \l__codedoc_index_macro_tl
-    \tl_set:Nx \l__codedoc_index_key_tl
+    \__kernel_tl_set:Nx \l__codedoc_index_key_tl
       { \tl_to_str:N \l__codedoc_index_macro_tl }
     \tl_clear:N \l__codedoc_index_module_tl
     \tl_if_in:NoTF \l__codedoc_index_key_tl { \tl_to_str:n { __ } }
@@ -2273,14 +2273,14 @@
   }
 \cs_new_protected:Npn \__codedoc_key_pop:
   {
-    \tl_set:Nx \l__codedoc_index_key_tl
+    \__kernel_tl_set:Nx \l__codedoc_index_key_tl
       { \tl_tail:N \l__codedoc_index_key_tl }
   }
 \cs_new_protected:Npn \__codedoc_key_trim_module:n #1
   {
     \cs_set:Npn \__codedoc_tmpa:w ##1 #1 ##2 \q_stop
       { \exp_not:n {##1} }
-    \tl_set:Nx \l__codedoc_index_module_tl
+    \__kernel_tl_set:Nx \l__codedoc_index_module_tl
       { \exp_after:wN \__codedoc_tmpa:w \l__codedoc_index_module_tl #1 \q_stop }
   }
 \cs_new_protected:Npn \__codedoc_key_drop_underscores:
@@ -2314,7 +2314,7 @@
           {
             \seq_set_split:NoV \l__codedoc_tmpa_seq
               { \token_to_str:N _ } \l__codedoc_index_key_tl
-            \tl_set:Nx \l__codedoc_index_module_tl
+            \__kernel_tl_set:Nx \l__codedoc_index_module_tl
               {
                 \int_case:nnF { \seq_count:N \l__codedoc_tmpa_seq }
                   {
