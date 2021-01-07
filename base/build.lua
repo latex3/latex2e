@@ -126,6 +126,7 @@ dynamicfiles = {"*.tst"}
 unpackfiles     = {"unpack.ins"}
 unpacksuppfiles =
   {
+    "glyphtounicode.tex",
     "hyphen.cfg",
     "UShyphen.tex",
     "ot1lmr.fd",
