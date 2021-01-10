@@ -78,6 +78,7 @@ tlmgr install  \
   bookmark     \
   booktabs     \
   cbfonts      \
+  cm-super     \
   colortbl     \
   csquotes     \
   dvips        \
