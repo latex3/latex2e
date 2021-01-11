@@ -122,6 +122,17 @@
 %    hooks, e.g., only \hook{shipout/firstpage} and
 %    \hook{shipout/lastpage} are executed and the total shipout
 %    counters are incremented.
+%
+%    The command doesn't use \cs{ShipoutBox} but its own private box
+%    register so that it can be used inside of shipout hooks to do
+%    some extra shipouts. It does have access to \cs{Shipoutbox}
+%    though if it is used in \hook{shipout/before} can use its
+%    content.
+%
+%    It is safe to use it in \hook{shipout/before} or
+%    \hook{shipout/after} but not necessarily in the other
+%    \hook{shipout/...} hooks as they are intended for special
+%    processing.
 % \end{function}
 %
 %  \begin{variable}{\ShipoutBox,\l_shipout_box}
@@ -161,6 +172,10 @@
 %       \cs{ShipoutBox} / \cs{l_shipout_box}).
 %       It can be used to alter that box content or to discard it
 %       completely (see \cs{DiscardShipoutBox} below).
+%
+%       You can use \cs{RawShipout} inside this hook for special use
+%       cases. It can make use of \cs{ShipoutBox} (which doesn't yet
+%       include the background and foreground material).
 %
 %    \item[\hook{shipout/background}]
 %
@@ -203,6 +218,8 @@
 %
 %       ^^A \fmi{not sure it has to be that restrictive.}
 %
+%       This hook is added to the very first page regardless of how it
+%       is shipped out (i.e., with \cs{shipout} or \cs{RawShipout}).
 %
 %    \item[\hook{shipout/lastpage}]
 %
@@ -210,6 +227,7 @@
 %       the output file. It is only executed on the very last page of
 %       the output file ---
 %       or rather on the page that \LaTeX{} believes is the last one.
+%       Again it is executed regardless of the shipout method.
 %
 %       It may not be possible for \LaTeX{} to correctly determine
 %       which page is the last one without several reruns. If this
@@ -221,6 +239,12 @@
 %
 %       This hook is executed after a shipout has happened. If the
 %       shipout box is discarded this hook is not looked at.
+%
+%       You can use \cs{RawShipout} inside this hook for special use
+%       cases and the main \cs{ShipoutBox} is still available at this
+%       point (but in contrast to \hook{shipout/before} it now
+%       includes the background and foreground material).
+%
 %
 %    \end{description}
 %  \end{variable}\footnotetext{In
@@ -636,6 +660,12 @@
 %  \end{macro}
 %
 %
+%  \begin{macro}{\l_@@_raw_box}
+%    The \cs{RawShipout} gets it own box but it is internal as there is no hook manipulation for it.
+%    \begin{macrocode}
+\box_new:N  \l_@@_raw_box
+%    \end{macrocode}
+%  \end{macro}
 %
 %
 %  \begin{macro}{\@@_execute:}
@@ -684,13 +714,15 @@
 %  \end{macro}
 %
 %
-%  \begin{macro}{\@@_execute_cont}
+%  \begin{macro}{\@@_execute_cont:}
 %    This does the actual shipout running several hooks as part of it.
-%    The code for them is passed as argument \verb=#1= and \verb=#2=
-%    to \cs{@@_execute_raw_cont:nn}.
+%    The code for them is passed as argument \verb=#2= to \verb=#4=
+%    to \cs{@@_execute_main_cont:Nnnn}; the first argument is the box
+%    to be shipped out.
 %    \begin{macrocode}
 \cs_new:Npn \@@_execute_cont: {
-  \@@_execute_raw_cont:nnn
+  \@@_execute_main_cont:Nnnn
+     \l_shipout_box
      { \hook_use:n {shipout/before} }
      { \hook_if_empty:nF {shipout/foreground}
          { \@@_add_foreground_picture:n
@@ -723,7 +755,7 @@
 %  \end{macro}
 %
 %
-%  \begin{macro}{\@@_execute_raw_cont:nnn}
+%  \begin{macro}{\@@_execute_main_cont:Nnnn}
 %    When we have reached this point the shipout box has been
 %    processed and is available in \cs{l_shipout_box} and ready for
 %    real ship out (unless it gets discarded during the process).
@@ -745,8 +777,8 @@
 %    case we don't reset the deadcyles, that would be up to the OR
 %    processing logic to do.}
 %    \begin{macrocode}
-\cs_new:Npn \@@_execute_raw_cont:nnn #1#2#3 {
-  \box_if_empty:NTF \l_shipout_box
+\cs_new:Npn \@@_execute_main_cont:Nnnn #1#2#3#4 {
+  \box_if_empty:NTF #1
     { \PackageWarning{ltshipout}{Ignoring~ void~ shipout~ box} }
     {
 %    \end{macrocode}
@@ -764,12 +796,12 @@
 %    necessary as the code could access them via \cs{box_ht:N}, etc.,
 %    but it is perhaps convenient.}
 %    \begin{macrocode}
-      \@@_get_box_size:N \l_shipout_box
+      \@@_get_box_size:N #1
 %    \end{macrocode}
 %    Then we execute the \hook{shipout/before} hook (or nothing in
 %    case of \cs{RawShipout}).
 %    \begin{macrocode}
-      #1
+      #2
 %    \end{macrocode}
 %    In \cs{g_shipout_totalpages_int} we count all shipout attempts so
 %    we increment that counter already here (the other one is
@@ -802,7 +834,7 @@
 %    needed? Or the resetting of \cs{protect} to its kernel value?}
 %    \begin{macrocode}
 %          \group_begin:
-%            \box_set_eq_drop:NN \l_shipout_box \l_shipout_box
+%            \box_set_eq_drop:NN #1 #1
 %          \group_end:
 %          \cs_set_eq:NN \protect \exp_not:N
         }
@@ -813,7 +845,7 @@
 %    once more but this time make it a warning, because the best
 %    practice way is to use the request mechanism.
 %    \begin{macrocode}
-        { \box_if_empty:NTF \l_shipout_box
+        { \box_if_empty:NTF #1
             { \PackageWarning{ltshipout}{
                 Shipout~ box~ was~ voided~ by~ hook,\MessageBreak
                 ignoring~ shipout~ box  }
@@ -842,12 +874,12 @@
 %    inside that environment.
 %    
 %    \begin{macrocode}
-              \@@_get_box_size:N \l_shipout_box
+              \@@_get_box_size:N #1
 %    \end{macrocode}
 %    Run the hooks for background and foreground (or nothing if this
 %    is called by \cs{RawShipout}.
 %    \begin{macrocode}
-              #2
+              #3
 %    \end{macrocode}
 %    We then run \cs{@@_execute_firstpage_hook:} that adds
 %    the content of the hook \hook{shipout/firstpage} to the
@@ -880,11 +912,14 @@
 %    to the appropriate definition for that case.
 %    \begin{macrocode}
               \cs_set_eq:NN \protect \exp_not:N
-              \tex_shipout:D \box_use:N \l_shipout_box
+              \tex_shipout:D \box_use:N #1
 %    \end{macrocode}
-%    
+%    The \hook{shipout/after} hook (if exected in \verb=#4=) needs to
+%    run with \cs{protect}ed commands again being executedas that hook
+%    will ``typeset'' material added at the top of the next page.
 %    \begin{macrocode}
-              #3
+              \set@typeset@protect
+              #4
             }
         }
 %    \end{macrocode}
@@ -907,14 +942,14 @@
 %    This implements the ``raw'' shipout which bypasses the before,
 %    foreground, background and after hooks. It follows the same pattern than
 %    \cs{_@@_execute_raw:} except that it finally calls
-%    \cs{_@@_execute_raw_cont:nnn} with three empty arguments.
+%    \cs{_@@_execute_main_cont:Nnnn} with three empty arguments.
 %    instead of the hook code.
 %    \begin{macrocode}
 \cs_set_protected:Npn \@@_execute_raw: {
   \tl_set:Nx \l_@@_group_level_tl
      { \int_value:w \tex_currentgrouplevel:D }
   \tex_afterassignment:D \@@_execute_test_level_raw:
-  \tex_setbox:D \l_shipout_box
+  \tex_setbox:D \l_@@_raw_box
 }
 %    \end{macrocode}
 %    
@@ -928,7 +963,7 @@
 %    
 %    \begin{macrocode}
 \cs_new:Npn \@@_execute_nohooks_cont: {
-  \@@_execute_raw_cont:nnn{}{}{}
+  \@@_execute_main_cont:Nnnn \l_@@_raw_box {}{}{} 
 }  
 %    \end{macrocode}
 %  \end{macro}
