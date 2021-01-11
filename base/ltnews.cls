@@ -1,7 +1,7 @@
 % \iffalse meta-comment
 %
 % Copyright 1993-2020
-% The LaTeX3 Project and any individual authors listed elsewhere
+% The LaTeX Project and any individual authors listed elsewhere
 % in this file.
 %
 % This file is part of the LaTeX base system.
@@ -35,7 +35,7 @@
 % with LaTeX.  The changes log is at the end of the file.
 
 % Copyright 1994-2004
-% Alan Jeffrey and the LaTeX3 project.
+% Alan Jeffrey and the LaTeX Project.
 
 % This is a LaTeX2e document class.
 
@@ -437,7 +437,7 @@
 \newcommand{\indicia}{\renewcommand{\@indicia}}
 \newcommand{\@indicia}{%
    \LaTeXNews, and the \LaTeX{} software,
-   are brought to you by the \LaTeX3 Project Team;
+   are brought to you by the \LaTeX\ Project Team;
    Copyright \@year, all rights reserved.
 }
 
