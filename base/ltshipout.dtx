@@ -32,8 +32,8 @@
 %%% From File: ltshipout.dtx
 %
 %    \begin{macrocode}
-\providecommand\ltshipoutversion{v1.0f}
-\providecommand\ltshipoutdate{2021/01/11}
+\providecommand\ltshipoutversion{v1.0g}
+\providecommand\ltshipoutdate{2021/01/12}
 %    \end{macrocode}
 %
 %<*driver>
@@ -883,17 +883,12 @@
 %    \begin{macrocode}
               \@@_get_box_size:N #1
 %    \end{macrocode}
-%    Run the hooks for background and foreground (or nothing if this
-%    is called by \cs{RawShipout}.
+%    Run the hooks for background and foreground or, if this
+%    is called by \cs{RawShipout}, copy the box \cs{l_@@_raw_box} to
+%    \cs{l_shipout_box} so that firstpage and lastpage material gets
+%    added if necessary (that is always done to \cs{l_shipout_box}.
 %    \begin{macrocode}
               #3
-%    \end{macrocode}
-%    We then run \cs{@@_execute_firstpage_hook:} that adds
-%    the content of the hook \hook{shipout/firstpage} to the
-%    start of the first page (if non-empty). It is then redefined to
-%    do nothing on later pages.
-%    \begin{macrocode}
-              \@@_execute_firstpage_hook:
 %    \end{macrocode}
 %    Then we check if we have to add the \hook{shipout/lastpage} hook
 %    or the corresponding kernel hook
@@ -913,16 +908,31 @@
                     \bool_gset_true:N \g_@@_lastpage_handled_bool
                 }
 %    \end{macrocode}
+%    We then run \cs{@@_add_firstpage_hook:} that adds
+%    the content of the hook \hook{shipout/firstpage} to the
+%    start of the first page (if non-empty). It is then redefined to
+%    do nothing on later pages.
+%    \begin{macrocode}
+              \@@_add_firstpage_hook:
+%    \end{macrocode}
 %    Finally we run the actual \TeX{} primitive for shipout. As that will
 %    expand delayed \cs{write} statements inside the page in which
 %    protected commands should not expand we first change \cs{protect}
 %    to the appropriate definition for that case.
 %    \begin{macrocode}
               \cs_set_eq:NN \protect \exp_not:N
-              \tex_shipout:D \box_use:N #1
+              \tex_shipout:D \box_use:N \l_shipout_box
 %    \end{macrocode}
-%    The \hook{shipout/after} hook (if exected in \verb=#4=) needs to
-%    run with \cs{protect}ed commands again being executedas that hook
+%    The \cs{l_shipout_box} may contain the firstpage material if this
+%    was the very first shipout. That makes it unsuitable for reuse in
+%    another shipout, so as a safety measure the next command resets
+%    \cs{l_shipout_box} to its earlier state if that is necessary. On
+%    later pages this is then a no-op.
+%    \begin{macrocode}
+              \@@_drop_firstpage_hook:
+%    \end{macrocode}
+%    The \hook{shipout/after} hook (if in \verb=#4=) needs to run with
+%    \cs{protect}ed commands again being executed, because that hook
 %    will ``typeset'' material added at the top of the next page.
 %    \begin{macrocode}
               \set@typeset@protect
@@ -972,8 +982,9 @@
 %    \begin{macrocode}
 \cs_new:Npn \@@_execute_nohooks_cont: {
   \@@_execute_main_cont:Nnnn \l_@@_raw_box
-     {} { \@@_debug:n{\typeout{Doing~ raw~ shipout~ ...}} } {} 
-}  
+     {} { \@@_debug:n{ \typeout{Doing~ raw~ shipout~ ...} }
+          \box_set_eq:NN \l_shipout_box \l_@@_raw_box } {} 
+} 
 %    \end{macrocode}
 %  \end{macro}
 
@@ -1024,32 +1035,54 @@
 %  \end{macro}
 %
 %
-%  \begin{macro}{\@@_execute_firstpage_hook: }
+%  \begin{macro}{\@@_add_firstpage_hook:,\@@_drop_firstpage_hook}
+%
 %    This command adds any specials into a box and adds that to the
 %    very beginning of the first box shipped out. After that we
 %    redefine it to do nothing on later pages.
 %    \begin{macrocode}
-\cs_new:Npn \@@_execute_firstpage_hook: {
+\cs_new:Npn \@@_add_firstpage_hook: {
 %    \end{macrocode}
 %    Adding something to the beginning means adding it to the
-%    background as that  layer is done first in the output. Of course
+%    background as that layer is done first in the output. Of course
 %    that is only needed if the hook actually contains anything.
 %    \begin{macrocode}
   \hook_if_empty:nF {shipout/firstpage}
-       { \@@_add_background_box:n { \UseHook{shipout/firstpage} } }
+       {
+%    \end{macrocode}
+%    First we make a copy of the \cs{l_shipout_box} that we can
+%    restore it later on.
+%    \begin{macrocode}
+         \box_set_eq:NN \l_@@_raw_box \l_shipout_box
+         \@@_add_background_box:n { \UseHook{shipout/firstpage} }
+%    \end{macrocode}
+%    After the actual shipout \cs{@@_drop_firstpage_hook:} is
+%    run. Normally that does nothing but now it is used (once) to
+%    restore the earlier content of \cs{l_shipout_box} and then
+%    redefines itself again to do nothing.
+%    \begin{macrocode}
+         \cs_gset:Npn \@@_drop_firstpage_hook: {
+           \box_set_eq:NN \l_shipout_box \l_@@_raw_box
+           \cs_gset_eq:NN \@@_drop_firstpage_hook:  \prg_do_nothing:
+         }
+       }
 %    \end{macrocode}
 %    Once we are here we change the definition to do nothing next time
 %    and we also change the command used to implement \cs{AtBeginDvi}
-%    to become a warning and not  add further material to a hook that
+%    to become a warning and not add further material to a hook that
 %    is never used again.
 %    \begin{macrocode}
-  \cs_gset_eq:NN \@@_execute_firstpage_hook: \prg_do_nothing:
+  \cs_gset_eq:NN \@@_add_firstpage_hook: \prg_do_nothing:
   \cs_gset:Npn \@@_add_firstpage_material:Nn ##1 ##2 {
     \@latex@warning{
         First~ page~ is~ already~ shipped~ out,~ ignoring\MessageBreak
         \string##1 }
   }
 }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_drop_firstpage_hook: \prg_do_nothing:
 %    \end{macrocode}
 %  \end{macro}
 %
