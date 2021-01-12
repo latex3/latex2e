@@ -1,7 +1,7 @@
 % \iffalse meta-comment
 %
 % Copyright 1993-2019
-% The LaTeX3 Project and any individual authors listed elsewhere
+% The LaTeX Project and any individual authors listed elsewhere
 % in this file.
 %
 % This file is part of the LaTeX base system.
@@ -34,7 +34,7 @@
 % and `LaTeX2e for class and package writers'.  The changes log is at
 % the end of the file.
 
-% Copyright 1994 1999 Alan Jeffrey and the LaTeX3 project.
+% Copyright 1994-1999 Alan Jeffrey and the LaTeX Project.
 
 % This is a LaTeX2e document class.
 
