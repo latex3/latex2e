@@ -2,7 +2,7 @@
 % This class is buggy and needs fixing
 
 \ProvidesClass{source2edoc}
-              [2020/12/02 v0.2 Quick hack to typeset source2.tex
+              [2021/01/14 v0.2b Quick hack to typeset source2.tex
                (not usable for anything else and buggy -- will vanish again)!]
 
 \LoadClass{l3doc}
@@ -106,6 +106,31 @@
     \fi
     \cs_set_eq:NN \@auxout \@mainaux
   }
+
+
+% change the setup here: we have a lot of long names so better run raggeded
+  
+\cs_set_protected:Npn \__codedoc_macro_end_style:n #1
+  {
+    \nobreak \noindent
+    { \raggedright\hangindent1pc \footnotesize ( \emph{#1} ) \par }
+  }
+
+  
+% next two declarations should move to l3doc.cls in the l3kernel eventually
+% they should be ``new'' not ``set'' but to avoid getting in timing issues
+% when they will be officially defined we use ``set'' here
+  
+\cs_set_eq:NN \__codedoc_saved_detect_internals:N \__codedoc_detect_internals:N
+
+% maybe this change should be local so that it automatically reverts on \verb=\end{macro}=
+% without the need to explicitly turn it on again.
+
+\cs_new_protected:Npn \InternalDetectionOff
+  { \cs_gset_eq:NN \__codedoc_detect_internals:N \use_none:n }
+\cs_new_protected:Npn \InternalDetectionOn
+  { \cs_gset_eq:NN \__codedoc_detect_internals:N \__codedoc_saved_detect_internals:N }
+  
 \ExplSyntaxOff
 
 \def\partname{File}
@@ -257,7 +282,7 @@ Bug reports can be opened (category \texttt{#1}) at\\%
            {}
 
 
-%\errorstopmode
+\errorstopmode
 \batchmode           
-           
+
 \endinput
