@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %%
-%% File: ltshipout.dtx (C) Copyright 2020 Frank Mittelbach, LaTeX Team
+%% File: ltshipout.dtx (C) Copyright 2020,2021 Frank Mittelbach, LaTeX Team
 %%
 %
 % This file is part of the LaTeX base system.
@@ -31,8 +31,8 @@
 %%% From File: ltshipout.dtx
 %
 %    \begin{macrocode}
-\providecommand\ltshipoutversion{v1.0c}
-\providecommand\ltshipoutdate{2020/11/03}
+\providecommand\ltshipoutversion{v1.0d}
+\providecommand\ltshipoutdate{2020/12/06}
 %    \end{macrocode}
 %
 %<*driver>
@@ -751,7 +751,13 @@
               \hook_if_empty:nF {shipout/foreground}
                    { \@@_add_foreground_picture:n
                      { \hook_use:n {shipout/foreground} } }
-              \hook_if_empty:nF {shipout/background}
+%    \end{macrocode}
+%    If there is no user hook, there might still code in the kernel hook.
+% \changes{v1.0d}{2020/11/23}{Check for both kernel and user hook (gh/431)}
+%    \begin{macrocode}
+              \bool_lazy_and:nnF
+                   { \hook_if_empty_p:n {shipout/background} }
+                   { \tl_if_empty_p:N \@kernel@before@shipout@background }
                    { \@@_add_background_picture:n
                      { \@kernel@before@shipout@background
                        \hook_use:n {shipout/background} } }
@@ -764,11 +770,15 @@
               \@@_execute_firstpage_hook:
 %    \end{macrocode}
 %    The we check if we have to add the \hook{shipout/lastpage} hook
+%    or the corresponding kernel hook
 %    because we have reached the last page. This test will be false for
 %    all but one (and hopefully the correct) page.
+% \changes{v1.0d}{2020/11/23}{Check for both kernel and user hook (gh/431)}
 %    \begin{macrocode}
               \int_compare:nNnT \@abspage@last = \g_shipout_readonly_int
-                { \hook_if_empty:nF {shipout/lastpage}
+                { \bool_lazy_and:nnF
+                    { \hook_if_empty_p:n {shipout/lastpage} }
+                    { \tl_if_empty_p:N \@kernel@after@shipout@lastpage }
                     { \@@_debug:n { \typeout{Executing~ lastpage~ hook~
                           on~ page~ \int_use:N \g_shipout_readonly_int }        }
                       \_@@_add_foreground_box:n { \UseHook{shipout/lastpage}
@@ -1235,7 +1245,7 @@
 %
 %  \begin{macro}{\g_shipout_totalpages_int,\c@totalpages}
 %    We count every shipout attempt (even those that are discarded) in
-%    tis counter. It is not used in the code but may get used in user
+%    this counter. It is not used in the code but may get used in user
 %    code.
 %    \begin{macrocode}
 \int_new:N \g_shipout_totalpages_int
@@ -1428,9 +1438,11 @@
 %
 %
 %  \begin{macro}{\AtBeginDvi}
-%    
+%    If we roll forward from an earlier kernel \cs{AtBeginDvi} is
+%    defined so we better not use \cs{cs_new_protected:Npn} here.
+% \changes{v1.0d}{2020/11/24}{Support for roll forward (gh/434)}
 %    \begin{macrocode}
-\cs_new_protected:Npn \AtBeginDvi {\@@_add_firstpage_material:Nn \AtBeginDvi}
+\cs_set_protected:Npn \AtBeginDvi {\@@_add_firstpage_material:Nn \AtBeginDvi}
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -1500,7 +1512,17 @@
 %    \begin{macrocode}
 %<latexrelease>\IncludeInRelease{0000/00/00}%
 %<latexrelease>                 {\shipout}{Hook management (shipout)}%
-%<latexrelease>\expandafter\let\expandafter\shipout\csname tex_shipout:D\endcsname
+%<latexrelease>
+%    \end{macrocode}
+%    If we roll forward then \cs{tex\_shipout:D} may not be defined in
+%    which case \cs{shipout} does have it original definition and so
+%    we must not \cs{let} it to something else which is \cs{relax}! 
+% \changes{v1.0d}{2020/11/24}{Support for roll forward (gh/434)}
+%    \begin{macrocode}
+%<latexrelease>\ifcsname tex_shipout:D\endcsname
+%<latexrelease>\expandafter\let\expandafter\shipout
+%<latexrelease>                \csname tex_shipout:D\endcsname
+%<latexrelease>\fi
 %<latexrelease>
 %<latexrelease>\let \ShipoutBox\@undefined
 %<latexrelease>\let \ReadonlyShipoutCounter \@undefined
@@ -1535,7 +1557,7 @@
 %    \end{macrocode}
 %    We do not undo a substitution when rolling back. As the file
 %    support gets undone the underlying data is no longer used (and
-%    sufficiently obscure that should not interfere with existing
+%    sufficiently obscure that it should not interfere with existing
 %    commands) and properly removing it would mean we need to make the
 %    \cs{unclare@...} and its support macros available in all earlier
 %    kernel releases which is pointless (and actually worse).
