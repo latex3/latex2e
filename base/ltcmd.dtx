@@ -566,11 +566,16 @@
 %   \cs{scan_stop:}, whose name gives a reasonable error message if the
 %   command is used inside a csname and protects against
 %   \texttt{f}-expansion.  This is useless for environments since
-%   \cs{begin} is already not expandable.
+%   \cs{begin} is already not expandable.  Both the command and
+%   environment codes start with \cs{group_align_safe_begin:}, then
+%   \cs{@@_run_code:} (used by both) does \cs{group_align_safe_end:}, so
+%   that delimited arguments may be grabbed in alignments if they
+%   contain and alignment tab token (see latex3/latex3/issues/839).
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_start_env:nnnnn #1#2
   {
     \cs_if_exist_use:N \conditionally@traceoff
+    \group_align_safe_begin:
     \str_set:Nn \l_@@_environment_str {#2}
     \bool_set_true:N \l_@@_environment_bool
     \@@_start_aux:ccnnnn
@@ -580,8 +585,9 @@
   }
 \cs_new_protected:Npx \@@_start:nNNnnn #1#2#3
   {
-    \exp_not:n { \cs_if_exist_use:N \conditionally@traceoff }
     \exp_not:c { xparse~function~is~not~expandable }
+    \exp_not:n { \cs_if_exist_use:N \conditionally@traceoff }
+    \exp_not:N \group_align_safe_begin:
     \exp_not:n { \bool_set_false:N \l_@@_environment_bool }
     \exp_not:N \@@_start_aux:NNnnnn
     #2 #3 {#1}
@@ -610,13 +616,14 @@
 %
 % \begin{macro}{\@@_run_code:}
 %   After arguments are grabbed, this function is responsible for
-%   inserting default values, running processors, and finally running
-%   the code.
+%   inserting default values, running processors, and finally doing
+%   \cs{group_align_safe_end:} as promised, and running the code.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_run_code:
   {
     \tl_if_empty:NF \l_@@_defaults_tl { \@@_defaults: }
     \tl_if_empty:NF \l_@@_process_all_tl { \@@_args_process: }
+    \group_align_safe_end:
     \cs_if_exist_use:N \conditionally@traceon
     \exp_after:wN \l_@@_fn_code_tl \l_@@_args_tl
   }
@@ -743,10 +750,15 @@
 %   default values (or is |?| if there are none).  |#4| is the code to run.
 %   |#2|~and~|#3| are functions (named after the command) that grab a single
 %   argument in the input stream (|#3|~is~short).  The argument specification |#1| is
-%   only used by diagnostic functions.
+%   only used by diagnostic functions.  Same as for the non-expandable
+%   version, this starts with \cs{group_align_safe_begin:}, which
+%   expands to nothing, so may be safely used in an expandable context.
 %    \begin{macrocode}
 \cs_new:Npn \@@_start_expandable:nNNNNn #1#2#3#4#5#6
-  { #6 \@@_end_expandable:NNw #5 #4 \q_@@ #2#3 }
+  {
+    \group_align_safe_begin:
+    #6 \@@_end_expandable:NNw #5 #4 \q_@@ #2#3
+  }
 %    \end{macrocode}
 % \end{macro}
 %
@@ -789,7 +801,7 @@
   {
     #6
     \str_if_eq:nnTF {#1} {#2}
-      { \use_i_delimit_by_q_stop:nw { #5 #1 } }
+      { \use_i_delimit_by_q_stop:nw { \group_align_safe_end: #5 #1 } }
       {
         \exp_args:No \@@_tl_mapthread_function:nnN
           { #4 #1 } {#3}
@@ -2356,7 +2368,9 @@
 %
 %   The group keep catcode changes local, and
 %   \cs{group_align_safe_begin/end:} allow to use a character
-%   with category code~$4$ (normally |&|) as the delimiter.
+%   with category code~$4$ (normally |&|) as the delimiter (all commands
+%   do \cs{group_align_safe_begin/end:}, so there's no need to do that
+%   again here).
 %   It is ended by \cs{@@_grab_v_group_end:}, which smuggles
 %   the collected argument out of the group.
 %    \begin{macrocode}
@@ -2374,26 +2388,24 @@
   {
     \tl_set:Nn \l_@@_signature_tl {#1}
     \group_begin:
-      \group_align_safe_begin:
-        \tex_escapechar:D = 92 \scan_stop:
-        \tl_clear:N \l_@@_v_arg_tl
-        \peek_remove_spaces:n
-          {
-            \peek_meaning_remove:NTF \c_group_begin_token
-              {
-                \group_align_safe_end:
-                \@@_grab_v_bgroup:
-              }
-              {
-                \peek_N_type:TF
-                  { \@@_grab_v_aux_test:N }
-                  { \@@_grab_v_aux_abort:n { } }
-              }
-          }
+      \tex_escapechar:D = 92 \scan_stop:
+      \tl_clear:N \l_@@_v_arg_tl
+      \peek_remove_spaces:n
+        {
+          \peek_meaning_remove:NTF \c_group_begin_token
+            {
+              \group_align_safe_end:
+              \@@_grab_v_bgroup:
+            }
+            {
+              \peek_N_type:TF
+                { \@@_grab_v_aux_test:N }
+                { \@@_grab_v_aux_abort:n { } }
+            }
+        }
   }
 \cs_new_protected:Npn \@@_grab_v_group_end:
   {
-        \group_align_safe_end:
         \exp_args:NNNo
       \group_end:
     \tl_set:Nn \l_@@_v_arg_tl { \l_@@_v_arg_tl }
