@@ -61,6 +61,7 @@ tlmgr install   \
 tlmgr install   \
   bidi          \
   dinbrief      \
+  everyshi      \
   pgfmorepages  \
   pgf           \
   filehook
