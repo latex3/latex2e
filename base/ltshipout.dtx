@@ -32,8 +32,8 @@
 %%% From File: ltshipout.dtx
 %
 %    \begin{macrocode}
-\providecommand\ltshipoutversion{v1.0g}
-\providecommand\ltshipoutdate{2021/01/18}
+\providecommand\ltshipoutversion{v1.0h}
+\providecommand\ltshipoutdate{2021/01/19}
 %    \end{macrocode}
 %
 %<*driver>
@@ -899,6 +899,15 @@
 %    \begin{macrocode}
               \@@_get_box_size:N #1
 %    \end{macrocode}
+%    The first hook we run is the \hook{shipout/firstpage} hook. This
+%    is only done once, then the \cs{@@_run_firstpage_hook:}
+%    command redefines itself to do nothing. If the hook contains
+%    \cs{special}s for integration at the top of the page they will be
+%    temporarily stored in a safe place and added later with
+%    \cs{@@_add_firstpage_specials:}.
+%    \begin{macrocode}
+              \@@_run_firstpage_hook:
+%    \end{macrocode}
 %    Run the hooks for background and foreground or, if this
 %    is called by \cs{RawShipout}, copy the box \cs{l_@@_raw_box} to
 %    \cs{l_shipout_box} so that firstpage and lastpage material gets
@@ -906,12 +915,12 @@
 %    \begin{macrocode}
               #3
 %    \end{macrocode}
-%    We then run \cs{@@_add_firstpage_hook:} that adds
+%    We then run \cs{@@_add_firstpage_specials:} that adds
 %    the content of the hook \hook{shipout/firstpage} to the
 %    start of the first page (if non-empty). It is then redefined to
 %    do nothing on later pages.
 %    \begin{macrocode}
-              \@@_add_firstpage_hook:
+              \@@_add_firstpage_specials:
 %    \end{macrocode}
 %    Then we check if we have to add the \hook{shipout/lastpage} hook
 %    or the corresponding kernel hook
@@ -946,7 +955,7 @@
 %    \cs{l_shipout_box} to its earlier state if that is necessary. On
 %    later pages this is then a no-op.
 %    \begin{macrocode}
-              \@@_drop_firstpage_hook:
+              \@@_drop_firstpage_specials:
 %    \end{macrocode}
 %    The \hook{shipout/after} hook (if in \verb=#4=) needs to run with
 %    \cs{protect}ed commands again being executed, because that hook
@@ -1052,36 +1061,47 @@
 %  \end{macro}
 %
 %
-%  \begin{macro}{\@@_add_firstpage_hook:,\@@_drop_firstpage_hook}
+%  \begin{macro}{\@@_run_firstpage_hook:}
 %
-%    This command adds any specials into a box and adds that to the
-%    very beginning of the first box shipped out. After that we
-%    redefine it to do nothing on later pages.
+%    There are three commands to handle the \hook{shipout/firstpage}
+%    hook:
+%    \cs{@@_run_firstpage_hook:}, \cs{@@_add_firstpage_specials:} and
+%    \cs{@@_drop_firstpage_hook}. 
+%
+%    That hook is supposed to contain \cs{special}s and similar
+%    material to be placed at the very beginning of the output page
+%    and so it needs careful placing to avoid that anything else gets
+%    in front of it. And this means we have to wait with this until
+%    other hooks such as \hook{shipout/background} have added their
+%    bits. It is also important that such \cs{special}s show up only
+%    on the very first page, so if this page gets saved before
+%    \cs{shipout} for later reuse, we have to make sure that they
+%    aren't in the saved version.
+%
+%    In addition the hook may also contain code to be executed ``first'', e.g.,
+%    visible from code in \hook{shipout/background} and this conflicts
+%    with adding the \cs{special}s late.
+%
+%    Therefore the processing is split into different parts:
+%    \cs{@@_run_firstpage_hook:} is done early and checks if there is
+%    any material in the hook. 
 %    \begin{macrocode}
-\cs_new:Npn \@@_add_firstpage_hook: {
+\cs_new:Npn \@@_run_firstpage_hook: {
+  \hook_if_empty:nTF {shipout/firstpage}
 %    \end{macrocode}
-%    Adding something to the beginning means adding it to the
-%    background as that layer is done first in the output. Of course
-%    that is only needed if the hook actually contains anything.
+%    If not then we define the other two commands to do nothing.
 %    \begin{macrocode}
-  \hook_if_empty:nF {shipout/firstpage}
        {
+         \cs_gset_eq:NN \@@_add_firstpage_specials:  \prg_do_nothing:
+         \cs_gset_eq:NN \@@_drop_firstpage_specials: \prg_do_nothing:
+       }
 %    \end{macrocode}
-%    First we make a copy of the \cs{l_shipout_box} that we can
-%    restore it later on.
+%    If there is material we execute inside a box, which means any
+%    \cs{special} will end up in that box and any other code is
+%    executed and can have side effects (as long as they are global).
 %    \begin{macrocode}
-         \box_set_eq:NN \l_@@_raw_box \l_shipout_box
-         \@@_add_background_box:n { \UseHook{shipout/firstpage} }
-%    \end{macrocode}
-%    After the actual shipout \cs{@@_drop_firstpage_hook:} is
-%    run. Normally that does nothing but now it is used (once) to
-%    restore the earlier content of \cs{l_shipout_box} and then
-%    redefines itself again to do nothing.
-%    \begin{macrocode}
-         \cs_gset:Npn \@@_drop_firstpage_hook: {
-           \box_set_eq:NN \l_shipout_box \l_@@_raw_box
-           \cs_gset_eq:NN \@@_drop_firstpage_hook:  \prg_do_nothing:
-         }
+       {
+         \hbox_set:Nn \l_@@_firstpage_box { \UseHook{shipout/firstpage} }
        }
 %    \end{macrocode}
 %    Once we are here we change the definition to do nothing next time
@@ -1089,7 +1109,7 @@
 %    to become a warning and not add further material to a hook that
 %    is never used again.
 %    \begin{macrocode}
-  \cs_gset_eq:NN \@@_add_firstpage_hook: \prg_do_nothing:
+  \cs_gset_eq:NN \@@_run_firstpage_hook: \prg_do_nothing:
   \cs_gset:Npn \@@_add_firstpage_material:Nn ##1 ##2 {
     \@latex@warning{
         First~ page~ is~ already~ shipped~ out,~ ignoring\MessageBreak
@@ -1097,12 +1117,67 @@
   }
 }
 %    \end{macrocode}
+% \end{macro}
 %
+%
+%
+%  \begin{macro}{\@@_add_firstpage_specials:,\@@_drop_firstpage_hook}
+%    The \cs{@@_add_firstpage_specials:} then adds the \cs{special}s
+%    stored in \cs{l_@@_firstpage_box} to the page to be shipped out
+%    when the time is ready. Note that if there was no material in the
+%    \hook{shipout/firstpage} hook then this command gets redefined to
+%    do nothing. But for most documents there is something, e.g., some
+%    PostScript header, or some meta data declaration, etc.\ so by 
+%    default we assume there is something to do.
 %    \begin{macrocode}
-\cs_new_eq:NN \@@_drop_firstpage_hook: \prg_do_nothing:
+\cs_new:Npn \@@_add_firstpage_specials: {
+%    \end{macrocode}
+%    First we make a copy of the \cs{l_shipout_box} that we can
+%    restore it later on.
+%    \begin{macrocode}
+  \box_set_eq:NN \l_@@_raw_box \l_shipout_box
+%    \end{macrocode}
+%    Adding something to the beginning means adding it to the
+%    background as that layer is done first in the output. 
+%    \begin{macrocode}
+  \@@_add_background_box:n { \hbox_unpack:N \l_@@_firstpage_box }
+%    \end{macrocode}
+%    After the actual shipout \cs{@@_drop_firstpage_specials:} is
+%    run to
+%    restore the earlier content of \cs{l_shipout_box} and then
+%    redefines itself again to do nothing.
+%
+%    As a final act we change the definition to do nothing next time.
+%    \begin{macrocode}
+  \cs_gset_eq:NN \@@_add_firstpage_specials: \prg_do_nothing:
+}
+%    \end{macrocode}
+%
+%    The \cs{@@_drop_firstpage_specials:} is run after the shipout has
+%    accured but before the \hook{shipout/afterpage} hook is executed.
+%    That is the point where we have to restore the \cs{ShipoutBox} to
+%    its state without the \hook{shipout/firstpage} material.
+%    \begin{macrocode}
+\cs_new:Npn \@@_drop_firstpage_specials: {
+    \box_set_eq:NN \l_shipout_box \l_@@_raw_box
+%    \end{macrocode}
+%    If there was no such material then \cs{@@_run_firstpage_hook:}
+%    will have changed the definition to a no-op already. Otherwise
+%    this is what we do here.
+%    \begin{macrocode}
+    \cs_gset_eq:NN \@@_drop_firstpage_specials:  \prg_do_nothing:
+  }
 %    \end{macrocode}
 %  \end{macro}
 %
+
+%  \begin{macro}{\l_@@_firstpage_box}
+%    The box to hold any firstpage \cs{special}s.
+%    \begin{macrocode}
+\box_new:N \l_@@_firstpage_box
+%    \end{macrocode}
+%  \end{macro}
+
 %
 %  \begin{macro}{\g_@@_lastpage_handled_bool}
 %    A boolean to signal if we have already handled the
