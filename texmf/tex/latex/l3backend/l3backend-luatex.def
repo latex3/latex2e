@@ -26,7 +26,7 @@
 %% 
 %% File: l3backend-basics.dtx
 \ProvidesExplFile
-  {l3backend-luatex.def}{2021-01-09}{}
+  {l3backend-luatex.def}{2020-01-29}{}
   {L3 backend support: PDF output (LuaTeX)}
 \cs_if_exist:NTF \__kernel_dependency_version_check:nn
   {
@@ -614,18 +614,14 @@
           { xyz ~ zoom \fp_eval:n { #2 * 10 } }
         \scan_stop:
   }
-\cs_new_protected:Npn \__pdf_backend_destination_box:nn #1#2
+\cs_new_protected:Npn \__pdf_backend_destination:nnnn #1#2#3#4
   {
-    \group_begin:
-      \hbox_set:Nn \l__pdf_internal_box {#2}
-      \tex_pdfextension:D dest ~
-      name {#1}
-      fitr ~
-        width  \box_wd:N \l__pdf_internal_box
-        height \box_ht:N \l__pdf_internal_box
-        depth  \box_dp:N \l__pdf_internal_box
-      \box_use:N \l__pdf_internal_box
-    \group_end:
+    \tex_pdfextension:D dest ~
+    name {#1}
+    fitr ~
+      width  \dim_eval:n {#2} ~
+      height \dim_eval:n {#3} ~
+      depth  \dim_eval:n {#4} \scan_stop:
   }
 \cs_new_protected:Npn \__pdf_backend_catalog_gput:nn #1#2
   {
@@ -763,19 +759,23 @@
     \pdfmanagement_add:nnn { Page / Resources / ExtGState }
       { opacity 1 } { << /ca ~ 1 /CA ~ 1 >> }
   }
+\tl_new:N \l__opacity_backend_fill_tl
+\tl_new:N \l__opacity_backend_stroke_tl
 \cs_new_protected:Npn \__opacity_backend_select:n #1
  {
    \exp_args:Nx \__opacity_backend_select_aux:n
      { \fp_eval:n { min(max(0,#1),1) } }
-   \group_insert_after:N \__opacity_backend_reset:
  }
 \cs_new_protected:Npn \__opacity_backend_select_aux:n #1
   {
+    \tl_set:Nn \l__opacity_backend_fill_tl {#1}
+    \tl_set:Nn \l__opacity_backend_stroke_tl {#1}
     \pdfmanagement_add:nnn { Page / Resources / ExtGState }
       { opacity #1 }
       { << /ca ~ #1 /CA ~ #1 >> }
-   \__opacity_backend_stack_push:nn \c__opacity_backend_stack_int
-     { /opacity #1 ~ gs }
+    \__opacity_backend_stack_push:nn \c__opacity_backend_stack_int
+      { /opacity #1 ~ gs }
+    \group_insert_after:N \__opacity_backend_reset:
   }
 \cs_if_exist:NF \pdfmanagement_add:nnn
   {
@@ -784,18 +784,36 @@
 \cs_new_protected:Npn \__opacity_backend_reset:
  { \__opacity_backend_stack_pop:n \c__opacity_backend_stack_int }
 \cs_new_protected:Npn \__opacity_backend_fill:n #1
-  { \__opacity_backend:nn { \fp_eval:n { min(max(0,#1),1) } } { ca } }
-\cs_new_protected:Npn \__opacity_backend_stroke:n #1
-  { \__opacity_backend:nn { \fp_eval:n { min(max(0,#1),1) } } { CA } }
-\cs_new_protected:Npn \__opacity_backend:nn #1#2
   {
-    \pdfmanagement_add:nnn { Page / Resources / ExtGState }
-      { opacity #1 }
-      { << /#2 ~ #1 >> }
-   \__opacity_backend_stack_push:nn \c__opacity_backend_stack_int
-     { /opacity #1 ~ gs }
+    \__opacity_backend_fill_stroke:xx
+      { \fp_eval:n { min(max(0,#1),1) } }
+      \l__opacity_backend_stroke_tl
   }
-\cs_generate_variant:Nn \__opacity_backend:nn { x }
+\cs_new_protected:Npn \__opacity_backend_stroke:n #1
+  {
+    \__opacity_backend_fill_stroke:xx
+      \l__opacity_backend_fill_tl
+      { \fp_eval:n { min(max(0,#1),1) } }
+  }
+\cs_new_protected:Npn \__opacity_backend_fill_stroke:nn #1#2
+  {
+    \str_if_eq:nnTF {#1} {#2}
+      { \__opacity_backend_select_aux:n {#1} }
+      {
+        \tl_set:Nn \l__opacity_backend_fill_tl {#1}
+        \tl_set:Nn \l__opacity_backend_stroke_tl {#2}
+        \pdfmanagement_add:nnn { Page / Resources / ExtGState }
+          { opacity.fill #1 }
+          { << /ca ~ #1 >> }
+        \pdfmanagement_add:nnn { Page / Resources / ExtGState }
+          { opacity.stroke #1 }
+          { << /CA ~ #2 >> }
+        \__opacity_backend_stack_push:nn \c__opacity_backend_stack_int
+         { /opacity.fill #1 ~ gs /opacity.stroke #2 ~ gs }
+        \group_insert_after:N \__opacity_backend_reset:
+      }
+  }
+\cs_generate_variant:Nn \__opacity_backend_fill_stroke:nn { xx }
 %% 
 %%
 %% End of file `l3backend-luatex.def'.
