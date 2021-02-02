@@ -9,7 +9,7 @@
 -- l3sys.dtx  (with options: `package,lua')
 -- l3token.dtx  (with options: `package,lua')
 -- 
--- Copyright (C) 1990-2020 The LaTeX3 Project
+-- Copyright (C) 1990-2021 The LaTeX Project
 -- 
 -- It may be distributed and/or modified under the conditions of
 -- the LaTeX Project Public License (LPPL), either version 1.3c of

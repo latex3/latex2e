@@ -109,6 +109,7 @@ typesetfiles   =
     "ltx3info.tex",
     "modguide.tex",
     "usrguide.tex",
+    "usrguide3.tex",
     "latexchanges.tex",
     "lthooks-doc.tex",
     "ltshipout-doc.tex",

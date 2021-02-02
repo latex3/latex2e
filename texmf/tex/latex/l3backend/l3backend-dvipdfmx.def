@@ -10,8 +10,9 @@
 %% l3backend-draw.dtx  (with options: `package,dvipdfmx')
 %% l3backend-graphics.dtx  (with options: `package,dvipdfmx')
 %% l3backend-pdf.dtx  (with options: `package,dvipdfmx')
+%% l3backend-opacity.dtx  (with options: `package,dvipdfmx')
 %% 
-%% Copyright (C) 1990-2020 The LaTeX3 Project
+%% Copyright (C) 1990-2021 The LaTeX Project
 %% 
 %% It may be distributed and/or modified under the conditions of
 %% the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -25,7 +26,7 @@
 %% 
 %% File: l3backend-basics.dtx
 \ProvidesExplFile
-  {l3backend-dvipdfmx.def}{2020-09-24}{}
+  {l3backend-dvipdfmx.def}{2020-01-29}{}
   {L3 backend support: dvipdfmx}
 \cs_if_exist:NTF \__kernel_dependency_version_check:nn
   {
@@ -54,20 +55,25 @@
   { \__kernel_backend_literal:n { x:gsave } }
 \cs_new_protected:Npn \__kernel_backend_scope_end:
   { \__kernel_backend_literal:n { x:grestore } }
+\group_begin:
+  \cs_set:Npn \__sys_tmp:w #1 Version ~ #2 ~ #3 \q_stop {#2}
+  \sys_get_shell:nnNTF { extractbb~--version }
+    { \char_set_catcode_space:n { `\  } }
+    \l__sys_internal_tl
+    {
+      \int_const:Nn \c__kernel_sys_dvipdfmx_version_int
+        {
+          \exp_after:wN \__sys_tmp:w \l__sys_internal_tl
+            \q_stop
+        }
+    }
+    { \int_const:Nn \c__kernel_sys_dvipdfmx_version_int { 0 } }
+\group_end:
 %% File: l3backend-color.dtx
-\cs_new_protected:Npn \__color_backend_select_cmyk:n #1
-  {
-    \__kernel_backend_literal:n { pdf: bc ~ [#1] }
-    \group_insert_after:N \__color_backend_reset:
-  }
-\cs_new_eq:NN \__color_backend_select_gray:n \__color_backend_select_cmyk:n
-\cs_new_eq:NN \__color_backend_select_rgb:n \__color_backend_select_cmyk:n
-\cs_new_protected:Npn \__color_backend_reset:
-  { \__kernel_backend_literal:n { pdf: ec } }
 \cs_new_protected:Npn \__color_backend_pickup:N #1 { }
 \cs_if_exist:cT { ver@color.sty }
   {
-     \cs_set_protected:Npn \__color_backend_pickup:N #1
+    \cs_set_protected:Npn \__color_backend_pickup:N #1
       {
         \exp_args:NV \tl_if_head_is_space:nTF \current@color
           {
@@ -85,13 +91,94 @@
     \cs_new_protected:Npn \__color_backend_pickup:w #1 ~ #2 \s__color_stop #3
       { \tl_set:Nn #3 { {#1} {#2} } }
   }
-\cs_new_protected:Npn \__color_backend_select_separation:nn #1#2
-  { \__color_backend_select:n { @#1 ~ [#2] } }
-\cs_new_protected:Npn \__color_backend_select:n #1
+\int_new:N \l__color_backend_stack_int
+\int_compare:nNnTF \c__kernel_sys_dvipdfmx_version_int < { 20201111 }
+  { \cs_new_protected:Npn \__kernel_color_backend_stack_init:Nnn #1#2#3 { } }
   {
-    \__kernel_backend_literal:n { pdf: bc ~ #1 }
+    \int_new:N \g__color_backend_stack_int
+    \cs_new_protected:Npx \__kernel_color_backend_stack_init:Nnn #1#2#3
+      {
+        \int_gincr:N \exp_not:N \g__color_backend_stack_int
+        \int_const:Nn #1 { \exp_not:N \g__color_backend_stack_int }
+        \cs_if_exist:NTF \AtBeginDvi
+          { \exp_not:N \AtBeginDvi }
+          { \exp_not:N \use:n }
+          {
+            \__kernel_backend_literal:x
+              {
+                pdfcolorstackinit ~
+                \exp_not:N \int_use:N \exp_not:N \g__color_backend_stack_int
+                \c_space_tl
+                \exp_not:N \tl_if_blank:nF {#2} { #2 ~ }
+                (#3)
+              }
+          }
+      }
+    \cs_if_exist:cTF { main@pdfcolorstack }
+      {
+        \int_set:Nn \l__color_backend_stack_int
+          { \int_use:c { main@pdfcolorstack } }
+      }
+      {
+        \__kernel_color_backend_stack_init:Nnn \c__color_backend_main_stack_int
+          { page ~ direct } { 0 ~ g ~ 0 ~ G }
+        \int_set_eq:NN \l__color_backend_stack_int
+          \c__color_backend_main_stack_int
+      }
+  }
+\int_compare:nNnF \c__kernel_sys_dvipdfmx_version_int < { 20201111 }
+  {
+    \cs_new_protected:Npn \__color_backend_stack_push:nn #1#2
+      {
+        \__kernel_backend_literal:x
+          {
+            pdfcolorstack ~
+            \int_eval:n {#1} ~
+            push ~ (#2)
+          }
+      }
+    \cs_generate_variant:Nn \__color_backend_stack_push:nn { nx }
+    \cs_new_protected:Npn \__color_backend_stack_pop:n #1
+      {
+        \__kernel_backend_literal:x
+          {
+            pdfcolorstack ~
+            \int_eval:n {#1} ~
+            pop
+          }
+      }
+  }
+\tl_new:N \l__color_backend_fill_tl
+\tl_new:N \l__color_backend_stroke_tl
+\cs_new_protected:Npn \__color_backend_select_cmyk:n #1
+  { \__color_backend_select:nn { #1 ~ k } { #1 ~ K } }
+\cs_new_protected:Npn \__color_backend_select_gray:n #1
+  { \__color_backend_select:nn { #1 ~ g } { #1 ~ G } }
+\cs_new_protected:Npn \__color_backend_select_rgb:n #1
+  { \__color_backend_select:nn { #1 ~ rg } { #1 ~ RG } }
+\cs_new_protected:Npn \__color_backend_select:nn #1#2
+  {
+    \tl_set:Nn \l__color_backend_fill_tl {#1}
+    \tl_set:Nn \l__color_backend_stroke_tl {#2}
+    \__color_backend_stack_push:nn \l__color_backend_stack_int { #1 ~ #2 }
     \group_insert_after:N \__color_backend_reset:
   }
+\cs_new_protected:Npn \__color_backend_reset:
+  { \__color_backend_stack_pop:n \l__color_backend_stack_int }
+\int_compare:nNnT \c__kernel_sys_dvipdfmx_version_int < { 20201111 }
+  {
+    \cs_gset_protected:Npn \__color_backend_select_cmyk:n #1
+      {
+        \__kernel_backend_literal:n { pdf: bc ~ [#1] }
+        \group_insert_after:N \__color_backend_reset:
+      }
+    \cs_gset_eq:NN \__color_backend_select_gray:n \__color_backend_select_cmyk:n
+    \cs_gset_eq:NN \__color_backend_select_rgb:n \__color_backend_select_cmyk:n
+    \cs_gset_protected:Npn \__color_backend_reset:
+      { \__kernel_backend_literal:n { pdf: ec } }
+  }
+\cs_new_protected:Npn \__color_backend_select_separation:nn #1#2
+  { \__color_backend_select:nn { /#1 ~ cs ~ #2 ~ scn  } { /#1 ~ CS ~ #2 ~ SCN } }
 \cs_new_eq:NN \__color_backend_select_devicen:nn \__color_backend_select_separation:nn
 \cs_new_protected:Npn \__color_backend_separation_init:nnnnn #1#2#3#4#5
   {
@@ -109,16 +196,19 @@
         / \str_convert_pdfname:n {#1} ~ #2 ~
         \pdf_object_last:
       }
+    \use:x
+      {
+        \pdfmanagement_add:nnn
+          { Page / Resources / ColorSpace }
+          { color \int_use:N \g__color_model_int }
+          { \pdf_object_last: }
+      }
   }
 \cs_if_exist:NF \pdf_object_now:nn
   { \cs_gset_protected:Npn \__color_backend_separation_init:nnnnn #1#2#3#4#5 { } }
 \cs_new_protected:Npn \__color_backend_separation_init:n #1
   {
-    \__kernel_backend_literal:x
-      {
-        pdf:obj ~ @color \int_use:N \g__color_model_int \c_space_tl
-          [#1]
-      }
+    \pdf_object_now:nx { array } {#1}
   }
 \cs_new_protected:Npn \__color_backend_separation_init_CIELAB:nnn #1#2#3
   {
@@ -178,6 +268,13 @@
         #2 ~
         \pdf_object_last:
       }
+    \use:x
+      {
+        \pdfmanagement_add:nnn
+          { Page / Resources / ColorSpace }
+          { color \int_use:N \g__color_model_int }
+          { \pdf_object_last: }
+      }
   }
 \cs_if_exist:NF \pdf_object_now:nn
   { \cs_gset_protected:Npn \__color_backend_devicen_init:nnn #1#2#3 { } }
@@ -188,24 +285,65 @@
       { \__color_backend_devicen_init:w #2 \s__color_stop }
   }
 \cs_new_eq:NN \__color_backend_devicen_init:n \__color_backend_separation_init:n
+\int_compare:nNnT \c__kernel_sys_dvipdfmx_version_int < { 20201111 }
+  {
+    \cs_gset_protected:Npn \__color_backend_select_separation:nn #1#2 { }
+    \cs_gset_eq:NN \__color_backend_select_devicen:nn
+      \__color_backend_select_separation:nn
+  }
 \cs_new_protected:Npn \__color_backend_fill_cmyk:n #1
-  { \__kernel_backend_literal_pdf:n { #1 ~ k } }
+  { \__color_backend_fill:n { #1 ~ k } }
 \cs_new_protected:Npn \__color_backend_fill_gray:n #1
-  { \__kernel_backend_literal_pdf:n { #1 ~ g } }
+  { \__color_backend_fill:n { #1 ~ g } }
 \cs_new_protected:Npn \__color_backend_fill_rgb:n #1
-  { \__kernel_backend_literal_pdf:n { #1 ~ rg } }
-  \cs_new_protected:Npn \__color_backend_stroke_cmyk:n #1
-  { \__kernel_backend_literal_pdf:n { #1 ~ K } }
+  { \__color_backend_fill:n { #1 ~ rg } }
+\cs_new_protected:Npn \__color_backend_fill:n #1
+  {
+    \tl_set:Nn \l__color_backend_fill_tl {#1}
+    \__color_backend_stack_push:nn \l__color_backend_stack_int
+      { #1 ~ \l__color_backend_stroke_tl }
+    \group_insert_after:N \__color_backend_reset:
+  }
+\cs_new_protected:Npn \__color_backend_stroke_cmyk:n #1
+  { \__color_backend_stroke:n { #1 ~ K } }
 \cs_new_protected:Npn \__color_backend_stroke_gray:n #1
-  { \__kernel_backend_literal_pdf:n { #1 ~ G } }
+  { \__color_backend_stroke:n { #1 ~ G } }
 \cs_new_protected:Npn \__color_backend_stroke_rgb:n #1
-  { \__kernel_backend_literal_pdf:n { #1 ~ RG } }
+  { \__color_backend_stroke:n { #1 ~ RG } }
+\cs_new_protected:Npn \__color_backend_stroke:n #1
+  {
+    \tl_set:Nn \l__color_backend_stroke_tl {#1}
+    \__color_backend_stack_push:nn \l__color_backend_stack_int
+      { \l__color_backend_fill_tl \c_space_tl #1 }
+    \group_insert_after:N \__color_backend_reset:
+  }
 \cs_new_protected:Npn \__color_backend_fill_separation:nn #1#2
-  { \__kernel_backend_literal_pdf:n { /#1 ~ cs ~ #2 ~ scn } }
+  { \__color_backend_fill:n { /#1 ~ cs ~ #2 ~ scn } }
 \cs_new_protected:Npn \__color_backend_stroke_separation:nn #1#2
-  { \__kernel_backend_literal_pdf:n { /#1 ~ CS ~ #2 ~ SCN } }
+  { \__color_backend_stroke:n { /#1 ~ CS ~ #2 ~ SCN } }
 \cs_new_eq:NN \__color_backend_fill_devicen:nn \__color_backend_fill_separation:nn
 \cs_new_eq:NN \__color_backend_stroke_devicen:nn \__color_backend_stroke_separation:nn
+\int_compare:nNnT \c__kernel_sys_dvipdfmx_version_int < { 20201111 }
+  {
+    \cs_gset_protected:Npn \__color_backend_fill_cmyk:n #1
+      {
+        \__kernel_backend_literal:n { pdf: bc ~ [#1] }
+        \group_insert_after:N \__color_backend_reset:
+      }
+    \cs_gset_eq:NN \__color_backend_fill_gray:n \__color_backend_fill_cmyk:n
+    \cs_gset_eq:NN \__color_backend_fill_rgb:n \__color_backend_fill_cmyk:n
+    \cs_gset_protected:Npn \__color_backend_reset:
+      { \__kernel_backend_literal:n { pdf: ec } }
+    \cs_gset_protected:Npn \__color_backend_stroke:n #1
+      { \__kernel_backend_literal:n {#1} }
+    \cs_gset_protected:Npn \__color_backend_fill_separation:nn #1#2 { }
+    \cs_gset_eq:NN \__color_backend_fill_devicen:nn
+      \__color_backend_fill_separation:nn
+    \cs_gset_eq:NN \__color_backend_stroke_separation:nn
+      \__color_backend_fill_separation:nn
+    \cs_gset_eq:NN \__color_backend_stroke_devicen:nn
+      \__color_backend_stroke_separation:nn
+  }
 %% File: l3backend-box.dtx
 \cs_new_protected:Npn \__box_backend_clip:N #1
   {
@@ -621,15 +759,26 @@
   }
 \cs_new:Npn \__pdf_backend_annotation_last:
  { @pdf.obj \int_use:N \g__pdf_backend_annotation_int }
+\int_new:N \g__pdf_backend_link_int
 \cs_new_protected:Npn \__pdf_backend_link_begin_goto:nnw #1#2
   { \__pdf_backend_link_begin:n { #1 /Subtype /Link /A << /S /GoTo /D ( #2 ) >> } }
 \cs_new_protected:Npn \__pdf_backend_link_begin_user:nnw #1#2
   { \__pdf_backend_link_begin:n {#1#2} }
-\cs_new_protected:Npn \__pdf_backend_link_begin:n #1
+\cs_new_protected:Npx \__pdf_backend_link_begin:n #1
   {
-    \__pdf_backend:n
+    \int_compare:nNnF \c__kernel_sys_dvipdfmx_version_int < { 20201111 }
       {
-         bann
+        \exp_not:N \int_gincr:N \exp_not:N  \g__pdf_backend_link_int
+      }
+    \__pdf_backend:x
+      {
+         bann ~
+         \int_compare:nNnF \c__kernel_sys_dvipdfmx_version_int < { 20201111 }
+           {
+             @pdf.lnk
+             \exp_not:N \int_use:N \exp_not:N  \g__pdf_backend_link_int
+             \c_space_tl
+           }
          <<
            /Type /Annot
            #1
@@ -638,7 +787,14 @@
   }
 \cs_new_protected:Npn \__pdf_backend_link_end:
   { \__pdf_backend:n { eann } }
-\cs_new:Npn \__pdf_backend_link_last: { }
+\cs_new:Npx \__pdf_backend_link_last:
+  {
+    \int_compare:nNnF \c__kernel_sys_dvipdfmx_version_int < { 20201111 }
+      {
+        @pdf.lnk
+          \exp_not:N \int_use:N \exp_not:N \g__pdf_backend_link_int
+      }
+  }
 \cs_new_protected:Npn \__pdf_backend_link_margin:n #1
   { \__kernel_backend_literal:x { dvipdfmx:config~g~ \dim_eval:n {#1} } }
 \cs_new_protected:Npn \__pdf_backend_destination:nn #1#2
@@ -657,41 +813,49 @@
               { fitbv } { /FitBV ~ @xpos }
               { fith }  { /FitH ~ @ypos }
               { fitv }  { /FitV ~ @xpos }
+              { fitr }  { /Fit }
             }
             { /XYZ ~ @xpos ~ @ypos ~ \fp_eval:n { (#2) / 100 } }
         ]
       }
   }
-\cs_new_protected:Npn \__pdf_backend_destination_box:nn #1#2
+\cs_new_protected:Npn \__pdf_backend_destination:nnnn #1#2#3#4
   {
-    \group_begin:
-      \hbox_set:Nn \l__pdf_internal_box {#2}
-      \box_move_down:nn { \box_dp:N \l__pdf_internal_box }
-        {
-          \hbox:n
-            {
-              \__pdf_backend:n { obj ~ @pdf_ #1 _llx ~ @xpos }
-              \__pdf_backend:n { obj ~ @pdf_ #1 _lly ~ @ypos }
-            }
-        }
-      \box_use:N \l__pdf_internal_box
-      \box_move_up:nn { \box_ht:N \l__pdf_internal_box }
-        {
-          \hbox:n
-            {
-              \__pdf_backend:n
-                {
-                  dest ~ (#1)
-                  [
-                    @thispage
-                    /FitR ~
-                      @pdf_ #1 _llx ~ @pdf_ #1 _lly ~
-                      @xpos ~ @ypos
-                  ]
-                }
-            }
-        }
-    \group_end:
+    \exp_args:Ne \__pdf_backend_destination_aux:nnnn
+      { \dim_eval:n {#2} } {#1} {#3} {#4}
+  }
+\cs_new_protected:Npn \__pdf_backend_destination_aux:nnnn #1#2#3#4
+  {
+    \vbox_to_zero:n
+      {
+        \tex_kern:D \dim_eval:n {#4} \scan_stop:
+        \hbox:n
+          {
+            \__pdf_backend:n { obj ~ @pdf_ #2 _llx ~ @xpos }
+            \__pdf_backend:n { obj ~ @pdf_ #2 _lly ~ @ypos }
+          }
+        \tex_vss:D
+      }
+    \tex_kern:D #1 \scan_stop:
+    \vbox_to_zero:n
+      {
+        \tex_kern:D \dim_eval:n { -#3 } \scan_stop:
+        \hbox:n
+          {
+            \__pdf_backend:n
+              {
+                dest ~ (#2)
+                [
+                  @thispage
+                  /FitR ~
+                    @pdf_ #2 _llx ~ @pdf_ #2 _lly ~
+                    @xpos ~ @ypos
+                ]
+              }
+          }
+        \tex_vss:D
+      }
+    \tex_kern:D -#1 \scan_stop:
   }
 \cs_new_protected:Npn \__pdf_backend_compresslevel:n #1
   { \__kernel_backend_literal:x { dvipdfmx:config~z~ \int_eval:n {#1} } }
@@ -716,6 +880,98 @@
   { \__kernel_backend_literal_page:n { /#1 ~ #2 ~ BDC } }
 \cs_new_protected:Npn \__pdf_backend_emc:
   { \__kernel_backend_literal_page:n { EMC } }
+%% File: l3backend-opacity.dtx
+\cs_if_exist:NT \pdfmanagement_add:nnn
+  {
+    \__kernel_color_backend_stack_init:Nnn \c__opacity_backend_stack_int
+      { page ~ direct } { /opacity 1 ~ gs }
+    \pdfmanagement_add:nnn { Page / Resources / ExtGState }
+      { opacity 1 } { << /ca ~ 1 /CA ~ 1 >> }
+  }
+\tl_new:N \l__opacity_backend_fill_tl
+\tl_new:N \l__opacity_backend_stroke_tl
+\cs_new_protected:Npn \__opacity_backend_select:n #1
+ {
+   \exp_args:Nx \__opacity_backend_select_aux:n
+     { \fp_eval:n { min(max(0,#1),1) } }
+ }
+\cs_new_protected:Npn \__opacity_backend_select_aux:n #1
+  {
+    \tl_set:Nn \l__opacity_backend_fill_tl {#1}
+    \tl_set:Nn \l__opacity_backend_stroke_tl {#1}
+    \pdfmanagement_add:nnn { Page / Resources / ExtGState }
+      { opacity #1 }
+      { << /ca ~ #1 /CA ~ #1 >> }
+    \__opacity_backend_stack_push:nn \c__opacity_backend_stack_int
+      { /opacity #1 ~ gs }
+    \group_insert_after:N \__opacity_backend_reset:
+  }
+\cs_if_exist:NF \pdfmanagement_add:nnn
+  {
+    \cs_gset_protected:Npn \__opacity_backend_select_aux:n #1 { }
+  }
+\cs_new_protected:Npn \__opacity_backend_reset:
+ { \__opacity_backend_stack_pop:n \c__opacity_backend_stack_int }
+\cs_new_protected:Npn \__opacity_backend_fill:n #1
+  {
+    \__opacity_backend_fill_stroke:xx
+      { \fp_eval:n { min(max(0,#1),1) } }
+      \l__opacity_backend_stroke_tl
+  }
+\cs_new_protected:Npn \__opacity_backend_stroke:n #1
+  {
+    \__opacity_backend_fill_stroke:xx
+      \l__opacity_backend_fill_tl
+      { \fp_eval:n { min(max(0,#1),1) } }
+  }
+\cs_new_protected:Npn \__opacity_backend_fill_stroke:nn #1#2
+  {
+    \str_if_eq:nnTF {#1} {#2}
+      { \__opacity_backend_select_aux:n {#1} }
+      {
+        \tl_set:Nn \l__opacity_backend_fill_tl {#1}
+        \tl_set:Nn \l__opacity_backend_stroke_tl {#2}
+        \pdfmanagement_add:nnn { Page / Resources / ExtGState }
+          { opacity.fill #1 }
+          { << /ca ~ #1 >> }
+        \pdfmanagement_add:nnn { Page / Resources / ExtGState }
+          { opacity.stroke #1 }
+          { << /CA ~ #2 >> }
+        \__opacity_backend_stack_push:nn \c__opacity_backend_stack_int
+         { /opacity.fill #1 ~ gs /opacity.stroke #2 ~ gs }
+        \group_insert_after:N \__opacity_backend_reset:
+      }
+  }
+\cs_generate_variant:Nn \__opacity_backend_fill_stroke:nn { xx }
+\int_compare:nNnT \c__kernel_sys_dvipdfmx_version_int < { 20201111 }
+  {
+    \cs_gset_protected:Npn \__opacity_backend_select_aux:n #1
+      {
+        \tl_set:Nn \l__opacity_backend_fill_tl {#1}
+        \tl_set:Nn \l__opacity_backend_stroke_tl {#1}
+        \pdfmanagement_add:nnn { Page / Resources / ExtGState }
+          { opacity #1 }
+          { << /ca ~ #1 /CA ~ #1 >> }
+        \__kernel_backend_literal_pdf:n { /opacity #1 ~ gs }
+      }
+    \cs_gset_protected:Npn \__opacity_backend_fill_stroke:nn #1#2
+      {
+        \str_if_eq:nnTF {#1} {#2}
+          { \__opacity_backend_select_aux:n {#1} }
+          {
+            \tl_set:Nn \l__opacity_backend_fill_tl {#1}
+            \tl_set:Nn \l__opacity_backend_stroke_tl {#2}
+            \pdfmanagement_add:nnn { Page / Resources / ExtGState }
+              { opacity.fill #1 }
+              { << /ca ~ #1 >> }
+            \pdfmanagement_add:nnn { Page / Resources / ExtGState }
+              { opacity.stroke #1 }
+              { << /CA ~ #2 >> }
+            \__kernel_backend_literal_pdf:n
+             { /opacity.fill #1 ~ gs /opacity.stroke #2 ~ gs }
+          }
+      }
+  }
 %% 
 %%
 %% End of file `l3backend-dvipdfmx.def'.

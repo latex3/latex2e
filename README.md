@@ -93,4 +93,7 @@ The LaTeX kernel is developed by [The LaTeX3 Project](https://latex-project.org)
 
 ## Copyright
 
-This README file is copyright 2019 The LaTeX Project.
+This README file is
+
+Copyright (C) 2019-2021
+The LaTeX Project
