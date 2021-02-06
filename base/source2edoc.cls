@@ -5,6 +5,9 @@
               [2021/01/14 v0.2b Quick hack to typeset source2.tex
                (not usable for anything else and buggy -- will vanish again)!]
 
+
+\declare@file@substitution{doc.sty}{doc-v3beta.sty}
+
 \LoadClass{l3doc}
 
 \RemoveFromHook{begindocument}[l3doc]          % drop the standard setting  making " a shortverb
