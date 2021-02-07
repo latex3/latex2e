@@ -129,7 +129,6 @@ unpacksuppfiles =
   {
     "hyphen.cfg",
     "UShyphen.tex",
-    "kvoptions.sty",        -- temp (for doc)
     "ot1lmr.fd",
     "t1lmr.fd",
     "t1lmss.fd",
@@ -142,8 +141,9 @@ unpacksuppfiles =
 -- Custom settings for the check system
 testsuppdir = "testfiles/helpers"
 
--- No dependencies at all (other than l3build and for typesetting)
-checkdeps   = { maindir .. "/required/firstaid"  }
+-- Dependencies for testing and typesetting
+checkdeps   = { maindir .. "/required/firstaid" }
+
 typesetdeps =
   {
     maindir .. "/required/graphics",
