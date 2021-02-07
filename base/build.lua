@@ -129,6 +129,7 @@ unpacksuppfiles =
   {
     "hyphen.cfg",
     "UShyphen.tex",
+    "kvoptions.sty",        -- temp (for doc)
     "ot1lmr.fd",
     "t1lmr.fd",
     "t1lmss.fd",
