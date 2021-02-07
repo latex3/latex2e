@@ -42,7 +42,7 @@ checksuppfiles = checksuppfiles     or
 stdengine      = stdengine          or "etex"
 tagfiles       = tagfiles or {"*.dtx","*.ins","*.tex","README.md"}
 typesetsuppfiles = typesetsuppfiles or
-  {"color.cfg", "graphics.cfg", "ltxdoc.cfg", "ltxguide.cfg"}
+  {"color.cfg", "graphics.cfg", "ltxguide.cfg"}
 
 -- Ensure the local format file is used
 function tex(file,dir,mode)
