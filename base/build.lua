@@ -126,6 +126,7 @@ dynamicfiles = {"*.tst"}
 unpackfiles     = {"unpack.ins"}
 unpacksuppfiles =
   {
+    "glyphtounicode.tex",
     "hyphen.cfg",
     "UShyphen.tex",
     "ot1lmr.fd",
@@ -209,10 +210,4 @@ dofile (maindir .. "/build-config.lua")
 -- Suppress makeindex tree other than formal releases
 if not master_branch then
   makeindexfiles = { }
-end
-
--- Find and run the build system
-kpse.set_program_name ("kpsewhich")
-if not release_date then
-  dofile(kpse.lookup("l3build.lua"))
 end
