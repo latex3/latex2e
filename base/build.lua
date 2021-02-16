@@ -52,7 +52,7 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
-    "ltpara.ltx",             -- temp
+--    "ltpara.ltx",             -- temp
     "source2edoc.cls",        -- temp
      "*-????-??-??.sty"
   }
@@ -118,6 +118,8 @@ typesetfiles   =
     "lthooks-code.tex",
     "ltshipout-code.tex",
     "ltfilehook-code.tex",
+    "ltpara-doc.tex",
+    "ltpara-code.tex",
   }
 
 -- Files that should be removed after running a test
