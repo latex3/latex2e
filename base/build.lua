@@ -52,7 +52,6 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
---    "ltpara.ltx",             -- temp
     "source2edoc.cls",        -- temp
      "*-????-??-??.sty"
   }
