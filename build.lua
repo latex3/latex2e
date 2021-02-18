@@ -8,7 +8,7 @@ module  = ""
 
 -- A couple of custom variables: the order here is set up for 'importance'
 bundles  = {"base"}
-required = {"cyrillic", "graphics", "tools", "amsmath"}
+required = {"cyrillic", "graphics", "tools", "amsmath", "firstaid"}
 
 -- Location of main directory: use Unix-style path separators
 maindir = "."
@@ -81,10 +81,4 @@ function main (target)
   end
 end
 
--- Find and run the build system
-kpse.set_program_name ("kpsewhich")
 dofile(("./build-config.lua"))
-if not release_date then
-  dofile(kpse.lookup("l3build.lua"))
-end
-

@@ -2,7 +2,7 @@
 % This class is buggy and needs fixing
 
 \ProvidesClass{source2edoc}
-              [2020/08/16 v0.1 Quick hack to typeset source2.tex
+              [2021/01/14 v0.2b Quick hack to typeset source2.tex
                (not usable for anything else and buggy -- will vanish again)!]
 
 \LoadClass{l3doc}
@@ -14,8 +14,43 @@
 
 
 
-% l3doc's def are buggy (already fixed there but not distributed yet)
+
 \ExplSyntaxOn
+
+% in 2e we have a lot of functions that have no ``user-level'' documentation so we disable
+% a bogus backref in that case. Over time the sources should be clean up to have such documentation.
+
+\cs_set_protected:Npn \__codedoc_print_documented:
+  {
+    \seq_gset_filter:NNn \g__codedoc_nested_names_seq
+      \g__codedoc_nested_names_seq
+      { ! \__codedoc_if_macro_internal_p:n {##1} }
+    \seq_if_empty:NF \g__codedoc_nested_names_seq
+      {
+% This is a crude change: we grab the first name
+        \__codedoc_get_hyper_target:xN
+          { \seq_item:Nn \g__codedoc_nested_names_seq { 1 } }
+          \l__codedoc_tmpa_tl
+% ... and check if it has a reference
+        \cs_if_exist:cT{ r@\l__codedoc_tmpa_tl }
+% If it does we show it, if not we don't.
+         {
+           \int_set:Nn \l__codedoc_tmpa_int
+             { \seq_count:N \g__codedoc_nested_names_seq }
+           \int_compare:nNnTF \l__codedoc_tmpa_int = 1 {~This~} {~These~}
+           \bool_if:NTF \l__codedoc_macro_var_bool {variable} {function}
+           \int_compare:nNnTF \l__codedoc_tmpa_int = 1 {~is~} {s~are~}
+           documented~on~page~
+           \exp_args:Nx \pageref { \l__codedoc_tmpa_tl } .
+         }
+      }
+    \seq_gclear:N \g__codedoc_nested_names_seq
+  }
+
+
+  
+% some l3doc's def are buggy (already fixed there but not distributed yet)
+
 \RenewDocumentCommand \DocInclude { m }
   {
     \relax\clearpage
@@ -71,6 +106,31 @@
     \fi
     \cs_set_eq:NN \@auxout \@mainaux
   }
+
+
+% change the setup here: we have a lot of long names so better run raggeded
+  
+\cs_set_protected:Npn \__codedoc_macro_end_style:n #1
+  {
+    \nobreak \noindent
+    { \raggedright\hangindent1pc \footnotesize ( \emph{#1} ) \par }
+  }
+
+  
+% next two declarations should move to l3doc.cls in the l3kernel eventually
+% they should be ``new'' not ``set'' but to avoid getting in timing issues
+% when they will be officially defined we use ``set'' here
+  
+\cs_set_eq:NN \__codedoc_saved_detect_internals:N \__codedoc_detect_internals:N
+
+% maybe this change should be local so that it automatically reverts on \verb=\end{macro}=
+% without the need to explicitly turn it on again.
+
+\cs_new_protected:Npn \InternalDetectionOff
+  { \cs_gset_eq:NN \__codedoc_detect_internals:N \use_none:n }
+\cs_new_protected:Npn \InternalDetectionOn
+  { \cs_gset_eq:NN \__codedoc_detect_internals:N \__codedoc_saved_detect_internals:N }
+  
 \ExplSyntaxOff
 
 \def\partname{File}
@@ -222,7 +282,7 @@ Bug reports can be opened (category \texttt{#1}) at\\%
            {}
 
 
-%\errorstopmode
+\errorstopmode
 \batchmode           
-           
+
 \endinput

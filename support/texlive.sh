@@ -57,6 +57,15 @@ tlmgr install   \
   stringenc     \
   url
 
+# special testing
+tlmgr install   \
+  bidi          \
+  dinbrief      \
+  everyshi      \
+  pgfmorepages  \
+  pgf           \
+  filehook
+
 # Additional support for typesetting
 tlmgr install  \
   alphalph     \
@@ -70,6 +79,7 @@ tlmgr install  \
   bookmark     \
   booktabs     \
   cbfonts      \
+  cm-super     \
   colortbl     \
   csquotes     \
   dvips        \

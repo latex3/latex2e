@@ -6,7 +6,7 @@
 %%
 %% l3backend-header.dtx  (with options: `header,dvips')
 %% 
-%% Copyright (C) 1990-2020 The LaTeX3 Project
+%% Copyright (C) 1990-2021 The LaTeX Project
 %% 
 %% It may be distributed and/or modified under the conditions of
 %% the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -20,7 +20,9 @@
 %% 
 %% File: l3backend-header.dtx
 /color.sc { } def
-/color.fc { } def
+TeXDict begin
+/TeXcolorseparation { setcolor } def
+end
 true setglobal
 /pdf.globaldict 4 dict def
 false setglobal
