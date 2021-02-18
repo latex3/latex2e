@@ -117,6 +117,8 @@ typesetfiles   =
     "lthooks-code.tex",
     "ltshipout-code.tex",
     "ltfilehook-code.tex",
+    "ltpara-doc.tex",
+    "ltpara-code.tex",
   }
 
 -- Files that should be removed after running a test
