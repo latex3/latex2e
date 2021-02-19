@@ -53,6 +53,7 @@ sourcefiles    =
     "small2e.tex",
     "testpage.tex",
     "source2edoc.cls",        -- temp
+     "doc-v3beta.sty",        -- temp
      "*-????-??-??.sty"
   }
 textfiles =
