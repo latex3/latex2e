@@ -52,6 +52,7 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
+    "doc-v3beta.sty",         -- temp
     "source2edoc.cls",        -- temp
      "doc-v3beta.sty",        -- temp
      "*-????-??-??.sty"
@@ -144,8 +145,9 @@ unpacksuppfiles =
 -- Custom settings for the check system
 testsuppdir = "testfiles/helpers"
 
--- No dependencies at all (other than l3build and for typesetting)
-checkdeps   = { maindir .. "/required/firstaid"  }
+-- Dependencies for testing and typesetting
+checkdeps   = { maindir .. "/required/firstaid" }
+
 typesetdeps =
   {
     maindir .. "/required/graphics",
