@@ -63,8 +63,6 @@ tlmgr install   \
   dinbrief      \
   everyshi      \
   filehook      \
-  koma-script   \
-  memoir        \
   pgf           \
   pgfmorepages
 
