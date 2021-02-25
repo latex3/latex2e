@@ -1,7 +1,7 @@
 % \iffalse meta-comment
 %
 % Copyright 1993-2019
-% The LaTeX3 Project and any individual authors listed elsewhere
+% The LaTeX Project and any individual authors listed elsewhere
 % in this file.
 %
 % This file is part of the LaTeX base system.

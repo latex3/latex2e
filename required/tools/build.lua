@@ -25,14 +25,10 @@ checkdeps =
     maindir .. "/required/graphics"
   }
 
+checkruns = 3  -- some tests need 3 runs to settle!
+
 -- Allow for TU and other tests test
 checkconfigs = {"build","config-TU","config-legacy","config-search"}
 
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
-
--- Find and run the build system
-kpse.set_program_name ("kpsewhich")
-if not release_date then
-  dofile(kpse.lookup("l3build.lua"))
-end

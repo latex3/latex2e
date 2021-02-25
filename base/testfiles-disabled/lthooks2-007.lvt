@@ -1,0 +1,336 @@
+% Benchmark for:
+%   removing code while sorting (option 2)
+%     vs.
+%   removing code from a list of removals (option 3)
+% See https://github.com/FrankMittelbach/AccessiblePDF/issues/85
+
+\documentclass{article}
+\input{regression-test}
+
+\usepackage{l3benchmark}
+
+% This test compares two approaches for removing code from a hook (both
+% of which have to work with an undeclared hook--reversed order).
+%   Option 2 is by using the removes rule from the sorting system and a
+%   ``remover'' label that when present makes the others be removed.
+%   Option 3, when the code still doesn't exist in the hook, marks a
+%   code chunk to be removed, and when it tries to be added, this mark
+%   doesn't allow.
+% This test compares the performance of both aproaches.
+%
+% The results on my machine show that option 3 is a bit faster than
+% option 2.  I think that is because the code for \hook_gput_code:nnn
+% has to worry about the labels being in the correct lexical order,
+% while \hook_gremove_code:nn ``just adds'' the label to be removed from
+% the list.
+%
+% Besides, the benchmarking doesn't measure the sorting (done in
+% \__hook_initialize_hook_code:n), only the addition/removal of code,
+% which means that option 2 is much slower because those chunks are
+% still in the code structure to be sorted.
+
+\ExplSyntaxOn
+
+\START
+
+% ------------------------------------------------------------
+% Option 2:
+\benchmark_tic:
+% \show\aaa\tracingall
+
+% Create the hook
+\hook_new:n {aaa}
+
+% Then add all the code chunks
+\int_step_inline:nn { 500 }
+  { \hook_gput_code:nnn {aaa} {label#1} {~code#1} }
+
+% Set the rules to remove the 500 benchmark
+% labels when label-rm is present.
+\int_step_inline:nn { 500 }
+  { \hook_gset_rule:nnnn {aaa} {label-rm} {removes} {label#1} }
+
+\OMIT \benchmark_toc: \TIMO
+% (l3benchmark) + TOC: 0.388 s
+
+% Add the remove-all label
+% (this is that guy no one wants to hang out with ;-)
+\hook_gput_code:nnn {aaa} {label-rm} { }
+
+% Sort the code (here the actual removal happens)
+\__hook_initialize_hook_code:n { aaa }
+
+% \hook_log:n {aaa}
+
+% Then this should contain only \__hook_next~aaa
+\cs_show:c { __hook~aaa }
+% \tracingnone
+% About 219000 lines of .log with `\tracingall` with 50 labels
+
+
+% ------------------------------------------------------------
+% Option 3:
+\benchmark_tic:
+% \show\bbb\tracingall
+
+% Create the hook
+\hook_new:n {bbb}
+
+% Then try to add the marked labels
+\int_step_inline:nn { 500 }
+  { \hook_gput_code:nnn {bbb} {label#1} {~code#1} }
+
+% Mark the labels to be removed
+\int_step_inline:nn { 500 }
+  { \hook_gremove_code:nn {bbb} {label#1} }
+
+\OMIT \benchmark_toc: \TIMO
+% (l3benchmark) + TOC: 0.351 s
+
+% Sort the code (no labels to sort here)
+\__hook_initialize_hook_code:n { bbb }
+
+% \hook_log:n {bbb}
+
+% And this should also contain only \__hook_next~bbb
+\cs_show:c { __hook~bbb }
+% \tracingnone
+% About 56000 lines of .log with `\tracingall` with 50 labels
+
+
+% ------------------------------------------------------------
+% Option 2 (reverse order):
+\benchmark_tic:
+% \show\xxx\tracingall
+
+% Set the rules to remove the 500 benchmark
+% labels when label-rm is present.
+\int_step_inline:nn { 500 }
+  { \hook_gset_rule:nnnn {xxx} {label-rm} {removes} {label#1} }
+
+% Create the hook
+\hook_new:n {xxx}
+
+% Then add all the code chunks
+\int_step_inline:nn { 500 }
+  { \hook_gput_code:nnn {xxx} {label#1} {~code#1} }
+
+\OMIT \benchmark_toc: \TIMO
+% (l3benchmark) + TOC: 0.555 s
+
+% Add the remove-all label
+% (this is that guy no one wants to hang out with ;-)
+\hook_gput_code:nnn {xxx} {label-rm} { }
+
+% Sort the code (here the actual removal happens)
+\__hook_initialize_hook_code:n { xxx }
+
+% \hook_log:n {xxx}
+
+% Then this should contain only \__hook_next~xxx
+\cs_show:c { __hook~xxx }
+% \tracingnone
+% About 218000 lines of .log with `\tracingall` with 50 labels
+
+
+% ------------------------------------------------------------
+% Option 3 (reverse order):
+\benchmark_tic:
+% \show\yyy\tracingall
+
+% Mark the labels to be removed
+\int_step_inline:nn { 500 }
+  { \hook_gremove_code:nn {yyy} {label#1} }
+
+% Create the hook
+\hook_new:n {yyy}
+
+% Then try to add the marked labels
+\int_step_inline:nn { 500 }
+  { \hook_gput_code:nnn {yyy} {label#1} {~code#1} }
+
+\OMIT \benchmark_toc: \TIMO
+% (l3benchmark) + TOC: 0.429 s
+
+% Sort the code (no labels to sort here)
+\__hook_initialize_hook_code:n { yyy }
+
+% \hook_log:n {yyy}
+
+% And this should also contain only \__hook_next~yyy
+\cs_show:c { __hook~yyy }
+% \tracingnone
+% About 35000 lines of .log with `\tracingall` with 50 labels
+
+% ------------------------------------------------------------
+
+% Now we'll test the case where hooks are used ``normally'', without
+% queued removals.  For the tests, \@@_hook_gput_code_do:nnn is disabled
+% otherwise most of the time measured is spent with \prop_gput:Nnn.
+% The time taken by each benchmark is roughtly 100 times longer with
+% \@@_hook_gput_code_do:nnn:
+\use_i:nn
+  {
+    % Disable \@@_hook_gput_code_do:nnn:
+    \cs_set_eq:NN \__hook_hook_gput_code_do:nnn \use_none:nnn
+    \def\runs{100000}
+  }
+  {
+    \def\runs{1000}
+  }
+% The first test shows the time it takes to run \hook_gput_code:nnn if
+% marked removals weren't implemented> it is naturally the fastest case,
+% as no extra test is performed whatsoever.
+%
+% The second test shows the current (ec885fff---slowest) implementation,
+% that tests with \tl_if_in:Nn even if the removal list is empty. Taking
+% into account only the \tl_if_in:Nn test with an eventual do-nothing
+% \@@_hook_gput_code_do:nnn, this takes about twice the time of the
+% previous test.  But then, adding to the hook is /much/ slower.
+%
+% The third test shows a possible \tl_if_empty:N test before the
+% \tl_if_in:Nn, which gets the execution time between cases 1 and 2.
+%
+% The other three tests down below do the same but with a non-empty
+% removal list.  The first two tests take roughly the same time, but the
+% third takes a bit longer because the \tl_if_empty:N test fails and
+% \tl_if_in:Nn is executed anyway.
+
+% No removal queued:
+\tl_set_eq:NN \g__hook_removal_list_tl \c_empty_tl
+
+\group_begin:
+
+% ------------------------------
+% Without testing \__hook_if_marked_removal (before addto-undeclared-hook):
+\cs_set_protected:Npn \hook_gput_code:nnn #1#2#3
+  {
+        \hook_if_exist:nTF {#1}
+          {
+            \__hook_hook_gput_code_do:nnn {#1} {#2} {#3}
+            \__hook_update_hook_code:n {#1}
+          }
+          { \__hook_try_declaring_generic_hook:w #1//\scan_stop: {#1}{#2}{#3} }
+  }
+
+\hook_new:n { abc }
+\benchmark_tic:
+\int_step_inline:nn { \runs }
+  { \hook_gput_code:nnn { abc } { label } { code } }
+\OMIT \benchmark_toc: \TIMO
+% (l3benchmark) + TOC: 0.395 s
+
+% ------------------------------
+% Current implementation:
+\cs_set_protected:Npn \hook_gput_code:nnn #1#2#3
+  {
+    \__hook_if_marked_removal:nnTF {#1} {#2}
+      { \__hook_unmark_removal:nn {#1} {#2} }
+      {
+        \hook_if_exist:nTF {#1}
+          {
+            \__hook_hook_gput_code_do:nnn {#1} {#2} {#3}
+            \__hook_update_hook_code:n {#1}
+          }
+          { \__hook_try_declaring_generic_hook:w #1//\scan_stop: {#1}{#2}{#3} }
+      }
+  }
+
+\hook_new:n { def }
+\benchmark_tic:
+\int_step_inline:nn { \runs }
+  { \hook_gput_code:nnn { def } { label } { code } }
+\OMIT \benchmark_toc: \TIMO
+% (l3benchmark) + TOC: 0.858 s
+
+% ------------------------------
+% Testing if \g__hook_removal_list_tl is empty in \__hook_if_marked_removal:nn:
+\prg_set_protected_conditional:Npnn \__hook_if_marked_removal:nn #1 #2 { TF }
+  {
+    \tl_if_empty:NTF \g__hook_removal_list_tl
+      { \prg_return_false: }
+      {
+        \exp_args:NNx \tl_if_in:NnTF \g__hook_removal_list_tl
+          { \__hook_removal_tl:nn {#1} {#2} }
+          { \prg_return_true: } { \prg_return_false: }
+      }
+  }
+
+\hook_new:n { ghi }
+\benchmark_tic:
+\int_step_inline:nn { \runs }
+  { \hook_gput_code:nnn { ghi } { label } { code } }
+\OMIT \benchmark_toc: \TIMO
+% (l3benchmark) + TOC: 0.593 s
+
+\group_end:
+
+% ------------------------------------------------------------
+
+% Same tests as above, with a queued removal:
+\hook_gremove_code:nn { some-hook } { some-label }
+
+\group_begin:
+
+% ------------------------------
+% Without testing \__hook_if_marked_removal (before addto-undeclared-hook):
+\cs_gset_protected:Npn \hook_gput_code:nnn #1#2#3
+  {
+        \hook_if_exist:nTF {#1}
+          {
+            \__hook_hook_gput_code_do:nnn {#1} {#2} {#3}
+            \__hook_update_hook_code:n {#1}
+          }
+          { \__hook_try_declaring_generic_hook:w #1//\scan_stop: {#1}{#2}{#3} }
+  }
+
+\benchmark_tic:
+\int_step_inline:nn { \runs }
+  { \hook_gput_code:nnn { abc } { label } { code } }
+\OMIT \benchmark_toc: \TIMO
+% (l3benchmark) + TOC: 0.404 s
+
+% ------------------------------
+% Current implementation:
+\cs_gset_protected:Npn \hook_gput_code:nnn #1#2#3
+  {
+    \__hook_if_marked_removal:nnTF {#1} {#2}
+      { \__hook_unmark_removal:nn {#1} {#2} }
+      {
+        \hook_if_exist:nTF {#1}
+          {
+            \__hook_hook_gput_code_do:nnn {#1} {#2} {#3}
+            \__hook_update_hook_code:n {#1}
+          }
+          { \__hook_try_declaring_generic_hook:w #1//\scan_stop: {#1}{#2}{#3} }
+      }
+  }
+
+\benchmark_tic:
+\int_step_inline:nn { \runs }
+  { \hook_gput_code:nnn { def } { label } { code } }
+\OMIT \benchmark_toc: \TIMO
+% (l3benchmark) + TOC: 0.971 s
+
+% ------------------------------
+% Testing if \g__hook_removal_list_tl is empty in \__hook_if_marked_removal:nn:
+\prg_set_protected_conditional:Npnn \__hook_if_marked_removal:nn #1 #2 { TF }
+  {
+    \tl_if_empty:NTF \g__hook_removal_list_tl
+      { \prg_return_false: }
+      {
+        \exp_args:NNx \tl_if_in:NnTF \g__hook_removal_list_tl
+          { \__hook_removal_tl:nn {#1} {#2} }
+          { \prg_return_true: } { \prg_return_false: }
+      }
+  }
+
+\benchmark_tic:
+\int_step_inline:nn { \runs }
+  { \hook_gput_code:nnn { ghi } { label } { code } }
+\OMIT \benchmark_toc: \TIMO
+% (l3benchmark) + TOC: 1.04 s
+
+\group_end:
+
+\END

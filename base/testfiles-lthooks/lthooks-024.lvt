@@ -1,0 +1,95 @@
+\RequirePackage[enable-debug]{expl3}
+\ExplSyntaxOn
+\debug_on:n { check-declarations , deprecation }
+\ExplSyntaxOff
+
+\documentclass{article}
+
+\input{regression-test}
+
+
+\START
+
+\makeatletter
+
+\NewHook{foo}
+
+\ExplSyntaxOn
+\def\testme#1{%
+  \AddToHook{foo}[]      {top-level} % Error
+  \AddToHook{foo}[~]     {top-level} % Error
+  \AddToHook{foo}[.]     {#1       } % Valid
+  \AddToHook{foo}[..]    {..       }
+  \AddToHook{foo}[../]   {../      }
+  \AddToHook{foo}[/]     {/        }
+  \AddToHook{foo}[//]    {//       }
+  \AddToHook{foo}[./]    {#1/      } % Valid
+  \AddToHook{foo}[/./]   {/./      }
+  \AddToHook{foo}[.x]    {.x       }
+  \AddToHook{foo}[/.x]   {/.x      }
+  \AddToHook{foo}[.x/]   {.x/      }
+  \AddToHook{foo}[./foo] {#1/foo   } % Valid
+  \AddToHook{foo}[./foo/]{#1/foo/  } % Valid
+  \AddToHook{foo}[/./foo]{/./foo   }
+  \__hook_initialize_hook_code:n {foo}
+  \LogHook{foo}
+  \RemoveFromHook{foo}[*]
+}
+\ExplSyntaxOff
+
+% No \@currname
+\testme{top-level}
+
+\PushDefaultHookLabel{pkg}
+  \testme{pkg}
+\PopDefaultHookLabel
+
+\OMIT
+
+\def\testme#1{%
+  \expanded{\AddToHook{foo}[./foo]{#1/foo}} % Valid
+  \csname __hook_initialize_hook_code:n\endcsname {foo}
+  \LogHook{foo}
+  \RemoveFromHook{foo}[*]
+}
+
+% pkgA sets \SetDefaultHookLabel
+\begin{filecontents}{\jobname-pkgA.sty}
+\SetDefaultHookLabel{pkgA}
+\testme{pkgA}
+\usepackage{\jobname-pkgB}
+\testme{pkgA}
+\end{filecontents}
+
+% pkgB doesn't, but uses hooks anyhow
+\begin{filecontents}{\jobname-pkgB.sty}
+\testme{\jobname-pkgB}
+\usepackage{\jobname-pkgC}
+\testme{\jobname-pkgB}
+\end{filecontents}
+
+% pkgC also sets a default label
+\begin{filecontents}{\jobname-pkgC.sty}
+\SetDefaultHookLabel{pkgC}
+\testme{pkgC}
+\end{filecontents}
+
+\TIMO
+
+\testme{top-level}
+\usepackage{\jobname-pkgA}
+\testme{top-level}
+
+\ExplSyntaxOn
+\cs_undefine:c { ver@\jobname-pkgA.sty }
+\cs_undefine:c { ver@\jobname-pkgB.sty }
+\cs_undefine:c { ver@\jobname-pkgC.sty }
+\ExplSyntaxOff
+
+\PushDefaultHookLabel{my-document}
+  \testme{my-document}
+  \usepackage{\jobname-pkgA}
+  \testme{my-document}
+\PopDefaultHookLabel
+
+\END

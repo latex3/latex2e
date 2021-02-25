@@ -39,6 +39,7 @@ installfiles   =
   }
 sourcefiles    =
   {
+    "lppl.tex",
     "ltnews.cls",
     "ltxguide.cls",
     "minimal.cls",
@@ -51,6 +52,8 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
+    "source2edoc.cls",        -- temp
+     "doc-v3beta.sty",        -- temp
      "*-????-??-??.sty"
   }
 textfiles =
@@ -107,14 +110,26 @@ typesetfiles   =
     "ltx3info.tex",
     "modguide.tex",
     "usrguide.tex",
-    "latexchanges.tex"
+    "usrguide3.tex",
+    "latexchanges.tex",
+    "lthooks-doc.tex",
+    "ltshipout-doc.tex",
+    "ltfilehook-doc.tex",
+    "lthooks-code.tex",
+    "ltshipout-code.tex",
+    "ltfilehook-code.tex",
+    "ltpara-doc.tex",
+    "ltpara-code.tex",
   }
+
+-- Files that should be removed after running a test
 dynamicfiles = {"*.tst"}
 
 -- A few special file for unpacking
 unpackfiles     = {"unpack.ins"}
 unpacksuppfiles =
   {
+    "glyphtounicode.tex",
     "hyphen.cfg",
     "UShyphen.tex",
     "ot1lmr.fd",
@@ -130,19 +145,21 @@ unpacksuppfiles =
 testsuppdir = "testfiles/helpers"
 
 -- No dependencies at all (other than l3build and for typesetting)
-checkdeps   = { }
+checkdeps   = { maindir .. "/required/firstaid"  }
 typesetdeps =
   {
     maindir .. "/required/graphics",
-    maindir .. "/required/tools"
+    maindir .. "/required/tools",
+    maindir .. "/required/amsmath"    -- for l3doc.cls :-(
   }
-unpackdeps  = { }
+unpackdeps  = {}
 
 -- Customise typesetting
 indexstyle = "source2e.ist"
 
--- Allow for TU and other tests test
-checkconfigs = {"build","config-TU","config-legacy"}
+-- Allow for TU and other test configurations
+checkconfigs = {"build","config-1run","config-TU","config-legacy","config-lthooks",
+                "config-lthooks2","config-ltcmd"}
 
 update_tag = update_tag_base
 
@@ -196,10 +213,4 @@ dofile (maindir .. "/build-config.lua")
 -- Suppress makeindex tree other than formal releases
 if not master_branch then
   makeindexfiles = { }
-end
-
--- Find and run the build system
-kpse.set_program_name ("kpsewhich")
-if not release_date then
-  dofile(kpse.lookup("l3build.lua"))
 end

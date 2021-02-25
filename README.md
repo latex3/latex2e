@@ -2,6 +2,18 @@
 
 ## Overview
 
+> **Important notice:** This repository holds the unpackaged sources
+> of LaTeX2e as well as code under development in various
+> branches. For this reason it is only of interest to a small number
+> of developers in this form and building a working version from the
+> sources is a non-trivial exercise.
+>
+> The normal way to obtain LaTeX is therefore not to get it from this
+> repository, but through the packaged version available from
+> https://ctan.org and automatically distributed as part of major TeX
+> distributions such as TeXLive, MacTeX or MiKTeX.
+
+
 This repository hosts development of the core LaTeX distribution, which
 comprises:
 
@@ -34,12 +46,18 @@ Only issues *specifically related to these components* should be logged [with
 the team on GitHub](https://github.com/latex3/latex2e/issues). The LaTeX
 ecosystem is large, and there are *many* (thousands) of additional packages not
 maintained by us: issues related to the use of those need to be reported to the
-relevant maintainers.
+relevant maintainers because we are usually unable to help in that case.
 
 To help you making the right decision where to report an issue we ask to start
 your minimal example file showing the problem *always* with
 
     \RequirePackage{latexbug}
+
+> Please look at the report generated from `latexbug` and if it
+> indicates that you are using packages not maintained by the LaTeX
+> Project check if your problem is still present after removing
+> them. If so contact the maintainers of these third-party packages
+> and file a bug report with them.
 
 More details on creating issue reports for the core LaTeX distribution
 are given in our [CONTRIBUTING guide](CONTRIBUTING.md).
@@ -75,4 +93,7 @@ The LaTeX kernel is developed by [The LaTeX3 Project](https://latex-project.org)
 
 ## Copyright
 
-This README file is copyright 2019 The LaTeX Project.
+This README file is
+
+Copyright (C) 2019-2021
+The LaTeX Project
