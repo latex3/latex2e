@@ -62,9 +62,9 @@ tlmgr install   \
   bidi          \
   dinbrief      \
   everyshi      \
-  pgfmorepages  \
+  filehook      \
   pgf           \
-  filehook
+  pgfmorepages
 
 # Additional support for typesetting
 tlmgr install  \

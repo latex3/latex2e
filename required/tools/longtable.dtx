@@ -27,11 +27,17 @@
           \ProvidesFile{longtable.dtx}
 %</dtx>
 %<package>\NeedsTeXFormat{LaTeX2e}[1995/06/01]
+%<package>\providecommand\DeclareRelease[3]{}
+%<package>\providecommand\DeclareCurrentRelease[2]{}
+%<package>
+%<package>\DeclareRelease{}{2020-01-02}{longtable-2020-01-07.sty}
+%<package>\DeclareCurrentRelease{}{2020-02-07}
+%<package>
 %<package>\ProvidesPackage{longtable}
 %<driver> \ProvidesFile{longtable.drv}
 % \fi
 %         \ProvidesFile{longtable.dtx}
-          [2020/01/07 v4.13 Multi-page Table package (DPC)]
+          [2020-02-07 v4.14 Multi-page Table package (DPC)]
 %
 % \iffalse
 %<*driver>
@@ -303,7 +309,7 @@
 % (see below), the "LTchunksize" must be at least  as large as the
 % number of rows in each of the head or foot sections.
 %
-% This document specifies "\setcounter{LTchunksize}{10}".  If you look
+% This document specifies "\setcounter{LTchunksize}{200}".  If you look
 % at the previous table, after the \emph{first} run of \LaTeX\  you will
 % see that various parts of the table do not line up.
 % \LaTeX\ will also have printed a warning that the column
@@ -877,9 +883,11 @@
 % \end{macro}
 %
 % \begin{macro}{\LTchunksize}
-% Chunk size (The number of rows taken per "\halign"). Default 20.
+% \changes{v4.14}{2020/02/07}
+%      {Increase default chunksize from 20 to 200}
+% Chunk size (The number of rows taken per "\halign"). Default 200.
 %    \begin{macrocode}
-\newcount\LTchunksize \LTchunksize=20
+\newcount\LTchunksize \LTchunksize=200
 %    \end{macrocode}
 % \end{macro}
 %
@@ -914,6 +922,14 @@
 % \end{macro}
 % \end{macro}
 % \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\LT@gbox}
+% \changes{v4.14}{2020/02/07}
+%      {global box added (tools/2914)}
+%    \begin{macrocode}
+\newbox\LT@gbox
+%    \end{macrocode}
 % \end{macro}
 %
 % \begin{macro}{\LT@cols}
@@ -1212,7 +1228,7 @@
 % \end{macro}
 %
 % \begin{macro}{\LT@start}
-% % \changes{v4.13}{2020/01/07}
+% \changes{v4.13}{2020/01/07}
 %      {fix issue https://github.com/davidcarlisle/dpctex/issues/8}
 % This macro starts the process of putting the table on the current
 % page. It is not called until either a "\\" or "\endlongtable" command
@@ -1227,6 +1243,34 @@
 \def\LT@start{%
   \let\LT@start\endgraf
   \endgraf\penalty\z@\vskip\LTpre\endgraf
+%    \end{macrocode}
+% \changes{v4.14}{2020/02/07}
+%      {Guard against shrink glue on current page tools/3396 and github 183}
+% This next block was suggested by Lars Hellström in pr tools/3396
+% He documents it as:
+%
+% The original problem occurs because TeX has not yet found an awfully bad
+% "(b=*)" breakpoint and is therefore still collecting material to see if there
+% is a really good break somewhere just ahead. As we know there aren't, we
+% want to make it stop looking and break the page, so that "\pagetotal" will be
+% for the page  where the table will actually end up. To achieve this, we
+% need to give \TeX\ an awfully bad, but legal, breakpoint. The simplest way of
+% doing this seems to be to insert a "\kern" that counters the "\pageshrink" for
+% the page, followed by a "\penalty" and a "\par" (to exercise the page builder).
+% We also have to make sure that this breakpoint doesn't affect how the next
+% page is broken, so we make the penalty 9999 (10000 is infinite and thus not
+% a legal breakpoint) and cancel out the "\kern" with a new "\kern".
+% 
+% I don't think this is the \emph{right} solution to the problem (that would be
+% that the standard output routine has a feature for syncronizing with
+% typesetting, as part of the preparations for switching output routine), but
+% it's OK. Perhaps XOR will make it better.
+%    \begin{macrocode}
+   \ifdim \pagetotal<\pagegoal \else
+      \dimen@=\pageshrink
+      \advance \dimen@ 1sp %
+      \kern\dimen@\penalty 9999\endgraf \kern-\dimen@
+   \fi
 %    \end{macrocode}
 % Start a new page if there is not enough room for the table head, foot,
 % and one extra line.
@@ -1259,7 +1303,18 @@
 %
 %    \begin{macrocode}
   \advance\dimen@ -\pagegoal
-  \ifdim \dimen@>\z@\vfil\break\fi
+  \ifdim \dimen@>\z@
+    \vfil\break
+  \else
+%    \end{macrocode}
+%
+% \changes{v4.14}{2020/02/07}
+%      {Guard against shrink glue on current page see github 183}
+% The LT output routine does not handle shrink on the page, which can cause
+% The first page to be over-long, so forget it is there.
+%    \begin{macrocode}
+    \ifdim\pageshrink>\z@\pageshrink\z@\fi
+  \fi
 %    \end{macrocode}
 % Store height of page minus table foot in  "\@colroom".
 % \changes{v3.14}{1995/05/02}
@@ -1269,9 +1324,12 @@
 %    \end{macrocode}
 % If the foot is non empty, reduce the "\vsize" and "\@colroom"
 % accordingly.
+% \changes{v4.14}{2020/02/07}
+%      {Rearrange vertical space tests for tools/3512 (floats on same page)}
 %    \begin{macrocode}
   \ifvoid\LT@foot\else
-    \advance\vsize-\ht\LT@foot
+%    \advance\vsize-\ht\LT@foot
+    \global\advance\vsize-\ht\LT@foot
     \global\advance\@colroom-\ht\LT@foot
     \dimen@\pagegoal\advance\dimen@-\ht\LT@foot\pagegoal\dimen@
     \maxdepth\z@
@@ -1350,8 +1408,15 @@
   \fi
 %    \end{macrocode}
 % Force one more go with the \env{longtable} output routine.
+% \changes{v4.14}{2020/02/07}
+%      {Rearrange vertical space tests for tools/3512 (floats on same page)}
 %    \begin{macrocode}
   \endgraf\penalty -\LT@end@pen
+  \ifvoid\LT@foot\else
+    \global\advance\vsize\ht\LT@foot
+    \global\advance\@colroom\ht\LT@foot
+    \dimen@\pagegoal\advance\dimen@\ht\LT@foot\pagegoal\dimen@
+  \fi
 %    \end{macrocode}
 % Now close the group to return to the standard routine.
 %    \begin{macrocode}
@@ -1361,9 +1426,11 @@
 % table.\footnote{This can not be the correct. However if it is omitted,
 % there is a problem with marginpars, for example on page~3 of this
 % document. Any Output Routine Gurus out there?}
+% \changes{v4.14}{2020/02/07}
+%      {Rearrange vertical space tests for tools/3512 (floats on same page)}
 %    \begin{macrocode}
   \global\@mparbottom\z@
-  \pagegoal\vsize
+%  \pagegoal\vsize
   \endgraf\penalty\z@\addvspace\LTpost
 %    \end{macrocode}
 % Footnotes. As done in  the \package{multicol} package.
@@ -1452,6 +1519,8 @@
 % \begin{macro}{\LT@setprevdepth}
 % \changes{v4.05}{1996/11/12}
 %      {Macro added}
+% \changes{v4.14}{2020/02/07}
+%      {spurious \cs{global} removed}
 % This will be redefined to set the "\prevdepth"
 %  at the start of a chunk.
 %    \begin{macrocode}
@@ -1471,7 +1540,7 @@
   \global\advance\LT@rows\@ne
   \ifnum\LT@rows=\LTchunksize
     \gdef\LT@setprevdepth{%
-      \prevdepth\z@\global
+      \prevdepth\z@
       \global\let\LT@setprevdepth\relax}%
     \expandafter\LT@xtabularcr
   \else
@@ -1528,11 +1597,13 @@
 % \begin{macro}{\LT@echunk}
 % \changes{v4.05}{1996/11/12}
 %      {\cs{unskip} added for pagebreak support}
+% \changes{v4.14}{2020/02/07}
+%      {allocated global box  (tools/2914)}
 % This ends the current chunk, and removes the dummy row.
 %    \begin{macrocode}
 \def\LT@echunk{%
   \crcr\LT@save@row\cr\egroup
-  \global\setbox\@ne\lastbox
+  \global\setbox\LT@gbox\lastbox
 %    \end{macrocode}
 % The following line was added in v4.05.
 % \package{longtable} relies on "\lineskip" glue (which is 0pt) to
@@ -1753,9 +1824,11 @@
 % Loop through the last row, discarding glue, and saving box widths. At
 % V3.04 changed the scratch box to 2, as the new "\kill" requires that
 % "\box0" be preserved.
+% \changes{v4.14}{2020/02/07}
+%      {allocated global box  (tools/2914)}
 %    \begin{macrocode}
   \setbox\tw@\hbox{%
-    \unhbox\@ne
+    \unhbox\LT@gbox
     \let\LT@old@row\LT@save@row
     \global\let\LT@save@row\@empty
     \count@\LT@cols
@@ -1973,13 +2046,17 @@
 % vsplit off a bit of the last chunk, so that the last page did not just
 % have head and foot sections, but it is hard to do this in a consistent
 % manner.}
+% \changes{v4.14}{2020/02/07}
+%      {Rearrange vertical space tests for tools/3512 (floats on same page)}
 %    \begin{macrocode}
         \dimen@\pagegoal
+        \advance\dimen@\ht\LT@foot
         \advance\dimen@-\ht\LT@lastfoot
         \ifdim\dimen@<\ht\z@
           \setbox\@cclv\vbox{\unvbox\z@\copy\LT@foot\vss}%
           \@makecol
           \@outputpage
+          \global\vsize\@colroom
           \setbox\z@\vbox{\box\LT@head}%
 %    \end{macrocode}
 % End of "\ifdim\dimen@<\ht\@cclc".
@@ -1993,14 +2070,17 @@
 % Reset "\@colroom".
 % \changes{v3.14}{1995/05/02}
 %      {Reset \cs{@colroom}, for tools/1584}
+% \changes{v4.14}{2020/02/07}
+%      {Rearrange vertical space tests for tools/3512 (floats on same page)}
 %    \begin{macrocode}
-      \global\@colroom\@colht
-      \global\vsize\@colht
+%      \global\@colroom\@colht
+%      \global\vsize\@colht
 %    \end{macrocode}
 % Put the last page of the table on to the main vertical list.
+% \changes{v4.14}{2020/02/07}
+%      {Remove box from final page tools/3512}
 %    \begin{macrocode}
-      \vbox
-        {\unvbox\z@\box\ifvoid\LT@lastfoot\LT@foot\else\LT@lastfoot\fi}%
+        \unvbox\z@\box\ifvoid\LT@lastfoot\LT@foot\else\LT@lastfoot\fi
 %    \end{macrocode}
 % End of "\ifnum\outputpenalty > -\LT@end@pen".
 %    \begin{macrocode}
