@@ -6,7 +6,7 @@
 %%
 %% l3doc.dtx  (with options: `class')
 %% 
-%% Copyright (C) 1990-2021 The LaTeX3 Project
+%% Copyright (C) 1990-2021 The LaTeX Project
 %% 
 %% It may be distributed and/or modified under the conditions of
 %% the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -19,7 +19,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: l3doc.dtx
-\RequirePackage{expl3,xparse,calc}
+\RequirePackage{expl3,calc}
 \ProvidesExplClass{l3doc}{2018-04-30}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist

@@ -23,10 +23,3 @@ checkconfigs = {"build","config-TU"}
 dofile (maindir .. "/build-config.lua")
 
 update_tag = update_tag_ltx
-
--- Find and run the build system
-kpse.set_program_name ("kpsewhich")
-if not release_date then
-  dofile(kpse.lookup("l3build.lua"))
-end
-

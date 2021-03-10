@@ -32,8 +32,8 @@
 %%% From File: ltshipout.dtx
 %
 %    \begin{macrocode}
-\providecommand\ltshipoutversion{v1.0h}
-\providecommand\ltshipoutdate{2021/01/19}
+\providecommand\ltshipoutversion{v1.0i}
+\providecommand\ltshipoutdate{2021/01/25}
 %    \end{macrocode}
 %
 %<*driver>
@@ -195,6 +195,16 @@
 %       cases. It can make use of \cs{ShipoutBox} (which doesn't yet
 %       include the background and foreground material).
 %
+%       \textbf{Note:} It is not possible (or say advisable) to try
+%       and use this hook to typeset material with the intention to
+%       return it to main vertical list, it will go wrong and give
+%       unexpected results in many cases---for starters it will appear
+%       after the current page not before or it will vanish or the
+%       vertical spacing will be wrong!
+%    \end{description}
+%  \end{variable}
+%
+%    \begin{description}
 %    \item[\hook{shipout/background}]
 %
 %       This hook adds a picture environment into the background of
@@ -233,6 +243,9 @@
 %       not discarded at the last minute). It should only contain
 %       \cs{special} or similar commands needed to direct post processors
 %       handling the \texttt{.dvi} or \texttt{.pdf} output.\footnotemark
+%  \footnotetext{In
+%         \LaTeXe{} that was already existing, but implemented using a box
+%         register with the name \cs{@begindvibox}.}
 %
 %       ^^A \fmi{not sure it has to be that restrictive.}
 %
@@ -263,11 +276,13 @@
 %       point (but in contrast to \hook{shipout/before} it now
 %       includes the background and foreground material).
 %
+%       \textbf{Note:} Just like \hook{shipout/before} this hook is
+%       not meant to be used for adding adding typeset material back
+%       to the main vertical list---it might vanish or the
+%       vertical spacing will be wrong!
+%
 %
 %    \end{description}
-%  \end{variable}\footnotetext{In
-%         \LaTeXe{} that was already existing, but implemented using a box
-%         register with the name \cs{@begindvibox}.}
 %
 %    As mentioned above the hook \hook{shipout/before} is executed
 %    first and can manipulate the prepared shipout box stored in
@@ -362,6 +377,22 @@
 %    those commands become available as public functions with their original
 %    names as given below.
 %
+%
+%
+% \subsection{Provided Lua\TeX\ callbacks}
+% 
+%  \begin{variable}{pre_shipout_filter}
+%    Under Lua\TeX{} the \texttt{pre\_shipout\_filter} Lua callback is
+%    provided which gets called immediately before the shipout primitive gets invoked.
+%    The signature is
+%    \begin{verbatim}
+%     function(<node> head)
+%       return true
+%     end
+%    \end{verbatim}
+%    The \texttt{head} is the list node corresponding to the box to be shipped out.
+%    The return value should always be \texttt{true}.
+%  \end{variable}
 %
 % \subsection{Information counters}
 %
@@ -691,6 +722,34 @@
 %  \end{macro}
 %
 %
+%  \begin{macro}{\@@_finalize_box:}
+%    For Lua\TeX{} invoke the \texttt{pre\_shipout\_filter} callback.
+%  \changes{v1.0i}{2021/01/22}{Add \texttt{pre\_shipout\_filter} Lua callback}
+%    \begin{macrocode}
+\sys_if_engine_luatex:TF
+  {
+    \newluafunction \@@_finalize_box:
+    \exp_args:Nx \everyjob {
+      \exp_not:V \everyjob
+      \exp_not:N \lua_now:n {
+        luatexbase.create_callback('pre_shipout_filter', 'list')
+        local~call, getbox, setbox = luatexbase.call_callback, tex.getbox, tex.setbox~
+        lua.get_functions_table()[\the \@@_finalize_box:] = function()
+          local~result = call('pre_shipout_filter', getbox(\the \l_shipout_box))
+          if~not (result == true) then~
+            setbox(\the \l_shipout_box, result~or~nil)
+          end~
+        end
+      }
+    }
+    \protected \luadef \@@_finalize_box: \the \@@_finalize_box:
+  } {
+    \cs_set_eq:NN \@@_finalize_box: \scan_stop:
+  }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
 %  \begin{macro}{\@@_execute:}
 %    This is going to the be the code run by \cs{shipout}. The code
 %    follows closely the  ideas from \pkg{atbegshi}, so not
@@ -941,6 +1000,7 @@
                     }
                     \bool_gset_true:N \g_@@_lastpage_handled_bool
                 }
+              \@@_finalize_box:
 %    \end{macrocode}
 %    Finally we run the actual \TeX{} primitive for shipout. As that will
 %    expand delayed \cs{write} statements inside the page in which
