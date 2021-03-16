@@ -60,6 +60,8 @@ tlmgr install   \
 # special testing
 tlmgr install   \
   bidi          \
+  bigfoot       \
+  ncctools      \
   dinbrief      \
   everyshi      \
   filehook      \
