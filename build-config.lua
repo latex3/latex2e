@@ -72,7 +72,7 @@ end
 do
   local tag = os.getenv'TRAVIS_TAG'
   if tag and tag ~= "" then
-    master_branch = not string.match(tag, '^dev-')
+    main_branch = not string.match(tag, '^dev-')
   else
     local branch = os.getenv'TRAVIS_BRANCH'
     if not branch then
@@ -80,9 +80,9 @@ do
       branch = f:read'*a':sub(1,-2)
       assert(f:close())
     end
-    master_branch = string.match(branch, '^master')
+    main_branch = string.match(branch, '^main')
   end
-  if not master_branch then
+  if not main_branch then
     tdsroot = "latex-dev"
     print("Creating/installing dev-version in " .. tdsroot)
     ctanpkg = ctanpkg or ""
@@ -117,7 +117,7 @@ function update_tag(file,content,tagname,tagdate)
     tag = tagname
   end
   local patch_level = ""
-  if master_branch then
+  if main_branch then
     if rev then
       tag = tag .. " patch level " .. rev
       patch_level = rev
@@ -169,7 +169,7 @@ function update_tag_ltx(file,content,tagname,tagdate)
   if not tag then
     tag = tagname
   end
-  if master_branch then
+  if main_branch then
     if rev then
       tag = tag .. " patch level " .. rev
     end
