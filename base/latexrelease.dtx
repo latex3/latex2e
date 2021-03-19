@@ -40,7 +40,7 @@
 %<*latexrelease>
 % \fi
 %         \ProvidesFile{latexrelease.dtx}
-          [2021/01/23 v1.0l LaTeX release emulation and tests
+          [2021/03/18 v1.0m LaTeX release emulation and tests
               (including releases up to \latexreleaseversion)]
 % \iffalse
 %</latexrelease>
@@ -391,6 +391,7 @@
 %
 % \begin{macro}{\sourceLaTeXdate}
 %   \changes{v1.0l}{2021/01/23}{\cs{sourceLaTeXdate} added}
+%   \changes{v1.0m}{2021/03/18}{Define \cs{sourceLaTeXdate} conditionally}
 %   Store the original \LaTeX{} format version
 %   as a number in the format |YYYYMMDD|.  This macro has to
 %   be defined conditionally, so that it isn't changed in case
@@ -501,72 +502,83 @@ of this package available from CTAN}
 %
 % \section{Ignoring \texttt{\string_new} errors when rolling back}
 %
+% \changes{v1.0m}{2021/03/18}
+%         {Make \texttt{\string_new} definitions harmless}
 %    \begin{macrocode}
 \ExplSyntaxOn
+%<@@=latexrelease>
 %    \end{macrocode}
 %
+% First we'll define a \cs{declarecommand} that does \cs{renewcommand}
+% if the command being defined already exists, and \cs{newcommand}
+% otherwise.
 %    \begin{macrocode}
-\cs_set_eq:NN \__latexrelease_cs_if_free:NF \cs_if_free:NF 
-\cs_set_eq:NN \__latexrelease___kernel_chk_if_free_cs:N \__kernel_chk_if_free_cs:N
+\cs_new_protected:Npn \@@_declare_command:w
+  { \@star@or@long \@@_declare_command:Nw }
+\cs_new_protected:Npn \@@_declare_command:Nw #1
+  { \cs_if_exist:NTF #1 { \renew@command } { \new@command } #1 }
 %    \end{macrocode}
 %
+% Now create a token list to hold the list of changed commands, and
+% define a temporary macro that will loop through the command list,
+% store each in \cs{l_@@_restores_tl}, save a copy, and redefine each.
 %    \begin{macrocode}
-\cs_set_eq:NN \__latexrelease___kernel_msg_error:nnx \__kernel_msg_error:nnx
-\cs_set_eq:NN \__latexrelease___kernel_msg_new:nn \__kernel_msg_new:nn
-\cs_set_eq:NN \__kernel_msg_new:nnn \__latexrelease___kernel_msg_new:nnn
-\cs_set_eq:NN \__latexrelease_msg_new:nn \msg_new:nn
-\cs_set_eq:NN \__latexrelease_msg_new:nnn \msg_new:nnn
-\cs_set_eq:NN \__latexrelease_msg_new:nnnn \msg_new:nnnn
+\tl_new:N \l_@@_restores_tl
+\cs_new:Npn \@@_tmp:w #1 #2
+  {
+    \quark_if_recursion_tail_stop:N #1
+    \tl_put_right:Nn \l_@@_restores_tl {#1}
+    \cs_set_eq:cN { @@_ \cs_to_str:N #1 } #1
+    \cs_set_eq:NN #1 #2
+    \@@_tmp:w
+  }
+\tl_clear:N \l_@@_restores_tl
 %    \end{macrocode}
 %
+% The redefinitions below are needed because:
+% \begin{description}
+%   \def\makelabel#1{\cs{#1}}
+%   \item[__kernel_chk_if_free_cs:N] This function is used ubiquitously
+%     in the \pkg{l3kernel} to check if a control sequence is definable,
+%     and give an error otherwise (similar to \cs{@ifdefinable}).
+%     Making it a no-op is enough for most cases (except when defining
+%     new registers);
+%   \item[__kernel_msg_error:nnx] This command is used to error on
+%     already defined scan marks.  Just making the error do nothing is
+%     enough, as no action is taken in that case;
+%   \item[__kernel_msg_new:nnn] Used to define new messages.  Making it
+%     \texttt{\string_set} is enough;
+%   \item[__kernel_msg_new:nnnn] Same as above;
+%   \item[msg_new:nnn] Same as above;
+%   \item[msg_new:nnnn] Same as above;
+%   \item[NewDocumentCommand] Used to define user-level commands in the
+%     kernel.  Making it equal to \cs{DeclareDocumentCommand} solves the
+%     problem;
+%   \item[newcommand] Same as above.
+% \end{description}
+% And here we go:
 %    \begin{macrocode}
-\cs_set_eq:NN \__latexrelease_NewDocumentCommand \NewDocumentCommand
-\cs_set_eq:NN \__latexrelease_newcommand \newcommand
+\@@_tmp:w
+  \__kernel_chk_if_free_cs:N \use_none:n
+  \__kernel_msg_error:nnx \use_none:nnn
+  \__kernel_msg_new:nnn   \__kernel_msg_set:nnn
+  \__kernel_msg_new:nnnn  \__kernel_msg_set:nnnn
+  \msg_new:nnn  \msg_set:nnn
+  \msg_new:nnnn \msg_set:nnnn
+  \NewDocumentCommand \DeclareDocumentCommand
+  \newcommand \@@_declare_command:w
+  \q_recursion_tail \q_recursion_tail
+  \q_recursion_stop
 %    \end{macrocode}
 %
-%    The new definitions while rolling back:
+% Finally, redirect the error thrown by \cs{NewHook} to nowhere so it
+% can be safely reused (the hook isn't redeclared if it already exists).
 %    \begin{macrocode}
-\cs_set_eq:NN \cs_if_free:NF \use_none:nn
-\cs_set_eq:NN \__kernel_chk_if_free_cs:N \use_none:n
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-\cs_set_eq:NN \__kernel_msg_error:nnx  \__kernel_msg_info:nnx
-\cs_set_eq:NN \__kernel_msg_new:nn     \__kernel_msg_set:nn
-\cs_set_eq:NN \__kernel_msg_new:nnn    \__kernel_msg_set:nnn
-\cs_set_eq:NN \msg_new:nn   \msg_set:nn
-\cs_set_eq:NN \msg_new:nnn  \msg_set:nnn
-\cs_set_eq:NN \msg_new:nnnn \msg_set:nnnn
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-\def\declarecommand{\@star@or@long\declare@command}
-\def\declare@command#1{%
-  \@tempswafalse
-  \ifx#1\@undefined \@tempswatrue \else     % not the way to do it but ...
-  \ifx#1\relax      \@tempswatrue \fi \fi   % good enough for now
-  \if@tempswa
-    \expandafter\new@command
-  \else
-    \expandafter\renew@command
-  \fi
-  #1}
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-\cs_set_eq:NN \NewDocumentCommand\DeclareDocumentCommand
-\cs_set_eq:NN \newcommand        \declarecommand
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-\msg_redirect_name:nnn  {hooks} {exists} {none}
+\msg_redirect_name:nnn { hooks } { exists } { none }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
 \ExplSyntaxOff
-%    \end{macrocode}
-%
-%    \begin{macrocode}
 %</latexrelease>
 %    \end{macrocode}
 %
@@ -574,37 +586,26 @@ of this package available from CTAN}
 %
 %    \begin{macrocode}
 %<*latexrelease-finish>
-%    \end{macrocode}
-%
-%    \begin{macrocode}
 \ExplSyntaxOn
 %    \end{macrocode}
 %
+% Now just loop through the list of redefined commands and restore their
+% previous meanings.
 %    \begin{macrocode}
-\cs_set_eq:NN \cs_if_free:NF \__latexrelease_cs_if_free:NF
-\cs_set_eq:NN  \__kernel_chk_if_free_cs:N \__latexrelease___kernel_chk_if_free_cs:N
-\cs_set_eq:NN \__kernel_msg_error:nnx \__latexrelease___kernel_msg_error:nnx
-\cs_set_eq:NN \__kernel_msg_new:nn \__latexrelease___kernel_msg_new:nn
-\cs_set_eq:NN \__kernel_msg_new:nn \__latexrelease___kernel_msg_new:nnn
-\cs_set_eq:NN \msg_new:nn   \__latexrelease_msg_new:nn
-\cs_set_eq:NN \msg_new:nnn  \__latexrelease_msg_new:nnn
-\cs_set_eq:NN \msg_new:nnnn \__latexrelease_msg_new:nnnn
-\cs_set_eq:NN \NewDocumentCommand \__latexrelease_NewDocumentCommand
-\cs_set_eq:NN \newcommand        \__latexrelease_newcommand
+\tl_map_inline:Nn \l_@@_restores_tl
+  { \cs_set_eq:Nc #1 { @@_ \cs_to_str:N #1 } }
+%    \end{macrocode}
+%
+% And restore the hook error message.
+%    \begin{macrocode}
+\msg_redirect_name:nnn { hooks } { exists } { }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-\msg_redirect_name:nnn  {hooks} {exists} {}
-%    \end{macrocode}
-%
-%    \begin{macrocode}
+%<@@=>
 \ExplSyntaxOff
-%    \end{macrocode}
-%
-%    \begin{macrocode}
 %</latexrelease-finish>
 %    \end{macrocode}
-%
 %
 % \section{Individual Changes}
 %
