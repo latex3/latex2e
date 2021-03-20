@@ -366,6 +366,95 @@
 % necessary as the new code only gets defined if that release is
 % chosen.
 %
+% \section{Declaring entire modules}
+%
+% Sometimes a large chunk of code is added as a module to another larger
+% code base.  As example of that in the 2020-10-01 release \LaTeX{} got
+% a new hook management system, \pkg{lthooks}, which was added in one go
+% and, as with all changes to the kernel, it was added to
+% \pkg{latexrelease}.  However rolling back from a future date to the
+% 2020-10-01 release didn't work because \pkg{latexrelease} would try to
+% define again all those commands, which would result in many errors.
+%
+% To solve that problem, completely new modules can be defined in
+% \pkg{latexrelease} using the commands:
+% \begin{quote}
+%   \cs{NewModuleRelease}%^^A
+%     \verb|{|\meta{name}\verb|}{|\meta{release date}\verb|}|\\
+%   \null\quad\meta{module code}\\
+%   \cs{IncludeInRelease}%^^A
+%     \verb|{0000/00/00}{|\meta{name}\verb|}{|\meta{message}\verb|}|\\
+%   \null\quad\meta{undefine module code}\\
+%   \cs{EndModuleRelease}
+% \end{quote}
+% With that setup, the module \meta{name} will be declared to exist only
+% in releases equal or later \meta{release date}.
+%
+% If \pkg{latexrelease} is rolling backwards or forwards between dates
+% after \meta{release date}, then all the \meta{module code} is skipped,
+% except when inside \meta{IncludeInRelease} guards, in which case the
+% code is applied or skipped as discussed above.
+%
+% If rolling forward from a date before the module's \meta{release date}
+% to a date after that, then all the \meta{module code} is executed to
+% define the module, and \cs{IncludeInRelease} guards are executed
+% accordingly, depending on the date declared and the target date.
+%
+% If \pkg{latexrelease} is rolling back to a date before \meta{release
+% date}, then the code in the \cs{IncludeInRelease} guard dated
+% \verb|0000/00/00| is executed instead to undefine the module.  This
+% guard \emph{is not} ended by the usual \cs{EndIncludeInRelease}, but
+% instead by \cs{EndModuleRelease}.
+%
+% Finally, if rolling backwards or forwards between dates both before
+% \meta{release date}, the entire code between \meta{NewModuleRelease}
+% and \meta{EndModuleRelease} is entirely skipped.
+%
+% \subsection{Example}
+%
+% Here is an example usage of the structure described above, as it would
+% be used in the \LaTeX{} kernel, taking \pkg{lthooks} as example:
+% \begin{verbatim}
+% %<*2ekernel|latexrelease>
+% \ExplSyntaxOn
+% %<latexrelease>\NewModuleRelease{lthooks}{2020/10/01}
+% \NewDocumentCommand \NewHook { m }
+%   { \hook_new:n {#1} }
+% %<latexrelease>\IncludeInRelease{2021/05/01}{\AddToHook}{Long~argument}
+% \NewDocumentCommand \AddToHook { m o +m }
+%   { \hook_gput_code:nnn {#1} {#2} {#3} }
+% %<latexrelease>\EndIncludeInRelease
+% %<latexrelease>
+% %<latexrelease>\IncludeInRelease{2020/10/01}{\AddToHook}{Long~argument}
+% %<latexrelease>\NewDocumentCommand \AddToHook { m o m }
+% %<latexrelease>  { \hook_gput_code:nnn {#1} {#2} {#3} }
+% %<latexrelease>\EndIncludeInRelease
+% %<latexrelease>
+% %<latexrelease>\IncludeInRelease{0000/00/00}{lthooks}{Undefine~lthooks}
+% %<latexrelease>\cs_undefine:N \NewHook
+% %<latexrelease>\cs_undefine:N \NewReversedHook
+% %<latexrelease>\cs_undefine:N \AddToHook
+% %<latexrelease>\EndModuleRelease
+% \ExplSyntaxOff
+% %</2ekernel|latexrelease>
+% \end{verbatim}
+%
+% In the example above, \cs{NewHook} is declared only once, and
+% unchanged in the next release (2021/05/01 in the example), so it has
+% no \cs{IncludeInRelease} guards, and will only be defined if needed.
+% \cs{AddToHook}, on the other hand, changed between the two releases
+% (made up for the example;  it didn't really happen)
+% and has an \cs{IncludeInRelease} block for the current release (off
+% \pkg{docstrip} guards, so it goes into the kernel too), and another
+% for the previous release (in \pkg{docstrip} guards so it goes only
+% into \pkg{latexrelease}).
+%
+% Note that in the example above, \cs{ExplSyntaxOn} and
+% \cs{ExplSyntaxOff} were added \emph{outside} the module code, because,
+% as discussed above, sometimes the code outside \cs{IncludeInRelease}
+% guards may be skipped, but not the code inside them, and in that case
+% the catcodes would be wrong when defining the code.
+%
 % \section{fixltx2e}
 %
 % As noted above, prior to the 2015 \LaTeX\ release updates to the
@@ -415,7 +504,8 @@
 % \end{macro}
 %
 % \changes{v1.0c}{2015/02/19}{Swap argument order}
-% \changes{v1.0k}{2018/05/08}{reset \cs{\requestedLaTeXdate} for current and latest options, github issue 43}
+% \changes{v1.0k}{2018/05/08}{reset \cs{\requestedLaTeXdate} for current
+%                             and latest options, github issue 43}
 %    \begin{macrocode}
 \DeclareOption*{%
   \def\@IncludeInRelease#1[#2]{\@IncludeInRele@se{#1}}%
