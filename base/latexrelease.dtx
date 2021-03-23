@@ -606,6 +606,10 @@ of this package available from CTAN}
 %
 % \changes{v1.0m}{2021/03/18}
 %         {Make \texttt{\string_new} definitions harmless}
+%
+% Define a set of changes here, but we'll only use them later to make
+% sure they are applied after \pkg{expl3} is loaded.  If loading from a
+% rather old format, we don't have \cs{ExplSyntaxOn} yet.
 %    \begin{macrocode}
 \begingroup
   \catcode95=11 % _
@@ -624,8 +628,59 @@ of this package available from CTAN}
   { \@star@or@long \@@_declare_command:Nw }
 \cs_gset_protected:Npn \@@_declare_command:Nw #1
   { \cs_if_exist:NTF #1 { \renew@command } { \new@command } #1 }
+%    \end{macrocode}
+%
+% Then define a version of \cs{e@alloc} that checks if the control
+% sequence being defined already exists, and if so, checks if its
+% meaning is the same as the one that would be defined with the call to
+% \cs{e@alloc}.  If both tests pass, nothing is defined to save a
+% register.  This version also takes care of setting
+% \cs{allocationnumber} to the value it would have after the register is
+% allocated.
+%    \begin{macrocode}
 \cs_gset_protected:Npn \@@_e@alloc:NnnnnN #1 #2 #3 #4 #5 #6
-  { \cs_if_free:NT #6 { \@@_e@alloc #1 {#2} {#3} {#4} {#5} #6 } }
+  {
+    \cs_if_free:NTF #6
+      { \use:n }
+      {
+        \exp_after:wN \@@_e@alloc:N
+          \token_to_meaning:N #6 \scan_stop: {#2} #6
+      }
+        { \@@_e@alloc #1 {#2} {#3} {#4} {#5} #6 }
+  }
+%    \end{macrocode}
+% Walk through the meaning of the control sequence token by token,
+% looking for the register allocation number.
+%    \begin{macrocode}
+\cs_gset_protected:Npn \@@_e@alloc:N #1
+  {
+    \if_int_compare:w 0 < 0
+        \if_int_compare:w 10 < 9#1 ~ 1 \fi:
+        \if_charcode:w " #1 1 \fi: \exp_stop_f:
+      \tex_afterassignment:D \@@_e@alloc:w
+      \@tempcnta #1
+      \use_i:nnn
+    \fi:
+    \use:n
+      {
+        \if_meaning:w \scan_stop: #1
+          \exp_after:wN \use_iv:nnnn
+        \fi:
+        \@@_e@alloc:N
+      }
+  }
+%    \end{macrocode}
+% When found, check if it is the exact same register as it would be
+% allocated, and if it is, set \cs{allocationnumber} accordingly and
+% exit, otherwise undefine the register and allocate from scratch.
+%    \begin{macrocode}
+\cs_gset_protected:Npn \@@_e@alloc:w #1 \scan_stop: #2 #3
+  {
+    #2 \@@_tmp:w = \@tempcnta
+    \token_if_eq_meaning:NNTF #3 \@@_tmp:w
+      { \int_set_eq:NN \allocationnumber \@tempcnta  \use_none:n }
+      { \cs_set_eq:NN #3 \tex_undefined:D            \use:n      }
+  }
 %    \end{macrocode}
 %
 % Now create a token list to hold the list of changed commands, and
