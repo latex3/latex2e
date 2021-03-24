@@ -33,7 +33,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltvers.dtx}
-             [2021/01/15 v1.1e LaTeX Kernel (Version Info)]
+             [2021/03/18 v1.1f LaTeX Kernel (Version Info)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltvers.dtx}
@@ -214,6 +214,11 @@
 %    \end{macrocode}
 %
 % \begin{macro}{\IncludeInRelease}
+% \begin{macro}{\EndIncludeInRelease}
+% \begin{macro}{\@IncludeInRelease}
+% \begin{macro}{\@IncludeInRele@se}
+% \begin{macro}{\@gobble@IncludeInRelease}
+% \begin{macro}{\@check@IncludeInRelease}
 % \changes{v1.0w}{2015/02/21}
 %         {set \cs{@currname} empty here (in case \cs{IncludeInRelease} input early)}
 %    \begin{macrocode}
@@ -224,6 +229,7 @@
 % \changes{v1.0m}{2015/01/17}{modified with \cs{@currname}}
 % \changes{v1.0o}{2015/01/19}{Optional argument}
 % \changes{v1.0q}{2015/02/19}{Swap argument order}
+% \changes{v1.1f}{2021/03/18}{Add support for usage in \cs{NewModuleRelease}}
 %
 %    \begin{macrocode}
 %<*2ekernel|latexrelease>
@@ -237,9 +243,29 @@
                 {There is an \string\EndIncludeRelease\space missing}%
   \@includeinreleasefalse
   \fi
-  \kernel@ifnextchar[%
-  {\@IncludeInRelease{#1}}
-  {\@IncludeInRelease{#1}[#1]}}
+  \ifnum0%
+      \ifx\new@moduledate\@empty\else 1\fi
+      \ifnum \expandafter\@parse@version#1//00\@nil=0 1\fi
+      =11
+    \expandafter\@firstoftwo
+  \else
+    \expandafter\@secondoftwo
+  \fi
+    {\finish@module@release{#1}}%
+    {\kernel@ifnextchar[%
+      {\@IncludeInRelease{#1}}
+      {\@IncludeInRelease{#1}[#1]}}}
+\def\finish@module@release#1#2#3{%
+  \toks@{[#1] #3}%
+  \ifnum\expandafter\@parse@version\new@moduledate//00\@nil
+       >\expandafter\@parse@version\fmtversion//00\@nil
+    \GenericInfo{}{Applying: \the\toks@}%
+  \else
+    \GenericInfo{}{Skipping: \the\toks@}%
+    \expandafter\gobble@finish@module@release
+  \fi}
+\long\def\gobble@finish@module@release#1\EndModuleRelease{%
+  \EndModuleRelease}
 %    \end{macrocode}
 %
 % If a specific date has not been specified in |latexrelease|
@@ -261,9 +287,9 @@
 %    only really needed for rolling forward. So maybe one day \dots
 %    \begin{macrocode}
     \ifnum\expandafter\@parse@version#1//00\@nil
-          >\expandafter\@parse@version\fmtversion//00\@nil
+         >\expandafter\@parse@version\fmtversion//00\@nil
       \GenericInfo{}{Skipping: \the\toks@}%
-     \expandafter\expandafter\expandafter\@gobble@IncludeInRelease
+      \expandafter\expandafter\expandafter\@gobble@IncludeInRelease
     \else
       \GenericInfo{}{Applying: \the\toks@}%
       \@includeinreleasetrue
@@ -282,6 +308,9 @@
   \@includeinreleasefalse
 \else
   \PackageError{latexrelease}{mis-matched EndIncludeInRelease}{}%
+\fi
+\if@skipping@module
+  \expandafter\new@module@skip
 \fi}
 %    \end{macrocode}
 %
@@ -296,13 +325,84 @@
                                    #2#3\@end@check@IncludeInRelease{%
   \ifx\@check@IncludeInRelease#2\else
     \PackageError{latexrelease}{skipped IncludeInRelease for tag \string#2}{}%
+  \fi
+  \if@skipping@module
+    \expandafter\new@module@skip
   \fi}
 %    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \subsection{Declaring an all-new module}
+%
+% \begin{macro}{\if@skipping@module}
+% \begin{macro}{\NewModuleRelease}
+% \begin{macro}{\EndModuleRelease}
+% \begin{macro}{\new@module@skip}
+% \begin{macro}{\new@modulename}
+% \begin{macro}{\new@moduledate}
+%
+%   When we have a whole new module, we can't roll back to a date where
+%   such module exists, otherwise hundreds of \enquote{command already
+%   defined} errors will pop up.  But we can't skip it altogether
+%   either, because the module might have changes we still want applied,
+%   so a more detailed cherry-picking of code chunks have to be done.
+%
+%   \changes{v1.1f}{2021/03/18}{Added \cs{NewModuleRelease}.}
+%    \begin{macrocode}
+\let\if@skipping@module\iffalse
+\def\@skipping@moduletrue{\let\if@skipping@module\iftrue}
+\def\@skipping@modulefalse{\let\if@skipping@module\iffalse}
+\let\new@modulename\@empty
+\let\new@moduledate\@empty
+\def\NewModuleRelease#1#2{%
+  \ifx\new@modulename\@empty \else
+    \@latex@error{Nested \noexpand\NewModuleRelease forbidden.}\@ehd \fi
+  \edef\new@modulename{#1}%
+  \edef\new@moduledate{#2}%
+  \GenericInfo{}{BEGIN module: \new@modulename\space (\new@moduledate)}%
+  \ifnum\sourceLaTeXdate<%
+      \expandafter\@parse@version\new@moduledate//00\@nil\relax
+    \ifnum\expandafter\@parse@version\fmtversion//00\@nil<%
+          \expandafter\@parse@version\new@moduledate//00\@nil\relax
+      \GenericInfo{}{Skipping module \new@modulename}%
+      \expandafter\expandafter
+      \expandafter\gobble@finish@module@release
+    \else
+      \GenericInfo{}{Applying module \new@modulename}
+      \@skipping@modulefalse
+    \fi
+  \else
+    \GenericInfo{}{Skipping module \new@modulename}
+    \@skipping@moduletrue
+    \expandafter\new@module@skip
+  \fi}
+\long\def\new@module@skip#1\IncludeInRelease{\IncludeInRelease}
+\def\EndModuleRelease{%
+  \ifx\new@modulename\@empty
+    \@latex@error{Extra \string\EndModuleRelease.}\@eha
+  \else
+    \GenericInfo{}{END module: \new@modulename\space (\new@moduledate)}%
+    \let\new@modulename\@empty
+    \let\new@moduledate\@empty
+    \@skipping@modulefalse
+  \fi}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
 %
 %    \begin{macrocode}
 %</2ekernel|latexrelease>
 %    \end{macrocode}
-% \end{macro}
+%
 % \Finale
 %
 \endinput
