@@ -135,11 +135,150 @@ provided in \file{ltpara-doc.pdf} and for those who want to study the
 some point in the future it will get fully merged into the \LaTeX{}
 kernel and will then appear in \file{source2e.pdf}.
 
+\section{Other kernel hook extensions}
+
+\subsection{Add a Lua callback to \pkg{ltshipout} to provide
+  a uniform location for applying custom attributes}
+
+Just before shipping out a page, a new \LuaTeX{} callback
+\texttt{pre\_shipout\_filter} is now called to allow final
+adjustments to the box to be shipped out. This is particularly for
+Lua\TeX\ packages which flag certain elements of the page (e.g. using
+attributes or properties) in order to apply certain effects to these
+elements at shipout. An example for this is the \pkg{luacolor}
+package which could insert the color commands using this callback.
+
+
+\subsection{Provide a hook in \cs{selectfont}}
+
+After \cs{selectfont} has altered the font we run a hook so that
+packages can make final adjustments. This functionality was originally
+provided by the \pkg{everysel} package, the new implementation is
+slightly different and uses the standard hook management.
+%
+\githubissue{444}
+
+
+\subsection{Shipping out a page while bypassing hooks}
+
+In the 2020 October release several hooks were added to the page
+shipout process, e.g., to add some background or foreground material
+to some or all pages. We now also added a \cs{RawShipout} command that
+bypasses most of these hooks during the shipout. Some essential
+internal bookkeeping still takes place such as updating the
+\texttt{totalpages} counter or adding \texttt{shipout/firstpage} or
+\texttt{shipout/lastpage} material if the page happens to be the first
+or last.
+
+
+
+
+\section{A note on the \texttt{TS1} encoding}
+
+The \enquote{text symbol encoding} (\texttt{TS1}) was originally
+designed at the Cork Conference as a companion to the \texttt{T1}
+encoding. In it various symbols that are not subject to hyphenation
+got assembled and the \pkg{textcomp} package was developed to make
+them accessible. Unfortunately the \TeX{} community was a bit too
+enthusiastic and included several symbols only available in a few
+\TeX{} fonts and some, such as the capital accents, not available at
+all but developed as part of the reference font implementation.
+
+In hindsight that was a very bad idea because it meant that other
+existing fonts (at the time) and later new fonts that got developed
+were unable to provide the full set of glyphs that made up the
+\texttt{TS1} encoding. For existing free PostScript fonts people to
+the extra effort and produced virtual fonts that that faked (some) of
+the missing glyphs. But this was and is a time consuming effort so it
+was done only for a few basic fonts. But even then, only some fonts
+included all glyphs from \texttt{TS1} so the \pkg{textcomp} already
+back then contained a long list, dividing fonts into 5 categories
+according to which glyphs were implemented and which were missing.
+
+A couple of releases back the functionality of the \pkg{textcomp}
+package got integrated into the core code of the \LaTeX{} kernel so
+that its glyph definitions, e.g., \cs{textcopyright}, \cs{texteuro} or
+\cs{textyen}, are now automatically available without the need to load
+an additional package in the preamble.
+
+At the time this happened many new free fonts had appeared and
+unfortunately the chaos around the question \enquote{which glyphs of
+  the \texttt{TS1} encoding are implemented by which font} had
+increased with it. Not only did one find many new holes it was next to
+impossible to order the set of fonts into a reasonable set of
+sub-encodings that are contained in each other in a single sequence.
+
+In the end we decided on nine or ten sub-encodings with a reasonable
+number of font in each so that all font implemented all glyphs of the
+sub-encoding they got mapped to. Thus when typesetting with a font one
+could be sure that a command like \cs{textcopyleft} would either
+typeset the requested character (if the glyph was part of the
+sub-encoding the font belonged to) or it would raise an error, saying
+that the glyph is unavailable in that fact. The mapping would ensure
+that \LaTeX{} always errs on the side of caution, because it might
+claim a glyph is unavailable even though in fact it is.
+
+For example, the old \texttt{pcr} (PostScript Courier) font (as well
+as most other older PS fonts) is mapped to sub-encoding 5 and
+therefore claims that \cs{textasciigrave} is unavailable even though
+in fact for Courier this is not true. If one uses such a font and this
+becomes an issue then there are a couple (suboptimal) possibilities.
+For one, one can alter the mapping of Courier and pretend that belongs
+to a fuller sub-encoding, e.g.
+\begin{verbatim}
+  \DeclareEncodingSubset{TS1}{pcr}{2}
+\end{verbatim}
+The downside is, that \LaTeX{} then believes other glyphs that are in fact
+unavailable are also there, so that it is important to check that the
+final document doesn't have some missing glyphs.
+
+An alternative is to pretend that \cs{textasciigrave} can always be
+taken from the \texttt{TS1} encoding (no questions asked):
+\begin{verbatim}
+  \DeclareTextSymbolDefault{\textasciigrave}{TS1}
+\end{verbatim}
+Again there is a danger that this is not true when it is used with a
+different font and would then generate a missing glyph.
+
+Finally, and possibly the best solution, if not impossible for other
+reasons, is to simply use a different font, for example, to use the
+\TeX{} Gyre Cursor font (a reimplementation of Courier but with a
+much more complete glyph set).
+
+
 
 
 \section{Other changes to the \LaTeX{} kernel}
 
-\subsection{Adjusting \env{itemize} labels with \cs{labelitemfont}}
+
+\subsection{Support several footnote marks to one footnote}
+
+It is sometimes necessary to reference the same footnote several
+times, i.e., produce several footnote marks with the same number or
+symbol. This is now always possible by placing a \cs{label} into the
+\cs{footnote} and reference it with the command \cs{footref}
+elsewhere.  This way marks referring to footnotes anywhere on the page
+(including those in \texttt{minipage}s) can be generated.  In the past
+this command was only available with certain classes or when loading
+the \pkg{footmisc} package.
+%
+\githubissue{482}
+
+
+\subsection{Improved copy \& paste support for \pdfTeX{} documents}
+
+When compiling with \pdfTeX{}, additional information is added to the
+PDF file to improve copying from and searching in text. This especially
+allows ligatures to copy correctly from \pdfTeX{} generated PDF files in
+most cases.
+
+Since this has been integrated into the kernel, most documents should no
+longer need to load the \pkg{cmap} package or input \texttt{glyphtounicode}.
+%
+\githubissue{465}
+
+
+\subsection{Customize \env{itemize} labels with \cs{labelitemfont}}
 
 The command \cs{labelitemfont} was in fact already introduced with the
 \LaTeX\ release 2020-02-02, but back then we forgot to describe it, so
@@ -172,7 +311,75 @@ you the buggy old behavior back.
 \githubissue{497}
 
 
-\subsection{A note on file names with spaces, dots or UTF-8 characters}
+
+
+
+\subsection{Additional support for Unicode characters from the
+  Latin Extended Additional block}
+
+\LaTeX\ is quite capable of typesetting characters such as
+\enquote{\d{m}}, but until now it lacked the Unicode mappings for some
+characters that are used to write Sanskrit words in Latin
+transliteration (as seen in books about yoga, Buddhist philosophy,
+etc.). These have now been added so that such characters can be
+entered directly instead of resorting to \verb=\d{m}= and so forth.
+%
+\githubissue{484}
+
+
+
+
+\subsection{Provide more ``dashes'' in encodings \texttt{OT1}, \texttt{T1} and \texttt{TU}}
+
+When pasting in text from external sources one sometimes encounters the Unicode characters
+%
+\texttt{"2011} (non-breaking hyphen),
+\texttt{"2012} (figure dash) and
+\texttt{"2015} (horizontal bar)
+%
+in addition to the common \texttt{"2013} (en-dash) and \texttt{"2014}
+(em-dash). In the past the first three characters produced an error
+message when used with \pdfTeX{}. Now they typeset an approximation
+(as they are unavailable in \texttt{OT1} or \texttt{T1} encoded fonts
+used by \pdfTeX{}), e.g., the figure dash is approximated by an en-dash.
+
+In Unicode engines they either work (if contained in the selected
+Unicode font) or typeset nothing and produce a ``Missing character''
+warning in the log file.
+
+However, what works in all engines now, is to access the characters
+via the command names \cs{textnonbreakinghyphen}, \cs{textfiguredash}
+and \cs{texthorizontalbar}, respectively.
+%
+\githubissue{404}
+
+
+
+
+
+\subsection{Poor man's \cs{textasteriskcentered} if missing}
+
+The \cs{textasteriskcentered} symbol, used as part of the set of
+footnote symbols in \LaTeX{}, is assumed to be implemented by
+every font in the \texttt{TS1} encoding (when \pdfTeX{} is used) or
+in the \texttt{TU} encoding for the Unicode engines. Unfortunately,
+that assumption is not correct for all fonts, for example, for the
+\texttt{stix2} fonts don't offer the glyph, with the result that one
+gets missing glyphs when using \cs{thanks} etc.
+
+Therefore the definition for \cs{textasteriskcentered} was
+altered to check if there is a glyph in the right position and if not
+a normal \enquote{*} is used, slightly enlarged and lowered.  That may
+not be perfect in all cases, but certainly better than nothing showing
+up or to taking the glyph from a different font.
+%
+\githubissue{502}
+
+
+
+
+
+\subsection{A note on file names with spaces, dots or \acro{utf-8} characters}
 
 In one of the the recent \LaTeX{} releases we improved the interface
 for specifying file names so that they can now safely contain spaces
@@ -211,6 +418,30 @@ removed if it was used. Thus \verb=\include{mychap.tex}= now loads
 \githubissue{486}
 
 
+
+\subsection{Allow \acro{utf-8} characters in file name of \env{filecontents}}
+
+Since a few releases back, the \env{filecontents} environment allows writing a
+file with \acro{utf-8} characters in its name.  However there was a bug that
+would not allow \emph{over}writing a file with \acro{utf-8} characters in the
+name.  This has been fixed and now \env{filecontents} allows any characters in
+the file name.
+%
+\githubissue{415}
+
+
+\subsection{Robust commands in file name arguments}
+The file name handling has been modified so that \verb|\string| is
+applied while normalizing robust commands while determining the file
+name.  Previously \verb|\input{\sqrt{2}}| would cause \LaTeX\ to loop indefinitely.
+With the new behavior it accesses \verb|sqrt {2}.tex|.
+%
+\githubissue{481}
+
+
+
+
+
 \subsection{\cs{end}\texttt{\textbraceleft document\textbraceright}
   should always start in v-mode}
 
@@ -236,50 +467,6 @@ the name. The coding has now been slightly altered to allow for this.
 \githubissue{427}
 
 
-\subsection{Add a Lua callback to \pkg{ltshipout} to provide
-  a uniform location for applying custom attributes}
-
-Just before shipping out a page, a new \LuaTeX{} callback
-\texttt{pre\_shipout\_filter} is now called to allow final
-adjustments to the box to be shipped out. This is particularly for
-Lua\TeX\ packages which flag certain elements of the page (e.g. using
-attributes or properties) in order to apply certain effects to these
-elements at shipout. An example for this is the \pkg{luacolor}
-package which could insert the color commands using this callback.
-
-
-\subsection{Improved copy\&paste support for \pdfTeX{} documents}
-
-When compiling with \pdfTeX{}, additional information is added to the
-PDF file to improve copying from and searching in text. This especially
-allows ligatures to copy correctly from \pdfTeX{} generated PDF files in
-most cases.
-
-Since this has been integrated into the kernel, most documents should no
-longer need to load the \pkg{cmap} package or input \texttt{glyphtounicode}.
-%
-\githubissue{465}
-
-
-\subsection{Provide a hook in \cs{selectfont}}
-
-After \cs{selectfont} has altered the font we run a hook so that
-packages can make final adjustments. This functionality was originally
-provided by the \pkg{everysel} package, the new implementation is
-slightly different and uses the standard hook management.
-%
-\githubissue{444}
-
-
-\subsection{Delay change of font series and shape to \cs{selectfont} call}
-
-With the NFSS extensions introduced in 2020 the font series and shape
-settings be be influenced by changes to the font family. The setting
-is therefore delayed until \cs{selectfont} is executed to avoid
-unnecessary or incorrect substitutions that may otherwise happen due
-to the order of declarations.
-%
-\githubissue{444}
 
 
 
@@ -292,39 +479,6 @@ the preamble.
 %
 \githubissue{424}
 
-
-
-\subsection{Shipping out a page while bypassing hooks}
-
-In the 2020 October release several hooks were added to the page
-shipout process, e.g., to add some background or foreground material
-to some or all pages. We now also added a \cs{RawShipout} command that
-bypasses most of these hooks during the shipout. Some essential
-internal bookkeeping still takes place such as updating the
-\texttt{totalpages} counter or adding \texttt{shipout/firstpage} or
-\texttt{shipout/lastpage} material if the page happens to be the first
-or last.
-
-\subsection{Robust commands in filename arguments}
-The filename handling has been modified so that \verb|\string| is
-applied while normalizing robust commands while determining the file
-name.  Previously \verb|\input{\sqrt{2}}| would cause \LaTeX\ to loop indefinitely.
-With the new behavior it accesses \verb|sqrt {2}.tex|.
-%
-\githubissue{481}
-
-
-\subsection{Additional support for Unicode characters from the
-  Latin Extended Additional block}
-
-\LaTeX\ is quite capable of typesetting characters such as
-\enquote{\d{m}}, but until now it lacked the Unicode mappings for some
-characters that are used to write Sanskrit words in Latin
-transliteration (as seen in books about yoga, Buddhist philosophy,
-etc.). These have now been added so that such characters can be
-entered directly instead of resorting to \verb=\d{m}= and so forth.
-%
-\githubissue{484}
 
 
 \subsection{Always have color groups set up}
@@ -358,23 +512,20 @@ ended without a \cs{par} in the document.
 \githubissue{489}
 
 
+\subsection{Delay change of font series and shape to \cs{selectfont} call}
 
-\subsection{Producing several footnote marks to one footnote}
-
-It is sometimes necessary to reference the same footnote several
-times, i.e., produce several footnote marks with the same number or
-symbol. This is now always possible by placing a \cs{label} into the
-\cs{footnote} and reference it with the command \cs{footref}
-elsewhere.  This way marks refering to footnotes anywhere on the page
-(including those in \texttt{minipage}s) can be generated.  In the past
-this command was only available with certain classes or when loading
-the \pkg{footmisc} package.
+With the NFSS extensions introduced in 2020 the font series and shape
+settings be be influenced by changes to the font family. The setting
+is therefore delayed until \cs{selectfont} is executed to avoid
+unnecessary or incorrect substitutions that may otherwise happen due
+to the order of declarations.
 %
-\githubissue{482}
+\githubissue{444}
 
 
 
-\subsection{Providing the raw option list of packages or documentclass to key/value handlers}
+
+\subsection{Provide the raw option list of packages or documentclass to key/value handlers}
 
 \LaTeXe{} has always normalized space in option lists so\\
 \verb|\documentclass[ a4paper , 12pt ]{article}|\\
@@ -383,17 +534,17 @@ processed the intended options \texttt{a4paper} and \texttt{12pt}.
 Unfortunately the mechanism used was designed for the simple option
 names of the standard option processing.  Many classes and packages 
 now use extended \emph{keyval} processing, however this white space
-normalisation makes this difficult:
+normalization makes this difficult:
 \verb|[bb=1 2 3 4]|
 which might be expected to pass a bounding box of four numbers is
-normalised to \texttt{bb=1234} and
+normalized to \texttt{bb=1234} and
 \verb|[bb={1 2 3 4}]|\\
 which might be expected to quote the spaces results in low level \TeX{}
 parsing errors.
 
 
 For compatibility reasons, the standard option processing has not been
-changed however the original un-normalised package and class option lists
+changed however the original un-normalized package and class option lists
 are now saved. They are not used in the standard processing, however
 extended package option systems may use these \enquote{raw} option list
 macros if they are defined.
@@ -409,65 +560,9 @@ options that have been used.
 
 
 
-\subsection{Poor man's \cs{textasteriskcentered} if missing}
-
-The \cs{textasteriskcentered} symbol, used as part of the set of
-footnote symbols in \LaTeX{}, is assumed to be implemented by
-every font in the \texttt{TS1} encoding (when \pdfTeX{} is used) or
-in the \texttt{TU} encoding for the Unicode engines. Unfortunately,
-that assumption is not correct for all fonts, for example, for the
-\texttt{stix2} fonts don't offer the glyph, with the result that one
-gets missing glyphs when using \cs{thanks} etc.
-
-For that reason the definition for \cs{textasteriskcentered} was
-altered to check if there is a glyph in the right position and if not
-a normal \enquote{*} is used, slightly enlarged and lowered.  That may
-not be perfect in all cases, but certainly better than nothing show
-up.
-%
-\githubissue{502}
 
 
-
-\subsection{Provide more ``dashes'' in encodings \texttt{OT1}, \texttt{T1} and \texttt{TU}}
-
-When pasting in text from external sources one sometimes encounters the Unicode characters
-%
-\texttt{"2011} (non-breaking hyphen),
-\texttt{"2012} (figure dash) and
-\texttt{"2015} (horizontal bar)
-%
-in addition to the common \texttt{"2013} (en-dash) and \texttt{"2014}
-(em-dash). In the past the first three characters produced an error
-message when used with \pdfTeX{}. Now they typeset an approximation
-(as they are unavailable in \texttt{OT1} or \texttt{T1} encoded fonts
-used by \pdfTeX{}), e.g., the figure dash is approximated by an en-dash.
-
-In Unicode engines they either work (if contained in the selected
-Unicode font) or typeset nothing and produce a ``Missing character''
-warning in the log file.
-
-However, what works in all engines now, is to access the characters
-via the command names \cs{textnonbreakinghyphen}, \cs{textfiguredash}
-and \cs{texthorizontalbar}, respectively.
-%
-\githubissue{404}
-
-
-
-\subsection{\env{filecontents} with \acro{utf-8} characters in file name}
-
-Since a few releases back, the \env{filecontents} environment allows writing a
-file with \acro{utf-8} characters in its name.  However there was a bug that
-would not allow \emph{over}writing a file with \acro{utf-8} characters in the
-name.  This has been fixed and now \env{filecontents} allows any characters in
-the file name.
-%
-\githubissue{415}
-
-
-
-\subsection{Extending \pkg{latexrelease} to declare an entire module}
+\subsection{Extend \pkg{latexrelease} to declare entire modules}
 
 In the 2020-10-01 release, \LaTeX's new hook management system was added to the
 kernel (see \cite{33:ltnews32}) and, as with all changes to the kernel, it was
@@ -501,7 +596,7 @@ found in the \pkg{latexrelease} documentation (\verb|texdoc latexrelease|).
 \section{Changes to packages in the \pkg{graphics} category}
 
 
-\subsection{Removed spurious warning for generic graphics rules}
+\subsection{Remove spurious warning for generic graphics rules}
 
 A previous release mistakenly caused a warning to appear when loading a graphics
 file with an unknown extension through a generic graphics rule.  The warning
@@ -511,7 +606,7 @@ included correctly.  The warning now doesn't show up in that case.
 \githubissue{516}
 
 
-\subsection{Fixed loading \texttt{gzip}ped PostScript graphics files}
+\subsection{Fix loading \texttt{gzip}ped PostScript graphics files}
 
 A previous release mistakenly changed the file searching mechanism and
 compressed graphics files would raise an error when being loaded with
@@ -558,81 +653,6 @@ existing documents, a rollback to \pkg{longtable 4.13}
 
 %
 \githubissue{xxx}
-
-
-\section{Documentation updates}
-
-\subsection{A note on the \texttt{TS1} encoding}
-
-The \enquote{text symbol encoding} (\texttt{TS1}) was orginally
-designed at the Cork Conferense as a companion to the \texttt{T1}
-encoding. In it various symbols that are not subject to hyphenation
-got assembled and the \pkg{textcomp} package was developed to make
-them accessible. Unfortunately the \TeX{} community was a bit too
-enthusiastic and included several symbols only available in a few
-\TeX{} fonts and some, such as the capital accents, not available at
-all but developed as part of the reference font implementation.
-
-In hindsight that was a very bad idea because it meant that other
-existing fonts (at the time) and later new fonts that got developed
-were unable to provide the full set of glyphs that made up the
-\texttt{TS1} encoding. For existing free PostScript fonts people to
-the extra effort and produced virtual fonts that that faked (some) of
-the missing glyphs. But this was and is a timeconsuming effort so it
-was done only for a few basic fonts. But even then, only some fonts
-included all glyphs from \texttt{TS1} so the \pkg{textcomp} already
-back then contained a long list, dividing fonts into 5 categories
-according to which glyphs were implemented and which were missing.
-
-A couple of releases back the functionality of the \pkg{textcomp}
-package got integrated into the core code of the \LaTeX{} kernel so
-that its glyph definitions, e.g., \cs{textcopyright}, \cs{texteuro} or
-\cs{textyen}, are now automatically available without the need to load
-an additional package in the preamble.
-
-At the time this happened many new free fonts had appeared and
-unfortunately the chaos around the question \enquote{which glyphs of
-  the \texttt{TS1} encoding are implemented by which font} had
-increased with it. Not only did one find many new holes it was next to
-impossible to order the set of fonts into a reasonable set of
-sub-encodings that are contained in each other in a single sequence.
-
-In the end we decided on nine or ten sub-encodings with a reasonable
-number of font in each so that all font implemented all glyphs of the
-sub-encoding they got mapped to. Thus when typsetting with a font one
-could be sure that a command like \cs{texcopyleft} would either
-typeset the requested character (if the ghyph was part of the
-sub-encoding the font belonged to) or it would raise an error, saying
-that the glyph is unavailable in that fact. The mapping would ensure
-that \LaTeX{} always errs on the side of caution, because it might
-claim a glyph is unavailable even though in fact it is.
-
-For example, the old \texttt{pcr} (PostScript Courier) font (as well
-as most other older PS fonts) is mapped to sub-encoding 5 and
-therefore claims that \cs{textasciigrave} is unavailable even though
-in fact for Courier this is not true. If one uses such a font and this
-becomes an issue then there are a couple (suboptimal) possibilities.
-For one, one can alter the mapping of Courier and pretend that belongs
-to a fuller sub-encoding, e.g.
-\begin{verbatim}
-  \DeclareEncodingSubset{TS1}{pcr}{2}
-\end{verbatim}
-The downside is, that it then believe other glyphs tha are in fact
-unavailable are also there so that it is important to check that the
-final document doesn't have some missing glphs.
-%
-An alternative is to pretent that \cs{textasciigrave} can always be
-taken from the \texttt{TS1} encoding (no questions asked):
-\begin{verbatim}
-  \DeclareTextSymbolDefault{\textasciigrave}{TS1}
-\end{verbatim}
-Again there is a danger that this is not true when it is used with a
-different font and would then generate a missing glyph.
-
-Finally, and possibly the best solution, if not impossible for other
-reasons, is to simply use a different font, for example, to use the
-\TeX{} Gyre Cursor font (a reimplementation of Courier but with a
-muchmore complete glyph set).
 
 
 
