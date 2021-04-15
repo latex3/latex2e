@@ -1,3 +1,5 @@
+
+
 l3build save -cconfig-lthooks2 \
    lthooks2-002 \
    lthooks2-004 \
@@ -15,7 +17,15 @@ l3build save -cconfig-lthooks2 \
    shipout2-013 \
    shipout2-014 \
    github-0360  \
-   github-0431
+   github-0431  \
+   ltpara-001 \
+   ltpara-002 \
+   ltpara-003 \
+   ltpara-004 \
+   ltpara-005 \
+   ltpara-006 \
+   ltpara-007 \
+   ltpara-008
 
 
 
