@@ -1,3 +1,16 @@
+l3build save -cconfig-lthooks \
+ ltcmdhooks-001 \
+ ltcmdhooks-002 \
+ ltcmdhooks-003 \
+ ltcmdhooks-004 \
+ ltcmdhooks-005 \
+ ltcmdhooks-005a \
+ ltcmdhooks-006 \
+ ltcmdhooks-007 \
+ ltcmdhooks-008 \
+ ltcmdhooks-009
+
+exit
 
 
 l3build save -cconfig-lthooks2 \
