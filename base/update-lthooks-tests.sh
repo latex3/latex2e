@@ -77,6 +77,8 @@ l3build save -cconfig-lthooks \
    lthooks-024 \
    lthooks-025 \
    lthooks-026 \
+   lthooks-027 \
+   lthooks-028 \
    lthooks-errors \
    lthooks-etoolbox \
    lthooks-legacy \
