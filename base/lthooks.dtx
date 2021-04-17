@@ -31,8 +31,8 @@
 %%% From File: lthooks.dtx
 %
 %    \begin{macrocode}
-\def\lthooksversion{v1.0j}
-\def\lthooksdate{2021/04/16}
+\def\lthooksversion{v1.0k}
+\def\lthooksdate{2021/04/17}
 %    \end{macrocode}
 %
 %<*driver>
@@ -1455,6 +1455,38 @@
 % \end{function}
 %
 %
+% \subsubsection{Generic hooks for commands}
+%
+%    Similar to environments there are now (at least in theory) two
+%    generic hooks available for any \LaTeX{} command. These are
+%    \begin{description}
+%    \item[\hook{cmd/\meta{name}/before}]
+%
+%       This hook is executed at the very start of the command
+%       execution.
+%
+%    \item[\hook{cmd/\meta{name}/after}]
+%       This hook is executed at the very end of the command body.  It is
+%       implemented as a reversed hook.
+%    \end{description}
+%    In practice there are restrictions and especially the
+%    \hook{after} hook works only with a subset of commands. Details
+%    on restrictions documented in
+%    \texttt{ltcmdhooks-doc.pdf} or with code in
+%    \texttt{ltcmdhooks-code.pdf}.
+%
+%
+%
+%
+% \subsubsection{Generic hooks provided by file loading operations}
+%
+%    There are several hooks added to \LaTeX{}'s
+%    process of loading file via its high-level interfaces such as
+%    \cs{input}, \cs{include}, \cs{usepackage}, etc. These are documented in
+%    \texttt{ltfilehook-doc.pdf} or with code in
+%    \texttt{ltfilehook-code.pdf}.
+%
+%
 %
 % \subsubsection{Hooks provided by \cs{begin}\texttt{\{document\}}}
 % \label{sec:begindocument-hooks}
@@ -1629,14 +1661,6 @@
 %    \texttt{ltshipout-doc.pdf} or with code in
 %    \texttt{ltshipout-code.pdf}.
 %
-%
-% \subsubsection{Hooks provided by file loading operations}
-%
-%    There are several hooks added to \LaTeX{}'s
-%    process of loading file via its high-level interfaces such as
-%    \cs{input}, \cs{include}, \cs{usepackage}, etc. These are documented in
-%    \texttt{ltfilehook-doc.pdf} or with code in
-%    \texttt{ltfilehook-code.pdf}.
 %
 %
 % \subsubsection{Hooks provided in NFSS commands}
@@ -1999,25 +2023,44 @@
 %
 %
 %
-%  \begin{macro}{\hook_new:n}
+%  \begin{macro}{\hook_new:n,\@@_new:n,\@@_create:n}
 %    The \cs{hook_new:n} declaration declare a new hook and expects
 %    the hook \meta{name} as its argument, e.g.,
 %    \hook{begindocument}.
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_new:n #1
   { \@@_normalize_hook_args:Nn \@@_new:n {#1} }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
 \cs_new_protected:Npn \@@_new:n #1
   {
 %    \end{macrocode}
-%    We check for one of the internal data structures and if it
-%    already exists we complain.
+%   We check if the hook was already \emph{explicitly} declared with
+%   \cs{hook_new:n}, and if it already exists we complain, otherwise set
+%   the \enquote{created} flag for the hook so that it errors next time
+%   \cs{hook_new:n} is used.
 %    \begin{macrocode}
-    \hook_if_exist:nTF {#1}
+    \@@_if_created:nTF {#1}
       { \msg_error:nnn { hooks } { exists } {#1} }
+      {
+        \tl_new:c { g_@@_#1_created_tl }
+        \@@_create:n {#1}
+      }
+  }
 %    \end{macrocode}
-%    Otherwise we add the hook name to the list of all hooks and
-%    allocate the necessary data structures for the new hook.
+%
 %    \begin{macrocode}
+\cs_new_protected:Npn \@@_create:n #1
+  {
+%    \end{macrocode}
+%   Now we check if the hook's data structure can be safely created
+%   without \pkg{expl3} raising errors, then
+%   we add the hook name to the list of all hooks and
+%   allocate the necessary data structures for the new hook,
+%   otherwise just do nothing.
+%    \begin{macrocode}
+    \tl_if_exist:cF { @@~#1 }
       {
         \seq_gput_right:Nn \g_@@_all_seq {#1}
 %    \end{macrocode}
@@ -2033,7 +2076,7 @@
 %    The \cs{g_@@_\meta{hook}_labels_clist} holds the sorted list of
 %    labels (once it got sorted). This is used only for debugging.
 %    \begin{macrocode}
-        \clist_new:c {g_@@_#1_labels_clist}
+        \clist_new:c { g_@@_#1_labels_clist }
 %    \end{macrocode}
 %    Some hooks should reverse the default order of code chunks. To
 %    signal this we have a token list which is empty for normal hooks
@@ -2055,7 +2098,7 @@
 %
 %    \begin{macrocode}
         \@@_include_legacy_code_chunk:n {#1}
-     }
+      }
   }
 %    \end{macrocode}
 %  \end{macro}
@@ -2150,6 +2193,74 @@
   }
 %    \end{macrocode}
 % \end{macro}
+%
+%
+% \subsection{On the existence of hooks}
+% \label{sec:existence}
+%
+% A hook may be declared in three stages:
+% \begin{description}[format=\cs]
+%   \setlist[itemize]{leftmargin=5cm,format=\cs}
+%   \item[@@_declare:n] initializes the basic data structure for the
+%     hook so that it may contain code.  It creates the hook code pool
+%     (\cs[no-index]{g_@@_\meta{hook}_code_prop}) and the |top-level|
+%     and |next| token lists.  A hook is implicitly declared with
+%     \cs{@@_declare:n} when any is added to it.  A hook declared only
+%     with \cs{@@_declare:n} will not be usable with \cs{hook_use:n}.
+%     This state is detected by \cs{@@_if_exist:n} by
+%     \cs[no-index]{g_@@_\meta{hook}_code_prop} being defined.
+%     \begin{itemize}
+%       \item [@@_if_exist:n]      returns |true|.
+%       \item [@@_if_declared:nTF] returns |false|.
+%       \item [@@_if_created:nTF]  returns |false|.
+%       \item [@@_if_disabled:nTF] returns |false|.
+%     \end{itemize}
+%   \item[@@_create:n] initializes all hook data structures, as done
+%     by \cs{hook_new:n}, except that doing \cs{hook_new:n} on that
+%     hook will not result in an error.  This is done implicitly by
+%     \cs{hook_gput_code:n} when adding code to a generic hook.
+%     This state is detected by \cs{@@_if_declared:n} by
+%     \cs[no-index]{@@~\meta{hook}} being defined.
+%     \begin{itemize}
+%       \item [@@_if_exist:n]      returns |true|.
+%       \item [@@_if_declared:nTF] returns |true|.
+%       \item [@@_if_created:nTF]  returns |false|.
+%       \item [@@_if_disabled:nTF] returns |false|.
+%     \end{itemize}
+%   \item[hook_new:n] same as \cs{@@_create:n} except it also doesn't
+%     allow the hook to be declared again with \cs{hook_new:n}.
+%     This state is detected by \cs{@@_if_created:n} by
+%     \cs[no-index]{g_@@_\meta{hook}_created_tl} being defined.
+%     \begin{itemize}
+%       \item [@@_if_exist:n]      returns |true|.
+%       \item [@@_if_declared:nTF] returns |true|.
+%       \item [@@_if_created:nTF]  returns |true|.
+%       \item [@@_if_disabled:nTF] returns |false|.
+%     \end{itemize}
+% \end{description}
+% A hook may additionally be disabled:
+% \begin{description}[format=\cs]
+%   \setlist[itemize]{leftmargin=5cm,format=\cs}
+%   \item[hook_disable:n] This forces the creation of the
+%     \cs[no-index]{g_@@_\meta{hook}_created_tl} so that the hook
+%     errors when used with \cs{hook_new:n}, then it undefines
+%     \cs[no-index]{@@~\meta{hook}} so that it may not be executed.
+%     Since by using the normal hook declaration commands from above
+%     we can't get this combination, if a hook has a
+%     \cs[no-index]{g_@@_\meta{hook}_created_tl} and not a
+%     \cs[no-index]{@@~\meta{hook}} then it is disabled.
+%     \cs{@@_if_disabled:n} uses that to check if the hook is
+%     disabled.
+%     \begin{itemize}
+%       \item [@@_if_exist:n] may return |true| or |false|.
+%       \item [@@_if_declared:nTF] returns |false|.
+%       \item [@@_if_created:nTF]  returns |true|.
+%       \item [@@_if_disabled:nTF] returns |true|.
+%     \end{itemize}
+% \end{description}
+%
+%
+%
 %
 %
 %
@@ -2313,6 +2424,9 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_gput_code:nnn #1 #2
   { \@@_normalize_hook_args:Nnn \@@_gput_code:nnn {#1} {#2} }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
 \cs_new_protected:Npn \@@_gput_code:nnn #1 #2 #3
   {
 %    \end{macrocode}
@@ -2336,7 +2450,7 @@
 %    If no removal is queued, we are free to add.  Start by checking if
 %    the hook exists.
 %    \begin{macrocode}
-            \hook_if_exist:nTF {#1}
+            \@@_if_declared:nTF {#1}
 %    \end{macrocode}
 %    If so we simply add (or append) the new code to the property list
 %    holding different chunks for the hook. At \verb=\begin{document}=
@@ -2357,10 +2471,17 @@
 %    declare it as a generic hook, if its name matches one of the valid
 %    patterns.
 %    \begin{macrocode}
-              { \@@_try_declaring_generic_hook:nnn {#1} {#2} {#3} }
+              {
+                \@@_if_disabled:nTF {#1}
+                  { \msg_error:nnn { hooks } { hook-disabled } {#1} }
+                  { \@@_try_declaring_generic_hook:nnn {#1} {#2} {#3} }
+              }
           }
       }
   }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
 \cs_generate_variant:Nn \@@_gput_code:nnn { nxv }
 %    \end{macrocode}
 %
@@ -2475,12 +2596,18 @@
       }
       { \@@_try_declaring_generic_hook_split:nNNnn {#1} }
   }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
 \cs_new_protected:Npn \@@_try_declaring_generic_hook_split:nNNnn #1 #2 #3
   {
     \@@_try_declaring_generic_hook:wnTF #1 / / / \scan_stop: {#1}
       { #2 }
       { #3 } {#1}
   }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
 \prg_new_protected_conditional:Npnn \@@_try_declaring_generic_hook:wn
     #1 / #2 / #3 / #4 \scan_stop: #5 { TF }
   {
@@ -2489,22 +2616,35 @@
       {
         \prop_if_in:NnTF \c_@@_generics_prop {#1}
           {
-            \hook_if_exist:nF {#5} { \hook_new:n {#5} }
+            \@@_if_declared:nF {#5}
+              {
 %    \end{macrocode}
-%    After having declared the hook we check the second component (for
-%    file hooks) or the third component for environment hooks) and
-%    if it is on the list of components for which we should have declared
-%    a reversed hook we alter the hook data structure accordingly.
+%    If the hook doesn't exist yet we check if it is a \texttt{cmd}
+%    hook and if so we attempt patching the command in addition to
+%    declaring the hook.
+%
+%    For some commands this will not be possible, in which case
+%    \cs{@@_patch_cmd_or_delay:Nnn} will generate an appropriate error
+%    message.
 %    \begin{macrocode}
+                \str_if_eq:nnT {#1} { cmd }
+                  { \@@_try_put_cmd_hook:n {#5} }
+%    \end{macrocode}
+%
+%    Declare the hook always even if it can't really be used (error
+%    message generated elsewhere).
+%
+%    Here we use \cs{@@_create:n}, so that a \cs{hook_new:n} is still
+%    possible later.
+%    \begin{macrocode}
+                \@@_create:n {#5}
+              }
             \prop_if_in:NnTF \c_@@_generics_reversed_ii_prop {#2}
               { \tl_gset:cn { g_@@_#5_reversed_tl } { - } }
               {
                 \prop_if_in:NnT \c_@@_generics_reversed_iii_prop {#3}
                   { \tl_gset:cn { g_@@_#5_reversed_tl } { - } }
               }
-%    \end{macrocode}
-%    Now that we know that the hook is declared we can add the code to it.
-%    \begin{macrocode}
             \prg_return_true:
           }
           { \prg_return_false: }
@@ -2588,14 +2728,16 @@
 %    Property list holding the generic names. We don't provide any user
 %    interface to this as this is meant to be static.
 %    \begin{description}
+%    \item[\texttt{cmd}]
+%      The generic hooks used for commands.
 %    \item[\texttt{env}]
 %      The generic hooks used in \cs{begin} and \cs{end}.
-%    \item[\texttt{file}]
+%    \item[\texttt{file}, \texttt{package}, \texttt{class}, \texttt{include}]
 %      The generic hooks used when loading a file
 %    \end{description}
 %    \begin{macrocode}
 \prop_const_from_keyval:Nn \c_@@_generics_prop
-  {env=,file=,package=,class=,include=}
+     {cmd=,env=,file=,package=,class=,include=}
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -3567,15 +3709,20 @@
   { \@@_log_cmd:x { >~#1 } }
 \cs_new_protected:Npn \@@_log_line_indent:x #1
   { \@@_log_cmd:x { >~\@spaces #1 } }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
 \cs_new_protected:Npn \@@_log:nN #1 #2
   {
     \@@_preamble_hook:n {#1}
     \@@_log_cmd:x { ^^J ->~The~hook~'#1': }
 %    \end{macrocode}
-%    
+%
 %    \begin{macrocode}
-    \hook_if_exist:nF {#1}
-      { \@@_log_line:x { is~not~declared! } }
+    \@@_if_declared:nF {#1}
+      { \@@_log_line:x { The~hook~is~not~declared. } }
+    \@@_if_disabled:nT {#1}
+      { \@@_log_line:x { The~hook~is~disabled. } }
     \hook_if_empty:nTF {#1}
       { #2 { The~hook~is~empty } }
       {
@@ -3593,7 +3740,7 @@
         \@@_log_line:x
           {
             Document-level~(top-level)~code
-            \hook_if_exist:nT {#1}
+            \@@_if_declared:nT {#1}
               { ~(executed~\@@_if_reversed:nTF {#1} {first} {last} ) } :
           }
         \@@_log_line_indent:x
@@ -3644,7 +3791,7 @@
 %   to that hook) and not empty
 %    \begin{macrocode}
         \bool_lazy_and:nnTF
-            { \hook_if_exist_p:n {#1} }
+            { \@@_if_declared_p:n {#1} }
             { ! \hook_if_empty_p:n {#1} }
           {
             \@@_log_line:x
@@ -3668,7 +3815,7 @@
           {
             #2
               {
-                Hook~ \hook_if_exist:nTF {#1}
+                Hook~ \@@_if_declared:nTF {#1}
                   {code~pool~empty} {not~declared}
               }
           }
@@ -3773,17 +3920,19 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_gput_next_code:nn #1
   { \@@_normalize_hook_args:Nn \@@_gput_next_code:nn {#1} }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
 \cs_new_protected:Npn \@@_gput_next_code:nn #1 #2
   {
-    \@@_declare:n {#1}
-    \hook_if_exist:nTF {#1}
-      { \@@_gput_next_do:nn {#1} {#2} }
-      { \@@_try_declaring_generic_next_hook:nn {#1} {#2} }
-  }
-\cs_new_protected:Npn \@@_gput_next_do:nn #1
-  {
-    \exp_args:Nc \@@_gput_next_do:Nnn
-      { @@_next~#1 } {#1}
+    \@@_if_disabled:nTF {#1}
+      { \msg_error:nnn { hooks } { hook-disabled } {#1} }
+      {
+        \@@_declare:n {#1}
+        \hook_if_exist:nTF {#1}
+          { \@@_gput_next_do:nn {#1} {#2} }
+          { \@@_try_declaring_generic_next_hook:nn {#1} {#2} }
+      }
   }
 %    \end{macrocode}
 %   First check if the ``next code'' token list is empty:  if so we need
