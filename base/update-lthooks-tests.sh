@@ -10,7 +10,6 @@ l3build save -cconfig-lthooks \
  ltcmdhooks-008 \
  ltcmdhooks-009
 
-exit
 
 
 l3build save -cconfig-lthooks2 \
