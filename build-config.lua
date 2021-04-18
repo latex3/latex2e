@@ -30,6 +30,7 @@ checksuppfiles = checksuppfiles     or
     "regression-test.tex",
     "xetex.def",
     "dvips.def",
+    "lipsum.ltd.tex",
     "lipsum.sty",
     "*.fd",
     "*.txt",

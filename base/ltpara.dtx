@@ -11,11 +11,11 @@
 %    https://www.latex-project.org/lppl.txt
 %
 %
-%%% From File: lthooks.dtx
+%%% From File: ltpara.dtx
 %
 %    \begin{macrocode}
-\def\ltparaversion{v1.0d}
-\def\ltparadate{2021/02/18}
+\def\ltparaversion{v1.0f}
+\def\ltparadate{2021/04/16}
 %    \end{macrocode}
 %<*driver>
 \documentclass{l3doc}
@@ -302,13 +302,14 @@
 %      \cs{noindent}).
 %
 %      The indentation box to be typeset is available to the hook as
-%      \cs{IndentationBox} and its automatic placement (after the hook is
-%      executed) can be prevented through \cs{SuppressIndentationBox}.
+%      \cs{IndentBox} and its automatic placement (after the hook is
+%      executed) can be prevented through \cs{OmitIndent}.
+%      More precisely \cs{OmitIndent} voids the box.
 %
-%      If not suppressed, then the indentation is typeset directly
+%      The indentation box is then typeset directly
 %      after the hook execution by something equivalent to
-%      \cs{box}\cs{IndentationBox} followed by the current content of
-%      the token register \cs{everypar} as it is available to the
+%      \cs{box}\cs{IndentBox} followed by the current content of
+%      the token register \cs{everypar} that it is available to the
 %      kernel or to packages (that run some legacy code).
 %
 %      One has to be careful not to add any code to the hook that
@@ -375,7 +376,7 @@
 %    \item[\cs{@kernel@before@para@before}]
 %       For future extensions, not currently used by the kernel.
 %
-
+%
 %    \item[\cs{@kernel@after@para@after}]
 %       For future extensions, not currently used by the kernel.
 %
@@ -437,25 +438,66 @@
 %    Spring release!
 % \end{quote}
 %
-% \begin{function}{\SuppressIndentationBox,\para_suppress_indentation:}
+% \begin{function}{\OmitIndent,\para_omit_indent:}
 %    Inside the \hook{para/begin} hook one can use this command to
 %    suppress the indentation box at the start of the
 %    paragraph. (Technically it is possible to use this command
 %    outside the hook as well, but this should not be relied upon.)
 %    The box itself remains available for use.
 %
-%    The \pkg{expl3} name for the function is \cs{para_suppress_indentation:}.
+%    The \pkg{expl3} name for the function is \cs{para_omit_indent:}.
 % \end{function}
 %
-% \begin{variable}{\IndentationBox,\g_para_indentation_box}
+% \begin{variable}{\IndentBox,\g_para_indent_box}
 %    The box register holding the indentation box for the paragraph is
 %    available for inspection (or changes) inside hooks. It remains
-%    available even if the \cs{SuppressIndentationBox} command was
+%    available even if the \cs{OmitIndent} command was
 %    used; in that case it  will just not be automatically placed.
 %
-%    The \pkg{expl3} name for the box register is \cs{g_para_indentation_box}.
+%    The \pkg{expl3} name for the box register is \cs{g_para_indent_box}.
 % \end{variable}
 %
+%
+% \begin{function}{\RawIndent,\para_raw_indent:,
+%                  \RawNoindent,\para_raw_noindent:,
+%                  \RawParEnd,\para_raw_end:}
+% \begin{syntax}
+%   \cs{RawIndent}   \textit{hmode material} \cs{RawParEnd}
+%   \cs{RawNoindent} \textit{hmode material} \cs{RawParEnd}
+% \end{syntax}
+%
+%    The commands \cs{RawIndent} and \cs{RawNoindent} are not meant
+%    for normal paragraph building (where the result is a textual
+%    paragraph in the the traditional meaning of the word), but for
+%    special cases where \TeX{}'s low-level algorithm is used to
+%    achieve special effects, but where the result is not a
+%    \enquote{paragraph}.
+%
+%    They are called \enquote{raw}, because they bypass \LaTeX{}'s
+%    hook mechanism for paragraphs and simply invoke the low-level
+%    \TeX{} algorithm.  I.e., they are like the original \TeX{}
+%    primitives \cs{indent} and \cs{noindent} (that is they execute no
+%    hooks other than \cs{everypar}) except that they can only be used
+%    in vertical mode and generate an error if found elsewhere.
+%
+%    To avoid issues a paragraph started by them should always be
+%    ended by \cs{RawParEnd}\footnote{Technical note for those who
+%    know their \textit{\TeX book\/}: the \cs{RawParEnd} comand
+%    invokes the original \TeX{} engine definition of \cs{par} that
+%    (soley) triggers the paragraph builder in \TeX{} when found
+%    inside unrestricted horizontal mode and does nothing in other
+%    processing modes.}
+%    and not by \cs{par} (or a blank line), because the latter will execute
+%    hooks which then have no counterpart at the beginning of the
+%    paragraph. It is the responsibility of the programmer to make
+%    sure that they are properly paired. This also means that one
+%    should not put arbitrary user content between these commands if
+%    that content could contain stray \cs{par}s.
+%
+%    The \pkg{expl3} names for the functions are
+%    \cs{para_raw_indent:}, \cs{para_raw_indent:} and
+%    \cs{para_raw_end:}.
+% \end{function}
 %
 %
 %
@@ -574,21 +616,70 @@
 %    in blue.
 %
 %
+%
+% \subsection{Some technical notes}
+%
+%    The code tries hard to be transparent for package code, but of
+%    course any change means that there is a potential for breaking
+%    other code. So in section we collect a few cases that may be of
+%    importance if low-level code is dealing with paragraphs that are
+%    now behaving slightly differently. The notes are from issues we
+%    observed and will probably grow over time.
+%
+% \subsubsection{Glue items between paragraphs (found with \pkg{fancypar})}
+%
+%    In the past \LaTeX{} placed two glue items between two
+%    consecutive paragraph, e.g.,
+%\begin{verbatim}
+%   text1 \par text2 \par
+%\end{verbatim}
+%   would show something like
+%\begin{verbatim}
+% \glue(\parskip) 0.0 plus 1.0
+% \glue(\baselineskip) 5.16669
+%\end{verbatim}
+%   but now there is anothe \cs{parskip} glue (that is always 0pt):
+%\begin{verbatim}
+% \glue(\parskip) 0.0 plus 1.0
+% \glue(\parskip) 0.0
+% \glue(\baselineskip) 5.16669
+%\end{verbatim}
+%    The reason is that we generate a \enquote{fake}'' paragraph to
+%    gain control and safely add the early hooks, but this generates
+%    an additional glue item. That item doesn't contribute anything
+%    vertically but ifsomebody writes code the unravels a constructed
+%    list using \cs{lastbox}, \cs{unskip} and \cs{unpenalty} then the
+%    code has to remove one additional glue item  or else will fail.
+
+%
+% ^^A \subsubsection{}
+%
+%
+%
+% ^^A \subsubsection{}
+%
+%
+%
+%
+%
+%
 % \StopEventually{\setlength\IndexMin{200pt}  \PrintIndex  }
 %
 %
 % \section{The Implementation}
 %
 %    \begin{macrocode}
-%<*2ekernel>
+%<@@=para>
 %    \end{macrocode}
 %
+%
 %    \begin{macrocode}
-%<@@=para>
+%<*2ekernel|latexrelease>
 \ExplSyntaxOn
+%<latexrelease>\NewModuleRelease{2021/06/01}{ltpara}
+%<latexrelease>                 {Paragraph~handling~and~hooks}
 %    \end{macrocode}
-
-
+%
 %
 %
 % \subsection{Providing hooks for paragraphs}
@@ -641,10 +732,10 @@
 \tl_gset:Nn \g_@@_standard_everypar_tl {
 %    \end{macrocode}
 %    First we remove the indentation box and store it in
-%    \cs{g_para_indentation_box}. If there was none because the paragraph
+%    \cs{g_para_indent_box}. If there was none because the paragraph
 %    was started by \cs{noindent} the box register will be void.
 %    \begin{macrocode}
-  \box_gset_to_last:N \g_para_indentation_box
+  \box_gset_to_last:N \g_para_indent_box
 %    \end{macrocode}
 %
 %    This will make the newly started horizontal list empty, so if we
@@ -683,13 +774,6 @@
 %    case there are nested paragraphs coming up.
 %    \begin{macrocode}
   \tex_everypar:D{\g_@@_standard_everypar_tl}
-%  \showthe\tex_everypar:D
-%    \end{macrocode}
-%    Then we set up \cs{@@_handle_indent:} to reinsert the indentation
-%    box later. This can be undone via \cs{SuppressIndentationBox}
-%    inside the hook(s).
-%    \begin{macrocode}
-  \cs_set_eq:NN \@@_handle_indent: \@@_add_indentation_box:
 %    \end{macrocode}
 %
 %    This is followed by executing the kernel and the public hook. The
@@ -710,7 +794,7 @@
 %    we add that later, and indirectly.
 %    \begin{macrocode}
   \@@_handle_indent:
-% \the \everypar           % <--- done differently
+% \the \everypar           % <--- done differently below
 }
 %    \end{macrocode}
 %  \end{macro}
@@ -782,40 +866,38 @@
 %  \end{macro}
 %
 %
-%  \begin{macro}{\g_para_indentation_box}
+%  \begin{macro}{\g_para_indent_box}
 %    For managing the indentation we need to provide a public
 %    accessible box register
 %    \begin{macrocode}
-\box_new:N \g_para_indentation_box
+\box_new:N \g_para_indent_box
 %    \end{macrocode}
 %  \end{macro}
 
-%  \begin{macro}{\@@_handle_indent:,\@@_add_indentation_box:}
-%    Adding (typesetting) the indent box is straight forward, the
-%    default action for is \cs{@@_handle_indent:} is
-%    \cs{@@_add_indentation_box:}.
+%  \begin{macro}{\@@_handle_indent:}
+%    Adding (typesetting) the indent box is straight forward.
+%    If it was emptied before it does nothing.
 %    \begin{macrocode}
-\cs_new:Npn \@@_add_indentation_box: {
-  \box_use_drop:N \g_para_indentation_box
+\cs_new:Npn \@@_handle_indent: {
+  \box_use_drop:N \g_para_indent_box
 }
-\cs_new_eq:NN \@@_handle_indent: \@@_add_indentation_box:
 %    \end{macrocode}
-%     The declaration \cs{para_suppress_indentation:} (or
-%    \cs{SuppressIndentationBox}) changes that to do nothing.
+%     The declaration \cs{para_omit_indent:} (or
+%    \cs{OmitIndent}) changes that to do nothing.
 %    \begin{macrocode}
-\cs_new:Npn \para_suppress_indentation: {
-  \cs_set_eq:NN \@@_handle_indent: \prg_do_nothing:
+\cs_new:Npn \para_omit_indent: {
+  \box_gclear:N \g_para_indent_box
 }
 %    \end{macrocode}
 %  \end{macro}
 %
 %
-%  \begin{macro}{\IndentationBox,\SuppressIndentationBox}
+%  \begin{macro}{\IndentBox,\OmitIndent}
 %    The \LaTeXe{} names for the indentation box and for suppressing it
 %    for use in the \hook{para/begin} hook.
 %    \begin{macrocode}
-\cs_set_eq:NN \IndentationBox \g_para_indentation_box
-\cs_set_eq:NN \SuppressIndentationBox \para_suppress_indentation:
+\cs_set_eq:NN \IndentBox \g_para_indent_box
+\cs_set_eq:NN \OmitIndent \para_omit_indent:
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -979,6 +1061,67 @@
 %    \end{macrocode}
 %  \end{macro}
 %
+%
+%
+%
+%  \begin{macro}{\para_raw_indent:,
+%                \para_raw_noindent:,
+%                \para_raw_end:}
+%
+%    The commands \cs{para_raw_indent:} and \cs{para_raw_noindent:}
+%    are like the primitives \cs{indent} and \cs{noindent} except that
+%    they can only be used in vertical mode.
+%
+%    To avoid issues a paragraph started by them should always be
+%    ended by \cs{para_raw_end:} and not by \cs{para_end:} or
+%    \cs{par} as the latter will execute hooks which then have no
+%    counterpart at the beginning of the paragraph. It is the
+%    responsibility of the programmer to make sure that they are
+%    properly paired.
+%    \begin{macrocode}
+\cs_new:Npn \para_raw_indent: {
+  \mode_if_vertical:TF
+       {
+         \tex_everypar:D {
+           \box_gset_to_last:N \g_para_indent_box
+           \tex_everypar:D { \g_@@_standard_everypar_tl }
+           \@@_handle_indent:
+           \the\everypar }
+       }
+       { \__kernel_msg_error:nn {para}{raw} }
+  \tex_indent:D
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new:Npn \para_raw_noindent: {
+  \mode_if_vertical:TF
+       {
+         \tex_everypar:D {
+           \tex_everypar:D { \g_@@_standard_everypar_tl }
+           \the\everypar }
+       }
+       { \__kernel_msg_error:nn {para}{raw} }
+  \tex_noindent:D
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_eq:NN \para_raw_end: \tex_par:D
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\RawIndent,\RawNoIndent,\RawParEnd}
+%    The \LaTeXe{} names for starting and ending a paragraph without adding any hooks.
+%    \begin{macrocode}
+\cs_set_eq:NN \RawIndent   \para_raw_indent:
+\cs_set_eq:NN \RawNoindent \para_raw_noindent:
+\cs_set_eq:NN \RawParEnd   \para_raw_end:
+%    \end{macrocode}
+%  \end{macro}
+%
+%
 %    This ends the \texttt{para} module code.
 %    \begin{macrocode}
 %<@@=>
@@ -1010,7 +1153,10 @@
 %
 %   \subsection{The error messages}
 %
-%    Well, one really, first argument is the hook name second the mode
+%    This one is used when we detect that some hook code has changed
+%    the mode where it shouldn't, e.g., by starting or ending a
+%    paragraph.
+%    The first argument is the hook name second the mode
 %    it should have stayed in but didn't.
 %    \begin{macrocode}
 \__kernel_msg_new:nnnn {para} {mode}
@@ -1026,72 +1172,43 @@
   }
 %    \end{macrocode}
 %
+%    And here is one used in the \enquote{raw} commands when they are
+%    used outside of vertical mode. 
 %    \begin{macrocode}
+\__kernel_msg_new:nnnn {para} {raw}
+  {
+     Paragraph started while not in vertical mode.
+  }
+  {
+    Starting a paragraph with \RawIndent or \RawNoindent
+    (or \para_raw_indent: or \para_raw_noindent:) is only
+    allowed if LaTeX is in vertical mode.
+  }
+%    \end{macrocode}
+
+
+%    \begin{macrocode}
+%
+%<latexrelease>\IncludeInRelease{0000/00/00}%
+%<latexrelease>                 {ltpara}{Undo~hooks~for~paragraphs}
+%<latexrelease>
+%<latexrelease>\let \OmitIndent  \@undefined
+%<latexrelease>\let \IndentBox   \@undefined
+%<latexrelease>\let \RawIndent   \@undefined
+%<latexrelease>\let \RawNoindent \@undefined
+%<latexrelease>\let \RawParEnd   \@undefined
+%<latexrelease>
+%<latexrelease>\cs_set_eq:NN \par     \tex_par:D
+%<latexrelease>\cs_set_eq:NN \@@par   \tex_par:D
+%<latexrelease>\cs_set_eq:NN \endgraf \tex_par:D
+%<latexrelease>  
+%<latexrelease>\EndModuleRelease
 \ExplSyntaxOff
-%    \end{macrocode}
-%
-%  \subsection{Kernel corrections}
-%
-%    These corrections/changes are already part of the 2021/05
-%    release, i.e., but for testing with older releases they have been
-%    included here for now. So this section will vanish soon.
-%
-%
-%    Marginpar boxes are missing a final internal \cs{par}.
-%    \begin{macrocode}
-\IfFormatAtLeastTF{2021/05/01}{}
-{
-\long\def \@savemarbox #1#2{%
-  \global\setbox #1%
-    \color@vbox
-      \vtop{%
-        \hsize\marginparwidth
-        \@parboxrestore
-        \@marginparreset
-        #2\par                    % <-- needed
-        \@minipagefalse
-        \outer@nobreak
-        }%
-    \color@endbox
-}
-%    \end{macrocode}
-%
-%    Two sample definitions for the kernel hooks to help a bit with
-%    tracing.
-%    \begin{macrocode}
-\newcounter{paracnt}
-\def\@kernel@before@para@begin{%
-  \stepcounter{paracnt}%
-  \typeout{PARA: \arabic{paracnt} start
-    (\@currenvir\space level\on@line)}%
-}
-\def\@kernel@after@para@end  {%
-  \typeout{PARA: \arabic{paracnt} end \space\space
-    (\@currenvir\space level\on@line)}%
-  \addtocounter{paracnt}{-1}%
-}
-%    \end{macrocode}
-%
-%
-%    The next lines belong in the kernel and just make sure that  we
-%    avoid the these days unnecessary optimization that \TeX{} doesn't
-%    call on \cs{par} if a vertical box ends in hmode. Instead \TeX{}
-%    directly calls the par builder in that case :-(.
-%    \begin{macrocode}
-\let\color@begingroup\begingroup
-\def\color@endgroup{\endgraf\endgroup}
-\def\color@setgroup{\color@begingroup}  % \def\color@setgroup{\color@begingroup\set@color}
-\def\color@hbox{\hbox\bgroup\color@begingroup}
-\def\color@vbox{\vbox\bgroup\color@begingroup}
-\def\color@endbox{\color@endgroup\egroup}
-}
+%</2ekernel|latexrelease>
 %    \end{macrocode}
 %
 %
 %
-%    \begin{macrocode}
-%<*2ekernel>
-%    \end{macrocode}
 %
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1099,61 +1216,3 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 
-%%%% unused as hok was dropped
-
-% \subsubsection{Put the first word of each paragraph in an \cs{fbox} and append
-%    a \P{} sign at the end of the paragraph}
-%
-%    We make the assumption that the first word ends in a space so
-%    that we can grab it easily (which
-%    is of course not quite right). So here is the code for that.
-%\begin{verbatim}
-%  \def\firstwordboxed#1 {\fbox{#1} }
-%\end{verbatim}
-%    Installing that is then just a matter of putting it into the right
-%    hook. Since we don't want to box the indentation (or what comes
-%    from \cs{everypar} we shouldn't use \hook{para/begin} but
-%    \hook{para/textbegin}.
-%    Adding the \P{} is equally simple.
-%\begin{verbatim}
-%  \AddToHook{para/textbegin}{\firstwordboxed}
-%  \AddToHook{para/end}{\P}
-%\end{verbatim}
-%    While this will work more or less flawless (if you accept that it
-%    will pick up any punctuation after the first word), it will fail
-%    in at least two cases.
-%    \begin{itemize}
-%    \item Single word paragraphs ending with \cs{par} instead of an
-%    empty line will blow up because the \cs{par} will be picked up as
-%    part of the argument and error as our \cs{firstwordboxed} doesn't
-%    accept a \cs{par} not being long. That is actually good, because
-%    picking it up would be worse: it would get ignored inside
-%    \cs{fbox} and so the paragraph would be combined with the next
-%    (or worse).
-%
-%    \item The second problem is, of course, that sticking it into
-%    every \hook{para/textbegin} means it get applied to places like
-%    \cs{section} which is not really what you want. So some more
-%    elaborate mechanism would be necessary---a task for another rainy
-%    day.
-%    \end{itemize}
-%
-%    There is one other point to note here. The \cs{firstwordboxed} is
-%    expected to scan ahead. So can that kind of code be placed into a
-%    hook? The answer is a kind of yes and no.
-
-%    Hooks can receive code from different places, but obviously only
-%    one chunk of code can do some scanning ahead, the one that comes
-%    last. Any hook code in a different position would see any
-%    following code from later chunks as part of the scanning which
-%    may or may not be a problem. In fact, even in our simple example,
-%    the argument picked up by \cs{firstwordboxed} isn't really the
-%    first word of the paragraph. It is that but in front of it there
-%    is also the code responsible for running
-%    \verb=\AddTohookNext{para/textbegin}=. As long as this is not
-%    doing anything harmful it doesn't hurt in this case, but it
-%    clearly shows that this example is not as  simple as it
-%    claims to be and on the whole we have to conclude that hooks
-%    aren't really meant to do such scanning or at least not without a
-%    lot of precaution.
-%
