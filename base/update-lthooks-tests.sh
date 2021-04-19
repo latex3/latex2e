@@ -8,7 +8,8 @@ l3build save -cconfig-lthooks \
  ltcmdhooks-006 \
  ltcmdhooks-007 \
  ltcmdhooks-008 \
- ltcmdhooks-009
+ ltcmdhooks-009 \
+ ltcmdhooks-010
 
 #exit
 
