@@ -82,6 +82,7 @@ l3build save -cconfig-lthooks \
    lthooks-errors \
    lthooks-etoolbox \
    lthooks-legacy \
+   lthooks-doc-examples \
    shipout-000 \
    shipout-002 \
    shipout-004 \
