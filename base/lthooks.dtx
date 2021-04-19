@@ -32,7 +32,7 @@
 %
 %    \begin{macrocode}
 \def\lthooksversion{v1.0k}
-\def\lthooksdate{2021/04/17}
+\def\lthooksdate{2021/04/18}
 %    \end{macrocode}
 %
 %<*driver>
@@ -993,9 +993,9 @@
 %    A leading |.| is treated literally.
 % \end{function}
 %
-% \begin{function}[pTF]{\@@_if_declared:n}
+% \begin{function}[pTF]{\@@_if_usable:n}
 %   \begin{syntax}
-%     \cs{@@_if_declared:nTF} \Arg{hook} \Arg{true code} \Arg{false code}
+%     \cs{@@_if_usable:nTF} \Arg{hook} \Arg{true code} \Arg{false code}
 %   \end{syntax}
 %   Tests if the \meta{hook} exists (if it was created with either
 %   \cs{NewHook}, \cs{NewReversedHook}, or \cs{NewMirroredHookPair}), and
@@ -1009,7 +1009,7 @@
 %   sparingly.
 %
 %   Generic hooks are declared at the time code is added to them, so the
-%   result of \cs{@@_if_declared:n} will change once code is added to
+%   result of \cs{@@_if_usable:n} will change once code is added to
 %   said hook (unless the hook was previously declared).
 %
 %    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
@@ -2054,44 +2054,133 @@
 %    different states are distinguished. The actual implementation
 %    then follows in the next sections.
 %
+%    One problem we have to solve is, that we need to be able to add
+%    code to hooks (e.g., with \cs{AddToHook}) even if that code has
+%    not been declared yet. For example, one package needs to write
+%    into a hook of another package, but that package ay not get
+%    loaded or only loaded later. Another problem most hooks require
+%    declaration but this is not the case for the generic hooks.
+%
+%    We therefore distinguish the following states for a hook and they
+%    are managed with four different tests: structure existence (\cs{@@_if_structure_exist:nTF}), 
+%       creation (\cs{@@_if_usable:nTF}), declaration
+%       (\cs{@@_if_declared:nTF}) and disabled or not (\cs{@@_if_disabled:nTF})
+%    \begin{description}
+%    \setlist[itemize]{leftmargin=5cm,format=\cs}
+%    \item[not existing]
+%
+%       Nothing is known about the hook so far. This state can be
+%       detected with \cs{@@_if_structure_exist:nTF}
+%       (which uses the  false branch).
+%
+%       In this state the hook can be declared, disabled, rules can be
+%       defined or code could be added to it, but it is not possible
+%       to use the hook (with \cs{UseHook}).
+
+%    \item[basic data structure set up]
+%
+%       A hook is this state when its basic data structure has been
+%       set up (using \cs{@@_setup_structure:n}). The data structure setup happens
+%       automatically when commands such as \cs{AddToHook}  are used
+%       and the hook is at that point in state \enquote{not existing}.
+%
+%       In this state the four tests give the following results:
+%     \begin{itemize}
+%       \item [@@_if_structure_exist:nTF]      returns |true|.
+%       \item [@@_if_usable:nTF]   returns |false|.
+%       \item [@@_if_declared:nTF]  returns |false|.
+%       \item [@@_if_disabled:nTF]  returns |false|.
+%     \end{itemize}
+%
+%       The allowed acctions are the same as in the \enquote{not
+%       existing} state.
+%
+%    \item[declared]
+%
+%       A hook is in this state it is not disabled and was explicity declared (e.g.,
+%       with \cs{NewHook}). In this case the four tests give the
+%       following results:
+%     \begin{itemize}
+%       \item [@@_if_structure_exist:nTF]      returns |true|.
+%       \item [@@_if_usable:nTF]   returns |true|.
+%       \item [@@_if_declared:nTF]  returns |true|.
+%       \item [@@_if_disabled:nTF]  returns |false|.
+%     \end{itemize}
+%
+%    \item[usable]
+%       A hook is in this state is not disabled, was not explicitly
+%       declared but nevertheless is allowed to be used (with
+%       \cs{UseHook} or \cs{hook_use:n}). This state is only possible
+%       for generic hooks as they do not need to be
+%       declared. Therefore such hooks move directly from state \enquote{not
+%       existing} to \enquote{usable} the moment a declaration such as
+%       \cs{AddToHook} wants to add to the hook data structure.
+%       In this state the tests give the following results:
+%     \begin{itemize}
+%       \item [@@_if_structure_exist:nTF]      returns |true|.
+%       \item [@@_if_usable:nTF]   returns |true|.
+%       \item [@@_if_declared:nTF]  returns |false|.
+%       \item [@@_if_disabled:nTF]  returns |false|.
+%     \end{itemize}
+%
+%
+%    \item[disabled]
+%       A hook in any state is changed to this state by using
+%       \cs{DisableHook}. This changes the tests to give the following results:
+%     \begin{itemize}
+%       \item [@@_if_structure_exist:nTF]      \emph{unchanged}.
+%       \item [@@_if_usable:nTF]   returns |false|.
+%       \item [@@_if_declared:nTF]  returns |true|.
+%       \item [@@_if_disabled:nTF]  returns |true|.
+%     \end{itemize}
+%       The  structure test is unchanged (if the hook was unknown before it is
+%       false otherwise true). The usable test returns false so that
+%       any \cs{UseHook} will bypass the hook from now on. The
+%       declared test returns true so that any further \cs{NewHook}
+%       generates an error and the disabled test returns true so that
+%       \cs{AddToHook} can return an error.
+% \fmiinline{maybe it should do this only after begin document?}
+%
+%    \end{description}
+%
 % \fmi{reorder presentation of commands: new first}
 %
 % \begin{description}[format=\cs]
 %   \setlist[itemize]{leftmargin=5cm,format=\cs}
-%   \item[@@_declare:n] initializes the basic data structure for the
+%   \item[@@_setup_structure:n] initializes the basic data structure for the
 %     hook so that it may contain code.  It creates the hook code pool
 %     (\cs[no-index]{g_@@_\meta{hook}_code_prop}) and the |top-level|
 %     and |next| token lists.  A hook is implicitly declared with
-%     \cs{@@_declare:n} when any is added to it.  A hook declared only
-%     with \cs{@@_declare:n} will not be usable with \cs{hook_use:n}.
-%     This state is detected by \cs{@@_if_exist:n} by
+%     \cs{@@_setup_structure:n} when any is added to it.  A hook declared only
+%     with \cs{@@_setup_structure:n} will not be usable with \cs{hook_use:n}.
+%     This state is detected by \cs{@@_if_structure_exist:n} by
 %     \cs[no-index]{g_@@_\meta{hook}_code_prop} being defined.
 %     \begin{itemize}
-%       \item [@@_if_exist:n]      returns |true|.
-%       \item [@@_if_declared:nTF] returns |false|.
-%       \item [@@_if_created:nTF]  returns |false|.
+%       \item [@@_if_structure_exist:n]      returns |true|.
+%       \item [@@_if_usable:nTF] returns |false|.
+%       \item [@@_if_declared:nTF]  returns |false|.
 %       \item [@@_if_disabled:nTF] returns |false|.
 %     \end{itemize}
-%   \item[@@_create:n] initializes all hook data structures, as done
+%   \item[@@_make_usable:n] initializes all hook data structures, as done
 %     by \cs{hook_new:n}, except that doing \cs{hook_new:n} on that
 %     hook will not result in an error.  This is done implicitly by
 %     \cs{hook_gput_code:n} when adding code to a generic hook.
-%     This state is detected by \cs{@@_if_declared:n} by
+%     This state is detected by \cs{@@_if_usable:n} by
 %     \cs[no-index]{@@~\meta{hook}} being defined.
 %     \begin{itemize}
-%       \item [@@_if_exist:n]      returns |true|.
-%       \item [@@_if_declared:nTF] returns |true|.
-%       \item [@@_if_created:nTF]  returns |false|.
+%       \item [@@_if_structure_exist:n]      returns |true|.
+%       \item [@@_if_usable:nTF] returns |true|.
+%       \item [@@_if_declared:nTF]  returns |false|.
 %       \item [@@_if_disabled:nTF] returns |false|.
 %     \end{itemize}
-%   \item[hook_new:n] same as \cs{@@_create:n} except it also doesn't
+%   \item[hook_new:n] same as \cs{@@_make_usable:n} except it also doesn't
 %     allow the hook to be declared again with \cs{hook_new:n}.
-%     This state is detected by \cs{@@_if_created:n} by
-%     \cs[no-index]{g_@@_\meta{hook}_created_tl} being defined.
+%     This state is detected by \cs{@@_if_declared:n} by
+%     \cs[no-index]{g_@@_\meta{hook}_declared_tl} being defined.
 %     \begin{itemize}
-%       \item [@@_if_exist:n]      returns |true|.
-%       \item [@@_if_declared:nTF] returns |true|.
-%       \item [@@_if_created:nTF]  returns |true|.
+%       \item [@@_if_structure_exist:n]      returns |true|.
+%       \item [@@_if_usable:nTF] returns |true|.
+%       \item [@@_if_declared:nTF]  returns |true|.
 %       \item [@@_if_disabled:nTF] returns |false|.
 %     \end{itemize}
 % \end{description}
@@ -2099,19 +2188,19 @@
 % \begin{description}[format=\cs]
 %   \setlist[itemize]{leftmargin=5cm,format=\cs}
 %   \item[hook_disable:n] This forces the creation of the
-%     \cs[no-index]{g_@@_\meta{hook}_created_tl} so that the hook
+%     \cs[no-index]{g_@@_\meta{hook}_declared_tl} so that the hook
 %     errors when used with \cs{hook_new:n}, then it undefines
 %     \cs[no-index]{@@~\meta{hook}} so that it may not be executed.
 %     Since by using the normal hook declaration commands from above
 %     we can't get this combination, if a hook has a
-%     \cs[no-index]{g_@@_\meta{hook}_created_tl} and not a
+%     \cs[no-index]{g_@@_\meta{hook}_declared_tl} and not a
 %     \cs[no-index]{@@~\meta{hook}} then it is disabled.
 %     \cs{@@_if_disabled:n} uses that to check if the hook is
 %     disabled.
 %     \begin{itemize}
-%       \item [@@_if_exist:n] may return |true| or |false|.
-%       \item [@@_if_declared:nTF] returns |false|.
-%       \item [@@_if_created:nTF]  returns |true|.
+%       \item [@@_if_structure_exist:n] may return |true| or |false|.
+%       \item [@@_if_usable:nTF] returns |false|.
+%       \item [@@_if_declared:nTF]  returns |true|.
 %       \item [@@_if_disabled:nTF] returns |true|.
 %     \end{itemize}
 % \end{description}
@@ -2121,7 +2210,7 @@
 % \subsubsection{Setting hooks up}
 %
 %
-%  \begin{macro}{\hook_new:n,\@@_new:n,\@@_create:n}
+%  \begin{macro}{\hook_new:n,\@@_new:n,\@@_make_usable:n}
 %    The \cs{hook_new:n} declaration declare a new hook and expects
 %    the hook \meta{name} as its argument, e.g.,
 %    \hook{begindocument}.
@@ -2139,17 +2228,17 @@
 %   the \enquote{created} flag for the hook so that it errors next time
 %   \cs{hook_new:n} is used.
 %    \begin{macrocode}
-    \@@_if_created:nTF {#1}
+    \@@_if_declared:nTF {#1}
       { \msg_error:nnn { hooks } { exists } {#1} }
       {
-        \tl_new:c { g_@@_#1_created_tl }
-        \@@_create:n {#1}
+        \tl_new:c { g_@@_#1_declared_tl }
+        \@@_make_usable:n {#1}
       }
   }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_create:n #1
+\cs_new_protected:Npn \@@_make_usable:n #1
   {
 %    \end{macrocode}
 %   Now we check if the hook's data structure can be safely created
@@ -2169,7 +2258,7 @@
 %    \end{macrocode}
 %    Now ensure that the base data structure for the hook exists:
 %    \begin{macrocode}
-        \@@_declare:n {#1}
+        \@@_setup_structure:n {#1}
 %    \end{macrocode}
 %    The \cs{g_@@_\meta{hook}_labels_clist} holds the sorted list of
 %    labels (once it got sorted). This is used only for debugging.
@@ -2203,16 +2292,16 @@
 %
 %
 %
-% \begin{macro}{\@@_declare:n}
+% \begin{macro}{\@@_setup_structure:n}
 %   This function declares the basic data structures for a hook without
 %   actually declaring the hook itself.  This is needed to allow adding
 %   to undeclared hooks.  Here it is unnecessary to check whether all
 %   variables exist, since all three are declared at the same time
 %   (either all of them exist, or none).
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_declare:n #1
+\cs_new_protected:Npn \@@_setup_structure:n #1
   {
-    \@@_if_exist:nF {#1}
+    \@@_if_structure_exist:nF {#1}
       {
         \prop_new:c { g_@@_#1_code_prop }
         \tl_new:c { @@_toplevel~#1 }
@@ -2299,7 +2388,7 @@
 % \begin{macro}{\hook_disable:n}
 % \begin{macro}[pTF]{\@@_if_disabled:n}
 %   Disables a hook by creating its
-%   \cs[no-index]{g_@@_\meta{hook}_created_tl} and undefining its
+%   \cs[no-index]{g_@@_\meta{hook}_declared_tl} and undefining its
 %   \cs[no-index]{@@~\meta{hook}} token list.  This does not clear any
 %   code that may be already stored in the hook's structure, but doesn't
 %   allow adding more code.  \cs{@@_if_disabled:nTF} uses that specific
@@ -2307,13 +2396,13 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_disable:n #1
   {
-    \tl_gclear_new:c { g_@@_#1_created_tl }
+    \tl_gclear_new:c { g_@@_#1_declared_tl }
     \cs_undefine:c { @@~#1 }
   }
 \prg_new_conditional:Npnn \@@_if_disabled:n #1 { p, T, F, TF }
   {
     \bool_lazy_and:nnTF
-        { \tl_if_exist_p:c { g_@@_#1_created_tl } }
+        { \tl_if_exist_p:c { g_@@_#1_declared_tl } }
         { ! \tl_if_exist_p:c { @@~#1 } }
       { \prg_return_true: }
       { \prg_return_false: }
@@ -2509,7 +2598,7 @@
 %    If no removal is queued, we are free to add.  Start by checking if
 %    the hook exists.
 %    \begin{macrocode}
-            \@@_if_declared:nTF {#1}
+            \@@_if_usable:nTF {#1}
 %    \end{macrocode}
 %    If so we simply add (or append) the new code to the property list
 %    holding different chunks for the hook. At \verb=\begin{document}=
@@ -2552,7 +2641,7 @@
 %    However, first some debugging info if debugging is enabled:
 %    \begin{macrocode}
     \@@_debug:n{\iow_term:x{****~ Add~ to~
-                      \@@_if_declared:nF {#1} { undeclared~ }
+                      \@@_if_usable:nF {#1} { undeclared~ }
                       hook~ #1~ (#2)
                       \on@line\space <-~ \tl_to_str:n{#3}} }
 %    \end{macrocode}
@@ -2570,9 +2659,9 @@
           {
 %    \end{macrocode}
 %    If the hook's basic structure does not exist, we need to declare it
-%    with \cs{@@_declare:n}.
+%    with \cs{@@_setup_structure:n}.
 %    \begin{macrocode}
-            \@@_declare:n {#1}
+            \@@_setup_structure:n {#1}
             \@@_tl_gput_right:cn { @@_toplevel~#1 } {#3}
           }
           { \msg_error:nnn { hooks } { misused-top-level } {#1} }
@@ -2597,7 +2686,7 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_gput_undeclared_hook:nnn #1 #2 #3
   {
-    \@@_declare:n {#1}
+    \@@_setup_structure:n {#1}
     \@@_hook_gput_code_do:nnn {#1} {#2} {#3}
   }
 %    \end{macrocode}
@@ -2675,7 +2764,7 @@
       {
         \prop_if_in:NnTF \c_@@_generics_prop {#1}
           {
-            \@@_if_declared:nF {#5}
+            \@@_if_usable:nF {#5}
               {
 %    \end{macrocode}
 %    If the hook doesn't exist yet we check if it is a \texttt{cmd}
@@ -2693,10 +2782,10 @@
 %    Declare the hook always even if it can't really be used (error
 %    message generated elsewhere).
 %
-%    Here we use \cs{@@_create:n}, so that a \cs{hook_new:n} is still
+%    Here we use \cs{@@_make_usable:n}, so that a \cs{hook_new:n} is still
 %    possible later.
 %    \begin{macrocode}
-                \@@_create:n {#5}
+                \@@_make_usable:n {#5}
               }
             \prop_if_in:NnTF \c_@@_generics_reversed_ii_prop {#2}
               { \tl_gset:cn { g_@@_#5_reversed_tl } { - } }
@@ -2823,11 +2912,11 @@
 \cs_new_protected:Npn \@@_gremove_code:nn #1 #2
   {
 %    \end{macrocode}
-%    First check that the hook code pool exists.  \cs{@@_if_declared:nTF}
+%    First check that the hook code pool exists.  \cs{@@_if_usable:nTF}
 %    isn't used here because it should be possible to remove code from a
 %    hook before its defined (see section~\ref{sec:querying}).
 %    \begin{macrocode}
-    \@@_if_exist:nTF {#1}
+    \@@_if_structure_exist:nTF {#1}
       {
 %    \end{macrocode}
 %    Then remove the chunk and run \cs{@@_update_hook_code:n} so
@@ -2874,7 +2963,7 @@
 %    \end{macrocode}
 %    Finally update the code, if the hook exists.
 %    \begin{macrocode}
-        \@@_if_declared:nT {#1}
+        \@@_if_usable:nT {#1}
           { \@@_update_hook_code:n {#1} }
       }
 %    \end{macrocode}
@@ -3015,7 +3104,7 @@
 %    \end{macrocode}
 %    First we ensure the basic data structure of the hook exists:
 %    \begin{macrocode}
-    \@@_declare:n {#1}
+    \@@_setup_structure:n {#1}
 %    \end{macrocode}
 %    Then we clear any previous relationship between both labels.
 %    \begin{macrocode}
@@ -3239,7 +3328,7 @@
 %    as they are needed several times inside. This way we save a bit
 %    on processing time if we do that up front.
 %    \begin{macrocode}
-    \@@_if_declared:nT {#1}
+    \@@_if_usable:nT {#1}
       {
         \prop_if_empty:cTF {g_@@_#1_code_prop}
           {
@@ -3778,7 +3867,7 @@
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-    \@@_if_declared:nF {#1}
+    \@@_if_usable:nF {#1}
       { \@@_log_line:x { The~hook~is~not~declared. } }
     \@@_if_disabled:nT {#1}
       { \@@_log_line:x { The~hook~is~disabled. } }
@@ -3799,7 +3888,7 @@
         \@@_log_line:x
           {
             Document-level~(top-level)~code
-            \@@_if_declared:nT {#1}
+            \@@_if_usable:nT {#1}
               { ~(executed~\@@_if_reversed:nTF {#1} {first} {last} ) } :
           }
         \@@_log_line_indent:x
@@ -3850,7 +3939,7 @@
 %   to that hook) and not empty
 %    \begin{macrocode}
         \bool_lazy_and:nnTF
-            { \@@_if_declared_p:n {#1} }
+            { \@@_if_usable_p:n {#1} }
             { ! \hook_if_empty_p:n {#1} }
           {
             \@@_log_line:x
@@ -3874,7 +3963,7 @@
           {
             #2
               {
-                Hook~ \@@_if_declared:nTF {#1}
+                Hook~ \@@_if_usable:nTF {#1}
                   {code~pool~empty} {not~declared}
               }
           }
@@ -3984,8 +4073,8 @@
     \@@_if_disabled:nTF {#1}
       { \msg_error:nnn { hooks } { hook-disabled } {#1} }
       {
-        \@@_declare:n {#1}
-        \@@_if_declared:nTF {#1}
+        \@@_setup_structure:n {#1}
+        \@@_if_usable:nTF {#1}
           { \@@_gput_next_do:nn {#1} {#2} }
           { \@@_try_declaring_generic_next_hook:nn {#1} {#2} }
       }
@@ -4184,7 +4273,7 @@
 %    \begin{macrocode}
 \prg_new_conditional:Npnn \hook_if_empty:n #1 { p , T , F , TF }
   {
-    \@@_if_exist:nTF {#1}
+    \@@_if_structure_exist:nTF {#1}
       {
         \bool_lazy_and:nnTF
             { \prop_if_empty_p:c { g_@@_#1_code_prop } }
@@ -4201,7 +4290,7 @@
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}[pTF]{\@@_if_declared:n}
+% \begin{macro}[pTF]{\@@_if_usable:n}
 %   A canonical way to test if a hook exists.  A hook exists if the
 %   token list that stores the sorted code for that hook,
 %   \cs[no-index]{@@~\meta{hook}}, exists.  The property list
@@ -4211,7 +4300,7 @@
 %   (for example, in case the package that defines it isn't loaded).
 %\fmi{docu update?}
 %    \begin{macrocode}
-\prg_new_conditional:Npnn \@@_if_declared:n #1 { p , T , F , TF }
+\prg_new_conditional:Npnn \@@_if_usable:n #1 { p , T , F , TF }
   {
     \tl_if_exist:cTF { @@~#1 }
       { \prg_return_true: }
@@ -4220,14 +4309,14 @@
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}[pTF]{\@@_if_exist:n}
+% \begin{macro}[pTF]{\@@_if_structure_exist:n}
 %   An internal check if the hook has already been declared with
-%   \cs{@@_declare:n}.  This means that the hook was already used somehow
+%   \cs{@@_setup_structure:n}.  This means that the hook was already used somehow
 %   (a code chunk or rule was added to it), but it still wasn't declared
 %   with \cs{hook_new:n}.
 %\fmi{docu update?}
 %    \begin{macrocode}
-\prg_new_conditional:Npnn \@@_if_exist:n #1 { p , T , F , TF }
+\prg_new_conditional:Npnn \@@_if_structure_exist:n #1 { p , T , F , TF }
   {
     \prop_if_exist:cTF { g_@@_#1_code_prop }
       { \prg_return_true: }
@@ -4238,16 +4327,16 @@
 %  
 %  
 %  
-%  \begin{macro}[pTF]{\@@_if_created:n}
+%  \begin{macro}[pTF]{\@@_if_declared:n}
 %
-%    I used \cs{@@_if_created:n} because \cs{@@_if_exist:n} seems a
+%    I used \cs{@@_if_declared:n} because \cs{@@_if_structure_exist:n} seems a
 %    bit misleading (and it already exists, to check if a hook was
-%    already declared with \cs{@@_declare:n}).
+%    already declared with \cs{@@_setup_structure:n}).
 %\fmi{docu update?}
 %    \begin{macrocode}
-\prg_new_conditional:Npnn \@@_if_created:n #1 { p, T, F, TF }
+\prg_new_conditional:Npnn \@@_if_declared:n #1 { p, T, F, TF }
   {
-    \tl_if_exist:cTF { g_@@_#1_created_tl }
+    \tl_if_exist:cTF { g_@@_#1_declared_tl }
       { \prg_return_true: }
       { \prg_return_false: }
   }
@@ -4692,7 +4781,7 @@
 % internal conditional for a while.  Regardless, those packages' use for
 % \cs{IfHookExistsTF} is not really correct and can be changed.}
 %    \begin{macrocode}
-\cs_new_eq:NN \IfHookExistsTF \@@_if_declared:nTF
+\cs_new_eq:NN \IfHookExistsTF \@@_if_usable:nTF
 %    \end{macrocode}
 % \end{macro}
 %
