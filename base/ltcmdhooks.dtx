@@ -13,7 +13,7 @@
 %
 %%% From File: ltcmdhooks.dtx
 %
-\def\ltcmdhooksversion{v0.9d}
+\def\ltcmdhooksversion{v1.0a}
 \def\ltcmdhooksdate{2021/04/19}
 %
 %
@@ -95,7 +95,7 @@
 %\begin{verbatim}
 %    \AddToHook{cmd/foo/before}{<before code>}
 %\end{verbatim}
-%    then, after |\begin{document}| the definition of \tn{foo} will be:
+%    then, after |\begin{document}| the definition of \cs[no-index]{foo} will be:
 %\begin{verbatim}
 %    \renewcommand\foo[2]{\UseHook{cmd/foo/before}Code #1 for #2!}
 %\end{verbatim}
@@ -107,9 +107,25 @@
 %
 %    In other words, the mechanism is similar to what \pkg{etoolbox}
 %    offers with \tn{pretocmd} and \tn{apptocmd} with the important
-%    difference that by using the hook management interface it is now
-%    possible to define how the code chunks added in these places are
-%    ordered, if different packages want to add code at these points.
+%    differences 
+%    \begin{itemize}
+%    \item
+%
+%      that code can be prepended or appended (i.e., added to the
+%      hooks) even if the command itself is not defined, because the
+%      defining package has not yet been loaded
+%
+%    \item
+%
+%      and that by using the hook management interface it is now
+%      possible to define how the code chunks added in these places
+%      are ordered, if different packages want to add code at these
+%      points.
+%
+%    \end{itemize}
+%
+%
+%
 %
 % \section{Restrictions and Operational details}
 % \label{sec:restrictions}
@@ -156,6 +172,8 @@
 % patched to include the hook, and if it doesn't exist or if it can't be
 % patched for any reason, an error is thrown.
 %
+%
+%
 % \subsection{Commands that look ahead}
 % \label{sec:look-ahead}
 %
@@ -173,6 +191,8 @@
 % but instead calls a few internal \LaTeX{} macros to look for the
 % optional and mandatory arguments.  By adding code to the
 % \hook{cmd/section/after} hook, you get in the way of that scanning.
+%
+%
 %
 % \section{Package Author Interface}
 %
@@ -192,30 +212,27 @@
 % that typesets its contents in a framed box with width optionally
 % given in parentheses:
 % \begin{verbatim}
-% \newcommand\fancybox{\@ifnextchar(%)
-%   {\@fancybox}{\@fancybox(5cm)}}
-% \def\@fancybox(#1)#2{%
-%   \fbox{\parbox{#1}{#2}}}
+%    \newcommand\fancybox{\@ifnextchar({\@fancybox}{\@fancybox(5cm)}}
+%    \def\@fancybox(#1)#2{\fbox{\parbox{#1}{#2}}}
 % \end{verbatim}
 % If you try that definition, then add some code after it with
 % \begin{verbatim}
-% \AddToHook{cmd/fancybox/after}{<code>}
+%    \AddToHook{cmd/fancybox/after}{<code>}
 % \end{verbatim}
 % and then use the \cs[no-index]{fancybox} command you will see that it
-% will be completely broken.
+% will be completely broken bcause the hook will get executed in the
+% middle of parsing for optional \texttt{(...)} argument.
 %
 % If, on the other hand, you want to add hooks to your command you can
 % do something like:
 % \begin{verbatim}
-% \newcommand\fancybox{\@ifnextchar(%)
-%   {\@fancybox}{\@fancybox(5cm)}}
-% \def\@fancybox(#1)#2{%
-%   \fbox{%
-%     \UseHook{cmd/fancybox/before}%
-%     \parbox{#1}{#2}%
-%     \UseHook{cmd/fancybox/after}}}
-% \NewHook{cmd/fancybox/before}
-% \NewReversedHook{cmd/fancybox/after}
+%   \newcommand\fancybox{\@ifnextchar({\@fancybox}{\@fancybox(5cm)}}
+%   \def\@fancybox(#1)#2{\fbox{%
+%                        \UseHook{cmd/fancybox/before}%
+%                        \parbox{#1}{#2}%
+%                        \UseHook{cmd/fancybox/after}}}
+%   \NewHook{cmd/fancybox/before}
+%   \NewReversedHook{cmd/fancybox/after}
 % \end{verbatim}
 % then the hooks will be executed where they should and no patching
 % will be attempted.  It is important that the hooks are declared with
@@ -232,11 +249,25 @@
 % will get an error.  Or if you don't want the error, you can simply
 % declare the hook with \cs{NewHook} and never use it.
 %
+% The above approach is useful for really complex commands where for
+% one or the other reason the hooks can't be placed at the very
+% beginning and end of the command body and some hand-crafting is
+% needed. However, in the example above the real (and in fact only)
+% issue is the cascading argument parsing in the style developed long
+% ago in \LaTeX~2.09. Thus, a much simpler solution for this case is
+% to replace it with the modern \cs{NewDocumentCommand} syntax and
+% define the command as follows:
+% \begin{verbatim}
+%  \DeclareDocumentCommand\fancybox{D(){5cm}m}{\fbox{\parbox{#1}{#2}}}
+% \end{verbatim}
+% If you do that then both hooks automatically work and are patched
+% into the right places.
+%
 % \StopEventually{\setlength\IndexMin{200pt}  \PrintIndex  }
 %
 %
-% \section{The Implementation}
 %
+% \section{The Implementation}
 %
 % \subsection{Execution plan}
 %
@@ -244,7 +275,7 @@
 % into the definition of a command, which is always a tricky thing to
 % do.  Some cases are easy because we know how the command was defined,
 % so we can assume how its \meta{parameter text} looks like (for example
-% a command defined with \cs{newcommand} may have an optional argument
+% a command defined with \tn{newcommand} may have an optional argument
 % followed by a run of mandatory arguments), so we can just expand that
 % command and make it grab |#1|, |#2|, etc.\@ as arguments and
 % define it all back with the hooks added.
@@ -259,7 +290,7 @@
 % \begin{enumerate}
 %   \item
 %     Check if a command is of a known type (that is, defined with
-%     \cs{newcommand}\footnote{It's not always possible to reliably
+%     \tn{newcommand}\footnote{It's not always possible to reliably
 %     detect this case because a command defined with no optional
 %     argument is indistinguishable from a \tn{def}ed command.},
 %     \cs[no-index]{DeclareRobustCommand}, or
@@ -292,10 +323,13 @@
 % \subsection{Variables}
 %
 % \begin{macro}[int]{\g_hook_patch_action_list_tl}
-%   Pairs of |\if<cmd>..\patch<cmd>| to be used with
-%   \tn{robust@command@act} when looking for a known patching rule.
-%   \pho{Should this be documented?  How/to what extent, as it's quite
-%        specialised?}
+%    Pairs of |\if<cmd>..\patch<cmd>| to be used with
+%    \tn{robust@command@act} when looking for a known patching
+%    rule. This token list is exposed because we see some future
+%    applications (with very specialized packages, such as
+%    \pkg{etoolbox} that may want to extend the pairs processed. It is
+%    not meant for general use which is why it is not documented in
+%    the interface documentation above.
 %    \begin{macrocode}
 \tl_new:N \g_hook_patch_action_list_tl
 %    \end{macrocode}
@@ -347,7 +381,7 @@
 %    \end{macrocode}
 % \end{macro}
 %
-% \subsection{Patching or Delaying}
+% \subsection{Patching or delaying}
 %
 % \begin{macro}{\@@_try_put_cmd_hook:n,\@@_try_put_cmd_hook:w}
 %   Before |\begin{document}| all patching is delayed.
@@ -428,6 +462,10 @@
 %    \end{macrocode}
 % \end{macro}
 %
+%
+%
+%
+%
 % \subsection{Patching commands}
 %
 % \begin{macro}{\@@_patch_command:Nnn}
@@ -503,23 +541,33 @@
 % \end{macro}
 % \end{macro}
 %
+%
+%
+%
+%
+%
+%
 % \subsubsection{Patching by expansion and redefinition}
 %
-% \begin{macro}{\g_hook_patch_action_list_tl}
-%   This is the list of known command types and the function that
-%   patches the command hooks into them.  The conditionals are taken
-%   from \tn{ShowCommand} and \tn{NewCommandCopy}.
+% \begin{macro}[int]{\g_hook_patch_action_list_tl}
+%    This is the list of known command types and the function that
+%    patches the command hooks into them.  The conditionals are taken
+%    from \tn{ShowCommand}, \tn{NewCommandCopy} and
+%    \cs{__kernel_cmd_if_xparse:NTF} defined in \texttt{ltcmd}.
 %    \begin{macrocode}
 \tl_gset:Nn \g_hook_patch_action_list_tl
   {
     { \@if@DeclareRobustCommand \@@_patch_DeclareRobustCommand:Nnn }
     { \@if@newcommand \@@_patch_newcommand:Nnn }
+    { \__kernel_cmd_if_xparse:NTF \@@_cmd_patch_xparse:Nn }
   }
 %    \end{macrocode}
 % \end{macro}
 %
+%
+%
+%
 % \begin{macro}{\@@_patch_DeclareRobustCommand:Nnn}
-% \begin{macro}{\@@_patch_newcommand:Nnn}
 %   At this point we know that the commands can be patched by expanding
 %   then redefining.  These are the cases of commands defined with
 %   \tn{newcommand} with an optional argument or with
@@ -540,7 +588,11 @@
         { \cs_to_str:N #1 ~ }
   }
 %    \end{macrocode}
+% \end{macro}
 %
+%
+%
+% \begin{macro}{\@@_patch_newcommand:Nnn}
 %   If the command was defined with \tn{newcommand} and an optional
 %   argument, call the patching engine with a \cs{c_true_bool} to flag
 %   the presence of an optional argument, and with
@@ -554,7 +606,22 @@
   }
 %    \end{macrocode}
 % \end{macro}
-% \end{macro}
+
+  
+%  \begin{macro}{\@@_cmd_patch_xparse:Nn}
+%    And for commands defined by the \pkg{xparse} commands use this
+%    for patching:
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_cmd_patch_xparse:Nn #1 #2
+  {
+    \exp_args:NNc \@@_patch_expand_redefine:NNnn \c_false_bool
+      { \cs_to_str:N #1 ~ code } {#2}
+  }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
 %
 % \begin{macro}{\@@_patch_expand_redefine:NNnn}
 % \begin{macro}[EXP]{\@@_make_prefixes:w}
@@ -670,6 +737,11 @@
 % \end{macro}
 % \end{macro}
 %
+%
+%
+%
+%
+%
 % \subsubsection{Patching by retokenization}
 %
 % At this point we've drained the possibilities of patching a command by
@@ -756,6 +828,8 @@
 %    \end{macrocode}
 % \end{macro}
 %
+%
+%
 % \begin{macro}{\@@_try_patch_with_catcodes:Nnnnw}
 %   This function is a simple wrapper around
 %   \cs{@@_cmd_if_scanable:NnTF} and \cs{@@_patch_retokenize:Nnnn} if
@@ -780,6 +854,9 @@
 %    \end{macrocode}
 % \end{macro}
 %
+%
+%
+%
 % \begin{macro}[int]{\kerneltmpDoNotUse}
 %   This is an oddity required to be safe (as safe as reasonably
 %   possible) when patching the command.  The entirety of
@@ -803,6 +880,8 @@
 %     and the \meta{replacement text} separately through \tn{scantokens}
 %     and then putting everything together at the end.}
 % \end{macro}
+%
+%
 %
 % \begin{macro}{\@@_patch_required_catcodes:}
 %   Here are the catcode settings that are \emph{mandatory} when
@@ -836,6 +915,9 @@
 %     lowercase letters, U and H, the slash, and whatever characters in
 %     the command name\ldots sigh\ldots}
 % \end{macro}
+%
+%
+%
 %
 % \begin{macro}[TF]{\@@_cmd_if_scanable:Nn}
 %   Here we'll do a quick test if the command being patched can in fact
@@ -874,6 +956,8 @@
   }
 %    \end{macrocode}
 % \end{macro}
+%
+%
 %
 % \begin{macro}{\@@_patch_retokenize:Nnnn}
 %   Then, if \cs{@@_cmd_if_scanable:NnTF} returned true, we can go on
@@ -970,25 +1054,18 @@
   }
 %    \end{macrocode}
 %
-% \subsection{Changes to \pkg{ltcmd}}
-% \pho{To be properly integrated}
 %
 %    \begin{macrocode}
-\prg_new_eq_conditional:NNn \@@_cmd_if_xparse:N
-  \__cmd_cmd_if_xparse:N { TF }
-\tl_gput_right:Nn \g_hook_patch_action_list_tl
-  { { \@@_cmd_if_xparse:NTF \@@_cmd_patch_xparse:Nn } }
-\cs_new_protected:Npn \@@_cmd_patch_xparse:Nn #1 #2
-  {
-    \exp_args:NNc \@@_patch_expand_redefine:NNnn \c_false_bool
-      { \cs_to_str:N #1 ~ code } {#2}
-  }
-%    \end{macrocode}
-%
-%
-%    \begin{macrocode}
-%<latexrelease>\IncludeInRelease{0000/00/00}{lthooks}%
+%<latexrelease>\IncludeInRelease{0000/00/00}{ltcmdhooks}%
 %<latexrelease>                 {The~hook~management~system~for~commands}
+%<latexrelease>
+%    \end{macrocode}
+%    The command \cs{@@_cmd_begindocument_code:} is used in an
+%    internal hook, so we need to make sure it has a harmless
+%    definition after rollback as that will not remove it from the
+%    kernel hook.
+%    \begin{macrocode}
+%<latexrelease>\cs_set_eq:NN \@@_cmd_begindocument_code: \prg_do_nothing:
 %<latexrelease>
 %<latexrelease>\EndModuleRelease
 \ExplSyntaxOff
