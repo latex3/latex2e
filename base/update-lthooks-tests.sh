@@ -1,17 +1,3 @@
-l3build save -cconfig-lthooks \
- ltcmdhooks-001 \
- ltcmdhooks-002 \
- ltcmdhooks-003 \
- ltcmdhooks-004 \
- ltcmdhooks-005 \
- ltcmdhooks-005a \
- ltcmdhooks-006 \
- ltcmdhooks-007 \
- ltcmdhooks-008 \
- ltcmdhooks-009 \
- ltcmdhooks-010
-
-#exit
 
 l3build save -cconfig-lthooks2 \
    lthooks2-002 \
@@ -43,6 +29,17 @@ l3build save -cconfig-lthooks2 \
 
 
 l3build save -cconfig-lthooks \
+ ltcmdhooks-001 \
+ ltcmdhooks-002 \
+ ltcmdhooks-003 \
+ ltcmdhooks-004 \
+ ltcmdhooks-005 \
+ ltcmdhooks-005a \
+ ltcmdhooks-006 \
+ ltcmdhooks-007 \
+ ltcmdhooks-008 \
+ ltcmdhooks-009 \
+ ltcmdhooks-010 \
    filehook-001 \
    filehook-002 \
    filehook-003 \
