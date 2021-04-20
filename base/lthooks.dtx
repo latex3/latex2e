@@ -191,6 +191,9 @@
 %    \texttt{ltcmdhooks-doc}) as depending on the definition of the
 %    command such generic hooks may be unusable. If that is known, a
 %    package developer can disable such hooks up front.
+%
+%    The \meta{hook} can be specified using the dot-syntax to denote
+%    the current package name. See section~\ref{sec:default-label}.
 % \end{function}
 %
 %
@@ -875,6 +878,9 @@
 %    This declaration is intended for use with generic hooks that are
 %    known not to work (see \texttt{ltcmdhooks-doc}) if they receive
 %    code.
+%
+%    The \meta{hook} can be specified using the dot-syntax to denote
+%    the current package name. See section~\ref{sec:default-label}.
 % \end{function}
 %
 %
@@ -2170,7 +2176,7 @@
 %
 %    This initializes all hook data structures for the hook but if
 %    used on its own doesn mark the hook as declared (as
-%    \cs{hook_new:n} does, so a later\cs{hook_new:n} on that hook will
+%    \cs{hook_new:n} does, so a later \cs{hook_new:n} on that hook will
 %    not result in an error.  This command is internally used by
 %    \cs{hook_gput_code:n} when adding code to a generic hook.
 %    \begin{macrocode}
@@ -2183,7 +2189,7 @@
 %   allocate the necessary data structures for the new hook,
 %   otherwise just do nothing.
 % \fmi{As this internal code we can make sure that this test here is
-%    actually not needed as it was made earlier already -- not changed}    
+%    actually not needed as it was made earlier already -- not changed}
 %    \begin{macrocode}
     \tl_if_exist:cF { @@~#1 }
       {
@@ -2331,6 +2337,7 @@
 % \subsubsection{Disabling hooks}
 %
 % \begin{macro}{\hook_disable:n}
+% \begin{macro}{\@@_disable:n}
 % \begin{macro}[pTF]{\@@_if_disabled:n}
 %
 %    Disables a hook by creating its
@@ -2345,6 +2352,8 @@
 %
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_disable:n #1
+  { \@@_normalize_hook_args:Nn \@@_disable:n {#1} }
+\cs_new_protected:Npn \@@_disable:n #1
   {
     \tl_gclear_new:c { g_@@_#1_declared_tl }
     \cs_undefine:c { @@~#1 }
@@ -2358,6 +2367,7 @@
       { \prg_return_false: }
   }
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 %
@@ -2766,20 +2776,20 @@
 %<latexrelease>\IncludeInRelease{2020/10/01}%
 %<latexrelease>         {\@@_try_declaring_generic_hook:wn}{Support~cmd~hooks}
 %<latexrelease>
-%<latexrelease>\prg_new_protected_conditional:Npnn \__hook_try_declaring_generic_hook:wn
+%<latexrelease>\prg_new_protected_conditional:Npnn \@@_try_declaring_generic_hook:wn
 %<latexrelease>    #1 / #2 / #3 / #4 \scan_stop: #5 { TF }
 %<latexrelease>  {
 %<latexrelease>    \tl_if_empty:nTF {#2}
 %<latexrelease>      { \prg_return_false: }
 %<latexrelease>      {
-%<latexrelease>        \prop_if_in:NnTF \c__hook_generics_prop {#1}
+%<latexrelease>        \prop_if_in:NnTF \c_@@_generics_prop {#1}
 %<latexrelease>          {
 %<latexrelease>            \@@_if_declared:nF {#5} { \hook_new:n {#5} }
-%<latexrelease>            \prop_if_in:NnTF \c__hook_generics_reversed_ii_prop {#2}
-%<latexrelease>              { \tl_gset:cn { g__hook_#5_reversed_tl } { - } }
+%<latexrelease>            \prop_if_in:NnTF \c_@@_generics_reversed_ii_prop {#2}
+%<latexrelease>              { \tl_gset:cn { g_@@_#5_reversed_tl } { - } }
 %<latexrelease>              {
-%<latexrelease>                \prop_if_in:NnT \c__hook_generics_reversed_iii_prop {#3}
-%<latexrelease>                  { \tl_gset:cn { g__hook_#5_reversed_tl } { - } }
+%<latexrelease>                \prop_if_in:NnT \c_@@_generics_reversed_iii_prop {#3}
+%<latexrelease>                  { \tl_gset:cn { g_@@_#5_reversed_tl } { - } }
 %<latexrelease>              }
 %<latexrelease>            \prg_return_true:
 %<latexrelease>          }
@@ -3069,15 +3079,12 @@
 %
 %  \begin{macro}{\hook_gset_rule:nnnn}
 %  \begin{macro}{\@@_gset_rule:nnnn}
-%
-%    \fmiinline{needs docu correction given new implementation -- not
-%    sure this  statement is still true, can you check Phelype?}
-%
 %    With
 %    \cs{hook_gset_rule:nnnn}\Arg{hook}\Arg{label1}\Arg{relation}\Arg{label2}
 %    a relation is defined between the two code labels for the given
 %    \meta{hook}.  The special hook \texttt{??} stands for \emph{any}
-%    hook describing a default rule.
+%    hook, which sets a default rule (to be used if no other relation
+%    between the two hooks exist).
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_gset_rule:nnnn #1#2#3#4
   {
@@ -3085,7 +3092,7 @@
       {#1} {#2} {#3} {#4}
   }
 %    \end{macrocode}
-%    
+%
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_gset_rule:nnnn #1#2#3#4
   {
@@ -3952,8 +3959,9 @@
             \@@_log_line:x { Execution~order: }
             #2
               {
-                \@spaces Not~set~because~hook~ \@@_if_usable:nTF {#1}
-                  {code~pool~empty} {is~not~usable~(disabled~or~undeclared)}
+                \@spaces Not~set~because~the~hook~ \@@_if_usable:nTF {#1}
+                  { code~pool~is~empty }
+                  { is~\@@_if_disabled:nTF {#1} {disabled} {undeclared} }
               }
           }
       }
