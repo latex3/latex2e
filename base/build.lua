@@ -112,14 +112,8 @@ typesetfiles   =
     "usrguide.tex",
     "usrguide3.tex",
     "latexchanges.tex",
-    "lthooks-doc.tex",
-    "ltshipout-doc.tex",
-    "ltfilehook-doc.tex",
-    "lthooks-code.tex",
-    "ltshipout-code.tex",
-    "ltfilehook-code.tex",
-    "ltpara-doc.tex",
-    "ltpara-code.tex",
+    "*-doc.tex",
+    "*-code.tex",
   }
 
 -- Files that should be removed after running a test
