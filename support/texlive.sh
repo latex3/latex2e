@@ -19,6 +19,9 @@ if ! command -v texlua > /dev/null; then
   cd ..
 fi
 
+# https: repositories only (only temp)
+#tlmgr option repository https://mirror.ctan.org/systems/texlive/tlnet
+
 # Backups only make the cache bigger
 tlmgr option -- autobackup 0
 
