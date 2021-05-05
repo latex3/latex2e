@@ -38,7 +38,7 @@ checksuppfiles = checksuppfiles     or
     "lualibs*.lua", 
     "fontloader*.lua",
     "luaotfload*.lua",
-    "luaotfloat.sty"
+    "fixup_mathaxis.lua",
   }
 stdengine      = stdengine          or "etex"
 tagfiles       = tagfiles or {"*.dtx","*.ins","*.tex","README.md"}
