@@ -706,6 +706,7 @@
       }
     \mode_if_math:T { \mbox }
       {
+        \bool_if:NT \l__codedoc_allow_indexing_bool { \__codedoc_target: }
         \verbatim@font
         \__codedoc_if_almost_str:VT \l__codedoc_cmd_tl
           {
@@ -713,8 +714,8 @@
             \bool_if:NT \g__codedoc_cs_break_bool
               {
                 \regex_replace_all:nnN
-                  {([^\\])_([^\_])}
-                  {\1\c{BreakableUnderscore}\2}
+                  { ([^\\\_]\_*) \_ ([^\_]) }
+                  { \1 \c{BreakableUnderscore} \2 }
                   \l__codedoc_cmd_tl
               }
           }
@@ -722,14 +723,15 @@
         \l__codedoc_cmd_tl
         \@
       }
-    \bool_if:NF \l__codedoc_cmd_noindex_bool
-      {
+    \bool_if:NT \l__codedoc_allow_indexing_bool
+     {
+      \bool_if:NF \l__codedoc_cmd_noindex_bool
+       {
         \quark_if_no_value:NF \l__codedoc_cmd_index_tl
           {
             \__kernel_tl_set:Nx \l__codedoc_cmd_tl
               { \c_backslash_str \exp_not:o { \l__codedoc_cmd_index_tl } }
           }
-
         \exp_args:No \__codedoc_key_get:n { \l__codedoc_cmd_tl }
         \quark_if_no_value:NF \l__codedoc_cmd_module_tl
           {
@@ -742,7 +744,8 @@
           { \l__codedoc_index_module_tl }
           { usage }
           \l__codedoc_index_internal_bool
-      }
+       }
+     }
   }
 \cs_generate_variant:Nn \__codedoc_cmd:nn { no }
 \cs_new_protected:Npn \__codedoc_meta:n #1
@@ -1155,8 +1158,7 @@
 \cs_new_protected:Npn \__codedoc_typeset_functions:
   {
     \small\ttfamily
-    \HD@savedestfalse
-    \HD@target
+    \__codedoc_target:
     \Hy@MakeCurrentHref { HD. \int_use:N \c@HD@hypercount }
     \begin{tabular} [t] { @{} l @{} >{\hspace{\tabcolsep}} r @{} }
       \toprule
@@ -1387,8 +1389,7 @@
         \hbox:n
           {
             \strut
-            \int_compare:nNnT \l__codedoc_macro_int = 0
-              { \HD@target }
+            \int_compare:nNnT \l__codedoc_macro_int = 0 { \__codedoc_target: }
           }
         \vskip \int_eval:n { \l__codedoc_macro_int - 1 } \baselineskip
       }
@@ -1487,8 +1488,7 @@
       {
         \vbox_unpack_drop:N \l__codedoc_macro_box
         \hbox { \llap { \__codedoc_print_macroname:nN {#1} #2
-            \MacroFont       % <----- without it the \ is in lmr10 if a link is made
-            \
+            \MacroFont \
         } }
       }
     \int_incr:N \l__codedoc_macro_int
@@ -1675,21 +1675,16 @@
   {
     \@bsphack
     \begingroup
-      \HD@target
-      \let\HDorg@encapchar\encapchar
-      \edef\encapchar usage
-        {
-          \HDorg@encapchar hdclindex{\the\c@HD@hypercount}{usage}
-        }
+      \__codedoc_target:
       \index
         {
           #1\actualchar{\protect\ttfamily#1}~(option)
-          \encapchar usage
+          \encapchar hdclindex{\the\c@HD@hypercount}{usage}
         }
       \index
         {
           options:\levelchar#1\actualchar{\protect\ttfamily#1}
-          \encapchar usage
+          \encapchar hdclindex{\the\c@HD@hypercount}{usage}
         }
     \endgroup
     \@esphack
@@ -1883,15 +1878,37 @@
     \fi
     \cs_set_eq:NN \@auxout \@mainaux
   }
-\cs_gset:Npn \codeline@wrindex #1
+\cs_gset_protected:Npn \@wrindex #1
+  {
+    \protected@write \@indexfile {}
+      { \string \indexentry {#1} { MMMMI - \thepage } }
+    \endgroup \@esphack
+  }
+\cs_gset_protected:Npn \codeline@wrindex #1
   {
     \immediate\write\@indexfile
       {
         \string\indexentry{#1}
-          { \filesep \int_use:N \c@CodelineNo }
+          { MMMMV - \filesep \int_use:N \c@CodelineNo }
       }
   }
 \tl_gclear:N \filesep
+\cs_new_protected:Npn \__codedoc_index_page_hc:nn #1#2
+  {
+    \protected@write \@indexfile {}
+      {
+        \string \indexentry { #1 \encapchar hdpindex{#2} }
+          { MMMMI - \thepage }
+      }
+  }
+\cs_new_protected:Npn \__codedoc_index_codeline_hc:nn #1#2
+  {
+    \immediate\write\@indexfile
+      {
+        \string \indexentry { #1 \encapchar hdclindex{\the\c@HD@hypercount}{#2} }
+          { MMMMV - \filesep \int_use:N \c@CodelineNo - MMMD - \the\c@HD@hypercount - M }
+      }
+  }
 \cs_gset:Npn \docincludeaux
   {
     \tl_set:Nn \thepart { \alphalph { part } }
@@ -2100,6 +2117,32 @@
       }
   }
 \AtEndDocument { \__codedoc_show_not_tested: }
+\cs_new_protected:Npn \__codedoc_target:
+  {
+    \mode_leave_vertical:
+    \group_begin:
+      \HD@savedestfalse \HD@target
+    \group_end:
+  }
+\cs_set_nopar:Npx \theCodelineNo
+  {
+    \group_begin:
+      \exp_not:N \HD@savedestfalse
+      \exp_not:o \theCodelineNo
+    \group_end:
+  }
+\bool_new:N \l__codedoc_allow_indexing_bool
+\bool_set_true:N \l__codedoc_allow_indexing_bool
+\use:x
+  {
+    \exp_not:n { \cs_set_nopar:Npn \@starttoc #1 }
+      {
+        \group_begin:
+          \bool_set_false:N \l__codedoc_allow_indexing_bool
+          \exp_not:o { \@starttoc {#1} }
+        \group_end:
+      }
+  }
 \g@addto@macro \theindex { \MakePrivateLetters }
 \cs_gset:Npn \verbatimchar {&}
 \setcounter { IndexColumns } { 2 }
@@ -2183,14 +2226,14 @@
     \__codedoc_quote_special_char:N \l__codedoc_index_escaped_key_tl
     \__codedoc_special_index_set:Nn \l__codedoc_index_escaped_macro_tl {#2}
     \str_if_eq:onTF { \@currenvir } { macrocode }
-      { \codeline@wrindex }
+      { \__codedoc_index_codeline_hc:nn }
       {
         \str_case:nnF {#6}
           {
-            { main }  { \codeline@wrindex }
-            { usage } { \index }
+            { main }  { \__codedoc_index_codeline_hc:nn }
+            { usage } { \__codedoc_index_page_hc:nn }
           }
-          { \HD@target \index }
+          { \__codedoc_target: \__codedoc_index_page_hc:nn }
       }
       {
         \tl_if_empty:nF { #3 #4 #5 }
@@ -2201,10 +2244,43 @@
           \token_to_str:N \verbatim@font \c_space_tl
           \l__codedoc_index_escaped_macro_tl
         }
-        \encapchar
-        hdclindex{\the\c@HD@hypercount}{#6}
       }
+      {#6}
   }
+\group_begin:
+\char_set_active_eq:NN - \scan_stop:
+\tl_const:Nx \c__codedoc_active_minus_tl { \char_generate:nn { `- } { 13 } }
+\group_end:
+\cs_new_eq:NN \__codedoc_old_hdpindex:nn \hdpindex
+\cs_new_eq:NN \__codedoc_old_hdclindex:nnn \hdclindex
+\cs_gset_protected:Npn \hdpindex #1
+  { \__codedoc_hdindex:nn { \__codedoc_old_hdpindex:nn {#1} } }
+\cs_gset_protected:Npn \hdclindex #1#2
+  { \__codedoc_hdindex:nn { \__codedoc_old_hdclindex:nnn {#1} {#2} } }
+\cs_new_protected:Npn \__codedoc_hdindex:nn #1#2
+  {
+    \tl_set:Nn \l__codedoc_tmpa_tl {#2}
+    \tl_replace_all:Nxn \l__codedoc_tmpa_tl
+      { \exp_not:V \c__codedoc_active_minus_tl \exp_not:V \c__codedoc_active_minus_tl }
+      { -- }
+    \seq_set_split:NnV \l__codedoc_tmpa_seq { -- } \l__codedoc_tmpa_tl
+    \seq_set_map:NNn \l__codedoc_tmpa_seq \l__codedoc_tmpa_seq
+      { \__codedoc_hdindex_aux:nn {#1} {##1} }
+    \seq_use:Nn \l__codedoc_tmpa_seq { -- }
+  }
+\cs_new_protected:Npn \__codedoc_hdindex_aux:nn #1#2
+  {
+    \tl_set:Nn \l__codedoc_tmpa_tl {#2}
+    \tl_replace_all:Nnn \l__codedoc_tmpa_tl { MMMM } { \use_none:nn }
+    \tl_if_in:NnT \l__codedoc_tmpa_tl { MMMD }
+      {
+        \tl_replace_all:Nxn \l__codedoc_tmpa_tl
+          { \exp_not:V \c__codedoc_active_minus_tl MMMD } { - MMMD }
+        \tl_replace_all:Nnn \l__codedoc_tmpa_tl { - MMMD } { \__codedoc_hdindex_aux:w }
+      }
+    \use:x { \exp_not:n {#1} { \exp_not:V \l__codedoc_tmpa_tl } }
+  }
+\cs_new_protected:Npn \__codedoc_hdindex_aux:w #1 M { }
 \cs_new_protected:Npn \__codedoc_special_index_set:Nn #1#2
   {
     \__kernel_tl_set:Nx #1 { \tl_to_str:n {#2} }
@@ -2305,7 +2381,7 @@
         \str_case:fn { \str_head:N \l__codedoc_index_key_tl }
           {
             { q } { \tl_set:Nn \l__codedoc_index_module_tl { quark } }
-            { s } { \tl_set:Nn \l__codedoc_index_module_tl { quark } }
+            { s } { \tl_set:Nn \l__codedoc_index_module_tl { scan } }
           }
         \__codedoc_key_pop:
         \__codedoc_key_pop:
@@ -2314,21 +2390,36 @@
           {
             \seq_set_split:NoV \l__codedoc_tmpa_seq
               { \token_to_str:N _ } \l__codedoc_index_key_tl
-            \__kernel_tl_set:Nx \l__codedoc_index_module_tl
+            \seq_get_left:NN \l__codedoc_tmpa_seq \l__codedoc_index_module_tl
+            \clist_if_in:NoT \g__codedoc_non_modules_clist \l__codedoc_index_module_tl
               {
-                \int_case:nnF { \seq_count:N \l__codedoc_tmpa_seq }
+                \seq_get_right:NN \l__codedoc_tmpa_seq \l__codedoc_index_module_tl
+                \clist_if_in:NoT \g__codedoc_non_modules_clist \l__codedoc_index_module_tl
                   {
-                    { 0 } { }
-                    { 1 } { int }
-                    { 2 } { \seq_item:Nn \l__codedoc_tmpa_seq { 2 } }
+                    \tl_clear:N \l__codedoc_index_module_tl
                   }
-                  { \seq_item:Nn \l__codedoc_tmpa_seq { 1 } }
               }
           }
       }
       {
         \tl_set_eq:NN \l__codedoc_index_module_tl \l__codedoc_index_key_tl
         \exp_args:No \__codedoc_key_trim_module:n { \token_to_str:N _ }
+      }
+  }
+\clist_new:N \g__codedoc_non_modules_clist
+\clist_gset:Nx \g__codedoc_non_modules_clist
+  {
+    \tl_to_str:n
+      {
+
+        alignment, ampersand, atsign, backslash, catcode, circumflex,
+        code, colon, document, dollar, e, empty, false, hash, inf,
+        initex, job, left, log, math, mark, max, minus, nan, nil, no,
+        novalue, other, parameter, percent, pi, recursion, right, space,
+        stop, term, tilde, tmpa, tmpb, true, underscore, zero, one, two,
+        three, four, five, six, seven, eight, nine, ten, eleven, twelve,
+        thirteen, fourteen, fifteen, sixteen, thirty, hundred
+
       }
   }
 \GlossaryPrologue
