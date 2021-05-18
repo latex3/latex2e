@@ -241,7 +241,18 @@ local function fmt(engines,dest)
 end
 
 function checkinit_hook()
-  return fmt(options["engine"] or checkengines,testdir)
+  local engines = options.engine
+  if not engines then
+    local target = options.target
+    if target == 'check' or target == 'bundlecheck' then
+      engines = checkengines
+    elseif target == 'save' then
+      engines = {stdengine}
+    else
+      error'Unexpected target in call to checkinit_hook'
+    end
+  end
+  return fmt(engines,testdir)
 end
 
 function docinit_hook() return fmt({"pdftex"},typesetdir) end
