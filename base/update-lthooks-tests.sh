@@ -40,6 +40,7 @@ l3build save -cconfig-lthooks \
  ltcmdhooks-008 \
  ltcmdhooks-009 \
  ltcmdhooks-010 \
+ ltcmdhooks-011 \
    filehook-001 \
    filehook-002 \
    filehook-003 \
