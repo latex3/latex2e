@@ -1,6 +1,7 @@
 % \iffalse meta-comment
 %%
-%% File: ltshipout.dtx (C) Copyright 2020 Frank Mittelbach, LaTeX Team
+%% Copyright (C) 2020-2021
+%%               Frank Mittelbach, LaTeX Team
 %%
 %
 % This file is part of the LaTeX base system.
@@ -31,8 +32,8 @@
 %%% From File: ltshipout.dtx
 %
 %    \begin{macrocode}
-\providecommand\ltshipoutversion{v1.0d}
-\providecommand\ltshipoutdate{2020/11/24}
+\providecommand\ltshipoutversion{v1.0i}
+\providecommand\ltshipoutdate{2021/03/17}
 %    \end{macrocode}
 %
 %<*driver>
@@ -55,6 +56,9 @@
   }
 \ExplSyntaxOff
 
+\providecommand\InternalDetectionOff{}
+\providecommand\InternalDetectionOn{}
+
 \EnableCrossrefs
 \CodelineIndex
 \begin{document}
@@ -75,7 +79,7 @@
 %    \ltshipoutversion\ dated \ltshipoutdate, \copyright\ \LaTeX\
 %    Project.}}
 %
-% \author{Frank Mittelbach}
+% \author{Frank Mittelbach, \LaTeX{} Project Team}
 %
 % \maketitle
 %
@@ -108,11 +112,56 @@
 %    It then stores it in a named box register.  This box can then be
 %    manipulated through a set of hooks after which it is shipped out
 %    for real.
+%
+%    Each shipout that actually happens (i.e., where the material is
+%    not discarded for one or the other reason) is recorded and the
+%    total number is available in a readonly variable and in a
+%    \LaTeX{} counter.
+% \end{function}
+%
+%
+% \begin{function}{\RawShipout}
+%    This command implements a simplified shipout that bypasses the
+%    foreground and background 
+%    hooks, e.g., only \hook{shipout/firstpage} and
+%    \hook{shipout/lastpage} are executed and the total shipout
+%    counters are incremented.
+%
+%    The command doesn't use \cs{ShipoutBox} but its own private box
+%    register so that it can be used inside of shipout hooks to do
+%    some additional shipouts while already in the output routine with
+%    the current page being stored in \cs{ShipoutBox}. It does have
+%    access to \cs{ShipoutBox} if it is used in \hook{shipout/before}
+%    (or \hook{shipout/after}) and can use its content.
+%
+%    It is safe to use it in \hook{shipout/before} or
+%    \hook{shipout/after} but not necessarily in the other
+%    \hook{shipout/...} hooks as they are intended for special
+%    processing.
 % \end{function}
 %
 %  \begin{variable}{\ShipoutBox,\l_shipout_box}
-%    This box register is called \cs{ShipoutBox} (alternatively available via the
-%    L3 name \cs{l_shipout_box}).
+%    This box register is called \cs{ShipoutBox} (alternatively
+%    available via the L3 name \cs{l_shipout_box}).
+%
+%    This box is a ``local'' box and assignments to it should be done
+%    only locally. Global assignments (as done by some packages with
+%    older code where this is box is known as 255) may work but they are
+%    conceptually wrong and may result in errors under certain
+%    circumstances.
+%
+%    During the execution of \hook{shipout/before} this box contains
+%    the accumulated material for the page, but not yet any material
+%    added by other shipout hooks.
+%    During execution of \hook{shipout/after}, i.e., after the shipout
+%    has happened, the box also contains any background or foreground
+%    material.
+%
+%    Material from the hooks \hook{shipout/firstpage} or
+%    \hook{shipout/lastpage} is not included (but only used during the
+%    actual shipout) to facilitate reuse of the box data (e.g.,
+%    \hook{shipout/firstpage} material should never be added to a
+%    later page of the output).
 %  \end{variable}
 %
 %
@@ -133,11 +182,11 @@
 %
 % \subsection{Provided hooks}
 %
-%  \begin{variable}{shipout/before,
+%  \begin{variable}{shipout/before,shipout/after,
 %                   shipout/foreground,shipout/background,
 %                   shipout/firstpage,
 %                   shipout/lastpage}
-%    The code offers a number of hooks into which packages (or the
+%    The code for \cs{shipout} offers a number of hooks into which packages (or the
 %    user) can add code to support different use cases.
 %    These are:
 %    \begin{description}
@@ -148,6 +197,20 @@
 %       It can be used to alter that box content or to discard it
 %       completely (see \cs{DiscardShipoutBox} below).
 %
+%       You can use \cs{RawShipout} inside this hook for special use
+%       cases. It can make use of \cs{ShipoutBox} (which doesn't yet
+%       include the background and foreground material).
+%
+%       \textbf{Note:} It is not possible (or say advisable) to try
+%       and use this hook to typeset material with the intention to
+%       return it to main vertical list, it will go wrong and give
+%       unexpected results in many cases---for starters it will appear
+%       after the current page not before or it will vanish or the
+%       vertical spacing will be wrong!
+%    \end{description}
+%  \end{variable}
+%
+%    \begin{description}
 %    \item[\hook{shipout/background}]
 %
 %       This hook adds a picture environment into the background of
@@ -186,15 +249,22 @@
 %       not discarded at the last minute). It should only contain
 %       \cs{special} or similar commands needed to direct post processors
 %       handling the \texttt{.dvi} or \texttt{.pdf} output.\footnotemark
+%  \footnotetext{In
+%         \LaTeXe{} that was already existing, but implemented using a box
+%         register with the name \cs{@begindvibox}.}
 %
 %       ^^A \fmi{not sure it has to be that restrictive.}
 %
+%       This hook is added to the very first page regardless of how it
+%       is shipped out (i.e., with \cs{shipout} or \cs{RawShipout}).
 %
 %    \item[\hook{shipout/lastpage}]
 %
 %       The corresponding hook to add \cs{special}s at the very end of
-%       the output file. It is only executed on the very last page ---
+%       the output file. It is only executed on the very last page of
+%       the output file ---
 %       or rather on the page that \LaTeX{} believes is the last one.
+%       Again it is executed regardless of the shipout method.
 %
 %       It may not be possible for \LaTeX{} to correctly determine
 %       which page is the last one without several reruns. If this
@@ -202,17 +272,32 @@
 %       extra page to place the material and also request a rerun to
 %       get the correct placement sorted out.
 %
+%    \item[\hook{shipout/after}]
+%
+%       This hook is executed after a shipout has happened. If the
+%       shipout box is discarded this hook is not looked at.
+%
+%       You can use \cs{RawShipout} inside this hook for special use
+%       cases and the main \cs{ShipoutBox} is still available at this
+%       point (but in contrast to \hook{shipout/before} it now
+%       includes the background and foreground material).
+%
+%       \textbf{Note:} Just like \hook{shipout/before} this hook is
+%       not meant to be used for adding adding typeset material back
+%       to the main vertical list---it might vanish or the
+%       vertical spacing will be wrong!
+%
+%
 %    \end{description}
-%  \end{variable}\footnotetext{In
-%         \LaTeXe{} that was already existing, but implemented using a box
-%         register with the name \cs{@begindvibox}.}
 %
 %    As mentioned above the hook \hook{shipout/before} is executed
 %    first and can manipulate the prepared shipout box stored in
 %    \cs{ShipoutBox} or set things up for use in \cs{write} during the
-%    actual shipout. The other hooks are added inside hboxes to the
-%    box being shipped out in the following
-%    order:
+%    actual shipout. It is even run if there was a
+%    \cs{DiscardShipoutBox} request in the document.
+%
+%    The other hooks (except \hook{shipout/after}) are added inside
+%    hboxes to the box being shipped out in the following order:
 %    \begin{center}
 %    \begin{tabular}{ll}
 %       \hook{shipout/firstpage}   & only on the first page \\
@@ -225,32 +310,50 @@
 %    If any of the hooks has no code then that particular no box is
 %    added at that point.
 %
+%    Once the (page) box has been shipped out the \hook{shipout/after}
+%    hook is called (while you are still inside the output routine). It
+%    is not called if the shipout box was discarded.
+%
 %    In a document that doesn't produce pages, e.g., only makes
-%    \cs{typeout}s, none of the hooks are executed (as there is no
+%    \cs{typeout}s, none of the hooks are ever executed (as there is no
 %    \cs{shipout}) not even the \hook{shipout/lastpage} hook.
+%
+%    If \cs{RawShipout} is used instead of \cs{shipout} then only the
+%    hooks \hook{shipout/firstpage} and \hook{shipout/lastpage} are
+%    executed (on the first or last page), all others are bypassed.
+%
+%
+%
+% \subsection{Legacy \LaTeX{} commands}
 %
 % \begin{function}{\AtBeginDvi,\AtEndDvi}
 %    \cs{AtBeginDvi} is the existing \LaTeXe{} interface to fill the
 %    \hook{shipout/firstpage} hook. This is not really a good name
 %    as it is not just supporting \texttt{.dvi} but also \texttt{.pdf}
-%    output or \texttt{.dvx}.
+%    output or \texttt{.xdv}.
 %
 %    \cs{AtEndDvi} is the counterpart that was not available in the
 %    kernel but only through the package \pkg{atenddvi}. It fills the
 %    \hook{shipout/lastpage} hook.
-%
-%    \fmi{better names? Any suggestions?}
-%
 % \end{function}
+%
+%    As these two wrappers have been available for a long time we
+%    continue offering them. However, for new code we suggest using
+%    the high-level hook management commands directly instead of
+%    ``randomly-named'' wrappers.  This will lead to code that is
+%    easier to understand and to maintain.  For this reason we do not
+%    provide any other wrapper commands for the above hooks in the
+%    kernel.
+%
 %
 % \subsection{Special commands for use inside the hooks}
 %
-% \begin{function}{\DiscardShipoutBox,\shipout_discard_box:}
+% \begin{function}{\DiscardShipoutBox,\shipout_discard:}
 %   \begin{syntax}
 %     \cs{AddToHookNext} \texttt{\{shipout/before\} \{...\cs{DiscardShipoutBox}...\}}
 %   \end{syntax}
 %    The \cs{DiscardShipoutBox} declaration (L3 name
-%    \cs{shipout_discard_box:})
+%    \cs{shipout_discard:})
 %    requests that on the next
 %    shipout the page box is thrown away instead of being shipped to
 %    the \texttt{.dvi} or \texttt{.pdf} file.
@@ -261,6 +364,8 @@
 %    Note that if this declaration is used directly in the document it
 %    may depend on the placement to which page it applies, given that
 %    \LaTeX{} output routine is called in an asynchronous manner!
+%    Thus normally one would use this only as part of the
+%    \hook{shipout/before} code.
 %
 %    \fmi{Once we have a new mark mechanism available we can improve
 %    on that and make sure that the declaration applies to the page
@@ -279,12 +384,28 @@
 %    names as given below.
 %
 %
+%
+% \subsection{Provided Lua\TeX\ callbacks}
+% 
+%  \begin{variable}{pre_shipout_filter}
+%    Under Lua\TeX{} the \texttt{pre\_shipout\_filter} Lua callback is
+%    provided which gets called immediately before the shipout primitive gets invoked.
+%    The signature is
+%    \begin{verbatim}
+%     function(<node> head)
+%       return true
+%     end
+%    \end{verbatim}
+%    The \texttt{head} is the list node corresponding to the box to be shipped out.
+%    The return value should always be \texttt{true}.
+%  \end{variable}
+%
 % \subsection{Information counters}
 %
 %
 %  \begin{variable}{\ReadonlyShipoutCounter,\g_shipout_readonly_int}
 %   \begin{syntax}
-%     \cs{ifnum}\cs{ReadOnlyShipoutCounter}\texttt{=...}
+%     \cs{ifnum}\cs{ReadonlyShipoutCounter}\texttt{=...}
 %     \cs{int_use:N} \cs{g_shipout_readonly_int} \texttt{\% expl3 usage}
 %   \end{syntax}
 %    This integer holds the number of pages shipped out up to now
@@ -292,6 +413,7 @@
 %    routine). More precisely, it is incremented only after it is
 %    clear that a page will be shipped out, i.e., after the
 %    \hook{shipout/before} hook (because that might discard the page)!
+%    In contrast \hook{shipout/after} sees the incremented value.
 %
 %    Just like with the \texttt{page} counter its value is
 %    only accurate within the output routine. In the body of the
@@ -299,10 +421,11 @@
 %    asynchronously!
 %
 %    Also important: it \emph{must not} be set, only read. There are
-%    no provisions to prevent that but if you do, chaos will be the
-%    result. To emphasize this fact it is not provided as a \LaTeX{}
-%    counter but as a \TeX{} counter (i.e., a command), so
-%    \cs{Alph}\Arg{\cs{ReadonlyShipoutCounter}} etc, would not work.
+%    no provisions to prevent that restriction, but if you manipulate
+%    it, chaos will be the result. To emphasize this fact it is not
+%    provided as a \LaTeX{} counter but as a \TeX{} counter (i.e., a
+%    command), so \cs{Alph}\verb={=\cs{ReadonlyShipoutCounter}\verb=}=
+%    etc, would not work.
 %  \end{variable}
 %
 %  \begin{variable}{totalpages,\g_shipout_totalpages_int}
@@ -314,7 +437,8 @@
 %    \texttt{totalpages} counter is a \LaTeX{} counter and incremented
 %    for each shipout attempt including those pages that are discarded
 %    for one or the other reason. Again \hook{shipout/before} sees
-%    the counter before it is incremented).
+%    the counter before it is incremented. In contrast
+%    \hook{shipout/after} sees the incremented value.
 %
 %    Furthermore, while it is incremented for each page, its value is
 %    never used by \LaTeX. It can therefore be freely reset or changed by user
@@ -331,9 +455,9 @@
 %     \cs{thetotalpages}/\cs{PreviousTotalPages}
 %   \end{syntax}
 %    Command that expands to the number of total pages from the
-%    previous run.  If there was no previous run or if usedin the
+%    previous run.  If there was no previous run or if used in the
 %    preamble it expands to
-%    \texttt{0}. Note that this is a command to a counter, so in order
+%    \texttt{0}. Note that this is a command and not a counter, so in order
 %    to display the number in, say, Roman numerals you have to assign
 %    its value to a counter and then use \cs{Roman} on that counter.
 %  \end{variable}
@@ -356,9 +480,15 @@
 %
 % \section{Emulating commands from other packages}
 %
-%    The packages in this section are no longer necessary but as they
-%    are used in other packages they are emulated when they are loaded
-%    via \cs{usepackage} or \cs{RequirePackage}.
+%    The packages in this section are no longer necessary, but as they
+%    are used by other packages, they are emulated when they are
+%    explicitly loaded with \cs{usepackage} or \cs{RequirePackage}.
+%
+%    Please note that the emulation only happens if the package is
+%    explicitly requested, i.e., the commands documented below are not
+%    automatically available in the \LaTeX{} kernel!  If you write a
+%    new package we suggest to use the appropriate kernel hooks
+%    directly instead of loading the emulation.
 %
 %
 % \subsection{Emulating \pkg{atbegshi}}
@@ -410,6 +540,21 @@
 %    This is the name of the shipout box as \pkg{atbegshi} knows it.
 % \end{function}
 %
+%
+% \begin{function}{\AtBeginShipoutOriginalShipout}
+%    This is the name of the \cs{shipout} primitive as \pkg{atbegshi}
+%    knows it. This bypasses all the mechanisms set up by the \LaTeX{}
+%    kernel and there are various scenarios in which it can therefore
+%    fail. It should only be used to run existing legacy
+%    \pkg{atbegshi} code but not in newly developed applications.
+%
+%    The kernel alternative is \cs{RawShipout} which is integrated
+%    with the \LaTeX{} mechanisms and updates, for example, the
+%    \cs{ReadonlyShipoutCounter} counter. Please use \cs{RawShipout}
+%    for new code if you want to bypass the before, foreground and
+%    background hooks.
+% \end{function}
+%
 % \begin{function}{\AtBeginShipoutInit}
 %   By default \pkg{atbegshi} delayed its action until
 %    \verb=\begin{document}=.  This command was forcing it in an earlier
@@ -434,6 +579,13 @@
 %
 % \subsection{Emulating \pkg{everyshi}}
 %
+%    The \pkg{everyshi} package is providing commands to run arbitrary
+%    code just before the shipout starts.
+%    One point of difference: in the new shipout hooks the page is
+%    available as \cs{ShipoutBox} for inspection of change, one should
+%    not manipulate box 255 directly inside \hook{shipout/before}, so
+%    old code doing this would change to use \cs{ShipoutBox} instead
+%    of \texttt{255} or \cs{@cclv}.
 %
 % \begin{function}{\EveryShipout}
 %   \begin{syntax}
@@ -447,22 +599,49 @@
 %   \end{syntax}
 % \end{function}
 %
+%    However, most use cases for \pkg{everyshi} are attempts to put
+%    some picture or text into the background or foreground of the page
+%    and that can be done today simply by using the
+%    \hook{shipout/background} and 
+%    \hook{shipout/foreground} hooks without any need to coding.
 %
 %
 % \subsection{Emulating \pkg{atenddvi}}
 %
-% The \pkg{atenddvi} package implemented only a single command:
-%    \cs{AtEndDvi} and that is now available out of the box.
+%    The \pkg{atenddvi} package implemented only a single command:
+%    \cs{AtEndDvi} and that is now available out of the box so the
+%    emulation makes the package a no-op.
 %
 %
 %
 % \subsection{Emulating \pkg{everypage}}
 %
-%    This page takes over the original \cs{@begindvi} hook and replaces 
-%    it. It should be all covered by the hooks offered here (details
-%    need checking) and thus could simply use the provided hooks
-%    rather than defining its own.
+%    This package patched the original \cs{@begindvi} hook and replaced 
+%    it with its own version.
+%    Its functionality is now covered by the hooks offered by the
+%    kernel so that there is no need for such patching any longer.
 %
+% \begin{function}{\AddEverypageHook}
+%   \begin{syntax}
+% \cs{AddEverypageHook}\Arg{code} $\equiv$
+% \qquad\cs{AddToHook}\texttt{\{shipout/background\}\{\cs{put}(1in,-1in)\Arg{code}\}}
+%   \end{syntax}
+%    \cs{AddEverypageHook} is adding something into the
+%    background of every page at a position of 1in to the right and
+%    1in down from the top left corner of the page.
+%     By using the kernel hook directly you can put your material
+%    directly to the right place, i.e., use other coordinates in the
+%    \cs{put} statement above.
+% \end{function}
+%
+% \begin{function}{\AddThispageHook}
+%   \begin{syntax}
+% \cs{AddThispageHook}\Arg{code} $\equiv$
+% \qquad\cs{AddToHookNext}\texttt{\{shipout/background\}\{\cs{put}(1in,-1in)\Arg{code}\}}
+%   \end{syntax}
+%    The \cs{AddThispageHook} wrapper is similar but uses
+%    \cs{AddToHookNext}.
+% \end{function}
 %
 %
 % \StopEventually{\setlength\IndexMin{200pt}  \PrintIndex  }
@@ -479,7 +658,7 @@
 %    \begin{macrocode}
 %<*2ekernel|latexrelease>
 %<latexrelease>\IncludeInRelease{2020/10/01}%
-%<latexrelease>                 {\shipout}{Hook mangement (shipout)}%
+%<latexrelease>                 {\shipout}{Hook management (shipout)}%
 %    \end{macrocode}
 %
 %
@@ -540,6 +719,41 @@
 %  \end{macro}
 %
 %
+%  \begin{macro}{\l_@@_raw_box}
+%    The \cs{RawShipout} gets its own box but it is internal as there
+%    is no hook manipulation for it.
+%    \begin{macrocode}
+\box_new:N  \l_@@_raw_box
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\@@_finalize_box:}
+%    For Lua\TeX{} invoke the \texttt{pre\_shipout\_filter} callback.
+%  \changes{v1.0i}{2021/01/22}{Add \texttt{pre\_shipout\_filter} Lua callback}
+%    \begin{macrocode}
+\sys_if_engine_luatex:TF
+  {
+    \newluafunction \@@_finalize_box:
+    \exp_args:Nx \everyjob {
+      \exp_not:V \everyjob
+      \exp_not:N \lua_now:n {
+        luatexbase.create_callback('pre_shipout_filter', 'list')
+        local~call, getbox, setbox = luatexbase.call_callback, tex.getbox, tex.setbox~
+        lua.get_functions_table()[\the \@@_finalize_box:] = function()
+          local~result = call('pre_shipout_filter', getbox(\the \l_shipout_box))
+          if~not (result == true) then~
+            setbox(\the \l_shipout_box, result~or~nil)
+          end~
+        end
+      }
+    }
+    \protected \luadef \@@_finalize_box: \the \@@_finalize_box:
+  } {
+    \cs_set_eq:NN \@@_finalize_box: \scan_stop:
+  }
+%    \end{macrocode}
+%  \end{macro}
 %
 %
 %  \begin{macro}{\@@_execute:}
@@ -567,7 +781,8 @@
 %
 %  \begin{macro}{\l_@@_group_level_tl}
 %    Helper token list to record the group level at which
-%    \cs{@@_execute:} is encountered.  \begin{macrocode}
+%    \cs{@@_execute:} is encountered.
+%    \begin{macrocode}
 \tl_new:N \l_@@_group_level_tl
 %    \end{macrocode}
 %  \end{macro}
@@ -581,28 +796,78 @@
 \cs_new:Npn \@@_execute_test_level: {
   \int_compare:nNnT
      \l_@@_group_level_tl < \tex_currentgrouplevel:D 
-     \tex_aftergroup:D
-  \@@_execute_cont:
+     \tex_aftergroup:D \@@_execute_cont:
 }
 %    \end{macrocode}
 %  \end{macro}
 %
 %
 %  \begin{macro}{\@@_execute_cont:}
+%    This does the actual shipout running several hooks as part of it.
+%    The code for them is passed as argument \verb=#2= to \verb=#4=
+%    to \cs{@@_execute_main_cont:Nnnn}; the first argument is the box
+%    to be shipped out.
+%    \begin{macrocode}
+\cs_new:Npn \@@_execute_cont: {
+  \@@_execute_main_cont:Nnnn
+     \l_shipout_box
+     { \hook_use:n {shipout/before} }
+     { \hook_if_empty:nF {shipout/foreground}
+         { \@@_add_foreground_picture:n
+             { \hook_use:n {shipout/foreground} } }
+%    \end{macrocode}
+%    If the user hook for the background (\hook{shipout/background}) has
+%    no code, there might still code in the kernel hook so we need to
+%    test for this too.
+%    We only test for the \cs{@kernel@before@shipout@background}
+%    though. If the  \cs{@kernel@after@shipout@background} needs
+%    executing even if the user hook is empty then we can add another
+%    test (or the kernel could put something into the before hook).
+%                   
+% \changes{v1.0d}{2020/11/23}{Check for both kernel and user hook (gh/431)}
+% \changes{v1.0f}{2021/01/08}{Added another kernel hook for more
+%    flexibility (cf \texttt{https://github.com/pgf-tikz/pgf/issues/960}}
+%    \begin{macrocode}
+       \bool_lazy_and:nnF
+         { \hook_if_empty_p:n {shipout/background} }
+         { \tl_if_empty_p:N \@kernel@before@shipout@background }
+         { \@@_add_background_picture:n
+           { \@kernel@before@shipout@background
+             \hook_use:n {shipout/background}
+             \@kernel@after@shipout@background }
+         }
+     }
+     { \hook_use:n {shipout/after} }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\@@_execute_main_cont:Nnnn}
 %    When we have reached this point the shipout box has been
 %    processed and is available in \cs{l_shipout_box} and ready for
-%    real ship out (perhaps)..
+%    real ship out (unless it gets discarded during the process).
+%
+%    The three arguments hold hook code that is executed just before the
+%    actual shipout (\verb=#1=), within the shipout adding
+%    background and foreground material (\verb=#2=) and after the
+%    shipout has happened (\verb=#3=).
+%    These are passed as arguments because the same code without those
+%    hooks is also used when doing a ``raw'' shipout implemented by
+%    \cs{RawShipout}.
+%    The only hook that is always executed is that for the very last
+%    page, i.e., \hook{shipout/lastpage}.
 %
 %    First we quickly check if it is void (can't happen in the
 %    standard \LaTeX{} output routine but \cs{shipout} might be called
 %    from a package that has some special processing logic). If it is
 %    void we aren't shipping anything out and processing ends.\footnote{In that
-%    case we don't reset the deadcyles, that would be up to the OR
+%    case we don't reset the deadcycles, that would be up to the OR
 %    processing logic to do.}
 %    \begin{macrocode}
-\cs_new:Npn \@@_execute_cont: {
-  \box_if_empty:NTF \l_shipout_box
-    { \PackageWarning{ltshipout}{Ignoring~ void~ shipout~ box} }
+\cs_new:Npn \@@_execute_main_cont:Nnnn #1#2#3#4 {
+  \box_if_empty:NTF #1
+    { \@latex@warning{Ignoring~ void~ shipout~ box} }
     {
 %    \end{macrocode}
 %    Otherwise we assume that we will ship something and prepare for
@@ -610,7 +875,8 @@
 %    \cs{protect} while we are running the hook code).
 %    We also save the current \cs{protect} state to restore it later.
 %    \begin{macrocode}
-      \bool_gset_false:N \g_@@_discard_bool
+%      \bool_gset_false:N \g_@@_discard_bool  % setting this would disable
+                                              % \DiscardShipoutBox on doc-level
       \cs_set_eq:NN \@@_saved_protect: \protect
       \set@typeset@protect
 %    \end{macrocode}
@@ -619,11 +885,12 @@
 %    necessary as the code could access them via \cs{box_ht:N}, etc.,
 %    but it is perhaps convenient.}
 %    \begin{macrocode}
-      \@@_get_box_size:N \l_shipout_box
+      \@@_get_box_size:N #1
 %    \end{macrocode}
-%    Then we execute the \hook{shipout/before} hook.
+%    Then we execute the \hook{shipout/before} hook (or nothing in
+%    case of \cs{RawShipout}).
 %    \begin{macrocode}
-      \hook_use:n {shipout/before}
+      #2
 %    \end{macrocode}
 %    In \cs{g_shipout_totalpages_int} we count all shipout attempts so
 %    we increment that counter already here (the other one is
@@ -631,7 +898,8 @@
 %    \cs{shipout}.
 %
 %     We increment it after running the above hook so that the values
-%    for \cs{g_shipout_totalpages_int} and \cs{} are in sync while the
+%    for \cs{g_shipout_totalpages_int} and \cs{g_shipout_readonly_int}
+%    are in sync while the
 %    hook is executed (in the case that totalpages isn't manually
 %    altered or through discarding pages that is).
 %    \begin{macrocode}
@@ -641,7 +909,7 @@
 %    we now test for it.
 %    \begin{macrocode}
       \bool_if:NTF \g_@@_discard_bool
-        { \PackageInfo{ltshipout}{Completed~ page~ discarded}
+        { \@latex@info@no@line{Completed~ page~ discarded}
           \bool_gset_false:N \g_@@_discard_bool
 %    \end{macrocode}
 %    As we are discarding the page box and not shipping anything out,
@@ -655,7 +923,7 @@
 %    needed? Or the resetting of \cs{protect} to its kernel value?}
 %    \begin{macrocode}
 %          \group_begin:
-%            \box_set_eq_drop:NN \l_shipout_box \l_shipout_box
+%            \box_set_eq_drop:NN #1 #1
 %          \group_end:
 %          \cs_set_eq:NN \protect \exp_not:N
         }
@@ -666,8 +934,8 @@
 %    once more but this time make it a warning, because the best
 %    practice way is to use the request mechanism.
 %    \begin{macrocode}
-        { \box_if_empty:NTF \l_shipout_box
-            { \PackageWarning{ltshipout}{
+        { \box_if_empty:NTF #1
+            { \@latex@warning{
                 Shipout~ box~ was~ voided~ by~ hook,\MessageBreak
                 ignoring~ shipout~ box  }
             }
@@ -691,39 +959,54 @@
 %    changed) and then look at the hooks \hook{shipout/foreground}
 %    and \hook{shipout/background}. If either or both are non-empty
 %    we add a \texttt{picture} environment to the box (in the
-%    foreground and or in the background) and execute the hook code
+%    foreground and/or in the background) and execute the hook code
 %    inside that environment.
 %    
 %    \begin{macrocode}
-              \@@_get_box_size:N \l_shipout_box
-              \hook_if_empty:nF {shipout/foreground}
-                   { \@@_add_foreground_picture:n
-                     { \hook_use:n {shipout/foreground} } }
-              \hook_if_empty:nF {shipout/background}
-                   { \@@_add_background_picture:n
-                     { \@kernel@before@shipout@background
-                       \hook_use:n {shipout/background} } }
+              \@@_get_box_size:N #1
 %    \end{macrocode}
-%    We then run \cs{@@_execute_firstpage_hook:} that adds
+%    The first hook we run is the \hook{shipout/firstpage} hook. This
+%    is only done once, then the \cs{@@_run_firstpage_hook:}
+%    command redefines itself to do nothing. If the hook contains
+%    \cs{special}s for integration at the top of the page they will be
+%    temporarily stored in a safe place and added later with
+%    \cs{@@_add_firstpage_specials:}.
+%    \begin{macrocode}
+              \@@_run_firstpage_hook:
+%    \end{macrocode}
+%    Run the hooks for background and foreground or, if this
+%    is called by \cs{RawShipout}, copy the box \cs{l_@@_raw_box} to
+%    \cs{l_shipout_box} so that firstpage and lastpage material gets
+%    added if necessary (that is always done to \cs{l_shipout_box}.
+%    \begin{macrocode}
+              #3
+%    \end{macrocode}
+%    We then run \cs{@@_add_firstpage_specials:} that adds
 %    the content of the hook \hook{shipout/firstpage} to the
 %    start of the first page (if non-empty). It is then redefined to
 %    do nothing on later pages.
 %    \begin{macrocode}
-              \@@_execute_firstpage_hook:
+              \@@_add_firstpage_specials:
 %    \end{macrocode}
-%    The we check if we have to add the \hook{shipout/lastpage} hook
+%    Then we check if we have to add the \hook{shipout/lastpage} hook
+%    or the corresponding kernel hook
 %    because we have reached the last page. This test will be false for
 %    all but one (and hopefully the correct) page.
+% \changes{v1.0d}{2020/11/23}{Check for both kernel and user hook (gh/431)}
 %    \begin{macrocode}
               \int_compare:nNnT \@abspage@last = \g_shipout_readonly_int
-                { \hook_if_empty:nF {shipout/lastpage}
+                { \bool_lazy_and:nnF
+                    { \hook_if_empty_p:n {shipout/lastpage} }
+                    { \tl_if_empty_p:N \@kernel@after@shipout@lastpage }
                     { \@@_debug:n { \typeout{Executing~ lastpage~ hook~
-                          on~ page~ \int_use:N \g_shipout_readonly_int }        }
-                      \_@@_add_foreground_box:n { \UseHook{shipout/lastpage}
-                                                  \@kernel@after@shipout@lastpage }
+                          on~ page~ \int_use:N \g_shipout_readonly_int } }
+                      \_@@_add_foreground_box:n
+                          { \UseHook{shipout/lastpage}
+                            \@kernel@after@shipout@lastpage }
                     }
                     \bool_gset_true:N \g_@@_lastpage_handled_bool
                 }
+              \@@_finalize_box:
 %    \end{macrocode}
 %    Finally we run the actual \TeX{} primitive for shipout. As that will
 %    expand delayed \cs{write} statements inside the page in which
@@ -732,6 +1015,21 @@
 %    \begin{macrocode}
               \cs_set_eq:NN \protect \exp_not:N
               \tex_shipout:D \box_use:N \l_shipout_box
+%    \end{macrocode}
+%    The \cs{l_shipout_box} may contain the firstpage material if this
+%    was the very first shipout. That makes it unsuitable for reuse in
+%    another shipout, so as a safety measure the next command resets
+%    \cs{l_shipout_box} to its earlier state if that is necessary. On
+%    later pages this is then a no-op.
+%    \begin{macrocode}
+              \@@_drop_firstpage_specials:
+%    \end{macrocode}
+%    The \hook{shipout/after} hook (if in \verb=#4=) needs to run with
+%    \cs{protect}ed commands again being executed, because that hook
+%    will ``typeset'' material added at the top of the next page.
+%    \begin{macrocode}
+              \set@typeset@protect
+              #4
             }
         }
 %    \end{macrocode}
@@ -746,20 +1044,69 @@
 %  \end{macro}
 %
 %
+%
+%
+%  \begin{macro}{\@@_execute_raw:,
+%                \@@_execute_test_level_raw:}
+%
+%    This implements the ``raw'' shipout which bypasses the before,
+%    foreground, background and after hooks. It follows the same pattern than
+%    \cs{_@@_execute_raw:} except that it finally calls
+%    \cs{_@@_execute_main_cont:Nnnn} with three empty arguments.
+%    instead of the hook code.
+%    \begin{macrocode}
+\cs_set_protected:Npn \@@_execute_raw: {
+  \tl_set:Nx \l_@@_group_level_tl
+     { \int_value:w \tex_currentgrouplevel:D }
+  \tex_afterassignment:D \@@_execute_test_level_raw:
+  \tex_setbox:D \l_@@_raw_box
+}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\cs_new:Npn \@@_execute_test_level_raw: {
+  \int_compare:nNnT
+     \l_@@_group_level_tl < \tex_currentgrouplevel:D
+     \tex_aftergroup:D \@@_execute_nohooks_cont:
+}
+%    \end{macrocode}
+%    Well, not totally empty arguments, we add some debugging if we
+%    are actually doing a shipout.
+%    \begin{macrocode}
+\cs_new:Npn \@@_execute_nohooks_cont: {
+  \@@_execute_main_cont:Nnnn \l_@@_raw_box
+     {} { \@@_debug:n{ \typeout{Doing~ raw~ shipout~ ...} }
+          \box_set_eq:NN \l_shipout_box \l_@@_raw_box } {} 
+} 
+%    \end{macrocode}
+%  \end{macro}
+
+%  \begin{macro}{\RawShipout}
+%    The interface name for raw shipout.
+% \changes{v1.0g}{2021/01/10}{Macro added}
+%    \begin{macrocode}
+\cs_gset_eq:NN \RawShipout \@@_execute_raw:
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
 %  \begin{macro}{\@@_saved_protect:}
-%    Remeber the current \cs{protect} state.
+%    Remember the current \cs{protect} state.
 %    \begin{macrocode}
 \cs_new_eq:NN  \@@_saved_protect: \protect
 %    \end{macrocode}
 %  \end{macro}
 %
-%  \begin{macro}{shipout/before,
+%  \begin{macro}{shipout/before,shipout/after,
 %                   shipout/foreground,shipout/background,
 %                   shipout/firstpage,
 %                   shipout/lastpage}
 %    Declaring all hooks for the shipout code.
 %    \begin{macrocode}
 \hook_new:n{shipout/before}
+\hook_new:n{shipout/after}
 \hook_new:n{shipout/foreground}
 \hook_new:n{shipout/background}
 \hook_new:n{shipout/firstpage}
@@ -770,36 +1117,71 @@
 %
 %
 %  \begin{macro}{\@kernel@after@shipout@lastpage,
-%                \@kernel@before@shipout@background}
+%                \@kernel@before@shipout@background,
+%                \@kernel@after@shipout@background}
 %    And here are the internal kernel hooks going before or after the
 %    public ones where needed.
+% \changes{v1.0g}{2021/01/10}{Internal hook
+%                             \cs{@kernel@after@shipout@background} added}
 %    \begin{macrocode}
 \let\@kernel@after@shipout@lastpage\@empty
 \let\@kernel@before@shipout@background\@empty
+\let\@kernel@after@shipout@background\@empty
 %    \end{macrocode}
 %  \end{macro}
 %
 %
-%  \begin{macro}{\@@_execute_firstpage_hook: }
-%    This command adds any specials into a box and adds that to the
-%    very beginning of the first box shipped out. After that we
-%    redefine it to do nothing on later pages.
+%  \begin{macro}{\@@_run_firstpage_hook:}
+%
+% \changes{v1.0h}{2021/01/19}{Handling of firstpage hook altered}
+%
+%    There are three commands to handle the \hook{shipout/firstpage}
+%    hook:
+%    \cs{@@_run_firstpage_hook:}, \cs{@@_add_firstpage_specials:} and
+%    \cs{@@_drop_firstpage_specials:}. 
+%
+%    That hook is supposed to contain \cs{special}s and similar
+%    material to be placed at the very beginning of the output page
+%    and so it needs careful placing to avoid that anything else gets
+%    in front of it. And this means we have to wait with this until
+%    other hooks such as \hook{shipout/background} have added their
+%    bits. It is also important that such \cs{special}s show up only
+%    on the very first page, so if this page gets saved before
+%    \cs{shipout} for later reuse, we have to make sure that they
+%    aren't in the saved version.
+%
+%    In addition the hook may also contain code to be executed ``first'', e.g.,
+%    visible from code in \hook{shipout/background} and this conflicts
+%    with adding the \cs{special}s late.
+%
+%    Therefore the processing is split into different parts:
+%    \cs{@@_run_firstpage_hook:} is done early and checks if there is
+%    any material in the hook. 
 %    \begin{macrocode}
-\cs_new:Npn \@@_execute_firstpage_hook: {
+\cs_new:Npn \@@_run_firstpage_hook: {
+  \hook_if_empty:nTF {shipout/firstpage}
 %    \end{macrocode}
-%    Adding something to the beginning means adding it to the
-%    background as that  layer is done first in the output. Of course
-%    that is only needed if the hook actually contains anything.
+%    If not then we define the other two commands to do nothing.
 %    \begin{macrocode}
-  \hook_if_empty:nF {shipout/firstpage}
-       { \@@_add_background_box:n { \UseHook{shipout/firstpage} } }
+       {
+         \cs_gset_eq:NN \@@_add_firstpage_specials:  \prg_do_nothing:
+         \cs_gset_eq:NN \@@_drop_firstpage_specials: \prg_do_nothing:
+       }
+%    \end{macrocode}
+%    If there is material we execute inside a box, which means any
+%    \cs{special} will end up in that box and any other code is
+%    executed and can have side effects (as long as they are global).
+%    \begin{macrocode}
+       {
+         \hbox_set:Nn \l_@@_firstpage_box { \UseHook{shipout/firstpage} }
+       }
 %    \end{macrocode}
 %    Once we are here we change the definition to do nothing next time
 %    and we also change the command used to implement \cs{AtBeginDvi}
-%    to become a warning and not  add further material to a hook that
+%    to become a warning and not add further material to a hook that
 %    is never used again.
 %    \begin{macrocode}
-  \cs_gset_eq:NN \@@_execute_firstpage_hook: \prg_do_nothing:
+  \cs_gset_eq:NN \@@_run_firstpage_hook: \prg_do_nothing:
   \cs_gset:Npn \@@_add_firstpage_material:Nn ##1 ##2 {
     \@latex@warning{
         First~ page~ is~ already~ shipped~ out,~ ignoring\MessageBreak
@@ -807,8 +1189,67 @@
   }
 }
 %    \end{macrocode}
+% \end{macro}
+%
+%
+%
+%  \begin{macro}{\@@_add_firstpage_specials:,\@@_drop_firstpage_specials:}
+%    The \cs{@@_add_firstpage_specials:} then adds the \cs{special}s
+%    stored in \cs{l_@@_firstpage_box} to the page to be shipped out
+%    when the time is ready. Note that if there was no material in the
+%    \hook{shipout/firstpage} hook then this command gets redefined to
+%    do nothing. But for most documents there is something, e.g., some
+%    PostScript header, or some meta data declaration, etc.\ so by 
+%    default we assume there is something to do.
+%    \begin{macrocode}
+\cs_new:Npn \@@_add_firstpage_specials: {
+%    \end{macrocode}
+%    First we make a copy of the \cs{l_shipout_box} that we can
+%    restore it later on.
+%    \begin{macrocode}
+  \box_set_eq:NN \l_@@_raw_box \l_shipout_box
+%    \end{macrocode}
+%    Adding something to the beginning means adding it to the
+%    background as that layer is done first in the output. 
+%    \begin{macrocode}
+  \@@_add_background_box:n { \hbox_unpack_drop:N \l_@@_firstpage_box }
+%    \end{macrocode}
+%    After the actual shipout \cs{@@_drop_firstpage_specials:} is
+%    run to
+%    restore the earlier content of \cs{l_shipout_box} and then
+%    redefines itself again to do nothing.
+%
+%    As a final act we change the definition to do nothing next time.
+%    \begin{macrocode}
+  \cs_gset_eq:NN \@@_add_firstpage_specials: \prg_do_nothing:
+}
+%    \end{macrocode}
+%
+%    The \cs{@@_drop_firstpage_specials:} is run after the shipout has
+%    occurred but before the \hook{shipout/afterpage} hook is executed.
+%    That is the point where we have to restore the \cs{ShipoutBox} to
+%    its state without the \hook{shipout/firstpage} material.
+%    \begin{macrocode}
+\cs_new:Npn \@@_drop_firstpage_specials: {
+    \box_set_eq:NN \l_shipout_box \l_@@_raw_box
+%    \end{macrocode}
+%    If there was no such material then \cs{@@_run_firstpage_hook:}
+%    will have changed the definition to a no-op already. Otherwise
+%    this is what we do here.
+%    \begin{macrocode}
+    \cs_gset_eq:NN \@@_drop_firstpage_specials:  \prg_do_nothing:
+  }
+%    \end{macrocode}
 %  \end{macro}
 %
+
+%  \begin{macro}{\l_@@_firstpage_box}
+%    The box to hold any firstpage \cs{special}s.
+%    \begin{macrocode}
+\box_new:N \l_@@_firstpage_box
+%    \end{macrocode}
+%  \end{macro}
+
 %
 %  \begin{macro}{\g_@@_lastpage_handled_bool}
 %    A boolean to signal if we have already handled the
@@ -849,8 +1290,8 @@
   \dim_set:Nn \l_shipout_box_ht_dim { \box_ht:N #1 }
   \dim_set:Nn \l_shipout_box_dp_dim { \box_dp:N #1 }
   \dim_set:Nn \l_shipout_box_wd_dim { \box_wd:N #1 }
-  \dim_set:Nn \l_shipout_box_ht_plus_dp_dim { \l_shipout_box_ht_dim +
-                                         \l_shipout_box_dp_dim }
+  \dim_set:Nn \l_shipout_box_ht_plus_dp_dim
+      { \l_shipout_box_ht_dim + \l_shipout_box_dp_dim }
 }
 %    \end{macrocode}
 %  \end{macro}
@@ -883,7 +1324,7 @@
 %  \begin{macro}{\l_@@_tmp_box,\l_@@_saved_badness_tl}
 %    We need a box for the background and foreground material and a
 %    token register to remember badness settings as we disable  them
-%    during te buildup below.
+%    during the buildup below.
 %    \begin{macrocode}
 \box_new:N \l_@@_tmp_box
 \tl_new:N  \l_@@_saved_badness_tl
@@ -1088,7 +1529,7 @@
 %    \begin{macrocode}
 \cs_new:Npn \@@_picture_overlay:n #1 {
 %    \end{macrocode}
-%    The very first time this is executed we have to initializes (and
+%    The very first time this is executed we have to initialize (and
 %    freeze) the origins.
 %    \begin{macrocode}
     \@@_init_page_origins:
@@ -1183,7 +1624,7 @@
 %
 %  \begin{macro}{\g_shipout_totalpages_int,\c@totalpages}
 %    We count every shipout attempt (even those that are discarded) in
-%    tis counter. It is not used in the code but may get used in user
+%    this counter. It is not used in the code but may get used in user
 %    code.
 %    \begin{macrocode}
 \int_new:N \g_shipout_totalpages_int
@@ -1207,7 +1648,7 @@
 %    or the statement is missing from it we initialize it with the
 %    largest possible number in \TeX{}. We use this as the default
 %    because then we are inserting the \hook{shipout/lastpage} on
-%    the last page (or after the last page but not on page 1 for a
+%    the last page (or after the last page) but not on page 1 for a
 %    multipage document.
 %    \begin{macrocode}
 \xdef\@abspage@last{\number\maxdimen}
@@ -1219,11 +1660,11 @@
 %
 %    Instead of using the hooks \hook{enddocument} and
 %    \hook{enddocument/afterlastpage} we add this code to private
-%    kernel hooks to be 100\% when it is executed and to avoid
+%    kernel hooks to be 100\% sure when it is executed and to avoid
 %    cluttering the hooks with data that is always there.
 %
 %    Inside \cs{enddocument} there is a \cs{clearpage}. Just before
-%    that we execute this code here. There is a good change that we
+%    that we execute this code here. There is a good chance that we
 %    are on the last page. Therefore, if we don't know the value from
 %    the last run, we assume that the current page is the right
 %    one. So we set \cs{@abspage@last} and as a result the next
@@ -1307,7 +1748,7 @@
 %    At this point we also signal to \LaTeX{}'s endgame that a rerun is
 %    necessary so that an appropriate message can be shown on the
 %    terminal. We do this by simply defining a command used as a flag and
-%    tested \cs{enddocument}.
+%    tested in \cs{enddocument}.
 %    \begin{macrocode}
               \cs_gset_eq:NN \@extra@page@added \relax
             }
@@ -1380,7 +1821,8 @@
 %    defined so we better not use \cs{cs_new_protected:Npn} here.
 % \changes{v1.0d}{2020/11/24}{Support for roll forward (gh/434)}
 %    \begin{macrocode}
-\cs_set_protected:Npn \AtBeginDvi {\@@_add_firstpage_material:Nn \AtBeginDvi}
+\cs_set_protected:Npn \AtBeginDvi
+                      {\@@_add_firstpage_material:Nn \AtBeginDvi}
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -1409,6 +1851,7 @@
 %                \@expl@@@shipout@add@foreground@picture@@n}
 %    Some internals needed elsewhere.
 %
+%  \InternalDetectionOff
 %    \begin{macrocode}
 \cs_set_eq:NN \@expl@@@shipout@add@firstpage@material@@Nn
               \__shipout_add_firstpage_material:Nn
@@ -1433,6 +1876,7 @@
 \cs_set_eq:NN \@expl@@@shipout@add@foreground@picture@@n
               \__shipout_add_foreground_picture:n
 %    \end{macrocode}
+%  \InternalDetectionOn
 %  \end{macro}
 %
 %    \begin{macrocode}
@@ -1449,7 +1893,7 @@
 %    
 %    \begin{macrocode}
 %<latexrelease>\IncludeInRelease{0000/00/00}%
-%<latexrelease>                 {\shipout}{The hook management (shipout)}%
+%<latexrelease>                 {\shipout}{Hook management (shipout)}%
 %<latexrelease>
 %    \end{macrocode}
 %    If we roll forward then \cs{tex\_shipout:D} may not be defined in
@@ -1462,6 +1906,7 @@
 %<latexrelease>                \csname tex_shipout:D\endcsname
 %<latexrelease>\fi
 %<latexrelease>
+%<latexrelease>\let \RawShipout\@undefined
 %<latexrelease>\let \ShipoutBox\@undefined
 %<latexrelease>\let \ReadonlyShipoutCounter \@undefined
 %<latexrelease>\let \c@totalpages \@undefined
@@ -1485,23 +1930,13 @@
 %<latexrelease>\let \ShipoutBoxDepth \@undefined
 %<latexrelease>\let \ShipoutBoxWidth \@undefined
 %<latexrelease>
-%<latexrelease>\let \AtBeginShipoutDiscard \@undefined
-%<latexrelease>
-%<latexrelease>\let \AtBeginShipoutAddToBox \@undefined
-%<latexrelease>\let \AtBeginShipoutAddToBoxForeground \@undefined
-%<latexrelease>\let \AtBeginShipoutUpperLeft \@undefined
-%<latexrelease>\let \AtBeginShipoutUpperLeftForeground \@undefined
-%<latexrelease>
 %    \end{macrocode}
 %    We do not undo a substitution when rolling back. As the file
 %    support gets undone the underlying data is no longer used (and
-%    sufficiently obscure that should not interfer with existing
+%    sufficiently obscure that it should not interfere with existing
 %    commands) and properly removing it would mean we need to make the
-%    \cs{unclare@...} and its support macros available in all earlier
+%    \cs{undeclare@...} and its support macros available in all earlier
 %    kernel releases which is pointless (and actually worse).
-%    \begin{macrocode}
-%\undeclare@file@substitution{everyshi.sty}
-%    \end{macrocode}
 %    
 %    \begin{macrocode}
 %<latexrelease>
@@ -1509,7 +1944,7 @@
 %    \end{macrocode}
 %    We do not reenable a disabled package load when rolling back. As the file
 %    support gets undone the underlying data is no longer checked (and
-%    sufficiently obscure that it should not interfer with existing
+%    sufficiently obscure that it should not interfere with existing
 %    commands) and properly removing it would mean we need to make the
 %    \cs{reenable@package@load} command available in all earlier
 %    kernel releases which is pointless (and actually worse).
@@ -1585,8 +2020,8 @@
 %    \begin{macrocode}
 %<*atbegshi-ltx>
 \ProvidesPackage{atbegshi-ltx}
-   [2020/08/17 v1.0a
-     Emulation of the original atbegshi package^^Jwith kernel methods]
+   [2021/01/10 v1.0c
+     Emulation of the original atbegshi^^Jpackage with kernel methods]
 %    \end{macrocode}
 %
 %
@@ -1595,6 +2030,7 @@
 \let \AtBeginShipoutBox \ShipoutBox
 %    \end{macrocode}
 %  \end{macro}
+%
 %
 %
 %  \begin{macro}{\AtBeginShipoutInit}
@@ -1650,15 +2086,27 @@
 %    \end{macrocode}
 %  \end{macro}
 %
+%  \begin{macro}{\AtBeginShipoutOriginalShipout}
+%    This offers the raw \cs{shipout} primitive of the engine. A page
+%    shipped out with this is not counted by
+%    \cs{ReadonlyShipoutCounter} counter and thus the mechanism to
+%    place \cs{special}s at the very end of the output might fail,
+%    etc. It should therefore not be used in new applications but is
+%    only provided to allow  running legacy code. For new code use the
+%    commands provided by the kernel instead.
+%    \begin{macrocode}
+\ExplSyntaxOn
+\cs_new_eq:NN \AtBeginShipoutOriginalShipout \tex_shipout:D
+%    \end{macrocode}
+%  \end{macro}
 %
 %
-%  \begin{macro}{\ShipoutBoxHeight,\ShipoutBoxWidth,\ShipoutoBoxDepth}
+%  \begin{macro}{\ShipoutBoxHeight,\ShipoutBoxWidth,\ShipoutBoxDepth}
 %    This is somewhat different from the original in \pkg{atbegshi}
 %    where \cs{ShipoutBoxHeight} etc.\ only holds the
 %    \verb=\the\ht<box>= value. This may has some implications in some
 %    use cases and if that is a problem then it might need changing.
 %    \begin{macrocode}
-\ExplSyntaxOn  
 \cs_new:Npn \ShipoutBoxHeight { \dim_use:N \l_shipout_box_ht_dim }
 \cs_new:Npn \ShipoutBoxDepth  { \dim_use:N \l_shipout_box_dp_dim }
 \cs_new:Npn \ShipoutBoxWidth  { \dim_use:N \l_shipout_box_wd_dim }
@@ -1685,56 +2133,8 @@
 %
 % \subsection{Package \pkg{everyshi} emulation}
 %
-%    \begin{macrocode}
-%<*everyshi-ltx>
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-\ProvidesPackage{everyshi-ltx}
-   [2020/08/17 v1.0a
-    Emulation of the original everyshi package^^Jwith kernel methods]
-%    \end{macrocode}
-%    
-%  \begin{macro}{\EveryShipout,\AtNextShipout}
-%    This package has only two public commands so simulating it is easy:
-%    \begin{macrocode}
-\protected \def \EveryShipout  {\AddToHook{shipout/before}}
-\protected \def \AtNextShipout {\AddToHookNext{shipout/before}}
-%    \end{macrocode}
-%  \end{macro}
-%
-%    \begin{macrocode}
-%    This is one difference between \pkg{everyshi} and the kernel
-%    implementation, the latter does not directly use box 255.
-%
-%    For usage by ordinary users this makes no difference but of a
-%    package use complicated code together with \pkg{everyshi} and
-%    directly manipulates box 255 then this package needs updating.
-%    In most cases the updates are simple because the kernel offers
-%    hooks that makes such complicated code unnecessary.
-%
-%    We therefore add a little file into the adjusted package
-%    \begin{macrocode}
-%%
-%%   In normal circumstances the above emulation is sufficient and in
-%%   all known packages (we know of) that use everyshi it either works or
-%%   the packages have been adjusted. 
-%%
-%%   Code that directly manipulates box 255, however, might fail. 
-%%   If that is the case look at the shipout hooks offered now as
-%%   they are normally sufficienct to avoid such minpulations (or
-%%   replace box 255 with \ShipoutBox in the code.
-%%
-%</everyshi-ltx>
-%    \end{macrocode}
-%
-%
-%    If the package is requested we substitute the one above:
-%    \begin{macrocode}
-%<*2ekernel>
-\declare@file@substitution{everyshi.sty}{everyshi-ltx.sty}
-%</2ekernel>
-%    \end{macrocode}
+%    This is now directly handled in that package so emulation is not
+%    necessary any more.
 %
 %
 %    Rather important :-)

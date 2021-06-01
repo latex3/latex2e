@@ -1,7 +1,7 @@
 % \iffalse meta-comment
 %
-% Copyright (C) 1993-2020
-% The LaTeX3 Project and any individual authors listed elsewhere
+% Copyright (C) 1993-2021
+% The LaTeX Project and any individual authors listed elsewhere
 % in this file.
 %
 % This file is part of the LaTeX base system.
@@ -30,14 +30,14 @@
 % \iffalse
 %%% From File: ltfsstrc.dtx
 %% Copyright (C) 1989-97 by Frank Mittelbach and Rainer Sch\"opf.
-%% Copyright (C) 1994-97 by LaTeX3 project. All rights reserved.
+%% Copyright (C) 1994-97 by LaTeX Project. All rights reserved.
 %
-%<package>\NeedsTeXFormat{LaTeX2e}[1995/05/16]
+%<package>\NeedsTeXFormat{LaTeX2e}[2021/06/01]
 %<package>\ProvidesPackage{tracefnt}
-%<package>     [2019/10/11 v3.0l  Standard LaTeX package (font tracing)]
+%<package>     [2020/12/22 v3.0n  Standard LaTeX package (font tracing)]
 % \fi
 % \ProvidesFile{ltfsstrc.dtx}
-%              [2020/02/03 v3.0l LaTeX Kernel (NFSS tracing)]
+%              [2021/04/26 v3.0o LaTeX Kernel (NFSS tracing)]
 %
 % \iffalse
 %<+checkmem>\CHECKMEM
@@ -190,7 +190,7 @@
 % special package file named \texttt{trace.sty}.\footnote{This package
 % is not in distribution at the moment (and probably doesn't any
 % longer work). Think of this part of the code as being historical
-% artefacts.}
+% artifacts.}
 %    \begin{macrocode}
 %<+debug> \input trace.sty
 %    \end{macrocode}
@@ -420,19 +420,25 @@
 %    \end{macrocode}
 %  \end{macro}
 %
+
+%    \begin{macrocode}
+%<*2ekernel|latexrelease|package>
+%<latexrelease>\IncludeInRelease{2021/06/01}%
+%<latexrelease>                 {\selectfont}{Add hook to \selectfont}%
+%    \end{macrocode}
 %
-% \changes{v1.0j}{1990/02/18}
-%      {Redefine unprotected version \cs{p@selectfont}
-%                           instead of \cs{selectfont}.}
+%
 %
 %
 % \begin{macro}{\selectfont}
+% \changes{v1.0j}{1990/02/18}
+%      {Redefine unprotected version \cs{p@selectfont}
+%                           instead of \cs{selectfont}.}
 % \changes{v1.1a}{1989/12/16}{Changed order of calls.}
 % \changes{v2.3f}{1994/05/12}{Use \cs{DeclareRobustCommand}}
 %    The macro |\selectfont| is called whenever a font change must
 %    take place.
 %    \begin{macrocode}
-%<*2ekernel|package>
 \DeclareRobustCommand\selectfont
         {%
 %    \end{macrocode}
@@ -456,6 +462,77 @@
     \ifx\f@linespread\baselinestretch \else
       \set@fontsize\baselinestretch\f@size\f@baselineskip \fi
 %    \end{macrocode}
+%
+%    The series and shape updates are only prepared by
+%    \cs{fontseries} and \cs{fontshape} but not executed until after
+%    we are ready to change the font face. This way they happen after
+%    a possibly new family is set which is important because they
+%    look at the available font faces in that family and alter the
+%    selection based on availibility. Several calls to \cs{fontseries}
+%    or \cs{fontshape} are delayed in the order in which they appear,
+%    so that by switching them one can work around missing
+%    intermediate font faces and avoid substitutions.
+%
+%    We first attempt to do the merge without any substitution. As we
+%    might end up with a non-existing font face we may have to restart
+%    and therefore save the current values of \cs{f@series} and
+%    \cs{f@shape} before the merge.
+%
+%    But first we make a quick test to see if there are any delayed
+%    actions, because if not it is pointless to make all the
+%    assignments and try loading a missing fontshape.
+%
+% \changes{v3.0n}{2020/12/22}{Execute delayed series and shape updates (gh/444)}
+%    \begin{macrocode}
+    \ifx\delayed@f@adjustment\@empty
+    \else
+      \let\f@shape@saved\f@shape
+      \let\f@series@saved\f@series      
+%    \end{macrocode}
+%    The we run the delayed adjustments (which is using the
+%    \cs{..@without@substitution} commands
+%    \begin{macrocode}
+      \delayed@f@adjustment
+%    \end{macrocode}
+%    We then check if the resulting cominbation is valid but for this
+%    we have to make sure the the appropiate \texttt{.fd} is loaded if
+%    that hasn't happened so far.
+%    \begin{macrocode}
+      \maybe@load@fontshape
+      \ifcsname \f@encoding/\f@family/\f@series/\f@shape \endcsname
+%    \end{macrocode}
+%    If this macro is defined then we are good and no further action
+%    is necessary.
+%    
+%    Otherwise the combination is not valid, so we redo the merge but
+%    this time with substitutions.
+%    \begin{macrocode}
+      \else
+        \let\f@shape\f@shape@saved
+        \let\f@series\f@series@saved
+        \let\delayed@merge@font@shape\merge@font@shape
+        \let\delayed@merge@font@series\merge@font@series
+        \delayed@f@adjustment
+        \let\delayed@merge@font@shape\merge@font@shape@without@substitution
+        \let\delayed@merge@font@series\merge@font@series@without@substitution
+      \fi
+%    \end{macrocode}
+%    Now the series and shape values are updated and we clear
+%    \cs{delayed@f@adjustment}. This is important because on the next
+%    execution of \cs{selectfont} we should not mistakenly redo the
+%    delayed actions if there wasn't any series or shape change.
+%    \begin{macrocode}
+      \let\delayed@f@adjustment\@empty
+    \fi
+%    \end{macrocode}
+%    If the series was forced we should now cancel that in case the
+%    next series change is done with some low-level setting to
+%    \cs{f@series}.
+% \changes{v3.0o}{2021/04/26}{Unset the forced series boolean when reaching
+%    \cs{selectfont} (gh/444)}
+%    \begin{macrocode}
+    \@forced@seriesfalse
+%    \end{macrocode}
 %    Then we generate the internal name of the font
 %    by concatenating {\em family}, {\em series},
 %    {\em shape}, and current {\em size},
@@ -478,18 +555,13 @@
 %    \begin{macrocode}
     \font@name
 %    \end{macrocode}
-%    If |\tracingfonts| is
-%    greater than 2 we also show the font switch.
-%    We do this before |\glb@settings| is called since this
-%    macro might redefine |\font@name|.
-% \changes{v1.0k}{1990/03/14}{Added code for TeX3.}
-% \changes{v1.0i}{1990/02/16}{Changed \cs{f@size} to \cs{lcl@currsize}
-%         (see fam file).}
+%    
+%    After switching fonts we run a hook, so that packages can make
+%    last minute alterations based on the new font (originally provided
+%    in \pkg{everysel} but using a different interface).
+% \changes{v3.0m}{2020/12/03}{Install a hook in \cs{selectfont} (gh/444)}
 %    \begin{macrocode}
-%<*trace>
-    \ifnum \tracingfonts>\tw@
-      \@font@info{Switching to \font@name}\fi
-%</trace>
+    \UseHook{selectfont}%
 %    \end{macrocode}
 %    Finally we call |\size@update|. This macro is normally empty but
 %    will contain actions (like setting the |\baselineskip|) that have
@@ -514,11 +586,69 @@
 % \end{macro}
 %
 %
+%  \begin{macro}{selectfont}
+%    Declare the hook used in selecfont in the kernel, but not
+%    inside the \pkg{tracefnt} package.
+%    \begin{macrocode}
+%<-trace>\NewHook{selectfont}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%    If |\tracingfonts| is
+%    greater than 2 we also show the font switch inside \cs{selectfont}.
+%    We do this by adding this code to the hook in the \pkg{tracefnt} package:
+%    macro might redefine |\font@name|.
+%    \begin{macrocode}
+%<*trace>
+\AddToHook{selectfont}
+   {\ifnum \tracingfonts>\tw@
+       \@font@info{Switching to \font@name}\fi}
+%</trace>
+%    \end{macrocode}
+%
+%
+%    \begin{macrocode}
+%</2ekernel|latexrelease|package>
+%<latexrelease>\EndIncludeInRelease
+%    \end{macrocode}
+%
+%    With \cs{selectfont} having different definitions in different
+%    kernels we also have to provide them in the \texttt{tracefnt}
+%    package to support rollback. In packages that works a bit
+%    differently and therefore we have to provide an empty block there.   
+%    \begin{macrocode}
+%<package>\IncludeInRelease{2021/06/01}%
+%<package>                 {\selectfont}{Add hook to \selectfont}%
+%<package>\EndIncludeInRelease
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<latexrelease|package>\IncludeInRelease{0000/00/00}%
+%<latexrelease|package>                 {\selectfont}{Add hook to \selectfont}%
+%<latexrelease|package>
+%<latexrelease|package>\DeclareRobustCommand\selectfont
+%<latexrelease|package>   {%
+%<latexrelease|package>    \ifx\f@linespread\baselinestretch \else
+%<latexrelease|package>      \set@fontsize\baselinestretch\f@size\f@baselineskip \fi
+%<latexrelease|package>    \xdef\font@name{%
+%<latexrelease|package>      \csname\curr@fontshape/\f@size\endcsname}%
+%<latexrelease|package>    \pickup@font
+%<latexrelease|package>    \font@name
+%<latexrelease|package>    \size@update
+%<latexrelease|package>    \enc@update
+%<latexrelease|package>   }
+%<latexrelease|package>
+%<latexrelease|package>\EndIncludeInRelease
+%    \end{macrocode}
+%    
+%
 %
 %  \begin{macro}{\set@fontsize}
 %    The macro |\set@fontsize| does the actual work. First it assigns
 %    new values to |\f@size|, |\f@baselineskip| and |\f@linespread|.
 %    \begin{macrocode}
+%<*2ekernel|package>
 \def\set@fontsize#1#2#3{%
     \@defaultunits\@tempdimb#2pt\relax\@nnil
     \edef\f@size{\strip@pt\@tempdimb}%
@@ -1245,7 +1375,7 @@
 %  Now, we are through with the case of a simple size, except for
 %  calling the size function. This will be handled later, as it is
 %  the same mechanism for all types of size specification. We will
-%  now proceed to macors for extraction of size range specification.
+%  now proceed to macros for extraction of size range specification.
 %
 %
 %

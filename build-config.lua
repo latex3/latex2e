@@ -13,6 +13,7 @@ unpackdeps  = unpackdeps  or {maindir .. "/base"}
 
 -- We really need 3 on most files (toc + references)
 typesetruns  = 3
+maxprintline = 9999
 
 -- Set up the check system to work in 'stand-alone' mode
 -- This relies on a format being built by the 'base' dependency
@@ -30,6 +31,7 @@ checksuppfiles = checksuppfiles     or
     "regression-test.tex",
     "xetex.def",
     "dvips.def",
+    "lipsum.ltd.tex",
     "lipsum.sty",
     "*.fd",
     "*.txt",
@@ -240,7 +242,18 @@ local function fmt(engines,dest)
 end
 
 function checkinit_hook()
-  return fmt(options["engine"] or checkengines,testdir)
+  local engines = options.engine
+  if not engines then
+    local target = options.target
+    if target == 'check' or target == 'bundlecheck' then
+      engines = checkengines
+    elseif target == 'save' then
+      engines = {stdengine}
+    else
+      error'Unexpected target in call to checkinit_hook'
+    end
+  end
+  return fmt(engines,testdir)
 end
 
 function docinit_hook() return fmt({"pdftex"},typesetdir) end

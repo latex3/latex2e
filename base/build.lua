@@ -53,6 +53,7 @@ sourcefiles    =
     "small2e.tex",
     "testpage.tex",
     "source2edoc.cls",        -- temp
+     "doc-v3beta.sty",        -- temp
      "*-????-??-??.sty"
   }
 textfiles =
@@ -111,12 +112,8 @@ typesetfiles   =
     "usrguide.tex",
     "usrguide3.tex",
     "latexchanges.tex",
-    "lthooks-doc.tex",
-    "ltshipout-doc.tex",
-    "ltfilehook-doc.tex",
-    "lthooks-code.tex",
-    "ltshipout-code.tex",
-    "ltfilehook-code.tex",
+    "*-doc.tex",
+    "*-code.tex",
   }
 
 -- Files that should be removed after running a test
@@ -126,6 +123,7 @@ dynamicfiles = {"*.tst"}
 unpackfiles     = {"unpack.ins"}
 unpacksuppfiles =
   {
+    "glyphtounicode.tex",
     "hyphen.cfg",
     "UShyphen.tex",
     "ot1lmr.fd",
@@ -155,7 +153,7 @@ indexstyle = "source2e.ist"
 
 -- Allow for TU and other test configurations
 checkconfigs = {"build","config-1run","config-TU","config-legacy","config-lthooks",
-                "config-lthooks2"}
+                "config-lthooks2","config-ltcmd"}
 
 update_tag = update_tag_base
 
@@ -209,10 +207,4 @@ dofile (maindir .. "/build-config.lua")
 -- Suppress makeindex tree other than formal releases
 if not master_branch then
   makeindexfiles = { }
-end
-
--- Find and run the build system
-kpse.set_program_name ("kpsewhich")
-if not release_date then
-  dofile(kpse.lookup("l3build.lua"))
 end

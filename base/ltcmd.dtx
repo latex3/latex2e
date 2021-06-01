@@ -1,0 +1,4034 @@
+% \iffalse meta-comment
+%
+% Copyright (C) 1999 Frank Mittelbach, Chris Rowley, David Carlisle
+% Copyright (C) 2004-2008 Frank Mittelbach, The LaTeX3 Project
+% Copyright (C) 2009-2021
+% The LaTeX Project and any individual authors listed elsewhere
+% in this file.
+%
+% This file is part of the LaTeX base system.
+% -------------------------------------------
+%
+% It may be distributed and/or modified under the
+% conditions of the LaTeX Project Public License, either version 1.3c
+% of this license or (at your option) any later version.
+% The latest version of this license is in
+%    https://www.latex-project.org/lppl.txt
+% and version 1.3c or later is part of all distributions of LaTeX
+% version 2008 or later.
+%
+% This file has the LPPL maintenance status "maintained".
+%
+% The list of all files belonging to the LaTeX base distribution is
+% given in the file `manifest.txt'. See also `legal.txt' for additional
+% information.
+%
+% The list of derived (unpacked) files belonging to the distribution
+% and covered by LPPL is defined by the unpacking scripts (with
+% extension .ins) which are part of the distribution.
+%
+% \fi
+%
+% \iffalse
+%
+%%% From File: ltcmd.dtx
+%
+%    \begin{macrocode}
+\def\ltcmdversion{v1.0e}
+\def\ltcmddate{2021-05-24}
+%    \end{macrocode}
+%
+%<*driver>
+% \fi
+\ProvidesFile{ltcmd.dtx}
+  [\ltcmddate\space \ltcmdversion\space
+   LaTeX Kernel (Document commands)]
+% \iffalse
+\documentclass{l3doc}
+\GetFileInfo{ltcmd.dtx}
+\title{\filename}
+\date{\filedate}
+\author{Frank Mittelbach, Chris Rowley, David Carlisle, \LaTeX{} Project Team}
+\begin{document}
+  \maketitle
+  \DocInput{ltcmd.dtx}
+\end{document}
+%</driver>
+% \fi
+%
+% \section{Creating document commands}
+%
+% \changes{v1.0a}{2020/11/20}{Initial version derived from \texttt{xparse.dtx}}
+%
+% Document commands should be created using the tools provided by this module:
+% \cs{NewDocumentCommand}, etc.\@, in almost all cases. This allows clean
+% separation of document-level syntax from code-level interfaces. Users have
+% a need to create new document commands, and as such a significant amount of
+% documentation for \pkg{ltcmd} is provided as part of \texttt{usrguide3}. Here,
+% additional material aimed at programmers is provided
+%
+% \StopEventually{}
+%
+%    \begin{macrocode}
+%<@@=cmd>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<*2ekernel>
+\message{document commands,}
+%</2ekernel>
+%    \end{macrocode}
+%
+% \changes{v1.0b}{2021/03/18}{Use \cs{NewModuleRelease}.}
+% \changes{v1.0e}{2021/05/24}{Use \cs{msg_...} instead of \cs{__kernel_msg...}}
+%
+%
+% \pkg{ltcmd} code contains an |^^@| character, which usually has
+% catcode~15, so \cs{IncludeInRelease} will break when this code is
+% being skipped, so we'll save the catcode of |^^@| to restore later:
+%    \begin{macrocode}
+%<*2ekernel|latexrelease>
+%<latexrelease>\edef\@latexrelease@catcode@null{\the\catcode`\^^@ }
+%<latexrelease>\catcode`\^^@=12
+\ExplSyntaxOn
+%<latexrelease>\NewModuleRelease{2020/10/01}{ltcmd}
+%<latexrelease>                 {Document~command~parser}%
+%    \end{macrocode}
+%
+% \subsection{Variables and constants}
+%
+% \begin{variable}{\l_@@_arg_spec_tl}
+%   Holds the argument specification after normalization of shorthands.
+%    \begin{macrocode}
+\tl_new:N \l_@@_arg_spec_tl
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_args_tl}
+%   Token list variable for grabbed arguments.
+%    \begin{macrocode}
+\tl_new:N \l_@@_args_tl
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_args_i_tl, \l_@@_args_ii_tl}
+%   Hold the modified arguments when dealing with default values or
+%   processors.
+%    \begin{macrocode}
+\tl_new:N \l_@@_args_i_tl
+\tl_new:N \l_@@_args_ii_tl
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_current_arg_int}
+%   The number of the current argument being set up: this is used to
+%   make sure there are at most 9 arguments, then for creating the
+%   expandable auxiliary functions and knowing how many arguments the
+%   code function should take.
+%    \begin{macrocode}
+\int_new:N \l_@@_current_arg_int
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_defaults_bool, \l_@@_defaults_tl}
+%   The boolean indicates whether there are any argument with default
+%   value other than |-NoValue-|; the token list holds the code to
+%   determine these default values in terms of other arguments.
+%    \begin{macrocode}
+\bool_new:N \l_@@_defaults_bool
+\tl_new:N \l_@@_defaults_tl
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_environment_bool}
+%   Generating environments uses the same mechanism as generating functions.
+%   However, full processing of arguments is always needed for environments,
+%   and so the function-generating code needs to know this.
+%   This variable is also used at run time to give correct error messages.
+%    \begin{macrocode}
+\bool_new:N \l_@@_environment_bool
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_environment_str}
+%   Name of the environment, used at definition time and at run time.
+%    \begin{macrocode}
+\str_new:N \l_@@_environment_str
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_expandable_bool}
+%   Used to indicate if an expandable command is begin generated, as this
+%   affects both the acceptable argument types and how they are implemented.
+%    \begin{macrocode}
+\bool_new:N \l_@@_expandable_bool
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_expandable_aux_name_tl}
+%   Used to create pretty-printing names for the auxiliaries: although the
+%   immediate definition does not vary, the full expansion does and so it
+%   does not count as a constant.
+%    \begin{macrocode}
+\tl_new:N \l_@@_expandable_aux_name_tl
+\tl_set:Nn \l_@@_expandable_aux_name_tl
+  {
+    \l_@@_function_tl \c_space_tl
+    ( arg~ \int_use:N \l_@@_current_arg_int )
+  }
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\g_@@_grabber_int}
+%   Used (in exceptional cases) to get unique names for grabbers used by
+%   expandable commands.
+%    \begin{macrocode}
+\int_new:N \g_@@_grabber_int
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_fn_tl}
+%   For passing the pre-formed name of the auxiliary to be used as the
+%   parsing function.
+%    \begin{macrocode}
+\tl_new:N \l_@@_fn_tl
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_fn_code_tl}
+%   For passing the pre-formed name of the auxiliary that contains the
+%   actual code.
+%    \begin{macrocode}
+\tl_new:N \l_@@_fn_code_tl
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_function_tl}
+%   Holds the control sequence name of the function currently being
+%   defined: used to avoid passing this as an argument and to avoid repeated
+%   use of \cs{cs_to_str:N}.
+%    \begin{macrocode}
+\tl_new:N \l_@@_function_tl
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_grab_expandably_bool}
+%   When defining a non-expandable command, indicates whether the
+%   arguments can all safely be grabbed by expandable grabbers.  This is
+%   to support abuses of \pkg{xparse} that use protected functions
+%   inside csname constructions.
+%    \begin{macrocode}
+\bool_new:N \l_@@_grab_expandably_bool
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_obey_spaces_bool}
+%   For trailing optionals.
+%    \begin{macrocode}
+\bool_new:N \l_@@_obey_spaces_bool
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_last_delimiters_tl}
+%   Holds the delimiters (first tokens) of all optional arguments since
+%   the previous mandatory argument, to warn about cases where it would
+%   be impossible to omit optional arguments completely because the
+%   following mandatory argument has the same delimiter as one of the
+%   optional arguments.
+%    \begin{macrocode}
+\tl_new:N \l_@@_last_delimiters_tl
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_long_bool}
+%   Used to indicate that an argument is long, on a per-argument basis.
+%    \begin{macrocode}
+\bool_new:N \l_@@_long_bool
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_m_args_int}
+%   The number of \texttt{m} arguments: if this is the same as the total
+%   number of arguments, then a short-cut can be taken in the creation of
+%   the grabber code.
+%    \begin{macrocode}
+\int_new:N \l_@@_m_args_int
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_prefixed_bool}
+%   When preparing the signature of non-expandable commands, indicates
+%   that the current argument is affected by a processor or by |+|
+%   (namely is long).
+%    \begin{macrocode}
+\bool_new:N \l_@@_prefixed_bool
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_process_all_tl, \l_@@_process_one_tl, \l_@@_process_some_bool}
+%   When preparing the signature, the processors that will be applied to
+%   a given argument are collected in \cs{l_@@_process_one_tl}, while
+%   \cs{l_@@_process_all_tl} contains processors for all arguments.  The
+%   boolean indicates whether there are any processors (to bypass the
+%   whole endeavour otherwise).
+%    \begin{macrocode}
+\tl_new:N \l_@@_process_all_tl
+\tl_new:N \l_@@_process_one_tl
+\bool_new:N \l_@@_process_some_bool
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_saved_args_tl}
+%   Stores \cs{l_@@_args_tl} to deal with space-trimming of
+%   \texttt{b}-type arguments.
+%    \begin{macrocode}
+\tl_new:N \l_@@_saved_args_tl
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_signature_tl}
+%   Used when constructing the signature (code for argument grabbing) to
+%   hold what will become the implementation of the main function.
+%   When arguments are grabbed (at point of use of the command/environment),
+%   it also stores the code for grabbing the remaining arguments.
+%    \begin{macrocode}
+\tl_new:N \l_@@_signature_tl
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}
+%   {\l_@@_some_obey_spaces_bool, \l_@@_some_long_bool, \l_@@_some_short_bool}
+%   These flags are set while normalizing the argument specification.
+%   The \texttt{obey_spaces} one is used to detect when |!| is used on
+%   an argument that is not a trailing optional argument.
+%   The other two are used to check whether all short arguments appear
+%   before long arguments: this is needed to grab arguments expandably.
+%   As soon as the first long argument is seen (other than
+%   \texttt{t}-type, whose long status is ignored) the
+%   \texttt{some_long} flag is set.  The \texttt{some_short} flag is
+%   used for expandable commands, to know whether to define a short
+%   auxiliary too.
+%    \begin{macrocode}
+\bool_new:N \l_@@_some_obey_spaces_bool
+\bool_new:N \l_@@_some_long_bool
+\bool_new:N \l_@@_some_short_bool
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_tmp_prop, \l_@@_tmpa_tl, \l_@@_tmpb_tl}
+% \begin{macro}{\@@_tmp:w}
+%   Scratch space.
+%    \begin{macrocode}
+\prop_new:N \l_@@_tmp_prop
+\tl_new:N \l_@@_tmpa_tl
+\tl_new:N \l_@@_tmpb_tl
+\cs_new_eq:NN \@@_tmp:w ?
+%    \end{macrocode}
+% \end{macro}
+% \end{variable}
+%
+%   With \pkg{xparse}, information about commands being (re)defined was
+%   switched off by default, unless the |log-declarations| package
+%   option was used, so here we'll switch that off as well.
+%    \begin{macrocode}
+\msg_redirect_module:nnn { cmd } { info } { none }
+%    \end{macrocode}
+%
+%   Also add \pkg{cmd} to the \pkg{LaTeX} messages.
+%    \begin{macrocode}
+\prop_gput:Nnn \g_msg_module_type_prop { cmd } { LaTeX }
+%    \end{macrocode}
+%
+% \subsection{Declaring commands and environments}
+%
+% \begin{macro}{\@@_declare_cmd:Nnn, \@@_declare_expandable_cmd:Nnn}
+% \begin{macro}{\@@_declare_cmd_aux:Nnn}
+% \begin{macro}
+%   {\@@_declare_cmd_internal:Nnnn, \@@_declare_cmd_internal:cnxn}
+%   The main functions for creating commands set the appropriate flag then
+%   use the same internal code to do the definition.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_declare_cmd:Nnn
+  {
+    \bool_set_false:N \l_@@_expandable_bool
+    \@@_declare_cmd_aux:Nnn
+  }
+\cs_new_protected:Npn \@@_declare_expandable_cmd:Nnn
+  {
+    \bool_set_true:N \l_@@_expandable_bool
+    \@@_declare_cmd_aux:Nnn
+  }
+%    \end{macrocode}
+%  The first stage is to log information, both for the user in the log and
+%  for programmatic use in a property list of all declared commands.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_declare_cmd_aux:Nnn #1#2#3
+  {
+    \cs_if_exist:NTF #1
+      {
+        \msg_info:nnxx { cmd } { redefine-command }
+          { \token_to_str:N #1 } { \tl_to_str:n {#2} }
+      }
+      {
+        \bool_lazy_or:nnT
+          { \cs_if_exist_p:c { \cs_to_str:N #1 ~ code } }
+          { \cs_if_exist_p:c { \cs_to_str:N #1 ~ defaults } }
+          {
+            \msg_warning:nnx { cmd } { unsupported-let }
+              { \token_to_str:N #1 }
+          }
+        \msg_info:nnxx { cmd } { define-command }
+          { \token_to_str:N #1 } { \tl_to_str:n {#2} }
+      }
+    \bool_set_false:N \l_@@_environment_bool
+    \@@_declare_cmd_internal:Nnnn #1 {#2} {#3} { }
+  }
+%    \end{macrocode}
+%   At definition time, the variable \cs{l_@@_fn_tl} is only used for error messages.
+%   The real business of defining a document command starts with setting up
+%   the appropriate name, then normalizing the argument specification to get rid of
+%   shorthands.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_declare_cmd_internal:Nnnn #1#2#3#4
+  {
+    \tl_set:Nx \l_@@_function_tl { \cs_to_str:N #1 }
+    \tl_set:Nx \l_@@_fn_tl
+      { \exp_not:c { \l_@@_function_tl \c_space_tl } }
+    \@@_normalize_arg_spec:n {#2}
+    \exp_args:No \@@_prepare_signature:n \l_@@_arg_spec_tl
+    \@@_declare_cmd_code:Nnn #1 {#2} {#3}
+    #4
+    \@@_break_point:n {#2}
+  }
+\cs_generate_variant:Nn \@@_declare_cmd_internal:Nnnn { cnx }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_break_point:n}
+%   A marker used to escape from creating a definition if necessary.
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_break_point:n \use_none:n
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_declare_cmd_code:Nnn}
+% \begin{macro}
+%   {\@@_declare_cmd_code_aux:Nnn, \@@_declare_cmd_code_expandable:Nnn}
+%   The appropriate auxiliary is called.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_declare_cmd_code:Nnn
+  {
+    \bool_if:NTF \l_@@_grab_expandably_bool
+      { \@@_declare_cmd_code_expandable:Nnn }
+      { \@@_declare_cmd_code_aux:Nnn }
+   }
+%    \end{macrocode}
+%   Standard functions call \cs{@@_start:nNNnnn}, which receives the
+%   argument specification, an auxiliary used for
+%   grabbing arguments, an auxiliary containing the code, and then the
+%   signature, default arguments, and processors.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_declare_cmd_code_aux:Nnn #1#2#3
+  {
+    \cs_generate_from_arg_count:cNnn
+      { \l_@@_function_tl \c_space_tl code }
+      \cs_set_protected:Npn \l_@@_current_arg_int {#3}
+    \cs_set_protected_nopar:Npx #1
+      {
+        \bool_if:NTF \l_@@_environment_bool
+          {
+            \@@_start_env:nnnnn { \exp_not:n {#2} }
+              { \l_@@_environment_str }
+          }
+          {
+            \@@_start:nNNnnn { \exp_not:n {#2} }
+              \exp_not:c { \l_@@_function_tl \c_space_tl }
+              \exp_not:c { \l_@@_function_tl \c_space_tl code }
+          }
+          { \exp_not:o \l_@@_signature_tl }
+          {
+            \bool_if:NT \l_@@_defaults_bool
+              { \exp_not:o \l_@@_defaults_tl }
+          }
+          {
+            \bool_if:NT \l_@@_process_some_bool
+              { \exp_not:o \l_@@_process_all_tl }
+          }
+      }
+  }
+%    \end{macrocode}
+%   Expandable functions and functions whose arguments can be grabbed
+%   expandably call \cs{@@_start_expandable:nNNNNn}, which receives the
+%   argument specification, four auxiliaries (two for grabbing arguments, one for
+%   the code, and one for default arguments), and finally the signature.
+%   Non-expandable functions that take this branch should nevertheless
+%   be protected, as well as their \texttt{code} function.  They will
+%   only be expanded in contexts such as constructing a csname.
+%   The two grabbers (named after the function with one or two spaces)
+%   are needed when there are both short and long arguments; otherwise
+%   the same grabber is included twice in the definition.  If all
+%   arguments are long or all are short the (only) grabber is defined
+%   correspondingly to be long/short.  Otherwise two grabbers are
+%   defined, one long, one short.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_declare_cmd_code_expandable:Nnn #1#2#3
+  {
+    \exp_args:Ncc \cs_generate_from_arg_count:NNnn
+      { \l_@@_function_tl \c_space_tl code }
+      { cs_set \bool_if:NF \l_@@_expandable_bool { _protected } :Npn }
+      \l_@@_current_arg_int {#3}
+    \bool_if:NT \l_@@_defaults_bool
+      {
+        \use:x
+          {
+            \cs_generate_from_arg_count:cNnn
+              { \l_@@_function_tl \c_space_tl defaults }
+              \cs_set:Npn \l_@@_current_arg_int
+              { \exp_not:o \l_@@_defaults_tl }
+          }
+      }
+    \bool_if:NTF \l_@@_expandable_bool
+      { \cs_set_nopar:Npx } { \cs_set_protected_nopar:Npx } #1
+      {
+        \exp_not:N \@@_start_expandable:nNNNNn
+          { \exp_not:n {#2} }
+          \exp_not:c { \l_@@_function_tl \c_space_tl }
+          \exp_not:c
+            {
+              \l_@@_function_tl \c_space_tl
+              \bool_if:NT \l_@@_some_short_bool
+                { \bool_if:NT \l_@@_some_long_bool { \c_space_tl } }
+            }
+          \exp_not:c { \l_@@_function_tl \c_space_tl code }
+          \bool_if:NTF \l_@@_defaults_bool
+            { \exp_not:c { \l_@@_function_tl \c_space_tl defaults } }
+            { ? }
+          { \exp_not:o \l_@@_signature_tl }
+      }
+    \bool_if:NTF \l_@@_some_long_bool
+      {
+        \bool_if:NT \l_@@_some_short_bool
+          {
+            \cs_set_nopar:cpx { \l_@@_function_tl \c_space_tl \c_space_tl }
+              ##1##2 { ##1 {##2} }
+          }
+        \cs_set:cpx
+      }
+      { \cs_set_nopar:cpx }
+          { \l_@@_function_tl \c_space_tl } ##1##2 { ##1 {##2} }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_declare_env:nnnn}
+% \begin{macro}{\@@_declare_env_internal:nnnn}
+%   The lead-off to creating an environment is much the same as that for
+%   creating a command: issue the appropriate message, store the argument
+%   specification then hand off to an internal function.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_declare_env:nnnn #1#2
+  {
+    \str_set:Nx \l_@@_environment_str {#1}
+    \str_set:Nx \l_@@_environment_str
+      { \tl_trim_spaces:o { \l_@@_environment_str } }
+    \cs_if_exist:cTF { \l_@@_environment_str }
+      {
+        \msg_info:nnxx { cmd } { redefine-environment }
+          { \l_@@_environment_str } { \tl_to_str:n {#2} }
+      }
+      {
+        \msg_info:nnxx { cmd } { define-environment }
+          { \l_@@_environment_str } { \tl_to_str:n {#2} }
+      }
+    \bool_set_false:N \l_@@_expandable_bool
+    \bool_set_true:N \l_@@_environment_bool
+    \exp_args:NV \@@_declare_env_internal:nnnn
+      \l_@@_environment_str {#2}
+  }
+%    \end{macrocode}
+%   Creating a document environment requires a few more steps than creating
+%   a single command. In order to pass the arguments of the command to the
+%   end of the function, it is necessary to store the grabbed arguments.
+%   To do that, the function used at the end of the environment has to be
+%   redefined to contain the appropriate information. To minimize the amount
+%   of expansion at point of use, the code here is expanded now as well as
+%   when used.
+%   The last argument of \cs{@@_declare_cmd_internal:Nnnn} is only run
+%   if the definition succeeded.  In package mode this ensures that the
+%   original definition of the environment is not changed if the
+%   definition fails for any reason.  This also avoids an error when
+%   defining the \verb*|end aux | function when the user asks for more
+%   than $9$ arguments.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_declare_env_internal:nnnn #1#2#3#4
+  {
+    \@@_declare_cmd_internal:cnxn { environment~ #1 } {#2}
+      {
+        \cs_set_nopar:Npx \exp_not:c { environment~ #1 ~end~aux }
+          {
+            \exp_not:N \exp_not:N \exp_not:c { environment~ #1~end~aux~ }
+            \exp_not:n { \exp_not:o \l_@@_args_tl }
+          }
+        \exp_not:n {#3}
+      }
+      {
+        \cs_set_nopar:cpx { environment~ #1 ~end }
+          { \exp_not:c { environment~ #1 ~end~aux } }
+        \cs_generate_from_arg_count:cNnn
+          { environment~ #1 ~end~aux~ } \cs_set:Npn
+          \l_@@_current_arg_int {#4}
+        \cs_set_eq:cc {#1}       { environment~ #1 }
+        \cs_set_eq:cc { end #1 } { environment~ #1 ~end }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \subsection{Structure of \pkg{xparse} commands}
+%
+% \begin{macro}{\@@_start_env:nnnnn, \@@_start:nNNnnn}
+%   For error messages that occur during run-time when getting arguments
+%   of environments it is necessary to keep track of the environment
+%   name.  We begin non-expandable commands with a token equal to
+%   \cs{scan_stop:}, whose name gives a reasonable error message if the
+%   command is used inside a csname and protects against
+%   \texttt{f}-expansion.  This is useless for environments since
+%   \cs{begin} is already not expandable.  Both the command and
+%   environment codes start with \cs{group_align_safe_begin:}, then
+%   \cs{@@_run_code:} (used by both) does \cs{group_align_safe_end:}, so
+%   that delimited arguments may be grabbed in alignments if they
+%   contain and alignment tab token (see latex3/latex3/issues/839).
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_start_env:nnnnn #1#2
+  {
+    \conditionally@traceoff
+    \group_align_safe_begin:
+    \str_set:Nn \l_@@_environment_str {#2}
+    \bool_set_true:N \l_@@_environment_bool
+    \@@_start_aux:ccnnnn
+      { environment~ \l_@@_environment_str \c_space_tl }
+      { environment~ \l_@@_environment_str \c_space_tl code }
+      {#1}
+  }
+\cs_new_protected:Npx \@@_start:nNNnnn #1#2#3
+  {
+    \exp_not:c { xparse~function~is~not~expandable }
+    \exp_not:N \conditionally@traceoff
+    \exp_not:N \group_align_safe_begin:
+    \exp_not:n { \bool_set_false:N \l_@@_environment_bool }
+    \exp_not:N \@@_start_aux:NNnnnn
+    #2 #3 {#1}
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_start_aux:NNnnnn, \@@_start_aux:ccnnnn}
+%   This sets up a few variables to minimize the boilerplate code
+%   included in all \pkg{xparse}-defined commands.  It then runs the
+%   grabbers~|#4|.  Again, the argument specification |#1| is only for
+%   diagnostics.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_start_aux:NNnnnn #1#2#3#4#5#6
+  {
+    \tl_clear:N \l_@@_args_tl
+    \tl_set:Nn \l_@@_fn_tl {#1}
+    \tl_set:Nn \l_@@_fn_code_tl {#2}
+    \tl_set:Nn \l_@@_defaults_tl {#5}
+    \tl_set:Nn \l_@@_process_all_tl {#6}
+    #4 \@@_run_code:
+  }
+\cs_generate_variant:Nn \@@_start_aux:NNnnnn { cc }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_run_code:}
+%   After arguments are grabbed, this function is responsible for
+%   inserting default values, running processors, and finally doing
+%   \cs{group_align_safe_end:} as promised, and running the code.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_run_code:
+  {
+    \tl_if_empty:NF \l_@@_defaults_tl { \@@_defaults: }
+    \tl_if_empty:NF \l_@@_process_all_tl { \@@_args_process: }
+    \group_align_safe_end:
+    \conditionally@traceon
+    \exp_after:wN \l_@@_fn_code_tl \l_@@_args_tl
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_defaults:}
+% \begin{macro}{\@@_defaults_def:, \@@_defaults_def:nn, \@@_defaults_def:nnn}
+% \begin{macro}{\@@_defaults_aux:,  \@@_defaults_error:w}
+%   First construct \cs{@@_tmp:w} (see below) that will receive
+%   the arguments found so far and determine default values for any
+%   missing argument.  Then call it repeatedly until the set of
+%   arguments stabilizes.  Since that could lead to an infinite loop we
+%   only call it up to nine times, the maximal number needed for
+%   stabilization if there is a chain of arguments that depend on each
+%   other.  If that fails to stabilize raise an error.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_defaults:
+  {
+    \@@_defaults_def:
+    \tl_set_eq:NN \l_@@_args_i_tl \l_@@_args_tl
+    \@@_defaults_aux: \@@_defaults_aux: \@@_defaults_aux:
+    \@@_defaults_aux: \@@_defaults_aux: \@@_defaults_aux:
+    \@@_defaults_aux: \@@_defaults_aux: \@@_defaults_aux:
+    \@@_defaults_error:w
+    \q_recursion_stop
+    \tl_set_eq:NN \l_@@_args_tl \l_@@_args_i_tl
+  }
+\cs_new_protected:Npn \@@_defaults_aux:
+  {
+    \tl_set:Nx \l_@@_args_ii_tl
+      { \exp_after:wN \@@_tmp:w \l_@@_args_i_tl }
+    \tl_if_eq:NNT \l_@@_args_ii_tl \l_@@_args_i_tl
+      { \use_none_delimit_by_q_recursion_stop:w }
+    \tl_set_eq:NN \l_@@_args_i_tl \l_@@_args_ii_tl
+  }
+\cs_new_protected:Npn \@@_defaults_error:w \q_recursion_stop
+  {
+    \msg_error:nnx { cmd } { loop-in-defaults }
+      { \@@_environment_or_command: }
+  }
+%    \end{macrocode}
+%   To construct \cs{@@_tmp:w}, first go through the arguments
+%   found and the corresponding defaults, building a token list with
+%   |{#|\meta{arg number}|}| for arguments found in the input (whose
+%   default will not be used) and otherwise
+%   |{|\cs{exp_not:n}\Arg{default}|}| for arguments whose default will
+%   be used.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_defaults_def:
+  {
+    \tl_clear:N \l_@@_tmpa_tl
+    \int_zero:N \l_@@_current_arg_int
+    \@@_tl_mapthread_function:NNN \l_@@_args_tl \l_@@_defaults_tl
+      \@@_defaults_def:nn
+    \cs_generate_from_arg_count:NNVo \@@_tmp:w \cs_set:Npn
+      \l_@@_current_arg_int \l_@@_tmpa_tl
+  }
+\cs_generate_variant:Nn \cs_generate_from_arg_count:NNnn { NNVo }
+\cs_new_protected:Npn \@@_defaults_def:nn
+  {
+    \int_incr:N \l_@@_current_arg_int
+    \exp_args:NV \@@_defaults_def:nnn \l_@@_current_arg_int
+  }
+\cs_new_protected:Npn \@@_defaults_def:nnn #1#2#3
+  {
+    \tl_put_right:Nx \l_@@_tmpa_tl
+      {
+        {
+          \exp_not:N \exp_not:n
+            {
+              \tl_if_novalue:nTF {#2}
+                { \exp_not:o {#3} }
+                { \exp_not:n { ## #1 } }
+            }
+        }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_args_process:}
+% \begin{macro}{\@@_args_process_loop:nn, \@@_args_process_aux:n}
+%   Loop through arguments (stored in \cs{l_@@_args_tl}) and the
+%   corresponding processors (in \cs{l_@@_process_all_tl})
+%   simultaneously, apply all processors for each argument and store the
+%   result back into \cs{l_@@_args_tl}.  To allow processors to depend
+%   on other arguments, for every processor define a temporary auxiliary
+%   that receives all arguments \cs{l_@@_args_tl}.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_args_process:
+  {
+    \tl_clear:N \l_@@_args_ii_tl
+    \@@_tl_mapthread_function:NNN
+      \l_@@_args_tl
+      \l_@@_process_all_tl
+      \@@_args_process_loop:nn
+    \tl_set_eq:NN \l_@@_args_tl \l_@@_args_ii_tl
+  }
+\cs_new_protected:Npn \@@_args_process_loop:nn #1#2
+  {
+    \tl_set:Nn \ProcessedArgument {#1}
+    \tl_if_novalue:nF {#1}
+      { \tl_map_function:nN {#2} \@@_args_process_aux:n }
+    \tl_put_right:No \l_@@_args_ii_tl
+      { \exp_after:wN { \ProcessedArgument } }
+  }
+\cs_new_protected:Npn \@@_args_process_aux:n #1
+  {
+    \cs_generate_from_arg_count:NNnn \@@_tmp:w \cs_set:Npn
+      { \tl_count:N \l_@@_args_tl } {#1}
+    \exp_args:NNNo \exp_after:wN \@@_tmp:w \l_@@_args_tl
+      { \ProcessedArgument }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}[EXP]{\@@_start_expandable:nNNNNn}
+%   This is called for all expandable commands.  |#6| is the signature,
+%   responsible for grabbing arguments.  |#5| is used to determine
+%   default values (or is |?| if there are none).  |#4| is the code to run.
+%   |#2|~and~|#3| are functions (named after the command) that grab a single
+%   argument in the input stream (|#3|~is~short).  The argument specification |#1| is
+%   only used by diagnostic functions.  Same as for the non-expandable
+%   version, this starts with \cs{group_align_safe_begin:}, which
+%   expands to nothing, so may be safely used in an expandable context.
+%    \begin{macrocode}
+\cs_new:Npn \@@_start_expandable:nNNNNn #1#2#3#4#5#6
+  {
+    \group_align_safe_begin:
+    #6 \@@_end_expandable:NNw #5 #4 \q_@@ #2#3
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}[EXP]{\@@_end_expandable:NNw}
+% \begin{macro}[EXP]{\@@_end_expandable_aux:w}
+% \begin{macro}[EXP]{\@@_end_expandable_aux:nNNNN}
+% \begin{macro}[EXP]{\@@_end_expandable_defaults:nnnNNn}
+% \begin{macro}[EXP]{\@@_end_expandable_defaults:nnw}
+% \begin{macro}[EXP]{\@@_end_expandable_defaults:nw}
+%   Followed by a function |#1| to determine default values (or |?| if
+%   there are no defaults), the code
+%   |#2|, arguments that have been grabbed, then \cs{q_@@} and two generic
+%   grabbers.  The idea to find default values is similar to the
+%   non-expandable case but we cannot define an auxiliary function, so
+%   at every step in the loop we need to go through all arguments
+%   searching for which ones started out as |-NoValue-| and replacing
+%   these by the newly computed values.  In fact we need to keep track
+%   of three versions of all arguments: the original version, the
+%   previous version with default values, and the currently built
+%   version (first argument of \cs{@@_end_expandable_defaults:nnnNNn}).
+%    \begin{macrocode}
+\cs_new:Npn \@@_end_expandable:NNw #1#2
+  { \@@_end_expandable_aux:w #1#2 \prg_do_nothing: }
+\cs_new:Npn \@@_end_expandable_aux:w #1#2#3 \q_@@
+  { \exp_args:No \@@_end_expandable_aux:nNNNN {#3} #1 #2 }
+\cs_new:Npn \@@_end_expandable_aux:nNNNN #1#2#3#4#5
+  {
+    \token_if_eq_charcode:NNT ? #2 { \exp_after:wN \use_iv:nnnn }
+    \@@_end_expandable_defaults:nnnNNn {#1} { } {#1} #2#3
+      { } { } { } { } { } { } { } { } { } { }
+      {
+        \msg_expandable_error:nnf { cmd } { loop-in-defaults }
+          { \exp_args:Nf \tl_trim_spaces:n { \token_to_str:N #4 } }
+        \use_iv:nnnn
+      }
+    \q_stop
+  }
+\cs_new:Npn \@@_end_expandable_defaults:nnnNNn #1#2#3#4#5#6
+  {
+    #6
+    \str_if_eq:nnTF {#1} {#2}
+      { \use_i_delimit_by_q_stop:nw { \group_align_safe_end: #5 #1 } }
+      {
+        \exp_args:No \@@_tl_mapthread_function:nnN
+          { #4 #1 } {#3}
+          \@@_end_expandable_defaults:nnw
+        \@@_end_expandable_defaults:nnnNNn { } {#1} {#3} #4 #5
+      }
+  }
+\cs_new:Npn \@@_end_expandable_defaults:nnw #1#2
+  {
+    \tl_if_novalue:nTF {#2}
+      { \exp_args:No \@@_end_expandable_defaults:nw {#1} }
+      { \@@_end_expandable_defaults:nw {#2} }
+  }
+\cs_new:Npn \@@_end_expandable_defaults:nw
+    #1#2 \@@_end_expandable_defaults:nnnNNn #3
+  { #2 \@@_end_expandable_defaults:nnnNNn { #3 {#1} } }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \subsection{Normalizing the argument specifications}
+%
+% The goal here is to expand aliases and check that the argument
+% specification is valid before the main parsing run.  If it is not
+% valid the entire set up is abandoned to avoid any strange internal
+% errors.  A function is provided for each argument type that will grab
+% any extra data items and call the loop function after performing the
+% following checks and tasks.
+% \begin{itemize}
+%   \item Check that each argument has the correct number of data items
+%     associated with it, and that where a single character is required,
+%     one has actually been supplied.
+%   \item Check that processors and the markers~|+| and~|!| are followed
+%     by an argument for which they make sense, and are not redundant.
+%   \item Check the absence of forbidden types for expandable commands,
+%     namely \texttt{G}/\texttt{v} always, and \texttt{l}/\texttt{u}
+%     after optional arguments (\pkg{xparse} may have inserted braces
+%     due to a failed search for an optional argument).
+%   \item Check that no optional argument is followed by a mandatory
+%     argument with the same delimiter, as otherwise the optional
+%     argument could never be omitted.
+%   \item Keep track in \cs{l_@@_some_long_bool} and
+%     \cs{l_@@_some_short_bool} of whether the command has some
+%     long/short arguments.
+%   \item Keep track in \cs{l_@@_grab_expandably_bool} of whether all
+%     arguments are \texttt{m}/\texttt{l}/\texttt{u} type and short
+%     arguments appear before long ones, in which case they can be
+%     grabbed expandably just as safely as they could be grabbed
+%     nonexpandably.  Regardless of that, arguments of expandable
+%     commands will be grabbed expandably and arguments of environments
+%     will not (because the list of arguments built by non-expandable
+%     grabbing is used to pass them to the end-environment code).
+% \end{itemize}
+% Further checks happen at the end of the loop:
+% \begin{itemize}
+% \item that there are at most $9$ arguments;
+% \item that an expandable command does not end with an optional
+%   argument (this case is detected by using the fact that
+%   \cs{l_@@_last_delimiters_tl} is cleared by every mandatory argument
+%   and filled by every optional argument).
+% \end{itemize}
+%
+% \begin{macro}{\@@_normalize_arg_spec:n}
+% \begin{macro}{\@@_normalize_arg_spec_loop:n}
+%   Loop through the argument specification, calling an auxiliary
+%   specific to each argument type.  If any argument is unknown stop the
+%   definition.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_normalize_arg_spec:n #1
+  {
+    \int_zero:N \l_@@_current_arg_int
+    \tl_clear:N \l_@@_last_delimiters_tl
+    \tl_clear:N \l_@@_arg_spec_tl
+    \bool_set_true:N \l_@@_grab_expandably_bool
+    \bool_set_false:N \l_@@_obey_spaces_bool
+    \bool_set_false:N \l_@@_long_bool
+    \bool_set_false:N \l_@@_some_obey_spaces_bool
+    \bool_set_false:N \l_@@_some_long_bool
+    \bool_set_false:N \l_@@_some_short_bool
+    \@@_normalize_arg_spec_loop:n #1
+      \q_recursion_tail \q_recursion_tail \q_recursion_tail \q_recursion_stop
+    \int_compare:nNnT \l_@@_current_arg_int > 9
+      {
+        \msg_error:nnxx { cmd } { too-many-arguments }
+          { \@@_environment_or_command: } { \tl_to_str:n {#1} }
+        \@@_bad_def:wn
+      }
+    \bool_if:NT \l_@@_expandable_bool
+      {
+        \tl_if_empty:NF \l_@@_last_delimiters_tl
+          {
+            \msg_error:nnxx { cmd } { expandable-ending-optional }
+              { \iow_char:N \\ \l_@@_function_tl } { \tl_to_str:n {#1} }
+            \@@_bad_def:wn
+          }
+      }
+    \bool_if:NT \l_@@_expandable_bool
+      { \bool_set_true:N \l_@@_grab_expandably_bool }
+    \bool_if:NT \l_@@_environment_bool
+      { \bool_set_false:N \l_@@_grab_expandably_bool }
+  }
+\cs_new_protected:Npn \@@_normalize_arg_spec_loop:n #1
+  {
+    \quark_if_recursion_tail_stop:n {#1}
+    \int_incr:N \l_@@_current_arg_int
+    \cs_if_exist_use:cF { @@_normalize_type_ \tl_to_str:n {#1} :w }
+      {
+        \bool_lazy_any:nTF
+          {
+            { \str_if_eq_p:nn {#1} { G } }
+            { \str_if_eq_p:nn {#1} { g } }
+            { \str_if_eq_p:nn {#1} { l } }
+            { \str_if_eq_p:nn {#1} { u } }
+          }
+          {
+            \msg_error:nnxx { cmd } { xparse-argument-type }
+              { \@@_environment_or_command: } { \tl_to_str:n {#1} }
+          }
+          {
+            \msg_error:nnxx { cmd } { unknown-argument-type }
+              { \@@_environment_or_command: } { \tl_to_str:n {#1} }
+          }
+        \@@_bad_def:wn
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}
+%   {
+%     \@@_normalize_type_d:w,
+%     \@@_normalize_type_e:w,
+%     \@@_normalize_type_o:w,
+%     \@@_normalize_type_O:w,
+%     \@@_normalize_type_r:w,
+%     \@@_normalize_type_s:w,
+%   }
+%   These argument types are aliases of more general ones, for example
+%   with the default argument |-NoValue-|.  To easily insert that marker
+%   expanded in the definitions we call \cs{@@_tmp:w} with the argument
+%   |-NoValue-|.  For argument types that need additional data, check
+%   that the data is present (not \cs{q_recursion_tail}) before
+%   proceeding.
+%    \begin{macrocode}
+\cs_set_protected:Npn \@@_tmp:w #1
+  {
+    \cs_new_protected:Npn \@@_normalize_type_d:w ##1##2
+      {
+        \quark_if_recursion_tail_stop_do:nn {##2} { \@@_bad_arg_spec:wn }
+        \@@_normalize_type_D:w {##1} {##2} {#1}
+      }
+    \cs_new_protected:Npn \@@_normalize_type_e:w ##1
+      {
+        \quark_if_recursion_tail_stop_do:nn {##1} { \@@_bad_arg_spec:wn }
+        \@@_normalize_type_E:w {##1} { }
+      }
+    \cs_new_protected:Npn \@@_normalize_type_o:w
+      { \@@_normalize_type_D:w [ ] {#1} }
+    \cs_new_protected:Npn \@@_normalize_type_O:w
+      { \@@_normalize_type_D:w [ ] }
+    \cs_new_protected:Npn \@@_normalize_type_r:w ##1##2
+      {
+        \quark_if_recursion_tail_stop_do:nn {##2} { \@@_bad_arg_spec:wn }
+        \@@_normalize_type_R:w {##1} {##2} {#1}
+      }
+    \cs_new_protected:Npn \@@_normalize_type_s:w
+      { \@@_normalize_type_t:w * }
+  }
+\exp_args:No \@@_tmp:w { \c_novalue_tl }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}
+%   {
+%     \@@_normalize_type_>:w,
+%     \@@_normalize_type_+:w,
+%     \@@_normalize_type_!:w,
+%   }
+%   Check that these prefixes have arguments, namely that the next token
+%   is not \cs{q_recursion_tail}, and remember to leave it after the
+%   looping macro.  Processors are forbidden in expandable commands.
+%   If all is good, store the prefix in the cleaned up
+%   \cs{l_@@_arg_spec_tl}, and decrement the argument number as prefixes
+%   do not correspond to arguments.
+%    \begin{macrocode}
+\cs_new_protected:cpn { @@_normalize_type_>:w } #1#2
+  {
+    \quark_if_recursion_tail_stop_do:nn {#2} { \@@_bad_arg_spec:wn }
+    \bool_if:NT \l_@@_expandable_bool
+      {
+        \msg_error:nnxx { cmd } { processor-in-expandable }
+          { \iow_char:N \\ \l_@@_function_tl } { \tl_to_str:n {#1} }
+        \@@_bad_def:wn
+      }
+    \tl_put_right:Nx \l_@@_arg_spec_tl { > { \tl_trim_spaces:n {#1} } }
+    \int_decr:N \l_@@_current_arg_int
+    \bool_set_false:N \l_@@_grab_expandably_bool
+    \@@_normalize_arg_spec_loop:n {#2}
+  }
+\cs_new_protected:cpn { @@_normalize_type_+:w } #1
+  {
+    \quark_if_recursion_tail_stop_do:nn {#1} { \@@_bad_arg_spec:wn }
+    \bool_if:NT \l_@@_long_bool
+      {
+        \msg_error:nnxx { cmd } { two-markers }
+          { \@@_environment_or_command: } { + }
+        \@@_bad_def:wn
+      }
+    \bool_set_true:N \l_@@_long_bool
+    \int_decr:N \l_@@_current_arg_int
+    \@@_normalize_arg_spec_loop:n {#1}
+  }
+\cs_new_protected:cpn { @@_normalize_type_!:w } #1
+  {
+    \quark_if_recursion_tail_stop_do:nn {#1} { \@@_bad_arg_spec:wn }
+    \bool_if:NT \l_@@_obey_spaces_bool
+      {
+        \msg_error:nnxx { cmd } { two-markers }
+          { \@@_environment_or_command: } { ! }
+        \@@_bad_def:wn
+      }
+    \bool_set_true:N \l_@@_obey_spaces_bool
+    \bool_set_true:N \l_@@_some_obey_spaces_bool
+    \int_decr:N \l_@@_current_arg_int
+    \@@_normalize_arg_spec_loop:n {#1}
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}
+%   {
+%     \@@_normalize_type_D:w,
+%     \@@_normalize_type_E:w,
+%     \@@_normalize_type_t:w,
+%   }
+% \begin{macro}{\@@_normalize_E_unique_check:w}
+%   Optional argument types.  Check that all required data is present
+%   (and consists of single characters if applicable) and check for
+%   forbidden types for expandable commands.  For \texttt{E}-type
+%   require that there is at least one embellishment, that each one is a
+%   single character, and that there aren't more optional arguments than
+%   embellishments; also remember that each embellishment counts as one
+%   argument for \cs{l_@@_current_arg_int}.  Then in each case
+%   store the data in \cs{l_@@_arg_spec_tl}, and
+%   for later checks store in \cs{l_@@_last_delimiters_tl} the tokens
+%   whose presence determines whether there is an optional argument (for
+%   braces store |{}|, seen later as an empty delimiter).
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_normalize_type_D:w #1#2#3
+  {
+    \quark_if_recursion_tail_stop_do:nn {#3} { \@@_bad_arg_spec:wn }
+    \@@_single_token_check:n {#1} \@@_allowed_token_check:N #1
+    \@@_single_token_check:n {#2}
+    \@@_add_arg_spec:n { D #1 #2 {#3} }
+    \tl_put_right:Nn \l_@@_last_delimiters_tl {#1}
+    \bool_set_false:N \l_@@_grab_expandably_bool
+    \@@_normalize_arg_spec_loop:n
+  }
+\cs_new_protected:Npn \@@_normalize_type_E:w #1#2
+  {
+    \quark_if_recursion_tail_stop_do:nn {#2} { \@@_bad_arg_spec:wn }
+    \tl_if_blank:nT {#1} { \@@_bad_arg_spec:wn }
+    \tl_map_function:nN {#1} \@@_single_token_check:n
+    \tl_map_function:nN {#1} \@@_allowed_token_check:N
+    \@@_normalize_E_unique_check:w #1 \q_nil \q_stop
+    \int_compare:nNnT { \tl_count:n {#2} } > { \tl_count:n {#1} }
+      { \@@_bad_arg_spec:wn }
+    \@@_add_arg_spec:n { E {#1} {#2} }
+    \tl_put_right:Nn \l_@@_last_delimiters_tl {#1}
+    \bool_set_false:N \l_@@_grab_expandably_bool
+    \int_add:Nn \l_@@_current_arg_int { \tl_count:n {#1} - 1 }
+    \@@_normalize_arg_spec_loop:n
+  }
+\cs_new_protected:Npn \@@_normalize_E_unique_check:w #1#2 \q_stop
+  {
+    \quark_if_nil:NF #1
+      {
+        \tl_if_in:nnT {#2} {#1} { \@@_bad_arg_spec:wn }
+        \@@_normalize_E_unique_check:w #2 \q_stop
+      }
+  }
+\cs_new_protected:Npn \@@_normalize_type_t:w #1
+  {
+    \quark_if_recursion_tail_stop_do:Nn #1 { \@@_bad_arg_spec:wn }
+    \@@_single_token_check:n {#1} \@@_allowed_token_check:N #1
+    \tl_put_right:Nx \l_@@_arg_spec_tl
+      {
+        \bool_if:NT \l_@@_obey_spaces_bool { ! }
+        t \exp_not:n {#1}
+      }
+    \tl_put_right:Nn \l_@@_last_delimiters_tl {#1}
+    \bool_set_false:N \l_@@_grab_expandably_bool
+    \bool_set_false:N \l_@@_obey_spaces_bool
+    \bool_set_false:N \l_@@_long_bool
+    \@@_normalize_arg_spec_loop:n
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}
+%   {
+%     \@@_normalize_type_m:w,
+%     \@@_normalize_type_R:w,
+%     \@@_normalize_type_v:w
+%   }
+%   Mandatory arguments.  First check the required data is present,
+%   consists of single characters where applicable, and that the argument
+%   type is allowed for expandable commands if applicable.  For the
+%   \texttt{m} and \texttt{R} argument types check that they do not
+%   follow some optional argument with that delimiter as otherwise the
+%   optional argument could not be omitted.  Then save data in
+%   \cs{l_@@_arg_spec_tl}, count the mandatory argument, and empty the
+%   list of last delimiters.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_normalize_type_m:w
+  {
+    \@@_delimiter_check:nnn { } { m } { \iow_char:N \{ }
+    \@@_add_arg_spec_mandatory:n { m }
+    \@@_normalize_arg_spec_loop:n
+  }
+\cs_new_protected:Npn \@@_normalize_type_R:w #1#2#3
+  {
+    \quark_if_recursion_tail_stop_do:nn {#3} { \@@_bad_arg_spec:wn }
+    \@@_single_token_check:n {#1} \@@_allowed_token_check:N #1
+    \@@_single_token_check:n {#2}
+    \@@_delimiter_check:nnn {#1} { R/r } { \tl_to_str:n {#1} }
+    \bool_set_false:N \l_@@_grab_expandably_bool
+    \@@_add_arg_spec_mandatory:n { R #1 #2 {#3} }
+    \@@_normalize_arg_spec_loop:n
+  }
+\cs_new_protected:Npn \@@_normalize_type_v:w
+  {
+    \@@_normalize_check_gv:N v
+    \@@_add_arg_spec_mandatory:n { v }
+    \@@_normalize_arg_spec_loop:n
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_normalize_type_b:w}
+%   This argument type is not allowed for commands.  This is only
+%   allowed at the end of the argument specification, hence we check
+%   that |#1| is the end.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_normalize_type_b:w #1
+  {
+    \bool_if:NF \l_@@_environment_bool
+      {
+        \msg_error:nnxx { cmd } { invalid-command-arg }
+          { \@@_environment_or_command: } { b }
+        \@@_bad_def:wn
+      }
+    \tl_clear:N \l_@@_last_delimiters_tl
+    \@@_add_arg_spec:n { b }
+    \quark_if_recursion_tail_stop:n {#1}
+    \msg_error:nnxx { cmd } { arg-after-body }
+      { \@@_environment_or_command: }
+      { \tl_to_str:n {#1} }
+    \@@_bad_def:wn
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_single_token_check:n}
+%   Checks that the argument is a single (non-space) token (possibly
+%   surrounded by spaces), and aborts the definition otherwise.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_single_token_check:n #1
+  {
+    \tl_trim_spaces_apply:nN {#1} \tl_if_single_token:nF
+      {
+        \msg_error:nnxx { cmd } { not-single-token }
+          { \@@_environment_or_command: } { \tl_to_str:n {#1} }
+        \@@_bad_def:wn
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_allowed_token_check:N}
+%   Some tokens are now allowed as delimiters for some argument types,
+%   notably implicit begin/end-group tokens (|\bgroup|/|\egroup|).
+%   The major problem with these tokens is that for |\peek_...| functions,
+%   a literal~|{|$_1$. is virtually indistinguishable from a |\bgroup| or
+%   other token which was |\let| to a~|{|$_1$, and the same goes
+%   for~|}|$_2$.  All other tokens can be easily distingushed from their
+%   implicit counterparts by grabbing them and looking at the string
+%   length (see \cs{@@_token_if_cs:NTF}), but for begin/end group tokens
+%   that is not possible without the risk of mistakenly grabbing the
+%   entire brace group (potentially leading to a~\texttt{!~Runaway argument}
+%   error) or trying to grab a |}|$_2$, leading to
+%   an~\verb|! Argument of \dots has an extra }| error.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_allowed_token_check:N #1
+  {
+    \token_if_eq_meaning:NNTF #1 \c_group_begin_token
+        { \use:n }
+        {
+          \token_if_eq_meaning:NNTF #1 \c_group_end_token
+            { \use:n }
+            { \use_none:n }
+        }
+      {
+        \msg_error:nnxxx { cmd } { forbidden-implicit-group-token }
+          { \@@_environment_or_command: } { \tl_to_str:n {#1} }
+          {
+            \token_if_eq_meaning:NNTF #1 \c_group_begin_token
+              { begin } { end }
+          }
+        \@@_bad_def:wn
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_normalize_check_gv:N, \@@_normalize_check_lu:N}
+%   Called for arguments that are always forbidden, or forbidden after
+%   an optional argument, for expandable commands.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_normalize_check_gv:N #1
+  {
+    \bool_if:NT \l_@@_expandable_bool
+      {
+        \msg_error:nnxx { cmd } { invalid-expandable-argument-type }
+          { \iow_char:N \\ \l_@@_function_tl } { \tl_to_str:n {#1} }
+        \@@_bad_def:wn
+      }
+    \bool_set_false:N \l_@@_grab_expandably_bool
+  }
+\cs_new_protected:Npn \@@_normalize_check_lu:N #1
+  {
+    \bool_if:NT \l_@@_expandable_bool
+      {
+        \tl_if_empty:NF \l_@@_last_delimiters_tl
+          {
+            \msg_error:nnxx { cmd } { invalid-after-optional-expandably }
+              { \iow_char:N \\ \l_@@_function_tl } { \tl_to_str:n {#1} }
+            \@@_bad_def:wn
+          }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_delimiter_check:nnn}
+%   Called for \texttt{m} and \texttt{R} arguments.  Checks that the
+%   leading token does not coincide with the token denoting the presence
+%   of a previous optional argument.  Instead of dealing with braces for
+%   the \texttt{m}-type we use an empty delimiter to denote that case.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_delimiter_check:nnn #1#2#3
+  {
+    \tl_map_inline:Nn \l_@@_last_delimiters_tl
+      {
+        \tl_if_eq:nnT {##1} {#1}
+          {
+            \msg_warning:nnxx { cmd } { optional-mandatory }
+              {#2} {#3}
+          }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_bad_arg_spec:wn, \@@_bad_def:wn}
+%   If the argument specification is wrong, this provides an escape from
+%   the entire definition process.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_bad_arg_spec:wn #1 \@@_break_point:n #2
+  {
+    \msg_error:nnxx { cmd } { bad-arg-spec }
+      { \@@_environment_or_command: } { \tl_to_str:n {#2} }
+  }
+\cs_new_protected:Npn \@@_bad_def:wn #1 \@@_break_point:n #2 { }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_arg_spec:n, \@@_add_arg_spec_mandatory:n}
+%   When adding an argument to the argument specification, set the
+%   \texttt{some_long} or \texttt{some_short} booleans as appropriate
+%   and clear the booleans keeping track of |+| and |!| markers.
+%   Before that, test for a short argument following some long
+%   arguments: this is forbidden for expandable commands and prevents
+%   grabbing arguments expandably.
+%
+%   For mandatory arguments do some more work, in particular complain if
+%   they were preceeded by~|!|.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_arg_spec:n #1
+  {
+    \bool_lazy_and:nnT
+      { ! \l_@@_long_bool }
+      { \l_@@_some_long_bool }
+      {
+        \bool_if:NT \l_@@_expandable_bool
+          {
+            \msg_error:nnx { cmd } { inconsistent-long }
+              { \iow_char:N \\ \l_@@_function_tl }
+            \@@_bad_def:wn
+          }
+        \bool_set_false:N \l_@@_grab_expandably_bool
+      }
+    \bool_if:NTF \l_@@_long_bool
+      { \bool_set_true:N \l_@@_some_long_bool }
+      { \bool_set_true:N \l_@@_some_short_bool }
+    \tl_put_right:Nx \l_@@_arg_spec_tl
+      {
+        \bool_if:NT \l_@@_long_bool { + }
+        \bool_if:NT \l_@@_obey_spaces_bool { ! }
+        \exp_not:n {#1}
+      }
+    \bool_set_false:N \l_@@_long_bool
+    \bool_set_false:N \l_@@_obey_spaces_bool
+  }
+\cs_new_protected:Npn \@@_add_arg_spec_mandatory:n #1
+  {
+    \bool_if:NT \l_@@_some_obey_spaces_bool
+      {
+        \msg_error:nnxx { cmd } { non-trailing-obey-spaces }
+          { \@@_environment_or_command: } { \tl_to_str:n {#1} }
+        \@@_bad_def:wn
+      }
+    \tl_clear:N \l_@@_last_delimiters_tl
+    \@@_add_arg_spec:n {#1}
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Preparing the signature: general mechanism}
+%
+% \begin{macro}{\@@_prepare_signature:n}
+% \begin{macro}{\@@_prepare_signature:N}
+% \begin{macro}{\@@_prepare_signature_bypass:N}
+%   Actually creating the signature uses the same loop approach as
+%   normalizing the signature. There are first a number of variables which need
+%   to be set to track what is going on. Many of these variables are unused
+%   when defining expandable commands.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_prepare_signature:n #1
+  {
+    \int_zero:N \l_@@_current_arg_int
+    \bool_set_false:N \l_@@_long_bool
+    \bool_set_false:N \l_@@_obey_spaces_bool
+    \int_zero:N \l_@@_m_args_int
+    \bool_set_false:N \l_@@_defaults_bool
+    \tl_clear:N \l_@@_defaults_tl
+    \tl_clear:N \l_@@_process_all_tl
+    \tl_clear:N \l_@@_process_one_tl
+    \bool_set_false:N \l_@@_process_some_bool
+    \tl_clear:N \l_@@_signature_tl
+    \@@_prepare_signature:N #1 \q_recursion_tail \q_recursion_stop
+    \bool_if:NF \l_@@_expandable_bool { \@@_flush_m_args: }
+  }
+%    \end{macrocode}
+%  The main looping function does not take an argument, but carries out the
+%  reset on the processor boolean. This is split off from the rest of the
+%  process so that when actually setting up processors the flag-reset can
+%  be bypassed.
+%
+%  For each known argument type there is an appropriate function to actually
+%  do the addition to the signature. These are separate for expandable and
+%  standard functions, as the approaches are different.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_prepare_signature:N
+  {
+    \bool_set_false:N \l_@@_prefixed_bool
+    \@@_prepare_signature_bypass:N
+  }
+\cs_new_protected:Npn \@@_prepare_signature_bypass:N #1
+  {
+    \quark_if_recursion_tail_stop:N #1
+    \use:c
+      {
+         @@_add
+         \bool_if:NT \l_@@_grab_expandably_bool { _expandable }
+         _type_  \token_to_str:N #1 :w
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \subsection{Setting up a standard signature}
+%
+% Each argument-adding function appends to the signature a grabber (and
+% for some types, the delimiters or default value), except the one for
+% \texttt{m} arguments.  These are collected and added to the signature
+% all at once by \cs{@@_flush_m_args:}, called for every other argument
+% type.  All of the functions then call the loop function
+% \cs{@@_prepare_signature:N}.  Default values of arguments are
+% collected by \cs{@@_add_default:n} rather than being stored with the
+% argument; this function and \cs{@@_add_default:} are also responsible
+% for keeping track of \cs{l_@@_current_arg_int}.
+%
+% \begin{macro}{\@@_add_type_+:w}
+%   Making the next argument long means setting the flag. The \texttt{m}
+%   arguments are recorded here as
+%   this has to be done for every case where there is then a long argument.
+%    \begin{macrocode}
+\cs_new_protected:cpn { @@_add_type_+:w }
+  {
+    \@@_flush_m_args:
+    \bool_set_true:N \l_@@_long_bool
+    \bool_set_true:N \l_@@_prefixed_bool
+    \@@_prepare_signature_bypass:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_type_!:w}
+%   Much the same for controlling trailing optional arguments.
+%    \begin{macrocode}
+\cs_new_protected:cpn { @@_add_type_!:w }
+  {
+    \@@_flush_m_args:
+    \bool_set_true:N \l_@@_obey_spaces_bool
+    \bool_set_true:N \l_@@_prefixed_bool
+    \@@_prepare_signature_bypass:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_type_>:w}
+%   When a processor is found, the processor code is stored.  It will be
+%   used by \cs{@@_args_process:} once arguments are all found. Here too
+%   the loop calls \cs{@@_prepare_signature_bypass:N} rather than
+%   \cs{@@_prepare_signature:N} so that the flag is not reset.
+%    \begin{macrocode}
+\cs_new_protected:cpn { @@_add_type_>:w } #1
+  {
+    \@@_flush_m_args:
+    \bool_set_true:N \l_@@_prefixed_bool
+    \bool_set_true:N \l_@@_process_some_bool
+    \tl_put_left:Nn \l_@@_process_one_tl { {#1} }
+    \@@_prepare_signature_bypass:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_type_b:w}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_type_b:w
+  {
+    \@@_flush_m_args:
+    \@@_add_default:
+    \@@_add_grabber:N b
+    \@@_prepare_signature:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_type_D:w}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_type_D:w #1#2#3
+  {
+    \@@_flush_m_args:
+    \@@_add_default:n {#3}
+    \@@_add_grabber:N D
+    \tl_put_right:Nn \l_@@_signature_tl { #1 #2 }
+    \@@_prepare_signature:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_type_E:w}
+%   The \texttt{E}-type argument needs a special handling of default
+%   values.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_type_E:w #1#2
+  {
+    \@@_flush_m_args:
+    \@@_add_default_E:nn {#1} {#2}
+    \@@_add_grabber:N E
+    \tl_put_right:Nn \l_@@_signature_tl { {#1} }
+    \@@_prepare_signature:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_type_m:w}
+%   The \texttt{m} type is special as short arguments which are not
+%   post-processed are simply counted at this stage. Thus there is a check
+%   to see if either of these cases apply. If so, a one-argument grabber
+%   is added to the signature. On the other hand, if a standard short
+%   argument is required it is simply counted at this stage, to be
+%   added later using \cs{@@_flush_m_args:}.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_type_m:w
+  {
+    \@@_add_default:
+    \bool_if:NTF \l_@@_prefixed_bool
+      { \@@_add_grabber:N m }
+      { \int_incr:N \l_@@_m_args_int }
+    \@@_prepare_signature:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_type_R:w}
+%   The \texttt{R}-type argument is very similar to the \texttt{D}-type.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_type_R:w #1#2#3
+  {
+    \@@_flush_m_args:
+    \@@_add_default:n {#3}
+    \@@_add_grabber:N R
+    \tl_put_right:Nn \l_@@_signature_tl { #1 #2 }
+    \@@_prepare_signature:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_type_t:w}
+%   Setting up a \texttt{t} argument means collecting one token for the test,
+%   and adding it along with the grabber to the signature.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_type_t:w #1
+  {
+    \@@_flush_m_args:
+    \@@_add_default:
+    \@@_add_grabber:N t
+    \tl_put_right:Nn \l_@@_signature_tl {#1}
+    \@@_prepare_signature:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_type_v:w}
+%   At this stage, the \texttt{v} argument is identical to \texttt{l}
+%   except that since the grabber may fail to read a verbatim argument
+%   we need a default value.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_type_v:w
+  {
+    \@@_flush_m_args:
+    \exp_args:No \@@_add_default:n \c_novalue_tl
+    \@@_add_grabber:N v
+    \@@_prepare_signature:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_flush_m_args:}
+%   As \texttt{m} arguments are simply counted, there is a need to add
+%   them to the token register in a block. As this function can only
+%   be called if something other than \texttt{m} turns up, the flag can
+%   be switched here.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_flush_m_args:
+  {
+    \int_compare:nNnT \l_@@_m_args_int > 0
+      {
+        \tl_put_right:Nx \l_@@_signature_tl
+          { \exp_not:c { @@_grab_m_ \int_use:N \l_@@_m_args_int :w } }
+        \tl_put_right:Nx \l_@@_process_all_tl
+          { \prg_replicate:nn { \l_@@_m_args_int } { { } } }
+      }
+    \int_zero:N \l_@@_m_args_int
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_grabber:N}
+%   To keep the various checks needed in one place, adding the grabber
+%   to the signature is done here.  The only questions are whether the
+%   grabber should be long or not, and whether to obey spaces.  The
+%   \cs{l_@@_obey_spaces_bool} boolean can only be \texttt{true} for
+%   trailing optional arguments.  In that case spaces will not be
+%   ignored when looking for that optional argument.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_grabber:N #1
+  {
+    \tl_put_right:Nx \l_@@_signature_tl
+      {
+        \exp_not:c
+          {
+            @@_grab_ #1
+            \bool_if:NT \l_@@_long_bool { _long }
+            \bool_if:NT \l_@@_obey_spaces_bool { _obey_spaces }
+            :w
+          }
+      }
+    \bool_set_false:N \l_@@_long_bool
+    \bool_set_false:N \l_@@_obey_spaces_bool
+    \tl_put_right:Nx \l_@@_process_all_tl
+      { { \exp_not:o \l_@@_process_one_tl } }
+    \tl_clear:N \l_@@_process_one_tl
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_default:n, \@@_add_default:, \@@_add_default_E:nn}
+%   Store the default value of an argument, or rather code that gives
+%   that default value (it may involve other arguments).  This is
+%   \cs{c_novalue_tl} for arguments with no actual default or with
+%   default |-NoValue-|; and (in a brace group) \cs{prg_do_nothing:}
+%   followed by a default value for others.  For \texttt{E}-type
+%   arguments, pad the defaults |#2| with some \cs{c_novalue_tl}
+%   until there are as many as embellishments~|#1|.  These functions are
+%   also used when defining expandable commands.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_default:n #1
+  {
+    \tl_if_novalue:nTF {#1}
+      { \@@_add_default: }
+      {
+        \int_incr:N \l_@@_current_arg_int
+        \bool_set_true:N \l_@@_defaults_bool
+        \tl_put_right:Nn \l_@@_defaults_tl { { \prg_do_nothing: #1 } }
+      }
+  }
+\cs_new_protected:Npn \@@_add_default:
+  {
+    \int_incr:N \l_@@_current_arg_int
+    \tl_put_right:Nn \l_@@_defaults_tl { \c_novalue_tl }
+  }
+\cs_new_protected:Npn \@@_add_default_E:nn #1#2
+  {
+    \tl_map_function:nN {#2} \@@_add_default:n
+    \prg_replicate:nn
+      { \tl_count:n {#1} - \tl_count:n {#2} }
+      { \@@_add_default: }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Setting up expandable types}
+%
+% The approach here is not dissimilar to that for standard types, but fewer types
+% are supported. There is
+% also a need to define the per-function auxiliaries: this is done here, while
+% the general grabbers are dealt with later.
+%
+% \begin{macro}{\@@_add_expandable_type_+:w}
+%   We have already checked that short arguments are before long
+%   arguments, so \cs{l_@@_long_bool} only changes from \texttt{false}
+%   to \texttt{true} once (and there is no need to reset it after each
+%   argument).  Also knock back the argument count because |+| is not an
+%   argument.  Continue the loop.
+%    \begin{macrocode}
+\cs_new_protected:cpn { @@_add_expandable_type_+:w }
+  {
+    \bool_set_true:N \l_@@_long_bool
+    \@@_prepare_signature:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_expandable_type_D:w}
+% \begin{macro}{\@@_add_expandable_type_D_aux:NNNn}
+% \begin{macro}{\@@_add_expandable_type_D_aux:NNN}
+% \begin{macro}{\@@_add_expandable_type_D_aux:NN}
+%   The set up for \texttt{D}-type arguments involves constructing a
+%   rather complex auxiliary which is used
+%   repeatedly when grabbing. There is an auxiliary here so that the
+%   \texttt{R}-type can share code readily: |#1| is |D| or~|R|.
+%   The |_aux:NN| auxiliary is needed if the two delimiting tokens are
+%   identical: in contrast to the non-expandable route, the grabber here
+%   has to act differently for this case.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_expandable_type_D:w
+  { \@@_add_expandable_type_D_aux:NNNn D }
+\cs_new_protected:Npn \@@_add_expandable_type_D_aux:NNNn #1#2#3#4
+  {
+    \@@_add_default:n {#4}
+    \tl_if_eq:nnTF {#2} {#3}
+      { \@@_add_expandable_type_D_aux:NN #1 #2 }
+      { \@@_add_expandable_type_D_aux:NNN #1 #2 #3 }
+    \@@_prepare_signature:N
+  }
+\cs_new_protected:Npn \@@_add_expandable_type_D_aux:NNN #1#2#3
+  {
+    \bool_if:NTF \l_@@_long_bool
+      { \cs_set:cpx }
+      { \cs_set_nopar:cpx }
+      { \l_@@_expandable_aux_name_tl } ##1 ##2 #2 ##3 \q_@@ ##4 #3
+      { ##1 {##2} {##3} {##4} }
+    \@@_add_expandable_grabber:nn {#1}
+      {
+        \exp_not:c  { \l_@@_expandable_aux_name_tl }
+        \exp_not:n { #2 #3 }
+      }
+  }
+\cs_new_protected:Npn \@@_add_expandable_type_D_aux:NN #1#2
+  {
+    \bool_if:NTF \l_@@_long_bool
+      { \cs_set:cpx }
+      { \cs_set_nopar:cpx }
+      { \l_@@_expandable_aux_name_tl } ##1 #2 ##2 #2
+      { ##1 {##2} }
+    \@@_add_expandable_grabber:nn { #1_alt }
+      {
+        \exp_not:c  { \l_@@_expandable_aux_name_tl }
+        \exp_not:n {#2}
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_expandable_type_E:w}
+% \begin{macro}{\@@_add_expandable_type_E_aux:n}
+%   For each embellishment, use \cs{@@_get_grabber:NN} to obtain an
+%   auxiliary delimited by that token and store a pair constituted of
+%   the auxiliary and the token in \cs{l_@@_tmpb_tl}, before appending
+%   the whole set of these pairs to the signature, and an equal number
+%   of |-NoValue-| markers (regardless of the default values of
+%   arguments).  Set the current argument appropriately.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_expandable_type_E:w #1#2
+  {
+    \@@_add_default_E:nn {#1} {#2}
+    \tl_clear:N \l_@@_tmpb_tl
+    \tl_map_function:nN {#1} \@@_add_expandable_type_E_aux:n
+    \@@_add_expandable_grabber:nn
+      { E \bool_if:NT \l_@@_long_bool { _long } }
+      {
+        { \exp_not:o \l_@@_tmpb_tl }
+        {
+          \prg_replicate:nn { \tl_count:n {#1} }
+            { { \c_novalue_tl } }
+        }
+      }
+    \@@_prepare_signature:N
+  }
+\cs_new_protected:Npn \@@_add_expandable_type_E_aux:n #1
+  {
+    \@@_get_grabber:NN #1 \l_@@_tmpa_tl
+    \tl_put_right:Nx \l_@@_tmpb_tl
+      { \exp_not:o \l_@@_tmpa_tl \exp_not:N #1 }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_expandable_type_m:w}
+%   Unlike the standard case, when working expandably each argument is always
+%   grabbed separately.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_expandable_type_m:w
+  {
+    \@@_add_default:
+    \@@_add_expandable_grabber:nn
+      { m \bool_if:NT \l_@@_long_bool { _long } } { }
+    \@@_prepare_signature:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_expandable_type_R:w}
+%   The \texttt{R}-type is very similar to the \texttt{D}-type
+%   argument, and so the same internals are used.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_expandable_type_R:w
+  { \@@_add_expandable_type_D_aux:NNNn R }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_expandable_type_t:w}
+%   An auxiliary delimited by |#1| is built now.  It will be used to
+%   test for the presence of that token.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_expandable_type_t:w #1
+  {
+    \@@_add_default:
+    \@@_get_grabber:NN #1 \l_@@_tmpa_tl
+    \@@_add_expandable_grabber:nn { t }
+      {
+        \exp_not:o \l_@@_tmpa_tl
+        \exp_not:N #1
+      }
+    \@@_prepare_signature:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_expandable_grabber:nn}
+%   This is called for all arguments to place the right grabber in the
+%   signature.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_expandable_grabber:nn #1#2
+  {
+    \tl_put_right:Nx \l_@@_signature_tl
+      { \exp_not:c { @@_expandable_grab_ #1 :w } #2 }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_get_grabber:NN}
+% \begin{macro}{\@@_get_grabber_auxi:NN}
+% \begin{macro}{\@@_get_grabber_auxii:NN}
+%   Given a token |#1|, defines an expandable function delimited by that
+%   token and stores it in the token list~|#2|.  The function is named
+%   after the token, unless that function name is already taken by some
+%   other grabber (this can happen in the rare case where delimiters
+%   with different category codes are used in the same document): in
+%   that case use a global counter to get a unique name.  Since the
+%   grabbers are not named after \pkg{xparse} commands they should not
+%   be used to get material from the input stream.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_get_grabber:NN #1#2
+  {
+    \cs_set:Npn \@@_tmp:w ##1 #1 {##1}
+    \exp_args:Nc \@@_get_grabber_auxi:NN
+      { @@_grabber_ \token_to_str:N #1 :w } #2
+  }
+\cs_new_protected:Npn \@@_get_grabber_auxi:NN #1#2
+  {
+    \cs_if_eq:NNTF \@@_tmp:w #1
+      { \tl_set:Nn #2 {#1} }
+      {
+        \cs_if_exist:NTF #1
+          {
+            \int_gincr:N \g_@@_grabber_int
+            \exp_args:Nc \@@_get_grabber_auxi:NN
+              {
+                @@_grabber_
+                - \int_use:N \g_@@_grabber_int :w
+              }
+              #2
+          }
+          { \@@_get_grabber_auxii:NN #1 #2 }
+      }
+  }
+\cs_new_protected:Npn \@@_get_grabber_auxii:NN #1#2
+  {
+    \cs_set_eq:NN #1 \@@_tmp:w
+    \tl_set:Nn #2 {#1}
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \subsection{Grabbing arguments}
+%
+% All of the grabbers follow the same basic pattern. The initial
+% function stores in \cs{l_@@_signature_tl} the code to grab further
+% arguments, defines (the function in) \cs{l_@@_fn_tl} that will grab
+% the argument, and calls it.
+%
+% Defining \cs{l_@@_fn_tl} means determining whether to use
+% \cs{cs_set:Npn} or \cs{cs_set_nopar:Npn}, and for optional arguments
+% whether to skip spaces. Once the argument is found, \cs{l_@@_fn_tl}
+% calls \cs{@@_add_arg:n}, responsible for calling processors and
+% grabbing further arguments.
+%
+% \begin{macro}
+%   {
+%     \@@_grab_b:w,
+%     \@@_grab_b_long:w,
+%     \@@_grab_b_obey_spaces:w,
+%     \@@_grab_b_long_obey_spaces:w,
+%     \@@_grab_b_aux:NNw,
+%     \@@_grab_b_end:Nw
+%   }
+%   This uses the well-tested code of \texttt{D}-type arguments,
+%   skipping the peeking step because the \texttt{b}-type argument is
+%   always present, and adding a cleanup stage at the end by hijacking
+%   the signature.  The clean-up consists of properly
+%   dealing with \cs{l_@@_args_tl} and also putting back the \cs{end}
+%   that served as an end-delimiter: this \cs{end} receives the
+%   environment name as its argument and is run normally.  The
+%   \texttt{D}-type code stores the argument found (body of the
+%   environment) as a brace group in \cs{l_@@_args_tl} and depending on
+%   the presence of a prefix~|!| we trim spaces or not before adding
+%   this braced argument into the saved \cs{l_@@_args_tl}.
+%   The strange \verb*|\begin | control sequence is there for display
+%     purposes only: it has to look like |\begin| in the terminal but
+%       not to delimited arguments.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_b:w
+  { \@@_grab_b_aux:NNw \cs_set_protected_nopar:Npn \tl_trim_spaces:n }
+\cs_new_protected:Npn \@@_grab_b_long:w
+  { \@@_grab_b_aux:NNw \cs_set_protected:Npn \tl_trim_spaces:n }
+\cs_new_protected:Npn \@@_grab_b_obey_spaces:w
+  { \@@_grab_b_aux:NNw \cs_set_protected_nopar:Npn \exp_not:n }
+\cs_new_protected:Npn \@@_grab_b_long_obey_spaces:w
+  { \@@_grab_b_aux:NNw \cs_set_protected:Npn \exp_not:n }
+\cs_new_protected:Npn \@@_grab_b_aux:NNw #1#2#3 \@@_run_code:
+  {
+    \@@_grab_D_aux:NNnN \begin \end {#3} #1
+    \tl_put_left:Nn \l_@@_signature_tl { \@@_grab_b_end:Nw #2 }
+    \tl_set_eq:NN \l_@@_saved_args_tl \l_@@_args_tl
+    \tl_clear:N \l_@@_args_tl
+    \exp_args:Nc \l_@@_fn_tl { begin ~ }
+  }
+\cs_new_protected:Npn \@@_grab_b_end:Nw #1#2 \@@_run_code:
+  {
+    \tl_set:Nx \l_@@_args_tl
+      {
+        \exp_not:V \l_@@_saved_args_tl
+        { \exp_after:wN #1 \l_@@_args_tl }
+      }
+    #2
+    \@@_run_code:
+    \end
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_grab_D:w}
+% \begin{macro}{\@@_grab_D_long:w}
+% \begin{macro}{\@@_grab_D_obey_spaces:w}
+% \begin{macro}{\@@_grab_D_long_obey_spaces:w}
+%   The generic delimited argument grabber. The auxiliary function does
+%   a peek test before calling \cs{@@_grab_D_call:Nw}, so that the
+%   optional nature of the argument works as expected.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_D:w #1#2#3 \@@_run_code:
+  {
+    \@@_grab_D_aux:NNnNN #1 #2 {#3} \cs_set_protected_nopar:Npn
+      \@@_peek_nonspace_remove:NTF
+  }
+\cs_new_protected:Npn \@@_grab_D_long:w #1#2#3 \@@_run_code:
+  {
+    \@@_grab_D_aux:NNnNN #1 #2 {#3} \cs_set_protected:Npn
+      \@@_peek_nonspace_remove:NTF
+  }
+\cs_new_protected:Npn \@@_grab_D_obey_spaces:w #1#2#3 \@@_run_code:
+  {
+    \@@_grab_D_aux:NNnNN #1 #2 {#3} \cs_set_protected_nopar:Npn
+      \@@_peek_meaning_remove:NTF
+  }
+\cs_new_protected:Npn \@@_grab_D_long_obey_spaces:w #1#2#3 \@@_run_code:
+  {
+    \@@_grab_D_aux:NNnNN #1 #2 {#3} \cs_set_protected:Npn
+      \@@_peek_meaning_remove:NTF
+  }
+%    \end{macrocode}
+% \begin{macro}{\@@_grab_D_aux:NNnNN}
+% \begin{macro}{\@@_grab_D_aux:NNnN}
+%   This is a bit complicated. The idea is that, in order to check for
+%   nested optional argument tokens (\texttt{[[...]]} and so on) the
+%   argument needs to be grabbed without removing any braces at all. If
+%   this is not done, then cases like |[{[}]| fail. So after testing for
+%   an optional argument, it is collected piece-wise. Inserting a quark
+%   prevents loss of braces, and there is then a test to see if there are
+%   nested delimiters to handle.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_D_aux:NNnNN #1#2#3#4#5
+  {
+    \@@_grab_D_aux:NNnN #1#2 {#3} #4
+    #5 #1
+      { \@@_grab_D_call:Nw #1 }
+      { \@@_add_arg:o \c_novalue_tl }
+  }
+%    \end{macrocode}
+%   Inside the \enquote{standard} grabber, there is a test to see if the
+%   grabbed argument is entirely enclosed by braces. There are a couple of
+%   extra factors to allow for: the argument might be entirely empty, and
+%   spaces at the start and end of the input must be retained around a brace
+%   group. Also notice that a \emph{blank} argument might still contain
+%   spaces.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_D_aux:NNnN #1#2#3#4
+  {
+    \tl_set:Nn \l_@@_signature_tl {#3}
+    \exp_after:wN #4 \l_@@_fn_tl ##1 #2
+      {
+        \tl_if_in:nnTF {##1} {#1}
+          { \@@_grab_D_nested:NNnN #1 #2 {##1} #4 }
+          {
+            \tl_if_blank:oTF { \use_none:n ##1 }
+              { \@@_add_arg:o { \use_none:n ##1 } }
+              {
+                \str_if_eq:eeTF
+                  { \exp_not:o { \use_none:n ##1 } }
+                  { { \exp_not:o { \use_ii:nnn ##1 \q_nil } } }
+                  { \@@_add_arg:o { \use_ii:nn ##1 } }
+                  { \@@_add_arg:o { \use_none:n ##1 } }
+              }
+          }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \begin{macro}{\@@_grab_D_nested:NNnN}
+% \begin{macro}{\@@_grab_D_nested:w}
+% \begin{macro}{\l_@@_nesting_a_tl}
+% \begin{macro}{\l_@@_nesting_b_tl}
+% \begin{macro}{\q_@@}
+%   Catching nested optional arguments means more work. The aim here is
+%   to collect up each pair of optional tokens without \TeX{} helping out,
+%   and without counting anything. The code above will already have
+%   removed the leading opening token and a closing token, but the
+%   wrong one. The aim is then to work through the material grabbed
+%   so far and divide it up on each opening token, grabbing a closing
+%   token to match (thus working in pairs). Once there are no opening
+%   tokens, then there is a second check to see if there are any
+%   opening tokens in the second part of the argument (for things
+%   like |[][]|). Once everything has been found, the entire collected
+%   material is added to the output as a single argument. The only tricky part
+%   here is ensuring that any grabbing function that might run away is named
+%   after the function currently being parsed and not after \pkg{xparse}. That
+%   leads to some rather complex nesting! There is also a need to prevent the
+%   loss of any braces, hence the insertion and removal of quarks along the
+%   way.
+%    \begin{macrocode}
+\tl_new:N \l_@@_nesting_a_tl
+\tl_new:N \l_@@_nesting_b_tl
+\quark_new:N \q_@@
+\cs_new_protected:Npn \@@_grab_D_nested:NNnN #1#2#3#4
+  {
+    \tl_clear:N \l_@@_nesting_a_tl
+    \tl_clear:N \l_@@_nesting_b_tl
+    \exp_after:wN #4 \l_@@_fn_tl ##1 #1 ##2 \q_@@ ##3 #2
+      {
+        \tl_put_right:No \l_@@_nesting_a_tl { \use_none:n ##1 #1 }
+        \tl_put_right:No \l_@@_nesting_b_tl { \use_i:nn #2 ##3 }
+        \tl_if_in:nnTF {##2} {#1}
+          {
+            \l_@@_fn_tl
+              \q_nil ##2 \q_@@ \ERROR
+          }
+          {
+            \tl_put_right:Nx \l_@@_nesting_a_tl
+              { \@@_grab_D_nested:w \q_nil ##2 \q_stop }
+            \tl_if_in:NnTF \l_@@_nesting_b_tl {#1}
+              {
+                \tl_set_eq:NN \l_@@_tmpa_tl \l_@@_nesting_b_tl
+                \tl_clear:N \l_@@_nesting_b_tl
+                \exp_after:wN \l_@@_fn_tl \exp_after:wN
+                  \q_nil \l_@@_tmpa_tl \q_nil \q_@@ \ERROR
+              }
+              {
+                \tl_put_right:No \l_@@_nesting_a_tl
+                  \l_@@_nesting_b_tl
+                \@@_add_arg:V \l_@@_nesting_a_tl
+              }
+          }
+      }
+    \l_@@_fn_tl #3 \q_nil \q_@@ \ERROR
+  }
+\cs_new:Npn \@@_grab_D_nested:w #1 \q_nil \q_stop
+  { \exp_not:o { \use_none:n #1 } }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \begin{macro}{\@@_grab_D_call:Nw}
+%   For \texttt{D} and \texttt{R}-type arguments, to avoid losing any
+%   braces, a token needs to be inserted before the argument to be grabbed.
+%   If the argument runs away because the closing token is missing then this
+%   inserted token shows up in the terminal. Ideally, |#1| would therefore be
+%   used directly, but that is no good as it will mess up the rest of the
+%   grabber. Instead, a copy of |#1| with an altered category code is used,
+%   as this will look right in the terminal but will not mess up the grabber.
+%   The only issue then is that the category code of |#1| is unknown. So there
+%   is a quick test to ensure that the inserted token can never be matched by
+%   the grabber. (This assumes that the open and close delimiters are not the
+%   same character with different category codes, but that really should not
+%   happen in any sensible document-level syntax.)
+%   An exception is when |#1| is a control sequence token, in which case the
+%   character-token treatment is no good because if hit with \cs{token_to_str:N}
+%   it would add sputios tokens to the argument. In this case a different
+%   branch is taken. The token inserted is then the same \meta{csname} as |#1|,
+%   but with a space appended, so that the grabber don't see it as another
+%   of the same delimiter.
+%    \begin{macrocode}
+\cs_new_protected_nopar:Npn \@@_grab_D_call:Nw #1
+  {
+    \token_if_eq_catcode:NNTF + #1
+      {
+        \exp_after:wN \exp_after:wN \exp_after:wN
+          \l_@@_fn_tl \char_generate:nn { `#1 } { 11 }
+      }
+      {
+        \@@_token_if_cs:NTF #1
+          {
+            \exp_after:wN \l_@@_fn_tl
+            \cs:w \cs_to_str:N #1 ~ \cs_end:
+          }
+          {
+            \exp_after:wN \l_@@_fn_tl
+            \token_to_str:N #1
+          }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}
+%   {
+%     \@@_grab_E:w, \@@_grab_E_long:w,
+%     \@@_grab_E_obey_spaces:w, \@@_grab_E_long_obey_spaces:w
+%   }
+% \begin{macro}{\@@_grab_E:nnNN}
+% \begin{macro}{\@@_grab_E_loop:NnN}
+% \begin{macro}{\@@_grab_E_finalise:}
+%   Everything here needs to point to a loop.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_E:w #1#2 \@@_run_code:
+  {
+    \@@_grab_E:nnNN {#1} {#2}
+      \cs_set_protected_nopar:Npn
+      \@@_peek_nonspace_remove:NTF
+  }
+\cs_new_protected:Npn \@@_grab_E_long:w #1#2 \@@_run_code:
+  {
+    \@@_grab_E:nnNN {#1} {#2}
+      \cs_set_protected:Npn
+      \@@_peek_nonspace_remove:NTF
+  }
+\cs_new_protected:Npn \@@_grab_E_obey_spaces:w #1#2 \@@_run_code:
+  {
+    \@@_grab_E:nnNN {#1} {#2}
+      \cs_set_protected_nopar:Npn
+      \@@_peek_meaning_remove:NTF
+  }
+\cs_new_protected:Npn \@@_grab_E_long_obey_spaces:w #1#2 \@@_run_code:
+  {
+    \@@_grab_E:nnNN {#1} {#2}
+      \cs_set_protected:Npn
+      \@@_peek_meaning_remove:NTF
+  }
+%    \end{macrocode}
+%   A loop is needed here to allow a random ordering of keys. These are
+%   searched for one at a time, with any not found needing to be tracked:
+%   they can appear later. The grabbed values are held in a property list
+%   which is then turned into an ordered list to be passed back to the user.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_E:nnNN #1#2#3#4
+  {
+    \exp_after:wN #3 \l_@@_fn_tl ##1##2##3
+      {
+        \prop_put:Nnn \l_@@_tmp_prop {##1} {##3}
+        \@@_grab_E_loop:NnN #4 { } ##2 \q_recursion_stop
+      }
+    \prop_clear:N \l_@@_tmp_prop
+    \tl_set:Nn \l_@@_signature_tl {#2}
+    \cs_set_protected:Npn \@@_grab_E_finalise:
+      {
+        \tl_map_inline:nn {#1}
+          {
+            \prop_get:NnNF \l_@@_tmp_prop {####1} \l_@@_tmpb_tl
+              { \tl_set_eq:NN \l_@@_tmpb_tl \c_novalue_tl }
+            \tl_put_right:Nx \l_@@_args_tl
+              { { \exp_not:V \l_@@_tmpb_tl } }
+          }
+        \l_@@_signature_tl \@@_run_code:
+      }
+    \@@_grab_E_loop:NnN #4 { } #1 \q_recursion_tail \q_recursion_stop
+  }
+\cs_new_protected:Npn \@@_grab_E_loop:NnN #1#2#3#4 \q_recursion_stop
+  {
+    \cs_if_eq:NNTF #3 \q_recursion_tail
+      { \@@_grab_E_finalise: }
+      {
+        #1 #3
+          { \l_@@_fn_tl #3 {#2#4} }
+          { \@@_grab_E_loop:NnN #1 {#2#3} #4 \q_recursion_stop }
+      }
+  }
+\cs_new_protected:Npn \@@_grab_E_finalise: { }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+%
+% \begin{macro}{\@@_grab_m:w}
+% \begin{macro}{\@@_grab_m_long:w}
+%   Collecting a single mandatory argument is quite easy.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_m:w #1 \@@_run_code:
+  {
+    \tl_set:Nn \l_@@_signature_tl {#1}
+    \exp_after:wN \cs_set_protected_nopar:Npn \l_@@_fn_tl ##1
+      { \@@_add_arg:n {##1} }
+    \l_@@_fn_tl
+  }
+\cs_new_protected:Npn \@@_grab_m_long:w #1 \@@_run_code:
+  {
+    \tl_set:Nn \l_@@_signature_tl {#1}
+    \exp_after:wN \cs_set_protected:Npn \l_@@_fn_tl ##1
+      { \@@_add_arg:n {##1} }
+    \l_@@_fn_tl
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_grab_m_1:w}
+% \begin{macro}{\@@_grab_m_2:w}
+% \begin{macro}{\@@_grab_m_3:w}
+% \begin{macro}{\@@_grab_m_4:w}
+% \begin{macro}{\@@_grab_m_5:w}
+% \begin{macro}{\@@_grab_m_6:w}
+% \begin{macro}{\@@_grab_m_7:w}
+% \begin{macro}{\@@_grab_m_8:w}
+% \begin{macro}{\@@_grab_m_9:w}
+% \begin{macro}{\@@_grab_m_aux:Nnnnnnnnn}
+%   Grabbing 1--8 mandatory arguments is done by giving 8--1 known
+%   arguments to a 9-argument function that stores them in
+%   \cs{l_@@_args_tl}.  For simplicity, grabbing 9 mandatory arguments
+%   is done by grabbing 5 then 4 arguments.
+%    \begin{macrocode}
+\cs_new_protected_nopar:Npn \@@_grab_m_aux:Nnnnnnnnn #1#2#3#4#5#6#7#8#9
+  {
+    \tl_put_right:No \l_@@_args_tl
+      { #1 {#2} {#3} {#4} {#5} {#6} {#7} {#8} {#9} }
+    \l_@@_signature_tl \@@_run_code:
+  }
+\cs_new_protected:cpn { @@_grab_m_1:w } #1 \@@_run_code:
+  {
+    \tl_set:Nn \l_@@_signature_tl {#1}
+    \exp_after:wN \cs_set_eq:NN \l_@@_fn_tl \@@_grab_m_aux:Nnnnnnnnn
+    \l_@@_fn_tl \use_none:nnnnnnn { } { } { } { } { } { } { }
+  }
+\cs_new_protected:cpn { @@_grab_m_2:w } #1 \@@_run_code:
+  {
+    \tl_set:Nn \l_@@_signature_tl {#1}
+    \exp_after:wN \cs_set_eq:NN \l_@@_fn_tl \@@_grab_m_aux:Nnnnnnnnn
+    \l_@@_fn_tl \use_none:nnnnnn { } { } { } { } { } { }
+  }
+\cs_new_protected:cpn { @@_grab_m_3:w } #1 \@@_run_code:
+  {
+    \tl_set:Nn \l_@@_signature_tl {#1}
+    \exp_after:wN \cs_set_eq:NN \l_@@_fn_tl \@@_grab_m_aux:Nnnnnnnnn
+    \l_@@_fn_tl \use_none:nnnnn { } { } { } { } { }
+  }
+\cs_new_protected:cpn { @@_grab_m_4:w } #1 \@@_run_code:
+  {
+    \tl_set:Nn \l_@@_signature_tl {#1}
+    \exp_after:wN \cs_set_eq:NN \l_@@_fn_tl \@@_grab_m_aux:Nnnnnnnnn
+    \l_@@_fn_tl \use_none:nnnn { } { } { } { }
+  }
+\cs_new_protected:cpn { @@_grab_m_5:w } #1 \@@_run_code:
+  {
+    \tl_set:Nn \l_@@_signature_tl {#1}
+    \exp_after:wN \cs_set_eq:NN \l_@@_fn_tl \@@_grab_m_aux:Nnnnnnnnn
+    \l_@@_fn_tl \use_none:nnn { } { } { }
+  }
+\cs_new_protected:cpn { @@_grab_m_6:w } #1 \@@_run_code:
+  {
+    \tl_set:Nn \l_@@_signature_tl {#1}
+    \exp_after:wN \cs_set_eq:NN \l_@@_fn_tl \@@_grab_m_aux:Nnnnnnnnn
+    \l_@@_fn_tl \use_none:nn { } { }
+  }
+\cs_new_protected:cpn { @@_grab_m_7:w } #1 \@@_run_code:
+  {
+    \tl_set:Nn \l_@@_signature_tl {#1}
+    \exp_after:wN \cs_set_eq:NN \l_@@_fn_tl \@@_grab_m_aux:Nnnnnnnnn
+    \l_@@_fn_tl \use_none:n { }
+  }
+\cs_new_protected:cpn { @@_grab_m_8:w } #1 \@@_run_code:
+  {
+    \tl_set:Nn \l_@@_signature_tl {#1}
+    \exp_after:wN \cs_set_eq:NN \l_@@_fn_tl \@@_grab_m_aux:Nnnnnnnnn
+    \l_@@_fn_tl \prg_do_nothing:
+  }
+\cs_new_protected:cpx { @@_grab_m_9:w }
+  {
+    \exp_not:c { @@_grab_m_5:w }
+    \exp_not:c { @@_grab_m_4:w }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_grab_R:w, \@@_grab_R_long:w}
+% \begin{macro}{\@@_grab_R_aux:NNnN}
+%  The grabber for \texttt{R}-type arguments is basically the same as
+%  that for \texttt{D}-type ones, but always skips spaces (as it is mandatory)
+%  and has a hard-coded error message.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_R:w #1#2#3 \@@_run_code:
+  { \@@_grab_R_aux:NNnN #1 #2 {#3} \cs_set_protected_nopar:Npn }
+\cs_new_protected:Npn \@@_grab_R_long:w #1#2#3 \@@_run_code:
+  { \@@_grab_R_aux:NNnN #1 #2 {#3} \cs_set_protected:Npn }
+\cs_new_protected:Npn \@@_grab_R_aux:NNnN #1#2#3#4
+  {
+    \@@_grab_D_aux:NNnN #1 #2 {#3} #4
+    \@@_peek_nonspace_remove:NTF #1
+      { \@@_grab_D_call:Nw #1 }
+      {
+        \msg_error:nnxx { cmd } { missing-required }
+          { \@@_environment_or_command: }
+          { \token_to_str:N #1 }
+        \@@_add_arg:o \c_novalue_tl
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_grab_t:w}
+% \begin{macro}{\@@_grab_t_obey_spaces:w}
+% \begin{macro}{\@@_grab_t_aux:NNw}
+%   Dealing with a token is quite easy. Check the match, remove the
+%   token if needed and add a flag to the output.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_t:w
+  { \@@_grab_t_aux:NNw \@@_peek_nonspace_remove:NTF }
+\cs_new_protected:Npn \@@_grab_t_obey_spaces:w
+  { \@@_grab_t_aux:NNw \@@_peek_meaning_remove:NTF }
+\cs_new_protected:Npn \@@_grab_t_aux:NNw #1#2#3 \@@_run_code:
+  {
+    \tl_set:Nn \l_@@_signature_tl {#3}
+    \exp_after:wN \cs_set_protected:Npn \l_@@_fn_tl
+      {
+        #1 #2
+          { \@@_add_arg:n { \BooleanTrue } }
+          { \@@_add_arg:n { \BooleanFalse } }
+      }
+    \l_@@_fn_tl
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{variable}{\l_@@_v_arg_tl}
+%    \begin{macrocode}
+\tl_new:N \l_@@_v_arg_tl
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{macro}{\@@_grab_v:w}
+% \begin{macro}{\@@_grab_v_long:w}
+% \begin{macro}{\@@_grab_v_aux:w}
+% \begin{macro}{\@@_grab_v_group_end:}
+%   The opening delimiter is the first non-space token, and is never
+%   read verbatim.  This is required by consistency with the case where
+%   the preceding argument was optional and absent: then \TeX{} has
+%   already read and tokenized that token when looking for the optional
+%   argument.  The first thing is thus to check is that this delimiter
+%   is a character, and to distinguish the case of a left brace (in that
+%   case, \cs{group_align_safe_end:} is needed to compensate for the
+%   begin-group character that was just seen).  Then set verbatim
+%   catcodes with \cs{@@_grab_v_aux_catcodes:}.
+%
+%   The group keep catcode changes local, and
+%   \cs{group_align_safe_begin/end:} allow to use a character
+%   with category code~$4$ (normally |&|) as the delimiter (all commands
+%   do \cs{group_align_safe_begin/end:}, so there's no need to do that
+%   again here).
+%   It is ended by \cs{@@_grab_v_group_end:}, which smuggles
+%   the collected argument out of the group.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_v:w
+  {
+    \bool_set_false:N \l_@@_long_bool
+    \@@_grab_v_aux:w
+  }
+\cs_new_protected:Npn \@@_grab_v_long:w
+  {
+    \bool_set_true:N \l_@@_long_bool
+    \@@_grab_v_aux:w
+  }
+\cs_new_protected:Npn \@@_grab_v_aux:w #1 \@@_run_code:
+  {
+    \tl_set:Nn \l_@@_signature_tl {#1}
+    \group_begin:
+      \tex_escapechar:D = 92 \scan_stop:
+      \tl_clear:N \l_@@_v_arg_tl
+      \peek_remove_spaces:n
+        {
+          \peek_meaning_remove:NTF \c_group_begin_token
+            {
+              \group_align_safe_end:
+              \@@_grab_v_bgroup:
+            }
+            {
+              \peek_N_type:TF
+                { \@@_grab_v_aux_test:N }
+                { \@@_grab_v_aux_abort:n { } }
+            }
+        }
+  }
+\cs_new_protected:Npn \@@_grab_v_group_end:
+  {
+        \exp_args:NNNo
+      \group_end:
+    \tl_set:Nn \l_@@_v_arg_tl { \l_@@_v_arg_tl }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_grab_v_aux_test:N}
+% \begin{macro}
+%   {
+%     \@@_grab_v_aux_loop:N,
+%     \@@_grab_v_aux_loop:NN,
+%     \@@_grab_v_aux_loop_end:
+%   }
+%   Check that the opening delimiter is a character, setup category codes,
+%   then start reading tokens one by one, keeping the delimiter as an argument.
+%   If the verbatim was not nested, we will be grabbing one character
+%   at each step. Unfortunately, it can happen that what follows the
+%   verbatim argument is already tokenized. Thus, we check at each step
+%   that the next token is indeed a \enquote{nice}
+%   character, \emph{i.e.}, is not a character with
+%   category code $1$ (begin-group), $2$ (end-group)
+%   or $6$ (macro parameter), nor the space character,
+%   with category code~$10$ and character code~$32$,
+%   nor a control sequence.
+%   The partially built argument is stored in \cs{l_@@_v_arg_tl}.
+%   If we ever meet a token which we cannot grab (non-N-type),
+%   or which is not a character according to
+%   \cs{@@_grab_v_token_if_char:NTF}, then we bail out with
+%   \cs{@@_grab_v_aux_abort:n}. Otherwise, we stop at the first
+%   character matching the delimiter.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_v_aux_test:N #1
+  {
+    \@@_grab_v_token_if_char:NTF #1
+      {
+        \@@_grab_v_aux_put:N #1
+        \@@_grab_v_aux_catcodes:
+        \@@_grab_v_aux_loop:N #1
+      }
+      { \@@_grab_v_aux_abort:n {#1} #1 }
+  }
+\cs_new_protected:Npn \@@_grab_v_aux_loop:N #1
+  {
+    \peek_N_type:TF
+      { \@@_grab_v_aux_loop:NN #1 }
+      { \@@_grab_v_aux_abort:n { } }
+  }
+\cs_new_protected:Npn \@@_grab_v_aux_loop:NN #1#2
+  {
+    \@@_grab_v_token_if_char:NTF #2
+      {
+        \token_if_eq_charcode:NNTF #1 #2
+          { \@@_grab_v_aux_loop_end: }
+          {
+            \@@_grab_v_aux_put:N #2
+            \@@_grab_v_aux_loop:N #1
+          }
+      }
+      { \@@_grab_v_aux_abort:n {#2} #2 }
+  }
+\cs_new_protected:Npn \@@_grab_v_aux_loop_end:
+  {
+    \@@_grab_v_group_end:
+    \@@_add_arg:x { \tl_tail:N \l_@@_v_arg_tl }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{variable}{\l_@@_v_nesting_int}
+%    \begin{macrocode}
+\int_new:N \l_@@_v_nesting_int
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{macro}{\@@_grab_v_bgroup:}
+% \begin{macro}{\@@_grab_v_bgroup_loop:}
+% \begin{macro}{\@@_grab_v_bgroup_loop:N}
+%   If the opening delimiter is a left brace, we keep track of
+%   how many left and right braces were encountered so far in
+%   \cs{l_@@_v_nesting_int} (the methods used for optional
+%   arguments cannot apply here), and stop as soon as it reaches~$0$.
+%
+%   Some care was needed when removing the opening delimiter, which
+%   has already been assigned category code~$1$: using
+%   \cs{peek_meaning_remove:NTF} in the \cs{@@_grab_v_aux:w}
+%   function would break within alignments. Instead, we first
+%   convert that token to a string, and remove the result as a
+%   normal undelimited argument.
+%    \begin{macrocode}
+\cs_new_protected:Npx \@@_grab_v_bgroup:
+  {
+    \exp_not:N \@@_grab_v_aux_catcodes:
+    \exp_not:n { \int_set:Nn \l_@@_v_nesting_int { 1 } }
+    \exp_not:N \@@_grab_v_aux_put:N \iow_char:N \{
+    \exp_not:N \@@_grab_v_bgroup_loop:
+  }
+\cs_new_protected:Npn \@@_grab_v_bgroup_loop:
+  {
+    \peek_N_type:TF
+      { \@@_grab_v_bgroup_loop:N }
+      { \@@_grab_v_aux_abort:n { } }
+  }
+\cs_new_protected:Npn \@@_grab_v_bgroup_loop:N #1
+  {
+    \@@_grab_v_token_if_char:NTF #1
+      {
+        \token_if_eq_charcode:NNTF \c_group_end_token #1
+          {
+            \int_decr:N \l_@@_v_nesting_int
+            \int_compare:nNnTF \l_@@_v_nesting_int > 0
+              {
+                \@@_grab_v_aux_put:N #1
+                \@@_grab_v_bgroup_loop:
+              }
+              { \@@_grab_v_aux_loop_end: }
+          }
+          {
+            \token_if_eq_charcode:NNT \c_group_begin_token #1
+              { \int_incr:N \l_@@_v_nesting_int }
+            \@@_grab_v_aux_put:N #1
+            \@@_grab_v_bgroup_loop:
+          }
+      }
+      { \@@_grab_v_aux_abort:n {#1} #1 }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_grab_v_aux_catcodes:}
+% \begin{macro}{\@@_grab_v_aux_abort:n}
+%   The approach for short verbatim arguments is to make the end-line
+%   character a macro parameter character: this is forbidden by the
+%   rest of the code. Then the error branch can check what caused the
+%   bail out and give the appropriate error message.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_v_aux_catcodes:
+  {
+    \cs_set_eq:NN \do \char_set_catcode_other:N
+    \dospecials
+    \tex_endlinechar:D = `\^^M \scan_stop:
+    \bool_if:NTF \l_@@_long_bool
+      { \char_set_catcode_other:n { \tex_endlinechar:D } }
+      { \char_set_catcode_parameter:n { \tex_endlinechar:D } }
+  }
+\cs_new_protected:Npn \@@_grab_v_aux_abort:n #1
+  {
+    \@@_grab_v_group_end:
+    \exp_after:wN \exp_after:wN \exp_after:wN
+      \peek_meaning_remove:NTF \char_generate:nn { \tex_endlinechar:D } { 6 }
+      {
+        \msg_error:nnxxx { cmd } { verbatim-newline }
+          { \@@_environment_or_command: }
+          { \tl_to_str:N \l_@@_v_arg_tl }
+          { \tl_to_str:n {#1} }
+        \@@_add_arg:o \c_novalue_tl
+      }
+      {
+        \msg_error:nnxxx { cmd } { verbatim-tokenized }
+          { \@@_environment_or_command: }
+          { \tl_to_str:N \l_@@_v_arg_tl }
+          { \tl_to_str:n {#1} }
+        \@@_add_arg:o \c_novalue_tl
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_grab_v_aux_put:N}
+%   Storing one token in the collected argument. Most tokens are
+%   converted to category code $12$, with the exception of active
+%   characters, and spaces (not sure what should be done for those).
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_v_aux_put:N #1
+  {
+    \tl_put_right:Nx \l_@@_v_arg_tl
+      {
+        \token_if_active:NTF #1
+          { \exp_not:N #1 } { \token_to_str:N #1 }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_grab_v_token_if_char:NTF}
+%   This function assumes that the escape character is printable.
+%   Then the string representation of control sequences is at least
+%   two characters, and \cs{str_tail:n} only removes the escape
+%   character. Macro parameter characters are doubled by
+%   \cs{tl_to_str:n}, and will also yield a non-empty result,
+%   hence are not considered as characters.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_v_token_if_char:NTF #1
+  { \str_if_eq:eeTF { } { \str_tail:n {#1} } }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_arg:n, \@@_add_arg:V, \@@_add_arg:o, \@@_add_arg:x}
+%   When an argument is found it is stored, then further arguments are
+%   grabbed by calling \cs{l_@@_signature_tl}.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_add_arg:n #1
+  {
+    \tl_put_right:Nn \l_@@_args_tl { {#1} }
+    \l_@@_signature_tl \@@_run_code:
+  }
+\cs_generate_variant:Nn \@@_add_arg:n { V , o , x }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Grabbing arguments expandably}
+%
+% \begin{macro}[EXP]{\@@_expandable_grab_D:w}
+% \begin{macro}[EXP]{\@@_expandable_grab_D:NNNwNNn}
+% \begin{macro}[EXP]{\@@_expandable_grab_D:NNNwNNnnn}
+% \begin{macro}[EXP]{\@@_expandable_grab_D:Nw}
+% \begin{macro}[EXP]{\@@_expandable_grab_D:nnNNNwNN}
+%   The first step is to grab the first token or group. The generic grabbers
+%   \cs{\meta{function}}\verb*| | and \cs{\meta{function}}\verb*| | are just after \cs{q_@@}, we go and find
+%   them (and use the long one).
+%    \begin{macrocode}
+\cs_new:Npn \@@_expandable_grab_D:w #1 \q_@@ #2#3
+  { #2 { \@@_expandable_grab_D:NNNwNNn #1 \q_@@ #2 #3 } }
+%    \end{macrocode}
+%   We then wish to test whether |#7|, which we just grabbed, is exactly |#2|.
+%   A preliminary test is whether their string representations coincide, then
+%   expand the only grabber function we have, |#1|, once: the two strings below
+%   are equal if and only if |#7| matches |#2| exactly.\footnote{It is obvious
+%   that if \texttt{\#7} matches \texttt{\#2} then the strings are equal. We
+%   must check the converse. The right-hand-side of \cs{str_if_eq:onTF} does
+%   not end with \texttt{\#3}, implying that the grabber function took
+%   everything as its arguments. The first brace group can only be empty if
+%   \texttt{\#7} starts with \texttt{\#2}, otherwise the brace group preceding
+%   \texttt{\#7} would not vanish. The third brace group is empty, thus the
+%   \cs{q_@@} that was used by our grabber \texttt{\#1} must be the one
+%   that we inserted (not some token in \texttt{\#7}), hence the second brace
+%   group contains the end of \texttt{\#7} followed by \texttt{\#2}. Since this
+%   is \texttt{\#2} on the right-hand-side, and no brace can be lost there,
+%   \texttt{\#7} must contain nothing else than its leading \texttt{\#2}.}
+%   The preliminary test is needed as |#7| could validly contain
+%   \tn{par} (because a later mandatory argument could be long) and our
+%   grabber may be short.  If
+%   |#7| does not match |#2|, then the optional argument is missing, we use the
+%   default |-NoValue-|, and put back the argument |#7| in the input stream.
+%
+%   If it does match, then interesting things need to be done. We will grab the
+%   argument piece by piece, with the following pattern:
+%   \begin{quote}
+%     \meta{grabber} \Arg{tokens} \\
+%     ~~\cs{q_nil} \Arg{piece 1} \meta{piece 2} \cs{ERROR} \cs{q_@@}\\
+%     ~~\cs{q_nil} \meta{input stream}
+%   \end{quote}
+%   The \meta{grabber} will find an opening delimiter in \meta{piece 2}, take
+%   the \cs{q_@@} as a second delimiter, and find more material delimited
+%   by the closing delimiter in the \meta{input stream}. We then move the part
+%   before the opening delimiter from \meta{piece 2} to \meta{piece 1}, and the
+%   material taken from the \meta{input stream} to the \meta{piece 2}. Thus,
+%   the argument moves gradually from the \meta{input stream} to the
+%   \meta{piece 2}, then to the \meta{piece 1} when we have made sure to find
+%   all opening and closing delimiters. This two-step process ensures that
+%   nesting works: the number of opening delimiters minus closing delimiters in
+%   \meta{piece 1} is always equal to the number of closing delimiters in
+%   \meta{piece 2}. We stop grabbing arguments once the \meta{piece 2} contains
+%   no opening delimiter any more, hence the balance is reached, and the final
+%   argument is \meta{piece 1} \meta{piece 2}.
+%   The indirection via \cs{@@_tmp:w} allows to insert |-NoValue-| expanded.
+%    \begin{macrocode}
+\cs_set_protected:Npn \@@_tmp:w #1
+  {
+    \cs_new:Npn \@@_expandable_grab_D:NNNwNNn ##1##2##3##4 \q_@@ ##5##6##7
+      {
+        \str_if_eq:nnTF {##2} {##7}
+          {
+            \str_if_eq:onTF
+              { ##1 { } { } ##7 ##2 \q_@@ ##3 }
+              { { } {##2} { } }
+          }
+          { \use_ii:nn }
+          {
+            ##1
+              { \@@_expandable_grab_D:NNNwNNnnn ##1##2##3##4 \q_@@ ##5##6 }
+              \q_nil { } ##2 \ERROR \q_@@ \ERROR
+          }
+          { ##4 {#1} \q_@@ ##5 ##6 {##7} }
+      }
+  }
+\exp_args:No \@@_tmp:w { \c_novalue_tl }
+%    \end{macrocode}
+%   At this stage, |#7| is \cs{q_nil} \Arg{piece 1} \meta{more for piece 1},
+%   and we want to concatenate all that, removing \cs{q_nil}, and keeping the
+%   opening delimiter |#2|. Simply use \cs{use_ii:nn}. Also, |#8| is
+%   \meta{remainder of piece 2} \cs{ERROR}, and |#9| is \cs{ERROR} \meta{more
+%   for piece 2}. We concatenate those, replacing the two \cs{ERROR} by the
+%   closing delimiter |#3|.
+%    \begin{macrocode}
+\cs_new:Npn \@@_expandable_grab_D:NNNwNNnnn #1#2#3#4 \q_@@ #5#6#7#8#9
+  {
+    \exp_args:Nof \@@_expandable_grab_D:nnNNNwNN
+      { \use_ii:nn #7 #2 }
+      { \@@_expandable_grab_D:Nw #3 \exp_stop_f: #8 #9 }
+    #1#2#3 #4 \q_@@ #5 #6
+  }
+\cs_new:Npn \@@_expandable_grab_D:Nw #1#2 \ERROR \ERROR { #2 #1 }
+%    \end{macrocode}
+%   Armed with our two new \meta{pieces}, we are ready to loop. However, we
+%   must first see if \meta{piece 2} (here |#2|) contains any opening
+%   delimiter |#4|. Again, we expand |#3|, this time removing its whole output
+%   with \cs{use_none:nnn}. The test is similar to \cs{tl_if_in:nnTF}. The
+%   token list is empty if and only if |#2| does not contain the opening
+%   delimiter. In that case, we are done, and put the argument (from which we
+%   remove a spurious pair of delimiters coming from how we started the loop).
+%   Otherwise, we go back to looping with
+%   \cs{@@_expandable_grab_D:NNNwNNnnn}. The code to deal with brace stripping
+%   is much the same as for the non-expandable case.
+%    \begin{macrocode}
+\cs_new:Npn \@@_expandable_grab_D:nnNNNwNN #1#2#3#4#5#6 \q_@@ #7#8
+  {
+    \exp_args:No \tl_if_empty:oTF
+      { #3 { \use_none:nnn } #2 \q_@@ #5 #4 \q_@@ #5 }
+      {
+        \tl_if_blank:oTF { \use_none:nn #1#2 }
+          { \@@_put_arg_expandable:ow { \use_none:nn #1#2 } }
+          {
+            \str_if_eq:eeTF
+              { \exp_not:o { \use_none:nn #1#2 } }
+              { { \exp_not:o { \use_iii:nnnn #1#2 \q_nil } } }
+              { \@@_put_arg_expandable:ow { \use_iii:nnn #1#2 } }
+              { \@@_put_arg_expandable:ow { \use_none:nn #1#2 } }
+          }
+            #6 \q_@@ #7 #8
+      }
+      {
+        #3
+          { \@@_expandable_grab_D:NNNwNNnnn #3#4#5#6 \q_@@ #7 #8 }
+          \q_nil {#1} #2 \ERROR \q_@@ \ERROR
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}[EXP]{\@@_expandable_grab_D_alt:w}
+% \begin{macro}[EXP]{\@@_expandable_grab_D_alt:NNwNNn}
+% \begin{macro}[EXP]{\@@_expandable_grab_D_alt:Nwn}
+%   When the delimiters are identical, nesting is not possible and a simplified
+%   approach is used. The test concept here is the same as for the case where
+%   the delimiters are different but there cannot be any nesting.
+%    \begin{macrocode}
+\cs_new:Npn \@@_expandable_grab_D_alt:w #1 \q_@@ #2#3
+  { #2 { \@@_expandable_grab_D_alt:NNwNNn #1 \q_@@ #2 #3 } }
+\cs_set_protected:Npn \@@_tmp:w #1
+  {
+    \cs_new:Npn \@@_expandable_grab_D_alt:NNwNNn ##1##2##3 \q_@@ ##4##5##6
+      {
+        \str_if_eq:nnTF {##6} {##2}
+          {
+            \str_if_eq:onTF
+              { ##1 { } ##6 ##2 ##2 }
+              { { } ##2 }
+          }
+          { \use_ii:nn }
+          {
+            ##1
+              { \@@_expandable_grab_D_alt:NNwn ##4 ##5 ##3 \q_@@ }
+              ##6 \ERROR
+          }
+          { ##3 {#1} \q_@@ ##4 ##5 {##6} }
+      }
+  }
+\exp_args:No \@@_tmp:w { \c_novalue_tl }
+\cs_new:Npn \@@_expandable_grab_D_alt:NNwn #1#2#3 \q_@@ #4
+  {
+    \tl_if_blank:oTF { \use_none:n #4 }
+      { \@@_put_arg_expandable:ow { \use_none:n #4 } }
+      {
+        \str_if_eq:eeTF
+          { \exp_not:o { \use_none:n #4 } }
+          { { \exp_not:o { \use_ii:nnn #4 \q_nil } } }
+          { \@@_put_arg_expandable:ow { \use_ii:nn #4 } }
+          { \@@_put_arg_expandable:ow { \use_none:n #4 } }
+      }
+        #3 \q_@@ #1 #2
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}[EXP]{\@@_expandable_grab_E:w, \@@_expandable_grab_E_long:w}
+% \begin{macro}[EXP]{\@@_expandable_grab_E_aux:w}
+% \begin{macro}[EXP]{\@@_expandable_grab_E_test:nnw}
+% \begin{macro}[EXP]{\@@_expandable_grab_E_loop:nnnNNw}
+% \begin{macro}[EXP]{\@@_expandable_grab_E_find:w}
+% \begin{macro}[EXP]{\@@_expandable_grab_E_find:nnw}
+% \begin{macro}[EXP]{\@@_expandable_grab_E_end:nnw}
+%   We keep track of long/short by placing the appropriate grabber as
+%   the third token after \cs{q_@@}; it is eventually removed by the
+%   \texttt{end:nnw} auxiliary.  The \texttt{aux:w} auxiliary will be
+%   called repeatedly with two arguments: the set
+%   of pairs \meta{parser} \meta{token}, and the set of arguments found
+%   so far (initially all |{-NoValue-}|).  At each step, grab what
+%   follows in the input stream then call the \texttt{loop:nnnNNw}
+%   auxiliary to compare it with each possible embellishment in turn.
+%   This auxiliary's |#1| is what was found in the input, |#2| collects
+%   \meta{parser} \meta{token} pairs that did not match, |#3| collects
+%   the corresponding arguments found previously, |#4| and |#5| is the
+%   current pair, |#6| is the remaining pairs, |#7| is empty or two
+%   \cs{q_nil}, and |#8| is the current argument.  If none of the pairs
+%   matched (determined by \cs{quark_if_nil:NTF}) then call the
+%   \texttt{end} auxiliary to stop looking for embellishments,
+%   remembering to put what was grabbed in the input back where it
+%   belongs, and storing the arguments found just before \cs{q_@@}.  If
+%   the current argument |#8| is not |-NoValue-| or if the input |#1|
+%   does not match |#5| (see \texttt{t}-type arguments below for a
+%   similar \cs{str_if_eq:onTF} test) then carry on the loop.
+%   Otherwise, we found a new embellishment: grab the corresponding
+%   argument in the input using the \texttt{find:w} auxiliary.  To avoid
+%   losing braces around that auxiliary's argument we include a
+%   space, which will be eliminated in the next loop through
+%   embellishments.
+%    \begin{macrocode}
+\cs_new:Npn \@@_expandable_grab_E:w #1 \q_@@ #2#3
+  { \@@_expandable_grab_E_aux:w #1 \q_@@ #2 #3 #3 }
+\cs_new:Npn \@@_expandable_grab_E_long:w #1 \q_@@ #2#3
+  { \@@_expandable_grab_E_aux:w #1 \q_@@ #2 #3 #2 }
+\cs_new:Npn \@@_expandable_grab_E_aux:w #1 \q_@@ #2#3#4
+  { #2 { \@@_expandable_grab_E_test:nnw #1 \q_@@ #2 #3 #4 } }
+\cs_new:Npn \@@_expandable_grab_E_test:nnw #1#2#3 \q_@@ #4#5#6#7
+  {
+    \@@_expandable_grab_E_loop:nnnNNw {#7} { } { }
+      #1 \q_nil \q_nil \q_nil \q_mark #2 \q_nil
+    #3 \q_@@ #4 #5 #6
+  }
+\cs_new:Npn \@@_expandable_grab_E_loop:nnnNNw
+    #1#2#3#4#5#6 \q_nil #7 \q_mark #8
+  {
+    \quark_if_nil:NTF #4
+      { \@@_expandable_grab_E_end:nnw {#1} {#3} }
+      {
+        \tl_if_novalue:nTF {#8}
+          { \str_if_eq:onTF { #4 { } #1 #5 } {#5} }
+          { \use_ii:nn }
+            { \@@_expandable_grab_E_find:w { #2 #4 #5 #6 } {#3} ~ }
+            {
+              \@@_expandable_grab_E_loop:nnnNNw
+                {#1} { #2 #4 #5 } { #3 {#8} }
+                #6 \q_nil #7 \q_mark
+            }
+      }
+  }
+\cs_new:Npn \@@_expandable_grab_E_find:w #1 \q_@@ #2#3#4
+  { #4 { \@@_expandable_grab_E_find:nnw #1 \q_@@ #2 #3 #4 } }
+\cs_new:Npn \@@_expandable_grab_E_find:nnw #1#2#3 \q_nil #4 \q_@@ #5#6#7#8
+  { \@@_expandable_grab_E_aux:w {#1} { #2 {#8} #3 } #4 \q_@@ #5 #6 #7 }
+\cs_new:Npn \@@_expandable_grab_E_end:nnw #1#2#3 \q_@@ #4#5#6
+  { #3 #2 \q_@@ #4 #5 {#1} }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}[EXP]{\@@_expandable_grab_m:w, \@@_expandable_grab_m_long:w}
+% \begin{macro}[EXP]{\@@_expandable_grab_m_aux:wNn}
+%   The mandatory case is easy: find the auxiliary after the \cs{q_@@},
+%   and use it directly to grab the argument, then correctly position
+%   the argument before \cs{q_@@}.
+%    \begin{macrocode}
+\cs_new:Npn \@@_expandable_grab_m:w #1 \q_@@ #2#3
+  { #3 { \@@_expandable_grab_m_aux:wNn #1 \q_@@ #2 #3 } }
+\cs_new:Npn \@@_expandable_grab_m_long:w #1 \q_@@ #2#3
+  { #2 { \@@_expandable_grab_m_aux:wNn #1 \q_@@ #2 #3 } }
+\cs_new:Npn \@@_expandable_grab_m_aux:wNn #1 \q_@@ #2#3#4
+  { #1 {#4} \q_@@ #2 #3 }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}[EXP]{\@@_expandable_grab_R:w}
+% \begin{macro}[EXP]{\@@_expandable_grab_R_aux:NNNwNNn}
+%   Much the same as for the \texttt{D}-type argument, with only the lead-off
+%   function varying.
+%    \begin{macrocode}
+\cs_new:Npn \@@_expandable_grab_R:w #1 \q_@@ #2#3
+  { #2 { \@@_expandable_grab_R_aux:NNNwNNn #1 \q_@@ #2#3 } }
+\cs_set_protected:Npn \@@_tmp:w #1
+  {
+    \cs_new:Npn \@@_expandable_grab_R_aux:NNNwNNn ##1##2##3##4 \q_@@ ##5##6##7
+      {
+        \str_if_eq:nnTF {##7} {##2}
+          {
+            \str_if_eq:onTF
+              { ##1 { } { } ##7 ##2 \q_@@ ##3 }
+              { { } {##2} { } }
+          }
+          { \use_ii:nn }
+          {
+            ##1
+              { \@@_expandable_grab_D:NNNwNNnnn ##1##2##3##4 \q_@@ ##5##6 }
+              \q_nil { } ##2 \ERROR \q_@@ \ERROR
+          }
+          {
+            \msg_expandable_error:nnff { cmd } { missing-required }
+              { \exp_args:Nf \tl_trim_spaces:n { \token_to_str:N ##5 } }
+              { \tl_to_str:n {##2} }
+            ##4 {#1} \q_@@ ##5 ##6 {##7}
+          }
+      }
+  }
+\exp_args:No \@@_tmp:w { \c_novalue_tl }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}[EXP]{\@@_expandable_grab_R_alt:w}
+% \begin{macro}[EXP]{\@@_expandable_grab_R_alt_aux:NNwNNn}
+%   When the delimiters are identical, nesting is not possible and a simplified
+%   approach is used. The test concept here is the same as for the case where
+%   the delimiters are different.
+%    \begin{macrocode}
+\cs_new:Npn \@@_expandable_grab_R_alt:w #1 \q_@@ #2#3
+  { #2 { \@@_expandable_grab_R_alt_aux:NNwNNn #1 \q_@@ #2#3 } }
+\cs_set_protected:Npn \@@_tmp:w #1
+  {
+    \cs_new:Npn \@@_expandable_grab_R_alt_aux:NNwNNn ##1##2##3 \q_@@ ##4##5##6
+      {
+        \str_if_eq:nnTF {##6} {##2}
+          {
+            \str_if_eq:onTF
+              { ##1 { } ##6 ##2 ##2 }
+              { { } ##2 }
+          }
+          { \use_ii:nn }
+          {
+            ##1
+              { \@@_expandable_grab_D_alt:NNwn ##4 ##5 ##3 \q_@@ }
+              ##6 \ERROR
+          }
+          {
+            \msg_expandable_error:nnff { cmd } { missing-required }
+              { \exp_args:Nf \tl_trim_spaces:n { \token_to_str:N ##4 } }
+              { \tl_to_str:n {##2} }
+            ##3 {#1} \q_@@ ##4 ##5 {##6}
+          }
+      }
+  }
+\exp_args:No \@@_tmp:w { \c_novalue_tl }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}[EXP]{\@@_expandable_grab_t:w}
+% \begin{macro}[EXP]{\@@_expandable_grab_t_aux:NNwn}
+%   As for a \texttt{D}-type argument, here we compare the grabbed tokens using
+%   the only parser we have in order to work out if |#2| is exactly equal to
+%   the output of the grabber.
+%    \begin{macrocode}
+\cs_new:Npn \@@_expandable_grab_t:w #1 \q_@@ #2#3
+  { #2 { \@@_expandable_grab_t_aux:NNwn #1 \q_@@ #2 #3 } }
+\cs_new:Npn \@@_expandable_grab_t_aux:NNwn #1#2#3 \q_@@ #4#5#6
+  {
+    \str_if_eq:onTF { #1 { } #6 #2 } {#2}
+      { #3 { \BooleanTrue } \q_@@ #4 #5 }
+      { #3 { \BooleanFalse } \q_@@ #4 #5 {#6} }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}[EXP]
+%   {\@@_put_arg_expandable:nw, \@@_put_arg_expandable:ow}
+%   A useful helper, to store arguments when they are ready.
+%    \begin{macrocode}
+\cs_new:Npn \@@_put_arg_expandable:nw #1#2 \q_@@ { #2 {#1} \q_@@ }
+\cs_generate_variant:Nn \@@_put_arg_expandable:nw { o }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Argument processors}
+%
+% \begin{macro}{\@@_bool_reverse:N}
+%   A simple reversal.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_bool_reverse:N #1
+  {
+    \bool_if:NTF #1
+      { \tl_set:Nn \ProcessedArgument { \c_false_bool } }
+      { \tl_set:Nn \ProcessedArgument { \c_true_bool } }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{variable}{\l_@@_split_list_seq, \l_@@_split_list_tl}
+% \begin{macro}{\@@_split_list:nn}
+% \begin{macro}{\@@_split_list_multi:nn, \@@_split_list_multi:nV}
+% \begin{macro}{\@@_split_list_single:Nn}
+%   Splitting can take place either at a single token or at a longer
+%   identifier. To deal with single active tokens, a two-part procedure is
+%   needed.
+%    \begin{macrocode}
+\seq_new:N \l_@@_split_list_seq
+\tl_new:N \l_@@_split_list_tl
+\cs_new_protected:Npn \@@_split_list:nn #1#2
+  {
+    \tl_if_single:nTF {#1}
+      {
+        \token_if_cs:NTF #1
+          { \@@_split_list_multi:nn {#1} {#2} }
+          { \@@_split_list_single:Nn #1 {#2} }
+      }
+      { \@@_split_list_multi:nn {#1} {#2} }
+  }
+\cs_new_protected:Npn \@@_split_list_multi:nn #1#2
+  {
+    \seq_set_split:Nnn \l_@@_split_list_seq {#1} {#2}
+    \tl_clear:N \ProcessedArgument
+    \seq_map_inline:Nn \l_@@_split_list_seq
+      { \tl_put_right:Nn \ProcessedArgument { {##1} } }
+  }
+\cs_generate_variant:Nn \@@_split_list_multi:nn { nV }
+\group_begin:
+\char_set_catcode_active:N \^^@
+\cs_new_protected:Npn \@@_split_list_single:Nn #1#2
+  {
+    \tl_set:Nn \l_@@_split_list_tl {#2}
+    \group_begin:
+    \char_set_lccode:nn { `\^^@ } { `#1 }
+    \tex_lowercase:D
+      {
+        \group_end:
+        \tl_replace_all:Nnn \l_@@_split_list_tl { ^^@ }
+      }   {#1}
+     \@@_split_list_multi:nV {#1} \l_@@_split_list_tl
+   }
+\group_end:
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{variable}
+%
+% \begin{macro}{\@@_split_argument:nnn}
+% \begin{macro}{\@@_split_argument_aux:nnnn}
+% \begin{macro}[EXP]{\@@_split_argument_aux:n}
+% \begin{macro}[rEXP]{\@@_split_argument_aux:wn}
+%   Splitting to a known number of items is a special version of splitting
+%   a list, in which the limit is hard-coded and where there will always be
+%   exactly the correct number of output items. An auxiliary function is
+%   used to save on working out the token list length several times.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_split_argument:nnn #1#2#3
+  {
+    \@@_split_list:nn {#2} {#3}
+    \exp_args:Nf \@@_split_argument_aux:nnnn
+      { \tl_count:N \ProcessedArgument }
+      {#1} {#2} {#3}
+  }
+\cs_new_protected:Npn \@@_split_argument_aux:nnnn #1#2#3#4
+  {
+    \int_compare:nNnF {#1} = { #2 + 1 }
+      {
+        \int_compare:nNnTF {#1} > { #2 + 1 }
+          {
+            \tl_set:Nx \ProcessedArgument
+              {
+                \exp_last_unbraced:NnNo
+                  \@@_split_argument_aux:n
+                  { #2 + 1 }
+                  \use_none_delimit_by_q_stop:w
+                  \ProcessedArgument
+                  \q_stop
+              }
+            \msg_error:nnxxx { cmd } { split-excess-tokens }
+              { \tl_to_str:n {#3} } { \int_eval:n { #2 + 1 } }
+              { \tl_to_str:n {#4} }
+          }
+          {
+            \tl_put_right:Nx \ProcessedArgument
+              {
+                \prg_replicate:nn { #2 + 1 - (#1) }
+                  { { \exp_not:V \c_novalue_tl } }
+              }
+          }
+      }
+  }
+%    \end{macrocode}
+%   Auxiliaries to leave exactly the correct number of arguments in
+%   \cs{ProcessedArgument}.
+%    \begin{macrocode}
+\cs_new:Npn \@@_split_argument_aux:n #1
+  { \prg_replicate:nn {#1} { \@@_split_argument_aux:wn } }
+\cs_new:Npn \@@_split_argument_aux:wn #1 \use_none_delimit_by_q_stop:w #2
+  {
+    \exp_not:n { {#2} }
+    #1
+    \use_none_delimit_by_q_stop:w
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_trim_spaces:n}
+%   This one is almost trivial.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_trim_spaces:n #1
+  { \tl_set:Nx \ProcessedArgument { \tl_trim_spaces:n {#1} } }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Access to the argument specification}
+%
+% \begin{macro}{\@@_get_arg_spec_error:N, \@@_get_arg_spec_error:n}
+% \begin{macro}{\@@_get_arg_spec_error_aux:n}
+%   Provide an informative error when trying to get the argument
+%   specification of a non-\pkg{xparse} command or environment.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_get_arg_spec_error:N #1
+  {
+    \bool_set_false:N \l_@@_environment_bool
+    \tl_set:Nn \l_@@_fn_tl {#1}
+    \@@_get_arg_spec_error_aux:n { \cs_if_exist:NTF #1 }
+  }
+\cs_new_protected:Npn \@@_get_arg_spec_error:n #1
+  {
+    \bool_set_true:N \l_@@_environment_bool
+    \str_set:Nx \l_@@_environment_str {#1}
+    \@@_get_arg_spec_error_aux:n
+      { \cs_if_exist:cTF { \l_@@_environment_str } }
+  }
+\cs_new_protected:Npn \@@_get_arg_spec_error_aux:n #1
+  {
+    #1
+      {
+        \msg_error:nnx { cmd } { non-xparse }
+          { \@@_environment_or_command: }
+      }
+      {
+        \msg_error:nnx { cmd } { unknown }
+          { \@@_environment_or_command: }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_get_arg_spec:NTF}
+%   If the command is not an \pkg{xparse} command, complain.  If it is,
+%   its second \enquote{item} is the argument specification.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_get_arg_spec:NTF #1#2#3
+  {
+    \__kernel_cmd_if_xparse:NTF #1
+      {
+        \tl_set:Nx \ArgumentSpecification { \tl_item:Nn #1 { 2 } }
+        #2
+      }
+      {#3}
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% Rolling forward from 2020-10-01 is tricky because the entire |ltcmd|
+% module is new, but the user-level commands have the same name, so only
+% these will clash.  To work around that, in |latexrelease| mode we will
+% (temporarily) disable \cs{__kernel_chk_if_free_cs:N} for this final
+% part of the code, then restore at the end.
+%    \begin{macrocode}
+%<latexrelease>\cs_new_eq:NN \@@_chk_if_free_cs:N \__kernel_chk_if_free_cs:N
+%<latexrelease>\cs_gset_eq:NN \__kernel_chk_if_free_cs:N \use_none:n
+%    \end{macrocode}
+%
+% \begin{variable}{\ArgumentSpecification}
+%    \begin{macrocode}
+\tl_new:N \ArgumentSpecification
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{macro}{\@@_get_arg_spec:N}
+% \begin{macro}{\@@_get_arg_spec:n}
+%   Recovering the argument specification is now trivial.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_get_arg_spec:N #1
+  {
+    \@@_get_arg_spec:NTF #1 { }
+      { \@@_get_arg_spec_error:N #1 }
+  }
+\cs_new_protected:Npn \@@_get_arg_spec:n #1
+  {
+    \exp_args:Nc \@@_get_arg_spec:NTF
+      { environment~ \tl_to_str:n {#1} }
+      { }
+      { \@@_get_arg_spec_error:n {#1} }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_show_arg_spec:N}
+% \begin{macro}{\@@_show_arg_spec:n}
+%   Showing the argument specification simply means finding it and then
+%   calling the \cs{tl_show:N} function.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_show_arg_spec:N #1
+  {
+    \@@_get_arg_spec:NTF #1
+      { \tl_show:N \ArgumentSpecification }
+      { \@@_get_arg_spec_error:N #1 }
+  }
+\cs_new_protected:Npn \@@_show_arg_spec:n #1
+  {
+    \exp_args:Nc \@@_get_arg_spec:NTF
+      { environment~ \tl_to_str:n {#1} }
+      { \tl_show:N \ArgumentSpecification }
+      { \@@_get_arg_spec_error:n {#1} }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \subsection{Utilities}
+%
+% \begin{macro}{\@@_check_definable:nNT, \@@_check_definable_aux:nN}
+%   Check that a token list is appropriate as a first argument of
+%   \cs{NewDocumentCommand} and similar functions and otherwise
+%   produce an error.  First trim whitespace to allow for spaces around
+%   the actual command to be defined.  If the result has multiple
+%   tokens, it is not a valid argument.  The single token is a control
+%   sequence exactly if its string representation has more than one
+%   character (using \cs{token_to_str:N} rather than \cs{tl_to_str:n}
+%   to avoid problems with macro parameter characters, and setting
+%   \cs{tex_escapechar:D} to prevent it from being non-printable).
+%   Finally, check for an active character: this is done by lowercasing
+%   the token to fix its character code (arbitrarily to that of~|?|)
+%   and comparing the result to an active~|?|.  Both control sequences
+%   and active characters are valid arguments, and non-active character
+%   tokens are not.  In all cases, the group opened to keep assignments
+%   local must be closed.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_check_definable:nNT #1
+  { \tl_trim_spaces_apply:nN {#1} \@@_check_definable_aux:nN }
+\group_begin:
+  \char_set_catcode_active:n { `? }
+  \cs_new_protected:Npn \@@_check_definable_aux:nN #1#2
+    {
+      \group_begin:
+      \tl_if_single_token:nTF {#1}
+        {
+          \int_set:Nn \tex_escapechar:D { 92 }
+          \exp_args:Nx \tl_if_empty:nTF
+            { \exp_args:No \str_tail:n { \token_to_str:N #1 } }
+            {
+              \exp_args:Nx \char_set_lccode:nn
+                { ` \str_head:n {#1} } { `? }
+              \tex_lowercase:D { \tl_if_eq:nnTF {#1} } { ? }
+                { \group_end: \use_iii:nnn }
+                { \group_end: \use_i:nnn }
+            }
+            { \group_end: \use_iii:nnn }
+        }
+        { \group_end: \use_ii:nnn }
+      {
+        \msg_error:nnxx { cmd } { not-definable }
+          { \tl_to_str:n {#1} } { \token_to_str:N #2 }
+      }
+      {
+        \msg_error:nnxx { cmd } { not-one-token }
+          { \tl_to_str:n {#1} } { \token_to_str:N #2 }
+      }
+    }
+\group_end:
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_token_if_cs:NTF}
+%   Based on the definition of \cs{@@_check_definable_aux:nN} above, but
+%   only checks for an actual control sequence (\emph{i.e.},
+%   \cs[no-index]{\meta{anything}}). \cs{tex_escapechar:D} is
+%   temporarily changed to a known value and then it checks if
+%   |\string#1| contains more than one character: if it does, it's a
+%   control sequence.  This test differs from \cs{token_if_cs:NTF} for
+%   example in \verb|\token_if_cs:NTF \c_group_begin_token {T}{F}|,
+%   where \cs{token_if_cs:NTF} returns false.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_token_if_cs:NTF #1
+  {
+    \group_begin:
+      \int_set:Nn \tex_escapechar:D { 92 }
+      \exp_args:Nx \tl_if_empty:nTF
+          { \exp_args:No \str_tail:n { \token_to_str:N #1 } }
+        { \group_end: \use_ii:nn }
+        { \group_end: \use_i:nn }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_tl_mapthread_function:NNN, \@@_tl_mapthread_function:nnN}
+% \begin{macro}{\@@_tl_mapthread_loop:w}
+%   Analogue of \cs{seq_mapthread_function:NNN} for token lists.
+%    \begin{macrocode}
+\cs_new:Npn \@@_tl_mapthread_function:NNN #1#2#3
+  {
+    \exp_after:wN \exp_after:wN
+    \exp_after:wN \@@_tl_mapthread_loop:w
+    \exp_after:wN \exp_after:wN
+    \exp_after:wN #3
+    \exp_after:wN #1
+    \exp_after:wN \q_recursion_tail
+    \exp_after:wN \q_mark
+    #2
+    \q_recursion_tail
+    \q_recursion_stop
+  }
+\cs_new:Npn \@@_tl_mapthread_function:nnN #1#2#3
+  {
+    \@@_tl_mapthread_loop:w #3
+      #1 \q_recursion_tail \q_mark
+      #2 \q_recursion_tail \q_recursion_stop
+  }
+\cs_new:Npn \@@_tl_mapthread_loop:w #1#2#3 \q_mark #4
+  {
+    \quark_if_recursion_tail_stop:n {#2}
+    \quark_if_recursion_tail_stop:n {#4}
+    #1 {#2} {#4}
+    \@@_tl_mapthread_loop:w #1#3 \q_mark
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\__kernel_cmd_if_xparse:NTF}
+% \changes{v1.0d}{2021/04/19}{Renamed \cs{__cmd_cmd_if_xparse:NTF} to
+%      \cs{__kernel_cmd_if_xparse:NTF} for cross-module usage}
+% \begin{macro}{\@@_cmd_if_xparse_aux:N}
+%
+%    To determine whether the command is an \pkg{xparse} command check
+%    that its |arg_spec| is empty (this also excludes non-macros) and
+%    that its |replacement_spec| starts with either
+%    \cs{@@_start:nNNnnn} (non-expandable command) or
+%    \cs{@@_start_expandable:nNNNNn} (expandable command) or
+%    \cs{@@_start_env:nnnnn} (environment).
+%
+%    This conditional is needed in several kernel modules and is
+%    therefore has a kernel-internal name.
+%    \begin{macrocode}
+\cs_new_protected:Npn \__kernel_cmd_if_xparse:NTF #1
+  {
+    \exp_args:Nf \str_case_e:nnTF
+      {
+        \exp_args:Nf \tl_if_empty:nT { \cs_argument_spec:N #1 }
+          {
+            \exp_last_unbraced:Nf \@@_cmd_if_xparse_aux:w
+              { \cs_replacement_spec:N #1 } ~ \q_stop
+          }
+      }
+      {
+        { \token_to_str:N \@@_start:nNNnnn } { }
+        { \token_to_str:N \@@_start_expandable:nNNNNn } { }
+        { \token_to_str:N \@@_start_env:nnnnn } { }
+      }
+  }
+\cs_new:Npn \@@_cmd_if_xparse_aux:w #1 ~ #2 \q_stop {#1}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_peek_nonspace:NTF, \@@_peek_nonspace_remove:NTF, \@@_peek_nonspace_aux:nNNTF}
+%   Collect spaces in a loop, and put the collected spaces back in the
+%   false branch of a call to \cs{peek_meaning:NTF} or
+%   \cs{peek_meaning_remove:NTF}.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_peek_nonspace:NTF
+  { \@@_peek_nonspace_aux:nNNTF { } \@@_peek_meaning:NTF }
+\cs_new_protected:Npn \@@_peek_nonspace_remove:NTF
+  { \@@_peek_nonspace_aux:nNNTF { } \@@_peek_meaning_remove:NTF }
+\cs_new_protected:Npn \@@_peek_nonspace_aux:nNNTF #1#2#3#4#5
+  {
+    \peek_meaning_remove:NTF \c_space_token
+      { \@@_peek_nonspace_aux:nNNTF { #1 ~ } #2 #3 {#4} {#5} }
+      { #2 #3 { #4 } { #5 #1 } }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_peek_meaning:NTF, \@@_peek_meaning_remove:NTF}
+% \begin{macro}{\@@_peek_cs_check_equal:NNN, \@@_peek_meaning_aux:NNTF, \@@_peek_true_remove:NNw}
+%   Peek ahead for a token with a given meaning.  In case the search
+%   token is a control sequence, also check that the \meta{csname} is
+%   the same as the control sequence peeked at.  This extra verification
+%   is necessary when the command is delimited by control sequence tokens
+%   (as opposed to character tokens), and we want the the exact same
+%   control sequence to match.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_peek_meaning:NTF
+  { \@@_peek_meaning_aux:NNTF \c_false_bool }
+\cs_new_protected:Npn \@@_peek_meaning_remove:NTF
+  { \@@_peek_meaning_aux:NNTF \c_true_bool }
+\cs_new_protected:Npn \@@_peek_meaning_aux:NNTF #1#2#3#4
+  {
+    \tl_set:Nn \l_@@_tmpa_tl {#3}
+    \tl_set:Nn \l_@@_tmpb_tl {#4}
+    \peek_meaning:NTF #2
+      {
+        \token_if_eq_meaning:NNTF #2 \c_group_begin_token
+          { \@@_peek_true_remove:Nw #1 }
+          {
+            \@@_token_if_cs:NTF #2
+              { \@@_peek_cs_check_equal:NNN #1 #2 }
+              { \@@_peek_true_remove:Nw #1 }
+          }
+      }
+      { \l_@@_tmpb_tl }
+  }
+\cs_new_protected:Npn \@@_peek_cs_check_equal:NNN #1#2#3
+  {
+    \str_if_eq:nnTF {#2} {#3}
+      { \@@_peek_true_remove:Nw #1 }
+      { \l_@@_tmpb_tl }
+    #3
+  }
+\cs_new_protected:Npn \@@_peek_true_remove:Nw #1
+  {
+    \bool_if:NTF #1
+      {
+        \tex_afterassignment:D \l_@@_tmpa_tl
+        \cs_set_eq:NN \@@_tmp:w
+      }
+      { \l_@@_tmpa_tl }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \subsection{Messages}
+%
+% \begin{variable}{\c_@@_ignore_def_tl}
+%    \begin{macrocode}
+\tl_const:Nn \c_@@_ignore_def_tl
+  { \\ \\ LaTeX~will~ignore~this~entire~definition. }
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{macro}{\@@_environment_or_command:}
+%   Two texts used in several messages.
+%    \begin{macrocode}
+\cs_new:Npn \@@_environment_or_command:
+  {
+    \bool_if:NTF \l_@@_environment_bool
+      { environment ~ ' \l_@@_environment_str ' }
+      {
+        command ~ '
+        \exp_args:Nf \tl_trim_spaces:n
+          { \exp_after:wN \token_to_str:N \l_@@_fn_tl }
+        '
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% Some messages intended as errors when defining commands/environments.
+%    \begin{macrocode}
+\msg_new:nnnn { cmd } { arg-after-body }
+  { In~the~definition~of~#1,~b~(body)~argument~must~be~last. }
+  {
+    The~'body'~argument~type~is~followed~by~'#2'~in~the~argument~
+    specification~of~the~#1.~This~is~not~allowed.
+    \c_@@_ignore_def_tl
+  }
+\msg_new:nnnn { cmd } { bad-arg-spec }
+  { Bad~argument~specification~'#2'~for~#1. }
+  {
+    The~argument~specification~provided~was~not~valid:~
+    one~or~more~mandatory~pieces~of~information~were~missing.
+    \c_@@_ignore_def_tl
+  }
+\msg_new:nnnn { cmd } { command-already-defined }
+  { Command~'#1'~already~defined! }
+  {
+    You~have~used~#2~
+    with~a~command~that~already~has~a~definition. \\ \\
+    The~existing~definition~of~'#1'~will~not~be~altered.
+  }
+\msg_new:nnnn { cmd } { command-not-yet-defined }
+  { Command ~'#1'~not~yet~defined! }
+  {
+    You~have~used~#2~
+    with~a~command~that~was~never~defined.
+    \c_@@_ignore_def_tl
+  }
+\msg_new:nnnn { cmd } { environment-already-defined }
+  { Environment~'#1'~already~defined! }
+  {
+    You~have~used~\NewDocumentEnvironment
+    with~an~environment~that~already~has~a~definition. \\ \\
+    The~existing~definition~of~'#1'~will~not~be~altered.
+  }
+\msg_new:nnnn { cmd } { environment-not-yet-defined }
+  { Environment~'#1'~not~yet~defined! }
+  {
+    You~have~used~\RenewDocumentEnvironment
+    with~an~environment~that~was~never~defined.
+    \c_@@_ignore_def_tl
+  }
+\msg_new:nnnn { cmd } { expandable-ending-optional }
+  {
+    Argument~specification~'#2'~for~expandable~command~'#1'~
+    ends~with~optional~argument.
+  }
+  {
+    Expandable~commands~must~have~a~final~mandatory~argument~
+    (or~no~arguments~at~all).~You~cannot~have~a~terminal~optional~
+    argument~with~expandable~commands.
+  }
+\msg_new:nnnn { cmd } { inconsistent-long }
+  { Inconsistent~long~arguments~for~expandable~command~'#1'. }
+  {
+    The~arguments~for~an~expandable~command~must~not~involve~short~
+    arguments~after~long~arguments.~You~have~tried~to~mix~the~two~types.
+  }
+\msg_new:nnnn { cmd } { invalid-command-arg }
+  { Argument~type~'#2'~not~available~for~#1. }
+  {
+    The~letter~'#2'~can~only~be~used~in~environment~argument~
+    specifications,~not~for~commands.
+    \\ \\
+    LaTeX~will~ignore~this~entire~definition.
+  }
+\msg_new:nnnn { cmd } { invalid-expandable-argument-type }
+  { Argument~type~'#2'~not~available~for~expandable~command~'#1'. }
+  {
+    The~letter~'#2'~specifies~an~argument~type~which~cannot~be~used~
+    in~an~expandable~command.
+    \c_@@_ignore_def_tl
+  }
+\msg_new:nnnn { cmd } { invalid-after-optional-expandably }
+  {
+    Argument~type~'#2'~not~available~after~optional~argument~
+    for~expandable~command~'#1'.
+  }
+  {
+    The~letter~'#2'~specifies~an~argument~type~which~cannot~be~used~
+    in~an~expandable~command~after~an~optional~argument.
+    \c_@@_ignore_def_tl
+  }
+\msg_new:nnnn { cmd } { non-trailing-obey-spaces }
+  { Prefix~'!'~used~before~mandatory~argument~'#2'~of~#1. }
+  {
+    The~prefix~'!'~can~only~apply~to~trailing~optional~arguments.
+    \c_@@_ignore_def_tl
+  }
+\msg_new:nnnn { cmd } { not-definable }
+  { First~argument~of~'#2'~must~be~a~command. }
+  {
+    The~first~argument~of~'#2'~should~be~the~document~command~that~will~
+    be~defined.~The~provided~argument~'#1'~is~a~character.~Perhaps~a~
+    backslash~is~missing?
+    \c_@@_ignore_def_tl
+  }
+\msg_new:nnnn { cmd } { not-one-token }
+  { First~argument~of~'#2'~must~be~a~command. }
+  {
+    The~first~argument~of~'#2'~should~be~the~document~command~that~will~
+    be~defined.~The~provided~argument~'#1'~contains~more~than~one~
+    token.~Perhaps~a~backslash~is~missing?
+    \c_@@_ignore_def_tl
+  }
+\msg_new:nnnn { cmd } { not-single-token }
+  {
+    Argument~delimiter~'#2'~for~the~#1~should~be~
+    a~single~non-space~token.
+  }
+  {
+    The~argument~specification~provided~was~not~valid:~in~a~place~
+    where~a~single~token~is~required,~LaTeX~found~'#2'.
+    \c_@@_ignore_def_tl
+  }
+\msg_new:nnnn { cmd } { forbidden-implicit-group-token }
+  { Argument~delimiter~'#2'~for~the~#1~is~not~allowed. }
+  {
+    The~argument~specification~provided~was~not~valid:~the~implicit~
+    #3-group~token~'#2'~is~not~allowed~as~an~argument~delimiter.
+    \c_@@_ignore_def_tl
+  }
+\msg_new:nnnn { cmd } { processor-in-expandable }
+  { Argument~processor~'>{#2}'~cannot~be~used~for~the~expandable~command~'#1'. }
+  {
+    The~argument~specification~for~#1~contains~a~processor~function:~
+    this~is~only~supported~for~standard~robust~commands.
+    \c_@@_ignore_def_tl
+  }
+\msg_new:nnnn { cmd } { too-many-arguments }
+  { Too~many~arguments~in~argument~specification~'#2'~of~#1. }
+  {
+    The~argument~specification~provided~has~more~than~9~arguments.~
+    This~cannot~be~implemented.
+    \c_@@_ignore_def_tl
+  }
+\msg_new:nnnn { cmd } { two-markers }
+  { Two~'#2'~apply~to~the~same~argument~in~argument~specification~of~#1. }
+  {
+    The~argument~specification~provided~has~two~markers~'#2'~applying~
+    to~the~same~argument;~these~are~redundant.
+  }
+\msg_new:nnnn { cmd } { unknown-argument-type }
+  { Unknown~argument~type~'#2'~for~the~#1. }
+  {
+    The~letter~'#2'~does~not~specify~a~known~argument~type.
+    \c_@@_ignore_def_tl
+  }
+\msg_new:nnnn { cmd } { xparse-argument-type }
+  { Deprecated~argument~type~'#2'~for~the~#1~requires~xparse. }
+  {
+    The~letter~'#2'~specifies~a~known~argument~type~that~requires~
+    the~xparse~package.
+    \c_@@_ignore_def_tl
+  }
+%    \end{macrocode}
+%
+% Errors when using commands/environments.  The \texttt{if-boolean}
+% message is always used in expandable errors.  The
+% \texttt{loop-in-defaults} and \texttt{missing-required} messages can
+% be expandable or not expandable.
+%    \begin{macrocode}
+\msg_new:nnn { cmd } { if-boolean }
+  { Invalid~use~\iow_char:N\\IfBooleanTF~{#1} }
+\msg_new:nnnn { cmd } { loop-in-defaults }
+  { Defaults~of~#1~have~circular~dependency. }
+  {
+    The~default~values~of~two~or~more~arguments~of~the~#1~
+    depend~on~each~other~in~a~way~that~cannot~be~resolved.
+  }
+\msg_new:nnnn { cmd } { missing-required }
+  { Missing~required~argument~for~#1. }
+  {
+    The~current~#1~expects~an~argument~starting~with~'#2'.~
+    LaTeX~did~not~find~it,~and~will~insert~a~default~value~to~be~processed.
+  }
+\msg_new:nnnn { cmd } { non-xparse }
+  { \str_uppercase:n #1~not~defined~using~xparse. }
+  {
+    You~have~asked~for~the~argument~specification~for~the~#1,~
+    but~this~was~not~defined~using~xparse.
+  }
+\msg_new:nnnn { cmd } { split-excess-tokens }
+  { Too~many~'#1'~tokens~when~trying~to~split~argument. }
+  {
+    LaTeX~was~asked~to~split~the~input~'#3'~
+    at~each~occurrence~of~the~token~'#1',~up~to~a~maximum~of~#2~parts.~
+    There~were~too~many~'#1'~tokens.
+  }
+\msg_new:nnnn { cmd } { unknown }
+  { Unknown~document~#1. }
+  {
+    You~have~asked~for~the~argument~specification~for~the~#1,~
+    but~it~is~not~defined.
+  }
+\msg_new:nnnn { cmd } { verbatim-newline }
+  { Verbatim~argument~of~#1~ended~by~end~of~line. }
+  {
+    The~verbatim~argument~of~the~#1~cannot~contain~more~than~one~line,~
+    but~the~end~
+    of~the~current~line~has~been~reached.~You~may~have~forgotten~the~
+    closing~delimiter.
+    \\ \\
+    LaTeX~will~ignore~'#2'.
+  }
+\msg_new:nnnn { cmd } { verbatim-tokenized }
+  { The~verbatim~#1~cannot~be~used~inside~an~argument. }
+  {
+    The~#1~takes~a~verbatim~argument.~
+    It~may~not~appear~within~the~argument~of~another~function.~
+    It~received~an~illegal~token \tl_if_empty:nF {#3} { ~'#3' } .
+    \\ \\
+    LaTeX~will~ignore~'#2'.
+  }
+%    \end{macrocode}
+%
+% Intended more for information.
+%    \begin{macrocode}
+\msg_new:nnn { cmd } { define-command }
+  {
+    Defining~command~#1~
+    with~sig.~'#2'~\msg_line_context:.
+  }
+\msg_new:nnn { cmd } { define-environment }
+  {
+    Defining~environment~'#1'~
+    with~sig.~'#2'~\msg_line_context:.
+  }
+\msg_new:nnn { cmd } { redefine-command }
+  {
+    Redefining~command~#1~
+    with~sig.~'#2'~\msg_line_context:.
+  }
+\msg_new:nnn { cmd } { redefine-environment }
+  {
+    Redefining~environment~'#1'~
+    with~sig.~'#2'~\msg_line_context:.
+  }
+\msg_new:nnn { cmd } { optional-mandatory }
+  {
+    Since~the~mandatory~argument~'#1'~has~the~same~delimiter~'#2'~
+    as~a~previous~optional~argument,~it~will~not~be~possible~to~
+    omit~all~optional~arguments~when~calling~this~command.
+  }
+\msg_new:nnn { cmd } { unsupported-let }
+  {
+    The~command~'#1'~was~undefined~but~not~the~associated~commands~
+    '#1~code'~and/or~'#1~defaults'.~Maybe~you~tried~using~
+    \iow_char:N\\let.~This~may~lead~to~an~infinite~loop.
+  }
+%    \end{macrocode}
+%
+% \subsection{User functions}
+%
+% The user functions are more or less just the internal functions
+% renamed.
+%
+% \begin{macro}{\BooleanFalse}
+% \begin{macro}{\BooleanTrue}
+%   Design-space names for the Boolean values.
+%    \begin{macrocode}
+\cs_new_eq:NN \BooleanFalse \c_false_bool
+\cs_new_eq:NN \BooleanTrue  \c_true_bool
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\NewDocumentCommand}
+% \begin{macro}{\RenewDocumentCommand}
+% \begin{macro}{\ProvideDocumentCommand}
+% \begin{macro}{\DeclareDocumentCommand}
+%   The user macros are pretty simple wrappers around the internal ones.
+%   There is however a check that the first argument is a single token,
+%   possibly surrounded by spaces (hence the strange \cs{use:nnn}), and
+%   is definable.
+%    \begin{macrocode}
+\cs_new_protected:Npn \NewDocumentCommand #1#2#3
+  {
+    \@@_check_definable:nNT {#1} \NewDocumentCommand
+      {
+        \cs_if_exist:NTF #1
+          {
+            \msg_error:nnxx { cmd } { command-already-defined }
+              { \use:nnn \token_to_str:N #1 { } }
+              { \token_to_str:N \NewDocumentCommand }
+          }
+          { \@@_declare_cmd:Nnn #1 {#2} {#3} }
+      }
+  }
+\cs_new_protected:Npn \RenewDocumentCommand #1#2#3
+  {
+    \@@_check_definable:nNT {#1} \RenewDocumentCommand
+      {
+        \cs_if_exist:NTF #1
+          { \@@_declare_cmd:Nnn #1 {#2} {#3} }
+          {
+            \msg_error:nnxx { cmd } { command-not-yet-defined }
+              { \use:nnn \token_to_str:N #1 { } }
+              { \token_to_str:N \RenewDocumentCommand }
+          }
+      }
+  }
+\cs_new_protected:Npn \ProvideDocumentCommand #1#2#3
+  {
+    \@@_check_definable:nNT {#1} \ProvideDocumentCommand
+      { \cs_if_exist:NF #1 { \@@_declare_cmd:Nnn #1 {#2} {#3} } }
+ }
+\cs_new_protected:Npn \DeclareDocumentCommand #1#2#3
+  {
+    \@@_check_definable:nNT {#1} \DeclareDocumentCommand
+      { \@@_declare_cmd:Nnn #1 {#2} {#3} }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\NewDocumentEnvironment}
+% \begin{macro}{\RenewDocumentEnvironment}
+% \begin{macro}{\ProvideDocumentEnvironment}
+% \begin{macro}{\DeclareDocumentEnvironment}
+%   Very similar for environments.
+%    \begin{macrocode}
+\cs_new_protected:Npn \NewDocumentEnvironment #1#2#3#4
+  {
+    \cs_if_exist:cTF {#1}
+      { \msg_error:nnx { cmd } { environment-already-defined } {#1} }
+      { \@@_declare_env:nnnn {#1} {#2} {#3} {#4} }
+  }
+\cs_new_protected:Npn \RenewDocumentEnvironment #1#2#3#4
+  {
+    \cs_if_exist:cTF {#1}
+      { \@@_declare_env:nnnn {#1} {#2} {#3} {#4} }
+      { \msg_error:nnx { cmd } { environment-not-yet-defined } {#1} }
+  }
+\cs_new_protected:Npn \ProvideDocumentEnvironment #1#2#3#4
+  { \cs_if_exist:cF {#1} { \@@_declare_env:nnnn {#1} {#2} {#3} {#4} } }
+\cs_new_protected:Npn \DeclareDocumentEnvironment #1#2#3#4
+  { \@@_declare_env:nnnn {#1} {#2} {#3} {#4} }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\NewExpandableDocumentCommand}
+% \begin{macro}{\RenewExpandableDocumentCommand}
+% \begin{macro}{\ProvideExpandableDocumentCommand}
+% \begin{macro}{\DeclareExpandableDocumentCommand}
+%   The expandable versions are essentially the same as the basic
+%   functions.  The strange \cs{use:nnn} is there in case |#1| is
+%   surrounded with spaces, as can happen with usual document catcodes
+%   in \cs{RenewExpandableDocumentCommand} |{| |\!| |}| \ldots{}
+%    \begin{macrocode}
+\cs_new_protected:Npn \NewExpandableDocumentCommand #1#2#3
+  {
+    \@@_check_definable:nNT {#1} \NewExpandableDocumentCommand
+      {
+        \cs_if_exist:NTF #1
+          {
+            \msg_error:nnxx { cmd } { command-already-defined }
+              { \use:nnn \token_to_str:N #1 { } }
+              { \token_to_str:N \NewExpandableDocumentCommand }
+          }
+          { \@@_declare_expandable_cmd:Nnn #1 {#2} {#3} }
+      }
+  }
+\cs_new_protected:Npn \RenewExpandableDocumentCommand #1#2#3
+  {
+    \@@_check_definable:nNT {#1} \RenewExpandableDocumentCommand
+      {
+        \cs_if_exist:NTF #1
+          { \@@_declare_expandable_cmd:Nnn #1 {#2} {#3} }
+          {
+            \msg_error:nnxx { cmd } { command-not-yet-defined }
+              { \use:nnn \token_to_str:N #1 { } }
+              { \token_to_str:N \RenewExpandableDocumentCommand }
+          }
+      }
+  }
+\cs_new_protected:Npn \ProvideExpandableDocumentCommand #1#2#3
+  {
+    \@@_check_definable:nNT {#1} \ProvideExpandableDocumentCommand
+      {
+        \cs_if_exist:NF #1
+          { \@@_declare_expandable_cmd:Nnn #1 {#2} {#3} }
+      }
+ }
+\cs_new_protected:Npn \DeclareExpandableDocumentCommand #1#2#3
+  {
+    \@@_check_definable:nNT {#1} \DeclareExpandableDocumentCommand
+      { \@@_declare_expandable_cmd:Nnn #1 {#2} {#3} }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\IfBooleanT, \IfBooleanF, \IfBooleanTF}
+%   The logical \meta{true} and \meta{false} statements are just the
+%   normal \cs{c_true_bool} and \cs{c_false_bool} so \cs{bool_if:NTF} is
+%   almost enough.  However, this code-level function blows up badly
+%   when passed invalid input.  We want \cs{IfBooleanTF} to accept a
+%   single (non-space) token equal to \cs{c_true_bool} or
+%   \cs{c_false_bool}, possibly surrounded by spaces.  If the input is
+%   blank or multiple items, jump to the error and pick the false
+%   branch.  If the input, ignoring spaces (we do this by omitting
+%   braces in the \cs{tl_if_single_token:nF} test), is not a single
+%   token then jump to the error as well.  It is then safe to compare
+%   the token to the two booleans, picking the appropriate branch.  If
+%   neither matches, we jump to the error as well.
+%    \begin{macrocode}
+\cs_new:Npn \IfBooleanTF #1
+  {
+    \tl_if_single:nF {#1}
+      { \prg_break:n { \use:n } }
+    \tl_if_single_token:nF #1
+      { \prg_break:n { \use:n } }
+    \token_if_eq_meaning:NNT #1 \c_true_bool
+      { \prg_break:n { \use_ii:nnn } }
+    \token_if_eq_meaning:NNT #1 \c_false_bool
+      { \prg_break:n { \use_iii:nnn } }
+    \prg_break:n { \use:n }
+    \prg_break_point:
+    {
+      \msg_expandable_error:nnn { cmd } { if-boolean } {#1}
+      \use_ii:nn
+    }
+  }
+\cs_new:Npn \IfBooleanT #1#2 { \IfBooleanTF {#1} {#2} { } }
+\cs_new:Npn \IfBooleanF #1 { \IfBooleanTF {#1} { } }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\IfNoValueT, \IfNoValueF, \IfNoValueTF}
+%   Simple re-naming.
+%    \begin{macrocode}
+\cs_new_eq:NN \IfNoValueF  \tl_if_novalue:nF
+\cs_new_eq:NN \IfNoValueT  \tl_if_novalue:nT
+\cs_new_eq:NN \IfNoValueTF \tl_if_novalue:nTF
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{\IfValueT, \IfValueF, \IfValueTF}
+%   Inverted logic.
+%    \begin{macrocode}
+\cs_new:Npn \IfValueF { \tl_if_novalue:nT }
+\cs_new:Npn \IfValueT { \tl_if_novalue:nF }
+\cs_new:Npn \IfValueTF #1#2#3 { \tl_if_novalue:nTF {#1} {#3} {#2} }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\ProcessedArgument}
+%   Processed arguments are returned using this name, which is reserved
+%   here although the definition will change.
+%    \begin{macrocode}
+\tl_new:N \ProcessedArgument
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\ReverseBoolean, \SplitArgument, \SplitList, \TrimSpaces}
+%   Simple copies.
+%    \begin{macrocode}
+\cs_new_eq:NN \ReverseBoolean \@@_bool_reverse:N
+\cs_new_eq:NN \SplitArgument  \@@_split_argument:nnn
+\cs_new_eq:NN \SplitList      \@@_split_list:nn
+\cs_new_eq:NN \TrimSpaces     \@@_trim_spaces:n
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\ProcessList}
+%   To support \cs{SplitList}.
+%    \begin{macrocode}
+\cs_new_eq:NN \ProcessList \tl_map_function:nN
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\GetDocumentCommandArgSpec}
+% \begin{macro}{\GetDocumentEnvironmentArgSpec}
+% \begin{macro}{\ShowDocumentCommandArgSpec}
+% \begin{macro}{\ShowDocumentEnvironmentArgSpec}
+%   More simple mappings, with a check that the argument is a single
+%   control sequence or active character.
+%    \begin{macrocode}
+\cs_new_protected:Npn \GetDocumentCommandArgSpec #1
+  {
+    \@@_check_definable:nNT {#1} \GetDocumentCommandArgSpec
+      { \@@_get_arg_spec:N #1 }
+  }
+\cs_new_eq:NN \GetDocumentEnvironmentArgSpec \@@_get_arg_spec:n
+\cs_new_protected:Npn \ShowDocumentCommandArgSpec #1
+  {
+    \@@_check_definable:nNT {#1} \ShowDocumentCommandArgSpec
+      { \@@_show_arg_spec:N #1 }
+  }
+\cs_new_eq:NN \ShowDocumentEnvironmentArgSpec \@@_show_arg_spec:n
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% Finally as promised, restore \cs{__kernel_chk_if_free_cs:N}:
+%    \begin{macrocode}
+%<latexrelease>\cs_gset_eq:NN \__kernel_chk_if_free_cs:N \@@_chk_if_free_cs:N
+%<latexrelease>\cs_undefine:N \@@_chk_if_free_cs:N
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<latexrelease>
+%<latexrelease>\IncludeInRelease{0000/00/00}{ltcmd}%
+%<latexrelease>                 {Document~command~parser}%
+%<latexrelease>
+%<latexrelease>\EndModuleRelease
+\ExplSyntaxOff
+%<latexrelease>\@ifundefined{ExplSyntaxOff}{}{\latexrelease@postexpl}
+%<latexrelease>\catcode`\^^@=\@latexrelease@catcode@null\relax
+%</2ekernel|latexrelease>
+%    \end{macrocode}
+%
+% We need to stop DocStrip treating |@@| in a special way at this point.
+%    \begin{macrocode}
+%<@@=>
+%    \end{macrocode}
+%
+% \Finale

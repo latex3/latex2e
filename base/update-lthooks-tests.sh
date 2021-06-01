@@ -1,3 +1,4 @@
+
 l3build save -cconfig-lthooks2 \
    lthooks2-002 \
    lthooks2-004 \
@@ -7,11 +8,39 @@ l3build save -cconfig-lthooks2 \
    shipout2-004 \
    shipout2-006 \
    shipout2-007 \
-   github-0360
+   shipout2-008 \
+   shipout2-009 \
+   shipout2-010 \
+   shipout2-011 \
+   shipout2-012 \
+   shipout2-013 \
+   shipout2-014 \
+   github-0360  \
+   github-0431  \
+   ltpara-001 \
+   ltpara-002 \
+   ltpara-003 \
+   ltpara-004 \
+   ltpara-005 \
+   ltpara-006 \
+   ltpara-007 \
+   ltpara-008
 
 
 
 l3build save -cconfig-lthooks \
+ ltcmdhooks-001 \
+ ltcmdhooks-002 \
+ ltcmdhooks-003 \
+ ltcmdhooks-004 \
+ ltcmdhooks-005 \
+ ltcmdhooks-005a \
+ ltcmdhooks-006 \
+ ltcmdhooks-007 \
+ ltcmdhooks-008 \
+ ltcmdhooks-009 \
+ ltcmdhooks-010 \
+ ltcmdhooks-011 \
    filehook-001 \
    filehook-002 \
    filehook-003 \
@@ -47,9 +76,13 @@ l3build save -cconfig-lthooks \
    lthooks-024 \
    lthooks-025 \
    lthooks-026 \
+   lthooks-027 \
+   lthooks-028 \
+   lthooks-029 \
    lthooks-errors \
    lthooks-etoolbox \
    lthooks-legacy \
+   lthooks-doc-examples \
    shipout-000 \
    shipout-002 \
    shipout-004 \

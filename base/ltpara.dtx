@@ -1,0 +1,1223 @@
+% \iffalse meta-comment
+%
+%% File: ltpara.dtx (C) Copyright 2020-2021
+%       Frank Mittelbach, LaTeX Team
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+%
+%%% From File: ltpara.dtx
+%
+%    \begin{macrocode}
+\def\ltparaversion{v1.0g}
+\def\ltparadate{2021/05/27}
+%    \end{macrocode}
+%<*driver>
+\documentclass{l3doc}
+
+%\usepackage{ltpara}
+
+% Fixing footnotes in  functions and variables: this should be in l3doc!
+\newcommand\fixfootnote[2]{\footnotemark
+  \AddToHookNext{env/#1/after}{\footnotetext{#2}}}
+\AddToHook{env/function/begin}{\def\footnote{\fixfootnote{function}}}
+\AddToHook{env/variable/begin}{\def\footnote{\fixfootnote{variable}}}
+
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{ltpara.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+% \providecommand\hook[1]{\texttt{#1}}
+% \providecommand\env[1]{\texttt{#1}}
+%
+%
+%
+% \title{The \texttt{ltpara.dtx} code\thanks{This file has version
+%    \ltparaversion\ dated \ltparadate, \copyright\ \LaTeX\
+%    Project.}}
+% \author{Frank Mittelbach}
+%
+% \maketitle
+%
+%
+% \begin{abstract}
+%    This code defines four special kernel hooks to support paragraph
+%    tagging as well as four public hooks which can be occasionally
+%    useful.
+% \end{abstract}
+%
+% \tableofcontents
+%
+%
+% \section{Introduction}
+%
+%
+%    The building of paragraphs in the \TeX{} engine(s) has a number
+%    of peculiarities that makes it on one hand fairly flexible but on
+%    the other hand somewhat awkward to control or reliably to extend.
+%    Thus to better understand the code below we start with a brief introduction
+%    of the mechanism; for more details refer to the
+%    \TeX{}book~\cite[chap.~14]{texbook} (for the full truth you may
+%    even have to study the program code).
+%
+% \subsection{The default processing done by the engine}
+%
+%    \TeX{} automatically starts building a paragraph when it is
+%    currently in vertical mode and encounters anything that can only
+%    live in horizontal mode. Most often this is a character, but
+%    there are also many commands that can be used only in horizontal mode.
+%    If any of them is encountered, \TeX{} will immediately back up
+%    (i.e., the character or command is read later again), adds a
+%    \cs{parskip} glue to the current vertical list unless the list is
+%    empty, switches to
+%    horizontal mode, starts its special \enquote{start of paragraph
+%    processing} and only then rereads the character or command that
+%    caused the mode change.\footnote{Already not quite true: the
+%    command \cs{noindent} starts the paragraph but influences the
+%    special processing by suppressing the paragraph indentation box
+%    normally inserted by it.}
+%
+%    This \enquote{start of paragraph
+%    processing} first adds an empty box at the start of the
+%    horizontal list of width \cs{parindent} (which represents the
+%    paragraph indentation) unless the paragraph was started with
+%    \cs{noindent} in which case no such box is
+%    added\footnote{That's a bit different from placing a zero-sized
+%    box!}. It then reads and processes all tokens stored in the
+%    special engine token register \cs{everypar}. After that it reads
+%    and processes whatever has caused the paragraph to start.
+%
+%    Thus out of the box, \TeX{} offers the possibility to put some
+%    special code into \cs{everypar} to gain control at (more or less)
+%    the start of the paragraph. For example, in LaTeX{} and a number
+%    of packages,  special code like the following is sometimes used:
+%\begin{verbatim}
+%  \everypar{{\setbox\z@\lastbox}\everypar{} ...}
+%\end{verbatim}
+%    This removes the paragraph indentation box again  (that was already
+%    placed by \TeX), then resets \cs{everypar} so that it doesn't do
+%    anything on the next paragraph start and then does whatever it
+%    wants to do, e.g., in an \cs{item} of a list it will typeset the label in
+%    front of the paragraph text.
+%    However, there is only one such \cs{everypar} token register and
+%    if different packages and/or the kernel all attempt to add their
+%    own code here, coordination is very difficult if not impossible.
+%
+%    The process when the paragraph ends has different mechanisms and interfaces.
+%    A paragraph ends when the engine  primitive \cs{par} is called
+%    while \TeX{} is in unrestricted horizontal mode, i.e., is
+%    building a paragraph. At other times this primitive does nothing
+%    or generates as an error depending on the mode \TeX{} is in,
+%    e.g., the \cs{par} in
+%    \verb=\hbox{a\par b}= is ignored, but \verb=$a\par b$= would complain.
+%
+%    If this primitive ends the paragraph it does some special
+%    \enquote{end of horizontal list} processing, then calls \TeX{} paragraph
+%    builder that breaks the horizontal list into lines then these
+%    lines are added as boxes to the enclosing vertical list and
+%    \TeX{} returns to vertical mode.
+%
+%    This \cs{par} command can be given explicitly, but there are also
+%    situations in which \TeX{} is generating it on the fly. Most
+%    often this happens when \TeX\ encounters a blank line which is
+%    automatically changed to a \cs{par} command which is then
+%    executed. The other possibility is that \TeX{} encounters a
+%    command which is incompatible with horizontal processing, e.g.,
+%    \cs{vskip} (a request for adding vertical space). In such case it
+%    silently backs up, and inserts a \cs{par} in the hope that this
+%    gets it out of horizontal mode and makes the offending command
+%    acceptable.
+
+%    The important point to note here is that \TeX{} really inserts
+%    the command \cs{par} which can be redefined. Thus, it may not have
+%    its original \enquote{primitive} meaning and therefore may not end the
+%    horizontal list and call the paragraph builder. This approach
+%    offers some flexibility but also allows you  to easily produce a
+%    \TeX{} document that loops forever, for example, the simple line
+%\begin{verbatim}
+%   A \let\par\relax \vskip
+%\end{verbatim}
+%    will start a horizontal list at \texttt{A}, redefines \cs{par},
+%    then sees \cs{vskip} and inserts \cs{par} to end the
+%    paragraph. But this now only runs \cs{relax} so nothing changes
+%    and \cs{vskip} is read again, issues a \cs{par} which \ldots. In
+%    short, it takes a plain \TeX{} document with five tokens to run
+%    forever (as not even memory is consumed and therefore eventually
+%    exhausted).
+%
+%    There are no other ways than changing \cs{par} to gain control at
+%    the end of a paragraph, i.e., there is no token list like
+%    \cs{everypar} that is inserted, i.e., the only way to change the
+%    default behavior is to modify the action that \cs{par} executes
+%    with similar issues as outlined before: different processes need
+%    to ensure that they do not overwrite their modifications or
+%    worse, think that the \cs{par} in front of them is the engine
+%    primitive while in fact it has already been changed by other
+%    code.
+%
+%
+%    To make matters slightly worse there are a few places where
+%    \TeX{} handles the situation differently (most likely for speed
+%    reasons back when computers were much slower). If \TeX{} finds
+%    itself in unrestricted horizontal mode at the end of building a
+%    vertical box (or an \cs{insert}, \cs{vadjust} or at the end of
+%    executing the output routine code), it will finish the horizontal
+%    list not by issuing a \cs{par} command (which would be consistent
+%    with all other places, but by simply executing the primitive version
+%    of \cs{par} regardless of the definition that \cs{par} has at the
+%    time.
+%
+%    Thus, if you have carefully crafted a redefined \cs{par} to execute
+%    some special actions at the end of a paragraph and you write
+%    something like
+%\begin{verbatim}
+%   \vbox{Some paragraph ... text.}
+%\end{verbatim}
+%    you will find that your code has never run for the last paragraph
+%    in that box. \LaTeX{} avoids this problem, by making sure that
+%    all its boxes (such as \cs{parbox} or the \env{minipage}
+%    environment, etc.) all internally add an explicit \cs{par} at the
+%    end so that such code is run and \TeX{} finds itself in vertical
+%    mode already without the need to start up the paragraph builder
+%    internally. But, of course, this only works for boxes under direct
+%    control of the \LaTeX{} kernel, if some package uses low-level
+%    \cs{vbox}es without adding this precaution the \TeX{}
+%    optimization kicks in and no special \cs{par} code is executed.
+%
+%    And there is another optimization that is painful: if a paragraph
+%    is interrupted by a mathematical display, e.g., \verb=\[...\]= in
+%    \LaTeX{} or \verb=$$...$$= in plain \TeX{}, then \TeX{} will
+%    resume horizontal mode afterward, i.e., build a new horizontal
+%    list (without inserting an indentation box or \cs{everypar} at
+%    that point). However, if that list immediately ends with an
+%    explicit or implicit \cs{par} then \TeX{} will simply throw away
+%    this \enquote{null} paragraph and not do its usual \enquote{end
+%    of horizontal list} processing, so this special case need to be
+%    accounted for when introducing some extended processing.
+%
+%
+%
+% \section{The new mechanism implemented for \LaTeX{}}
+%
+%    To improve the situation (and also to support automatic tagging
+%    of PDF documents) we now offer public as well as private hooks at
+%    the start and end of the paragraph processing. The public hooks
+%    can be used by packages (or by the user in the preamble or
+%    within the document) and using the hook mechanisms it is possible
+%    to reorder or arrange code from different packages in a way that
+%    it can safely coexist.
+%
+%    To make that happen we have to make use of the basic
+%    functionality that is offered by \TeX{}, e.g., we install
+%    special code inside \cs{everypar} to provide hooks at the
+%    beginning and we redefine \cs{par} to do some special processing
+%    when appropriate to install hooks at the end of the paragraph.
+%
+%    In order to make this work, we have to ensure that package use of
+%    \cs{everypar} is not overwriting our code. This is done through a
+%    trick: we basically hide the real \cs{everypar} from the packages
+%    and offer them a new token register (with the same name). So if
+%    they install their own code it doesn't overwrite ours. Our code
+%    then inserts the new \cs{everypar} at the right place inside the
+%    process so that it looks as if it was the primitive
+%    \cs{everypar}.\footnote{Ideally, \cs{everypar} wouldn't be used
+%    at all by packages and instead they would simply write their code
+%    into the hooks now offered by the kernel. However, while this is
+%    the longterm goal and clearly an improvement (because then the
+%    packages do no longer need to worry about getting their code
+%    overwritten or needing to account for already existing code in
+%    \cs{everypar}), this will not happen overnight. For that reason
+%    support for this legacy method is retained.}
+%
+%    At the end of the paragraph it would be great if we could use a
+%    similar trick. However, due to the fact that \TeX{} inserts the
+%    token \cs{par} (that doesn't have a defined meaning) we can't hide
+%    \enquote{the real thing\textsuperscript{TM}} and offer the
+%    package an indistinguishable alternate.
+%
+%    Fortunately, \LaTeX{} has already redefined \cs{par} for its own
+%    purposes. As a result there aren't many packages that attempt to
+%    change \cs{par}, because without a lot of extra care that would
+%    fail miserably. But bottom line, if you load a package that
+%    alters \cs{par} then the end of paragraph hooks are most likely
+%    not executing while that redefinition is
+%    active.\footnote{Similarly to the \cs{everypar} situation, the
+%    remedy is that such packages stop doing this and instead add
+%    their alterations into the paragraph hooks now provided.}
+%
+%
+%
+% \subsection{The provided hooks}
+%
+%
+%  \begin{variable}{para/before,
+%                   para/begin,
+%                   para/end,
+%                   para/after
+%                 }
+%    The following four public hooks are defined and executed for
+%    each paragraph:
+%    \begin{description}
+%
+%    \item[\hook{para/before}]
+%
+%      This hook is executed after the kernel hook
+%      \cs{@kernel@before@para@before} (discussed below) in vertical
+%      mode immediately after \TeX{} has contributed \cs{parskip} to
+%      the vertical list and before the actual paragraph processing in
+%      horizontal mode starts.
+%
+%      This hook should either not produce any typeset material or add
+%      only vertical material. If it starts a paragraph an error is
+%      generated. The reason is that we are in the starting process of
+%      processing a paragraph and so this would lead to endless
+%      recursion.\footnote{One could allow it but only if the newly
+%      started paragraph is processed without any hooks. Furthermore
+%      correct spacing would be a bit of a nightmare so for now this
+%      is forbidden.}
+%
+%    \end{description}
+%  \end{variable}
+%
+%    \vspace{-\bigskipamount}
+%
+%    \begin{description}
+%
+%    \item[\hook{para/begin}]
+%
+%      This hook is executed after the kernel hook
+%      \cs{@kernel@before@para@begin} (discussed below) in horizontal
+%      mode immediately before the indentation box is placed (if there
+%      is any, i.e., if the paragraph hasn't been started with
+%      \cs{noindent}).
+%
+%      The indentation box to be typeset is available to the hook as
+%      \cs{IndentBox} and its automatic placement (after the hook is
+%      executed) can be prevented through \cs{OmitIndent}.
+%      More precisely \cs{OmitIndent} voids the box.
+%
+%      The indentation box is then typeset directly
+%      after the hook execution by something equivalent to
+%      \cs{box}\cs{IndentBox} followed by the current content of
+%      the token register \cs{everypar} that it is available to the
+%      kernel or to packages (that run some legacy code).
+%
+%      One has to be careful not to add any code to the hook that
+%      starts its own paragraph (e.g., by adding a \cs{parbox} or a
+%      \cs{marginpar} inside) because that would call the hook inside
+%      again (as a new paragraph is started there) and thus lead to an
+%      endless recursion ending only after exhausting the available
+%      memory. This can only be done by making sure that is not
+%      executed for the inner paragraphs (or at least not recursively
+%      forever).
+%
+%
+%    \item[\hook{para/end}]
+%
+%      This hook is executed at the end of a paragraph when \TeX{} is
+%      ready to return to vertical mode and after it has removed the
+%      last horizontal glue (but not kern) placed on the horizontal
+%      list. The code is still executed in horizontal mode so it is
+%      possible to add further horizontal material at this point, but
+%      it should not alter the mode (even a temporary exit from
+%      horizontal mode would create chaos---any attempt will cause an
+%      error message)! After the hook has ended the kernel hook
+%      \cs{@kernel@after@para@end} is executed and then \TeX{} returns to
+%      vertical mode.
+%
+%      The hook is offered as public hook, but because of the
+%      requirement to stay within horizontal mode one needs to be
+%      careful in what is placed into the hook.\footnote{Maybe we
+%      should guard against that, but it would be rather tricky to
+%      implement as mode changes can happen across group boundaries so
+%      one would need to keep a private stack just for that. Well,
+%      something to ponder.}
+%
+%      This hook is implemented as a reversed hook.
+%
+%    \item[\hook{para/after}]
+%
+%      This hook is executed directly after \TeX{} has returned to
+%      vertical mode and after any material that migrated out of the
+%      horizontal list (e.g., from a \cs{vadjust}) has processed.
+%
+%      This hook should either not produce any typeset material or add
+%      only vertical material.
+%      However, for this hook starting a new paragraph is not a
+%      disaster so that it isn't prevented.
+%
+%      This hook is implemented as a reversed hook.
+%
+%      Once that hook code has been processed the kernel hook
+%      \cs{@kernel@after@para@after} is executed as the final action
+%      of the paragraph processing.
+%
+%    \end{description}
+%
+%  \begin{variable}{\@kernel@before@para@before,
+%                   \@kernel@after@para@after,
+%                    \@kernel@before@para@begin,
+%                   \@kernel@after@para@end,
+%                  }
+%    As already mentioned above there are also four kernel hooks that
+%    are executed at the start and end of the processing.
+%    \begin{description}
+%
+%    \item[\cs{@kernel@before@para@before}]
+%       For future extensions, not currently used by the kernel.
+%
+%
+%    \item[\cs{@kernel@after@para@after}]
+%       For future extensions, not currently used by the kernel.
+%
+%
+%    \item[\cs{@kernel@before@para@begin}]
+%
+%      Used by the kernel to implement tagging. This hook is executed
+%      at the very beginning of a paragraph after \TeX{} has switched to
+%      horizontal mode but before any indentation box got added or any
+%      \cs{everypar} was run.
+%
+%      It should not generate typeset material that could alter the
+%      position.  Note that it should never leave hmode, otherwise you
+%      will end with a loop! We could guard against this, but since it
+%      is an internal kernel hook that shouldn't be touched this isn't
+%      checked.
+%    \end{description}
+%  \end{variable}
+%
+%    \vspace{-\bigskipamount}
+%
+%    \begin{description}
+%
+%    \item[\cs{@kernel@after@para@end}]
+%
+%      Used by the kernel to implement tagging. It is executed
+%      directly after the public \hook{para/end} hook. After it there
+%      is a quick check that we are still in horizontal mode, i.e.,
+%      that the public hook has not mistakenly ended horizontal mode
+%      prematurely (this is an incomplete check just testing the mode
+%      and could perhaps be improved (at the cost of speed)).
+%
+%    \end{description}
+%
+%
+% \subsection{Altered and newly provided commands}
+%
+% \begin{function}{\par,\endgraf,\para_end:}
+%    An explicit request for ending a paragraph is known in plain
+%    \TeX{} under the name \cs{endgraf} where it simply calls the
+%    paragraph primitive (regardless of what \cs{par} may have as its
+%    current definition). In \LaTeX{} \cs{endgraf} with that behavior
+%    was also made available.
+%
+%    With the new paragraph handling in \LaTeX{}, ending a paragraph
+%    means a bit more than just calling the engine's paragraph
+%    builder: the process also has to add any hook code for the end of
+%    a paragraph. Thus
+%    \cs{endgraf} was changed to provide this additional functionality
+%    (and so by extension \cs{par} subject to its current meaning).
+%
+%    The \pkg{expl3} name for the functionality is \cs{para_end:}.
+% \end{function}
+%
+% \begin{quote}
+%    \textbf{Note:} \em The next two commands are still under
+%    discussion and may slightly change their semantics (as described
+%    in the document) and/or their names between now and the 2021
+%    Spring release!
+% \end{quote}
+%
+% \begin{function}{\OmitIndent,\para_omit_indent:}
+%    Inside the \hook{para/begin} hook one can use this command to
+%    suppress the indentation box at the start of the
+%    paragraph. (Technically it is possible to use this command
+%    outside the hook as well, but this should not be relied upon.)
+%    The box itself remains available for use.
+%
+%    The \pkg{expl3} name for the function is \cs{para_omit_indent:}.
+% \end{function}
+%
+% \begin{variable}{\IndentBox,\g_para_indent_box}
+%    The box register holding the indentation box for the paragraph is
+%    available for inspection (or changes) inside hooks. It remains
+%    available even if the \cs{OmitIndent} command was
+%    used; in that case it  will just not be automatically placed.
+%
+%    The \pkg{expl3} name for the box register is \cs{g_para_indent_box}.
+% \end{variable}
+%
+%
+% \begin{function}{\RawIndent,\para_raw_indent:,
+%                  \RawNoindent,\para_raw_noindent:,
+%                  \RawParEnd,\para_raw_end:}
+% \begin{syntax}
+%   \cs{RawIndent}   \textit{hmode material} \cs{RawParEnd}
+%   \cs{RawNoindent} \textit{hmode material} \cs{RawParEnd}
+% \end{syntax}
+%
+%    The commands \cs{RawIndent} and \cs{RawNoindent} are not meant
+%    for normal paragraph building (where the result is a textual
+%    paragraph in the the traditional meaning of the word), but for
+%    special cases where \TeX{}'s low-level algorithm is used to
+%    achieve special effects, but where the result is not a
+%    \enquote{paragraph}.
+%
+%    They are called \enquote{raw}, because they bypass \LaTeX{}'s
+%    hook mechanism for paragraphs and simply invoke the low-level
+%    \TeX{} algorithm.  I.e., they are like the original \TeX{}
+%    primitives \cs{indent} and \cs{noindent} (that is they execute no
+%    hooks other than \cs{everypar}) except that they can only be used
+%    in vertical mode and generate an error if found elsewhere.
+%
+%    To avoid issues a paragraph started by them should always be
+%    ended by \cs{RawParEnd}\footnote{Technical note for those who
+%    know their \textit{\TeX book\/}: the \cs{RawParEnd} comand
+%    invokes the original \TeX{} engine definition of \cs{par} that
+%    (soley) triggers the paragraph builder in \TeX{} when found
+%    inside unrestricted horizontal mode and does nothing in other
+%    processing modes.}
+%    and not by \cs{par} (or a blank line), because the latter will execute
+%    hooks which then have no counterpart at the beginning of the
+%    paragraph. It is the responsibility of the programmer to make
+%    sure that they are properly paired. This also means that one
+%    should not put arbitrary user content between these commands if
+%    that content could contain stray \cs{par}s.
+%
+%    The \pkg{expl3} names for the functions are
+%    \cs{para_raw_indent:}, \cs{para_raw_indent:} and
+%    \cs{para_raw_end:}.
+% \end{function}
+%
+%
+%
+% \subsection{Examples}
+%
+%    None of the examples in this section are meant for real use as
+%    they are far too simpleminded  but they should give some ideas of
+%    what could be possible if a bit more care is applied.
+%
+% \subsubsection{Testing the mechanism}
+%
+%    The idea is to output for each paragraph encountered some
+%    information: a paragraph sequence number, a level number in roman
+%    numerals, the environment in which this paragraph appears, and
+%    the line number where the start or end of the paragraph is, e.g.,
+%    something like
+%\begin{verbatim}
+%  PARA: 1-i start (document env. on input line 38)
+%  PARA: 1-i end   (document env. on input line 38)
+%  PARA: 2-i start (document env. on input line 40)
+%  PARA: 3-ii start (minipage env. on input line 40)
+%  PARA: 3-ii end   (minipage env. on input line 40)
+%  PARA: 2-i end   (document env. on input line 41)
+%\end{verbatim}
+%    As you can see paragraph 2 starts on line 40 and ends on 41 and
+%    inside a minipage started paragraph 3 (start and end on line 40).
+%    If you run this on some document you will find that \LaTeX{}
+%    considers more things \enquote{a paragraph} than you have
+%    probably thought.
+%
+%    This was generated by the following hook code:
+%\begin{verbatim}
+%  \newcounter{paracnt}         % sequence counter
+%  \newcounter{paralevel}       % level counter
+%\end{verbatim}
+%
+%    To support paragraph nesting we need to maintain a stack of the
+%    sequence numbers. This is most easily done using \pkg{expl3}
+%    functions, so we switch over. This is not a very general
+%    implementation, just enough for what we need and a bit of
+%    \LaTeXe{} thrown in as well. When popping the result gets stored
+%    in \cs{paracntvalue} and the \cs{ERROR}  should never happen
+%    because it means we have tried to pop from an empty stack.
+%\begin{verbatim}
+%  \ExplSyntaxOn
+%  \seq_new:N \g_para_seq
+%  \cs_new:Npn \ParaPush
+%    {\seq_gpush:No  \g_para_seq {\the\value{paracnt}}}
+%  \cs_new:Npn \ParaPop  {\seq_gpop:NNF  \g_para_seq \paracntvalue \ERROR }
+%  \ExplSyntaxOff
+%\end{verbatim}
+%    At the start of the paragraph increment both sequence counter and
+%    level and also save the then current sequence number on our stack.
+%\begin{verbatim}
+%  \AddToHook{para/begin}{%
+%    \stepcounter{paracnt}\stepcounter{paralevel}%
+%    \ParaPush
+%\end{verbatim}
+%    To display the sequence number we \cs{typeout} the current
+%    sequence and level number. The command \cs{@currenvir} gives us
+%    the current environment and \cs{on@line} produces a space and
+%    the current input line number.
+%\begin{verbatim}
+%    \typeout{PARA: \arabic{paracnt}-\roman{paralevel} start
+%      (\@currenvir\space env.\on@line)}%
+%\end{verbatim}
+%    We also typeset the sequence number as a tiny red number in a box
+%    that takes up no horizontal space. This helps us seeing where
+%    \LaTeX{} sees the start and end of the paragraphs in the
+%    document.
+%\begin{verbatim}
+%    \llap{\color{red}\tiny\arabic{paracnt}\ }%
+%  }
+%\end{verbatim}
+%
+%   At the end of the paragraph we display sequence number and
+%    level again. The level counter has the correct value but we need
+%    to retrieve the right sequence value by popping it off the stack
+%    after which it is available in \cs{paracntvalue} the way we have
+%    set this up above.
+%\begin{verbatim}
+%  \AddToHook{para/end}{%
+%    \ParaPop
+%    \typeout{PARA: \paracntvalue-\roman{paralevel} end \space\space
+%      (\@currenvir\space env.\on@line)}%
+%\end{verbatim}
+%    We also typeset again a tiny red number with that value, this
+%    time sticking out to the right.\footnote{Note that this can alter
+%    the document pagination, because a paragraph ending in a display
+%    (e.g., an equation) will get an extra line---in that case our tiny number
+%    has an effect even though it doesn't take up any space, because
+%    it paragraph is no longer empty and thus isn't dropped!}
+%    We also decrement the level counter since our level has finished.
+%\begin{verbatim}
+%    \rlap{\color{red}\tiny\ \paracntvalue}%
+%    \addtocounter{paralevel}{-1}%
+%  }
+%  \makeatother
+%\end{verbatim}
+%
+%
+%
+% \subsubsection{Mark the first paragraph of each \env{itemize}}
+%
+%    The code for this is rather simple. We apply  hook code that is
+%    executed only once inside a hook that is executed at the begin of
+%    each \env{itemize}. We explicitly change the color back and
+%    forth so that we don't introduce grouping around the paragraph.
+%\begin{verbatim}
+%  \AddToHook{env/itemize/begin}{%
+%    \AddToHookNext{para/begin}{\color{blue}}%
+%    \AddToHookNext{para/end}{\color{black}}%
+%  }
+%\end{verbatim}
+%    As a result the first paragraph of each \env{itemize} will appear
+%    in blue.
+%
+%
+%
+% \subsection{Some technical notes}
+%
+%    The code tries hard to be transparent for package code, but of
+%    course any change means that there is a potential for breaking
+%    other code. So in section we collect a few cases that may be of
+%    importance if low-level code is dealing with paragraphs that are
+%    now behaving slightly differently. The notes are from issues we
+%    observed and will probably grow over time.
+%
+% \subsubsection{Glue items between paragraphs (found with \pkg{fancypar})}
+%
+%    In the past \LaTeX{} placed two glue items between two
+%    consecutive paragraph, e.g.,
+%\begin{verbatim}
+%   text1 \par text2 \par
+%\end{verbatim}
+%   would show something like
+%\begin{verbatim}
+% \glue(\parskip) 0.0 plus 1.0
+% \glue(\baselineskip) 5.16669
+%\end{verbatim}
+%   but now there is anothe \cs{parskip} glue (that is always 0pt):
+%\begin{verbatim}
+% \glue(\parskip) 0.0 plus 1.0
+% \glue(\parskip) 0.0
+% \glue(\baselineskip) 5.16669
+%\end{verbatim}
+%    The reason is that we generate a \enquote{fake}'' paragraph to
+%    gain control and safely add the early hooks, but this generates
+%    an additional glue item. That item doesn't contribute anything
+%    vertically but ifsomebody writes code the unravels a constructed
+%    list using \cs{lastbox}, \cs{unskip} and \cs{unpenalty} then the
+%    code has to remove one additional glue item  or else will fail.
+
+%
+% ^^A \subsubsection{}
+%
+%
+%
+% ^^A \subsubsection{}
+%
+%
+%
+%
+%
+%
+% \StopEventually{\setlength\IndexMin{200pt}  \PrintIndex  }
+%
+%
+% \section{The Implementation}
+%
+%    \begin{macrocode}
+%<@@=para>
+%    \end{macrocode}
+%
+% \changes{v1.0g}{2021/05/24}{Use \cs{msg_...} instead of \cs{__kernel_msg...}}
+%
+%
+%    \begin{macrocode}
+%<*2ekernel|latexrelease>
+\ExplSyntaxOn
+%<latexrelease>\NewModuleRelease{2021/06/01}{ltpara}
+%<latexrelease>                 {Paragraph~handling~and~hooks}
+%    \end{macrocode}
+%
+%
+%
+% \subsection{Providing hooks for paragraphs}
+%
+%
+%  \begin{macro}{para/before,para/after,para/begin,para/end}
+%    The public hooks. They are implemented as a paired set of hooks.
+%    \begin{macrocode}
+\hook_new_pair:nn{para/before}{para/after}
+\hook_new_pair:nn{para/begin}{para/end}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\@kernel@before@para@before,
+%                \@kernel@after@para@after,
+%                \@kernel@before@para@begin,
+%                \@kernel@after@para@end}
+%    The corresponding kernel hooks (for tagging and future extensions).
+%    \begin{macrocode}
+\let \@kernel@before@para@before \@empty
+\let \@kernel@before@para@begin  \@empty
+\let \@kernel@after@para@end     \@empty
+\let \@kernel@after@para@after   \@empty
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%
+%  \begin{macro}{\g_@@_standard_everypar_tl}
+%    Whenever \TeX{} starts a paragraph it inserts first an
+%    indentation box and then executes the tokens stored in
+%    \cs{tex_everypar:D} (known to \LaTeX{} as \cs{everypar}). We
+%    alter this behavior slightly here, so that hooks are added
+%    into the right place. Otherwise the process change remains
+%    transparent to any legacy code for this space.
+%
+%    We keep the standard code to be used by \cs{tex_everypar:D} in a
+%    separate token list because we have to switch back and forth
+%    for error recovery and so altering \cs{tex_everypar:D}  all the
+%    time should be a tiny bit faster.
+%    \begin{macrocode}
+\tl_new:N \g_@@_standard_everypar_tl
+%    \end{macrocode}
+%    Here is now its definition:
+%    \begin{macrocode}
+\tl_gset:Nn \g_@@_standard_everypar_tl {
+%    \end{macrocode}
+%    First we remove the indentation box and store it in
+%    \cs{g_para_indent_box}. If there was none because the paragraph
+%    was started by \cs{noindent} the box register will be void.
+%    \begin{macrocode}
+  \box_gset_to_last:N \g_para_indent_box
+%    \end{macrocode}
+%
+%    This will make the newly started horizontal list empty, so if we
+%    stop it now and return to vertical mode it will be dropped by
+%    \TeX{}. We do that but inside a group so that any \cs{parshape}
+%    settings will not get lost as we need them for later.
+%    \begin{macrocode}
+  \group_begin:
+    \tex_par:D
+  \group_end:
+%    \end{macrocode}
+%    We then change \cs{tex_everypar:D} to generate an error so that
+%    we can detect and report if the \hook{para/before} hook illegally
+%    changed out of vmode.
+%    \begin{macrocode}
+  \tex_everypar:D { \msg_error:nnnn { hooks }{ para-mode }{before}{vertical} }
+  \@kernel@before@para@before
+  \hook_use:n {para/before}
+%    \end{macrocode}
+%    Assuming the hooks have been well behaved it is time to return to
+%    horizontal mode and start the paragraph in earnest. We already
+%    have the indentation box saved away so we now have to restart the
+%    paragraph with an empty \cs{tex_everypar:D} and with
+%    \cs{tex_noindent:D}. And we need to make sure not to get another
+%    \cs{parskip} or rather (since we can't prevent that) that it is
+%    of zero size.
+%    \begin{macrocode}
+  \group_begin:
+    \tex_everypar:D {}
+    \skip_zero:N \tex_parskip:D
+    \tex_noindent:D
+  \group_end:
+%    \end{macrocode}
+%    That brings us back to the start of the horizontal list but we
+%    need to change \cs{tex_everypar:D} back to its normal content in
+%    case there are nested paragraphs coming up.
+%    \begin{macrocode}
+  \tex_everypar:D{\g_@@_standard_everypar_tl}
+%    \end{macrocode}
+%
+%    This is followed by executing the kernel and the public hook. The
+%    kernel hook is there to enable tagging.
+%    \begin{macrocode}
+  \@kernel@before@para@begin
+  \hook_use:n {para/begin}
+%    \end{macrocode}
+%    If we aren't in horizontal mode any longer the hooks above misbehaved.
+%    \begin{macrocode}
+  \if_mode_horizontal: \else:
+    \msg_error:nnnn { hooks }{ para-mode }{begin}{vertical} \fi:
+%    \end{macrocode}
+%    Finally we reinsert the indentation box (unless suppressed) and
+%    then call \cs{everypar} the way legacy \LaTeX\ code expects it.
+%
+%    However, adding the public \cs{everypar} is a bit tricky (see below) so
+%    we add that later, and indirectly.
+%    \begin{macrocode}
+  \@@_handle_indent:
+% \the \everypar           % <--- done differently below
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}[int]{\tex_everypar:D}
+%    \cs{tex_everypar:D} then only has to execute
+%    \cs{g_@@_standard_everypar_tl} by default.
+%    \begin{macrocode}
+\tex_everypar:D{\g_@@_standard_everypar_tl}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}[int]{\everypar}
+%
+%    Tokens inserted at the beginning of the paragraph are placed into
+%    \cs{everypar} inside legacy \LaTeX{} code, e.g., by the list
+%    environments or by headings to handle \cs{clubpenalty}, etc. Now
+%    this isn't any longer the primitive but simply a toks register
+%    used in the code above but to legacy \LaTeX{} code that is
+%    transparent.
+%
+%    There is, however, a problem: a handful packages use exactly the
+%    same trick and replace the primitive with a token register and
+%    call the token register inside the renamed primitive. That is
+%    they assume that \cs{everypar} is the primitive and that it will
+%    still be called at the start of the paragraph even if renamed.
+%
+%    But if we have already replaced it by a token register then all
+%    they do is to give that token register a new name. Thus our code
+%    in \cs{tex_everypar:D} would call \cs{everypar} (which is their
+%    now token register) and the code that they added ends up in our
+%    token register which is then never used at all. A bit mind
+%    boggling I guess.
+%
+%    So what we have to do is not to call the token register
+%    \cs{everypar} by its name inside \cs{tex_everypar:D} but by using
+%    its actual register number.
+%    \begin{macrocode}
+\newtoks \everypar
+%    \end{macrocode}
+%
+%    After we have allocated a new toks register with the name
+%    \cs{everypar} the actual register number is available (briefly)
+%    inside \cs{allocationnumber}. So instead of \cs{the}\cs{everypar}
+%    we have to put \cs{the}\cs{toks}\meta{allocated number} at the end of
+%    \cs{tex_everypar:D}.
+%
+%    So what remains doing is to append a few tokens to the token list
+%    \cs{g_@@_standard_everypar_tl} which we do now. We use \texttt{x}
+%    expansion here to get the value of \cs{allocationnumber} in, all
+%    the other tokens should not be expanded at this point.
+
+%    One important point here is to terminate the register allocation
+%    number with a real space. This space will get swallowed up when
+%    the number is read. Anything else, such as \cs{scan_stop:} would
+%    remain in the input and that would mean that it would interfere
+%    with \cs{everypar} code that attempts to scan ahead to see how
+%    the paragraph text starts.
+%    \begin{macrocode}
+\tl_gput_right:Nx \g_@@_standard_everypar_tl {
+    \exp_not:N \the
+    \exp_not:N \toks
+    \the \allocationnumber
+    \c_space_tl
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\g_para_indent_box}
+%    For managing the indentation we need to provide a public
+%    accessible box register
+%    \begin{macrocode}
+\box_new:N \g_para_indent_box
+%    \end{macrocode}
+%  \end{macro}
+
+%  \begin{macro}{\@@_handle_indent:}
+%    Adding (typesetting) the indent box is straight forward.
+%    If it was emptied before it does nothing.
+%    \begin{macrocode}
+\cs_new:Npn \@@_handle_indent: {
+  \box_use_drop:N \g_para_indent_box
+}
+%    \end{macrocode}
+%     The declaration \cs{para_omit_indent:} (or
+%    \cs{OmitIndent}) changes that to do nothing.
+%    \begin{macrocode}
+\cs_new:Npn \para_omit_indent: {
+  \box_gclear:N \g_para_indent_box
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\IndentBox,\OmitIndent}
+%    The \LaTeXe{} names for the indentation box and for suppressing it
+%    for use in the \hook{para/begin} hook.
+%    \begin{macrocode}
+\cs_set_eq:NN \IndentBox \g_para_indent_box
+\cs_set_eq:NN \OmitIndent \para_omit_indent:
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%
+%
+%  \begin{macro}{\para_end:}
+%    Adding hooks to the end of a paragraph is similar but here we
+%    need to alter the command that is used by \TeX{} to end horizontal
+%    mode and return to vertical mode, i.e., \cs{par}.
+%
+%    This is a bit more complicated as this command can appear anywhere
+%    either explicitly or implicitly added by \TeX{} in certain
+%    situations:
+%    \begin{itemize}
+%    \item
+%      when using \cs{par} in the code or the document
+%    \item
+%      when using a blank line (which is converted to \cs{par})
+%    \item
+%      when \TeX{} finds any commands incompatible with horizontal
+%      mode it issues a \cs{par} and then rereads the command.
+%    \end{itemize}
+%
+%    Unfortunately, \TeX{} has some (these days) unnecessary
+%    optimization: if a \cs{vbox} ends and \TeX{} is still in
+%    horizontal mode it simply exercises the paragraph builder instead
+%    of issuing a \cs{par}. It is therefore necessary for \LaTeX{} to
+%    ensure that this case doesn't happen and all boxes internally
+%    have a \cs{par} command at their end.
+%
+%    This \cs{par} may or may not run the ``par primitive'' (which is
+%    always available as \cs{tex_par:D} in \pkg{expl3}); it is
+%    permissible to have a changed meaning and it is in fact changed
+%    by \LaTeX{} in various ways at various points inside
+%    \texttt{latex.ltx}.  For this \LaTeXe{} code has the following
+%    conventions: \cs{@@@@par} and \cs{endgraf} both refer to the
+%    default meaning (in the past this was the initex primitive) while
+%    \cs{par} is the current meaning which may does something else.
+%
+%
+%    We are now going to change this default meaning to run
+%    \cs{para_end:} instead, which ultimately executes the initex
+%    primitive but additionally adds our hooks when appropriate.
+%    This way the change is again transparent to the legacy \LaTeXe{}
+%    code.
+%
+%    In most cases \cs{para_end:} should behave exactly like the
+%    primitive and we achieve this by simply expanding it to the
+%    primitive which is available to us as \cs{tex_par:D}. This way we
+%    don't have to care about whether \TeX{} just does nothing (e.g.,
+%    if in vertical mode already) or generate an error, etc.
+%    \begin{macrocode}
+\cs_new_protected:Npn \para_end: {
+%    \end{macrocode}
+%
+%    The only case we care about is when we are in horizontal mode
+%    (i.e., doing typesetting) and not also in inner mode (i.e.,
+%    making paragraphs and not building an \cs{hbox}.
+%    \begin{macrocode}
+%  \bool_lazy_and:nnT
+%       { \mode_if_horizontal_p: }
+%       { \bool_not_p:n { \mode_if_inner_p: } }
+%       { ...
+%    \end{macrocode}
+%    Since this is executed for each and every paragraph in a document
+%    we try to stay a fast as possible, So we are aren't using the
+%    above construct but two conditionals instead. Using low-level
+%    \cs{if_mode...} conditions would be even faster but has the
+%    danger to conflict with conditionals in the user hooks.
+%    \begin{macrocode}
+  \mode_if_horizontal:TF {
+    \mode_if_inner:F {
+%    \end{macrocode}
+%    In that case the action of the primitive would be to remove the
+%    last glue (not kern) from the horizontal list constructed to form
+%    a paragraph then append the a penalty of 10000 and the
+%    \cs{parfillskip} at the end and pass the whole list to the
+%    paragraph builder which breaks it into lines and \TeX{} then
+%    returns to vertical mode.
+%
+%    What we want to do instead is to add our hook code at the end of
+%    the horizontal list before that happens and the code is passed to
+%    the paragraph builder. If there was a glue item at the end then
+%    it should get removed before the hook code gets added so we have
+%    to arrange for its removal ourselves.
+%
+%    There is not much point in checking if there was really a glue
+%    item at the end of the horizontal list, instead we simply try to
+%    remove one using \cs{tex_unskip:D}, if there wasn't one this will
+%    do nothing.
+%    \begin{macrocode}
+         \tex_unskip:D
+%    \end{macrocode}
+%    The we execute the public hook (which may add final typesetting
+%    material) followed by the kernel hook we need for adding tagging
+%    support. None of this is supposed to change the mode---at the
+%    moment we make only a very simple test for this, more devious
+%      changes go unnoticed, but too bad, that will then probably
+%      badly backfire.
+%    \begin{macrocode}
+         \hook_use:n{para/end}
+         \@kernel@after@para@end
+         \mode_if_horizontal:TF {
+%    \end{macrocode}
+%    The final action (before getting to the point where
+%    \cs{tex_par:D} is called) is to add a kern item so that the
+%    primitive is prevented from removing glue (if there was some). If
+%      we don't do this and the
+%    horizontal list ended in several glue items we would end up  with
+%    removing two instead of just the last one, which would be wrong.
+%    We use a kern as that is minimally faster.
+%
+%    There is however one other \TeX{} optimization that hurts: in a
+%    sequence like this \verb=$$ ... $$ \par=  \TeX{} will be in
+%    horizontal mode after the display, ready to receive further
+%    paragraph text, but since the \cs{par} follows immediately there
+%    is a ``null'' paragraph at the end and \TeX{} simply throws that
+%    away. The space between \verb=$$= and \cs{par} got already
+%    dropped during the display processing so the \cs{par} is not
+%    removing any space and appending \cs{parfillskip}, instead it
+%    simply goes silently to vmode. Now if we would had added something (to
+%    prevent glue removal) that would look to \TeX{} like material
+%    after the display and so we would end up with an empty paragraph
+%    just containing \cs{parfillskip}.
+%
+%    We therefore check if the current hlist is empty
+%    (\cs{tex_lastnodetype:D} has the value \texttt{-1} and
+%    only if not we add our kern.
+%    \begin{macrocode}
+           \if_int_compare:w 0 < \tex_lastnodetype:D
+             \tex_kern:D \c_zero_dim
+           \fi:
+%    \end{macrocode}
+%    To run the \hook{para/after} hook we first end the
+%    paragraph. This means that the \cs{tex_par:D} at the very end is
+%    unnecessary but executing it there unnecessarily is better than
+%    having code that test for all the different mode possibilities.
+%    \begin{macrocode}
+           \tex_par:D
+           \hook_use:n{para/after}
+           \@kernel@after@para@after
+         }
+%    \end{macrocode}
+%    If we haven't been in horizontal mode then the earlier hook
+%    \hook{para/end} is at fault and we report that.
+%    \begin{macrocode}
+         { \msg_error:nnnn { hooks }{ para-mode }{end}{horizontal} }
+%    \end{macrocode}
+%    Finally close out the nested conditionals.
+%    \begin{macrocode}
+    }
+  }  
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+  \tex_par:D
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%  \begin{macro}{\para_raw_indent:,
+%                \para_raw_noindent:,
+%                \para_raw_end:}
+%
+%    The commands \cs{para_raw_indent:} and \cs{para_raw_noindent:}
+%    are like the primitives \cs{indent} and \cs{noindent} except that
+%    they can only be used in vertical mode.
+%
+%    To avoid issues a paragraph started by them should always be
+%    ended by \cs{para_raw_end:} and not by \cs{para_end:} or
+%    \cs{par} as the latter will execute hooks which then have no
+%    counterpart at the beginning of the paragraph. It is the
+%    responsibility of the programmer to make sure that they are
+%    properly paired.
+%    \begin{macrocode}
+\cs_new:Npn \para_raw_indent: {
+  \mode_if_vertical:TF
+       {
+         \tex_everypar:D {
+           \box_gset_to_last:N \g_para_indent_box
+           \tex_everypar:D { \g_@@_standard_everypar_tl }
+           \@@_handle_indent:
+           \the\everypar }
+       }
+       { \msg_error:nn { kernel }{ raw-para } }
+  \tex_indent:D
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new:Npn \para_raw_noindent: {
+  \mode_if_vertical:TF
+       {
+         \tex_everypar:D {
+           \tex_everypar:D { \g_@@_standard_everypar_tl }
+           \the\everypar }
+       }
+       { \msg_error:nn { kernel }{ raw-para } }
+  \tex_noindent:D
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_eq:NN \para_raw_end: \tex_par:D
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\RawIndent,\RawNoIndent,\RawParEnd}
+%    The \LaTeXe{} names for starting and ending a paragraph without adding any hooks.
+%    \begin{macrocode}
+\cs_set_eq:NN \RawIndent   \para_raw_indent:
+\cs_set_eq:NN \RawNoindent \para_raw_noindent:
+\cs_set_eq:NN \RawParEnd   \para_raw_end:
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%    This ends the \texttt{para} module code.
+%    \begin{macrocode}
+%<@@=>
+%    \end{macrocode}
+%
+%  \begin{macro}{\par,\endgraf}
+%  \begin{macro}[int]{\@@par}
+%
+%    Having the new default definition for \cs{par} we also have to
+%    set it up so that it gets used. This is needed in three places
+%    \cs{par}, \cs{@@par} (to which \LaTeX{} resets \cs{par}
+%    occasionally) and \cs{endgraf} which is another name for the
+%    ``default'' action of \cs{par}.
+%    \begin{macrocode}
+\cs_set_eq:NN \par     \para_end:
+\cs_set_eq:NN \@@par   \para_end:
+\cs_set_eq:NN \endgraf \para_end:
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
+%
+%    While this is not integrated properly into the format we have to
+%    redo the \cs{everypar} setting from the kernel, otherwise that
+%    gets lost (as it happens before that file is loaded).
+%    \begin{macrocode}
+\everypar{\@nodocument} %% To get an error if text appears before the
+%    \end{macrocode}
+%
+%
+%   \subsection{The error messages}
+%
+%    This one is used when we detect that some hook code has changed
+%    the mode where it shouldn't, e.g., by starting or ending a
+%    paragraph.
+%    The first argument is the hook name second the mode
+%    it should have stayed in but didn't.
+%
+%    \begin{macrocode} 
+\msg_new:nnnn { hooks } { para-mode }
+  {
+    Illegal~mode~ change~ in~ hook~ 'para/#1'.\\
+    Hook~ code~ did~ not~ remain~ in~ #2~ mode.
+  }
+  {
+    Paragraph~ hooks~ cannot~ change~ the~ TeX~ mode~ without~ causing~
+    endless~ recursion.~ The~ hook~ code~ in~ 'para/#1'~ needs~ to~ stay~
+    in~ #2~ mode,~ but~ it~ didn't.~ Examine~ the~ hook~
+    code~ with~ \iow_char:N \\ShowHook~ to~ find~ the~ issue.
+  }
+%    \end{macrocode}
+%
+%    And here is one used in the \enquote{raw} commands when they are
+%    used outside of vertical mode. 
+%    \begin{macrocode}
+\msg_new:nnnn { kernel } { raw-para }
+  {
+     Not~ in~ vertical~ mode.
+  }
+  {
+    Starting~ a~ paragraph~ with~ \iow_char:N \\RawIndent~ or~
+    \iow_char:N \\RawNoindent \\
+    (or~ \iow_char:N \\para_raw_indent:~ or~
+    \iow_char:N \\para_raw_noindent:)~ is~ only~ allowed \\
+    if~ LaTeX~ is~ in~ vertical~ mode.
+  }
+%    \end{macrocode}
+
+
+%    \begin{macrocode}
+%
+%<latexrelease>\IncludeInRelease{0000/00/00}%
+%<latexrelease>                 {ltpara}{Undo~hooks~for~paragraphs}
+%<latexrelease>
+%<latexrelease>\let \OmitIndent  \@undefined
+%<latexrelease>\let \IndentBox   \@undefined
+%<latexrelease>\let \RawIndent   \@undefined
+%<latexrelease>\let \RawNoindent \@undefined
+%<latexrelease>\let \RawParEnd   \@undefined
+%<latexrelease>
+%<latexrelease>\cs_set_eq:NN \par     \tex_par:D
+%<latexrelease>\cs_set_eq:NN \@@par   \tex_par:D
+%<latexrelease>\cs_set_eq:NN \endgraf \tex_par:D
+%<latexrelease>  
+%<latexrelease>\EndModuleRelease
+\ExplSyntaxOff
+%</2ekernel|latexrelease>
+%    \end{macrocode}
+%
+%
+%
+%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\endinput
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+

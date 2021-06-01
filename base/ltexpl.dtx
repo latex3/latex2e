@@ -1,7 +1,7 @@
 % \iffalse meta-comment
 %
-% Copyright (C) 2019-2020
-% The LaTeX3 Project and any individual authors listed elsewhere
+% Copyright (C) 2019-2021
+% The LaTeX Project and any individual authors listed elsewhere
 % in this file.
 %
 % This file is part of the LaTeX base system.
@@ -33,7 +33,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltexpl.dtx}
-             [2020/12/18 v1.2h LaTeX Kernel (expl3-dependent code)]
+             [2021/04/20 v1.3c LaTeX Kernel (expl3-dependent code)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltexpl.dtx}
@@ -82,33 +82,60 @@
 %    \begin{macrocode}
 %<*2ekernel|latexrelease>
 %<latexrelease>\IncludeInRelease{2020/10/01}%
-%<latexrelease>  {kernel@enddocument hooks}{Define kernel enddocument Hooks}%
-\let\@kernel@after@enddocument\@empty
-\let\@kernel@after@enddocument@afterlastpage\@empty
+%<latexrelease>  {kernel@enddocument hooks}{Define several kernel hooks}
+%    \end{macrocode}
+%    We only initialize these kernel hooks if they are not already
+%    existing. Otherwise they would be set to \cs{@empty} on rollback
+%    which would be wrong because code that has been added to to them
+%    may still have to be executed in the rollback situation . Instead
+%    code that writes to them needs to handle the rollback as needed.
+%    It is likely that we have to change that approach in the future,
+%    but for now it should do.
+%    (It is enough to test only for the existence of one hook, as all
+%    got added at the same time.)
+% \changes{v1.3c}{2021/04/20}{Don't empty kernel hooks on rollback}
+%    \begin{macrocode}
+\ifx\@kernel@after@enddocument\@undefined
+  \let \@kernel@after@enddocument               \@empty
+  \let \@kernel@after@enddocument@afterlastpage \@empty
+%    \end{macrocode}
+%
+%  \begin{macro}{\@kernel@before@begindocument,\@kernel@after@begindocument}
+%    For the similar reasons we also define those that are used in
+%    \cs{document} because they too get material added to in early modules.
+%    \begin{macrocode}
+  \let \@kernel@before@begindocument \@empty
+  \let \@kernel@after@begindocument  \@empty
+\fi
 %<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 %
 %    \begin{macrocode}
 %<latexrelease>\IncludeInRelease{0000/00/00}%
-%<latexrelease>  {kernel@enddocument hooks}{Define kernel enddocument Hooks}%
+%<latexrelease>  {kernel@enddocument hooks}{Define several kernel hooks}
 %<latexrelease>\let\@kernel@after@enddocument\@undefined
 %<latexrelease>\let\@kernel@after@enddocument@afterlastpage\@undefined
-%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\let\@kernel@before@begindocument\@undefined
+%<latexrelease>\let\@kernel@after@begindocument\@undefined
 %</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 %
 % First define some blank commands, so that in case something goes wrong while
 % loading \textsf{expl3}, we won't get strange \texttt{Undefined control
 % sequence} errors.
+% \changes{v1.3a}{2021/01/24}{Define \pkg{expl3} hooks conditionally}
 %    \begin{macrocode}
 %<*2ekernel|latexrelease>
 %<latexrelease>\IncludeInRelease{2020/10/01}%
 %<latexrelease>            {\@expl@sys@load@backend@@}{Roll forward support}%
-\def\@expl@sys@load@backend@@{}
-\def\@expl@push@filename@@{}
-\def\@expl@push@filename@aux@@{}
-\def\@expl@pop@filename@@{}
+\def\reserved@a#1{\ifdefined#1\else\def#1{}\fi}
+\reserved@a\@expl@sys@load@backend@@
+\reserved@a\@expl@push@filename@@
+\reserved@a\@expl@push@filename@aux@@
+\reserved@a\@expl@pop@filename@@
 %<latexrelease>\EndIncludeInRelease
 %</2ekernel|latexrelease>
 %    \end{macrocode}
@@ -188,7 +215,9 @@
 % In \texttt{2ekernel} mode, an error is fatal and building the format
 % is aborted. Use \verb=\batchmode \read -1 to \tokenlist=, which errors
 % with
-% \verb=! Emergency stop. (cannot \read from terminal in nonstop modes)=
+%\begin{verbatim}
+%   ! Emergency stop. (cannot \read from terminal in nonstop modes)
+%\end{verbatim}
 % and aborts the \TeX{} run.  In \texttt{latexrelease} mode, raise an
 % error and do nothing.  Both ways, the error message shows the minimum
 % \textsf{expl3} engine requirements.
@@ -214,7 +243,7 @@
 %</2ekernel>
 %    \end{macrocode}
 %    We do not support a roll forward across 2019. You need to start
-%    with 2019 if you want to get to 2020 or beyond. 
+%    with 2019 if you want to get to 2020 or beyond.
 % \changes{v1.2g}{2020/11/24}{Support for roll forward (gh/434)}
 %    \begin{macrocode}
 %<*latexrelease>
@@ -225,21 +254,18 @@
            --- I'm giving up!\MessageBreak\MessageBreak
            Note that manually loading the expl3 package\MessageBreak
            from your distribution is not enough}%
-        \@@end  % die
+        \batchmode \read -1 to \reserved@a
 %</latexrelease>
       }%
-      {%
-        \input expl3.ltx
-        \ifdefined\NewDocumentCommand
-        \else
-          \IfFileExists{xparse.ltx}
-            {\input xparse.ltx }
-            {}%
-         \fi
-      }%
+      {\input expl3.ltx }%
   }
 %<latexrelease>\EndIncludeInRelease
 %<latexrelease>
+%    \end{macrocode}
+% To support roll-forward for the case where \textsf{xparse} is fully
+% integrated into the kernel, we do not need to repeat the complex test
+% above as we can simply look for the marker command.
+%    \begin{macrocode}
 %<latexrelease>\IncludeInRelease{2020/02/02}%
 %<latexrelease>                 {expl3}{Pre-load expl3}%
 %<latexrelease>\IfFileExists{expl3.ltx}
@@ -262,39 +288,12 @@
 %<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 %
-%
-%    Starting with 2020-10 the kernel contains most of the
-%    \texttt{xparse} interfaces loaded above. These interfaces are
-%    later used to define various user command. However, if somebody
-%    with an earlier installation tries to roll forward (using a
-%    \texttt{latexrelease} package from a newer release) this will not
-%    work as the earlier kernel doesn't contain commands such as
-%    \cs{NewDocumentCommand}.
-%
-%    We therefore add code into \texttt{latexrelease.sty} to load the
-%    \texttt{xparse} package of the current installation instead. this
-%    may not work if the installation is really old, but roll forward
-%    can't do miracles.
-%
-%    If the kernel is 2020-10 or later \cs{NewDocumentCommand} is
-%    already known (whether or not you roll forward or back) so
-%    nothing happens, but if you start from am earlier kernel the
-%    \texttt{xparse} package gets loaded by \texttt{latexrelease}.
-% \changes{v1.2g}{2020/11/24}{Load xparse in latexrelease if needed (gh/434)}
-%    \begin{macrocode}
-%<latexrelease>\IncludeInRelease{2020/10/01}%
-%<latexrelease>                 {\NewDocumentCommand}{Emergency loading xparse}%
-%<latexrelease>
-%<latexrelease>\ifdefined\NewDocumentCommand \else
-%<latexrelease>  \RequirePackage{xparse}
-%<latexrelease>\fi
-%<latexrelease>
-%<latexrelease>\EndIncludeInRelease
-%    \end{macrocode}
+% \changes{v1.3a}{2021/01/21}
+%                {Move \pkg{xparse} rollback code to \texttt{ltcmd.dtx}}
 %
 %    \subsection{Using expl3 code}
 %
-%    In order to ease the implemantation of some new features in
+%    In order to ease the implementation of some new features in
 %    \LaTeXe\ we may (temporarily) use some coding based on the
 %    \pkg{expl3}-code.
 %    Such macros will eventually vanish and may be changed
