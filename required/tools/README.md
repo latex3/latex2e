@@ -1,7 +1,7 @@
 The LaTeX `tools` bundle
 ========================
 
-Release 2021-06-01
+Release 2021-12-01 pre-release 0
 
 Overview
 --------
