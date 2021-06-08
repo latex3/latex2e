@@ -17,4 +17,4 @@
 - [ ] Version and date string updated in changed source files
 - [ ] Relevant `\changes` entries in source included
 - [ ] Relevant `changes.txt` updated
-- [ ] `ltnewsX.tex` updated
+- [ ] `ltnewsX.tex` (and/or `latexchanges.tex`) updated
