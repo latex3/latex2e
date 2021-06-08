@@ -60,7 +60,7 @@ tlmgr install   \
   stringenc     \
   url
 
-# special testing
+# special testing for firstaid
 tlmgr install   \
   bidi          \
   bigfoot       \
@@ -69,7 +69,9 @@ tlmgr install   \
   everyshi      \
   filehook      \
   pgf           \
-  pgfmorepages
+  pgfmorepages  \
+  ulem          \
+  varwidth
 
 # Additional support for typesetting
 tlmgr install  \
