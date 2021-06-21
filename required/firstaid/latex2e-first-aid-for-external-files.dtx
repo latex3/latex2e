@@ -618,6 +618,58 @@
 %    {Temporary fixes for the kernel \\
 %     (until the next patch-level release)}
 %
+% This fixes GitHub issue 591. It is only needed in Lua\TeX\ and replaces just one
+% instance of \cs{tex\_par:D} with the following version which removes
+% other nodes in the current list first.
+%    \begin{macrocode}
+\ExplSyntaxOn
+\sys_if_engine_luatex:T
+  {
+    \newluafunction \g__para_end_empty_par_id_int
+    \exp_args:Nx \everyjob {
+      \exp_not:V \everyjob
+      \exp_not:N \lua_now:n {
+        local~texnest, flush_list, par_token = tex.nest, node.flush_list, token.create'tex_par:D'~
+        lua.get_functions_table()[\int_use:N \g__para_end_empty_par_id_int] = function()
+          local~nest_level = texnest.top~
+          local~cur_head = nest_level.head~
+          flush_list(cur_head.next)
+          nest_level.tail, cur_head.next = cur_head, nil~
+          token.put_next(par_token)
+        end
+      }
+    }
+    \protected \luadef \__para_end_empty_par: \g__para_end_empty_par_id_int
+    \group_begin:
+    \cs_set:Npn \__para_extract_everypar:w #1 \the \toks #2 \s_stop
+      {
+        \tl_gset:Nn \g__para_standard_everypar_tl {
+          \box_gset_to_last:N \g_para_indent_box
+          \group_begin:
+            \__para_end_empty_par:
+          \group_end:
+          \tex_everypar:D { \msg_error:nnnn { hooks }{ para-mode }{before}{vertical} }
+          \@kernel@before@para@before
+          \hook_use:n {para/before}
+          \group_begin:
+            \tex_everypar:D {}
+            \skip_zero:N \tex_parskip:D
+            \tex_noindent:D
+          \group_end:
+          \tex_everypar:D{\g__para_standard_everypar_tl}
+          \@kernel@before@para@begin
+          \hook_use:n {para/begin}
+          \if_mode_horizontal: \else:
+            \msg_error:nnnn { hooks }{ para-mode }{begin}{vertical} \fi:
+          \__para_handle_indent:
+          \the \toks #2
+        }
+      }
+    \exp_last_unbraced:No \__para_extract_everypar:w \g__para_standard_everypar_tl \s_stop
+    \group_end:
+  }
+\ExplSyntaxOff
+%    \end{macrocode}
 %
 %    \begin{macrocode}
 %</kernel>
