@@ -111,8 +111,8 @@
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-\def\LaTeXFirstAidDate{2021/06/08}
-\def\LaTeXFirstAidVersion{v1.0m}
+\def\LaTeXFirstAidDate{2021/06/24}
+\def\LaTeXFirstAidVersion{v1.0n}
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -120,8 +120,8 @@
              [\LaTeXFirstAidDate\space \LaTeXFirstAidVersion\space
                LaTeX kernel fixes to external files and packages]
 %    \end{macrocode}
-             %
-             
+%
+%             
 %  \begin{macro}{\FirstAidNeededT}
 %    This is a very simple help to ensure that we only apply first aid
 %    to an unmodified package or class. It only works in the case the
@@ -135,7 +135,13 @@
 \ExplSyntaxOn             
 \cs_new:Npn\FirstAidNeededT#1#2#3{
   \exp_args:Ncx\str_if_eq:onF{ver@#1.#2}{#3}
-      { \typeout{==>~ First~ Aid~ for~ #1.#2~ no~ longer~ applied!} }
+      { \typeout{==>~ First~ Aid~ for~ #1.#2~ no~ longer~ applied!^^J
+          \@spaces Expected:^^J
+          \@spaces\@spaces #3^^J
+          \@spaces but~ found:^^J
+          \@spaces\@spaces \use:c{ver@#1.#2}^^J
+          \@spaces so~ I'm~ assuming~ it~ got~ fixed.
+      } }
   \exp_args:Ncx\str_if_eq:onT{ver@#1.#2}{#3}
 }
 \ExplSyntaxOff
@@ -493,20 +499,22 @@
 %
 %    A few classes unconditionally define \cs{footref}. Until that has
 %    changed we provide some first aid to let them do this.
+%
+%    --- This seems to be resolved now ---
 %     
 %    \begin{macrocode}
-\AddToHook{file/after/scrkbase.sty}[firstaid]{%
-  \FirstAidNeededT{scrkbase}{sty}%
-       {2020/09/21 v3.32 KOMA-Script package (KOMA-Script-dependent basics and keyval usage)}%
-    {\let\footref\@undefined}
-   }
+%\AddToHook{file/after/scrkbase.sty}[firstaid]{%
+%  \FirstAidNeededT{scrkbase}{sty}%
+%       {2020/09/21 v3.32 KOMA-Script package (KOMA-Script-dependent basics and keyval usage)}%
+%    {\let\footref\@undefined}
+%   }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-\AddToHook{class/before/memoir}[firstaid]{%
- % for version {2020/10/04 v3.7n configurable book, report, article document class}%
-  \let\footref\@undefined
-}
+%\AddToHook{class/before/memoir}[firstaid]{%
+% % for version {2020/10/04 v3.7n configurable book, report, article document class}%
+%  \let\footref\@undefined
+%}
 %    \end{macrocode}
 %
 %
@@ -548,7 +556,7 @@
 %
 %
 %
-% \subsection{\cs{ulem} first aid}
+% \subsection{\pkg{ulem} first aid}
 %
 %    In 2020 we fixed various kernel commands to accept \pkg{calc}
 %    syntax. The \pkg{ulem} package redefines some internals and that
@@ -565,7 +573,7 @@
 %    \end{macrocode}
 %
 %
-% \subsection{\cs{varwidth} first aid}
+% \subsection{\pkg{varwidth} first aid}
 %
 %    The \pkg{varwidth} package does a lot of low-level paragraph
 %    manipulation assuming traditional \TeX{} paragraphs. However, with
@@ -583,7 +591,7 @@
      {%
 \def\@vwid@sift{%
   \skip@\lastskip\unskip
-  \unskip                         % <---- the first aid here
+  \ifdim\lastskip=\z@\unskip\fi   % <---- the first aid here (not just unskip)
   \dimen@\lastkern\unkern
   \count@\lastpenalty\unpenalty
   \setbox\z@\lastbox
@@ -618,6 +626,58 @@
 %    {Temporary fixes for the kernel \\
 %     (until the next patch-level release)}
 %
+% This fixes GitHub issue 591. It is only needed in Lua\TeX\ and replaces just one
+% instance of \cs{tex\_par:D} with the following version which removes
+% other nodes in the current list first.
+%    \begin{macrocode}
+\ExplSyntaxOn
+\sys_if_engine_luatex:T
+  {
+    \newluafunction \g__para_end_empty_par_id_int
+    \exp_args:Nx \everyjob {
+      \exp_not:V \everyjob
+      \exp_not:N \lua_now:n {
+        local~texnest, flush_list, par_token = tex.nest, node.flush_list, token.create'tex_par:D'~
+        lua.get_functions_table()[\int_use:N \g__para_end_empty_par_id_int] = function()
+          local~nest_level = texnest.top~
+          local~cur_head = nest_level.head~
+          flush_list(cur_head.next)
+          nest_level.tail, cur_head.next = cur_head, nil~
+          token.put_next(par_token)
+        end
+      }
+    }
+    \protected \luadef \__para_end_empty_par: \g__para_end_empty_par_id_int
+    \group_begin:
+    \cs_set:Npn \__para_extract_everypar:w #1 \the \toks #2 \s_stop
+      {
+        \tl_gset:Nn \g__para_standard_everypar_tl {
+          \box_gset_to_last:N \g_para_indent_box
+          \group_begin:
+            \__para_end_empty_par:
+          \group_end:
+          \tex_everypar:D { \msg_error:nnnn { hooks }{ para-mode }{before}{vertical} }
+          \@kernel@before@para@before
+          \hook_use:n {para/before}
+          \group_begin:
+            \tex_everypar:D {}
+            \skip_zero:N \tex_parskip:D
+            \tex_noindent:D
+          \group_end:
+          \tex_everypar:D{\g__para_standard_everypar_tl}
+          \@kernel@before@para@begin
+          \hook_use:n {para/begin}
+          \if_mode_horizontal: \else:
+            \msg_error:nnnn { hooks }{ para-mode }{begin}{vertical} \fi:
+          \__para_handle_indent:
+          \the \toks #2
+        }
+      }
+    \exp_last_unbraced:No \__para_extract_everypar:w \g__para_standard_everypar_tl \s_stop
+    \group_end:
+  }
+\ExplSyntaxOff
+%    \end{macrocode}
 %
 %    \begin{macrocode}
 %</kernel>
