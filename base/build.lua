@@ -205,6 +205,6 @@ end
 dofile (maindir .. "/build-config.lua")
 
 -- Suppress makeindex tree other than formal releases
-if not master_branch then
+if not main_branch then
   makeindexfiles = { }
 end
