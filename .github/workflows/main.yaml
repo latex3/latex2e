@@ -1,0 +1,189 @@
+name: Automated testing
+on:
+  push:
+  pull_request:
+
+jobs:
+  l3build:
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        include:
+          - name: "Tests: base"
+            l3build_cmd: cd base && l3build check -q --show-log-on-error
+            artifact_name: testfiles
+          - name: "Tests: required"
+            l3build_cmd: cd required && l3build check -q --show-log-on-error
+            artifact_name: testfiles
+          - name: "Documentation"
+            l3build_cmd: l3build doc -q -H --show-log-on-error
+            artifact_name: Documentation
+            artifact_path: build/doc/*.pdf
+    name: ${{matrix.name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Generate unique ID
+        id: get-id
+        run: |
+          echo -n ::set-output name=id::
+          cat /proc/sys/kernel/random/uuid
+      - name: Load cache
+        uses: actions/cache@v2
+        with:
+          path: ~/texlive
+          key: texlive-v0-${{ steps.get-id.outputs.id }}
+          restore-keys: texlive-v0-
+      - run: sudo apt-get install ghostscript
+      - name: Install TeX Live
+        uses: zauguin/install-texlive@v1
+        with:
+          packages: |
+            # Needed for any use of texlua even if not testing LuaTeX
+            luatex
+            #
+            # The test framework itself
+            l3build
+            #
+            # Required to build plain and LaTeX formats:
+            # TeX90 plain for unpacking, pdfLaTeX, LuaLaTeX and XeTeX for tests
+            cm
+            etex
+            knuth-lib
+            latex-bin
+            luahbtex
+            tex
+            tex-ini-files
+            unicode-data
+            xetex
+            #
+            # Assuming a 'basic' font set up, metafont is required to avoid
+            # warnings with some packages and errors with others
+            metafont
+            mfware
+            texlive-scripts
+            #
+            # Contrib packages
+            amsfonts   
+            ec         
+            fontspec   
+            hyperref   
+            iftex      
+            kvoptions  
+            oberdiek   
+            pdftexcmds 
+            lh         
+            lualibs    
+            luaotfload 
+            tex-gyre   
+            stringenc  
+            url
+            #
+            # special testing for firstaid
+            bidi         
+            bigfoot      
+            ncctools     
+            dinbrief     
+            everyshi     
+            filehook     
+            pgf          
+            pgfmorepages 
+            ulem         
+            varwidth
+            #
+            # Additional support for typesetting
+            alphalph     
+            amscls       
+            atbegshi     
+            atveryend    
+            auxhook      
+            babel-german 
+            bigintcalc   
+            bitset       
+            bookmark     
+            booktabs     
+            cbfonts      
+            cm-super     
+            colortbl     
+            csquotes     
+            dvips        
+            enumitem     
+            epstopdf     
+            epstopdf-pkg 
+            etexcmds     
+            etoolbox     
+            fancyvrb     
+            fc           
+            geometry     
+            gettitlestring 
+            graphics-def 
+            helvetic     
+            hologo       
+            hycolor      
+            imakeidx     
+            infwarerr    
+            intcalc      
+            kvdefinekeys 
+            kvoptions    
+            kvsetkeys    
+            letltxmacro  
+            ltxcmds      
+            ly1          
+            makeindex    
+            mflogo       
+            palatino     
+            pdfescape    
+            pl           
+            psnfss       
+            refcount     
+            rerunfilecheck 
+            sauter       
+            times        
+            titlesec     
+            underscore   
+            uniquecounter 
+            vntex        
+            wasy         
+            wsuipa       
+            xkeyval      
+            zref
+      - name: Run l3build
+        run: ${{ matrix.l3build_cmd }}
+      - name: Archive failed test output
+        if: ${{ matrix.artifact_name != 'Documentation' && failure() }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: build/test*
+          retention-days: 1
+      - name: Archive documentation
+        if: ${{ matrix.artifact_name == 'Documentation' && success() }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: "**/*.pdf"
+  notifiy:
+    name: Send notifications
+    runs-on: ubuntu-20.04
+    needs: l3build
+    if: ${{ failure() && github.event_name != 'pull_request' }}
+    steps:
+      - name: Send mail
+        uses: dawidd6/action-send-mail@ceb614a2c5737d913f2d2729e2bcc70ad933382b
+        with:
+          server_address: typesetting.eu
+          server_port: 587
+          username: ${{secrets.MAIL_USERNAME}}
+          password: ${{secrets.MAIL_PASSWORD}}
+          to: latex3-commits@tug.org
+          from: LaTeX CI <github@latex-project.org>
+          priority: high
+          subject: "Test failed: ${{github.repository}} (${{github.ref}})"
+          body: |
+            Test failure for ${{github.repository}}
+            -------------------------------------------------------------
+
+            On branch:        ${{github.ref}} (${{github.sha}})
+            Initiated by:     ${{github.actor}}
+            Commit URL:       https://github.com/${{github.repository}}/commit/${{github.sha}}
+            More information: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
