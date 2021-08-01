@@ -856,6 +856,245 @@
 % \end{macro}
 % \end{macro}
 %
+% \subsubsection{Copying a command and its internal structure}
+%
+%<latexrelease>\IncludeInRelease{2021/11/15}{\@@_copy:NN}%
+%<latexrelease>  {Support \NewCommandCopy and \ShowCommand in ltcmd}
+% Since the 2020-10-01 \LaTeXe{} release, support for copying and
+% showing the definition of robust commands is available, but the
+% specifics of each command is implemented separately.  Here we'll add
+% support for copying and showing \pkg{ltcmd} definitions.
+%
+% To fully support copying, we need two commands:  a conditional to test
+% if a command is in fact an \pkg{ltcmd} command, and another to
+% actually copy the command.  The conditional is defined later as
+% \cs{__kernel_cmd_if_xparse:NTF}, so now to the copying:
+%
+% \begin{macro}{\@@_copy:NN}
+% \begin{macro}{\@@_set_eq_if_exist:NN,\@@_set_eq_if_exist:cc}
+%   This macro just branches to the proper copying command by using
+%   \cs{@@_cmd_type_cases:NnnnF}.  The copying command takes the names
+%   of the commands to be copied to and from, and the actual commands
+%   as its four arguments.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy:NN #1 #2
+  {
+    \use:x
+      {
+        \int_set:Nn \tex_escapechar:D { 92 }
+        \exp_not:N \@@_cmd_type_cases:NnnnF \exp_not:N #2
+          { \@@_copy_command:nnNN }
+          { \@@_copy_expandable:nnNN }
+          { \@@_copy_environment:nnNN }
+          { \exp_not:N \ERROR }
+            { \cs_to_str:N #1 } { \cs_to_str:N #2 }
+            \exp_not:N #1 \exp_not:N #2
+        \int_set:Nn \tex_escapechar:D { \int_use:N \tex_escapechar:D }
+      }
+  }
+\cs_new_protected:Npn \@@_set_eq_if_exist:NN #1 #2
+  { \cs_if_exist:NTF #2 { \cs_set_eq:NN } { \use_none:nn } #1 #2 }
+\cs_generate_variant:Nn \@@_set_eq_if_exist:NN { cc }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_copy_command:nnNN,\@@_copy_command:NnNNnnnn}
+%   A normal (non-expandable) command has a pretty straightforward
+%   structure.  Its definition is stored in
+%   \cs{\meta{cmd}\textvisiblespace code}, its defaults (if any) are
+%   stored in \cs{\meta{cmd}\textvisiblespace defaults}, and its
+%   top-level definition contains its signature, which can just be
+%   copied over.  \cs{@@_copy_command:nnNN} copies the command code and
+%   defaults, and then defines the top-level command using the auxiliary
+%   \cs{@@_copy_command:NnNNnnnn}.  This macro takes the signature of
+%   the command being copied from its top-level definition, and replaces
+%   the named bits with the new name.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_command:nnNN #1 #2 #3 #4
+  {
+    \cs_set_eq:cc { #1 ~ code } { #2 ~ code }
+    \@@_set_eq_if_exist:cc { #1 ~ defaults } { #2 ~ defaults }
+    \cs_set_protected_nopar:Npx #3
+      { \exp_after:wN \@@_copy_command:NnNNnnnn #4 {#1} }
+  }
+\cs_new:Npn \@@_copy_command:NnNNnnnn #1 #2 #3 #4 #5 #6 #7 #8
+  {
+    #1 \exp_not:n { {#2} }
+    \exp_not:c { #8 ~ } \exp_not:c { #8 ~ code }
+    \exp_not:n { {#5} {#6} {#7} }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_copy_expandable:nnNN,\@@_copy_expandable:NnNNNNnnn}
+%   An expandable command is slightly more complicated.  Besides the
+%   \cs{\meta{cmd}\textvisiblespace code}, and
+%   \cs{\meta{cmd}\textvisiblespace defaults}, it also has an auxiliary
+%   \cs{\meta{cmd}\textvisiblespace} for grabbing delimited arguments,
+%   and possibly another auxiliary
+%   \cs{\meta{cmd}\textvisiblespace\textvisiblespace}, if the command
+%   has both long and short arguments.  Then, its signature has also
+%   several specific bits that are unique to that command, contrary to
+%   non-expandable commands which use a common set of parsing functions.
+%
+%   We'll start by copying the basics, then call
+%   \cs{@@_copy_expandable_signature:NnNNNNnnn} to parse the signature
+%   of the command and make the modified copy in a temporary token list,
+%   then we call \cs{@@_copy_expandable:NnNNNNnnn} that will copy the
+%   top-level definition of the command, with the proper internal
+%   renames.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_expandable:nnNN #1 #2 #3 #4
+  {
+    \cs_set_eq:cc { #1 ~ code } { #2 ~ code }
+    \@@_set_eq_if_exist:cc { #1 ~ } { #2 ~ }
+    \@@_set_eq_if_exist:cc { #1 ~ \c_space_tl } { #2 ~ \c_space_tl }
+    \@@_set_eq_if_exist:cc { #1 ~ defaults } { #2 ~ defaults }
+    \exp_after:wN \@@_copy_expandable_signature:NnNNNNnnn #4 {#1} {#2}
+    \cs_set_nopar:Npx #3
+      { \exp_after:wN \@@_copy_expandable:NnNNNNnnn #4 {#1} {#2} }
+  }
+\cs_new:Npn \@@_copy_expandable:NnNNNNnnn #1 #2 #3 #4 #5 #6 #7 #8 #9
+  {
+    \exp_not:N #1 \exp_not:n { {#2} }
+    \exp_not:c { #8 ~ }
+    \exp_not:c
+      {
+        #8 ~
+        \str_if_eq:eeT
+            { \exp_not:c { #9 ~ \c_space_tl } } { \exp_not:N #4 }
+          { \c_space_tl }
+      }
+    \exp_not:c { #8 ~ code }
+    \str_if_eq:eeTF { \exp_not:N #6 } { ? }
+      { ? }
+      { \exp_not:c { #8 ~ defaults } }
+    { \exp_not:V \l_@@_tmpa_tl }
+  }
+%    \end{macrocode}
+%
+% \begin{macro}{
+%     \@@_copy_expandable_signature:NnNNNNnnn,
+%     \@@_copy_expandable:nnN,
+%     \@@_copy_parse_grabber:w,
+%   }
+%   A signature for an expandable command contains as many
+%   \cs{expandable_grab_\meta{type}:w} as there are arguments, and what
+%   follows this macro depends on the \meta{type}.  We'll start a loop
+%   through the signature, and at each argument grabber, we'll step the
+%   argument count, and look for the \meta{type} with
+%   \cs{@@_copy_parse_grabber:w} so we know which
+%   \cs{@@_copy_grabber_\meta{type}:w} to call next.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_expandable_signature:NnNNNNnnn
+    #1 #2 #3 #4 #5 #6 #7 #8 #9
+  {
+    \int_zero:N \l_@@_current_arg_int
+    \tl_clear:N \l_@@_tmpa_tl
+    \@@_copy_expandable:nnN {#8} {#9} #7
+      \q_recursion_tail \q_recursion_stop
+  }
+\cs_new_protected:Npn \@@_copy_expandable:nnN #1 #2 #3
+  {
+    \quark_if_recursion_tail_stop:n {#3}
+    \int_incr:N \l_@@_current_arg_int
+    \exp_after:wN \@@_copy_parse_grabber:w \token_to_str:N #3 {#1} {#2}
+  }
+\use:x
+  {
+    \cs_new_protected:Npn \exp_not:N \@@_copy_parse_grabber:w ##1
+        \tl_to_str:n { expandable_grab_ } ##2 \tl_to_str:n { :w }
+      {
+        \tl_put_right:Nx \exp_not:N \l_@@_tmpa_tl
+          { \exp_not:N \exp_not:c { @@_expandable_grab_##2:w } }
+        \exp_not:N \cs_if_exist_use:cF { @@_copy_grabber_##2:w }
+          { \exp_not:N \ERROR }
+      }
+  }
+%    \end{macrocode}
+%
+% \begin{macro}{
+%     \@@_copy_grabber_D:w,\@@_copy_grabber_D_alt:w,
+%     \@@_copy_grabber_R:w,\@@_copy_grabber_R_alt:w,
+%     \@@_copy_grabber_E:w,\@@_copy_grabber_E_long:w,
+%     \@@_copy_grabber_t:w,
+%     \@@_copy_grabber_m:w,\@@_copy_grabber_m_long:w,
+%   }
+%   The most complicated is the |D|elimited argument:  each argument has
+%   a dedicated grabbing function named after the command that has to be
+%   copied over (of the form
+%   \cs{\meta{cmd}\textvisiblespace(arg\textvisiblespace\meta{num})}).
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_grabber_D:w #1 #2 #3 #4 #5
+  {
+    \tl_put_right:Nx \l_@@_tmpa_tl
+      {
+        \exp_not:c { #1 ~ (arg ~ \int_use:N \l_@@_current_arg_int ) }
+        \exp_not:n { #4 #5 }
+      }
+    \cs_set_eq:cc
+      { #1 ~ (arg ~ \int_use:N \l_@@_current_arg_int ) }
+      { #2 ~ (arg ~ \int_use:N \l_@@_current_arg_int ) }
+    \@@_copy_expandable:nnN {#1} {#2}
+  }
+%    \end{macrocode}
+%
+%   |D_alt| is just a special case of |D| that uses a single delimiter
+%   (used when both delimiters of the argument are identical):
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_grabber_D_alt:w #1 #2 #3 #4
+  { \@@_copy_grabber_D:w {#1} {#2} {#3} {#4} { } }
+%    \end{macrocode}
+%
+%   |R|, as far as copying is concerned, is identical to |D|:
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_copy_grabber_R:w \@@_copy_grabber_D:w
+\cs_new_eq:NN \@@_copy_grabber_R_alt:w \@@_copy_grabber_D_alt:w
+%    \end{macrocode}
+%
+%   |E| is also straightforward: we just copy the embellishments over:
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_grabber_E:w #1 #2 #3 #4
+  {
+    \tl_put_right:Nn \l_@@_tmpa_tl { {#3} {#4} }
+    \@@_copy_expandable:nnN {#1} {#2}
+  }
+\cs_new_eq:NN \@@_copy_grabber_E_long:w \@@_copy_grabber_E:w
+%    \end{macrocode}
+%
+%   |t| just needs copying the token to be tested for:
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_grabber_t:w #1 #2 #3 #4
+  {
+    \tl_put_right:Nn \l_@@_tmpa_tl { #3 #4 }
+    \@@_copy_expandable:nnN {#1} {#2}
+  }
+%    \end{macrocode}
+%
+%   And last but not least, |m| is the simplest;  the grabber is just
+%   \cs{@@_expandable_grab_m:w}, which is already added to the new
+%   command so here we just resume the loop:
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_grabber_m:w { \@@_copy_expandable:nnN }
+\cs_new_eq:NN \@@_copy_grabber_m_long:w \@@_copy_grabber_m:w
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_copy_environment:nnNN}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_environment:nnNN #1 #2 #3 #4 { \ERROR }
+%    \end{macrocode}
+%
+%<latexrelease>\EndIncludeInRelease
+%
+%<latexrelease>\IncludeInRelease{0000/00/00}{\@@_copy:NN}%
+%<latexrelease>  {Support \NewCommandCopy and \ShowCommand in ltcmd}
+%
+%<latexrelease>\EndIncludeInRelease
+%
 % \subsection{Normalizing the argument specifications}
 %
 % The goal here is to expand aliases and check that the argument
