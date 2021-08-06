@@ -2801,7 +2801,141 @@
 % \end{macro}
 % \end{macro}
 %
+% \begin{macro}{\@@_curr_name_push:n,\@@_curr_name_push_aux:n}
+% \begin{macro}{\@@_curr_name_pop:}
+% \begin{macro}{\@@_end_document_label_check:}
+%   The token list \cs{g_@@_hook_curr_name_tl} stores the name of the
+%   current package/file to be used as label for hooks.
+%   Providing a consistent interface is tricky, because packages can
+%   be loaded within packages, and some packages may not use
+%   \cs{SetDefaultHookLabel} to change the default label (in which
+%   case \cs{@currname} is used).
 %
+%   To pull that one off, we keep a stack that contains the default
+%   label for each level of input.  The bottom of the stack contains the
+%   default label for the |top-level| (this stack should never go
+%   empty). If we're building the format, set the default label to be
+%   |top-level|:
+%    \begin{macrocode}
+\tl_gset:Nn \g_@@_hook_curr_name_tl { top-level }
+%    \end{macrocode}
+%
+%   Then, in case we're in \pkg{latexrelease} we push something on
+%   the stack to support roll forward.  But in some rare cases,
+%   \pkg{latexrelease} may be loaded inside another package (notably
+%   \pkg{platexrelease}), so we'll first push the |top-level| entry:
+%   \changes{v1.0i}{2021/03/18}
+%           {Only add \texttt{top-level} if not already there.}
+%    \begin{macrocode}
+%<latexrelease>\seq_if_empty:NT \g_@@_name_stack_seq
+%<latexrelease>  { \seq_gput_right:Nn \g_@@_name_stack_seq { top-level } }
+%    \end{macrocode}
+%   then we dissect the \cs{@currnamestack}, adding \cs{@currname} to
+%   the stack:
+% \changes{v1.0f}{2020/11/24}{Support for roll forward (gh/434)}
+%    \begin{macrocode}
+%<latexrelease>\cs_set_protected:Npn \@@_tmp:w #1 #2 #3
+%<latexrelease>  {
+%<latexrelease>    \quark_if_recursion_tail_stop:n {#1}
+%<latexrelease>    \seq_gput_right:Nn \g_@@_name_stack_seq {#1}
+%<latexrelease>    \@@_tmp:w
+%<latexrelease>  }
+%<latexrelease>\exp_after:wN \@@_tmp:w \@currnamestack
+%<latexrelease>  \q_recursion_tail \q_recursion_tail
+%<latexrelease>  \q_recursion_tail \q_recursion_stop
+%    \end{macrocode}
+%   and finally set the default label to be the \cs{@currname}:
+%   \changes{v1.0i}{2021/03/18}
+%           {Remove the (empty) \enquote{top-level} from \cs{@currnamestack}.}
+%    \begin{macrocode}
+%<latexrelease>\tl_gset:Nx \g_@@_hook_curr_name_tl { \@currname }
+%<latexrelease>\seq_gpop_right:NN \g_@@_name_stack_seq \l_@@_tmpa_tl
+%    \end{macrocode}
+%
+%   Two commands keep track of the stack: when a file is input,
+%   \cs{@@_curr_name_push:n} pushes the current default label to the
+%   stack, and sets the new default label in one go:
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_curr_name_push:n #1
+  { \exp_args:Nx \@@_curr_name_push_aux:n { \@@_make_name:n {#1} } }
+\cs_new_protected:Npn \@@_curr_name_push_aux:n #1
+  {
+    \tl_if_blank:nTF {#1}
+      { \msg_error:nn { hooks } { no-default-label } }
+      {
+        \str_if_eq:nnTF {#1} { top-level }
+          {
+            \msg_error:nnnnn { hooks } { set-top-level }
+              { to } { PushDefaultHookLabel } {#1}
+          }
+          {
+            \seq_gpush:NV \g_@@_name_stack_seq \g_@@_hook_curr_name_tl
+            \tl_gset:Nn \g_@@_hook_curr_name_tl {#1}
+          }
+      }
+  }
+%    \end{macrocode}
+%   and when an input is over, the topmost item of the stack is popped,
+%   since the label will not be used again, and \cs{g_@@_hook_curr_name_tl}
+%   is updated to the now topmost item of the stack:
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_curr_name_pop:
+  {
+    \seq_gpop:NNTF \g_@@_name_stack_seq \l_@@_return_tl
+      { \tl_gset_eq:NN \g_@@_hook_curr_name_tl \l_@@_return_tl }
+      { \msg_error:nn { hooks } { extra-pop-label } }
+  }
+%    \end{macrocode}
+%
+%   At the end of the document we want to check if there was no
+%   \cs{@@_curr_name_push:n} without a matching \cs{@@_curr_name_pop:}
+%   (not a critical error, but it might indicate that something else is
+%   not quite right):
+%    \begin{macrocode}
+\tl_gput_right:Nn \@kernel@after@enddocument@afterlastpage
+  { \@@_end_document_label_check: }
+\cs_new_protected:Npn \@@_end_document_label_check:
+  {
+    \seq_gpop:NNT \g_@@_name_stack_seq \l_@@_return_tl
+      {
+        \msg_error:nnx { hooks } { missing-pop-label }
+          { \g_@@_hook_curr_name_tl }
+        \tl_gset_eq:NN \g_@@_hook_curr_name_tl \l_@@_return_tl
+        \@@_end_document_label_check:
+      }
+  }
+%    \end{macrocode}
+%
+%   The token list \cs{g_@@_hook_curr_name_tl} is but a mirror of the
+%   top of the stack.
+%
+% \begin{macro}{\@@_set_default_hook_label:n,\@@_set_default_label:n}
+%   Now define a wrapper that replaces the top of the stack with the
+%   argument, and updates \cs{g_@@_hook_curr_name_tl} accordingly.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_set_default_hook_label:n #1
+  {
+    \seq_if_empty:NTF \g_@@_name_stack_seq
+      {
+        \msg_error:nnnnn { hooks } { set-top-level }
+          { for } { SetDefaultHookLabel } {#1}
+      }
+      { \exp_args:Nx \@@_set_default_label:n { \@@_make_name:n {#1} } }
+  }
+\cs_new_protected:Npn \@@_set_default_label:n #1
+  {
+    \str_if_eq:nnTF {#1} { top-level }
+      {
+        \msg_error:nnnnn { hooks } { set-top-level }
+          { to } { SetDefaultHookLabel } {#1}
+      }
+      { \tl_gset:Nn \g_@@_hook_curr_name_tl {#1} }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
 %
 % \subsection{Adding or removing hook code}
 %
@@ -4836,7 +4970,6 @@
 %
 %
 %  \begin{macro}{\AddToHook}
-%    
 %    \begin{macrocode}
 \NewDocumentCommand \AddToHook { m o +m }
   { \hook_gput_code:nnn {#1} {#2} {#3} }
@@ -4844,7 +4977,6 @@
 %  \end{macro}
 %
 %  \begin{macro}{\AddToHookNext}
-%    
 %    \begin{macrocode}
 \NewDocumentCommand \AddToHookNext { m +m }
   { \hook_gput_next_code:nn {#1} {#2} }
@@ -4852,7 +4984,6 @@
 %  \end{macro}
 %
 %  \begin{macro}{\ClearHookNext}
-%    
 % \changes{v1.0o}{2021/07/27}{Macro added}
 %    \begin{macrocode}
 \NewDocumentCommand \ClearHookNext { m }
@@ -4862,7 +4993,6 @@
 %
 %
 %  \begin{macro}{\RemoveFromHook}
-%    
 %    \begin{macrocode}
 \NewDocumentCommand \RemoveFromHook { m o }
   { \hook_gremove_code:nn {#1} {#2} }
@@ -4872,140 +5002,11 @@
 % \begin{macro}{\SetDefaultHookLabel}
 % \begin{macro}{\PushDefaultHookLabel}
 % \begin{macro}{\PopDefaultHookLabel}
-%
-% \fmiinline{Docu task: At some point this code for this should be moved to the
-%    label section earlier and here we should keep only the interface commands.}
-%
-% \begin{macro}{\@@_curr_name_push:n,\@@_curr_name_push_aux:n}
-% \begin{macro}{\@@_curr_name_pop:}
-% \begin{macro}{\@@_end_document_label_check:}
-%   The token list \cs{g_@@_hook_curr_name_tl} stores the name of the
-%   current package/file to be used as label for hooks.
-%   Providing a consistent interface is tricky, because packages can
-%   be loaded within packages, and some packages may not use
-%   \cs{SetDefaultHookLabel} to change the default label (in which
-%   case \cs{@currname} is used).
-%
-%   To pull that one off, we keep a stack that contains the default
-%   label for each level of input.  The bottom of the stack contains the
-%   default label for the |top-level| (this stack should never go
-%   empty). If we're building the format, set the default label to be
-%   |top-level|:
-%    \begin{macrocode}
-\tl_gset:Nn \g_@@_hook_curr_name_tl { top-level }
-%    \end{macrocode}
-%
-%   Then, in case we're in \pkg{latexrelease} we push something on
-%   the stack to support roll forward.  But in some rare cases,
-%   \pkg{latexrelease} may be loaded inside another package (notably
-%   \pkg{platexrelease}), so we'll first push the |top-level| entry:
-%   \changes{v1.0i}{2021/03/18}
-%           {Only add \texttt{top-level} if not already there.}
-%    \begin{macrocode}
-%<latexrelease>\seq_if_empty:NT \g_@@_name_stack_seq
-%<latexrelease>  { \seq_gput_right:Nn \g_@@_name_stack_seq { top-level } }
-%    \end{macrocode}
-%   then we dissect the \cs{@currnamestack}, adding \cs{@currname} to
-%   the stack:
-% \changes{v1.0f}{2020/11/24}{Support for roll forward (gh/434)}
-%    \begin{macrocode}
-%<latexrelease>\cs_set_protected:Npn \@@_tmp:w #1 #2 #3
-%<latexrelease>  {
-%<latexrelease>    \quark_if_recursion_tail_stop:n {#1}
-%<latexrelease>    \seq_gput_right:Nn \g_@@_name_stack_seq {#1}
-%<latexrelease>    \@@_tmp:w
-%<latexrelease>  }
-%<latexrelease>\exp_after:wN \@@_tmp:w \@currnamestack
-%<latexrelease>  \q_recursion_tail \q_recursion_tail
-%<latexrelease>  \q_recursion_tail \q_recursion_stop
-%    \end{macrocode}
-%   and finally set the default label to be the \cs{@currname}:
-%   \changes{v1.0i}{2021/03/18}
-%           {Remove the (empty) \enquote{top-level} from \cs{@currnamestack}.}
-%    \begin{macrocode}
-%<latexrelease>\tl_gset:Nx \g_@@_hook_curr_name_tl { \@currname }
-%<latexrelease>\seq_gpop_right:NN \g_@@_name_stack_seq \l_@@_tmpa_tl
-%    \end{macrocode}
-%
-%   Two commands keep track of the stack: when a file is input,
-%   \cs{@@_curr_name_push:n} pushes the current default label to the
-%   stack, and sets the new default label in one go:
-%    \begin{macrocode}
-\cs_new_protected:Npn \@@_curr_name_push:n #1
-  { \exp_args:Nx \@@_curr_name_push_aux:n { \@@_make_name:n {#1} } }
-\cs_new_protected:Npn \@@_curr_name_push_aux:n #1
-  {
-    \tl_if_blank:nTF {#1}
-      { \msg_error:nn { hooks } { no-default-label } }
-      {
-        \str_if_eq:nnTF {#1} { top-level }
-          {
-            \msg_error:nnnnn { hooks } { set-top-level }
-              { to } { PushDefaultHookLabel } {#1}
-          }
-          {
-            \seq_gpush:NV \g_@@_name_stack_seq \g_@@_hook_curr_name_tl
-            \tl_gset:Nn \g_@@_hook_curr_name_tl {#1}
-          }
-      }
-  }
-%    \end{macrocode}
-%   and when an input is over, the topmost item of the stack is popped,
-%   since the label will not be used again, and \cs{g_@@_hook_curr_name_tl}
-%   is updated to the now topmost item of the stack:
-%    \begin{macrocode}
-\cs_new_protected:Npn \@@_curr_name_pop:
-  {
-    \seq_gpop:NNTF \g_@@_name_stack_seq \l_@@_return_tl
-      { \tl_gset_eq:NN \g_@@_hook_curr_name_tl \l_@@_return_tl }
-      { \msg_error:nn { hooks } { extra-pop-label } }
-  }
-%    \end{macrocode}
-%
-%   At the end of the document we want to check if there was no
-%   \cs{@@_curr_name_push:n} without a matching \cs{@@_curr_name_pop:}
-%   (not a critical error, but it might indicate that something else is
-%   not quite right):
-%    \begin{macrocode}
-\tl_gput_right:Nn \@kernel@after@enddocument@afterlastpage
-  { \@@_end_document_label_check: }
-\cs_new_protected:Npn \@@_end_document_label_check:
-  {
-    \seq_gpop:NNT \g_@@_name_stack_seq \l_@@_return_tl
-      {
-        \msg_error:nnx { hooks } { missing-pop-label }
-          { \g_@@_hook_curr_name_tl }
-        \tl_gset_eq:NN \g_@@_hook_curr_name_tl \l_@@_return_tl
-        \@@_end_document_label_check:
-      }
-  }
-%    \end{macrocode}
-%
-%   The token list \cs{g_@@_hook_curr_name_tl} is but a mirror of the top
-%   of the stack.
-%
 %   Now define a wrapper that replaces the top of the stack with the
 %   argument, and updates \cs{g_@@_hook_curr_name_tl} accordingly.
 %    \begin{macrocode}
 \NewDocumentCommand \SetDefaultHookLabel { m }
-  {
-    \seq_if_empty:NTF \g_@@_name_stack_seq
-      {
-        \msg_error:nnnnn { hooks } { set-top-level }
-          { for } { SetDefaultHookLabel } {#1}
-      }
-      { \exp_args:Nx \@@_set_default_label:n { \@@_make_name:n {#1} } }
-  }
-\cs_new_protected:Npn \@@_set_default_label:n #1
-  {
-    \str_if_eq:nnTF {#1} { top-level }
-      {
-        \msg_error:nnnnn { hooks } { set-top-level }
-          { to } { SetDefaultHookLabel } {#1}
-      }
-      { \tl_gset:Nn \g_@@_hook_curr_name_tl {#1} }
-  }
-%    \end{macrocode}
+  { \@@_set_default_hook_label:n {#1} }
 %
 %   The label is only automatically updated with \cs{@onefilewithoptions}
 %   (\cs{usepackage} and \cs{documentclass}), but some packages, like
@@ -5038,9 +5039,6 @@
     #1 #2 {#3}
   }
 %    \end{macrocode}
-% \end{macro}
-% \end{macro}
-% \end{macro}
 % \end{macro}
 % \end{macro}
 % \end{macro}
