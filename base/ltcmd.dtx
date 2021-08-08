@@ -34,8 +34,8 @@
 %%% From File: ltcmd.dtx
 %
 %    \begin{macrocode}
-\def\ltcmdversion{v1.0f}
-\def\ltcmddate{2021-06-04}
+\def\ltcmdversion{v1.0g}
+\def\ltcmddate{2021-08-07}
 %    \end{macrocode}
 %
 %<*driver>
@@ -1744,15 +1744,66 @@
 %
 % \begin{macro}{\@@_add_type_E:w}
 %   The \texttt{E}-type argument needs a special handling of default
-%   values.
+%   values.  It also needs, since each embellishment is a separate
+%   argument, to replicate the argument processors to each embellishment
+%   argument so the number of arguments and processors remains in sync.
+% \changes{v1.0g}{2021/08/07}
+%         {Replicate argument processors for all embellishments (gh/639)}
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_add_type_E:w #1#2
   {
     \@@_flush_m_args:
     \@@_add_default_E:nn {#1} {#2}
+    \use:x
+      {
+        \@@_replicate_processor:nn { \tl_count:n {#1} }
+          { \exp_not:o \l_@@_process_one_tl }
+      }
     \@@_add_grabber:N E
     \tl_put_right:Nn \l_@@_signature_tl { {#1} }
     \@@_prepare_signature:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_replicate_processor:nn}
+%   In the command's argument processor signature (the final argument of
+%   \cs{@@_start:nNNnnn}) there is one braced item for each formal
+%   argument (up to nine), and in each of these items there is one
+%   braced item for each processor (as many as there were processors
+%   declared for a given argument).  Something like this:
+%   \begin{quote}
+%     \ttfamily \obeylines
+%     \{ \% argument processors
+%     \ \ \{ \% argument 1
+%     \ \ \ \ \{ processor 1 \} \{ processor 2 \} \ldots\ \{ processor n \}
+%     \ \ \} \% end argument 1
+%     \ \ \{ \ldots\ \} \% argument 2
+%     \ \ \ \ \ \vdots
+%     \ \ \{ \ldots\ \} \% argument n
+%     \} \% end argument processors
+%   \end{quote}
+%
+%   The function \cs{@@_add_grabber:N} adds one single grabber for an
+%   argument, and adds the braced item for that one argument.  However,
+%   in an |E|-type argument each embellishment requires its own formal
+%   argument, so we need to break out of one layer of braces in
+%   \cs{l_@@_process_one_tl}, add copies of the processor as necessary,
+%   and then return the removed brace.  The function below does just
+%   that:  it defines \cs{l_@@_process_one_tl} starting with a |}|$_2$
+%   and ending with a |{|$_11$, so that it adds as many processors as
+%   needed when |x|-expanded.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_replicate_processor:nn #1 #2
+  {
+    \int_compare:nNnF {#1} > { 1 } { \use_none:nnn }
+    \tl_set:Nx \l_@@_process_one_tl
+      {
+        \exp_not:n { \exp_not:n {#2} \if_false: { \fi: } }
+        \prg_replicate:nn { #1 - 2 }
+          { \exp_not:n { \exp_not:n { {#2} } } }
+        \exp_not:n { { \if_false: } \fi: \exp_not:n {#2} }
+      }
   }
 %    \end{macrocode}
 % \end{macro}
@@ -1847,6 +1898,8 @@
 %   \cs{l_@@_obey_spaces_bool} boolean can only be \texttt{true} for
 %   trailing optional arguments.  In that case spaces will not be
 %   ignored when looking for that optional argument.
+% \changes{v1.0g}{2021/08/07}
+%         {Replicate argument processors for all embellishments (gh/639)}
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_add_grabber:N #1
   {
@@ -1863,7 +1916,12 @@
     \bool_set_false:N \l_@@_long_bool
     \bool_set_false:N \l_@@_obey_spaces_bool
     \tl_put_right:Nx \l_@@_process_all_tl
-      { { \exp_not:o \l_@@_process_one_tl } }
+      {
+        {
+          \if_charcode:w E #1 \use_i:nn \fi:
+          \exp_not:o \l_@@_process_one_tl
+        }
+      }
     \tl_clear:N \l_@@_process_one_tl
   }
 %    \end{macrocode}
