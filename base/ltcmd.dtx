@@ -2269,18 +2269,18 @@
   { \@@_show_command_aux:nNNn { expandable~document~command } #8 #5 {#2} }
 %    \end{macrocode}
 %
-%   And now just pretty-print everything:
+%   Now just print everything in the wanted format.  The auxiliary
+%   \cs{@@_split_signature:n} stores a ready-to-print token list into
+%   \cs{l_@@_tmpa_tl}, so we ust use that here:
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_show_command_aux:nNNn #1 #2 #3 #4
   {
+    \@@_split_signature:n {#4}
     \iow_term:x
       {
         > ~ \token_to_str:N #2 = #1: \iow_newline:
-        > ~ signature = \tl_to_str:n {#4} . \iow_newline:
-        > ~ \token_to_str:N #3 ~ (
-        \int_eval:n
-          { \exp_args:Nf \str_count:n { \cs_argument_spec:N #3 } / 2 } ~
-        parameters ) : \cs_replacement_spec:N #3
+        \tl_use:N \l_@@_tmpa_tl
+        -> \cs_replacement_spec:N #3 .
       }
   }
 %    \end{macrocode}
@@ -2299,6 +2299,171 @@
 \tl_gput_right:Nn \@showcommandlisthook
   { { \__kernel_cmd_if_xparse:NTF \@@_show:N } }
 %    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_split_signature:n}
+%   Now we'll try a least-effort adventure into splitting the symbolic
+%   user-provided signature for a command into individual parameters for
+%   pretty-printing.  A counter is used to keep track of the current
+%   argument number, and two token lists are used: \cs{l_@@_tmpa_tl}
+%   holds the final token list to be printed, and \cs{l_@@_tmpb_tl}
+%   holds just the current item, so that we can make changes to an
+%   individual item without having to dissect the whole thing (this is
+%   used for |e|- and |E|-types).
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_split_signature:n #1
+  {
+    \int_set:Nn \l_@@_current_arg_int { 1 }
+    \tl_clear:N \l_@@_tmpa_tl
+    \tl_clear:N \l_@@_tmpb_tl
+    \@@_split_signature_loop:Nw #1 \q_recursion_tail \q_recursion_stop
+  }
+%    \end{macrocode}
+%
+% \begin{macro}{\@@_split_signature_loop:Nw}
+%   This is the main chunk of the loop:  it starts an item with
+%   \cs{@@_split_start_item:} (adds indentation and whatnot to
+%   \cs{l_@@_tmpb_tl}), then checks if a special token list
+%   \cs[no-index]{c_@@_show_type_\meta{type}_tl} exists.  If it doesn't,
+%   the current argument is a ``simple'' type which needs no extra
+%   processing.  Otherwise, call a specific function depending on the
+%   value of said token list.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_split_signature_loop:Nw #1
+  {
+    \quark_if_recursion_tail_stop:N #1
+    \tl_if_empty:NT \l_@@_tmpb_tl { \@@_split_start_item: }
+    \tl_if_exist:cTF { c_@@_show_type_#1_tl }
+      {
+        \use:c
+          {
+            @@_show_
+            \if_case:w \tl_use:c { c_@@_show_type_#1_tl } \exp_stop_f:
+            delim \or: delims \or: delims_opt \or: opt \or:
+            e \or: E \or: prefix \or: processor \fi: :Nw
+          } #1
+      }
+      { \@@_split_end_item:n {#1} \@@_split_signature_loop:Nw }
+  }
+%    \end{macrocode}
+%
+% \begin{macro}{
+%     \c_@@_show_type_t_tl,
+%     \c_@@_show_type_r_tl,\c_@@_show_type_d_tl,
+%     \c_@@_show_type_R_tl,\c_@@_show_type_D_tl,
+%     \c_@@_show_type_O_tl,
+%     \c_@@_show_type_e_tl,
+%     \c_@@_show_type_E_tl,
+%     \c_@@_show_type_+_tl,\c_@@_show_type_!_tl,
+%     \c_@@_show_type_>_tl,
+%   }
+%   The token lists \cs[no-index]{c_@@_show_type_\meta{type}_tl} exist
+%   for nontrivial (for printing) \meta{types} which requires special
+%   parsing (like delimiters or optional arguments).  Values from~0 to~7
+%   are assigned to each type:
+%   \begin{enumerate}
+%     \item a single delimiter token;
+%     \item two delimiter tokens;
+%     \item two delimiter tokens plus a default value;
+%     \item a default value;
+%     \item a list of embellishments (exclusive for |e|-type);
+%     \item embellishments plus defaults (exclusive for |E|-type);
+%     \item simple prefixes;
+%     \item prefixes with arguments (argument processors);
+%   \end{enumerate}
+%    \begin{macrocode}
+\cs_set_protected:Npn \@@_tmp:w #1 #2
+  {
+    \quark_if_nil:nF {#1}
+      { \tl_const:cn { c_@@_show_type_#1_tl } {#2} \@@_tmp:w }
+  }
+\@@_tmp:w t0 r1 d1 R2 D2 O3 e4 E5 +6 !6 >7 \q_nil \q_nil
+%    \end{macrocode}
+%
+% \begin{macro}{
+%     \@@_show_delim:Nw,\@@_show_delims:Nw,
+%     \@@_show_delims_opt:Nw,\@@_show_opt:Nw,
+%     \@@_show_e:Nw,\@@_show_E:Nw,
+%     \@@_show_prefix:Nw,\@@_show_processor:Nw,
+%   }
+%   Now, based on each type we know how to act.  In mosty cases it is
+%   just a matter of feeding the grabbed arguments and resuming the
+%   loop.  The embellishments require a bit more attention:  the
+%   |e|-type loops through the list of embellishments and adds each to
+%   the token list as separate arguments.  The |E|-type does more or
+%   less the same, but uses \cs{@@_tl_mapthread_function:nnN} to map
+%   over two lists simultaneously, adding each token and default to the
+%   token list to print.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_show_delim:Nw #1 #2
+  { \@@_split_end_item:n { #1 #2 } \@@_split_signature_loop:Nw }
+\cs_new_protected:Npn \@@_show_delims:Nw #1 #2 #3
+  { \@@_split_end_item:n { #1 #2 #3 } \@@_split_signature_loop:Nw }
+\cs_new_protected:Npn \@@_show_delims_opt:Nw #1 #2 #3 #4
+  { \@@_split_end_item:n { #1 #2 #3 {#4} } \@@_split_signature_loop:Nw }
+\cs_new_protected:Npn \@@_show_opt:Nw #1 #2
+  { \@@_split_end_item:n { #1 {#2} } \@@_split_signature_loop:Nw }
+\cs_new_protected:Npn \@@_show_e:Nw #1 #2
+  {
+    \tl_map_inline:nn {#2}
+      {
+        \@@_split_start_item:
+        \@@_split_end_item:n { #1 ##1 }
+      }
+    \@@_split_signature_loop:Nw
+  }
+\cs_new_protected:Npn \@@_show_E:Nw #1 #2 #3
+  {
+    \cs_set_protected:Npn \@@_tmp:w ##1 ##2
+      {
+        \@@_split_start_item:
+        \@@_split_end_item:n { #1 ##1 {##2} }
+      }
+    \@@_tl_mapthread_function:nnN {#2} {#3} \@@_tmp:w
+    \@@_split_signature_loop:Nw
+  }
+%    \end{macrocode}
+%
+%   Minor wrinkle with the prefixes: they use \cs{@@_split_add_item:n}
+%   instead of \cs{@@_split_end_item:n} (|add| \emph{vs.} |end|) because
+%   they are followed by an argument, so they can't end the item.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_show_prefix:Nw #1
+  { \@@_split_add_item:n {#1} \@@_split_signature_loop:Nw }
+\cs_new_protected:Npn \@@_show_processor:Nw #1 #2
+  { \@@_split_add_item:n { #1 {#2} } \@@_split_signature_loop:Nw }
+%    \end{macrocode}
+%
+% \begin{macro}{
+%     \@@_split_start_item:,
+%     \@@_split_add_item:n,
+%     \@@_split_end_item:n,
+%   }
+%   And now the auxiliaries that store the strings to be printed.
+%   \cs{@@_split_start_item:} starts an item from scratch,
+%   \cs{@@_split_add_item:n} adds tokens to an item without adding a
+%   newline, and \cs{@@_split_add_item:n} adds tokens, terminates the
+%   item with a newline, and steps the argument count.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_split_start_item:
+  {
+    \tl_set:Nx \l_@@_tmpb_tl
+      { ~ \c_space_tl \c_hash_str \int_use:N \l_@@_current_arg_int : }
+  }
+\cs_new_protected:Npn \@@_split_add_item:n #1
+  { \tl_put_right:Nx \l_@@_tmpb_tl { \tl_to_str:n {#1} } }
+\cs_new_protected:Npn \@@_split_end_item:n #1
+  {
+    \tl_put_right:Nx \l_@@_tmpa_tl
+      { \l_@@_tmpb_tl \tl_to_str:n {#1} \iow_newline: }
+    \tl_clear:N \l_@@_tmpb_tl
+    \int_incr:N \l_@@_current_arg_int
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
 % \end{macro}
 %
 % Not much to do regarding \pkg{latexrelease}: we could remove the
