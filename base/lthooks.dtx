@@ -2931,7 +2931,7 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_try_declaring_generic_hook:nNNnn #1
   {
-    \@@_if_file_hook:wTF #1 / / / \s_@@_mark
+    \@@_if_file_hook:wTF #1 / \s_@@_mark {#1}
       {
         \exp_args:Ne \@@_try_declaring_generic_hook_split:nNNnn
           { \exp_args:Ne \@@_file_hook_normalize:n {#1} }
@@ -2959,13 +2959,10 @@
 \prg_new_protected_conditional:Npnn \@@_try_declaring_generic_hook:wn
     #1 / #2 / #3 / #4 \scan_stop: #5 { TF }
   {
-    \tl_if_empty:nTF {#2}
-      { \prg_return_false: }
+    \@@_if_generic:nTF {#5}
       {
-        \prop_if_in:NnTF \c_@@_generics_prop {#1}
+        \@@_if_usable:nF {#5}
           {
-            \@@_if_usable:nF {#5}
-              {
 %    \end{macrocode}
 %    If the hook doesn't exist yet we check if it is a \texttt{cmd}
 %    hook and if so we attempt patching the command in addition to
@@ -2975,8 +2972,8 @@
 %    \cs{@@_patch_cmd_or_delay:Nnn} (defined in \texttt{ltcmdhooks})
 %    will generate an appropriate error message.
 %    \begin{macrocode}
-                \str_if_eq:nnT {#1} { cmd }
-                  { \@@_try_put_cmd_hook:n {#5} }
+            \str_if_eq:nnT {#1} { cmd }
+              { \@@_try_put_cmd_hook:n {#5} }
 %    \end{macrocode}
 %
 %    Declare the hook always even if it can't really be used (error
@@ -2985,15 +2982,13 @@
 %    Here we use \cs{@@_make_usable:n}, so that a \cs{hook_new:n} is still
 %    possible later.
 %    \begin{macrocode}
-                \@@_make_usable:n {#5}
-              }
-            \exp_args:NNx \prop_if_in:NnT \c_@@_generics_reversed_prop
-                { \tl_if_empty:nTF {#3} {#2} {#3} }
-              { \tl_gset:cn { g_@@_#5_reversed_tl } { - } }
-            \prg_return_true:
+            \@@_make_usable:n {#5}
           }
-          { \prg_return_false: }
+        \@@_if_generic_reversed:nT {#5}
+          { \tl_gset:cn { g_@@_#5_reversed_tl } { - } }
+        \prg_return_true:
       }
+      { \prg_return_false: }
   }
 %<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
@@ -3063,31 +3058,17 @@
 %   file-specific hook (not, for example, |file/before|, but
 %   |file/foo.tex/before|).  If it is a file-specific hook, then it
 %   executes the \meta{true} branch, otherwise \meta{false}.
-%
-%   A file-specific hook is \hook{file/\meta{position}/\meta{name}}.
-%   If any of these parts don't exist, it is a general file hook or not
-%   a file hook at all, so the conditional evaluates to \meta{false}.
-%   Otherwise, it checks that the first part is |file| and that the
-%   \meta{position} is in the \cs{c_@@_generics_file_prop}.
-%
-%   A property list is used here to avoid having to worry with catcodes,
-%   because \pkg{expl3}'s file name parsing turns all characters into
-%   catcode-12 tokens, which might differ from hand-input letters.
 %    \begin{macrocode}
 %<latexrelease>\IncludeInRelease{2021/11/15}{\@@_if_file_hook:w}%
 %<latexrelease>                 {Standardise~generic~hook~names}
 \prg_new_conditional:Npnn \@@_if_file_hook:w
-    #1 / #2 / #3 / #4 \s_@@_mark { TF }
+    #1 / #2 \s_@@_mark #3 { TF }
   {
-    \str_if_eq:nnTF {#1} { file }
+    \@@_if_generic:nTF {#3}
       {
-        \tl_if_empty:nTF {#3}
+        \str_if_eq:nnTF {#1} { file }
+          { \prg_return_true: }
           { \prg_return_false: }
-          {
-            \prop_if_in:NnTF \c_@@_generics_file_prop {#3}
-              { \prg_return_true: }
-              { \prg_return_false: }
-          }
       }
       { \prg_return_false: }
   }
@@ -3151,8 +3132,8 @@
 % \end{macro}
 %
 %  \begin{macro}{\c_@@_generics_prop}
-%    Property list holding the generic names. We don't provide any user
-%    interface to this as this is meant to be static.
+%    Token lists defining the possible generic hooks.  We don't provide
+%    any user interface to this as this is meant to be static.
 %    \begin{description}
 %    \item[\texttt{cmd}]
 %      The generic hooks used for commands.
@@ -3162,23 +3143,47 @@
 %      The generic hooks used when loading a file
 %    \end{description}
 %    \begin{macrocode}
-\prop_const_from_keyval:Nn \c_@@_generics_prop
-     {cmd=,env=,file=,package=,class=,include=}
+%<latexrelease>\IncludeInRelease{2021/11/15}{\c_@@_generics_prop}%
+%<latexrelease>                 {Standardise~generic~hook~names}
+\clist_map_inline:nn { cmd , env , file , package , class , include }
+  {
+    \tl_const:cn { c_@@_generic_#1/./before_tl } { + }
+    \tl_const:cn { c_@@_generic_#1/./after_tl  } { - }
+  }
+\tl_const:cn { c_@@_generic_env/./begin_tl } { + }
+\tl_const:cn { c_@@_generic_env/./end_tl   } { + }
+\tl_const:cn { c_@@_generic_include/./end_tl } { - }
+%<latexrelease>\EndIncludeInRelease
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2020/10/01}{\c_@@_generics_prop}%
+%<latexrelease>                 {Standardise~generic~hook~names}
+%<latexrelease>\prop_const_from_keyval:Nn \c_@@_generics_prop
+%<latexrelease>     {cmd=,env=,file=,package=,class=,include=}
+%<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 %  \end{macro}
 %
-%  \begin{macro}{\c_@@_generics_reversed_prop,
-%                \c_@@_generics_reversed_ii_prop,
+%  \begin{macro}{\c_@@_generics_reversed_ii_prop,
 %                \c_@@_generics_reversed_iii_prop,
 %                \c_@@_generics_file_prop}
 %    Some of the generic hooks are supposed to use reverse ordering,
 %    these are the following (the |ii| and |iii| names are kept for the
 %    deprecation cycle):
 %    \begin{macrocode}
-\prop_const_from_keyval:Nn \c_@@_generics_reversed_prop {after=,end=}
-\prop_const_from_keyval:Nn \c_@@_generics_reversed_ii_prop {after=,end=}
-\prop_const_from_keyval:Nn \c_@@_generics_reversed_iii_prop {after=}
-\prop_const_from_keyval:Nn \c_@@_generics_file_prop {before=,after=}
+%<latexrelease>\IncludeInRelease{2021/11/15}{\c_@@_generics_reversed_ii_prop}%
+%<latexrelease>                 {Standardise~generic~hook~names}
+%<latexrelease>\EndIncludeInRelease
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2020/10/01}{\c_@@_generics_reversed_ii_prop}%
+%<latexrelease>                 {Standardise~generic~hook~names}
+%<latexrelease>\prop_const_from_keyval:Nn \c_@@_generics_reversed_ii_prop {after=,end=}
+%<latexrelease>\prop_const_from_keyval:Nn \c_@@_generics_reversed_iii_prop {after=}
+%<latexrelease>\prop_const_from_keyval:Nn \c_@@_generics_file_prop {before=,after=}
+%<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -4415,7 +4420,7 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_try_file_hook:n #1
   {
-    \@@_if_file_hook:wTF #1 / / / \s_@@_mark
+    \@@_if_file_hook:wTF #1 / \s_@@_mark {#1}
       {
         \exp_args:Ne \@@_if_usable_use:n
           { \exp_args:Ne \@@_file_hook_normalize:n {#1} }
@@ -4548,9 +4553,8 @@
   }
 %    \end{macrocode}
 % \end{macro}
-%  
-%  
-%  
+%
+%
 %  \begin{macro}[pTF]{\@@_if_declared:n}
 %
 %    Internal test to check if the hook was officially declared with
@@ -4577,8 +4581,39 @@
     \fi:
   }
 %    \end{macrocode}
-% \end{macro}
+%  \end{macro}
 %
+% \begin{macro}[pTF]{\@@_if_generic:n}
+%   An internal conditional that checks if a name belongs to a generic
+%   hook.
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \@@_if_generic:n #1 { TF }
+  { \@@_if_generic:w #1 / / / \scan_stop: }
+\cs_new:Npn \@@_if_generic:w #1 / #2 / #3 / #4 \scan_stop:
+  {
+    \cs_if_exist:cTF { c_@@_generic_#1/./#3_tl }
+      { \prg_return_true: }
+      { \prg_return_false: }
+  }
+%    \end{macrocode}
+%  \end{macro}
+%
+% \begin{macro}[pTF]{\@@_if_generic_reversed:n}
+%   An internal conditional that checks if a name belongs to a generic
+%   reversed hook.
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \@@_if_generic_reversed:n #1 { T }
+  { \@@_if_generic_reversed:w #1 / / / \scan_stop: }
+\cs_new:Npn \@@_if_generic_reversed:w #1 / #2 / #3 / #4 \scan_stop:
+  {
+    \if_charcode:w - \cs:w c_@@_generic_#1/./#3_tl \cs_end:
+      \prg_return_true:
+    \else:
+      \prg_return_false:
+    \fi:
+  }
+%    \end{macrocode}
+%  \end{macro}
 %
 %  \subsection{Messages}
 %
