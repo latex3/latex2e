@@ -34,8 +34,8 @@
 %%% From File: ltcmd.dtx
 %
 %    \begin{macrocode}
-\def\ltcmdversion{v1.0g}
-\def\ltcmddate{2021-08-07}
+\def\ltcmdversion{v1.0h}
+\def\ltcmddate{2021-08-30}
 %    \end{macrocode}
 %
 %<*driver>
@@ -343,8 +343,7 @@
 %
 % \begin{macro}{\@@_declare_cmd:Nnn, \@@_declare_expandable_cmd:Nnn}
 % \begin{macro}{\@@_declare_cmd_aux:Nnn}
-% \begin{macro}
-%   {\@@_declare_cmd_internal:Nnnn, \@@_declare_cmd_internal:cnxn}
+% \begin{macro}{\@@_declare_cmd_internal:Nnnn}
 %   The main functions for creating commands set the appropriate flag then
 %   use the same internal code to do the definition.
 %    \begin{macrocode}
@@ -400,7 +399,6 @@
     #4
     \@@_break_point:n {#2}
   }
-\cs_generate_variant:Nn \@@_declare_cmd_internal:Nnnn { cnx }
 %    \end{macrocode}
 % \end{macro}
 % \end{macro}
@@ -565,15 +563,8 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_declare_env_internal:nnnn #1#2#3#4
   {
-    \@@_declare_cmd_internal:cnxn { environment~ #1 } {#2}
-      {
-        \cs_set_nopar:Npx \exp_not:c { environment~ #1 ~end~aux }
-          {
-            \exp_not:N \exp_not:N \exp_not:c { environment~ #1~end~aux~ }
-            \exp_not:n { \exp_not:o \l_@@_args_tl }
-          }
-        \exp_not:n {#3}
-      }
+    \exp_args:Nc \@@_declare_cmd_internal:Nnnn { environment~ #1 } {#2}
+      {#3}
       {
         \cs_set_nopar:cpx { environment~ #1 ~end }
           { \exp_not:c { environment~ #1 ~end~aux } }
@@ -582,6 +573,14 @@
           \l_@@_current_arg_int {#4}
         \cs_set_eq:cc {#1}       { environment~ #1 }
         \cs_set_eq:cc { end #1 } { environment~ #1 ~end }
+      }
+  }
+\cs_new_protected:Npn \@@_set_environment_end:n #1
+  {
+    \cs_set_nopar:cpx { environment~ #1 ~end~aux }
+      {
+        \exp_not:c { environment~ #1 ~end~aux~ }
+        \exp_not:o \l_@@_args_tl
       }
   }
 %    \end{macrocode}
@@ -639,7 +638,10 @@
     \tl_set:Nn \l_@@_fn_code_tl {#2}
     \tl_set:Nn \l_@@_defaults_tl {#5}
     \tl_set:Nn \l_@@_process_all_tl {#6}
-    #4 \@@_run_code:
+    #4
+    \bool_if:NT \l_@@_environment_bool
+      { \exp_args:No \@@_set_environment_end:n \l_@@_environment_str }
+    \@@_run_code:
   }
 \cs_generate_variant:Nn \@@_start_aux:NNnnnn { cc }
 %    \end{macrocode}
@@ -1734,8 +1736,7 @@
 %   We have already checked that short arguments are before long
 %   arguments, so \cs{l_@@_long_bool} only changes from \texttt{false}
 %   to \texttt{true} once (and there is no need to reset it after each
-%   argument).  Also knock back the argument count because |+| is not an
-%   argument.  Continue the loop.
+%   argument).  Continue the loop.
 %    \begin{macrocode}
 \cs_new_protected:cpn { @@_add_expandable_type_+:w }
   {
@@ -1933,6 +1934,656 @@
 % \end{macro}
 % \end{macro}
 %
+% \subsubsection{Copying a command and its internal structure}
+%
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2021/11/15}{\@@_copy:NN}%
+%<latexrelease>  {Support~\NewCommandCopy~in~ltcmd}
+%    \end{macrocode}
+%
+% \changes{v1.0h}{2021/08/30}{Added support for \cs{NewCommandCopy}}
+% Since the 2020-10-01 \LaTeXe{} release, support for copying and
+% showing the definition of robust commands is available, but the
+% specifics of each command is implemented separately.  Here we'll add
+% support for copying and showing \pkg{ltcmd} definitions.
+%
+% To fully support copying, we need two commands:  a conditional to test
+% if a command is in fact a \pkg{ltcmd} command, and another to
+% actually copy the command.  The conditional is defined later as
+% \cs{__kernel_cmd_if_xparse:NTF}, so now to the copying:
+%
+% \begin{macro}{\@@_copy:NN}
+% \begin{macro}{\@@_set_eq_if_exist:NN,\@@_set_eq_if_exist:cc}
+%   This macro just branches to the proper copying command by using
+%   \cs{@@_cmd_type_cases:NnnnnF}.  The copying command takes the names
+%   of the commands to be copied to and from, and the actual commands
+%   as its four arguments.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy:NN #1 #2
+  {
+    \use:x
+      {
+        \int_set:Nn \tex_escapechar:D { 92 }
+        \exp_not:N \@@_cmd_type_cases:NnnnnF \exp_not:N #2
+          { \@@_copy_command:nnNN }
+          { \@@_copy_expandable:nnNN }
+          { \@@_copy_environment:nnNN }
+          { \@@_copy_environment_end:nnNN }
+          { \@@_cant_copy:nwn { non-ltcmd } }
+            { \cs_to_str:N #1 } { \cs_to_str:N #2 }
+            \exp_not:N #1 \exp_not:N #2
+        \exp_not:N \@@_break_point:n { \cs_to_str:N #2 }
+        \int_set:Nn \tex_escapechar:D { \int_use:N \tex_escapechar:D }
+      }
+  }
+\cs_new_protected:Npn \@@_set_eq_if_exist:NN #1 #2
+  { \cs_if_exist:NTF #2 { \cs_set_eq:NN } { \use_none:nn } #1 #2 }
+\cs_generate_variant:Nn \@@_set_eq_if_exist:NN { cc }
+%    \end{macrocode}
+%
+% \begin{macro}{\@@_cant_copy:nwn}
+%   An utility macro similar to \cs{@@_bad_def:wn} to abort a command
+%   copy.  Contrary to \cs{@@_bad_def:wn} though, when this happens the
+%   issue is most likely internal, because the command was already
+%   (supposedly) correcly defined so it should be copyable.  Hopefully
+%   this macro will never be used ever, but if it does, apologise and
+%   give the reason for the failure so the user can report.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_cant_copy:nwn #1 #2 \@@_break_point:n #3
+  { \msg_error:nnnn { cmd } { copy-bug } {#1} {#3} }
+\msg_new:nnn { cmd } { copy-bug }
+  {
+    Error~while~copying~command~\iow_char:N\\#2:\\
+    \str_case:nn {#1}
+      {
+        { non-ltcmd } { Command~is~not~a~valid~ltcmd~command. }
+        { unknown-type } { Found~an~unknown~argument~type. }
+        { invalid-end }
+          { Target~command~is~not~named~\iow_char:N \\end<name>. }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+%   And, of course, add \cs{__kernel_cmd_if_xparse:NTF} and
+%   \cs{@@_copy:NN} to \cs{@declarecommandcopylisthook}:
+%    \begin{macrocode}
+\tl_gput_right:Nn \@declarecommandcopylisthook
+  { { \__kernel_cmd_if_xparse:NTF \@@_copy:NN } }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_copy_command:nnNN,\@@_copy_command:NnNNnnnn}
+%   A normal (non-expandable) command has a pretty straightforward
+%   structure.  Its definition is stored in
+%   \cs{\meta{cmd}\textvisiblespace code}, its defaults (if any) are
+%   stored in \cs{\meta{cmd}\textvisiblespace defaults}, and its
+%   top-level definition contains its signature, which can just be
+%   copied over.  \cs{@@_copy_command:nnNN} copies the command code and
+%   defaults, and then defines the top-level command using the auxiliary
+%   \cs{@@_copy_command:NnNNnnnn}.  This macro takes the signature of
+%   the command being copied from its top-level definition, and replaces
+%   the named bits with the new name.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_command:nnNN #1 #2 #3 #4
+  {
+    \cs_set_eq:cc { #1 ~ code } { #2 ~ code }
+    \@@_set_eq_if_exist:cc { #1 ~ defaults } { #2 ~ defaults }
+    \cs_set_protected_nopar:Npx #3
+      { \exp_after:wN \@@_copy_command:NnNNnnnn #4 {#1} }
+  }
+\cs_new:Npn \@@_copy_command:NnNNnnnn #1 #2 #3 #4 #5 #6 #7 #8
+  {
+    #1 \exp_not:n { {#2} }
+    \exp_not:c { #8 ~ } \exp_not:c { #8 ~ code }
+    \exp_not:n { {#5} {#6} {#7} }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_copy_expandable:nnNN,\@@_copy_expandable:NnNNNNnnn}
+%   An expandable command is slightly more complicated.  Besides the
+%   \cs{\meta{cmd}\textvisiblespace code}, and
+%   \cs{\meta{cmd}\textvisiblespace defaults}, it also has an auxiliary
+%   \cs{\meta{cmd}\textvisiblespace} for grabbing delimited arguments,
+%   and possibly another auxiliary
+%   \cs{\meta{cmd}\textvisiblespace\textvisiblespace}, if the command
+%   has both long and short arguments.  Then, its signature has also
+%   several specific bits that are unique to that command, contrary to
+%   non-expandable commands which use a common set of parsing functions.
+%
+%   We'll start by copying the basics, then call
+%   \cs{@@_copy_expandable_signature:NnNNNNnnn} to parse the signature
+%   of the command and make the modified copy in a temporary token list,
+%   then we call \cs{@@_copy_expandable:NnNNNNnnn} that will copy the
+%   top-level definition of the command, with the proper internal
+%   renames.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_expandable:nnNN #1 #2 #3 #4
+  {
+    \cs_set_eq:cc { #1 ~ code } { #2 ~ code }
+    \@@_set_eq_if_exist:cc { #1 ~ } { #2 ~ }
+    \@@_set_eq_if_exist:cc { #1 ~ \c_space_tl } { #2 ~ \c_space_tl }
+    \@@_set_eq_if_exist:cc { #1 ~ defaults } { #2 ~ defaults }
+    \exp_after:wN \@@_copy_expandable_signature:NnNNNNnnn #4 {#1} {#2}
+    \cs_set_nopar:Npx #3
+      { \exp_after:wN \@@_copy_expandable:NnNNNNnnn #4 {#1} {#2} }
+  }
+\cs_new:Npn \@@_copy_expandable:NnNNNNnnn #1 #2 #3 #4 #5 #6 #7 #8 #9
+  {
+    \exp_not:N #1 \exp_not:n { {#2} }
+    \exp_not:c { #8 ~ }
+    \exp_not:c
+      {
+        #8 ~
+        \str_if_eq:eeT
+            { \exp_not:c { #9 ~ \c_space_tl } } { \exp_not:N #4 }
+          { \c_space_tl }
+      }
+    \exp_not:c { #8 ~ code }
+    \str_if_eq:eeTF { \exp_not:N #6 } { ? }
+      { ? }
+      { \exp_not:c { #8 ~ defaults } }
+    { \exp_not:V \l_@@_tmpa_tl }
+  }
+%    \end{macrocode}
+%
+% \begin{macro}{
+%     \@@_copy_expandable_signature:NnNNNNnnn,
+%     \@@_copy_expandable:nnN,
+%     \@@_copy_parse_grabber:w,
+%   }
+%   A signature for an expandable command contains as many
+%   \cs{expandable_grab_\meta{type}:w} as there are arguments, and what
+%   follows this macro depends on the \meta{type}.  We'll start a loop
+%   through the signature, and at each argument grabber, we'll step the
+%   argument count, and look for the \meta{type} with
+%   \cs{@@_copy_parse_grabber:w} so we know which
+%   \cs{@@_copy_grabber_\meta{type}:w} to call next.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_expandable_signature:NnNNNNnnn
+    #1 #2 #3 #4 #5 #6 #7 #8 #9
+  {
+    \int_zero:N \l_@@_current_arg_int
+    \tl_clear:N \l_@@_tmpa_tl
+    \@@_copy_expandable:nnN {#8} {#9} #7
+      \q_recursion_tail \q_recursion_stop
+  }
+\cs_new_protected:Npn \@@_copy_expandable:nnN #1 #2 #3
+  {
+    \quark_if_recursion_tail_stop:n {#3}
+    \int_incr:N \l_@@_current_arg_int
+    \exp_after:wN \@@_copy_parse_grabber:w \token_to_str:N #3 {#1} {#2}
+  }
+\use:x
+  {
+    \cs_new_protected:Npn \exp_not:N \@@_copy_parse_grabber:w ##1
+        \tl_to_str:n { expandable_grab_ } ##2 \tl_to_str:n { :w }
+      {
+        \tl_put_right:Nx \exp_not:N \l_@@_tmpa_tl
+          { \exp_not:N \exp_not:c { @@_expandable_grab_##2:w } }
+        \exp_not:N \cs_if_exist_use:cF { @@_copy_grabber_##2:w }
+          { \@@_cant_copy:nwn { unknown-type } }
+      }
+  }
+%    \end{macrocode}
+%
+% \begin{macro}{
+%     \@@_copy_grabber_D:w,\@@_copy_grabber_D_alt:w,
+%     \@@_copy_grabber_R:w,\@@_copy_grabber_R_alt:w,
+%     \@@_copy_grabber_E:w,\@@_copy_grabber_E_long:w,
+%     \@@_copy_grabber_t:w,
+%     \@@_copy_grabber_m:w,\@@_copy_grabber_m_long:w,
+%   }
+%   The most complicated is the |D|elimited argument:  each argument has
+%   a dedicated grabbing function named after the command that has to be
+%   copied over (of the form
+%   \cs{\meta{cmd}\textvisiblespace(arg\textvisiblespace\meta{num})}).
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_grabber_D:w #1 #2 #3 #4 #5
+  {
+    \tl_put_right:Nx \l_@@_tmpa_tl
+      {
+        \exp_not:c { #1 ~ (arg ~ \int_use:N \l_@@_current_arg_int ) }
+        \exp_not:n { #4 #5 }
+      }
+    \cs_set_eq:cc
+      { #1 ~ (arg ~ \int_use:N \l_@@_current_arg_int ) }
+      { #2 ~ (arg ~ \int_use:N \l_@@_current_arg_int ) }
+    \@@_copy_expandable:nnN {#1} {#2}
+  }
+%    \end{macrocode}
+%
+%   |D_alt| is just a special case of |D| that uses a single delimiter
+%   (used when both delimiters of the argument are identical):
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_grabber_D_alt:w #1 #2 #3 #4
+  { \@@_copy_grabber_D:w {#1} {#2} {#3} {#4} { } }
+%    \end{macrocode}
+%
+%   |R|, as far as copying is concerned, is identical to |D|:
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_copy_grabber_R:w \@@_copy_grabber_D:w
+\cs_new_eq:NN \@@_copy_grabber_R_alt:w \@@_copy_grabber_D_alt:w
+%    \end{macrocode}
+%
+%   |E| is straightforward: we just copy the embellishments over, and
+%   increase the current argument number \cs{l_@@_current_arg_int} by
+%   the number of embellishments (minus one because there is a
+%   \cs{int_incr:N} down the line).
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_grabber_E:w #1 #2 #3 #4
+  {
+    \tl_put_right:Nn \l_@@_tmpa_tl { {#3} {#4} }
+    \int_add:Nn \l_@@_current_arg_int { \tl_count:n {#4} - 1 }
+    \@@_copy_expandable:nnN {#1} {#2}
+  }
+\cs_new_eq:NN \@@_copy_grabber_E_long:w \@@_copy_grabber_E:w
+%    \end{macrocode}
+%
+%   |t| just needs copying the token to be tested for:
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_grabber_t:w #1 #2 #3 #4
+  {
+    \tl_put_right:Nn \l_@@_tmpa_tl { #3 #4 }
+    \@@_copy_expandable:nnN {#1} {#2}
+  }
+%    \end{macrocode}
+%
+%   And last but not least, |m| is the simplest;  the grabber is just
+%   \cs{@@_expandable_grab_m:w}, which is already added to the new
+%   command so here we just resume the loop:
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_grabber_m:w { \@@_copy_expandable:nnN }
+\cs_new_eq:NN \@@_copy_grabber_m_long:w \@@_copy_grabber_m:w
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_copy_environment:nnNN}
+% \begin{macro}{\@@_copy_environment:Nnnnnnn}
+%   Copying an environment's \cs{begin} part is pretty much like copying
+%   a command, except it has a longer name, and at the end we have to
+%   copy \cs[no-index]{environment~\meta{name}} into
+%   \cs[no-index]{\meta{name}}.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_environment:nnNN #1 #2 #3 #4
+  {
+    \cs_set_eq:cc { environment~ #1 ~ code } { environment~ #2 ~ code }
+    \@@_set_eq_if_exist:cc
+      { environment~ #1 ~ defaults } { environment~ #2 ~ defaults }
+    \cs_set_protected_nopar:cpx { environment~ #1 }
+      { \exp_after:wN \@@_copy_environment:Nnnnnnn #4 {#1} }
+    \cs_set_eq:cc {#1} { environment~ #1 }
+  }
+\cs_new:Npn \@@_copy_environment:Nnnnnnn #1 #2 #3 #4 #5 #6 #7
+  { #1 \exp_not:n { {#2} } {#7} \exp_not:n { {#4} {#5} {#6} } }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_copy_environment_end:nnNN}
+% \begin{macro}{\@@_copy_environment_end_aux:nnNN}
+%   Copying an environment's \cs{end} part is a bit trickier.  We first
+%   have to make sure that both parts are named
+%   \cs[no-index]{end\meta{name}} (that's actually not a hard
+%   requirement, but an environment \cs{end} command makes no sense
+%   without the |end| in its name), and strip the leading |end| from the
+%   strings.  After that, copying is straightforward.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_environment_end:nnNN #1 #2
+  {
+    \@@_check_end:Nn \l_@@_tmpa_tl {#1}
+    \@@_check_end:Nn \l_@@_tmpb_tl {#2}
+    \exp_args:Noo \@@_copy_environment_end_aux:nnNN
+      { \l_@@_tmpa_tl } { \l_@@_tmpb_tl }
+  }
+\cs_new_protected:Npn \@@_copy_environment_end_aux:nnNN #1 #2 #3 #4
+  {
+    \cs_set_nopar:cpx { environment~ #1 ~end }
+      { \exp_not:c { environment~ #1 ~end~aux } }
+    \cs_set_eq:cc
+      { environment~ #1 ~end~aux~ } { environment~ #2 ~end~aux~ }
+    \cs_set_eq:cc { end #1 } { environment~ #1 ~end }
+  }
+%    \end{macrocode}
+%
+% \begin{macro}{\@@_check_end:Nn,\@@_check_end:n,\@@_check_end:w}
+%   To check whether an \cs{end} command is valid, we look for the
+%   string |end| at the beginning of the command name, and if not found,
+%   raise an error:
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_check_end:Nn #1 #2
+  {
+    \tl_set:Nx #1 { \@@_check_end:n {#2} }
+    \token_if_eq_meaning:NNT #1 \q_nil
+      { \@@_cant_copy:nwn { invalid-end } }
+  }
+\cs_set_protected:Npn \@@_tmp:w #1
+  {
+    \cs_new:Npn \@@_check_end:n ##1
+      {
+        \exp_after:wN \@@_check_end:w \tl_to_str:n {##1}
+          #1 \q_mark #1 \q_stop
+      }
+    \cs_new:Npn \@@_check_end:w ##1 #1 ##2 #1 ##3 \q_stop
+      { \if_meaning:w ##2 \q_mark \exp_not:N \q_nil \else: ##2 \fi: }
+  }
+\exp_args:No \@@_tmp:w { \tl_to_str:n { end } }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% Not much to do regarding \pkg{latexrelease}: we could remove the
+% entries from \cs{@declarecommandcopylisthook}, but it doesn't seem
+% worth it.
+%    \begin{macrocode}
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{2020/10/01}{\@@_copy:NN}%
+%<latexrelease>  {Support~\NewCommandCopy~in~ltcmd}
+%<latexrelease>\EndIncludeInRelease
+%    \end{macrocode}
+%
+% \subsubsection{Showing the definition of a command}
+%
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2021/11/15}{\@@_show:N}%
+%<latexrelease>  {Support~\ShowCommand~in~ltcmd}
+%    \end{macrocode}
+%
+% \changes{v1.0h}{2021/08/30}{Added support for \cs{ShowCommand}}
+% To show the definition of a command we need more or less the same
+% building blocks as for copying, except that instead of making a copy,
+% we'll just print stuff to the terminal.
+%
+% \begin{macro}{\@@_show:N}
+%   This macro just branches to the proper showing command by using
+%   \cs{@@_cmd_type_cases:NnnnnF}.  The showing command takes the command
+%   to be shown as argument.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_show:N #1
+  {
+    \use:x
+      {
+        \int_set:Nn \tex_escapechar:D { 92 }
+        \exp_not:N \@@_cmd_type_cases:NnnnnF \exp_not:N #1
+          { \@@_show_command:N }
+          { \@@_show_expandable:N }
+          { \@@_show_environment:N }
+          { \@@_show_environment_end:N }
+          { \@@_cant_copy:nwn { non-ltcmd } }
+            \exp_not:N #1
+        \exp_not:N \@@_break_point:n { \cs_to_str:N #1 }
+        \int_set:Nn \tex_escapechar:D { \int_use:N \tex_escapechar:D }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{
+%     \@@_show_command:N,
+%     \@@_show_command:NnNNwN,
+%     \@@_show_expandable:N,
+%     \@@_show_expandable:NnNNNNnN,
+%     \@@_show_command_aux:nNNn,
+%     \@@_show_environment:N,
+%   }
+%   These commands just expand the command once to reveal its innards,
+%   then pass the type of command, the control sequence, the signature,
+%   and the code macro to \cs{@@_show_command_aux:nNNn}.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_show_command:N #1
+  { \exp_after:wN \@@_show_command:NnNNwN #1 \q_@@ #1 }
+\cs_new_protected:Npn \@@_show_command:NnNNwN #1 #2 #3 #4 #5 \q_@@ #6
+  { \@@_show_command_aux:nNNn { document~command } #6 #4 {#2} }
+\cs_new_protected:Npn \@@_show_expandable:N #1
+  { \exp_after:wN \@@_show_expandable:NnNNNNnN #1 #1 }
+\cs_new_protected:Npn \@@_show_expandable:NnNNNNnN #1 #2 #3 #4 #5 #6 #7 #8
+  { \@@_show_command_aux:nNNn { expandable~document~command } #8 #5 {#2} }
+%    \end{macrocode}
+%
+%   Now just print everything in the wanted format.  The auxiliary
+%   \cs{@@_split_signature:n} stores a ready-to-print token list into
+%   \cs{l_@@_tmpa_tl}, so we ust use that here:
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_show_command_aux:nNNn #1 #2 #3 #4
+  {
+    \@@_split_signature:n {#4}
+    \iow_term:x
+      {
+        > ~ \token_to_str:N #2 = #1: \iow_newline:
+        \tl_use:N \l_@@_tmpa_tl
+        -> \cs_replacement_spec:N #3 .
+      }
+  }
+%    \end{macrocode}
+%
+%   We can reuse most of the above to show an environment, except that
+%   we need to ensure that the proper \cs[no-index]{environment~\ldots}
+%   are passed to \cs{@@_show_command_aux:nNNn}.  Additionally, when
+%   |\ShowCommand\foo| is used (if |foo| is an environment), we show
+%   |\endfoo| as well, and when |\ShowCommand\endfoo| is used, change
+%   that to |\ShowCommand\foo| and do the same.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_show_environment:N #1
+  {
+    \exp_after:wN \@@_show_environment:Nnnw #1 \q_@@
+    \iow_term:x
+      {
+        > ~ \token_to_str:N \end { \cs_to_str:N #1 } : \iow_newline:
+        -> \exp_args:Nc \cs_replacement_spec:N
+          { environment~ \cs_to_str:N #1 ~end~aux~ } .
+      }
+  }
+\cs_new_protected:Npn \@@_show_environment:Nnnw #1 #2 #3 #4 \q_@@
+  {
+    \use:x
+      {
+        \@@_show_command_aux:nNNn { document~environment }
+          { \exp_not:N \begin {#3} }
+          \exp_not:c { environment~ #3 ~ code }
+          {#2}
+      }
+  }
+\cs_new_protected:Npn \@@_show_environment_end:N #1
+  {
+    \exp_args:NNx \@@_check_end:Nn \l_@@_tmpa_tl { \cs_to_str:N #1 }
+    \exp_args:Nc \@@_show_environment:N { \l_@@_tmpa_tl }
+  }
+%    \end{macrocode}
+%
+%   And, of course, add \cs{__kernel_cmd_if_xparse:NTF} and
+%   \cs{@@_show:N} to \cs{@showcommandlisthook}:
+%    \begin{macrocode}
+\tl_gput_right:Nn \@showcommandlisthook
+  { { \__kernel_cmd_if_xparse:NTF \@@_show:N } }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_split_signature:n}
+%   Now we'll try a least-effort adventure into splitting the symbolic
+%   user-provided signature for a command into individual parameters for
+%   pretty-printing.  A counter is used to keep track of the current
+%   argument number, and two token lists are used: \cs{l_@@_tmpa_tl}
+%   holds the final token list to be printed, and \cs{l_@@_tmpb_tl}
+%   holds just the current item, so that we can make changes to an
+%   individual item without having to dissect the whole thing (this is
+%   used for |e|- and |E|-types).
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_split_signature:n #1
+  {
+    \int_set:Nn \l_@@_current_arg_int { 1 }
+    \tl_clear:N \l_@@_tmpa_tl
+    \tl_clear:N \l_@@_tmpb_tl
+    \@@_split_signature_loop:Nw #1 \q_recursion_tail \q_recursion_stop
+  }
+%    \end{macrocode}
+%
+% \begin{macro}{\@@_split_signature_loop:Nw}
+%   This is the main chunk of the loop:  it starts an item with
+%   \cs{@@_split_start_item:} (adds indentation and whatnot to
+%   \cs{l_@@_tmpb_tl}), then checks if a special token list
+%   \cs[no-index]{c_@@_show_type_\meta{type}_tl} exists.  If it doesn't,
+%   the current argument is a ``simple'' type which needs no extra
+%   processing.  Otherwise, call a specific function depending on the
+%   value of said token list.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_split_signature_loop:Nw #1
+  {
+    \quark_if_recursion_tail_stop:N #1
+    \tl_if_empty:NT \l_@@_tmpb_tl { \@@_split_start_item: }
+    \tl_if_exist:cTF { c_@@_show_type_#1_tl }
+      {
+        \use:c
+          {
+            @@_show_
+            \if_case:w \tl_use:c { c_@@_show_type_#1_tl } \exp_stop_f:
+            delim \or: delims \or: delims_opt \or: opt \or:
+            e \or: E \or: prefix \or: processor \fi: :Nw
+          } #1
+      }
+      { \@@_split_end_item:n {#1} \@@_split_signature_loop:Nw }
+  }
+%    \end{macrocode}
+%
+% \begin{macro}{
+%     \c_@@_show_type_t_tl,
+%     \c_@@_show_type_r_tl,\c_@@_show_type_d_tl,
+%     \c_@@_show_type_R_tl,\c_@@_show_type_D_tl,
+%     \c_@@_show_type_O_tl,
+%     \c_@@_show_type_e_tl,
+%     \c_@@_show_type_E_tl,
+%     \c_@@_show_type_+_tl,\c_@@_show_type_!_tl,
+%     \c_@@_show_type_>_tl,
+%   }
+%   The token lists \cs[no-index]{c_@@_show_type_\meta{type}_tl} exist
+%   for nontrivial (for printing) \meta{types} which requires special
+%   parsing (like delimiters or optional arguments).  Values from~0 to~7
+%   are assigned to each type:
+%   \begin{enumerate}
+%     \item a single delimiter token;
+%     \item two delimiter tokens;
+%     \item two delimiter tokens plus a default value;
+%     \item a default value;
+%     \item a list of embellishments (exclusive for |e|-type);
+%     \item embellishments plus defaults (exclusive for |E|-type);
+%     \item simple prefixes;
+%     \item prefixes with arguments (argument processors);
+%   \end{enumerate}
+%    \begin{macrocode}
+\cs_set_protected:Npn \@@_tmp:w #1 #2
+  {
+    \quark_if_nil:nF {#1}
+      { \tl_const:cn { c_@@_show_type_#1_tl } {#2} \@@_tmp:w }
+  }
+\@@_tmp:w t0 r1 d1 R2 D2 O3 e4 E5 +6 !6 >7 \q_nil \q_nil
+%    \end{macrocode}
+%
+% \begin{macro}{
+%     \@@_show_delim:Nw,\@@_show_delims:Nw,
+%     \@@_show_delims_opt:Nw,\@@_show_opt:Nw,
+%     \@@_show_e:Nw,\@@_show_E:Nw,
+%     \@@_show_prefix:Nw,\@@_show_processor:Nw,
+%   }
+%   Now, based on each type we know how to act.  In mosty cases it is
+%   just a matter of feeding the grabbed arguments and resuming the
+%   loop.  The embellishments require a bit more attention:  the
+%   |e|-type loops through the list of embellishments and adds each to
+%   the token list as separate arguments.  The |E|-type does more or
+%   less the same, but uses \cs{@@_tl_mapthread_function:nnN} to map
+%   over two lists simultaneously, adding each token and default to the
+%   token list to print.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_show_delim:Nw #1 #2
+  { \@@_split_end_item:n { #1 #2 } \@@_split_signature_loop:Nw }
+\cs_new_protected:Npn \@@_show_delims:Nw #1 #2 #3
+  { \@@_split_end_item:n { #1 #2 #3 } \@@_split_signature_loop:Nw }
+\cs_new_protected:Npn \@@_show_delims_opt:Nw #1 #2 #3 #4
+  { \@@_split_end_item:n { #1 #2 #3 {#4} } \@@_split_signature_loop:Nw }
+\cs_new_protected:Npn \@@_show_opt:Nw #1 #2
+  { \@@_split_end_item:n { #1 {#2} } \@@_split_signature_loop:Nw }
+\cs_new_protected:Npn \@@_show_e:Nw #1 #2
+  {
+    \tl_map_inline:nn {#2}
+      {
+        \@@_split_start_item:
+        \@@_split_end_item:n { #1 ##1 }
+      }
+    \@@_split_signature_loop:Nw
+  }
+\cs_set_protected:Npn \@@_tmp:w #1
+  {
+    \cs_new_protected:Npn \@@_show_E:Nw ##1 ##2 ##3
+      {
+        \cs_set_protected:Npn \@@_tmp:w ####1 ####2
+          {
+            \@@_split_start_item:
+            \@@_split_end_item:n { ##1 ####1 {####2} }
+          }
+        \@@_tl_mapthread_function:nnN {##2}
+          { ##3 {#1} {#1} {#1} {#1} {#1} {#1} {#1} {#1} {#1} } \@@_tmp:w
+        \@@_split_signature_loop:Nw
+      }
+  }
+\exp_args:NV \@@_tmp:w \c_novalue_tl
+%    \end{macrocode}
+%
+%   Minor wrinkle with the prefixes: they use \cs{@@_split_add_item:n}
+%   instead of \cs{@@_split_end_item:n} (|add| \emph{vs.} |end|) because
+%   they are followed by an argument, so they can't end the item.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_show_prefix:Nw #1
+  { \@@_split_add_item:n {#1} \@@_split_signature_loop:Nw }
+\cs_new_protected:Npn \@@_show_processor:Nw #1 #2
+  { \@@_split_add_item:n { #1 {#2} } \@@_split_signature_loop:Nw }
+%    \end{macrocode}
+%
+% \begin{macro}{
+%     \@@_split_start_item:,
+%     \@@_split_add_item:n,
+%     \@@_split_end_item:n,
+%   }
+%   And now the auxiliaries that store the strings to be printed.
+%   \cs{@@_split_start_item:} starts an item from scratch,
+%   \cs{@@_split_add_item:n} adds tokens to an item without adding a
+%   newline, and \cs{@@_split_add_item:n} adds tokens, terminates the
+%   item with a newline, and steps the argument count.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_split_start_item:
+  {
+    \tl_set:Nx \l_@@_tmpb_tl
+      { ~ \c_space_tl \c_hash_str \int_use:N \l_@@_current_arg_int : }
+  }
+\cs_new_protected:Npn \@@_split_add_item:n #1
+  { \tl_put_right:Nx \l_@@_tmpb_tl { \tl_to_str:n {#1} } }
+\cs_new_protected:Npn \@@_split_end_item:n #1
+  {
+    \tl_put_right:Nx \l_@@_tmpa_tl
+      { \l_@@_tmpb_tl \tl_to_str:n {#1} \iow_newline: }
+    \tl_clear:N \l_@@_tmpb_tl
+    \int_incr:N \l_@@_current_arg_int
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% Not much to do regarding \pkg{latexrelease}: we could remove the
+% entries from \cs{@showcommandlisthook}, but it doesn't seem
+% worth it.
+%    \begin{macrocode}
+%<latexrelease>\EndIncludeInRelease
+%
+%<latexrelease>\IncludeInRelease{2020/10/01}{\@@_show:N}%
+%<latexrelease>  {Support~\ShowCommand~in~ltcmd}
+%<latexrelease>\EndIncludeInRelease
+%    \end{macrocode}
+%
 % \subsection{Grabbing arguments}
 %
 % All of the grabbers follow the same basic pattern. The initial
@@ -2081,6 +2732,7 @@
 % \end{macro}
 % \end{macro}
 % \end{macro}
+%
 % \begin{macro}{\@@_grab_D_nested:NNnN}
 % \begin{macro}{\@@_grab_D_nested:w}
 % \begin{macro}{\l_@@_nesting_a_tl}
@@ -3433,8 +4085,11 @@
 % \end{macro}
 %
 % \begin{macro}{\__kernel_cmd_if_xparse:NTF}
+% \begin{macro}{\@@_cmd_type_cases:Nnnnn}
 % \changes{v1.0d}{2021/04/19}{Renamed \cs{__cmd_cmd_if_xparse:NTF} to
 %      \cs{__kernel_cmd_if_xparse:NTF} for cross-module usage}
+% \changes{v1.0d}{2021/07/30}{Added \cs{@@_cmd_type_cases:Nnnnn} for
+%      \cs{NewCommandCopy} and \cs{ShowCommand} support}
 % \begin{macro}{\@@_cmd_if_xparse_aux:N}
 %
 %    To determine whether the command is an \pkg{xparse} command check
@@ -3442,29 +4097,48 @@
 %    that its |replacement_spec| starts with either
 %    \cs{@@_start:nNNnnn} (non-expandable command) or
 %    \cs{@@_start_expandable:nNNNNn} (expandable command) or
-%    \cs{@@_start_env:nnnnn} (environment).
+%    \cs{@@_start_env:nnnnn} (environment) or
+%    \cs[no-index]{environment~\#1~end~aux} (environment end).
 %
 %    This conditional is needed in several kernel modules and is
 %    therefore has a kernel-internal name.
 %    \begin{macrocode}
-\cs_new_protected:Npn \__kernel_cmd_if_xparse:NTF #1
+\cs_new_protected:Npn \@@_cmd_type_cases:NnnnnF #1 #2 #3 #4 #5 #6
   {
-    \exp_args:Nf \str_case_e:nnTF
+    \exp_args:Ne \str_case_e:nnF
       {
         \exp_args:Nf \tl_if_empty:nT { \cs_argument_spec:N #1 }
           {
-            \exp_last_unbraced:Nf \@@_cmd_if_xparse_aux:w
-              { \cs_replacement_spec:N #1 } ~ \q_stop
+            \token_if_macro:NT #1
+              {
+                \exp_after:wN \exp_after:wN
+                \exp_after:wN \token_to_str:N
+                \exp_after:wN \use_i_delimit_by_q_stop:nw
+                  #1 \scan_stop: \q_stop
+              }
           }
       }
       {
-        { \token_to_str:N \@@_start:nNNnnn } { }
-        { \token_to_str:N \@@_start_expandable:nNNNNn } { }
-        { \token_to_str:N \@@_start_env:nnnnn } { }
+        { \token_to_str:N \@@_start:nNNnnn } {#2}
+        { \token_to_str:N \@@_start_expandable:nNNNNn } {#3}
+        { \token_to_str:N \@@_start_env:nnnnn } {#4}
+        {
+          \exp_after:wN \token_to_str:N
+            \cs:w environment~
+              \exp_last_unbraced:Ne \use_none:nnn
+                { \cs_to_str:N #1 } ~end~aux \cs_end:
+        } {#5}
       }
+      {#6}
   }
-\cs_new:Npn \@@_cmd_if_xparse_aux:w #1 ~ #2 \q_stop {#1}
+\cs_new_protected:Npn \__kernel_cmd_if_xparse:NTF #1
+  {
+    \@@_cmd_type_cases:NnnnnF #1
+      { } { } { } { } { \use_iii:nnn }
+    \use_i:nn
+  }
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 %
