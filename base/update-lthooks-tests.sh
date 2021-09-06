@@ -80,6 +80,7 @@ l3build save -cconfig-lthooks \
    lthooks-028 \
    lthooks-029 \
    lthooks-029-deprecated \
+   lthooks-030 \
    lthooks-errors \
    lthooks-errors-deprecated \
    lthooks-etoolbox \
@@ -89,7 +90,16 @@ l3build save -cconfig-lthooks \
    shipout-002 \
    shipout-004 \
    shipout-005 \
-   github-0565
+   github-0379 \
+   github-0387 \
+   github-0401 \
+   github-0464 \
+   github-0565 \
+   github-0606 \
+   github-0648 \
+   github-0648b 
+
+
 
 exit
 

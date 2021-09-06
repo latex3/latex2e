@@ -31,8 +31,8 @@
 %%% From File: lthooks.dtx
 %
 %    \begin{macrocode}
-\def\lthooksversion{v1.0q}
-\def\lthooksdate{2021/08/27}
+\def\lthooksversion{v1.0r}
+\def\lthooksdate{2021/09/06}
 %    \end{macrocode}
 %
 %<*driver>
@@ -2071,13 +2071,6 @@
 %    \end{macrocode}
 % \end{macro}
 %
-%  \begin{macro}{\g_@@_execute_immediately_prop}
-%    List of hooks that from no on should not longer receive code.
-%    \begin{macrocode}
-\prop_new:N \g_@@_execute_immediately_prop
-%    \end{macrocode}
-%  \end{macro}
-%
 %  \begin{macro}{\g_@@_used_prop}
 %    All hooks that receive code (for use in debugging display).
 %    \begin{macrocode}
@@ -2115,6 +2108,13 @@
 %   Scan mark used for delimited arguments.
 %    \begin{macrocode}
 \scan_new:N \s_@@_mark
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_clean_to_scan:w}
+%   Removes tokens until the next \cs{s_@@_mark}.
+%    \begin{macrocode}
+\cs_new:Npn \@@_clean_to_scan:w #1 \s_@@_mark { }
 %    \end{macrocode}
 % \end{macro}
 %
@@ -2974,9 +2974,11 @@
 \cs_new_protected:Npn \@@_gput_code:nnn #1 #2 #3
   {
 %    \end{macrocode}
-%    First check if the hook was used as a one-time hook:
+%   First check if the code should be executed immediately, rather than
+%   stored:
+% \changes{v1.0r}{2021/09/06}{Use dedicated conditional (gh/606)}
 %    \begin{macrocode}
-    \prop_if_in:NnTF \g_@@_execute_immediately_prop {#1}
+    \@@_if_execute_immediately:nTF {#1}
       {#3}
       {
 %    \end{macrocode}
@@ -4800,30 +4802,82 @@
 % \end{macro}
 % \end{macro}
 %
-%  \begin{macro}{\hook_use_once:n}
-%    For hooks that can and should be used only once we have a special
-%    use command that remembers the hook name in
-%    \cs{g_@@_execute_immediately_prop}. This has the effect that any
-%    further code added to the hook is executed immediately rather
-%    than stored in the hook.
+% \begin{macro}{\hook_use_once:n}
+% \begin{macro}{\@@_use_once:n}
+%   For hooks that can and should be used only once we have a special
+%   use command that further inhibits the hook from getting more code
+%   added to it.  This has the effect that any
+%   further code added to the hook is executed immediately rather
+%   than stored in the hook.
 %
-%    The code needs some gymnastics to prevent space trimming from the
-%    hook name, since \cs{hook_use:n} and \cs{hook_use_once:n} are
-%    documented to not trim spaces.
+%   The code needs some gymnastics to prevent space trimming from the
+%   hook name, since \cs{hook_use:n} and \cs{hook_use_once:n} are
+%   documented to not trim spaces.
 %
+% \changes{v1.0r}{2021/09/06}{Clean up after \cs{UseOneTimeHook} (gh/606)}
 %    \begin{macrocode}
 \cs_new_protected:Npn \hook_use_once:n #1
   {
-    \tl_if_exist:cT { @@~#1 }
-      {
-        \tl_set:Nn \l_@@_return_tl {#1}
-        \@@_normalize_hook_args:Nn \@@_use_once_store:n
-          { \l_@@_return_tl }
-        \hook_use:n {#1}
-      }
+    \@@_if_execute_immediately:nF {#1}
+      { \@@_normalize_hook_args:Nn \@@_use_once:n { \use:n {#1} } }
   }
-\cs_new_protected:Npn \@@_use_once_store:n #1
-  { \prop_gput:Nnn \g_@@_execute_immediately_prop {#1} { } }
+\cs_new_protected:Npn \@@_use_once:n #1
+  {
+    \@@_preamble_hook:n {#1}
+    \@@_use_once_set:n {#1}
+    \@@_use_initialized:n {#1}
+    \@@_use_once_clear:n {#1}
+  }
+%    \end{macrocode}
+%
+% \begin{macro}{\@@_use_once_set:n}
+% \begin{macro}{\@@_use_once_clear:n}
+%   \cs{@@_use_once_set:n} is used before the actual hook code is
+%   executed so that any usage of \cs{AddToHook} inside the hook causes
+%   the code to execute immediately.  Setting
+%   \cs[no-index]{g_@@_\meta{hook}_reversed_tl} to |I| prevents further
+%   code from being added to the hook.  \cs{@@_use_once_clear:n} then
+%   clears the hook so that any further call to \cs{hook_use:n} or
+%   \cs{hook_use_once:n} will expand to nothing.
+% \changes{v1.0r}{2021/09/06}{Clean up after \cs{UseOneTimeHook} (gh/606)}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_use_once_set:n #1
+  { \@@_tl_gset:cn { g_@@_#1_reversed_tl } { I } }
+\cs_new_protected:Npn \@@_use_once_clear:n #1
+  {
+    \@@_tl_gclear:c { @@~#1 }
+    \@@_tl_gclear:c { @@_next~#1 }
+    \@@_tl_gclear:c { @@_toplevel~#1 }
+    \prop_gclear:c { g_@@_#1_code_prop }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}[pTF]{\@@_if_execute_immediately:n}
+%   To check if code being added should be executed immediately (that
+%   is, if the hook is a one-time hook), we check if it's usable (it
+%   can't be one-time if it was not already usable), then we check that
+%   \cs[no-index]{g_@@_\meta{hook}_reversed_tl} is |I|.  The gymnastics
+%   around \cs{if:w} is there to allow the |reversed| token list to be
+%   empty.
+% \changes{v1.0r}{2021/09/06}{Macro added (gh/606)}
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \@@_if_execute_immediately:n #1 { F, TF }
+  {
+    \@@_if_usable:nTF {#1}
+      {
+        \exp_after:wN \@@_clean_to_scan:w
+        \if:w I \cs:w g_@@_#1_reversed_tl \cs_end:
+          \s_@@_mark \prg_return_true:
+        \else:
+          \s_@@_mark \prg_return_false:
+        \fi:
+      }
+      { \prg_return_false: }
+  }
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -4932,10 +4986,11 @@
 %    \begin{macrocode}
 \prg_new_conditional:Npnn \@@_if_reversed:n #1 { p , T , F , TF }
   {
-    \if_int_compare:w \cs:w g_@@_#1_reversed_tl \cs_end: 1 < 0 \exp_stop_f:
-      \prg_return_true:
+    \exp_after:wN \@@_clean_to_scan:w
+    \if:w - \cs:w g_@@_#1_reversed_tl \cs_end:
+      \s_@@_mark \prg_return_true:
     \else:
-      \prg_return_false:
+      \s_@@_mark \prg_return_false:
     \fi:
   }
 %    \end{macrocode}
