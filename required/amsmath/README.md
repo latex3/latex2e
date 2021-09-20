@@ -39,7 +39,7 @@ Additional documentation files include:
 
 which are included in the collection.  All of these can be accessed
 easily with most distributions by entering `texdoc` *filename* at the
-command line, or via [TeXdoc Online](http://texdoc.net).
+command line, or via [TeXdoc Online](https://texdoc.org).
 
 Change logs
 -----------
