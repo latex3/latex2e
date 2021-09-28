@@ -1,7 +1,7 @@
 The amsmath bundle for LaTeX
 ============================
 
-Release 2021-11-15 pre-release 1
+Release 2021-11-15 pre-release 2
 
 Overview
 --------
@@ -39,7 +39,7 @@ Additional documentation files include:
 
 which are included in the collection.  All of these can be accessed
 easily with most distributions by entering `texdoc` *filename* at the
-command line, or via [TeXdoc Online](http://texdoc.net).
+command line, or via [TeXdoc Online](https://texdoc.org).
 
 Change logs
 -----------
