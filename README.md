@@ -24,7 +24,7 @@ comprises:
   - Core graphics and color support (`graphics`)
   - Key mathematics support (`amsmath`)
 
-The master public Git repository is hosted on
+The main public Git repository is hosted on
 [GitHub](https://github.com/latex3/latex2e).
 
 Note that Babel moved to its own repository in 2019:
@@ -89,7 +89,7 @@ with the body containing
 
 ## Development team
 
-The LaTeX kernel is developed by [The LaTeX3 Project](https://latex-project.org).
+The LaTeX kernel is developed by [The LaTeX Project](https://latex-project.org).
 
 ## Copyright
 
