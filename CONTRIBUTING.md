@@ -1,5 +1,5 @@
 Thanks for considering contributing to LaTeX2e: feedback, fixes and
-ideas are all useful. Here, we ([The LaTeX3
+ideas are all useful. Here, we ([The LaTeX
 Project](https://www.latex-project.org)) have collected together a few
 pointers to help things along.
 
@@ -26,7 +26,7 @@ report a bug in LaTeX as follows:
 
 If the `latexbug` package is not part of your distribution you can
 download it
-[GitHub](https://raw.githubusercontent.com/latex3/latexbug/master/latexbug.sty).
+[GitHub](https://raw.githubusercontent.com/latex3/latexbug/main/latexbug.sty).
 In that case simply place it in the directory next to your test file (or
 place it into your local `texmf` tree so that it will be always found –
 how to do that depends on the installation you use).
