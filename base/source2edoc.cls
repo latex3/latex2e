@@ -61,6 +61,24 @@
     \int_compare:nNnTF \@auxout = \@partaux
       { \@latexerr{\string\include\space cannot~be~nested}\@eha }
       { \@docinclude {#1} }  % <--- braces needed!
+    \int_compare:nNnF { \tex_currentgrouplevel:D } = { 0 }
+      {
+        \int_compare:nNnT { \tex_interactionmode:D } = { 0 }
+          { \int_set:Nn \tex_interactionmode:D { 1 } }
+        \msg_fatal:nnn { source2edoc } { missing-endgroup } {#1}
+      }
+  }
+\msg_new:nnn { source2edoc } { missing-endgroup }
+  {
+    \str_if_eq:VnTF \@currenvir { document }
+      {
+        There~are~\int_use:N \tex_currentgrouplevel:D
+        \c_space_tl unclosed~groups~in~#1.dtx.
+      }
+      {
+        The~\@currenvir \c_space_tl environment~on~line~\@currenvline
+        \c_space_tl doesn't~have~a~matching~\iow_char:N\\end{\@currenvir}.
+      }
   }
 \cs_gset:Npn \@docinclude #1
   {
