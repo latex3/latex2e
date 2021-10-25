@@ -31,6 +31,13 @@ Note that Babel moved to its own repository in 2019:
 [GitHub](https://github.com/latex3/babel); any issues related to Babel should
 be reported there.
 
+From 2020 onwards LaTeX includes the L3 programming layer as
+part of the format. The code for this layer is hosted in its own
+repository: [GitHub](https://github.com/latex3/latex3); any issues
+directly related to commands from that layer should preferably be
+reported there.
+
+
 ## LaTeX Version number
 
 The LaTeX version is defined in the file `ltvers.dtx` in the two commands
