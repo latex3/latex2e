@@ -70,7 +70,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: expl3.dtx
-\def\ExplFileDate{2021-08-27}%
+\def\ExplFileDate{2021-10-18}%
 \begingroup
   \def\next{\endgroup}%
   \expandafter\ifx\csname PackageError\endcsname\relax
@@ -27786,7 +27786,7 @@
 \cs_generate_variant:Nn \box_gresize_to_ht_plus_dp:Nn { c }
 \cs_new_protected:Npn \__box_resize_to_ht_plus_dp:NnN #1#2#3
   {
-    \hbox_set:Nn #1
+    #3 #1
       {
         \__box_resize_set_corners:N #1
         \fp_set:Nn \l__box_scale_y_fp
@@ -28698,11 +28698,10 @@
           }
       }
   }
-\cs_new_protected:Npn \__color_model_init:nnn #1#2#3
+\cs_new_protected:Npn \__color_model_init:nnnnn #1#2#3#4#5
   {
     \int_gincr:N \g__color_model_int
-    \tl_const:cx { c__color_fallback_ #1 _tl }
-      { 1 \prg_replicate:nn { #2 - 1 } { ~ 1 } }
+    \tl_const:cn { c__color_fallback_ #1 _tl } { #4 }
     \clist_map_inline:nn { fill , stroke , select }
       {
         \cs_new_protected:cpx { __color_backend_ ##1 _ #1 :n } ####1
@@ -28714,11 +28713,22 @@
     \cs_new_protected:cpx { __color_model_ #1 _white: }
       {
         \prop_put:Nnn \exp_not:N \l__color_named_white_prop {#1}
-          { 0 \prg_replicate:nn { #2 - 1 } { ~ 0 } }
+        { \exp_not:n {#5} }
         \exp_not:N \int_compare:nNnF { \tex_currentgrouplevel:D } = 0
           { \group_insert_after:N \exp_not:c { __color_model_ #1 _ white: } }
       }
     \use:c { __color_model_ #1 _white: }
+  }
+\cs_generate_variant:Nn \__color_model_init:nnnnn { nnnxx }
+\cs_new_protected:Npn \__color_model_init:nnn #1#2#3
+  {
+    \__color_model_init:nnnxx { #1 } { #2 } { #3 }
+      {
+        1 \prg_replicate:nn { #2 - 1 } { ~ 1 }
+      }
+      {
+        0 \prg_replicate:nn { #2 - 1 } { ~ 0 }
+      }
   }
 \cs_new_protected:Npn \__color_model_separation:n #1
   {
@@ -29043,8 +29053,9 @@
       {
         \prg_replicate:nn {#1}
           { neg ~ 1.0 ~ add ~ #1 ~ -1 ~ roll ~ }
-        \int_eval:n { #2 + 4 } ~ 4 ~ roll
-        \prg_replicate:nn {#2} { ~ pop }
+        \int_eval:n { #2 + #1 } ~ #1 ~ roll
+        \prg_replicate:nn {#2} { ~ pop } ~
+        #1 ~ 1 ~ roll
       }
     \use:x
       {
@@ -29089,7 +29100,7 @@
         \fp_compare:nNnF {#3} = \c_zero_fp
           {
             \int_eval:n { #1 - \l__color_internal_int + #2 } ~ index ~
-              #3 ~ neg ~ mul ~ 1.0 ~ add ~ mul ~
+              -#3 ~ mul ~ 1.0 ~ add ~ mul ~
           }
         #2 ~ -1 ~ roll ~
       }
@@ -29236,6 +29247,75 @@
           #4 \s__color_mark #5 \s__color_stop
       }
   }
+\prop_const_from_keyval:Nn \c__color_icc_colorspace_signatures_prop
+  {
+    47524159 = {1} {1} {0} {},
+    52474220 = {3} {0~0~0} {1~1~1} {},
+    434D594B = {4} {0~0~0~1} {0~0~0~0} {},
+    4C616220 = {3} {0~0~0} {100~0~0} {0~100~-128~127~-128~127}
+  }
+\cs_new_protected:Npn \__color_model_iccbased:n #1
+  {
+    \prop_get:NnNTF \l__color_internal_prop { file }
+      \l__color_internal_tl
+      {
+        \exp_args:NV \__color_model_iccbased:nn
+          \l__color_internal_tl {#1}
+      }
+      {
+        \msg_error:nnn { color }
+          { ICCBased-requires-file } {#1}
+      }
+  }
+\cs_new_protected:Npn \__color_model_iccbased:nn #1#2
+  {
+    \exp_args:NNx \prop_get:NnNTF \c__color_icc_colorspace_signatures_prop
+      { \file_hex_dump:nnn { #1 } { 17 } { 20 } } \l__color_internal_tl
+      {
+        \exp_last_unbraced:NV \__color_model_iccbased_aux:nnnnnn
+          \l__color_internal_tl { #2 } { #1 }
+      }
+      {
+        \msg_error:nnn { color }
+        { ICCBased-unsupported-colorspace } {#2}
+      }
+  }
+\cs_new_protected:Npn \__color_model_iccbased_aux:nnnnnn #1#2#3#4#5#6
+  {
+    \__color_model_init:nnnnn {#5} {#1} { iccbased } {#2} {#3}
+    \use:c { __color_model_devicen_parse_ #1 :nn } {#5} {#1}
+    \exp_args:Nx \__color_backend_iccbased_init:nnn
+      { \file_full_name:n {#6} } {#1} {#4}
+  }
+\cs_new_protected:Npn \color_profile_apply:nn #1#2
+  {
+    \exp_args:Ne \__color_profile_apply:nn
+      { \file_full_name:n {#1} } {#2}
+  }
+\cs_new_protected:Npn \__color_profile_apply:nn #1#2
+  {
+    \cs_if_exist_use:cF { __color_profile_apply_ \tl_to_str:n {#2} :n }
+      {
+        \msg_error:nnn { color } { ICC-Device-unknown } {#2}
+        \use_none:n
+      }
+        {#1}
+  }
+\cs_new_protected:Npn \__color_profile_apply_gray:n #1
+  {
+    \int_gincr:N \g__color_model_int
+    \__color_backend_iccbased_device:nnn {#1} { Gray } { 1 }
+  }
+\cs_new_protected:Npn \__color_profile_apply_rgb:n #1
+  {
+    \int_gincr:N \g__color_model_int
+    \__color_backend_iccbased_device:nnn {#1} { RGB } { 3 }
+  }
+\cs_new_protected:Npn \__color_profile_apply_cmyk:n #1
+  {
+    \int_gincr:N \g__color_model_int
+    \__color_backend_iccbased_device:nnn {#1} { CMYK } { 4 }
+  }
 \cs_new_protected:Npn \color_show:n
   { \__color_show:Nn \msg_show:nnxxxx }
 \cs_new_protected:Npn \color_log:n
@@ -29297,6 +29377,29 @@
     \iow_indent:n { names~=~<names> }
     \\ \\
     key~was~given~with~the~correct~information.
+  }
+\msg_new:nnnn { color } { ICC-Device-unknown }
+  { Unknown~device~color~space~'#1'. }
+  {
+    LaTeX~has~been~asked~to~apply~an~ICC~profile~but~the~device~color~space~
+    '#1'~is~unknown.
+  }
+\msg_new:nnnn { color } { ICCBased-unsupported-colorspace }
+  { ICCBased~color~space~'#1'~uses~an~unsupported~data~color~space. }
+  {
+    LaTeX~has~been~asked~to~create~a~ICCBased~colorspace,~but~the~
+    used~data~colorspace~is~not~supported.~ICC~profiles~used~for~
+    defining~a~ICCBased~colorspace~should~use~a~Lab,~RGB,~or~
+    CMYK~data~colorspace.~LaTeX~will~ignore~this~request.
+  }
+\msg_new:nnnn { color } { ICCBased-requires-file }
+  { ICCBased~color~space~'#1'~require~an~file. }
+  {
+    LaTeX~has~been~asked~to~create~an~ICCBased~color~space,~but~no~\\ \\
+    \iow_indent:n { file~=~<name> }
+    \\ \\
+    key~was~given~with~the~correct~information.~LaTeX~will~ignore~this~
+    request.
   }
 \msg_new:nnnn { color } { model-already-defined }
   { Color~model~'#1'~already~defined. }
@@ -30362,7 +30465,7 @@
     \__coffin_offset_poles:Nnn #4
       { \l__coffin_offset_x_dim } { \l__coffin_offset_y_dim }
     \__coffin_update_vertical_poles:NNN #1 #4 \l__coffin_aligned_coffin
-    \coffin_set_eq:NN #1 \l__coffin_aligned_coffin
+    #9 #1 \l__coffin_aligned_coffin
   }
 \cs_new_protected:Npn \__coffin_attach_mark:NnnNnnnn #1#2#3#4#5#6#7#8
   {

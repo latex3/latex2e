@@ -13,21 +13,14 @@
 %
 %%% From File: ltcmdhooks.dtx
 %
-\def\ltcmdhooksversion{v1.0e}
-\def\ltcmdhooksdate{2021/09/28}
+\def\ltcmdhooksversion{v1.0f}
+\def\ltcmdhooksdate{2021/10/20}
 %
 %
 %
 %<*driver>
 \documentclass{l3doc}
 %\usepackage{ltcmdhooks}
-\makeatletter
-\providecommand\footref[1]{%
-  \begingroup
-    \unrestored@protected@xdef\@thefnmark{\ref{#1}}%
-  \endgroup
-  \@footnotemark}
-\makeatother
 \EnableCrossrefs
 \CodelineIndex
 \begin{document}
@@ -360,17 +353,44 @@
 % \end{macro}
 %
 % \begin{macro}{\l_@@_patch_prefixes_tl}
-% \begin{macro}{\l_@@_patch_param_text_tl}
-% \begin{macro}{\l_@@_patch_replacement_tl}
+% \begin{macro}{\l_@@_param_text_tl}
+% \begin{macro}{\l_@@_replace_text_tl}
 %   The prefixes and parameters of the definition for the macro being
 %   patched.
 %    \begin{macrocode}
 \tl_new:N \l_@@_patch_prefixes_tl
-\tl_new:N \l_@@_patch_param_text_tl
-\tl_new:N \l_@@_patch_replacement_tl
+\tl_new:N \l_@@_param_text_tl
+\tl_new:N \l_@@_replace_text_tl
 %    \end{macrocode}
 % \end{macro}
 % \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\c_@@_hash_tl}
+%   A constant token list that contains two parameter tokens.
+%    \begin{macrocode}
+\tl_const:Nn \c_@@_hash_tl { # # }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_exp_not:NN}
+% \begin{macro}{\@@_def_cmd:w}
+%   Two temporary macros that change depending on the macro being
+%   patched.
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_exp_not:NN ?
+\cs_new_eq:NN \@@_def_cmd:w ?
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\q_@@_recursion_tail,\q_@@_recursion_stop}
+%   Internal quarks for recursion:  they can't appear in any macro being
+%   patched.
+%    \begin{macrocode}
+\quark_new:N \q_@@_recursion_tail
+\quark_new:N \q_@@_recursion_stop
+%    \end{macrocode}
 % \end{macro}
 %
 % \begin{macro}{\g_@@_delayed_patches_prop}
@@ -670,13 +690,71 @@
 %
 %
 %
+%
 % \begin{macro}{\@@_patch_expand_redefine:NNnn}
+% \begin{macro}{\@@_redefine_with_hooks:Nnnn}
 % \begin{macro}[EXP]{\@@_make_prefixes:w}
 %   Now the real action begins.  Here we have in |#1| a boolean
-%   indicating if the command has a |[|\ldots|]|-delimited argument, in
-%   |#2| the command control sequence, in |#3| the name of the command
-%   (note that |#1|${}\ne{}$|\csname#2\endcsname| at this point!), and
-%   in |#4| the hook position, either |before| or |after|.
+%   indicating if the command has a leading |[|\ldots|]|-delimited
+%   argument, in |#2| the command control sequence, in |#3| the name of
+%   the command (note that |#1|${}\ne{}$|\csname#2\endcsname| at this
+%   point!), and in |#4| the hook position, either |before| or |after|.
+%
+% \changes{v1.0f}{2021/10/20}
+%         {Correct patching by expansion+redefinition when the macro
+%          contains a parameter tokens (gh/697).}
+%   Patching with expansion+redefinition is trickier than it looks like
+%   at first glance.  Suppose the simple definition:
+% \begin{verbatim}
+%   \def\foo#1{#1##2}
+% \end{verbatim}
+%   When defined, its \meta{replacement text} will be a token list
+%   containing:
+%   \begin{quote}
+%     \itshape
+%     out\_param |1|, mac\_param |#|, character |2|
+%   \end{quote}
+%
+%   Then, after expanding \cs{foo}|{##1}| (here |##| denotes a single
+%   |#|$_6$) we end up with a token list with \textit{out\_param}~|1|
+%   replaced:
+%   \begin{quote}
+%     \itshape
+%     mac\_param |#|, character |1|, mac\_param |#|, character |2|
+%   \end{quote}
+%   that is, the definition would be:
+% \begin{verbatim}
+%   \def\foo#1{#1#2}
+% \end{verbatim}
+%   which obviously fails, because the original input in the definition
+%   was |##| but \TeX{} reduced that to a single parameter token |#|$_6$
+%   when carrying out the definition.  That leaves no room for a clever
+%   solution with (say) \cs{unexpanded}, because anything that would
+%   double the second |#|$_6$, would also (incorrectly) double the
+%   first, so there's not much to do other than a manual solution.
+%
+%   There are three cases we can distinguish to make things hopefully
+%   faster on simpler cases:
+%   \begin{enumerate}
+%     \item a macro with no parameters;
+%     \item a macro with no parameter tokens in its definition;
+%     \item a macro with parameters \emph{and} parameter tokens.
+%   \end{enumerate}
+%
+%   The first case is trivial:  if the macro has no parameters, we can
+%   just use \cs{unexpanded} around it, and if there is a parameter
+%   token in it, it is handled correctly (the macro can be treated as a
+%   |tl| variable).
+%
+%   The second case requires looking at the \meta{replacement text} of
+%   the macro to see if it has a parameter token in there.  If it does
+%   not, then there is no worry, and the macro can be redefined normally
+%   (without \cs{unexpanded}).
+%
+%   The third case, as usual, is the devious one.  Here we'll have to
+%   loop through the definition token by token, and double every
+%   parameter token, so that this case can be handled like the previous
+%   one.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_patch_expand_redefine:NNnn #1 #2 #3 #4
   {
@@ -696,36 +774,93 @@
 %    \end{macrocode}
 %   Now build two token lists:
 %   \begin{description}
-%     \item[\cs{l_@@_patch_param_text_tl}] will contain the
+%     \item[\cs{l_@@_param_text_tl}] will contain the
 %       \meta{parameter text} to be used when redefining the macro.  It
 %       should be identical to the \meta{parameter text} used when
 %       originally defining that macro.
-%     \item[\cs{l_@@_patch_replacement_tl}] will contain braced pairs of
-%       |#|$_{12}$\meta{num} to feed to the macro when expanded.  This
-%       token list as well as the previous will have the first item
+%     \item[\cs{l_@@_replace_text_tl}] will contain braced pairs of
+%       \cs{c_@@_hash_tl}\meta{num} to feed to the macro when expanded.
+%       This token list as well as the previous will have the first item
 %       surrounded by |[|\ldots|]| in the case of an optional argument.
 %   \end{description}
+%
+%   The use of \cs{c_@@_hash_tl} here is to differentiate actual
+%   parameters in the macro from parameter tokens in the original
+%   definition of the macro.  Later on, \cs{c_@@_hash_tl} is either
+%   replaced by actual parameter tokens, or expanded into them.
 %    \begin{macrocode}
     \int_compare:nNnTF { \l_@@_patch_num_args_int } > { \c_zero_int }
       {
-        \tl_set:Nx \l_@@_patch_param_text_tl
-          { \bool_if:NTF #1 { [####1] } {  ####1  } }
-        \tl_set:Nx \l_@@_patch_replacement_tl
-          { \bool_if:NTF #1 { [####1] } { {####1} } }
+%    \end{macrocode}
+%   We'll first check if the command has any parameter token in its
+%   definition (feeding it empty arguments), and set \cs{@@_exp_not:n}
+%   accordingly.  \cs{@@_exp_not:n} will be used later to either leave
+%   \cs{c_@@_hash_tl} or expand it, and also to remember the result of
+%   \cs{@@_if_has_hash:nTF} to avoid testing twice (the test can be
+%   rather slow).
+%    \begin{macrocode}
+        \tl_set:Nx \l_@@_tmpa_tl { \bool_if:NTF #1 { [ ] } { { } } }
         \int_step_inline:nnn { 2 } { \l_@@_patch_num_args_int }
+          { \tl_put_right:Nn \l_@@_tmpa_tl { { } } }
+        \exp_args:NNo \exp_args:No \@@_if_has_hash:nTF
+            { \exp_after:wN #2 \l_@@_tmpa_tl }
+          { \cs_set_eq:NN \@@_exp_not:n \exp_not:n }
+          { \cs_set_eq:NN \@@_exp_not:n \use:n }
+        \cs_set_protected:Npn \@@_tmp:w ##1 ##2
           {
-            \tl_put_right:Nn \l_@@_patch_param_text_tl    { ## ####1 }
-            \tl_put_right:Nn \l_@@_patch_replacement_tl { { ## ####1 } }
+            ##1 \l_@@_param_text_tl   { \use:n ##2 }
+            ##1 \l_@@_replace_text_tl { \@@_exp_not:n {##2} }
           }
+%    \end{macrocode}
+%   Here we'll conditionally add |[|\ldots|]| around the first
+%   parameter:
+%    \begin{macrocode}
+        \bool_if:NTF #1
+          { \@@_tmp:w \tl_set:Nx { [ \c_@@_hash_tl 1 ] } }
+          { \@@_tmp:w \tl_set:Nx { { \c_@@_hash_tl 1 } } }
+%    \end{macrocode}
+%   Then, for every parameter from the second, just add it normally:
+%    \begin{macrocode}
+        \int_step_inline:nnn { 2 } { \l_@@_patch_num_args_int }
+          { \@@_tmp:w \tl_put_right:Nx { { \c_@@_hash_tl ##1 } } }
+%    \end{macrocode}
+%   Now, if the command has any parameter token in its definition
+%   (then \cs{@@_exp_not:n} is \cs{exp_not:n}), call
+%   \cs{@@_double_hashes:n} to double them, and replace every
+%   \cs{c_@@_hash_tl} by |#|:
+%    \begin{macrocode}
+        \tl_set:Nx \l_@@_replace_text_tl
+          { \exp_not:N #2 \exp_not:V \l_@@_replace_text_tl }
+        \tl_set:Nx \l_@@_replace_text_tl
+          {
+            \token_if_eq_meaning:NNTF \@@_exp_not:n \exp_not:n
+              { \exp_args:NNV \exp_args:No \@@_double_hashes:n }
+              { \exp_args:NV \exp_not:o }
+                  \l_@@_replace_text_tl
+          }
+%    \end{macrocode}
+%   And now, set a few auxiliaries for the case that the macro has
+%   parameters, so it won't be passed through \cs{unexpanded} (twice):
+%    \begin{macrocode}
+        \cs_set_eq:NN \@@_def_cmd:w \tex_gdef:D
+        \cs_set_eq:NN \@@_exp_not:NN \prg_do_nothing:
       }
       {
-        \tl_clear:N \l_@@_patch_param_text_tl
-        \tl_clear:N \l_@@_patch_replacement_tl
+%    \end{macrocode}
+%   In the case the macro has no parameters, we'll treat it as a token
+%   list and things are much simpler (expansion control looks a bit
+%   complicated, but it's just a pair of \cs{exp_not:N} preventing
+%   another \cs{exp_not:n} from expanding):
+%    \begin{macrocode}
+        \tl_clear:N \l_@@_param_text_tl
+        \tl_set_eq:NN \l_@@_replace_text_tl #2
+        \cs_set_eq:NN \@@_def_cmd:w \tex_xdef:D
+        \cs_set:Npn \@@_exp_not:NN ##1 { \exp_not:N ##1 \exp_not:N }
       }
 %    \end{macrocode}
-%   Finally, before redefining, we need to also get the prefixes used
-%   when defining the command.  Here we ensure that the \tn{escapechar}
-%   is printable, otherwise a macro defined with prefixes
+%   Before redefining, we need to also get the prefixes used when
+%   defining the command.  Here we ensure that the \tn{escapechar} is
+%   printable, otherwise a macro defined with prefixes
 %   |\protected \long| will have it \tn{meaning} printed as
 %   |protectedlong|, making life unnecessarily complicated.  Here the
 %   \tn{escapechar} is changed to |/|, then we loop between pairs of
@@ -740,34 +875,44 @@
       { \exp_not:N \@@_make_prefixes:w \cs_prefix_spec:N #2 / / }
         }
 %    \end{macrocode}
-%   Now that all the needed tools are ready, without further ado we'll
-%   redefine the command |#2|.  The definition uses the prefixes
-%   gathered in \cs{l_@@_patch_prefixes_tl}, a primitive \cs{tex_def:D}
-%   to avoid adding extra prefixes, and the \meta{parameter text} from
-%   \cs{l_@@_patch_param_text_tl}.
+%   Finally, call \cs{@@_redefine_with_hooks:Nnnn} with the macro being
+%   redefined in |#1|, then \cs{UseHook}|{cmd/<name>/before}| in |#2| or
+%   \cs{UseHook}|{cmd/<name>/after}| in |#3| (one is always empty), and
+%   in |#4| the \meta{replacement text} of the macro.
+%    \begin{macrocode}
+    \use:x
+      {
+        \@@_redefine_with_hooks:Nnnn \exp_not:N #2
+        \str_if_eq:nnTF {#4} { after }
+          { \use_ii_i:nn }
+          { \use:nn }
+            { { \@@_exp_not:NN \exp_not:N \UseHook { cmd / #3 / #4 } } }
+            { { } }
+            { \@@_exp_not:NN \exp_not:V \l_@@_replace_text_tl }
+      }
+  }
+%    \end{macrocode}
 %
-%   Then finally, in the body of the definition, we insert
-%   \hook{cmd/\#3/before} if |#4| is |before|, the code of the
-%   command expanded once grabbing the parameters in
-%   \cs{l_@@_patch_replacement_tl}, and \hook{cmd/\#3/after} if |#4| is
-%   |after|.
+%   Now that all the needed tools are ready, without further ado we'll
+%   redefine the command.  The definition uses the prefixes gathered in
+%   \cs{l_@@_patch_prefixes_tl}, a primitive \cs{@@_def_cmd:w} (which is
+%   \cs{tex_gdef:D} or \cs{tex_xdef:D}) to avoid adding extra prefixes,
+%   and the \meta{parameter text} from \cs{l_@@_param_text_tl}.
+%
+%   Then finally, in the body of the definition, we insert |#2|, which
+%   is \hook{cmd/\#1/before} or empty, |#4| which is the
+%   \meta{replacement text}, and |#3| which is \hook{cmd/\#1/after} or
+%   empty.
 %
 % \changes{v1.0e}{2021/09/28}
 %                {Make patching of commands a global operation (gh/674)}
 %    \begin{macrocode}
-    \use:x
-      {
-        \l_@@_patch_prefixes_tl \tex_gdef:D
-            \exp_not:N #2 \exp_not:V \l_@@_patch_param_text_tl
-          {
-            \str_if_eq:nnT {#4} { before }
-              { \exp_not:N \UseHook { cmd / #3 / #4 } }
-            \exp_args:No \exp_not:o
-              { \exp_after:wN #2 \l_@@_patch_replacement_tl }
-            \str_if_eq:nnT {#4} { after }
-              { \exp_not:N \UseHook { cmd / #3 / #4 } }
-          }
-      }
+\cs_new_protected:Npn \@@_redefine_with_hooks:Nnnn #1 #2 #3 #4
+  {
+    \l_@@_patch_prefixes_tl
+      \exp_after:wN \@@_def_cmd:w
+        \exp_after:wN #1 \l_@@_param_text_tl
+      { #2  #4  #3 }
   }
 %    \end{macrocode}
 %
@@ -786,10 +931,124 @@
 %    \end{macrocode}
 % \end{macro}
 % \end{macro}
+% \end{macro}
 %
 %
+% Here are some auxiliaries for the contraption above.
+%
+% \begin{macro}[pTF]{\@@_if_has_hash:n}
+% \begin{macro}{\@@_if_has_hash:w,\@@_if_has_hash_check:w}
+%   \cs{@@_if_has_hash:nTF} searches the token list |#1| for a catcode~6
+%   token, and if any is found, it returns |true|, and |false|
+%   otherwise.  The searching doesn't care about preserving groups or
+%   spaces:  we can ignore those safely (braces are removed) so that
+%   searching is as fast as possible.
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \@@_if_has_hash:n #1 { TF }
+  { \@@_if_has_hash:w #1 ## \s_@@_mark }
+\cs_new:Npn \@@_if_has_hash:w #1
+  {
+    \tl_if_single_token:nTF {#1}
+      {
+        \token_if_eq_catcode:NNTF ## #1
+          { \@@_if_has_hash_check:w }
+          { \@@_if_has_hash:w }
+      }
+      { \@@_if_has_hash:w #1 }
+  }
+\cs_new:Npn \@@_if_has_hash_check:w #1 \s_@@_mark
+  { \tl_if_empty:nTF {#1} { \prg_return_false: } { \prg_return_true: } }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
 %
 %
+% \begin{macro}[rEXP]{\@@_double_hashes:n}
+% \begin{macro}[rEXP]{
+%     \@@_double_hashes:w,
+%     \@@_double_hashes_output:N,
+%     \@@_double_hashes_stop:w,
+%     \@@_double_hashes_group:n,
+%     \@@_double_hashes_space:w,
+%   }
+%   \cs{@@_double_hashes:n} loops through the token list |#1| and
+%   duplicates any catcode~6 token, and expands tokens \cs{ifx}-equal to
+%   \cs{c_@@_hash_tl}, and leaves all other tokens \cs{notexpanded} with
+%   \cs{exp_not:N}.  Unfortunately pairs of explicit catcode~1 and
+%   catcode~2 character tokens are normalised to |{|$_1$ and |}|$_1$
+%   because it's not feasible to expandably detect the character code
+%   (\emph{maybe} it could be done using something along the lines of
+%   \url{https://tex.stackexchange.com/a/527538}, but it's far too much
+%   work for close to zero benefit).
+%
+%   \cs{@@_double_hashes:w} is the tail-recursive loop macro, that tests
+%   which of the three types of item is in the head of the token list.
+%    \begin{macrocode}
+\cs_new:Npn \@@_double_hashes:n #1
+  { \@@_double_hashes:w #1 \q_@@_recursion_tail \q_@@_recursion_stop }
+\cs_new:Npn \@@_double_hashes:w #1 \q_@@_recursion_stop
+  {
+    \tl_if_head_is_N_type:nTF {#1}
+      { \@@_double_hashes_output:N }
+      {
+        \tl_if_head_is_group:nTF {#1}
+          { \@@_double_hashes_group:n }
+          { \@@_double_hashes_space:w }
+      }
+    #1 \q_@@_recursion_stop
+  }
+%    \end{macrocode}
+%
+%   \cs{@@_double_hashes_output:N} checks for the end of the token list,
+%   then checks if the token is \cs{c_@@_hash_tl}, and if so just leaves
+%   it.
+%    \begin{macrocode}
+\cs_new:Npn \@@_double_hashes_output:N #1
+  {
+    \if_meaning:w \q_@@_recursion_tail #1
+      \@@_double_hashes_stop:w
+    \fi:
+    \if_meaning:w \c_@@_hash_tl #1
+%    \end{macrocode}
+%   (this \cs{use_i:nnnn} uses \cs{fi:} and consumes \cs{use:n}, the
+%   whole \cs{if_catcode:w} block, and the \cs{exp_not:N}, leaving just
+%   |#1| which is \cs{c_@@_hash_tl}.)
+%    \begin{macrocode}
+      \use_i:nnnn
+    \fi:
+    \use:n
+      {
+%    \end{macrocode}
+%   If |#1| is not \cs{c_@@_hash_tl}, then check if its catcode is~6,
+%   and if so, leave it doubled in \cs{exp_not:n} and consume the
+%   following |\exp_not:N #1|.
+%    \begin{macrocode}
+        \if_catcode:w ## \exp_not:N #1
+          \exp_after:wN \use_ii:nnnn
+        \fi:
+        \use_none:n
+          { \exp_not:n { #1 #1 } }
+      }
+%    \end{macrocode}
+%   If both previous tests returned |false|, then leave the token
+%   unexpanded and resume the loop.
+%    \begin{macrocode}
+    \exp_not:N #1
+    \@@_double_hashes:w
+  }
+\cs_new:Npn \@@_double_hashes_stop:w #1 \q_@@_recursion_stop { \fi: }
+%    \end{macrocode}
+%
+%   Dealing with spaces and grouped tokens is trivial:
+%    \begin{macrocode}
+\cs_new:Npn \@@_double_hashes_group:n #1
+  { { \@@_double_hashes:n {#1} } \@@_double_hashes:w }
+\exp_last_unbraced:NNo
+\cs_new:Npn \@@_double_hashes_space:w \c_space_tl
+  { ~ \@@_double_hashes:w }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
 %
 %
 % \subsubsection{Patching by retokenization}
