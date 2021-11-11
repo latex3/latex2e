@@ -29,18 +29,18 @@ l3build save -cconfig-lthooks2 \
 
 
 l3build save -cconfig-lthooks \
- ltcmdhooks-001 \
- ltcmdhooks-002 \
- ltcmdhooks-003 \
- ltcmdhooks-004 \
- ltcmdhooks-005 \
- ltcmdhooks-005a \
- ltcmdhooks-006 \
- ltcmdhooks-007 \
- ltcmdhooks-008 \
- ltcmdhooks-009 \
- ltcmdhooks-010 \
- ltcmdhooks-011 \
+   ltcmdhooks-001 \
+   ltcmdhooks-002 \
+   ltcmdhooks-003 \
+   ltcmdhooks-004 \
+   ltcmdhooks-005 \
+   ltcmdhooks-005a \
+   ltcmdhooks-006 \
+   ltcmdhooks-007 \
+   ltcmdhooks-008 \
+   ltcmdhooks-009 \
+   ltcmdhooks-010 \
+   ltcmdhooks-011 \
    filehook-001 \
    filehook-002 \
    filehook-003 \
@@ -79,14 +79,27 @@ l3build save -cconfig-lthooks \
    lthooks-027 \
    lthooks-028 \
    lthooks-029 \
+   lthooks-029-deprecated \
+   lthooks-030 \
    lthooks-errors \
+   lthooks-errors-deprecated \
    lthooks-etoolbox \
    lthooks-legacy \
    lthooks-doc-examples \
    shipout-000 \
    shipout-002 \
    shipout-004 \
-   shipout-005
+   shipout-005 \
+   github-0379 \
+   github-0387 \
+   github-0401 \
+   github-0464 \
+   github-0565 \
+   github-0606 \
+   github-0648 \
+   github-0648b 
+
+
 
 exit
 

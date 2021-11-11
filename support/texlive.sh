@@ -27,6 +27,7 @@ tlmgr option -- autobackup 0
 
 # Update a cached version first (else later step might fail)
 tlmgr update --self
+tlmgr update --all
 
 # Needed for any use of texlua even if not testing LuaTeX
 tlmgr install luatex
@@ -130,6 +131,3 @@ tlmgr install  \
   wsuipa       \
   xkeyval      \
   zref
-
-# ensure we have the latest of the above packages
-tlmgr update --all

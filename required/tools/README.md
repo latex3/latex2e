@@ -1,7 +1,7 @@
 The LaTeX `tools` bundle
 ========================
 
-Release 2021-06-01
+Release 2021-11-15 pre-release 3
 
 Overview
 --------
@@ -30,7 +30,7 @@ In particular, to check that you are really seeing a bug, please write
 a short, self-contained document that shows the problem. This should
 include the `latexbug` package, which will warn if your test file is
 not suitable for one or the other reason. See the [CONTRIBUTING
-guide](https://github.com/latex3/latex2e/blob/master/CONTRIBUTING.md)
+guide](https://github.com/latex3/latex2e/blob/main/CONTRIBUTING.md)
 for further details, or if you need to obtain the `latexbug` package.
 
 If the bug turns out to be with third-party software then please
@@ -51,4 +51,4 @@ of the package.
 
 -----
 
-<p>Copyright (C) 1993-2020 The LaTeX Project <br />
+<p>Copyright (C) 1993-2021 The LaTeX Project <br />
