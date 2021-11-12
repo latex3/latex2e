@@ -69,20 +69,22 @@ end
 
 -- Allow for 'dev' release
 --
--- See stackoverflow.com/a/12142066/212001
--- Also luaotfload build.lua: getting the Travis-CI version right is 'fun'
+-- See https://docs.github.com/en/actions/learn-github-actions/environment-variables
+-- for the meaning of the environment variables, but tl;dr: GITHUB_REF_TYPE says
+-- if we have a tag or a branch, GITHUB_REF_NAME has the corresponding name.
+-- If either one of them isn't set, we look at the current git HEAD.
 do
-  local tag = os.getenv'TRAVIS_TAG'
-  if tag and tag ~= "" then
-    main_branch = not string.match(tag, '^dev-')
+  local gh_type = os.getenv'GITHUB_REF_TYPE'
+  local name = os.getenv'GITHUB_REF_NAME'
+  if gh_type == 'tag' and name then
+    main_branch = not string.match(name, '^dev-')
   else
-    local branch = os.getenv'TRAVIS_BRANCH'
-    if not branch then
+    if gh_type ~= 'branch' or not name then
       local f = io.popen'git rev-parse --abbrev-ref HEAD'
-      branch = f:read'*a':sub(1,-2)
+      name = f:read'*a':sub(1,-2)
       assert(f:close())
     end
-    main_branch = string.match(branch, '^main')
+    main_branch = string.match(name, '^main')
   end
   if not main_branch then
     tdsroot = "latex-dev"
