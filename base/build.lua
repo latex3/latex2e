@@ -54,6 +54,7 @@ sourcefiles    =
     "testpage.tex",
     "doc-v3beta.sty",         -- temp
     "source2edoc.cls",        -- temp
+     "doc-v3beta.sty",        -- temp
      "*-????-??-??.sty"
   }
 textfiles =
@@ -112,14 +113,8 @@ typesetfiles   =
     "usrguide.tex",
     "usrguide3.tex",
     "latexchanges.tex",
-    "lthooks-doc.tex",
-    "ltshipout-doc.tex",
-    "ltfilehook-doc.tex",
-    "lthooks-code.tex",
-    "ltshipout-code.tex",
-    "ltfilehook-code.tex",
-    "ltpara-doc.tex",
-    "ltpara-code.tex",
+    "*-doc.tex",
+    "*-code.tex",
   }
 
 -- Files that should be removed after running a test
@@ -212,6 +207,6 @@ end
 dofile (maindir .. "/build-config.lua")
 
 -- Suppress makeindex tree other than formal releases
-if not master_branch then
+if not main_branch then
   makeindexfiles = { }
 end

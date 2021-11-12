@@ -19,11 +19,15 @@ if ! command -v texlua > /dev/null; then
   cd ..
 fi
 
+# https: repositories only (only temp)
+#tlmgr option repository https://mirror.ctan.org/systems/texlive/tlnet
+
 # Backups only make the cache bigger
 tlmgr option -- autobackup 0
 
 # Update a cached version first (else later step might fail)
 tlmgr update --self
+tlmgr update --all
 
 # Needed for any use of texlua even if not testing LuaTeX
 tlmgr install luatex
@@ -57,14 +61,18 @@ tlmgr install   \
   stringenc     \
   url
 
-# special testing
+# special testing for firstaid
 tlmgr install   \
   bidi          \
+  bigfoot       \
+  ncctools      \
   dinbrief      \
   everyshi      \
-  pgfmorepages  \
+  filehook      \
   pgf           \
-  filehook
+  pgfmorepages  \
+  ulem          \
+  varwidth
 
 # Additional support for typesetting
 tlmgr install  \
@@ -123,6 +131,3 @@ tlmgr install  \
   wsuipa       \
   xkeyval      \
   zref
-
-# ensure we have the latest of the above packages
-tlmgr update --all

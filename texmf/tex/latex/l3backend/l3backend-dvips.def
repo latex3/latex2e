@@ -12,7 +12,7 @@
 %% l3backend-pdf.dtx  (with options: `package,dvips')
 %% l3backend-opacity.dtx  (with options: `package,dvips')
 %% 
-%% Copyright (C) 1990-2021 The LaTeX Project
+%% Copyright (C) 2019-2021 The LaTeX Project
 %% 
 %% It may be distributed and/or modified under the conditions of
 %% the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -26,11 +26,11 @@
 %% 
 %% File: l3backend-basics.dtx
 \ProvidesExplFile
-  {l3backend-dvips.def}{2021-02-18}{}
+  {l3backend-dvips.def}{2021-10-18}{}
   {L3 backend support: dvips}
 \cs_if_exist:NTF \__kernel_dependency_version_check:nn
   {
-    \__kernel_dependency_version_check:nn {2020-09-01}
+    \__kernel_dependency_version_check:nn {2021-02-18}
       {l3backend-dvips.def}
   }
   {
@@ -46,6 +46,16 @@
 \cs_new_protected:Npn \__kernel_backend_literal:n #1
   { \__kernel_backend_literal:e { \exp_not:n {#1} } }
 \cs_generate_variant:Nn \__kernel_backend_literal:n { x }
+\cs_if_exist:NTF \@ifl@t@r
+  {
+    \@ifl@t@r \fmtversion { 2020-10-01 }
+      {
+        \cs_new_protected:Npn \__kernel_backend_first_shipout:n #1
+          { \hook_gput_code:nnn { shipout / firstpage } { l3backend } {#1} }
+      }
+      { \cs_new_eq:NN \__kernel_backend_first_shipout:n \AtBeginDvi }
+  }
+  { \cs_new_eq:NN \__kernel_backend_first_shipout:n \use:n }
 \cs_new_protected:Npn \__kernel_backend_literal_postscript:n #1
   { \__kernel_backend_literal:n { ps:: #1 } }
 \cs_generate_variant:Nn \__kernel_backend_literal_postscript:n { x }
@@ -54,10 +64,8 @@
 \cs_generate_variant:Nn \__kernel_backend_postscript:n { x }
 \bool_if:NT \g__kernel_backend_header_bool
   {
-    \cs_if_exist:NTF \AtBeginDvi
-      { \AtBeginDvi }
-      { \use:n }
-        { \__kernel_backend_literal:n { header = l3backend-dvips.pro } }
+    \__kernel_backend_first_shipout:n
+      { \__kernel_backend_literal:n { header = l3backend-dvips.pro } }
   }
 \cs_new_protected:Npn \__kernel_backend_align_begin:
   {
@@ -110,38 +118,73 @@
   }
 \cs_new_protected:Npn \__color_backend_reset:
   { \__kernel_backend_literal:n { color~pop } }
+\prop_new:N \g__color_backend_colorant_prop
+\cs_new:Npx \__color_backend_devicen_colorants:n #1
+  {
+    \exp_not:N \tl_if_blank:nF {#1}
+      {
+        \c_space_tl
+        << ~
+          /Colorants ~
+            << ~
+              \exp_not:N \__color_backend_devicen_colorants:w #1 ~
+                \exp_not:N \q_recursion_tail \c_space_tl
+                \exp_not:N \q_recursion_stop
+            >> ~
+        >>
+      }
+  }
+\cs_new:Npn \__color_backend_devicen_colorants:w #1 ~
+  {
+    \quark_if_recursion_tail_stop:n {#1}
+    \prop_if_in:NnT \g__color_backend_colorant_prop {#1}
+      {
+        #1 ~
+        \prop_item:Nn \g__color_backend_colorant_prop {#1} ~
+      }
+    \__color_backend_devicen_colorants:w
+  }
 \cs_new_protected:Npn \__color_backend_select_separation:nn #1#2
   { \__color_backend_select:n { separation ~ #1 ~ #2 } }
 \cs_new_eq:NN \__color_backend_select_devicen:nn \__color_backend_select_separation:nn
+\cs_new_protected:Npn \__color_backend_select_iccbased:nn #1#2 { }
 \cs_new_protected:Npx \__color_backend_separation_init:nnnnn #1#2#3#4#5
   {
     \bool_if:NT \g__kernel_backend_header_bool
       {
-        \cs_if_exist:NTF \AtBeginDvi
-          { \exp_not:N \AtBeginDvi }
-          { \use:n }
-            {
-              \exp_not:N \__color_backend_separation_init_aux:nnnnn
-                {#1} {#2} {#3} {#4} {#5}
-            }
+        \exp_args:Nx \__kernel_backend_first_shipout:n
+          {
+            \exp_not:N \__color_backend_separation_init_aux:nnnnnn
+              { \exp_not:N \int_use:N \g__color_model_int }
+              {#1} {#2} {#3} {#4} {#5}
+          }
+        \prop_gput:Nxx \exp_not:N \g__color_backend_colorant_prop
+          { / \exp_not:N \str_convert_pdfname:n {#1} }
+          {
+            << ~
+              /setcolorspace ~ {} ~
+            >> ~ begin ~
+              color \exp_not:N \int_use:N \g__color_model_int \c_space_tl
+            end
+          }
       }
   }
 \cs_generate_variant:Nn \__color_backend_separation_init:nnnnn { nxx }
-\cs_new_protected:Npn \__color_backend_separation_init_aux:nnnnn #1#2#3#4#5
+\cs_new_protected:Npn \__color_backend_separation_init_aux:nnnnnn #1#2#3#4#5#6
   {
     \__kernel_backend_literal:e
       {
         !
         TeXDict ~ begin ~
-        /color \int_use:N \g__color_model_int
+        /color #1
           {
             [ ~
-              /Separation ~ ( \str_convert_pdfname:n {#1} ) ~
-              [ ~ #2 ~ ] ~
+              /Separation ~ ( \str_convert_pdfname:n {#2} ) ~
+              [ ~ #3 ~ ] ~
                 {
-                  \cs_if_exist_use:cF { __color_backend_separation_init_ #2 :nnn }
+                  \cs_if_exist_use:cF { __color_backend_separation_init_ #3 :nnn }
                     { \__color_backend_separation_init:nnn }
-                      {#3} {#4} {#5}
+                      {#4} {#5} {#6}
                 }
             ] ~ setcolorspace
           } ~ def ~
@@ -276,11 +319,13 @@
               [ ~ #1 ~ ] ~
               #2 ~
               { ~ #3 ~ } ~
+              \__color_backend_devicen_colorants:n {#1}
             ] ~ setcolorspace
           } ~ def ~
         end
       }
   }
+\cs_new_protected:Npn \__color_backend_iccbased_init:nnn #1#2#3 { }
 \cs_new_protected:Npn \__color_backend_fill_cmyk:n #1
   { \__color_backend_fill:n { cmyk ~ #1 } }
 \cs_new_protected:Npn \__color_backend_fill_gray:n #1
@@ -713,7 +758,10 @@
 \cs_new_protected:Npn \__pdf_breaklink_postscript:n #1 { }
 \cs_new_eq:NN \__pdf_breaklink_usebox:N \box_use:N
 \cs_new_protected:Npn \__pdf_backend_link_begin_goto:nnw #1#2
-  { \__pdf_backend_link_begin:nw { #1 /Subtype /Link /A << /S /GoTo /D ( #2 ) >> } }
+  {
+    \__pdf_backend_link_begin:nw
+      { #1 /Subtype /Link /Action << /S /GoTo /D ( #2 ) >> }
+  }
 \cs_new_protected:Npn \__pdf_backend_link_begin_user:nnw #1#2
   { \__pdf_backend_link_begin:nw {#1#2} }
 \cs_new_protected:Npn \__pdf_backend_link_begin:nw #1
@@ -962,8 +1010,14 @@
           }
       }
   }
-\cs_new_protected:Npn \__pdf_backend_version_major_gset:n #1 { }
-\cs_new_protected:Npn \__pdf_backend_version_minor_gset:n #1 { }
+\cs_new_protected:Npn \__pdf_backend_version_major_gset:n #1
+  {
+    \cs_gset:Npx \__pdf_backend_version_major: { \int_eval:n {#1} }
+  }
+\cs_new_protected:Npn \__pdf_backend_version_minor_gset:n #1
+  {
+    \cs_gset:Npx \__pdf_backend_version_minor: { \int_eval:n {#1} }
+  }
 \cs_new:Npn \__pdf_backend_version_major: { -1 }
 \cs_new:Npn \__pdf_backend_version_minor: { -1 }
 \cs_new_protected:Npn \__pdf_backend_bdc:nn #1#2
@@ -978,18 +1032,43 @@
   }
 \cs_new_protected:Npn \__opacity_backend_select_aux:n #1
   {
-    \__kernel_backend_postscript:n
-      { #1 ~ .setfillconstantalpha ~ #1 ~ .setstrokeconstantalpha }
+    \__opacity_backend:nnn {#1} { fill }   { ca }
+    \__opacity_backend:nnn {#1} { stroke } { CA }
   }
 \cs_new_protected:Npn \__opacity_backend_fill:n #1
-  { \__opacity_backend:xn { \fp_eval:n { min(max(0,#1),1) } } { fill } }
-\cs_new_protected:Npn \__opacity_backend_stroke:n #1
-  { \__opacity_backend:xn { \fp_eval:n { min(max(0,#1),1) } } { stroke } }
-\cs_new_protected:Npn \__opacity_backend:nn #1#2
   {
-    \__kernel_backend_postscript:n { #1 ~ .set #2 constantalpha  }
+    \__opacity_backend:xnn
+      { \fp_eval:n { min(max(0,#1),1) } }
+      { fill }
+      { ca }
   }
-\cs_generate_variant:Nn \__opacity_backend:nn { x }
+\cs_new_protected:Npn \__opacity_backend_stroke:n #1
+  {
+    \__opacity_backend:xnn
+      { \fp_eval:n { min(max(0,#1),1) } }
+      { stroke }
+      { CA }
+  }
+\cs_new_protected:Npn \__opacity_backend:nnn #1#2#3
+  {
+    \__kernel_backend_postscript:n
+      {
+        product ~ (Ghostscript) ~ search
+          {
+            pop ~ pop ~ pop ~
+            #1 ~ .set #2 constantalpha
+          }
+          {
+            pop ~
+            mark ~
+            /#3 ~ #1
+            /SetTransparency ~
+            pdfmark
+          }
+        ifelse
+      }
+  }
+\cs_generate_variant:Nn \__opacity_backend:nnn { x }
 %% 
 %%
 %% End of file `l3backend-dvips.def'.

@@ -331,6 +331,13 @@ do
     node_write(n)
   end, "global", "protected")
 end
+  local gettimeofday = os.gettimeofday
+  local epoch = gettimeofday() - os.clock()
+  local write = tex.write
+  local tointeger = math.tointeger
+  luacmd('__sys_elapsedtime:', function()
+    write(tointeger((gettimeofday() - epoch)*65536 // 1))
+  end, 'global')
 -- File: l3token.dtx
 do
   local get_next = token.get_next

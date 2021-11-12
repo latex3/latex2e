@@ -1,0 +1,1396 @@
+% \iffalse meta-comment
+%
+%% File: ltcmdhooks.dtx (C) Copyright 2020-2021
+%%       Frank Mittelbach, Phelype Oleinik, LaTeX Team
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+%
+%%% From File: ltcmdhooks.dtx
+%
+\def\ltcmdhooksversion{v1.0f}
+\def\ltcmdhooksdate{2021/10/20}
+%
+%
+%
+%<*driver>
+\documentclass{l3doc}
+%\usepackage{ltcmdhooks}
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{ltcmdhooks.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+%
+% \providecommand\hook[1]{\texttt{#1}}
+% \providecommand\fmi[1]{\marginpar{\footnotesize FMi: #1}}
+% \providecommand\pho[1]{\marginpar{\footnotesize PhO: #1}}
+% \providecommand\phoinline[1]{\begin{quote}\itshape\footnotesize PhO: #1\end{quote}}
+%
+% \title{The \texttt{ltcmdhooks} module\thanks{This file has version
+%    \ltcmdhooksversion\ dated \ltcmdhooksdate, \copyright\ \LaTeX\
+%    Project.}}
+% \author{Frank Mittelbach \and Phelype Oleinik}
+%
+% \maketitle
+%
+%
+% \tableofcontents
+%
+%
+% \section{Introduction}
+%
+%    This file implements generic hooks for (arbitrary) commands.
+%    In theory every command \tn[no-index]{\meta{name}} offers now two
+%    associated hooks to which code can be added using \tn{AddToHook}
+%    or \tn{AddToHookNext}.\footnote{In practice this is not supported
+%    for all types of commands, see section~\ref{sec:look-ahead} for
+%    the restrictions that apply and what happens if one tries to use
+%    this with commands for which this is not supported.}  These are
+%    \begin{description}
+%    \item[\hook{cmd/\meta{name}/before}]
+%
+%       This hook is executed at the very start of the command
+%       execution after its arguments (if any) are parsed.  The hook
+%       \meta{code} is wrapped in the command inside a call to
+%       \cs{UseHook}|{cmd/|\meta{name}|/before}|, so the arguments
+%       passed to the command are \emph{not} available in the hook
+%       \meta{code}.
+%
+%    \item[\hook{cmd/\meta{name}/after}]
+%
+%       This hook is similar to \hook{cmd/\meta{name}/before}, but it is
+%       executed at the very end of the command body.  This hook is
+%       implemented as a reversed hook.
+%    \end{description}
+%
+%    The hooks are not physically present before
+%    \verb=\begin{document}= (i.e., using a command in the preamble
+%    will never execute them) and if nobody has declared any code for
+%    them, then they are not added to the command code ever.  For
+%    example, if we have the following definition
+%\begin{verbatim}
+%    \newcommand\foo[2]{Code #1 for #2!}
+%\end{verbatim}
+%    then executing \verb=\foo{A}{B}= will simply run
+%    \verb*=Code A for B!=
+%    as it was always the case. However, if somebody, somewhere (e.g.,
+%    in a package) adds
+%\begin{verbatim}
+%    \AddToHook{cmd/foo/before}{<before code>}
+%\end{verbatim}
+%    then, after |\begin{document}| the definition of \cs[no-index]{foo} will be:
+%\begin{verbatim}
+%    \renewcommand\foo[2]{\UseHook{cmd/foo/before}Code #1 for #2!}
+%\end{verbatim}
+%    and similarly \verb=\AddToHook{cmd/foo/after}{<after code>}=
+%    alters the definition to
+%\begin{verbatim}
+%    \renewcommand\foo[2]{Code #1 for #2!\UseHook{cmd/foo/after}}
+%\end{verbatim}
+%
+%    In other words, the mechanism is similar to what \pkg{etoolbox}
+%    offers with \tn{pretocmd} and \tn{apptocmd} with the important
+%    differences 
+%    \begin{itemize}
+%    \item
+%
+%      that code can be prepended or appended (i.e., added to the
+%      hooks) even if the command itself is not defined, because the
+%      defining package has not yet been loaded
+%
+%    \item
+%
+%      and that by using the hook management interface it is now
+%      possible to define how the code chunks added in these places
+%      are ordered, if different packages want to add code at these
+%      points.
+%
+%    \end{itemize}
+%
+%
+%
+%
+% \section{Restrictions and Operational details}
+% \label{sec:restrictions}
+%
+% Adding arbitrary material to commands is tricky because most of the
+% time we do not know what the macro expects as arguments when expanding
+% and \TeX{} doesn't have a reliable way to see that, so some guesswork
+% has to be employed.
+%
+% \subsection{Patching}
+%
+% The code here tries to find out if a command was defined with
+% \tn{newcommand} or \tn{DeclareRobustCommand} or
+% \tn{NewDocumentCommand}, and if so it \emph{assumes} that the argument
+% specification of the command is as expected (which is not fail-proof,
+% if someone redefines the internals of these commands in devious ways,
+% but is a reasonable assumption).
+%
+% If the command is one of the defined types, the code here does a
+% sandboxed expansion of the command such that it can be redefined again
+% exactly as before, but with the hook code added.
+%
+% If however the command is not a known type (it was defined with
+% \tn{def}, for example), then the code uses an approach similar to
+% \pkg{etoolbox}'s \tn{patchcmd} to retokenize the command with the hook
+% code in place.  This procedure, however, is more likely to fail if the
+% catcode settings are not the same as the ones at the time of command's
+% definition, so not always adding a hook to a command will work.
+%
+% \subsubsection{Timing}
+%
+% When \cs{AddToHook} (or its \pkg{expl3} equivalent) is called with
+% a generic |cmd| hook, say, \hook{cmd/foo/before}, for the first time
+% (that is, no code was added to that same hook before), in the preamble
+% of a document, it will store a patch instruction for that command
+% until |\begin{document}|, and only then all the commands which had
+% hooks added will be patched in one go.  That means that no command in
+% the preamble will have hooks patched into them.
+%
+% At |\begin{document}| all the delayed patches will be executed, and
+% if the command doesn't exist the code is still added to the hook,
+% but it will not be executed.  After |\begin{document}|, when
+% \cs{AddToHook} is called with a generic |cmd| hook the first time,
+% the command will be immediately patched to include the hook, and if
+% it doesn't exist or if it can't be patched for any reason, an error
+% is thrown; if \cs{AddToHook} was already used in the preamble no new
+% patching is attempted.
+%
+% This has the consequence that a command defined or redefined after
+% |\begin{document}| only uses generic |cmd| hook code if
+% \cs{AddToHook} is called for the first time after the definition is
+% made, or if the command explicitly uses the generic hook in its
+% definition by declaring it with \cs{NewHookPair} adding \cs{UseHook} as
+% part of the code.\footnote{We might change this behavior in the main
+% document slightly after gaining some usage experience.}
+%
+%
+% \subsection{Commands that look ahead}
+% \label{sec:look-ahead}
+%
+% Some commands are defined in different ``steps'' and they look ahead
+% in the input stream to find more arguments.  If you try to add some
+% code to the \hook{cmd/\meta{name}/after} hook of such command, it will
+% not work, and it is not possible to detect that programmatically, so
+% the user has to know (or find out) which commands can or cannot have
+% hooks attached to them.
+%
+% One good example is the \tn{section} command.  You can add something
+% to the \hook{cmd/section/before} hook, but if you try to add something
+% to the \hook{cmd/section/after} hook, \tn{section} will no longer
+% work.  That happens because the \tn{section} macro takes no argument,
+% but instead calls a few internal \LaTeX{} macros to look for the
+% optional and mandatory arguments.  By adding code to the
+% \hook{cmd/section/after} hook, you get in the way of that scanning.
+%
+%
+%
+% \section{Package Author Interface}
+%
+% The \hook{cmd} hooks are, by default, available for all commands
+% that can be patched to add the hooks.  For some commands, however,
+% the very beginning or the very end of the code is not the best place
+% to put the hooks, for example, if the command looks ahead for
+% arguments (see section~\ref{sec:look-ahead}).
+%
+% If you are a package author and you want to add the hooks to your
+% own commands in the proper position you can define the command and
+% manually add the \cs{UseHook} calls inside the command in the proper
+% positions, and manually define the hooks with \cs{NewHook} or
+% \cs{NewReversedHook}.  When the hooks are explicitly defined,
+% patching is not attempted so you can make sure your command works
+% properly.  For example, an (admittedly not really useful) command
+% that typesets its contents in a framed box with width optionally
+% given in parentheses:
+% \begin{verbatim}
+%    \newcommand\fancybox{\@ifnextchar({\@fancybox}{\@fancybox(5cm)}}
+%    \def\@fancybox(#1)#2{\fbox{\parbox{#1}{#2}}}
+% \end{verbatim}
+% If you try that definition, then add some code after it with
+% \begin{verbatim}
+%    \AddToHook{cmd/fancybox/after}{<code>}
+% \end{verbatim}
+% and then use the \cs[no-index]{fancybox} command you will see that it
+% will be completely broken, because the hook will get executed in the
+% middle of parsing for optional \texttt{(...)} argument.
+%
+% If, on the other hand, you want to add hooks to your command you can
+% do something like:
+% \begin{verbatim}
+%   \newcommand\fancybox{\@ifnextchar({\@fancybox}{\@fancybox(5cm)}}
+%   \def\@fancybox(#1)#2{\fbox{%
+%                        \UseHook{cmd/fancybox/before}%
+%                        \parbox{#1}{#2}%
+%                        \UseHook{cmd/fancybox/after}}}
+%   \NewHook{cmd/fancybox/before}
+%   \NewReversedHook{cmd/fancybox/after}
+% \end{verbatim}
+% then the hooks will be executed where they should and no patching
+% will be attempted.  It is important that the hooks are declared with
+% \cs{NewHook} or \cs{NewReversedHook}, otherwise the command hook
+% code will try to patch the command.  Note also that the call to
+% |\UseHook{cmd/fancybox/before}| does not need to be in the
+% definition of \cs[no-index]{fancybox}, but anywhere it makes sense
+% to insert it (in this case in the internal
+% \cs[no-index]{@fancybox}).
+%
+% Alternatively, if for whatever reason your command does not support
+% the generic hooks provided here, you can disable a hook with
+% \cs{DisableHook}\footnote{Please use \cs{DisableHook} if at all, only
+% on hooks that you \enquote{own}, i.e., for commands that your
+% package or class defines and not second guess
+% whether or not hooks of other packages should get disabled!}, so
+% that when someone tries to add code to it they will get an error.
+% Or if you don't want the error, you can simply declare the hook with
+% \cs{NewHook} and never use it.
+%
+%
+% The above approach is useful for really complex commands where for
+% one or the other reason the hooks can't be placed at the very
+% beginning and end of the command body and some hand-crafting is
+% needed. However, in the example above the real (and in fact only)
+% issue is the cascading argument parsing in the style developed long
+% ago in \LaTeX~2.09. Thus, a much simpler solution for this case is
+% to replace it with the modern \cs{NewDocumentCommand} syntax and
+% define the command as follows:
+% \begin{verbatim}
+%  \DeclareDocumentCommand\fancybox{D(){5cm}m}{\fbox{\parbox{#1}{#2}}}
+% \end{verbatim}
+% If you do that then both hooks automatically work and are patched
+% into the right places.
+%
+% \StopEventually{\setlength\IndexMin{200pt}  \PrintIndex  }
+%
+%
+%
+% \section{The Implementation}
+%
+% \subsection{Execution plan}
+%
+% To add |before| and |after| hooks to a command we will need to peek
+% into the definition of a command, which is always a tricky thing to
+% do.  Some cases are easy because we know how the command was defined,
+% so we can assume how its \meta{parameter text} looks like (for example
+% a command defined with \tn{newcommand} may have an optional argument
+% followed by a run of mandatory arguments), so we can just expand that
+% command and make it grab |#1|, |#2|, etc.\@ as arguments and
+% define it all back with the hooks added.
+%
+% Life's usually not that easy, so with some commands we can't do that
+% (a |#1| might as well be |#|$_{12}$|1|$_{12}$ instead of the expected
+% |#|$_{6}$|1|$_{12}$, for example) so we need to resort to ``patching''
+% the command: read its \tn{meaning}, and tokenize it again with
+% \tn{scantokens} and hope for the best.
+%
+% So the overall plan is:
+% \begin{enumerate}
+%   \item
+%     Check if a command is of a known type (that is, defined with
+%     \tn{newcommand}\footnote{It's not always possible to reliably
+%     detect this case because a command defined with no optional
+%     argument is indistinguishable from a \tn{def}ed command.},
+%     \cs[no-index]{DeclareRobustCommand}, or
+%     \cs[no-index]{New(Expandable)DocumentCommand}), and if is, take
+%     appropriate action.
+%   \item
+%     If the command is not a known type, we'll check if the command can
+%     be patched.  Two things will prevent a command from being
+%     patched:  if it was defined in a nonstandard catcode setting, or
+%     if it is an internal expl3 command with |__|\meta{module} in its
+%     name, in which case we refuse to patch.
+%   \item
+%     If the command was defined in nonstandard catcode settings, we
+%     will try a few standard ones to try our best to carry out the
+%     pathing.  If this doesn't help either, the code will give up and
+%     throw an error.
+% \end{enumerate}
+%
+%
+%    \begin{macrocode}
+%<@@=hook>
+%    \end{macrocode}
+%
+% \changes{v1.0b}{2021/05/24}{Use \cs{msg_...} instead of \cs{__kernel_msg...}}
+%
+%    \begin{macrocode}
+%<*2ekernel|latexrelease>
+\ExplSyntaxOn
+%<latexrelease>\NewModuleRelease{2021/06/01}{ltcmdhooks}
+%<latexrelease>                 {The~hook~management~system~for~commands}
+%    \end{macrocode}
+%
+% \subsection{Variables}
+%
+% \begin{macro}[int]{\g_hook_patch_action_list_tl}
+%    Pairs of |\if<cmd>..\patch<cmd>| to be used with
+%    \tn{robust@command@act} when looking for a known patching
+%    rule. This token list is exposed because we see some future
+%    applications (with very specialized packages, such as
+%    \pkg{etoolbox} that may want to extend the pairs processed. It is
+%    not meant for general use which is why it is not documented in
+%    the interface documentation above.
+%    \begin{macrocode}
+\tl_new:N \g_hook_patch_action_list_tl
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\l_@@_patch_num_args_int}
+%   The number of arguments in a macro being patched.
+%    \begin{macrocode}
+\int_new:N \l_@@_patch_num_args_int
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\l_@@_patch_prefixes_tl}
+% \begin{macro}{\l_@@_param_text_tl}
+% \begin{macro}{\l_@@_replace_text_tl}
+%   The prefixes and parameters of the definition for the macro being
+%   patched.
+%    \begin{macrocode}
+\tl_new:N \l_@@_patch_prefixes_tl
+\tl_new:N \l_@@_param_text_tl
+\tl_new:N \l_@@_replace_text_tl
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\c_@@_hash_tl}
+%   A constant token list that contains two parameter tokens.
+%    \begin{macrocode}
+\tl_const:Nn \c_@@_hash_tl { # # }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_exp_not:NN}
+% \begin{macro}{\@@_def_cmd:w}
+%   Two temporary macros that change depending on the macro being
+%   patched.
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_exp_not:NN ?
+\cs_new_eq:NN \@@_def_cmd:w ?
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\q_@@_recursion_tail,\q_@@_recursion_stop}
+%   Internal quarks for recursion:  they can't appear in any macro being
+%   patched.
+%    \begin{macrocode}
+\quark_new:N \q_@@_recursion_tail
+\quark_new:N \q_@@_recursion_stop
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\g_@@_delayed_patches_prop}
+%   A list containing the patches delayed to |\begin{document}|, so that
+%   patching is not attempted twice.
+%    \begin{macrocode}
+\prop_new:N \g_@@_delayed_patches_prop
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_patch_debug:x}
+%   A helper for patching debug info.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_patch_debug:x #1
+  { \@@_debug:n { \iow_term:x { [lthooks]~#1 } } }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Variants}
+%
+% \begin{macro}[int]{\tl_rescan:nV}
+%   \pkg{expl3} function variants used throughout the code.
+%    \begin{macrocode}
+\cs_generate_variant:Nn \tl_rescan:nn { nV }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Patching or delaying}
+%
+%   Before |\begin{document}| all patching is delayed.
+%
+% \begin{macro}{\@@_try_put_cmd_hook:n,\@@_try_put_cmd_hook:w}
+%   This function is called from within \cs{AddToHook}, when code is
+%   first added to a generic |cmd| hook.  
+%   If it is called within in the preamble, it delays the action
+%   until |\begin{document}|; 
+%   otherwise it tries to update the hook.
+% \changes{v1.0d}{2021/08/25}{Simplify generic hook detection}
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2021/11/15}{\@@_try_put_cmd_hook:n}%
+%<latexrelease>                 {Standardise~generic~hook~names}
+\cs_new_protected:Npn \@@_try_put_cmd_hook:n #1
+  { \@@_try_put_cmd_hook:w #1 / / / \s_@@_mark {#1} }
+\cs_new_protected:Npn \@@_try_put_cmd_hook:w
+    #1 / #2 / #3 / #4 \s_@@_mark #5
+  {
+    \@@_debug:n { \iow_term:n { ->~Adding~cmd~hook~to~'#2'~(#3): } }
+    \exp_args:Nc \@@_patch_cmd_or_delay:Nnn {#2} {#2} {#3}
+  }
+%<latexrelease>\EndIncludeInRelease
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2021/06/01}{\@@_try_put_cmd_hook:n}%
+%<latexrelease>                 {Standardise~generic~hook~names}
+%<latexrelease>\cs_new_protected:Npn \@@_try_put_cmd_hook:n #1
+%<latexrelease>  { \@@_try_put_cmd_hook:w #1 / / / \s_@@_mark {#1} }
+%<latexrelease>\cs_new_protected:Npn \@@_try_put_cmd_hook:w
+%<latexrelease>    #1 / #2 / #3 / #4 \s_@@_mark #5
+%<latexrelease>  {
+%<latexrelease>    \@@_debug:n { \iow_term:n { ->~Adding~cmd~hook~to~'#2'~(#3): } }
+%<latexrelease>    \str_case:nnTF {#3}
+%<latexrelease>        { { before } { } { after } { } }
+%<latexrelease>      { \exp_args:Nc \@@_patch_cmd_or_delay:Nnn {#2} {#2} {#3} }
+%<latexrelease>      { \msg_error:nnnn { hooks } { wrong-cmd-hook } {#2} {#3} }
+%<latexrelease>  }
+%<latexrelease>\EndIncludeInRelease
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_patch_cmd_or_delay:Nnn}
+% \begin{macro}{\@@_cmd_begindocument_code:}
+%   In the preamble, \cs{@@_patch_cmd_or_delay:Nnn} just adds the patch
+%   instruction to a property list to be executed later.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_patch_cmd_or_delay:Nnn #1 #2 #3
+  {
+    \@@_debug:n { \iow_term:n { ->~Add~generic~cmd~hook~for~#2~(#3). } }
+    \@@_debug:n
+      { \iow_term:n { !~In~the~preamble:~delaying. } }
+    \prop_gput:Nnn \g_@@_delayed_patches_prop { #2 / #3 }
+      { \@@_cmd_try_patch:nn {#2} {#3} }
+  }
+%    \end{macrocode}
+%
+%   The delayed patches are added to a property list to prevent
+%   duplication, and the code stored in the property list for each
+%   key is executed.  The function \cs{@@_patch_cmd_or_delay:Nnn} is
+%   also redefined to be \cs{@@_patch_command:Nnn} so that no further
+%   delaying is attempted.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_cmd_begindocument_code:
+  {
+    \cs_gset_eq:NN \@@_patch_cmd_or_delay:Nnn \@@_patch_command:Nnn
+    \prop_map_function:NN \g_@@_delayed_patches_prop { \use_ii:nn }
+    \prop_gclear:N \g_@@_delayed_patches_prop
+    \cs_undefine:N \@@_cmd_begindocument_code:
+  }
+\g@addto@macro \@kernel@after@begindocument
+  { \@@_cmd_begindocument_code: }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_cmd_try_patch:nn}
+%   At |\begin{document}| tries patching the command if the hook
+%   was not manually created in the meantime.  If the document does not
+%   exist, no error is raised here as it may hook into a package that
+%   wasn't loaded.  Hooks added to commands in the document body still
+%   raise an error if the command is not defined.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_cmd_try_patch:nn #1 #2
+  {
+    \@@_debug:n
+      { \iow_term:x { ->~\string\begin{document}~try~cmd / #1 / #2. } }
+    \@@_if_declared:nTF { cmd / #1 / #2 }
+      {
+        \@@_debug:n
+          { \iow_term:n { .->~Giving~up:~hook~already~created. } }
+      }
+      {
+        \cs_if_exist:cT {#1}
+          { \exp_args:Nc \@@_patch_command:Nnn {#1} {#1} {#2} }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+%
+%
+%
+%
+% \subsection{Patching commands}
+%
+% \begin{macro}{\@@_patch_command:Nnn}
+% \begin{macro}{\@@_patch_check:NNnn}
+% \begin{macro}[TF]{\@@_if_public_command:N}
+% \begin{macro}{\@@_if_public_command:w}
+%   \cs{@@_patch_command:Nnn} will do some sanity checks on the
+%   argument to detect if it is possible to add hooks to the command,
+%   and raises an error otherwise.  If the command can contain hooks,
+%   then it uses \tn{robust@command@act} to find out what type is the
+%   command, and patch it accordingly.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_patch_command:Nnn #1 #2 #3
+  {
+    \@@_patch_debug:x { analyzing~'\token_to_str:N #1' }
+    \@@_patch_debug:x { \token_to_str:N #1 = \token_to_meaning:N #1 }
+    \@@_patch_check:NNnn \cs_if_exist:NTF #1 { undef }
+      {
+        \@@_patch_debug:x { ++~control~sequence~is~defined }
+        \@@_patch_check:NNnn \token_if_macro:NTF #1 { macro }
+          {
+            \@@_patch_debug:x { ++~control~sequence~is~a~macro }
+            \@@_patch_check:NNnn \@@_if_public_command:NTF #1 { expl3 }
+              {
+                \@@_patch_debug:x { ++~macro~is~not~private }
+                \robust@command@act
+                  \g_hook_patch_action_list_tl #1
+                  \@@_retokenize_patch:Nnn { #1 {#2} {#3} }
+              }
+          }
+      }
+  }
+%    \end{macrocode}
+%
+%   And here's the auxiliary used above:
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_patch_check:NNnn #1 #2 #3 #4
+  {
+    #1 #2 {#4}
+      {
+        \msg_error:nnxx { hooks } { cant-patch }
+          { \token_to_str:N #2 } {#3}
+      }
+  }
+%    \end{macrocode}
+%   and a conditional \cs{@@_if_public_command:N} to check if a command
+%   has |__| in its name (no other checking is performed).  Primitives
+%   with |:D| in their name could be included here, but they are already
+%   discarded in the \cs{token_if_macro:NTF} test above.
+%    \begin{macrocode}
+\use:x
+  {
+    \prg_new_protected_conditional:Npnn
+        \exp_not:N \@@_if_public_command:N ##1 { TF }
+      {
+        \exp_not:N \exp_last_unbraced:Nf
+          \exp_not:N \@@_if_public_command:w
+            { \exp_not:N \cs_to_str:N ##1 }
+          \tl_to_str:n { _ _ } \s_@@_mark
+      }
+  }
+\exp_last_unbraced:NNNNo
+\cs_new_protected:Npn \@@_if_public_command:w
+    #1 \tl_to_str:n { _ _ } #2 \s_@@_mark
+  {
+    \tl_if_empty:nTF {#2}
+      { \prg_return_true: }
+      { \prg_return_false: }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+%
+%
+%
+%
+%
+%
+% \subsubsection{Patching by expansion and redefinition}
+%
+% \begin{macro}[int]{\g_hook_patch_action_list_tl}
+%    This is the list of known command types and the function that
+%    patches the command hooks into them.  The conditionals are taken
+%    from \tn{ShowCommand}, \tn{NewCommandCopy} and
+%    \cs{__kernel_cmd_if_xparse:NTF} defined in \texttt{ltcmd}.
+%    \begin{macrocode}
+\tl_gset:Nn \g_hook_patch_action_list_tl
+  {
+    { \@if@DeclareRobustCommand \@@_patch_DeclareRobustCommand:Nnn }
+    { \@if@newcommand \@@_patch_newcommand:Nnn }
+    { \__kernel_cmd_if_xparse:NTF \@@_cmd_patch_xparse:Nnn }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+%
+%
+%
+% \begin{macro}{\@@_patch_DeclareRobustCommand:Nnn}
+%   At this point we know that the commands can be patched by expanding
+%   then redefining.  These are the cases of commands defined with
+%   \tn{newcommand} with an optional argument or with
+%   \tn{DeclareRobustCommand}.
+%
+%   With \cs{@@_patch_DeclareRobustCommand:Nnn} we check if the command
+%   has an optional argument (with a test counter-intuitively called
+%   \tn{@if@newcommand}; also make sure the command doesn't take args by
+%   calling \cs{robust@command@chk@safe}).  If so, we pass the patching action
+%   to \cs{@@_patch_newcommand:Nnn}, otherwise we call the patching engine
+%   \cs{@@_patch_expand_redefine:NNnn} with a \cs{c_false_bool} to
+%   indicate that there is no optional argument.
+%
+%   \changes{v1.0c}{2021/07/20}
+%           {Use \cs{robust@command@chk@safe} before \cs{@if@newcommand}.}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_patch_DeclareRobustCommand:Nnn #1
+  {
+    \exp_args:Nc \@@_patch_DeclareRobustCommand_aux:Nnn
+      { \cs_to_str:N #1 ~ }
+  }
+\cs_new_protected:Npn \@@_patch_DeclareRobustCommand_aux:Nnn #1
+  {
+    \robust@command@chk@safe #1
+      { \@if@newcommand #1 }
+      { \use_ii:nn }
+        { \@@_patch_newcommand:Nnn }
+        { \@@_patch_expand_redefine:NNnn \c_false_bool }
+          #1
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+%
+%
+% \begin{macro}{\@@_patch_newcommand:Nnn}
+%   If the command was defined with \tn{newcommand} and an optional
+%   argument, call the patching engine with a \cs{c_true_bool} to flag
+%   the presence of an optional argument, and with
+%   \cs[no-index]{\string\command} to patch the actual code for
+%   \cs[no-index]{command}.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_patch_newcommand:Nnn #1
+  {
+    \exp_args:NNc \@@_patch_expand_redefine:NNnn \c_true_bool
+      { \c_backslash_str \cs_to_str:N #1 }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+%  \begin{macro}{\@@_cmd_patch_xparse:Nnn}
+%    And for commands defined by the \pkg{xparse} commands use this
+%    for patching:
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_cmd_patch_xparse:Nnn #1
+  {
+    \exp_args:NNc \@@_patch_expand_redefine:NNnn \c_false_bool
+      { \cs_to_str:N #1 ~ code }
+  }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%
+% \begin{macro}{\@@_patch_expand_redefine:NNnn}
+% \begin{macro}{\@@_redefine_with_hooks:Nnnn}
+% \begin{macro}[EXP]{\@@_make_prefixes:w}
+%   Now the real action begins.  Here we have in |#1| a boolean
+%   indicating if the command has a leading |[|\ldots|]|-delimited
+%   argument, in |#2| the command control sequence, in |#3| the name of
+%   the command (note that |#1|${}\ne{}$|\csname#2\endcsname| at this
+%   point!), and in |#4| the hook position, either |before| or |after|.
+%
+% \changes{v1.0f}{2021/10/20}
+%         {Correct patching by expansion+redefinition when the macro
+%          contains a parameter tokens (gh/697).}
+%   Patching with expansion+redefinition is trickier than it looks like
+%   at first glance.  Suppose the simple definition:
+% \begin{verbatim}
+%   \def\foo#1{#1##2}
+% \end{verbatim}
+%   When defined, its \meta{replacement text} will be a token list
+%   containing:
+%   \begin{quote}
+%     \itshape
+%     out\_param |1|, mac\_param |#|, character |2|
+%   \end{quote}
+%
+%   Then, after expanding \cs{foo}|{##1}| (here |##| denotes a single
+%   |#|$_6$) we end up with a token list with \textit{out\_param}~|1|
+%   replaced:
+%   \begin{quote}
+%     \itshape
+%     mac\_param |#|, character |1|, mac\_param |#|, character |2|
+%   \end{quote}
+%   that is, the definition would be:
+% \begin{verbatim}
+%   \def\foo#1{#1#2}
+% \end{verbatim}
+%   which obviously fails, because the original input in the definition
+%   was |##| but \TeX{} reduced that to a single parameter token |#|$_6$
+%   when carrying out the definition.  That leaves no room for a clever
+%   solution with (say) \cs{unexpanded}, because anything that would
+%   double the second |#|$_6$, would also (incorrectly) double the
+%   first, so there's not much to do other than a manual solution.
+%
+%   There are three cases we can distinguish to make things hopefully
+%   faster on simpler cases:
+%   \begin{enumerate}
+%     \item a macro with no parameters;
+%     \item a macro with no parameter tokens in its definition;
+%     \item a macro with parameters \emph{and} parameter tokens.
+%   \end{enumerate}
+%
+%   The first case is trivial:  if the macro has no parameters, we can
+%   just use \cs{unexpanded} around it, and if there is a parameter
+%   token in it, it is handled correctly (the macro can be treated as a
+%   |tl| variable).
+%
+%   The second case requires looking at the \meta{replacement text} of
+%   the macro to see if it has a parameter token in there.  If it does
+%   not, then there is no worry, and the macro can be redefined normally
+%   (without \cs{unexpanded}).
+%
+%   The third case, as usual, is the devious one.  Here we'll have to
+%   loop through the definition token by token, and double every
+%   parameter token, so that this case can be handled like the previous
+%   one.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_patch_expand_redefine:NNnn #1 #2 #3 #4
+  {
+    \@@_patch_debug:x { ++~command~can~be~patched~without~rescanning }
+%    \end{macrocode}
+%   We'll start by counting the number of arguments in the command by
+%   counting the number of characters in the \cs{cs_argument_spec:N} of
+%   the macro, divided by two, and subtracting one if the command has an
+%   optional argument (that is, an extra |[]| in its
+%   \meta{parameter text}).
+%    \begin{macrocode}
+    \int_set:Nn \l_@@_patch_num_args_int
+      {
+        \exp_args:Nf \str_count:n { \cs_argument_spec:N #2 } / 2
+        \bool_if:NT #1 { -1 }
+      }
+%    \end{macrocode}
+%   Now build two token lists:
+%   \begin{description}
+%     \item[\cs{l_@@_param_text_tl}] will contain the
+%       \meta{parameter text} to be used when redefining the macro.  It
+%       should be identical to the \meta{parameter text} used when
+%       originally defining that macro.
+%     \item[\cs{l_@@_replace_text_tl}] will contain braced pairs of
+%       \cs{c_@@_hash_tl}\meta{num} to feed to the macro when expanded.
+%       This token list as well as the previous will have the first item
+%       surrounded by |[|\ldots|]| in the case of an optional argument.
+%   \end{description}
+%
+%   The use of \cs{c_@@_hash_tl} here is to differentiate actual
+%   parameters in the macro from parameter tokens in the original
+%   definition of the macro.  Later on, \cs{c_@@_hash_tl} is either
+%   replaced by actual parameter tokens, or expanded into them.
+%    \begin{macrocode}
+    \int_compare:nNnTF { \l_@@_patch_num_args_int } > { \c_zero_int }
+      {
+%    \end{macrocode}
+%   We'll first check if the command has any parameter token in its
+%   definition (feeding it empty arguments), and set \cs{@@_exp_not:n}
+%   accordingly.  \cs{@@_exp_not:n} will be used later to either leave
+%   \cs{c_@@_hash_tl} or expand it, and also to remember the result of
+%   \cs{@@_if_has_hash:nTF} to avoid testing twice (the test can be
+%   rather slow).
+%    \begin{macrocode}
+        \tl_set:Nx \l_@@_tmpa_tl { \bool_if:NTF #1 { [ ] } { { } } }
+        \int_step_inline:nnn { 2 } { \l_@@_patch_num_args_int }
+          { \tl_put_right:Nn \l_@@_tmpa_tl { { } } }
+        \exp_args:NNo \exp_args:No \@@_if_has_hash:nTF
+            { \exp_after:wN #2 \l_@@_tmpa_tl }
+          { \cs_set_eq:NN \@@_exp_not:n \exp_not:n }
+          { \cs_set_eq:NN \@@_exp_not:n \use:n }
+        \cs_set_protected:Npn \@@_tmp:w ##1 ##2
+          {
+            ##1 \l_@@_param_text_tl   { \use:n ##2 }
+            ##1 \l_@@_replace_text_tl { \@@_exp_not:n {##2} }
+          }
+%    \end{macrocode}
+%   Here we'll conditionally add |[|\ldots|]| around the first
+%   parameter:
+%    \begin{macrocode}
+        \bool_if:NTF #1
+          { \@@_tmp:w \tl_set:Nx { [ \c_@@_hash_tl 1 ] } }
+          { \@@_tmp:w \tl_set:Nx { { \c_@@_hash_tl 1 } } }
+%    \end{macrocode}
+%   Then, for every parameter from the second, just add it normally:
+%    \begin{macrocode}
+        \int_step_inline:nnn { 2 } { \l_@@_patch_num_args_int }
+          { \@@_tmp:w \tl_put_right:Nx { { \c_@@_hash_tl ##1 } } }
+%    \end{macrocode}
+%   Now, if the command has any parameter token in its definition
+%   (then \cs{@@_exp_not:n} is \cs{exp_not:n}), call
+%   \cs{@@_double_hashes:n} to double them, and replace every
+%   \cs{c_@@_hash_tl} by |#|:
+%    \begin{macrocode}
+        \tl_set:Nx \l_@@_replace_text_tl
+          { \exp_not:N #2 \exp_not:V \l_@@_replace_text_tl }
+        \tl_set:Nx \l_@@_replace_text_tl
+          {
+            \token_if_eq_meaning:NNTF \@@_exp_not:n \exp_not:n
+              { \exp_args:NNV \exp_args:No \@@_double_hashes:n }
+              { \exp_args:NV \exp_not:o }
+                  \l_@@_replace_text_tl
+          }
+%    \end{macrocode}
+%   And now, set a few auxiliaries for the case that the macro has
+%   parameters, so it won't be passed through \cs{unexpanded} (twice):
+%    \begin{macrocode}
+        \cs_set_eq:NN \@@_def_cmd:w \tex_gdef:D
+        \cs_set_eq:NN \@@_exp_not:NN \prg_do_nothing:
+      }
+      {
+%    \end{macrocode}
+%   In the case the macro has no parameters, we'll treat it as a token
+%   list and things are much simpler (expansion control looks a bit
+%   complicated, but it's just a pair of \cs{exp_not:N} preventing
+%   another \cs{exp_not:n} from expanding):
+%    \begin{macrocode}
+        \tl_clear:N \l_@@_param_text_tl
+        \tl_set_eq:NN \l_@@_replace_text_tl #2
+        \cs_set_eq:NN \@@_def_cmd:w \tex_xdef:D
+        \cs_set:Npn \@@_exp_not:NN ##1 { \exp_not:N ##1 \exp_not:N }
+      }
+%    \end{macrocode}
+%   Before redefining, we need to also get the prefixes used when
+%   defining the command.  Here we ensure that the \tn{escapechar} is
+%   printable, otherwise a macro defined with prefixes
+%   |\protected \long| will have it \tn{meaning} printed as
+%   |protectedlong|, making life unnecessarily complicated.  Here the
+%   \tn{escapechar} is changed to |/|, then we loop between pairs of
+%   |/|\ldots|/| extracting the prefixes.
+%    \begin{macrocode}
+    \group_begin:
+      \int_set:Nn \tex_escapechar:D { `\/ }
+      \use:x
+        {
+    \group_end:
+    \tl_set:Nx \exp_not:N \l_@@_patch_prefixes_tl
+      { \exp_not:N \@@_make_prefixes:w \cs_prefix_spec:N #2 / / }
+        }
+%    \end{macrocode}
+%   Finally, call \cs{@@_redefine_with_hooks:Nnnn} with the macro being
+%   redefined in |#1|, then \cs{UseHook}|{cmd/<name>/before}| in |#2| or
+%   \cs{UseHook}|{cmd/<name>/after}| in |#3| (one is always empty), and
+%   in |#4| the \meta{replacement text} of the macro.
+%    \begin{macrocode}
+    \use:x
+      {
+        \@@_redefine_with_hooks:Nnnn \exp_not:N #2
+        \str_if_eq:nnTF {#4} { after }
+          { \use_ii_i:nn }
+          { \use:nn }
+            { { \@@_exp_not:NN \exp_not:N \UseHook { cmd / #3 / #4 } } }
+            { { } }
+            { \@@_exp_not:NN \exp_not:V \l_@@_replace_text_tl }
+      }
+  }
+%    \end{macrocode}
+%
+%   Now that all the needed tools are ready, without further ado we'll
+%   redefine the command.  The definition uses the prefixes gathered in
+%   \cs{l_@@_patch_prefixes_tl}, a primitive \cs{@@_def_cmd:w} (which is
+%   \cs{tex_gdef:D} or \cs{tex_xdef:D}) to avoid adding extra prefixes,
+%   and the \meta{parameter text} from \cs{l_@@_param_text_tl}.
+%
+%   Then finally, in the body of the definition, we insert |#2|, which
+%   is \hook{cmd/\#1/before} or empty, |#4| which is the
+%   \meta{replacement text}, and |#3| which is \hook{cmd/\#1/after} or
+%   empty.
+%
+% \changes{v1.0e}{2021/09/28}
+%                {Make patching of commands a global operation (gh/674)}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_redefine_with_hooks:Nnnn #1 #2 #3 #4
+  {
+    \l_@@_patch_prefixes_tl
+      \exp_after:wN \@@_def_cmd:w
+        \exp_after:wN #1 \l_@@_param_text_tl
+      { #2  #4  #3 }
+  }
+%    \end{macrocode}
+%
+%   Here's the auxiliary that makes the prefix control sequences for the
+%   redefinition.  Each item has to be \cs{tl_trim_spaces:n}'d because
+%   the last item (and not any other) has a trailing space.
+%    \begin{macrocode}
+\cs_new:Npn \@@_make_prefixes:w / #1 /
+  {
+    \tl_if_empty:nF {#1}
+      {
+        \exp_not:c { tex_ \tl_trim_spaces:n {#1} :D }
+        \@@_make_prefixes:w /
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+%
+% Here are some auxiliaries for the contraption above.
+%
+% \begin{macro}[pTF]{\@@_if_has_hash:n}
+% \begin{macro}{\@@_if_has_hash:w,\@@_if_has_hash_check:w}
+%   \cs{@@_if_has_hash:nTF} searches the token list |#1| for a catcode~6
+%   token, and if any is found, it returns |true|, and |false|
+%   otherwise.  The searching doesn't care about preserving groups or
+%   spaces:  we can ignore those safely (braces are removed) so that
+%   searching is as fast as possible.
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \@@_if_has_hash:n #1 { TF }
+  { \@@_if_has_hash:w #1 ## \s_@@_mark }
+\cs_new:Npn \@@_if_has_hash:w #1
+  {
+    \tl_if_single_token:nTF {#1}
+      {
+        \token_if_eq_catcode:NNTF ## #1
+          { \@@_if_has_hash_check:w }
+          { \@@_if_has_hash:w }
+      }
+      { \@@_if_has_hash:w #1 }
+  }
+\cs_new:Npn \@@_if_has_hash_check:w #1 \s_@@_mark
+  { \tl_if_empty:nTF {#1} { \prg_return_false: } { \prg_return_true: } }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+%
+% \begin{macro}[rEXP]{\@@_double_hashes:n}
+% \begin{macro}[rEXP]{
+%     \@@_double_hashes:w,
+%     \@@_double_hashes_output:N,
+%     \@@_double_hashes_stop:w,
+%     \@@_double_hashes_group:n,
+%     \@@_double_hashes_space:w,
+%   }
+%   \cs{@@_double_hashes:n} loops through the token list |#1| and
+%   duplicates any catcode~6 token, and expands tokens \cs{ifx}-equal to
+%   \cs{c_@@_hash_tl}, and leaves all other tokens \cs{notexpanded} with
+%   \cs{exp_not:N}.  Unfortunately pairs of explicit catcode~1 and
+%   catcode~2 character tokens are normalised to |{|$_1$ and |}|$_1$
+%   because it's not feasible to expandably detect the character code
+%   (\emph{maybe} it could be done using something along the lines of
+%   \url{https://tex.stackexchange.com/a/527538}, but it's far too much
+%   work for close to zero benefit).
+%
+%   \cs{@@_double_hashes:w} is the tail-recursive loop macro, that tests
+%   which of the three types of item is in the head of the token list.
+%    \begin{macrocode}
+\cs_new:Npn \@@_double_hashes:n #1
+  { \@@_double_hashes:w #1 \q_@@_recursion_tail \q_@@_recursion_stop }
+\cs_new:Npn \@@_double_hashes:w #1 \q_@@_recursion_stop
+  {
+    \tl_if_head_is_N_type:nTF {#1}
+      { \@@_double_hashes_output:N }
+      {
+        \tl_if_head_is_group:nTF {#1}
+          { \@@_double_hashes_group:n }
+          { \@@_double_hashes_space:w }
+      }
+    #1 \q_@@_recursion_stop
+  }
+%    \end{macrocode}
+%
+%   \cs{@@_double_hashes_output:N} checks for the end of the token list,
+%   then checks if the token is \cs{c_@@_hash_tl}, and if so just leaves
+%   it.
+%    \begin{macrocode}
+\cs_new:Npn \@@_double_hashes_output:N #1
+  {
+    \if_meaning:w \q_@@_recursion_tail #1
+      \@@_double_hashes_stop:w
+    \fi:
+    \if_meaning:w \c_@@_hash_tl #1
+%    \end{macrocode}
+%   (this \cs{use_i:nnnn} uses \cs{fi:} and consumes \cs{use:n}, the
+%   whole \cs{if_catcode:w} block, and the \cs{exp_not:N}, leaving just
+%   |#1| which is \cs{c_@@_hash_tl}.)
+%    \begin{macrocode}
+      \use_i:nnnn
+    \fi:
+    \use:n
+      {
+%    \end{macrocode}
+%   If |#1| is not \cs{c_@@_hash_tl}, then check if its catcode is~6,
+%   and if so, leave it doubled in \cs{exp_not:n} and consume the
+%   following |\exp_not:N #1|.
+%    \begin{macrocode}
+        \if_catcode:w ## \exp_not:N #1
+          \exp_after:wN \use_ii:nnnn
+        \fi:
+        \use_none:n
+          { \exp_not:n { #1 #1 } }
+      }
+%    \end{macrocode}
+%   If both previous tests returned |false|, then leave the token
+%   unexpanded and resume the loop.
+%    \begin{macrocode}
+    \exp_not:N #1
+    \@@_double_hashes:w
+  }
+\cs_new:Npn \@@_double_hashes_stop:w #1 \q_@@_recursion_stop { \fi: }
+%    \end{macrocode}
+%
+%   Dealing with spaces and grouped tokens is trivial:
+%    \begin{macrocode}
+\cs_new:Npn \@@_double_hashes_group:n #1
+  { { \@@_double_hashes:n {#1} } \@@_double_hashes:w }
+\exp_last_unbraced:NNo
+\cs_new:Npn \@@_double_hashes_space:w \c_space_tl
+  { ~ \@@_double_hashes:w }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+%
+% \subsubsection{Patching by retokenization}
+%
+% At this point we've drained the possibilities of patching a command by
+% expansion-and-redefinition, so we have to resort to patching by
+% retokenizing the command.  Patching by retokenization is done by
+% getting the \tn{meaning} of the command, doing the necessary
+% manipulations on the generated string, and the retokenizing that again
+% by using \tn{scantokens}.
+%
+% Patching by retokenization is definitely a riskier business, because
+% it relies that the tokens printed by \tn{meaning} produce the exact
+% same tokens as the ones in the original definition.  That is, the
+% catcode régime must be exactly(ish) the same, and there is no way of
+% telling except by trial and error.
+%
+% \begin{macro}{\@@_retokenize_patch:Nnn}
+%   This is the macro that will control the whole process.  First we'll
+%   try out one final, rather trivial case, of a command with no
+%   arguments;  that is, a token list.  This case can be patched with
+%   the expand-and-redefine routine but it has to be the very last case
+%   tested for, because most (all?) robust commands start with a
+%   top-level macro with no arguments, so testing this first would
+%   short-circuit \tn{robust@command@act} and the top-level macros would
+%   be incorrectly patched.  In that case, we just check if the
+%   \cs{cs_argument_spec:N} is empty, and call
+%   \cs{@@_patch_expand_redefine:NNnn}.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_retokenize_patch:Nnn #1 #2 #3
+  {
+    \@@_patch_debug:x { ..~command~can~only~be~patched~by~rescanning }
+    \str_if_eq:eeTF { \cs_argument_spec:N #1 } { }
+      { \@@_patch_expand_redefine:NNnn \c_false_bool #1 {#2} {#3} }
+      {
+%    \end{macrocode}
+%
+%   Otherwise, we start the actual patching by retokenization job.  The
+%   code calls \cs{@@_try_patch_with_catcodes:Nnnnw} with a different
+%   catcode setting:
+%   \begin{itemize}
+%     \item The current catcode setting;
+%     \item Switching the catcode of |@|;
+%     \item Switching the \pkg{expl3} syntax on or off;
+%     \item Both of the above.
+%   \end{itemize}
+%
+%   If patching succeeds, \cs{@@_try_patch_with_catcodes:Nnnnw} has the
+%   side-effect of patching the macro |#1| (which may be an internal
+%   from the command whose name is~|#2|).
+%    \begin{macrocode}
+        \tl_set:Nx \l_@@_tmpa_tl
+          {
+            \int_compare:nNnTF { \char_value_catcode:n {`\@ } } = { 12 }
+              { \exp_not:N \makeatletter } { \exp_not:N \makeatother }
+          }
+        \tl_set:Nx \l_@@_tmpb_tl
+          {
+            \bool_if:NTF \l__kernel_expl_bool
+              { \ExplSyntaxOff } { \ExplSyntaxOn }
+          }
+        \use:x
+          {
+            \exp_not:N \@@_try_patch_with_catcodes:Nnnnw
+                \exp_not:n { #1 {#2} {#3} }
+              { \prg_do_nothing: }
+              { \exp_not:V \l_@@_tmpa_tl } % @
+              { \exp_not:V \l_@@_tmpb_tl } % _:
+              {
+                \exp_not:V \l_@@_tmpa_tl   % @
+                \exp_not:V \l_@@_tmpb_tl   % _:
+              }
+          }
+              \q_recursion_tail \q_recursion_stop
+%    \end{macrocode}
+%
+%   If no catcode setting succeeds, give up and raise an error.  The
+%   command isn't changed in any way in that case.
+%    \begin{macrocode}
+          {
+            \msg_error:nnxx { hooks } { cant-patch }
+              { \c_backslash_str #2 } { retok }
+          }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+%
+%
+% \begin{macro}{\@@_try_patch_with_catcodes:Nnnnw}
+%   This function is a simple wrapper around
+%   \cs{@@_cmd_if_scanable:NnTF} and \cs{@@_patch_retokenize:Nnnn} if
+%   the former returns \meta{true}, plus some debug messages.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_try_patch_with_catcodes:Nnnnw #1 #2 #3 #4
+  {
+    \quark_if_recursion_tail_stop_do:nn {#4} { \use:n }
+    \@@_patch_debug:x { ++~trying~to~patch~by~retokenization }
+    \@@_cmd_if_scanable:NnTF {#1} {#4}
+      {
+        \@@_patch_debug:x { ++~macro~can~be~retokenized~cleanly }
+        \@@_patch_debug:x { ==~retokenizing~macro~now }
+        \@@_patch_retokenize:Nnnn #1 {#2} {#3} {#4}
+        \use_i_delimit_by_q_recursion_stop:nw \use_none:n
+      }
+      {
+        \@@_patch_debug:x { --~macro~cannot~be~retokenized~cleanly }
+        \@@_try_patch_with_catcodes:Nnnnw #1 {#2} {#3}
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+%
+%
+%
+% \begin{macro}[int]{\kerneltmpDoNotUse}
+%   This is an oddity required to be safe (as safe as reasonably
+%   possible) when patching the command.  The entirety of
+%   \begin{quote}
+%     \meta{prefixes} \tn{def} \meta{cs} \meta{parameter text}
+%       |{|\meta{replacement text}|}|
+%   \end{quote}
+%   will go through \tn{scantokens}.  The \meta{parameter text} and
+%   \meta{replacement text} are what we are trying to retokenize, so not
+%   much worry there.  The other items, however, should ``just work'',
+%   so some care is needed to not use too fancy catcode settings.
+%   Therefore we can't use an \pkg{expl3}-named macro for \meta{cs}, nor
+%   the \pkg{expl3} versions of \tn{def} or the \meta{prefixes}.
+%   That is why the definitions that will eventually go into
+%   \tn{scantokens} will use the oddly (but hopefully clearly)-named
+%   \cs{kerneltmpDoNotUse}:
+%    \begin{macrocode}
+\cs_new_eq:NN \kerneltmpDoNotUse !
+%    \end{macrocode}
+%   \phoinline{Maybe this can be avoided by running the \meta{parameter text}
+%     and the \meta{replacement text} separately through \tn{scantokens}
+%     and then putting everything together at the end.}
+% \end{macro}
+%
+%
+%
+% \begin{macro}{\@@_patch_required_catcodes:}
+%   Here are the catcode settings that are \emph{mandatory} when
+%   retokenizing commands.  These are the minimum necessary settings to
+%   perform the definitions:  they identify control sequences, which
+%   must be escaped with |\|$_0$, delimit the definition with |{|$_1$
+%   and |}|$_2$, and mark parameters with |#|$_6$.  Everything else may
+%   be changed, but not these.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_patch_required_catcodes:
+  {
+    \char_set_catcode_escape:N \\
+    \char_set_catcode_group_begin:N \{
+    \char_set_catcode_group_end:N \}
+    \char_set_catcode_parameter:N \#
+    % \int_set:Nn \tex_endlinechar:D { -1 }
+    % \int_set:Nn \tex_newlinechar:D { -1 }
+  }
+%    \end{macrocode}
+%   \phoinline{\pkg{etoolbox} sets the \tn{endlinechar} and \tn{newlinechar}
+%     when patching, but as far as I tested these didn't make much of
+%     a difference, so I left them out for now.  Maybe
+%     \tn{newlinechar}|=-1| avoids a space token being added after the
+%     definition.}
+%   \phoinline{If the patching is split by \meta{parameter text} and
+%     \meta{replacement text}, then only \# will have to stay in that
+%     list.}
+%   \phoinline{Actually now that we patch
+%     \texttt{\cs{UseHook}\{cmd/foo/before\}}, all the tokens there need
+%     to have the right catcodes, so this list now includes all
+%     lowercase letters, U and H, the slash, and whatever characters in
+%     the command name\ldots sigh\ldots}
+% \end{macro}
+%
+%
+%
+%
+% \begin{macro}[TF]{\@@_cmd_if_scanable:Nn}
+%   Here we'll do a quick test if the command being patched can in fact
+%   be retokenized with the specific catcode setting without changing
+%   in meaning.  The test is straightforward:
+%   \begin{enumerate}
+%     \item apply \tn{meaning} to the command;
+%     \item split the \meta{prefixes}, \meta{parameter text} and
+%       \meta{replacement text} and arrange them as
+%       \begin{quote}
+%         \meta{prefixes}\tn{def}\cs{kerneltmpDoNotUse}%^^A
+%           \meta{parameter text}|{|\meta{replacement text}|}|
+%       \end{quote}
+%     \item rescan that with the given catcode settings, and do
+%       the definition; then finally
+%     \item compare \cs{kerneltmpDoNotUse} with the original command.
+%   \end{enumerate}
+%   If both are \tn{ifx}-equal, the command can be safely patched.
+%    \begin{macrocode}
+\prg_new_protected_conditional:Npnn \@@_cmd_if_scanable:Nn #1 #2 { TF }
+  {
+    \cs_set_eq:NN \kerneltmpDoNotUse \scan_stop:
+    \cs_set_eq:NN \@@_tmp:w \scan_stop:
+    \use:x
+      {
+        \cs_set:Npn \@@_tmp:w
+            ####1 \tl_to_str:n { macro: } ####2 -> ####3 \s_@@_mark
+          { ####1 \def \kerneltmpDoNotUse ####2   {####3} }
+        \tl_set:Nx \exp_not:N \l_@@_tmpa_tl
+          { \exp_not:N \@@_tmp:w \token_to_meaning:N #1 \s_@@_mark }
+      }
+    \tl_rescan:nV { #2 \@@_patch_required_catcodes: } \l_@@_tmpa_tl
+    \token_if_eq_meaning:NNTF #1 \kerneltmpDoNotUse
+      { \prg_return_true: }
+      { \prg_return_false: }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+%
+%
+% \begin{macro}{\@@_patch_retokenize:Nnnn}
+%   Then, if \cs{@@_cmd_if_scanable:NnTF} returned true, we can go on
+%   and patch the command.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_patch_retokenize:Nnnn #1 #2 #3 #4
+  {
+%    \end{macrocode}
+%   Start off by making some things \tn{relax} to avoid lots of
+%   \tn{noexpand} below.
+%    \begin{macrocode}
+    \cs_set_eq:NN \kerneltmpDoNotUse \scan_stop:
+    \cs_set_eq:NN \@@_tmp:w \scan_stop:
+    \use:x
+      {
+%    \end{macrocode}
+%   Now we'll define \cs{@@_tmp:w} such that it splits the \tn{meaning}
+%   of the macro (|#1|) into its three parts:
+%   \begin{enumerate}
+%     \def\makelabel#1{\texttt{\#\#\#\##1}}
+%     \item \meta{prefixes}
+%     \item \meta{parameter text}
+%     \item \meta{replacement text}
+%   \end{enumerate}
+%   and arrange that a complete definition, then place the |before|
+%   or |after| hooks around the \meta{replacement text}:
+%   accordingly.
+%    \begin{macrocode}
+        \cs_set:Npn \@@_tmp:w
+            ####1 \tl_to_str:n { macro: } ####2 -> ####3 \s_@@_mark
+          {
+            ####1 \def \kerneltmpDoNotUse ####2
+              {
+                \str_if_eq:nnT {#3} { before }
+                  { \token_to_str:N \UseHook { cmd / #2 / #3 } }
+                ####3
+                \str_if_eq:nnT {#3} { after }
+                  { \token_to_str:N \UseHook { cmd / #2 / #3 } }
+              }
+          }
+%    \end{macrocode}
+%   Now we just have to get the \tn{meaning} of the command being
+%   patched and pass it through the meat grinder above.
+%    \begin{macrocode}
+        \tl_set:Nx \exp_not:N \l_@@_tmpa_tl
+          { \exp_not:N \@@_tmp:w \token_to_meaning:N #1 \s_@@_mark }
+      }
+%    \end{macrocode}
+%   Now rescan with the given catcode settings (overridden by the
+%   \cs{@@_patch_required_catcodes:}), and implicitly (by using the
+%   rescanned token list) carry out the definition from above.
+%    \begin{macrocode}
+    \tl_rescan:nV { #4 \@@_patch_required_catcodes: } \l_@@_tmpa_tl
+%    \end{macrocode}
+%   And to close, copy the newly-defined command into the old name and
+%   the patching is finally completed:
+%
+% \changes{v1.0e}{2021/09/28}
+%                {Make patching of commands a global operation (gh/674)}
+%    \begin{macrocode}
+    \cs_gset_eq:NN #1 \kerneltmpDoNotUse
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Messages}
+%
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2021/11/15}{wrong-cmd-hook}%
+%<latexrelease>                 {Standardise~generic~hook~names}
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{2021/11/15}{wrong-cmd-hook}%
+%<latexrelease>                 {Standardise~generic~hook~names}
+%<latexrelease>\msg_new:nnnn { hooks } { wrong-cmd-hook }
+%<latexrelease>  {
+%<latexrelease>    Generic~hook~`cmd/#1/#2'~is~invalid.
+%<latexrelease>%    The~hook~should~be~`cmd/#1/before'~or~`cmd/#1/after'.
+%<latexrelease>  }
+%<latexrelease>  {
+%<latexrelease>    You~tried~to~add~a~generic~hook~to~command~\iow_char:N \\#1,~but~`#2'~
+%<latexrelease>    is~an~invalid~component.~Only~`before'~or~`after'~are~allowed.
+%<latexrelease>  }
+%<latexrelease>\EndIncludeInRelease
+\msg_new:nnnn { hooks } { cant-patch }
+  {
+    Generic~hooks~cannot~be~added~to~'#1'.
+  }
+  {
+    You~tried~to~add~a~hook~to~'#1',~but~LaTeX~was~unable~to~
+    patch~the~command~because~it~\@@_unpatchable_cases:n {#2}.
+  }
+\cs_new:Npn \@@_unpatchable_cases:n #1
+  {
+    \str_case:nn {#1}
+      {
+        { undef } { doesn't~exist }
+        { macro } { is~not~a~macro }
+        { expl3 } { is~a~private~expl3~macro }
+        { retok } { can't~be~retokenized~cleanly }
+      }
+  }
+%    \end{macrocode}
+%
+%
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{0000/00/00}{ltcmdhooks}%
+%<latexrelease>                 {The~hook~management~system~for~commands}
+%<latexrelease>
+%    \end{macrocode}
+%    The command \cs{@@_cmd_begindocument_code:} is used in an
+%    internal hook, so we need to make sure it has a harmless
+%    definition after rollback as that will not remove it from the
+%    kernel hook.
+%    \begin{macrocode}
+%<latexrelease>\cs_set_eq:NN \@@_cmd_begindocument_code: \prg_do_nothing:
+%<latexrelease>
+%<latexrelease>\EndModuleRelease
+\ExplSyntaxOff
+%</2ekernel|latexrelease>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<@@=>
+%    \end{macrocode}
+%
+% \Finale
+%

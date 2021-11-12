@@ -33,7 +33,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltfinal.dtx}
-             [2021/01/21 v2.2l LaTeX Kernel (Final Settings)]
+             [2021/09/06 v2.2q LaTeX Kernel (Final Settings)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltfinal.dtx}
@@ -242,7 +242,73 @@
 % \end{macro}
 % \end{macro}
 %
-%
+% \begin{macro}{trace_stack_levels}
+%   Now define the Lua function to emulate \cs{tracingstacklevels} and
+%   install it in the \texttt{input_level_string} callback.
+%    \begin{macrocode}
+%</2ekernel>
+%<*2ekernel|latexrelease>
+%    \end{macrocode}
+%   In \texttt{latexrelease} mode we always remove the function from
+%   the callback, then add the correct version later.
+%    \begin{macrocode}
+%<latexrelease>\ifx\directlua\@undefined
+%<latexrelease>\else
+%<latexrelease>  \directlua{%
+%<latexrelease>    if luatexbase.callbacktypes['input_level_string'] and %
+%<latexrelease>       luatexbase.in_callback('input_level_string','tracingstacklevels') then
+%<latexrelease>        luatexbase.remove_from_callback('input_level_string','tracingstacklevels')
+%<latexrelease>    end}%
+%<latexrelease>\fi
+%<latexrelease>\IncludeInRelease{2021/06/01}{trace_stack_levels}%
+%<latexrelease>                 {Lua trace_stack_levels function}%
+\ifx\directlua\@undefined
+\else
+%<*2ekernel>
+  \expanded{%
+    \everyjob{\the\everyjob
+    \noexpand%\directlua
+%</2ekernel>
+    \directlua{%
+      local function trace_stack_levels (input_ptr)
+        local tracingstacklevels = tex.count.tracingstacklevels
+        if tex.tracingmacros > 0 or input_ptr < tracingstacklevels then
+          if tracingstacklevels > 0 then
+            if input_ptr < tracingstacklevels then
+              return "\string\n\string~" .. string.rep(".",input_ptr)
+            else
+              return "\string~\string~"
+            end
+          else
+            return "\string\n"
+          end
+        else
+          return ""
+        end
+      end
+%<latexrelease>    if luatexbase.callbacktypes['input_level_string'] then
+      luatexbase.add_to_callback('input_level_string',
+        trace_stack_levels,'tracingstacklevels')
+%<latexrelease>    end
+    }%
+%<*2ekernel>
+  }}%
+%</2ekernel>
+\fi
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>
+%    \end{macrocode}
+%   Then for the full rollback, just do nothing, since the function
+%   was already taken out of the rollback above.
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{0000/00/00}{trace_stack_levels}%
+%<latexrelease>                 {Lua trace_stack_levels function}%
+%<latexrelease>% Nothing here
+%<latexrelease>\EndIncludeInRelease
+%</2ekernel|latexrelease>
+%<*2ekernel>
+%    \end{macrocode}
+% \end{macro}
 %
 % The default values of the picture and |\fbox| parameters:
 %    \begin{macrocode}
@@ -569,11 +635,12 @@
 %   For pdf\TeX\ preload and enable automatic glyph to Unicode mapping
 %   for more reliable copy and paste support.
 %   \changes{v2.2l}{2021/01/21}{Load glyphtounicode.tex for pdf\TeX}
+%   \changes{v2.2m}{2021/02/25}{Improve speed of ToUnicode everyjob loading code}
 %
 %    \begin{macrocode}
 %</2ekernel>
 %<*2ekernel|latexrelease>
-%<latexrelease>\IncludeInRelease{2021/05/01}%
+%<latexrelease>\IncludeInRelease{2021/06/01}%
 %<latexrelease>                 {\pdfgentounicode}{Preload glyphtounicode}%
 \ifx \pdfgentounicode \@undefined \else
 %<*2ekernel>
@@ -588,16 +655,10 @@
 %<*2ekernel>
   \else
     \begingroup
-      \toks@\expandafter{\the\everyjob}%
-      \openin0"glyphtounicode"
-      \loop\unless\ifeof0
-        \read0 to \glyphline
-        \toks@\expandafter{\the\expandafter\toks@\glyphline}%
-      \repeat
-      \closein0
-      \expandafter
-    \endgroup
-    \expandafter\everyjob\expandafter{\the\toks@}%
+      \everyeof{\noexpand}\endlinechar-1
+      \edef\x{\endgroup
+        \everyjob{\the\everyjob\@@input glyphtounicode }%
+    }\x
   \fi
 %</2ekernel>
   \pdfgentounicode=1
@@ -1013,9 +1074,11 @@
    }}
 %    \end{macrocode}
 %
+% \changes{v2.2q}{2021/09/06}{Correctly upper and lowercase
+%                             \cs{ij} and \cs{IJ} (gh/658)}
 %    \begin{macrocode}
 \def\@uclclist{\oe\OE\o\O\ae\AE
-      \dh\DH\dj\DJ\l\L\ng\NG\ss\SS\th\TH}
+      \dh\DH\dj\DJ\l\L\ng\NG\ss\SS\ij\IJ\th\TH}
 %    \end{macrocode}
 %    The above code works, but has the nasty side-effect that if you
 %    say something like:
@@ -1183,6 +1246,39 @@
 % \end{macro}
 % \end{macro}
 %
+%  \subsection{Preparation for supporting PDF in backends}
+%
+%    At the current point in time, basic support for PDF in
+%    backends is not part of \LaTeX{} core; it is provided by external
+%    packages. At some time in the future that work will be placed
+%    into the kernel but for now it is separate and has to be
+%    explicitly loaded in the document.
+%
+%    In that code there is a command \cs{IfPDFManagementActiveTF} 
+%    which can be used by packages in order to execute different 
+%    code depending on the whether this basic backend support is loaded.
+%
+%    To make this also work properly when this external package is not
+%    loaded at all, we here add this command already in the
+%    kernel (with a trivial definition); thus any package can
+%    query this loading state in all circumstances.  
+%    Once this basic PDF backend
+%    support gets moved to the kernel, this definition will vanish
+%    again from here or, rather, it will be replaced by a real test.
+%
+%  \begin{macro}{\IfPDFManagementActiveTF}
+%    So long as the code for the basic backend support for PDF is not 
+%    loaded, the test that is implicit here will
+%    always return the false branch. 
+%    Once this code is loaded, this definition will get
+%    replaced by a real test (as it is then possible that the
+%    management code is either activated or not activated).
+% \changes{v2.2p}{2021/08/08}{Default definition added (gh/640)}
+%    \begin{macrocode}
+\let \IfPDFManagementActiveTF \@secondoftwo
+%    \end{macrocode}
+%  \end{macro}
+%
 %
 %
 % \subsection{Do some temporary work for pre-release}
@@ -1192,14 +1288,13 @@
 %    \begin{macrocode}
 %    \end{macrocode}
 %
-%    \subsection{Some last minute initializations \ldots}
+% \subsection{Some last minute initializations \ldots}
 %
 %    Load the first aid set of definitions for external packages that await updates.
 % \changes{v2.2j}{2020/09/26}
 %         {Load first aid file if existing}
 %    \begin{macrocode}
 \@input{latex2e-first-aid-for-external-files.ltx}
-\@input{ltpara.ltx}
 %    \end{macrocode}
 %
 %

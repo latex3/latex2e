@@ -1,7 +1,7 @@
 The amsmath bundle for LaTeX
 ============================
 
-Release 2021-05-01 pre-release 0
+Release 2022-06-01 pre-release 0
 
 Overview
 --------
@@ -12,7 +12,7 @@ developed by the American Mathematical Society (AMS) and released for general
 use as a service to the mathematical community. A number of smaller
 auxiliary packages are also distributed with the `amsmath` package.
 
-Effective in 2016, maintenance of `amsmath was transferred from AMS to
+Effective in 2016, maintenance of `amsmath` was transferred from AMS to
 the LaTeX Project; as `amsmath` is considered a "required" package, this
 centralizes control over the core LaTeX components.
 
@@ -28,7 +28,7 @@ Release distribution is carried out only through the CTAN archives.
 Documentation
 -------------
 
-The primary documentation for `amsmath` is in provided as `amsldoc.pdf`.
+The primary documentation for `amsmath` is provided as `amsldoc.pdf`.
 
 Additional documentation files include:
 
@@ -39,7 +39,7 @@ Additional documentation files include:
 
 which are included in the collection.  All of these can be accessed
 easily with most distributions by entering `texdoc` *filename* at the
-command line, or via [TeXdoc Online](http://texdoc.net).
+command line, or via [TeXdoc Online](https://texdoc.org).
 
 Change logs
 -----------
@@ -61,7 +61,7 @@ In particular, to check that you are really seeing a bug, please write
 a short, self-contained document that shows the problem. This should
 include the `latexbug` package, which will warn if your test file is
 not suitable for one or the other reason. See the [CONTRIBUTING
-guide](https://github.com/latex3/latex2e/blob/master/CONTRIBUTING.md)
+guide](https://github.com/latex3/latex2e/blob/main/CONTRIBUTING.md)
 for further details, or if you need to obtain the `latexbug` package.
 
 If the bug turns out to be with third-party software then please

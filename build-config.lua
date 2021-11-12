@@ -13,6 +13,7 @@ unpackdeps  = unpackdeps  or {maindir .. "/base"}
 
 -- We really need 3 on most files (toc + references)
 typesetruns  = 3
+maxprintline = 9999
 
 -- Set up the check system to work in 'stand-alone' mode
 -- This relies on a format being built by the 'base' dependency
@@ -30,6 +31,7 @@ checksuppfiles = checksuppfiles     or
     "regression-test.tex",
     "xetex.def",
     "dvips.def",
+    "lipsum.ltd.tex",
     "lipsum.sty",
     "*.fd",
     "*.txt",
@@ -37,7 +39,7 @@ checksuppfiles = checksuppfiles     or
     "lualibs*.lua", 
     "fontloader*.lua",
     "luaotfload*.lua",
-    "luaotfloat.sty"
+    "fixup_mathaxis.lua",
   }
 stdengine      = stdengine          or "etex"
 tagfiles       = tagfiles or {"*.dtx","*.ins","*.tex","README.md"}
@@ -72,7 +74,7 @@ end
 do
   local tag = os.getenv'TRAVIS_TAG'
   if tag and tag ~= "" then
-    master_branch = not string.match(tag, '^dev-')
+    main_branch = not string.match(tag, '^dev-')
   else
     local branch = os.getenv'TRAVIS_BRANCH'
     if not branch then
@@ -80,9 +82,9 @@ do
       branch = f:read'*a':sub(1,-2)
       assert(f:close())
     end
-    master_branch = string.match(branch, '^master')
+    main_branch = string.match(branch, '^main')
   end
-  if not master_branch then
+  if not main_branch then
     tdsroot = "latex-dev"
     print("Creating/installing dev-version in " .. tdsroot)
     ctanpkg = ctanpkg or ""
@@ -117,7 +119,7 @@ function update_tag(file,content,tagname,tagdate)
     tag = tagname
   end
   local patch_level = ""
-  if master_branch then
+  if main_branch then
     if rev then
       tag = tag .. " patch level " .. rev
       patch_level = rev
@@ -169,7 +171,7 @@ function update_tag_ltx(file,content,tagname,tagdate)
   if not tag then
     tag = tagname
   end
-  if master_branch then
+  if main_branch then
     if rev then
       tag = tag .. " patch level " .. rev
     end
@@ -240,7 +242,18 @@ local function fmt(engines,dest)
 end
 
 function checkinit_hook()
-  return fmt(options["engine"] or checkengines,testdir)
+  local engines = options.engine
+  if not engines then
+    local target = options.target
+    if target == 'check' or target == 'bundlecheck' then
+      engines = checkengines
+    elseif target == 'save' then
+      engines = {stdengine}
+    else
+      error'Unexpected target in call to checkinit_hook'
+    end
+  end
+  return fmt(engines,testdir)
 end
 
 function docinit_hook() return fmt({"pdftex"},typesetdir) end

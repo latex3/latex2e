@@ -1,5 +1,6 @@
 -- Tests for non Unicode engines
 
-checkengines = {"pdftex","xetex","luatex"}
+checkengines = {"etex","xetex","luatex"}
+stdengine    = "etex"
 checksearch  = false
 testfiledir  = "testfiles-filenames"
