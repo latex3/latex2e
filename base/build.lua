@@ -52,9 +52,7 @@ sourcefiles    =
     "sample2e.tex",
     "small2e.tex",
     "testpage.tex",
-    "doc-v3beta.sty",         -- temp
     "source2edoc.cls",        -- temp
-     "doc-v3beta.sty",        -- temp
      "*-????-??-??.sty"
   }
 textfiles =
@@ -155,7 +153,7 @@ indexstyle = "source2e.ist"
 
 -- Allow for TU and other test configurations
 checkconfigs = {"build","config-1run","config-TU","config-legacy","config-lthooks",
-                "config-lthooks2","config-ltcmd"}
+                "config-lthooks2","config-ltcmd","config-doc"}
 
 update_tag = update_tag_base
 

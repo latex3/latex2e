@@ -6,9 +6,6 @@
                (not usable for anything else and buggy -- will vanish again)!]
 
 
-% use the beta ofthe new doc package:
-              
-\declare@file@substitution{doc.sty}{doc-v3beta.sty}
 
 \LoadClass{l3doc}
 
