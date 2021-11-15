@@ -36,10 +36,6 @@ the most significant of these files are
    with one line of information about the contents
 - `legal.txt` and `lppl.txt` (LaTeX Project Public License) describe the
    LaTeX copyright, warranty and copying restrictions.
-- `texpert.txt` contains information about the system that may still be
-   useful for TeX experts
-- `tex2.txt` contains important information for users of extremely
-   old versions of TeX (pre 1990)
 - `bugs.txt` describes how to submit a bug report for LaTeX
 
 Other documentation files include files with names of the form:
