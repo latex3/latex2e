@@ -68,8 +68,6 @@ textfiles =
     "lppl-1-0.txt",
     "lppl-1-1.txt",
     "lppl-1-2.txt",
-    "tex2.txt",
-    "texpert.txt"
   }
 typesetfiles   =
   {
