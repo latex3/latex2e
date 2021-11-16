@@ -10,10 +10,14 @@ This bundle provides the core LaTeX kernel. In addition to this bundle,
 a minimal LaTeX system also needs the files contained in the
 
 - LaTeX team documentation (`doc`)
+- L3 programming layer (`l3kernel`)
+- L3 backend interfaces (`l3backend`)
+
 - Packages which must be available (`required`). These are
   - Essential tools (`tools`)
   - Core graphics and color support (`graphics`)
   - Key mathematics support (`amsmath`)
+  - First aid for external packages (`firstaid`)
 
 This file contains a small set of pointers to other more complete
 documentation on installing and using a LaTeX system.
