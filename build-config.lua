@@ -273,10 +273,11 @@ function typeset(file,dir)
     return errorlevel
   end
   for i = 2,typesetruns - 1 do
+-- we have to run tex first then then index otherwise the index isn't run on the second last run!
     errorlevel =
+      tex(file,dir,"batchmode") +
       makeindex(name,dir,".glo",".gls",".glg",glossarystyle) +
-      makeindex(name,dir,".idx",".ind",".ilg",indexstyle)    +
-      tex(file,dir,"batchmode")
+      makeindex(name,dir,".idx",".ind",".ilg",indexstyle)
     if errorlevel ~= 0 then return errorlevel end
   end
   return tex(file,dir)
