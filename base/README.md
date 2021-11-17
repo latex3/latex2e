@@ -12,6 +12,7 @@ a minimal LaTeX system also needs the files contained in the
 - LaTeX team documentation (`doc`)
 - L3 programming layer (`l3kernel`)
 - L3 backend interfaces (`l3backend`)
+- L3 unicode support (`unicode-data`)
 
 - Packages which must be available (`required`). These are
   - Essential tools (`tools`)
