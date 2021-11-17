@@ -11,8 +11,8 @@ typesetdeps = typesetdeps or
   }
 unpackdeps  = unpackdeps  or {maindir .. "/base"}
 
--- We really need 3 on most files (toc + references)
-typesetruns  = 3
+-- We really need 4 on most files (toc + references + index (which needs two runs))
+typesetruns  = 4
 maxprintline = 9999
 
 -- Set up the check system to work in 'stand-alone' mode
