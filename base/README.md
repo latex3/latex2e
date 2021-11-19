@@ -10,10 +10,15 @@ This bundle provides the core LaTeX kernel. In addition to this bundle,
 a minimal LaTeX system also needs the files contained in the
 
 - LaTeX team documentation (`doc`)
+- L3 programming layer (`l3kernel`)
+- L3 backend interfaces (`l3backend`)
+- L3 unicode support (`unicode-data`)
+
 - Packages which must be available (`required`). These are
   - Essential tools (`tools`)
   - Core graphics and color support (`graphics`)
   - Key mathematics support (`amsmath`)
+  - First aid for external packages (`firstaid`)
 
 This file contains a small set of pointers to other more complete
 documentation on installing and using a LaTeX system.
@@ -36,10 +41,6 @@ the most significant of these files are
    with one line of information about the contents
 - `legal.txt` and `lppl.txt` (LaTeX Project Public License) describe the
    LaTeX copyright, warranty and copying restrictions.
-- `texpert.txt` contains information about the system that may still be
-   useful for TeX experts
-- `tex2.txt` contains important information for users of extremely
-   old versions of TeX (pre 1990)
 - `bugs.txt` describes how to submit a bug report for LaTeX
 
 Other documentation files include files with names of the form:
