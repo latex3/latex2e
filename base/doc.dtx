@@ -1909,9 +1909,9 @@
 \RequirePackage{l3keys2e}
 \ExplSyntaxOn
 %    \end{macrocode}
-% These two options are available for use in \cs{usepackage} or in the
-% generated item \api's:
-% \fmi{cleanup documentation (and perhaps code)}
+% Some keys are available as options for use in \cs{usepackage} some are
+% for the generated item \api's:
+% \fmi{cleanup documentation (and code)}
 %    \begin{macrocode}
 \newif \ifdoc@noprint
 \newif \ifdoc@noindex
@@ -3362,7 +3362,6 @@
 % provided therein are making programming much easier. Over time I
 % will probably replace the rest of that \DOC code too.
 %    \begin{macrocode}
-\RequirePackage{expl3}
 \ExplSyntaxOn
 %    \end{macrocode}
 %
@@ -5531,65 +5530,73 @@
 % \section{Integrating hypdoc}
 %
 %    If the option \texttt{hyperref} is selected (which is the
-%    default), then we load the \pkg{hypdoc} package. That package
-%    currently expects some commands from \DOC version~2 being
-%    defined, so we first need to provide some dummy definitions for
-%    them.
+%    default), then we load the \pkg{hypdoc} package. We do that as
+%    late as possible so that we don't generate option clashes if it
+%    is also loaded in the preamble. That package currently changes
+%    more commands than it should (not knowing about their new
+%    definitions defined below) so we have to save and restore a few.
 %
 %    Midterm all this code in \pkg{hypdoc} should be directly included
 %    in \DOC. For now, while they are separate we have to do this
 %    juggling.
 %    \begin{macrocode}
-\ifdoc@hyperref
-  \let\PrintDescribeMacro \@empty
-  \let\PrintDescribeEnv   \@empty
-  \let\PrintMacroName     \@empty
-  \let\PrintEnvName       \@empty
-  \let\SpecialUsageIndex  \@empty
-  \let\SpecialEnvIndex    \@empty
+\AddToHook{begindocument/before}[doc/hyperref]{%
+ \ifdoc@hyperref
 %    \end{macrocode}
 %    Annoying to code around issue \#22
 %    \begin{macrocode}
   \expandafter\let\expandafter\doc@eoph@@k\csname doc.sty-h@@k\endcsname
 %    \end{macrocode}
-%    We load the package with the option it knows about. This way if
-%    it is later loaded again we don't get option clashes. The
-%    alternative is to delay the loading until \verb=\begin{document}=
-%    but that means we also have to delay a lot of other code so this
-%    is the simpler solution.
+%    We require the package without any option so if it was already
+%    loaded there is no option clash.
 %    \begin{macrocode}
-  \RequirePackage[numbered]{hypdoc}
+  \RequirePackage{hypdoc}
   \expandafter\let\csname doc.sty-h@@k\endcsname\doc@eoph@@k
 %    \end{macrocode}
 %    After \pkg{hypdoc} got loaded we need to undefine those macros
 %    again so that later on \texttt{Macro} and \texttt{Env} \DOC items
 %    appear to be undefined.
 %    \begin{macrocode}
-  \let\PrintDescribeMacro \relax
-  \let\PrintDescribeEnv   \relax
-  \let\PrintMacroName     \relax
-  \let\PrintEnvName       \relax
+  \let\PrintDescribeMacro \@@PrintDescribeMacro
+  \let\PrintDescribeEnv \@@PrintDescribeEnv
+  \let\PrintMacroName \@@PrintMacroName
+  \let\PrintEnvName \@@PrintEnvName
+  \let\SpecialUsageIndex \@@SpecialUsageIndex
+  \let\SpecialEnvIndex \@@SpecialEnvIndex
+  \let\SortIndex \@@SortIndex
 %    \end{macrocode}
-%    That package adds extra code into |\index| entries but it doesn't
-% know about all the stuff that \DOC does (now). So we need to provide
-% us with two helpers that handle the |\encapchar| case in some entries.
+%    The package adds new definitions for \cs{special@index} into
+%    \cs{CodelineIndex} and \cs{PageIndex} but since we are loading it
+%    very late we are already past them (in the preamble). So we test
+%    the final state and do it here.
 %    \begin{macrocode}
-  \def\doc@providetarget{\HD@target}
-  \def\doc@handleencap#1{\encapchar hdclindex{\the\c@HD@hypercount}{#1}}
+  \ifcodeline@index
+    \let\special@index\HD@codeline@wrindex
+  \else
+    \let\special@index\HD@page@wrindex
+  \fi
+%    \end{macrocode}
+%    That package also adds extra code into |\index| entries but it doesn't
+%    know about all the stuff that \DOC does (now). So we need to provide
+%    us with two helpers that handle the |\encapchar| case in some entries.
+%    \begin{macrocode}
+  \def\doc@providetarget{\HD@target}%
+  \def\doc@handleencap#1{\encapchar hdclindex{\the\c@HD@hypercount}{#1}}%
 %    \end{macrocode}
 %    If that package is not loaded these helpers do little to nothing.
 %    \begin{macrocode}
-\else
+ \else
   \let\doc@providetarget\@empty
-  \def\doc@handleencap#1{\encapchar #1}
+  \def\doc@handleencap#1{\encapchar #1}%
 %    \end{macrocode}
 %    We define the next commands just in case the user changed the option
 %    \texttt{hyperref} from \texttt{true} to \texttt{false} without
 %    removing the auxiliary files.
 %    \begin{macrocode}
-  \def\hdclindex#1#2{\ifx\@nil#2\@nil\else\csname #2\expandafter\endcsname\fi}
-  \def\hdpindex   #1{\ifx\@nil#1\@nil\else\csname #1\expandafter\endcsname\fi}
+  \def\hdclindex#1#2{\ifx\@nil#2\@nil\else\csname #2\expandafter\endcsname\fi}%
+  \def\hdpindex   #1{\ifx\@nil#1\@nil\else\csname #1\expandafter\endcsname\fi}%
 \fi
+}  
 %    \end{macrocode}
 %
 %
@@ -5730,16 +5737,12 @@
     \ignorespaces}
 %    \end{macrocode}
 % \end{macro}
-
-
-
-
-
-
-
-
-
-
+%
+%
+%
+%
+%
+%
 % \begin{macro}{\doc@env}
 %   \marg{true-value}\marg{item}\oarg{options}\\
 %   Handle optional arguments and call \cs{@doc@env}. Because environments can
@@ -6237,8 +6240,23 @@
                ]{Env}{environment}
 %    \end{macrocode}
 %
-
-
+%
+%
+%    To be able to restore the definition after \pkg{hypdoc} is loaded
+%    we better save them here. We only load the package at the end of
+%    the preamble, but the user might do this earlier and then  chaos
+%    is ensured.
+%    \begin{macrocode}
+  \let\@@PrintDescribeMacro \PrintDescribeMacro
+  \let\@@PrintDescribeEnv \PrintDescribeEnv
+  \let\@@PrintMacroName \PrintMacroName
+  \let\@@PrintEnvName \PrintEnvName
+  \let\@@SpecialUsageIndex \SpecialUsageIndex
+  \let\@@SpecialEnvIndex \SpecialEnvIndex
+  \let\@@SortIndex \SortIndex
+%    \end{macrocode}
+%
+%
 % \section{Misc additions}
 
 % \begin{imacro}{\cs}
