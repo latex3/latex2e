@@ -143,6 +143,21 @@
 %    \end{macrocode}
 % \end{macro}
 %
+% \begin{variable}{\l_@@_options_loading_bool}
+%   Used to indicate we are in the loading phase: controls the outcome
+%   of warnings.
+%    \begin{macrocode}
+\bool_new:N \l_@@_options_loading_bool
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_options_module_prop}
+%   To track non-standard module names.
+%    \begin{macrocode}
+\prop_new:N \l_@@_options_module_prop
+%    \end{macrocode}
+% \end{variable}
+%
 % \begin{macro}{\@@_options:Nn}
 % \begin{macro}{\@@_options_end:}
 %   The main function calls functions to collect up the global and local
@@ -154,6 +169,8 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_options:Nn #1#2
   {
+    \str_if_eq:nVF {#2} \@currname
+      { \prop_put:NnV \l_@@_options_module_prop {#2} \@currname }
     \cs_set_protected:Npn \@@_option_end: { }
     \clist_clear:N \l_@@_options_clist
     \@@_options_global:Nn #1 {#2}
@@ -171,7 +188,9 @@
         \cs_set_protected:Npn \@@_option_end:
           { \keys_define:nn {#2} { unknown .undefine: } }
       }
+    \bool_set_true: \l_@@_options_loading_bool
     \keys_set:nn {#2} \l_@@_options_clist
+    \bool_set_false:N \l_@@_options_loading_bool
     \cs_set_eq:NN \@unprocessedoptions \scan_stop:
     \@@_option_end:
   }
@@ -317,13 +336,19 @@
   {
     \IfNoValueTF {#1}
       { \@@_options_group_check:N \c_true_bool }
-      { \@@_options:Nn \c_true_bool {#1} }
+      {
+        \@@_options:Nn \c_true_bool {#1}
+        \@@_options_loaded:n {#1}
+      }
   }
 \NewDocumentCommand \ProcessKeysPackageOptions { o }
   {
     \IfNoValueTF {#1}
       { \@@_options_group_check:N \c_false_bool }
-      { \@@_options:Nn \c_false_bool {#1} }
+      {
+        \@@_options:Nn \c_false_bool {#1}
+        \@@_options_loaded:n {#1}
+      }
   }
 \@onlypreamble \ProcessKeysOptions
 \@onlypreamble \ProcessKeysPackageOptions
@@ -333,6 +358,7 @@
       { \@@_options:Nn #1 }
       {
         \exp_args:NNV \@@_options:Nn #1 \@currname
+        \exp_args:NV \@@_options_loaded:n \@currname
       }
   }
 %    \end{macrocode}
@@ -341,17 +367,61 @@
 %
 % \subsection{Option usage scope}
 %
+% \begin{macro}{\@@_options_loaded:n}
+% \begin{macro}{\@@_options_loaded:nn}
+%   Indicates that the load-time options for a package have been processed:
+%   once this has happened, make them unavailable either with a warning or
+%   an error.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_options_loaded:n #1
+  {
+    \prop_get:NnNT \l_keys_usage_load_prop {#1} \l_@@_tmpa_tl
+      {
+        \clist_map_inline:Nn \l_@@_tmpa_tl
+          {
+            \keys_set:nn {#1}
+              {
+                ##1 .code:n =
+                  \prop_get:NnNTF \l_@@_options_module_prop {#1} \l_@@_tmpa_tl
+                    { \exp_args:NV \@@_options_loaded:nn \l_@@_tmpa_tl }
+                    { \@@_options_loaded:nn {#1} }
+                      {##1}
+              }
+          }
+      }
+  }
+\cs_new_protected:Npn \@@_options_loaded:nn
+  {
+    \bool_if:NTF \l_@@_options_loading_bool
+      { \msg_warning:nnn { keys } { load-option-ignored } }
+      { \msg_error:nnnn { keys } { load-only } }
+        {#1} {#2}
+  }
+\msg_new:nnn { keys } { load-option-ignored }
+  { Package~"#1"~has~already~been~loaded:~ignoring~load-time~option~"#2". }
+\msg_new:nnnn { keys } { load-only }
+  { Key~"#2"~may~only~be~used~in~the~during~loading~of~package~"#1". }
+  {
+    LaTeX~was~asked~to~set~a~key~called~"#2",~but~this~is~only~allowed~
+    in~the~optional~argument~when~loading~package~"#1".
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
 %  Disable all preamble options in one shot.
 %    \begin{macrocode}
 \tl_gput_left:Nn \@kernel@after@begindocument
   {
-    \seq_map_inline:Nn \l_keys_usage_preamble_seq
+    \prop_map_inline:Nn \l_keys_usage_preamble_prop
       {
-        \keys_set:nn { }
+        \clist_map_inline:nn {#1}
           {
-            #1 .code:n =
-              \msg_error:nnx { keys } { preamble-only }
-                { \l_keys_key_str }
+            \keys_set:nn {#1}
+              {
+                ##1 .code:n =
+                  \msg_error:nnn { keys } { preamble-only } {##1}
+              }
           }
       }
   }
