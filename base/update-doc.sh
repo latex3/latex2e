@@ -10,6 +10,8 @@ l3build save -cconfig-doc -eetex,xetex,luatex \
 	tlb-dox004 \
 	tlb-dox005 \
 	tlb-dox008 \
+	tlb-dox013 \
+	tlb-dox014 \
 	tlb-falk001 \
 	tlb-hypdoc001 \
 	tlb1622
