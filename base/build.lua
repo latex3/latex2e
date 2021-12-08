@@ -53,7 +53,6 @@ sourcefiles    =
     "small2e.tex",
     "testpage.tex",
     "source2edoc.cls",        -- temp
-     "doc-v3beta.sty",        -- temp
      "*-????-??-??.sty"
   }
 textfiles =
@@ -136,8 +135,9 @@ unpacksuppfiles =
 -- Custom settings for the check system
 testsuppdir = "testfiles/helpers"
 
--- No dependencies at all (other than l3build and for typesetting)
-checkdeps   = { maindir .. "/required/firstaid"  }
+-- Dependencies for testing and typesetting
+checkdeps   = { maindir .. "/required/firstaid" }
+
 typesetdeps =
   {
     maindir .. "/required/graphics",
@@ -151,7 +151,7 @@ indexstyle = "source2e.ist"
 
 -- Allow for TU and other test configurations
 checkconfigs = {"build","config-1run","config-TU","config-legacy","config-lthooks",
-                "config-lthooks2","config-ltcmd"}
+                "config-lthooks2","config-ltcmd","config-doc"}
 
 update_tag = update_tag_base
 
