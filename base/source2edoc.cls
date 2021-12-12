@@ -5,6 +5,8 @@
               [2021/01/14 v0.2b Quick hack to typeset source2.tex
                (not usable for anything else and buggy -- will vanish again)!]
 
+
+
 \LoadClass{l3doc}
 
 \RemoveFromHook{begindocument}[l3doc]          % drop the standard setting  making " a shortverb
@@ -18,7 +20,7 @@
 \ExplSyntaxOn
 
 % in 2e we have a lot of functions that have no ``user-level'' documentation so we disable
-% a bogus backref in that case. Over time the sources should be clean up to have such documentation.
+% a bogus backref in that case. Over time the sources should be cleaned up to have such documentation.
 
 \cs_set_protected:Npn \__codedoc_print_documented:
   {
