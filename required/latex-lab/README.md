@@ -2,10 +2,10 @@
 
 This bundle holds optional files that are loaded in certain situations
 by kernel code (if available). For example, the new (as of 2021/12)
-`\DocumentMeta` command in the kernel loads a file from here holding
+`\DocumentMetadata` command in the kernel loads a file from here holding
 the real payload. While this code is still in development and the use
-is experimental and mainly for the tagging project) the code is stored
-outside the format so that there can be intermediate release not
+is experimental and mainly for the tagging project, the code is stored
+outside the format so that there can be intermediate releases not
 affecting the production use of LaTeX.
 
 
