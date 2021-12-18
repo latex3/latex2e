@@ -19,10 +19,12 @@ comprises:
 
 - The LaTeX kernel itself (`base`)
 - LaTeX team documentation (`doc`)
-- Packages which must be available (`required`). These are
+- Bundles which must be available (`required`). These are
   - Essential tools (`tools`)
   - Core graphics and color support (`graphics`)
   - Key mathematics support (`amsmath`)
+  - First aid for LaTeX  (`firstaid`) 
+  - LaTeX laboratory (`latex-lab`)
 
 The main public Git repository is hosted on
 [GitHub](https://github.com/latex3/latex2e).
