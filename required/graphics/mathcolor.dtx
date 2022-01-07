@@ -15,7 +15,7 @@
 %
 %    \begin{macrocode}
 \def\mathcolorversion{v1.0a}
-\def\mathcolordate{2022/01/06}
+\def\mathcolordate{2022/01/07}
 %    \end{macrocode}
 %<*driver>
 \documentclass{l3doc}
@@ -115,16 +115,16 @@
 %
 %    If you attempt to color large operators that use explicit
 %    \cs{limits}, \cs{nolimits}, or \cs{displaylimits}, then these
-%    commands should be placed next to the operator into the
-%    \meta{math material} argument, even if the actual sub or
-%    superscripts are outside and uncolored. E.g., if you write
-%    \verb/\mathcolor{red}{\int}\limits_0^1/ you get the error message
+%    limit controls need to immediately follow the operator. However,
+%    \cs{mathcolor} is written in a way that it is possible write
 %\begin{verbatim}
-%    ! Limit controls must follow a math operator.
+%     \[  \mathcolor{red}{\int}\limits_0^1 \textrm{ or }
+%         \mathcolor{red}{\int\limits}_0^1                \]
 %\end{verbatim}
-%    and you have to correct it to 
-%    \verb/\mathcolor{red}{\int\limits}_0^1/  to achieve
-% \[  \mathcolor{red}{\int\limits}_0^1  \]
+%    and achieve the same effect:
+%     \[  \mathcolor{red}{\int}\limits_0^1 \textrm{ or }
+%         \mathcolor{red}{\int\limits}_0^1                \]
+
 %
 %
 % \MaybeStop{\setlength\IndexMin{200pt}  \PrintIndex  }
@@ -223,39 +223,60 @@
 %    \begin{macrocode}
   \peek_catcode_ignore_spaces_expand:NTF \c_math_subscript_token
 %    \end{macrocode}
-%    If we found that character we call a function that handles sub or superscripts.
+%    If we found that character we call a function that handles sub or
+%    superscripts.
 %    \begin{macrocode}
     { \_@@_handle_scripts:Nw }
 %    \end{macrocode}
-%    Otherwise we peek at the next token again (spaces and \cs{relax}
-%    are already removed) to see if it is perhaps a
-%    \cs{c_math_superscript_token}.\footnote{\texttt{interface3}
-%    doesn't explicitly state if one could reuse \cs{l_peek_token}
-%    from the outer peek directly (maybe it should), in which case
-%    this should be a bit streamlined and the secondary peek avoided!}
+%    Otherwise check if this token we peeked at (which is now stored
+%    in \cs{l_peek_token} is a superscript token.
 %    \begin{macrocode}
-    { \peek_catcode:NTF \c_math_superscript_token
+    { \token_if_math_superscript:NTF \l_peek_token
 %    \end{macrocode}
 %    If found we call the sub/superscript handler.
 %    \begin{macrocode}
       { \_@@_handle_scripts:Nw }
 %    \end{macrocode}
-%    Otherwise we look for a \texttt{'} and if found remove it and
+%    Otherwise we check if it was any of the limit operation
+%    primitives. If that is the case, e.g., if we have a situation
+%    such as
+%\begin{verbatim}
+%    \mathcolor{red}{\int}\limits_1
+%\end{verbatim}
+%    we have to move it directly after the \cs{int} to ensure there
+%    is no color reset between the operator and the \cs{limits} command.
+%    \begin{macrocode}
+      { \token_case_meaning:NnTF \l_peek_token
+          {
+            \limits   { \limits }
+            \nolimits { \nolimits }
+            \displaylimits { \displaylimits }
+          }
+%    \end{macrocode}
+%    Once that is done, we have to get rid of the token we peeked at
+%    and them restart scanning for sub or superscripts. Given that
+%    \cs{_@@_scan_for_scripts:w} expands while scanning the simplest
+%    solution is to add \cs{use_none:n} in front of the peeked at token.
+%    \begin{macrocode}
+          { \_@@_scan_for_scripts:w \use_none:n }
+%    \end{macrocode}
+%    If it was one of these we look for a \texttt{'} and if found remove it and
 %    replace it by its expansion. The reason we have to do this (and
-%    not reply on the earlier peeking to expand for us is the fact
+%    not rely on the earlier peeking to expand for us is the fact
 %    that \texttt{'} is only ``math active'' and that doesn't expand
 %    under \cs{expand} or \cs{expandafter}.
 %    \begin{macrocode}
-      { \peek_meaning_remove:NTF '
-        { \_@@_handle_scripts:Nw ^\c_group_begin_token \prim@s }
+          { \peek_meaning_remove:NTF '
+            { \_@@_handle_scripts:Nw ^\c_group_begin_token \prim@s }
 %    \end{macrocode}
 %    If it is anything else we finish off which means we reset the
 %    color (because we prevented that before to happen automatically
 %    after the next group) and pop the color stack setting \cs{current@color}.
 %    \begin{macrocode}
-        { \reset@color
-          \seq_gpop:NN \g_@@_seq \current@color
-        }
+            { \reset@color
+              \seq_gpop:NN \g_@@_seq \current@color
+            }
+          }
       }
     }
 }
