@@ -152,12 +152,12 @@ end
 function update_tag_ltx(file,content,tagname,tagdate)
   local year = os.date("%Y")
   if string.match(content,
-    "Copyright %(C%) %d%d%d%d%-%d%d%d%d [^\n]*LaTeX3? Project") then
+    "Copyright %(C%) %d%d%d%d%-%d%d%d%d [^\n]*LaTeX") then
     content = string.gsub(content,
-      "Copyright %(C%) (%d%d%d%d)%-%d%d%d%d ([^\n]*LaTeX3? Project)",
+      "Copyright %(C%) (%d%d%d%d)%-%d%d%d%d ([^\n]*LaTeX)",
       "Copyright (C) %1-" .. year .. " %2")
-  elseif string.match(content,"Copyright %(C%) %d%d%d%d LaTeX") then
-    local oldyear = string.match(content,"Copyright %(C%) (%d%d%d%d) LaTeX")
+  elseif string.match(content,"Copyright %(C%) %d%d%d%d [^\n]*LaTeX") then
+    local oldyear = string.match(content,"Copyright %(C%) (%d%d%d%d) ([^\n]*LaTeX)")
     if year ~= oldyear then
       content = string.gsub(content,
         "Copyright %(C%) %d%d%d%d LaTeX",
