@@ -13,7 +13,7 @@ ctanpkg = "latex-graphics"
 maindir = "../.."
 
 -- Minor modifications to file types
-installfiles = {"*.def", "*.sty"}
+installfiles = {"*.def", "*.sty", "mathcolor.ltx"}
 typesetfiles = {"*.dtx", "*.tex"}
 docfiles     = {"cat.eps"}
 
