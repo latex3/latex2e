@@ -6,7 +6,7 @@
 %%
 %% l3doc.dtx  (with options: `class')
 %% 
-%% Copyright (C) 1990-2021 The LaTeX Project
+%% Copyright (C) 1990-2022 The LaTeX Project
 %% 
 %% It may be distributed and/or modified under the conditions of
 %% the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -375,8 +375,6 @@
     ':'~hence~it~is~not~clear~where~to~add~'_p'~or~'TF'.~
     Please~follow~expl3~naming~conventions.
   }
-\msg_new:nnn { l3doc } { deprecated-function }
-  { The~deprecated~function(s)~'#1'~should~have~been~removed~on~#2. }
 \msg_new:nnn { l3doc } { date-format }
   { The~date~'#1'~should~be~given~in~YYYY-MM-DD~format. }
 \msg_new:nnn { l3doc } { future-date }
@@ -998,7 +996,7 @@
       } ,
     added .code:n = { \__codedoc_date_set_past:Nn \l__codedoc_date_added_tl {#1} },
     updated .code:n = { \__codedoc_date_set_past:Nn \l__codedoc_date_updated_tl {#1} } ,
-    deprecated .code:n = { \__codedoc_deprecated_on:n {#1} } ,
+    deprecated .code:n = {} , % A stub
     tested .code:n = { } ,
     label .code:n =
       {
@@ -1029,19 +1027,6 @@
           { \tl_to_str:N \l__codedoc_macro_argument_tl }
           {#1}
       }
-  }
-\cs_new_protected:Npn \__codedoc_deprecated_on:n #1
-  {
-    \__codedoc_date_set:Nn \l__codedoc_tmpa_tl {#1}
-    \exp_args:No \__codedoc_date_compare:nNnT
-      { \l__codedoc_tmpa_tl } < { \c_sys_year_int - \c_sys_month_int - \c_sys_day_int }
-      {
-        \msg_error:nnxx { l3doc } { deprecated-function }
-          { \tl_to_str:N \l__codedoc_macro_argument_tl }
-          { \l__codedoc_tmpa_tl }
-      }
-    \bool_set_true:N \l__codedoc_macro_internal_bool
-    \bool_set_true:N \l__codedoc_macro_internal_set_bool
   }
 \cs_new_protected:Npn \__codedoc_function:nnw #1#2
   {
@@ -1346,7 +1331,7 @@
       } ,
     added .code:n = {} , % TODO
     updated .code:n = {} , % TODO
-    deprecated .code:n = { \__codedoc_deprecated_on:n {#1} } ,
+    deprecated .code:n = {} , % A stub
     verb .bool_set:N = \l__codedoc_names_verb_bool ,
     module .tl_set:N = \l__codedoc_override_module_tl ,
     documented-as .tl_set:N = \l__codedoc_macro_documented_tl ,

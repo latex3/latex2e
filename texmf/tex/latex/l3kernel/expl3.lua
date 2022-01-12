@@ -10,7 +10,7 @@
 -- l3token.dtx  (with options: `package,lua')
 -- l3intarray.dtx  (with options: `package,lua')
 -- 
--- Copyright (C) 1990-2021 The LaTeX Project
+-- Copyright (C) 1990-2022 The LaTeX Project
 -- 
 -- It may be distributed and/or modified under the conditions of
 -- the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -23,8 +23,6 @@
 -- and all files in that bundle must be distributed together.
 -- 
 -- File: l3luatex.dtx
-l3kernel = l3kernel or { }
-local l3kernel = l3kernel
 ltx = ltx or {utils={}}
 ltx.utils = ltx.utils or { }
 local ltxutils = ltx.utils
@@ -88,35 +86,11 @@ if not command_id and tokens and tokens.commands then
     return id_map[name]
   end
 end
-local function deprecated(table, name, func)
-  table[name] = function(...)
-    write_nl(format("Calling deprecated Lua function %s", name))
-    table[name] = func
-    return func(...)
-  end
-end
 local kpse_find = (resolvers and resolvers.findfile) or kpse.find_file
 local function escapehex(str)
   return (gsub(str, ".",
     function (ch) return format("%02X", byte(ch)) end))
 end
-deprecated(l3kernel, 'charcat', function(charcode, catcode)
-  cprint(catcode, utf8_char(charcode))
-end)
-local os_clock   = os.clock
-local base_clock_time = 0
-local function elapsedtime()
-  local val = (os_clock() - base_clock_time) * 65536 + 0.5
-  if val > 2147483647 then
-    val = 2147483647
-  end
-  write(format("%d",floor(val)))
-end
-l3kernel.elapsedtime = elapsedtime
-local function resettimer()
-  base_clock_time = os_clock()
-end
-l3kernel.resettimer = resettimer
 local function filedump(name,offset,length)
   local file = kpse_find(name,"tex",true)
   if not file then return end
@@ -130,12 +104,6 @@ local function filedump(name,offset,length)
   return escapehex(data)
 end
 ltxutils.filedump = filedump
-deprecated(l3kernel, "filedump", function(name, offset, length)
-  local dump = filedump(name, tonumber(offset), tonumber(length))
-  if dump then
-    write(dump)
-  end
-end)
 local md5_HEX = md5.HEX
 if not md5_HEX then
   local md5_sum = md5.sum
@@ -153,12 +121,6 @@ local function filemd5sum(name)
   return md5_HEX(data)
 end
 ltxutils.filemd5sum = filemd5sum
-deprecated(l3kernel, "filemdfivesum", function(name)
-  local hash = filemd5sum(name)
-  if hash then
-    write(hash)
-  end
-end)
 local filemoddate
 if os_date'%z':match'^[+-]%d%d%d%d$' then
   local pattern = lpeg.Cs(16 *
@@ -212,12 +174,6 @@ else
   end
 end
 ltxutils.filemoddate = filemoddate
-deprecated(l3kernel, "filemoddate", function(name)
-  local hash = filemoddate(name)
-  if hash then
-    write(hash)
-  end
-end)
 local function filesize(name)
   local file = kpse_find(name, "tex", true)
   if file then
@@ -228,32 +184,6 @@ local function filesize(name)
   end
 end
 ltxutils.filesize = filesize
-deprecated(l3kernel, "filesize", function(name)
-  local size = filesize(name)
-  if size then
-    write(size)
-  end
-end)
-deprecated(l3kernel, "strcmp", function (A, B)
-  if A == B then
-    write("0")
-  elseif A < B then
-    write("-1")
-  else
-    write("1")
-  end
-end)
-local os_exec    = os.execute
-deprecated(l3kernel, "shellescape", function(cmd)
-  local status,msg = os_exec(cmd)
-  if status == nil then
-    write_nl("log","runsystem(" .. cmd .. ")...(" .. msg .. ")\n")
-  elseif status == 0 then
-    write_nl("log","runsystem(" .. cmd .. ")...executed\n")
-  else
-    write_nl("log","runsystem(" .. cmd .. ")...failed " .. (msg or "") .. "\n")
-  end
-end)
 local luacmd do
   local set_lua = token.set_lua
   local undefined_cs = command_id'undefined_cs'
