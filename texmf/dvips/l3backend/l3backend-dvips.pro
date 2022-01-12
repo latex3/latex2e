@@ -6,7 +6,7 @@
 %%
 %% l3backend-header.dtx  (with options: `header,dvips')
 %% 
-%% Copyright (C) 2019-2021 The LaTeX Project
+%% Copyright (C) 2019-2022 The LaTeX Project
 %% 
 %% It may be distributed and/or modified under the conditions of
 %% the LaTeX Project Public License (LPPL), either version 1.3c of
