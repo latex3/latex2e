@@ -23,6 +23,13 @@ checkdeps =
     maindir .. "/required/tools"
   }
 
+typesetdeps =
+  {
+    maindir .. "/base",
+    maindir .. "/required/amsmath",
+    maindir .. "/required/tools"
+  }
+
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
 
