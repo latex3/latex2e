@@ -35,6 +35,13 @@ checkdeps =
 checkruns     = 2
 typesetruns   = 2
 
+typesetdeps =
+  {
+    maindir .. "/base",
+    maindir .. "/required/amsmath",
+    maindir .. "/required/graphics",
+    maindir .. "/required/tools"
+  }
 
 -- we want to test against external packages
 
