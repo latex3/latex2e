@@ -8,12 +8,16 @@ module = "latex-lab"
 
 ctanpkg = "latex-lab"
 
--- Location of main directory: use Unix-style path separators
 maindir = "../.."
 
 -- Minor modifications to file types
-installfiles = {"*.ltx", "*.sty", "*.tex"}
-typesetfiles = {"*.dtx"}
+installfiles = {"*.ltx", "*.sty"}
+typesetfiles = {
+                 "latex-lab-testphase.dtx",
+                 "*-doc.tex",
+		 "*-code.tex",
+	       }
+
 unpackfiles  = {"*.ins"}
 
 sourcefiles  = {"*.dtx", "*.ins", "*-????-??-??.sty"}
