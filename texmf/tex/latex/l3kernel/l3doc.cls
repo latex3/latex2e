@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{expl3,calc}
-\ProvidesExplClass{l3doc}{2018-04-30}{}
+\ProvidesExplClass{l3doc}{2022-01-12}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -1788,6 +1788,8 @@
       }
       { #1 \endinput }
   }
+\cs_if_exist:NT \MaybeStop
+   { \RenewCommandCopy \MaybeStop \StopEventually }
 \DeclareDocumentCommand \Finale { }
   { \tl_use:N \g__codedoc_finale_tl }
 \tl_new:N \g__codedoc_finale_tl
