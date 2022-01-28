@@ -32,7 +32,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltplain.dtx}
-             [2021/07/16 v2.3g LaTeX Kernel (Plain TeX)]
+             [2022/01/25 v2.3h LaTeX Kernel (Plain TeX)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltplain.dtx}
@@ -1186,18 +1186,143 @@
 % \end{macro}
 % \end{macro}
 %
-% \begin{macro}{\obeylines}
-% \begin{macro}{\obeyspaces}
-% In |\obeylines|, we say |\let^^M=\par| instead of |\def^^M{\par}|
-% since this allows, for example, |\let\par=\cr \obeylines \halign{...|
+% \begin{macro}{\obeylines,\obeyspaces}
+%    In |\obeylines|, we say |\let^^M=\obeyedline| instead of |\def^^M{\obeyedline}|
+%    since this allows, for example,
+% |\let\obeyedline=\cr \obeylines \halign{...|.
+%
+%    This is essentially a plain \TeX{} trick and in its original
+%    version where you had to use to use |\let\par=\cr| not really a
+%    safe idea in \LaTeX. If anybody used this trick
+%    this now breaks (and one needs to use \cs{obeyedline} instead).
+% \changes{v2.3h}{2022/01/25}{Provide redirection to support special
+%    use cases (gh/367)}
 %    \begin{macrocode}
-{\catcode`\^^M=\active % these lines must end with %
-  \gdef\obeylines{\catcode`\^^M\active \let^^M\par}%
-  \global\let^^M\par} % this is in case ^^M appears in a \write
-\def\obeyspaces{\catcode`\ \active}
-{\obeyspaces\global\let =\space}
+%</2ekernel>
+%<*2ekernel|latexrelease>
+%<latexrelease>\IncludeInRelease{2022/06/01}{\obeylines}%
+%<latexrelease>    {Add a redirection to obeylines and obeyspaces}%
+%    \end{macrocode}
+%    If the active |^^M| escapes, e.g. into a \cs{write} (which is
+%    effectively in a different context) we don't want the definition
+%    from \cs{obeylines} but rather a simple \cs{par} (in fact even
+%    the primitive one, not the \LaTeX{} version \cs{para\_end:} which
+%    is only defined later.
+%
+%    \begin{macrocode}
+\begingroup
+\catcode`\^^M=\active % these lines must end with %
+  \gdef\obeylines{\catcode`\^^M\active%
+    \let^^M\obeyedline%
+%    \end{macrocode}
+%    
+%    The next line ending the definition is rather curious and it took
+%    me awhile to understand why rollback fails. The problem is the
+%    following: if \texttt{latexrelease} is used, then blocks of
+%    \cs{IncludeInRelease} \dots\ \cs{EndIncludeInRelease} are
+%    bypassed at high speed by grabbing each as a delimited
+%    argument. However, in that case |^^M| is seen not as code but as
+%    line ending characters and in that mode \TeX{} discards
+%    everything from that point onwards to the real end of the line so
+%    it works like a comment --- pretty strange really (and I think
+%    due to the fact the the original pascal compiler could have some
+%    garbage showing up after the normal line ending character. Thus
+%    we really have to make sure that any closing braces is not one
+%    the same line as an |^^M|, because otherwise it would get dropped
+%    and we end with unbalanced braces and never see the
+%    \cs{EndIncludeInRelease} --- weird. In other places it doesn't
+%    matter because we aren't using the incomplete result.
+%    \begin{macrocode}
+  }%
+  \global\let^^M\par % this is in case ^^M appears in a \write
+\endgroup
+%    \end{macrocode}
+%
+% \begin{macro}{\obeyedline}
+%    The \cs{obeyedline} expands by default to
+%    \cs{par} with whatever definition \cs{par} has when it is
+%    executed. It can, however, be
+%    redefined (before calling \cs{obeylines}!) to achieve some
+%    special effects. If you want to alter is definition when already
+%    in the scope of \cs{obeylines}, it has no effect (because
+%    \cs{let} is used above).
+%    In that case simply make another call to \cs{obeylines}
+%    immediately. As you are in a restricted scope all that happens is
+%    that your redefinition is applied.
+%
+%    For the default definition we have to use \cs{def} not \cs{let}
+%    because the meaning of \cs{par} can change and we want to use the
+%    one that is current when \cs{obeylines} act.
+%
+%    There is a small subtlety here: in an \cs{edef} the active |^^M| stayed
+%    put (because it was equal to to the primitive \cs{par}), now
+%    \cs{obeyedline} expands and you get what it  contains, i.e., in that
+%    case \cs{par}, into the \cs{edef} or \cs{mark} unless we use
+%    \cs{protected} on it.
+%    \begin{macrocode}
+\protected\gdef\obeyedline{\par}
 %    \end{macrocode}
 % \end{macro}
+%
+% \begin{macro}{\obeyedspace}
+%    The definition of \cs{obeyspaces} is changed in the same way and
+%    now executes \cs{obeyedspace} for each active space.
+%    \begin{macrocode}
+\global\let\obeyedspace\space
+%    \end{macrocode}
+% \end{macro}
+%
+%    \begin{macrocode}
+\begingroup
+\catcode`\ =\active%
+\gdef\obeyspaces{\catcode`\ \active\let =\obeyedspace}%
+%    \end{macrocode}
+%    An active space elsewhere generates \cs{space} by default
+%    (for example in a \cs{write}).  
+%    \begin{macrocode}
+\global\let =\space%
+\endgroup
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000/00/00}{\obeylines}%
+%<latexrelease>    {Add a redirection to obeylines and obeyspaces}%
+%<latexrelease>
+%    \end{macrocode}
+%    From 2019 onwards the commands are made robust (somewhat later in
+%    the kernel sources). So if we roll back they are robust, so when
+%    redefining them we have get rid of the robust payload
+%    first. Otherwise that is seen by the later rollback below, which
+%    then installs a fragile version of the new definition on top of
+%    the one we roll back to here, sigh. \cs{kernel@make@fragile} also
+%    changes its definition (later own) so this is done directly.
+%    \begin{macrocode}
+%<latexrelease>\expandafter\let\csname obeylines \endcsname\@undefined
+%<latexrelease>\expandafter\let\csname obeyspace \endcsname\@undefined
+%<latexrelease>
+%<latexrelease>\begingroup
+%<latexrelease>\catcode`\^^M=\active % these lines must end with %
+%<latexrelease>  \gdef\obeylines{\catcode`\^^M\active \let^^M\par %
+%    \end{macrocode}
+%    Closing brace on a separate line (see comment above).
+%    \begin{macrocode}
+%<latexrelease>                 }%
+%    \end{macrocode}
+%    Another pitfall: if we do a rollback \cs{par} is no longer the
+%    primitive, so the roll back definition needs \cs{let} to what is
+%    new the primitive.
+%    \begin{macrocode}
+%<latexrelease>  \global\let^^M\RawParEnd % this is in case ^^M appears in a \write
+%<latexrelease>\endgroup
+%<latexrelease>\def\obeyspaces{\catcode`\ \active}
+%<latexrelease>
+%<latexrelease>\let\obeyedline\@undefined
+%<latexrelease>\let\obeyedspace\@undefined
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
+%    \end{macrocode}
 % \end{macro}
 %
 %  \begin{macro}{\loop}
