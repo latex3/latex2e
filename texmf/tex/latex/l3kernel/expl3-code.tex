@@ -70,7 +70,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: expl3.dtx
-\def\ExplFileDate{2022-01-21}%
+\def\ExplFileDate{2022-01-05}%
 \begingroup
   \def\next{\endgroup}%
   \expandafter\ifx\csname PackageError\endcsname\relax
@@ -178,11 +178,11 @@
   \def\ShortText{Required primitives not found}%
   \def\LongText%
     {%
-      LaTeX3 requires the e-TeX primitives and additional functionality as
-      described in the README file.
+      The L3 programming layer requires the e-TeX primitives and additional
+      functionality as described in the README file.
       \LineBreak
       These are available in the engines\LineBreak
-      - pdfTeX v1.40\LineBreak
+      - pdfTeX v1.40.0\LineBreak
       - XeTeX v0.99992\LineBreak
       - LuaTeX v1.10\LineBreak
       - e-(u)pTeX mid-2012\LineBreak
@@ -190,24 +190,14 @@
       \LineBreak
     }%
   \ifnum0%
-    \expandafter\ifx\csname pdfstrcmp\endcsname\relax
+    \expandafter\ifx\csname expanded\endcsname\relax
+      \ifx\csname pdfstrcmp\endcsname\relax\else 1\fi
     \else
-      \expandafter\ifx\csname pdftexversion\endcsname\relax
-        \expandafter\ifx\csname Ucharcat\endcsname\relax
-          \expandafter\ifx\csname kanjiskip\endcsname\relax
-          \else
-            1%
-          \fi
-        \else
-          1%
-        \fi
+      \expandafter\ifx\csname luatexversion\endcsname\relax
+        1%
       \else
-        \ifnum\pdftexversion<140 \else 1\fi
+        \ifnum\luatexversion<110 \else 1\fi
       \fi
-    \fi
-    \expandafter\ifx\csname directlua\endcsname\relax
-    \else
-      \ifnum\luatexversion<110 \else 1\fi
     \fi
     =0 %
       \newlinechar`\^^J %
@@ -13608,22 +13598,6 @@
   { \__keys_value_requirement:nn { forbidden } {#1} }
 \cs_new_protected:cpn { \c__keys_props_root_str .value_required:n } #1
   { \__keys_value_requirement:nn { required } {#1} }
-\group_begin:
-  \cs_set_protected:Npn \__keys_tmp:nn #1#2
-    {
-      \quark_if_recursion_tail_stop:n {#1}
-      \cs_new_eq:cc
-        { \c__keys_props_root_str . #2 }
-        { \c__keys_props_root_str . #1 }
-      \__keys_tmp:nn
-    }
-  \__keys_tmp:nn
-    { legacy_if_set:n } { if }
-    { tl_set:N }        { store }
-    { usage:n }         { usage }
-    { \q_recursion_tail } { }
-    \q_recursion_stop
-\group_end:
 \cs_new_protected:Npn \keys_set:nn #1#2
   {
     \use:x
@@ -28324,12 +28298,14 @@
   }
 \scan_new:N \s__color_stop
 \cs_new_protected:Npn \__color_select:N #1
-  { \exp_after:wN \__color_select:nn #1 }
-\cs_new_protected:Npn \__color_select:nn #1#2
   {
-    \use:c { __color_backend_select_ #1 :n } {#2}
+    \exp_after:wN \__color_select:nn #1
     \group_insert_after:N \__color_backend_reset:
   }
+\cs_new_protected:Npn \__color_select_math:N #1
+  { \exp_after:wN \__color_select:nn #1 }
+\cs_new_protected:Npn \__color_select:nn #1#2
+  { \use:c { __color_backend_select_ #1 :n } {#2} }
 \tl_new:N \l__color_current_tl
 \tl_set:Nn \l__color_current_tl { { gray } { 0 } }
 
@@ -28832,6 +28808,99 @@
     \tl_set:Nx #1
       { { \l_color_fixed_model_tl } { \l__color_value_tl } }
   }
+\tl_new:N \l_color_math_active_tl
+\tl_set:Nn \l_color_math_active_tl { ' }
+\seq_new:N \g__color_math_seq
+\cs_new_protected:Npn \color_math:nn #1#2
+  {
+    \__color_math:nn {#2}
+      { \__color_parse:nN {#1} \l__color_current_tl }
+  }
+\cs_new_protected:Npn \color_math:nnn #1#2#3
+  {
+    \__color_math:nn {#3}
+      {
+        \__color_select_main:Nw \l__color_current_tl
+          #1 / / \s__color_mark #2 / / \s__color_stop
+      }
+  }
+\cs_new_protected:Npn \__color_math:nn #1#2
+  {
+    \seq_gpush:NV \g__color_math_seq \l__color_current_tl
+    #2
+    \__color_select_math:N \l__color_current_tl
+    #1
+    \__color_math_scan:w
+  }
+\cs_new_protected:Npn \__color_math_scan:w
+  {
+    \peek_remove_filler:n
+      {
+        \peek_catcode:NTF \c_alignment_token
+          { \__color_math_scan_end: }
+          { \__color_math_scan_auxi: }
+      }
+  }
+\cs_new_protected:Npn \__color_math_scan_auxi:
+  {
+    \token_case_meaning:NnTF \l_peek_token
+      {
+        \c_math_subscript_token   { }
+        \c_math_superscript_token { }
+      }
+      { \__color_math_scripts:Nw }
+      {
+        \token_case_meaning:NnTF \l_peek_token
+          {
+            \tex_limits:D        { \tex_limits:D }
+            \tex_nolimits:D      { \tex_nolimits:D }
+            \tex_displaylimits:D { \tex_displaylimits:D }
+          }
+          { \__color_math_scan:w \use_none:n }
+          { \__color_math_scan_auxii: }
+      }
+  }
+\cs_new_protected:Npn \__color_math_scan_auxii:
+  {
+    \tl_map_inline:Nn \l_color_math_active_tl
+      {
+        \token_if_eq_meaning:NNT \l_peek_token ##1
+          {
+            \tl_map_break:n
+              {
+                \use_i:nn
+                  { \__color_math_scan_auxiii:N ##1 }
+              }
+          }
+        \__color_math_scan_end:
+      }
+  }
+\cs_new_protected:Npn \__color_math_scan_auxiii:N #1
+  {
+    \exp_after:wN \exp_after:wN \exp_after:wN \__color_math_scan:w
+      \char_generate:nn { `#1 } { 13 }
+  }
+\cs_new_protected:Npn \__color_math_scan_end:
+  {
+    \__color_backend_reset:
+    \seq_gpop:NN \g__color_math_seq \l__color_current_tl
+  }
+\cs_new_protected:Npn \__color_math_scripts:Nw #1
+  {
+    #1
+    \c_group_begin_token
+      \c_group_begin_token
+        \seq_get:NN \g__color_math_seq \l__color_current_tl
+        \__color_select:N \l__color_current_tl
+        \group_insert_after:N \c_group_end_token
+        \group_insert_after:N \__color_math_scan:w
+    \peek_remove_filler:n
+      {
+        \peek_catcode_remove:NF \c_group_begin_token
+          { \__color_math_script_aux:N }
+      }
+  }
+\cs_new_protected:Npn \__color_math_script_aux:N #1 { #1 \c_group_end_token }
 \cs_new_protected:Npn \color_fill:n #1
   {
     \__color_parse:nN {#1} \l__color_current_tl
