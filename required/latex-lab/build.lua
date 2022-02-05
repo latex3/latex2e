@@ -14,6 +14,7 @@ maindir = "../.."
 installfiles = {"*.ltx", "*.sty"}
 typesetfiles = {
                  "latex-lab-testphase.dtx",
+                 "latex-lab-new-or.dtx",
                  "*-doc.tex",
 		 "*-code.tex",
 	       }
