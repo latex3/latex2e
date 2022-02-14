@@ -49,7 +49,7 @@ typesetdeps =
 checksearch  = true
 
 -- Allow for TU and other test configurations
-checkconfigs = {"build","config-TU"}
+checkconfigs = {"build","config-TU","config-OR"}
 
 
 
