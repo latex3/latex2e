@@ -211,7 +211,8 @@
 %    \end{macrocode}
 % \end{variable}
 %
-% \begin{macro}{\@@_options:Nn, \@@_options:Nf}
+% \begin{macro}{\@@_options:Nn}
+% \begin{macro}{\@@_options:nN}
 % \changes{v1.0b}{2022/01/15}
 %         {Clear option list in end-of-package hook}
 % \begin{macro}{\@@_options_end:}
@@ -226,15 +227,17 @@
 %   in all cases.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_options:Nn #1#2
+  { \@@_options_expand_module:Nn \@@_options:nN {#2} #1 }
+\cs_new_protected:Npn \@@_options:nN #1#2
   {
-    \cs_gset_nopar:cpn { opt@fam@\@currname.\@currext } {#2}
+    \cs_gset_nopar:cpn { opt@fam@\@currname.\@currext } {#1}
     \cs_set_protected:Npn \@@_option_end: { }
     \clist_clear:N \l_@@_options_clist
-    \@@_options_global:Nn #1 {#2}
+    \@@_options_global:Nn #2 {#1}
     \@@_options_local:
-    \keys_if_exist:nnF {#2} { unknown }
+    \keys_if_exist:nnF {#1} { unknown }
       {
-        \keys_define:nn {#2}
+        \keys_define:nn {#1}
           {
             unknown .code:n =
               {
@@ -243,16 +246,15 @@
               }
           }
         \cs_set_protected:Npn \@@_option_end:
-          { \keys_define:nn {#2} { unknown .undefine: } }
+          { \keys_define:nn {#1} { unknown .undefine: } }
       }
     \bool_set_true:N \l_@@_options_loading_bool
-    \keys_set:nV {#2} \l_@@_options_clist
+    \keys_set:nV {#1} \l_@@_options_clist
     \bool_set_false:N \l_@@_options_loading_bool
     \AtEndOfPackage { \cs_set_eq:NN \@unprocessedoptions \scan_stop: }
     \@@_option_end:
-    \@@_options_loaded:n {#2}
+    \@@_options_loaded:n {#1}
   }
-\cs_generate_variant:Nn \@@_options:Nn { Nf }
 \msg_new:nnnn { keys } { option-unknown }
   { Unknown~option~'#1'~for~package~#2. }
   {
@@ -260,6 +262,7 @@
     but~the~#2~package~has~not~created~an~option~with~this~name.
   }
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 %
@@ -370,23 +373,47 @@
 %
 % \subsection{The document interfaces}
 %
+%    \begin{macrocode}
+\cs_generate_variant:Nn \keys_define:nn { nx }
+%    \end{macrocode}
+%
+% \begin{macro}{\@@_options_expand_module:Nn}
+% \begin{macro}{\@@_options_expand_module:nN}
+%   To deal with active characters inside the module argument whilst also
+%   expanding that argument, we use a combination of \texttt{c}- and
+%   \texttt{f}-type expansion. This works as the definitions for active
+%   UTF-8 bytes contain an \cs{ifincsname} test.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_options_expand_module:Nn #1#2
+  {
+    \cs:w @@_options_expand_module:nN \exp_after:wN \cs_end:
+      \exp_after:wN { \exp:w \exp_end_continue_f:w #2 } #1
+  }
+\cs_new_protected:Npn \@@_options_expand_module:nN #1#2
+  { #2 {#1} }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
 % \begin{macro}{\DeclareKeys}
 % \changes{v1.0c}{2022/02/15}{Expand module argument}
+% \changes{v1.0d}{2022/02/16}{Allow for active characters in module argument}
 %   Defining key options is quite straight-forward: we have an intermediate
 %   function to allow for potential set-up steps.
 %    \begin{macrocode}
 \NewDocumentCommand \DeclareKeys { O { \@currname } +m }
-  { \exp_args:Nf \keys_define:nn {#1} {#2} }
+  { \@@_options_expand_module:Nn \keys_define:nn {#1} {#2} }
 %    \end{macrocode}
 % \end{macro}
 %
 % \begin{macro}{\DeclareUnknownKeysHandler}
 % \changes{v1.0c}{2022/02/15}{Added \cs{DeclareUnknownKeysHandler}}
+% \changes{v1.0d}{2022/02/16}{Allow for active characters in module argument}
 %    \begin{macrocode}
 \NewDocumentCommand \DeclareUnknownKeysHandler { O { \@currname } +m }
   {
     \cs_set_protected:cpn { @@_unknown_handler_ #1 :nn } ##1##2 {#2}
-    \exp_args:Nxx \keys_define:nn {#1}
+    \@@_options_expand_module:Nn \keys_define:nx {#1}
       {
         unknown .code:n = 
           \exp_not:N \exp_args:NV
@@ -399,15 +426,16 @@
 %
 % \begin{macro}{\ProcessKeyOptions, \ProcessKeyPackageOptions}
 % \changes{v1.0c}{2022/02/15}{Expand module argument}
+% \changes{v1.0d}{2022/02/16}{Allow for active characters in module argument}
 %   We need to deal with the older interface from \pkg{l3keys2e} here: it had
 %   a mandatory argument. We can mop that up using a look-ahead, and then
 %   exploit that information to determine whether the package option handling
 %   is set up for the new approach for clash handling.
 %    \begin{macrocode}
 \NewDocumentCommand \ProcessKeyOptions { O { \@currname } }
-  { \@@_options:Nf \c_true_bool {#1} }
+  { \@@_options:Nn \c_true_bool {#1} }
 \NewDocumentCommand \ProcessKeyPackageOptions { O { \@currname } }
-  { \@@_options:Nf \c_false_bool {#1} }
+  { \@@_options:Nn \c_false_bool {#1} }
 \@onlypreamble \ProcessKeyOptions
 \@onlypreamble \ProcessKeyPackageOptions
 %    \end{macrocode}
@@ -484,10 +512,11 @@
 %
 % \begin{macro}{\SetKeys}
 % \changes{v1.0c}{2022/02/15}{Expand module argument}
+% \changes{v1.0d}{2022/02/16}{Allow for active characters in module argument}
 %   A simple wrapper.
 %    \begin{macrocode}
 \NewDocumentCommand \SetKeys { O { \@currname } +m }
-  { \keys_set:nn {#1} {#2} }
+  { \@@_options_expand_module:Nn \keys_set:nn {#1} {#2} }
 %    \end{macrocode}
 % \end{macro}
 %
