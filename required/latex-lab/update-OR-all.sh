@@ -14,9 +14,8 @@ l3build save -cconfig-OR \
 	footmisc-floats-bottom-abovefloats-flushbottom \
 	footmisc-floats-bottom-belowfloats-flushbottom
 
-exit
-
-footmisc-000 \
+l3build save -cconfig-OR \
+	footmisc-000 \
 	footmisc-001 \
 	footmisc-002 \
 	footmisc-003 \
