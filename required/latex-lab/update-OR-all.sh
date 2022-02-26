@@ -24,6 +24,8 @@ l3build save -cconfig-OR \
 	footmisc-006 \
 	footmisc-007-rollback \
 	footmisc-008-pdfcol \
+	footmisc-009-multiple \
+	footmisc-010-setspace \
 	github-001 \
 	footmisc-symbols-001 \
 	footmisc-symbols-002 \
