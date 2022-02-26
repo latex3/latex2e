@@ -67,22 +67,6 @@
 
 % latex.ltx
 
-\long\def\@footnotetext#1{\insert\footins{%
-    \reset@font\footnotesize
-    \interlinepenalty\interfootnotelinepenalty
-    \splittopskip\footnotesep
-    \splitmaxdepth \dp\strutbox \floatingpenalty \@MM
-    \hsize\columnwidth \@parboxrestore
-    \def\@currentcounter{footnote}%
-    \protected@edef\@currentlabel{%
-       \csname p@footnote\endcsname\@thefnmark
-    }%
-    \color@begingroup
-      \@makefntext{%
-        \rule\z@\footnotesep\ignorespaces#1\@finalstrut\strutbox}%
-    \par
-    \color@endgroup}}%
-
 \long\def\@mpfootnotetext#1{%
   \global\setbox\@mpfootins\vbox{%
     \unvbox\@mpfootins
@@ -116,10 +100,23 @@
 \ExplSyntaxOn
 
 
-\cs_new:Npn \fn_set_fnmark:nn #1#2 {
+\cs_new:Npn \fn_step_fnmark:nn #1#2 {
   \tl_if_novalue:nTF {#1}
     {
       \stepcounter {#2}
+      \protected@xdef \@thefnmark { \cs:w the#2 \cs_end: }
+    }
+    {
+     \group_begin:
+        \int_set:cn { c@#2 }{ #1 }
+        \unrestored@protected@xdef \@thefnmark { \cs:w the#2 \cs_end: }
+     \group_end:
+    }           
+}
+
+\cs_new:Npn \fn_set_fnmark:nn #1#2 {
+  \tl_if_novalue:nTF {#1}
+    {
       \protected@xdef \@thefnmark { \cs:w the#2 \cs_end: }
     }
     {
@@ -142,7 +139,7 @@
 \tl_new:N \@kernel@after@fnmark
 \tl_new:N \@kernel@before@fnmark@end
 
-\def\@footnotemark{%
+\def \@footnotemark {
 %-------
 % bibarts
 % chextras  --- actually in the wrong place does an \unskip
@@ -185,7 +182,99 @@
 
 % alterations not covered:
 %
-% ./arabtex/afoot.sty  --- too different
+% ./arabtex/afoot.sty  --- too different (and probably too old)
+
+
+
+%-------------------------------------
+
+\NewHook{fntext/begin}
+
+
+\long\def\@footnotetext#1{
+%-------
+% ./linguex/linguex.sty
+%-------
+  \@footnotetext@process {  % config point
+%-------
+% resetting baselinestretch ... (could be done further down)
+% ./uafthesis/uafthesis.cls
+% ./setspace/setspace.sty
+% ./footmisc/footmisc.sty (normal)
+    \UseHook{fntext/begin}
+%-------
+    \reset@font
+    \footnotesize
+%-------
+% some classes use a different font size, e.g.,
+% ./nrc/nrc1.cls  ./nrc/nrc2.cls
+%-------
+    \interlinepenalty\interfootnotelinepenalty
+    \splittopskip\footnotesep
+    \splitmaxdepth \dp\strutbox
+    \floatingpenalty \@MM
+    \hsize\columnwidth
+    \@parboxrestore
+%-------
+% altering para parameters ...
+% ./resphilosophica/resphilosophica.cls
+%-------
+    \def\@currentcounter{footnote}
+    \protected@edef \@currentlabel {
+       \csname p@footnote\endcsname \@thefnmark
+    }%
+    \color@begingroup
+%-------
+% fnpara wants to replace \@makefntext{...} (footmisc probably too ...)
+% needs handling!
+%-------
+      \@makefntext {
+%-------
+% ./resphilosophica/resphilosophica.cls
+%-------
+        \rule\z@\footnotesep
+        \ignorespaces
+%-------
+% Maybe those better go inside \@makefntext or maybe not:
+% bibarts
+% fnbreak.sty
+%-------
+        #1
+%-------
+% bibarts
+% fnbreak.sty
+%-------
+        \@finalstrut\strutbox
+      }
+    \par
+    \color@endgroup
+  }
+%-------
+% ./linguex/linguex.sty
+%-------
+}
+
+% default for config point
+\def\@footnotetext@process { \insert\footins }
+
+
+% to survive overwriting by setspace for now
+
+\let \FN@footnotetext \@footnotetext
+
+% firstaid for setspace:
+
+\AddToHook{package/setspace/after}
+          {\let \@footnotetext \FN@footnotetext
+           \AddToHook{fntext/begin}[setspace]{\let\baselinestretch\setspace@singlespace}%
+          }
+          
+
+
+% alterations not covered:
+%
+% ./revtex4-1/revtex4-1.cls  ./revtex/ltxutil.sty ./revtex/revtex4-2.cls ... (need analysis)
+% ./bigfoot/bigfoot.sty
 
 
 %-------------------------------------
@@ -217,7 +306,7 @@
 \NewHook{fnnote/after}
 
 \DeclareDocumentCommand\footnote {om} {
-  \fn_set_fnmark:nn {#1} \@mpfn
+  \fn_step_fnmark:nn {#1} \@mpfn
   \@footnotemark
   \@footnotetext {#2}
 %-------
@@ -229,7 +318,7 @@
 
 
 \DeclareDocumentCommand\footnotemark {o} {
-  \fn_set_fnmark:nn {#1} { footnote }
+  \fn_step_fnmark:nn {#1} { footnote }
   \@footnotemark
 }
 
@@ -521,17 +610,27 @@
 \ERROR
 \fi
 
+% next can be dropped when cleaned up
 \newif\ifFN@setspace
-\@ifpackageloaded{setspace}{%
-  \FN@setspacetrue
-  \@ifclassloaded{memoir}{%
-    \let\FN@baselinestretch\m@m@singlespace
-  }{%
-    \let\FN@baselinestretch\setspace@singlespace
-  }%
-}{%
-  \FN@setspacefalse
-}
+\@ifpackageloaded{setspace}%
+ {%
+   \FN@setspacetrue
+   \@ifclassloaded{memoir}%
+     {%
+       \AddToHook{fntext/begin}{\let\baselinestretch\m@m@singlespace}%
+       \let\FN@baselinestretch\m@m@singlespace
+     }%
+     {%
+%       \AddToHook{fntext/begin}{\let\baselinestretch\setspace@singlespace}%
+       \let\FN@baselinestretch\setspace@singlespace
+     }%
+ }%
+ {%
+   \FN@setspacefalse
+ }
+
+
+
 \ifFN@para
   \long\def\FN@footnotetext#1{%
     \insert\footins{%
@@ -583,31 +682,7 @@
 %      \FN@mf@prepare
     }%
   \else
-    \long\def\FN@footnotetext#1{%
-      \insert\footins{%
-        \ifFN@setspace
-          \let\baselinestretch\FN@baselinestretch
-        \fi
-        \reset@font\footnotesize
-        \interlinepenalty\interfootnotelinepenalty
-        \splittopskip\footnotesep
-        \splitmaxdepth \dp\strutbox
-        \floatingpenalty\@MM
-        \hsize\columnwidth
-        \@parboxrestore
-        \protected@edef\@currentlabel{%
-          \csname p@footnote\endcsname\@thefnmark
-        }%
-        \color@begingroup
-          \@makefntext{%
-            \rule\z@\footnotesep
-            \ignorespaces#1\@finalstrut\strutbox
-          }%
-        \color@endgroup
-      }%
-% wrong
-%      \FN@mf@prepare
-    }%
+%    \let \FN@footnotetext \@footnotetext
   \fi
 \fi
 \ifFN@para
