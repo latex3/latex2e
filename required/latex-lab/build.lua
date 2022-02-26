@@ -15,6 +15,7 @@ installfiles = {"*.ltx", "*.sty"}
 typesetfiles = {
                  "latex-lab-testphase.dtx",
                  "latex-lab-new-or.dtx",
+                 "latex-lab-footnotes.dtx",
                  "*-doc.tex",
 		 "*-code.tex",
 	       }
