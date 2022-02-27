@@ -67,6 +67,8 @@
 
 % latex.ltx
 
+        % not looked at yet
+        
 \long\def\@mpfootnotetext#1{%
   \global\setbox\@mpfootins\vbox{%
     \unvbox\@mpfootins
@@ -84,8 +86,6 @@
 
 
 \def\@makefnmark{\hbox{\@textsuperscript{\normalfont\@thefnmark}}}
-
-
 
 
 
@@ -139,7 +139,7 @@
 \tl_new:N \@kernel@after@fnmark
 \tl_new:N \@kernel@before@fnmark@end
 
-\def\debug@footnotemark{
+\cs_new:Npn \__fnote_debug_footnotemark: {
   \ShowCommand\@kernel@after@fnmark
   \ShowCommand\@kernel@before@fnmark@end
   \LogHook{fnmark/before}
@@ -147,12 +147,12 @@
   \LogHook{fnmark}
   \LogHook{fnmark/end}
   \LogHook{fnmark/after}
-  \global\let\debug@footnotemark\relax
-  }
+  \cs_gset_eq:NN \__fnote_debug_footnotemark: \prg_do_nothing:
+}
 
 
-\def \@footnotemark {
-  \debug@footnotemark
+\cs_new:Npn \fnote_footnotemark: {
+  \__fnote_debug_footnotemark:
 %-------
 % bibarts
 % chextras  --- actually in the wrong place does an \unskip
@@ -198,16 +198,9 @@
 % ./arabtex/afoot.sty  --- too different (and probably too old)
 
 
-% to survive overwrite by hyperref for now
+% Provide the name \LaTeXe{} is used to.
 
-\let \FN@footnotemark \@footnotemark
-
-\AddToHook{package/hyperref/after}{
-  \let\H@@footnotetext\FN@footnotetext
-  \let\H@@footnotemark\FN@footnotemark
-  \let \@footnotetext \FN@footnotetext
-  \let \@footnotemark \FN@footnotemark
-}
+\let \@footnotemark \fnote_footnotemark:
 
 
 
@@ -219,7 +212,7 @@
 \NewHook{fntext/after}
 
 
-\def\debug@footnotetext{
+\cs_new:Npn \__fnote_debug_footnotetext: {
   \ShowCommand\@footnotetext@process
   \ShowCommand\@footnotetext@processii
   \ShowCommand\@footnotetext@processiii
@@ -228,11 +221,11 @@
   \LogHook{fntext}
   \LogHook{fntext/para}
   \LogHook{fntext/after}
-  \global\let\debug@footnotetext\relax
+  \cs_gset_eq:NN \__fnote_debug_footnotetext: \prg_do_nothing:
   }
 
-\long\def\@footnotetext#1{
-  \debug@footnotetext
+\cs_new:Npn \fnote_footnotetext:n #1 {
+  \__fnote_debug_footnotetext:
 %-------
 % ./linguex/linguex.sty
   \UseHook{fntext/before}
@@ -323,26 +316,55 @@
 
 
 
-% to survive overwrite by setspace for now
+% Provide the name \LaTeXe{} is used to
 
-\let \FN@footnotetext \@footnotetext
-
-
-
-
-% firstaid for setspace:
-
-\AddToHook{package/setspace/after}
-   {\let \@footnotetext \FN@footnotetext % should not overwrite it but use hook
-    \AddToHook{fntext}[setspace]{\let\baselinestretch\setspace@singlespace}}
-
-          
+\cs_set_eq:NN \@footnotetext \fnote_footnotetext:n
 
 
 % alterations not covered:
 %
 % ./revtex4-1/revtex4-1.cls  ./revtex/ltxutil.sty ./revtex/revtex4-2.cls ... (need analysis)
 % ./bigfoot/bigfoot.sty
+
+
+
+%    \end{macrocode}
+%
+%
+%
+%
+%
+%
+% \subsection{Firstaid vor packages and classes}
+%
+% \subsection{\pkg{setspace}
+%
+%    It should not overwrite it any longer but use a hook, so for now we
+%    do just that here.
+%    \begin{macrocode}
+\AddToHook{package/setspace/after}
+   {\let \@footnotetext \fnote_footnotetext:n 
+    \AddToHook{fntext}[setspace]{\let\baselinestretch\setspace@singlespace}}
+%    \end{macrocode}
+%
+%
+%
+%
+% \subsection{\pkg{hyperref}
+%
+%    Prevent hyperref from redefining footnote stuff --- this is a
+%    temp solution.
+%    \begin{macrocode}
+\AddToHook{package/hyperref/after}{
+  \let\H@@footnotetext\fnote_footnotetext:n
+  \let\H@@footnotemark\fnote_footnotemark:
+  \let \@footnotetext \fnote_footnotetext:n
+  \let \@footnotemark \fnote_footnotemark:
+}
+
+
+          
+
 
 
 %-------------------------------------
@@ -371,14 +393,15 @@
 
 %-------------------------------------
 
-\NewHook{fnnote/after}
+\NewHook{fnote/after}
 
 \DeclareDocumentCommand\footnote {om} {
   \fn_step_fnmark:nn {#1} \@mpfn
   \@footnotemark
   \@footnotetext {#2}
 %-------
-  \UseHook{fnnote/after}
+% for multiple flags mainly
+  \UseHook{fnote/after}
 %-------
 }
 
@@ -406,7 +429,7 @@
 %  Tagging
 %-------------------------------------
 
-% hyperref support only when loaded (improve)
+% hyperref support only when loaded (improve integration)
 
 \newcounter{absfootnote}
 \AddToHook{fnmark}{\stepcounter{absfootnote}}  % too simple (fails with opt args)
@@ -490,32 +513,6 @@
 
 \ExplSyntaxOff
 
-
-
-%----------- old tagging
-
-\iffalse
-\DeclareDocumentCommand\footnote {om}{%
-  \IfNoValueTF{#1}%
-     {\stepcounter\@mpfn
-       \protected@xdef\@thefnmark{\thempfn}}%
-     {\begingroup
-        \csname c@\@mpfn\endcsname #1\relax
-        \unrestored@protected@xdef\@thefnmark{\thempfn}%
-      \endgroup}%
-     \tagstructbegin{tag=Lbl}%
-     \tagmcbegin{tag=Lbl}%
-     \@footnotemark
-     \tagmcend
-     \tagstructend
-     \@footnotetext
-         {%
-           \tagmcbegin{tag=Note}%
-           #2%
-           \tagmcend
-         }%
-}
-\fi
         
 %</kernel>
 %    \end{macrocode}
@@ -577,21 +574,32 @@
   \AtEndOfPackage{\setfnsymbol{lamport*-robust}}%
 }
 \newif\ifFN@para  \FN@parafalse
-\DeclareOption{para}{\ifFN@sidefn
-    \PackageError{footmisc}{Option "\CurrentOption" incompatible with
-      option "side"}%
-      {I shall ignore "\CurrentOption"}%
-  \else
-    \FN@paratrue
-  \fi
+\DeclareOption{para}{%  
+%    \end{macrocode}
+%    Options are executed in the orderof declaration, thus no point in
+%    checking for side option as footmisc did in the past
+%    \begin{macrocode}
+%    \PackageError{footmisc}{Option "\CurrentOption" incompatible with
+%                            option "side"}%
+%                 {I shall ignore "\CurrentOption"}%
+  \FN@paratrue
 }
-\newif\ifFN@sidefn  \FN@sidefnfalse
+%    \end{macrocode}
+%
+%    \begin{macrocode}
 \DeclareOption{side}{\ifFN@para
     \PackageError{footmisc}{Option "\CurrentOption" incompatible with
-      option "para"}%
-      {I shall ignore "\CurrentOption"}%
+                            option "para"}%
+                 {I shall ignore "\CurrentOption"}%
   \else
-    \FN@sidefntrue
+    \def\@footnotetext@process {\marginpar}
+    \AddToHook{fntext/para}{%
+      \hsize\marginparwidth     % correct the default \hsize
+      \footnotesep\z@           % don't add a default separation
+    }
+    \def\@footnotetext@processii  {\@makefntext}
+    \def\@footnotetext@processiii {}
+    \def\@footnotetext@processiv  {}
   \fi
 }
 \let\footnotelayout\@empty
@@ -803,20 +811,8 @@
   \def\@footnotetext@processiv {% config point
            \strut
            \penalty-10\relax
-            \hskip\footglue
+           \hskip\footglue
   }
-  
-\else
-  \ifFN@sidefn
-    \def\@footnotetext@process {\marginpar}
-    \AddToHook{fntext/para}{%
-      \hsize\marginparwidth     % correct the default \hsize
-      \footnotesep\z@           % don't add a default separation
-    }
-    \def\@footnotetext@processii  {\@makefntext}
-    \def\@footnotetext@processiii {}
-    \def\@footnotetext@processiv  {}
-  \fi
 \fi
 
 
@@ -917,10 +913,8 @@
   \providecommand*{\multiplefootnotemarker}{3sp}
   \providecommand*{\multfootsep}{,}
   \AddToHook{fnmark/begin}{\FN@mf@check}
-  \AddToHook{fnmark/end}{\FN@mf@prepare}
-  \AddToHook{fnnote/after}{\FN@mf@prepare}
-% cleanup and remove FN@footnotemark not needed in the end  
-  \let\FN@footnotemark\@footnotemark
+  \AddToHook{fnmark/end}  {\FN@mf@prepare}
+  \AddToHook{fnote/after} {\FN@mf@prepare}
 %
   \def\FN@mf@prepare{%
     \kern-\multiplefootnotemarker
@@ -939,7 +933,6 @@
   }
 \else
   \let\FN@mf@prepare\relax
-  \let\FN@footnotemark\@footnotemark
 \fi
 \ifFN@stablefootnote
 \let\FN@sf@@footnote\footnote
