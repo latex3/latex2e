@@ -26,6 +26,7 @@ l3build save -cconfig-OR \
 	footmisc-008-pdfcol \
 	footmisc-009-multiple \
 	footmisc-010-setspace \
+	footmisc-011-para \
 	tagging-001 \
 	github-001 \
 	footmisc-symbols-001 \
