@@ -6,3 +6,4 @@ checksearch  = true
 testfiledir  = "testfiles-OR"
 
 checkruns     = 3
+
