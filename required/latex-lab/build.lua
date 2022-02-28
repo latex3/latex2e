@@ -34,7 +34,7 @@ checkdeps =
     maindir .. "/base"
   }
 
-checkruns     = 2
+checkruns     = 4
 typesetruns   = 2
 
 typesetdeps =
