@@ -27,6 +27,7 @@ l3build save -cconfig-OR \
 	footmisc-009-multiple \
 	footmisc-010-setspace \
 	footmisc-011-para \
+	footmisc-012-side \
 	tagging-001 \
 	github-001 \
 	footmisc-symbols-001 \
