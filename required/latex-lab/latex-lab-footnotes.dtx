@@ -209,6 +209,7 @@
 \NewHook{fntext/before}
 \NewHook{fntext}
 \NewHook{fntext/para}
+\NewHook{fntext/mark}         %bad name
 \NewHook{fntext/begin}
 \NewHook{fntext/end}
 \NewHook{fntext/after}
@@ -260,10 +261,11 @@
     \floatingpenalty \@MM
     \hsize\columnwidth
     \@parboxrestore
+    \parindent 1em     % typical default used in \@makefntext moved up here
     \def\@currentcounter{footnote}
     \protected@edef \@currentlabel { \p@footnote \@thefnmark }
 %-------
-% altering para parameters ...
+% for altering para parameters ...
 % code for resphilosophica came earlier but it could go here.
 % Has the advantage that one can also overwrite \cs{@currentcounter}
 % and \cs{@currentlabel} is that is necessary.
@@ -330,6 +332,66 @@
 % ./revtex4-1/revtex4-1.cls  ./revtex/ltxutil.sty ./revtex/revtex4-2.cls ... (need analysis)
 % ./bigfoot/bigfoot.sty
 
+
+
+% \footnotemargin is the logic implemented by footmisc. Perhaps we
+% don't want to do this like that in the kernel but for now I have
+% used this interface unchanged.
+
+
+\newdimen\footnotemargin
+\footnotemargin\maxdimen         % no value given
+
+\AtBeginDocument{
+  \ifdim \footnotemargin=\maxdimen
+    \ifFN@para
+      \setlength\footnotemargin{-\maxdimen}    % default when para is used
+    \else
+      \setlength\footnotemargin{1.8em}
+    \fi
+  \fi
+}     
+
+
+\cs_new:Npn \fnote_makefntext:n #1 {
+%      \parindent 1em  %  paragraph settings can be done in fntext/para instead
+  \UseHook{fntext/mark}
+  \@makefntext@process
+      {
+        \ifdim\footnotemargin>\z@
+          \hb@xt@ \footnotemargin{\hss\@makefnmark}
+        \else
+          \ifdim\footnotemargin=\z@
+            \llap{\@makefnmark}
+          \else
+          \ifdim\footnotemargin=-\maxdimen
+               \@makefnmark
+            \else
+               \llap{\hb@xt@ -\footnotemargin{\@makefnmark\hss}}
+            \fi
+          \fi
+        \fi
+      }
+  \@makefntext@processii
+      { #1 }
+}
+
+
+
+
+% default for config point (1 arg)
+\def \@makefntext@process { \noindent }
+
+% default for config point (1 arg)
+\long \def \@makefntext@processii #1 { #1 }
+
+
+% unconditionally overwrite what the class is doing for the moment
+% should instead do some patching
+
+\AddToHook{class/after}{
+  \cs_set_eq:NN \@makefntext \fnote_makefntext:n
+}
 
 
 %    \end{macrocode}
@@ -479,35 +541,44 @@
     }
 }
 
-% align this with redefs below instead ...
 
-\AtBeginDocument{
-  \def\@makefntext #1 {
-      \parindent 1em
-      \noindent
-      \tag@FENote { \hb@xt@1.8em{\hss\@makefnmark} }{ #1 }
-  }
+\def \@makefntext@process #1 {
+  \noindent
+  \cs_if_exist:NT \tag_struct_begin:n { \tag_mc_end_push: }
+  \tag@FELbl { #1 }
 }
 
-\def\tag@FENote#1#2{
+\long \def \@makefntext@processii #1 {
+  \tag@FENote { #1 }
+  \cs_if_exist:NT \tag_struct_begin:n { \tag_mc_begin_pop:n{} }
+}
+
+
+
+\def\tag@FELbl#1{
   \cs_if_exist:NTF \tag_struct_begin:n
     {
-      \tag_mc_end_push:
       % target should perhaps be raised ...
       \IfPackageLoadedTF{hyperref}{ \hypertarget{fn.\the\c@absfootnote}{} }{}
       %\tag_struct_begin:n { tag=FENote,label=fn.\the\c@absfootnote } %alternativ location for structure
-        \tag_struct_begin:n { tag=Lbl }
-          \tag_mc_begin:n { tag=Lbl }
-            #1
-          \tag_mc_end:
-        \tag_struct_end:
-        \tag_mc_begin:n{tag=FENote}
-          #2
+      \tag_struct_begin:n { tag=Lbl }
+        \tag_mc_begin:n { tag=Lbl }
+          #1
         \tag_mc_end:
-      %\tag_struct_end: %alternative location for structure end but ends inside a P
-      \tag_mc_begin_pop:n{}
+      \tag_struct_end:
     }
-    { #1 #2 }
+    { #1 }
+}
+
+\def\tag@FENote#1{
+  \cs_if_exist:NTF \tag_struct_begin:n
+    {
+      \tag_mc_begin:n{tag=FENote}
+      #1
+      \tag_mc_end:
+      %\tag_struct_end: %alternative location for structure end but ends inside a P
+    }
+    { #1 }
 }
 
 %-------------------------------------
@@ -566,8 +637,6 @@
   #1#2{\the\@tempcnta}%
 }
 \let\@advance@macro\l@advance@macro
-\newdimen\footnotemargin
-\footnotemargin1.8em\relax
 \DeclareOption{symbol}{\renewcommand\thefootnote{\fnsymbol{footnote}}}
 \newif\ifFN@robust \FN@robustfalse
 \DeclareOption{symbol*}{%
@@ -799,6 +868,7 @@
 
 \ifFN@para
   \def\@footnotetext@process {\insert\footins}
+
   \long\def\@footnotetext@processii #1{%
     \setbox\FN@tempboxa\hbox{\@makefntext{#1}}%
     \dp\FN@tempboxa\z@
@@ -824,9 +894,6 @@
   \newbox\FN@tempboxb
   \newbox\FN@tempboxc
   \newskip\footglue \footglue=1em plus.3em minus.3em
-  \long\def\@makefntext#1{\leavevmode
-    \@makefnmark\nobreak
-    \hskip.5em\relax#1%
   }
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   \newdimen\footnotebaselineskip
@@ -869,6 +936,7 @@
                   \textwidth
             \else \columnwidth \fi}}
   {\def\FN@setfootnoteparawidth{\hsize\columnwidth}}
+
 \ifFN@perpage
   \RequirePackage{perpage}
   \MakePerPage{footnote}
@@ -876,11 +944,25 @@
 
 
 \ifFN@para
-  % use LaTeX's or class default
-  \renewcommand\@makefntext[1]{%
-    \parindent 1em%
-    \noindent
-    \hb@xt@1.8em{\hss\@makefnmark}#1}
+
+% This can use the default interface, except that a negative value for
+% \footnotemargin makes little sense, so we test for this and warn if
+% necessary. But -\maxdimen is ok again, so would need to be a litte bit more elaborate.
+%
+
+%\AddToHook{fntext/para}{
+%  \ifdim \footnotemargin >\z@ \else
+%    \PackageWarningNoline{footmisc}{Option 'para' needs positive \noexpand\footnotemargin}%
+%    \footnotemargin 1.8em\relax
+%  \fi
+%}
+
+
+\AddToHook{fntext/mark}{}
+\AddToHook{fntext/begin}{\nobreak \hspace{.2em}}
+
+
+
 
 \else
 
@@ -888,7 +970,7 @@
     \long\def\@makefntext#1{%
       \bgroup
         \setbox\@tempboxa\hbox{%
-          \ifdim\footnotemargin>0pt
+          \ifdim\footnotemargin>\z@
             \hb@xt@\footnotemargin{\@makefnmark\hss}%
           \else
             \@makefnmark
@@ -912,20 +994,22 @@
 
  \else
 
- \long\def\@makefntext#1{%
-      \parindent1em
-      \noindent
-      \ifdim\footnotemargin>\z@
-        \hb@xt@ \footnotemargin{\hss\@makefnmark}%
-      \else
-        \ifdim\footnotemargin=\z@
-          \llap{\@makefnmark}%
-        \else
-          \llap{\hb@xt@ -\footnotemargin{\@makefnmark\hss}}%
-        \fi
-      \fi
-    \footnotelayout#1%
-  }
+% This is now using the default interface:
+%
+% \long\def\@makefntext#1{%
+%      \parindent1em
+%      \noindent
+%      \ifdim\footnotemargin>\z@
+%        \hb@xt@ \footnotemargin{\hss\@makefnmark}%
+%      \else
+%        \ifdim\footnotemargin=\z@
+%          \llap{\@makefnmark}%
+%        \else
+%          \llap{\hb@xt@ -\footnotemargin{\@makefnmark\hss}}%
+%        \fi
+%      \fi
+%    \footnotelayout#1%
+%  }
 
  \fi
 \fi
