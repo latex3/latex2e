@@ -36,15 +36,315 @@
 %
 % \newcommand\fmi[1]{\begin{quote} TODO: \itshape #1\end{quote}}
 % \newcommand\NEW[1]{\marginpar{\mbox{}\hfill\fbox{New: #1}}}
+% \providecommand\class[1]{\texttt{#1.cls}}
 % \providecommand\pkg[1]{\texttt{#1}}
+% \providecommand\hook[1]{\texttt{#1}}
 %
 % \begin{abstract}
 % \end{abstract}
 %
+% \tableofcontents
+%
+%
 % \section{Introduction}
 %
-%    This code implements changes to the output routine. It is loaded by the
-%    pdfmanagement.
+%    This code reimplements the footnote interfaces for \LaTeX{}
+%    offering configurable methods for layout and functionality
+%    adjustments that avoid overwriting each other when used in
+%    classes as well as in packages (as far as possible --- obviously
+%    some adjustments are mutally exclusive). This is achieved by
+%    providing a a larger number of hooks (for areas where different
+%    packages/classes can easily coexist with their adjustments) and a
+%    number of configuration points to which only one class or package
+%    can write to successfully (in case of multiple changes the the
+%    last one wins). The latter are for special functionality, e.g.,
+%    if footnote text is typeset as a single paragraph, it can't be configured
+%    the same time to be typeset vertically with one footnote below
+%    each other.
+%
+%    The interfaces are  set up to support tagged PDF, but in order
+%    for this to work, all packages altering the fontnote setup should
+%    use the inferfaces provided here and not do it through the
+%    legacy methods (though there is some support for the latter as
+%    well, but if will not work in a cases).
+%
+% \subsection{Configuration methods}
+%
+%    Historically, the footnote setup in \LaTeX{} was done by
+%    providing definitions for \cs{@makefnmark} (format the footnote
+%    mark in running text and in front of the footnote text) and
+%    \cs{@makefntext} (formatting the footnote text and placing a mark
+%    in front of it).
+%
+%    There was a default definition for \cs{@makefnmark} in the format
+%    that was used by most document classes,
+%    but \cs{makefntext} had to be defined in the class itself because
+%    the format didn't provide a default. As a result you will find
+%    definitions for the latter in all document classes and defintions
+%    for \cs{@makefnmark} only in very few.
+%
+%    Furthermore, to enable special footnote layouts or provide
+%    additional functionality a few packages (and a few classes)
+%    overwrote other internal commands of \LaTeX's footnote
+%    mechanism. The commands affected in this way are mainly
+%    \cs{@footnotemark} and \cs{@footnotetext}. These overwrites could
+%    not be used in combination, so either the packages/classes had to
+%    be aware of being loaded together (which they sometimes did or
+%    tried to) or they would fail by overwriting each other
+%    unconditionally.
+%
+%    The present rewrite is an attempt to improve this situation, but
+%    of course, it will only work if all packages/classes make use of
+%    the new interfaces. Fortunately, the number of problematical
+%    packages altering these internal commands are fairly small so
+%    arranging for updates is a realistic goal --- to achieve properly
+%    tagged PDF it is a requirement.
+%
+%
+%
+% \section{Hooks and configuration points}
+%
+%    Note: the configuration points do not have an interface mechanism
+%    yet and all their names are temporary right now.
+%
+%
+% \subsection{Formatting the mark in the main text}
+%
+%    This implements formatting the mark\footnote{Like this one.} and
+%    its relation to surrounding text, e.g., if several marks appear
+%    in the same place, etc.
+%
+%
+% \subsubsection{Configuration points}
+%
+%    None: everything is implemented through a single definition for
+%    \cs{@footnotemark} that offers a number of hooks that can be used
+%    by packages to implement handling of multiple marks and the
+%    formatting of marks.
+%
+%
+% \subsubsection{Hooks}
+%
+%    The hooks to customize the marks in the text are the following:
+%    \begin{description}
+%    \item[\hook{fnmark/before}]
+%
+%      Executed at the very beginning of \cs{footnotemark}. Currently
+%      there are two packages (\pkg{bibarts} and \pkg{chextras}) that
+%      prepend material at this point (not ncessarily correctly, e.g.,
+%      they do not all check that they are in horizontal mode).
+%
+%      This hook is paired with hook \hook{fnmark/after}.
+%
+%    \item[\hook{fnmark}]
+%
+%      Executed in horizontal mode and after the current space factor
+%      has been saved away for reuse. This is where currently code for multiple
+%      marks does its preparation (as done by \pkg{footmisc} and
+%      others).
+%
+%      The hook is only executed in hmode, i.e., not if the mark is
+%      generated in math --- maybe that means the multiple handling
+%      should happen later?
+%
+%      After the hook \cs{nobreak} is executed, so any
+%      ``material'' added in the hook is tied to the following mark
+%      unless it contains its own permissible penalty.
+%
+%    \item[\hook{fnmark/begin}]
+%
+%      This hook is executed directly in front of the typeset mark.
+%      This is the place where \pkg{hyperref} adds part of its code,
+%      i.e., after the \cs{nobreak} mentioned above. With a closer
+%      integration of \pkg{hyperref} this hook may not be necessary at
+%      all.
+%
+%    \item[\hook{fnmark/end}]
+%
+%      This hook is executed directly after the typeset mark. It is
+%      used by \pkg{hyperref}, \pkg{memhfixc}, \pkg{scrlttr2}, and
+%      \pkg{footmisc}. Used, for example, to implement support for
+%      multiple marks in succession.
+%
+%      It is \emph{not} a reversed hook.
+%
+%
+%    \item[\hook{fnmark/after}]
+%
+%      This hook is executed at the very end of the \cs{footnotemark} command.
+%
+%      It is a reversed  hook to pair with \hook{fnmark/before}
+%    \end{description}
+%
+%
+%
+%
+% \subsubsection{Additional configuration possibilities}
+%
+%    The actual formatting is done through \cs{@makefnmark} --- no
+%    special customization support for now.
+%
+%
+%
+% \subsection{Formatting the footnote text}
+%
+%    This implements the formatting of the footnote text the way it
+%    appears at the bottom of the page (default case), or possibly
+%    elsewhere, e.g. in the margin.
+%
+% \subsubsection{Configuration points}
+%
+%    To cater for different layout configurations there are four
+%    configuration points which can be set only by one package or
+%    class. These are:
+%    \begin{description}
+%    \item[\cs{@footnotetext@process} (1 argument)]
+%
+%      This receives all material that is to be processed (or stored)
+%      including color protection code and what have you.  The default
+%      definition is to run \cs{insert\footins}.
+%
+%    \item[\cs{@footnotetext@processii}  (1 argument)]
+%
+%      The default definition runs \cs{@makefntext} which contains
+%      various hooks for customization. For most scenarios this is
+%      sufficient. However, when running all footnotes as a single
+%      paragraph at the bottom, then each footnote needs to be
+%      prepared prior to storing in the insert and this configuration
+%      point allows running extra code to do that.
+%
+%    \item[\cs{@footnotetext@processiii} (no argument)]
+%
+%      By default this configuration point adds a strut to the
+%      footnote material. so that consecutive footnotes are properly
+%      spaced vertically. In some use cases this is not appropriate
+%      (e.g., when running all footnotes s a single paragraph) and so
+%      this configuration point can cancel the action or do something
+%      else instead.
+%
+%      The configuration point is executed near the start of the
+%      argument for the configuration point
+%      \cs{@footnotetext@processii}.
+%
+%    \item[\cs{@footnotetext@processiv} (no argument)]
+%
+%      This configuration point is executed at the very end of the
+%      argument passed to  \cs{@footnotetext@processii}.
+%      By default it adds a final strut as long as we are still in
+%      horizontal mode (i.e., processing the footnote text paragraph.
+%      When running several footnotes in one paragraph some additional
+%      material (some horizontal glue) needs adding at this point.
+%
+%    \end{description}
+%    The configuration point \cs{@footnotetext@processii} runs
+%    \cs{@makefntext} and this command contains two further
+%    configuration points (and a few hooks):
+%    \begin{description}
+%    \item[\cs{@makefntext@process} (1 argument)]
+%
+%      This configuration point receives the material to typeset the
+%      footnote mark. By default, all it does is running \cs{indent}
+%      to get a paragraph indentation (if one is set up---in most
+%      layouts it is 0~points)  and then typesets the mark, but in
+%      some designs it executes more elaborate code.
+%
+%      If tagging is produced this configuration point is also
+%      responsible for surrounding the mark with the appropriate tags
+%      marking the mark as an Lbl. It does this using the command \cs{tag@FELbl}.
+%
+%    \item[\cs{@makefntext@processii} (1 argument)]
+%
+%      This configuration point manages the formatting of the footnote
+%      text once the mark has been typeset. 
+%
+%      If tagging is produced this configuration point is also
+%      responsible for surrounding the mark with the appropriate tags
+%      marking the mark as an MC of type FENote. It does this using
+%      the command \cs{tag@FENote}.
+%
+%    \end{description}
+%
+%
+%    The above configuration points are sufficient to implement all
+%    commonly used footnote layouts assuming L-R typesetting. For R-L
+%    typesetting they or may or may not need some extension (though
+%    that is not clear right now).
+%
+%
+%
+% \subsubsection{Hooks}
+%
+%    \begin{description}
+%    \item[\hook{fntext/before}]
+%
+%      Executed at the very beginning of \cs{footnotetext}. Currently
+%      there is on package (\pkg{linguex}) that
+%      prepends material at this point.
+%
+%      This hook is paired with hook \hook{fnmark/after}.
+%
+%    \item[\hook{fntext}]
+%
+%      Executed at the beginning of the material passed to the first
+%      configuration point.  Typically used to set any baseline
+%      stretch for the footnote text, e.g., by \pkg{setspace},
+%      \pkg{footmisc}, \class{uathesis} and others. Could be done in a
+%      later hook but is a bit more efficient here.
+%
+%      After the hook has run, the font is established, i.e., it can't
+%      be used to set a different font size.
+%
+%    \item[\hook{fntext/para}]
+%
+%      After the font is set default paragraph parameters are set up
+%      including \cs{interlinepenalty}, \cs{hsize}, \cs{parindent} and
+%      a number of others, as some of them depend on the font
+%      size. Then the \hook{fntext/para} is run. If one wants to
+%      change the font size, it is probably necessary to reset these
+%      other parameters too, e.g., \cs{parindent}, which can be done
+%      here.
+%
+%    \item[\hook{fntext/para2}]
+%
+%      The configuration point \cs{@footnotetext@processii} normally
+%      runs the command \cs{@makefntext} or some code that eventually
+%      runs this command, and this then produces the footnote mark (in
+%      front of the footnote text) and the formatted footnote text. In
+%      front of both the mark and the footnote text the hook
+%      \hook{fntext/para2} is executed.  In fact it is not
+%      clear if it is really needed, as most likely all of its
+%      settings could probably go into \hook{fntext/para}, it is just
+%      that historically there have been settings in some classes at
+%      this point in \cs{@makefntext}.
+%
+%    \item[\hook{fntext/begin} \& \hook{fntext/end}]
+%
+%      The footnote text itself is surrounded by the hooks
+%      \hook{fntext/begin} and \hook{fntext/end}. The two hooks are
+%      not paired as they are typically used independently.
+%
+%    \item[\hook{fntext/after}]
+%
+%      At the very end of \cs{footnotetext} we execute the hook
+%      \hook{fntext/after} which is a reversed hook paired with
+%      \hook{fntext/before}. Some packages, e.g., \pkg{linuex}, have
+%      code in that position.
+%
+%    \end{description}
+%
+%
+%
+%
+% \subsubsection{Additional configuration possibilities}
+%
+%
+%
+%
+%
+% \section{Tagging support}
+%
+%
+%
 %
 %
 %
@@ -129,22 +429,16 @@
 
 %-------------------------------------
 
-\NewHook{fnmark/before}
-\NewHook{fnmark/begin}
+\NewMirroredHookPair{fnmark/before}{fnmark/after}
 \NewHook{fnmark}
+\NewHook{fnmark/begin}
 \NewHook{fnmark/end}
-\NewHook{fnmark/after}
 
-% for hyperref links and perhaps tagging
-\tl_new:N \@kernel@after@fnmark
-\tl_new:N \@kernel@before@fnmark@end
 
 \cs_new:Npn \__fnote_debug_footnotemark: {
-  \ShowCommand\@kernel@after@fnmark
-  \ShowCommand\@kernel@before@fnmark@end
   \LogHook{fnmark/before}
-  \LogHook{fnmark/begin}
   \LogHook{fnmark}
+  \LogHook{fnmark/begin}
   \LogHook{fnmark/end}
   \LogHook{fnmark/after}
   \cs_gset_eq:NN \__fnote_debug_footnotemark: \prg_do_nothing:
@@ -166,22 +460,35 @@
 %                         (a bit less efficient)
 % memhfixc.sty
 % footmisc.sty
-    \UseHook{fnmark/begin}
+    \UseHook{fnmark}
 %-------
     \nobreak
   \fi
 %-------
 % hyperref.sty
-  \UseHook{fnmark}
-  \@kernel@after@fnmark
+  \UseHook{fnmark/begin}
 %-------
-  \@makefnmark
+  \@kernel@process@makefnmark
+     \@makefnmark
 %-------
+%    \end{macrocode}
+%    If a footnote mark is placed by its own then it should finish by
+%    executing \hook{fnmark/end}, resetting the space  factor, and
+%    finishing with \hook{fnmark/after}. However, inf a complete
+%    footnote these actions have to happen only after we have handled
+%    the footnote text (e.g., by placing it into an \cs{insert}. In
+%    such a situation \cs{__fnote_footmark_finish:} below does nothing
+%    and the action is carried out later.
+%    \begin{macrocode}
+  \__fnote_footnotemark_finish:
+}
+
+
+\cs_new:Npn \__fnote_finish: {
 % hyperref.sty
 % memhfixc.sty  --- could move fnmark/after
 % scrlttr2.cls  --- could vanish if footmisc uses a hook
 % footmisc.sty
-  \@kernel@before@fnmark@end
   \UseHook{fnmark/end}
 %-------
   \ifhmode
@@ -192,6 +499,15 @@
   \UseHook{fnmark/after}
 %-------
 }
+
+
+\cs_new_eq:NN \__fnote_footnotemark_finish: \__fnote_finish:
+
+
+  
+% Not a public config point but the kernel hook to add tagging
+\def \@kernel@process@makefnmark { }
+
 
 % alterations not covered:
 %
@@ -206,13 +522,12 @@
 
 %-------------------------------------
 
-\NewHook{fntext/before}
+\NewMirroredHookPair{fntext/before}{fntext/after}
 \NewHook{fntext}
 \NewHook{fntext/para}
-\NewHook{fntext/mark}         %bad name
+\NewHook{fntext/para2}         %bad name perhaps?
 \NewHook{fntext/begin}
 \NewHook{fntext/end}
-\NewHook{fntext/after}
 
 
 \cs_new:Npn \__fnote_debug_footnotetext: {
@@ -223,6 +538,7 @@
   \LogHook{fntext/before}
   \LogHook{fntext}
   \LogHook{fntext/para}
+  \LogHook{fntext/para2}
   \LogHook{fntext/begin}
   \LogHook{fntext/end}
   \LogHook{fntext/after}
@@ -235,6 +551,7 @@
 % ./linguex/linguex.sty
   \UseHook{fntext/before}
 %-------
+  \@kernel@process@footnotetext
   \@footnotetext@process {  % config point
 %-------
 % resetting baselinestretch ... (could be done further down)
@@ -321,6 +638,8 @@
 \def\@footnotetext@processiv  { \@finalstrut\strutbox }
 
 
+% kernel hook for tagging (2 args)
+\cs_new:Npn \@kernel@process@footnotetext {}
 
 % Provide the name \LaTeXe{} is used to
 
@@ -354,8 +673,7 @@
 
 
 \cs_new:Npn \fnote_makefntext:n #1 {
-%      \parindent 1em  %  paragraph settings can be done in fntext/para instead
-  \UseHook{fntext/mark}
+  \UseHook{fntext/para2}
   \@makefntext@process
       {
         \ifdim\footnotemargin>\z@
@@ -459,16 +777,14 @@
 
 %-------------------------------------
 
-\NewHook{fnote/after}
 
 \DeclareDocumentCommand\footnote {om} {
   \fn_step_fnmark:nn {#1} \@mpfn
+  \cs_set_eq:NN \__fnote_footnotemark_finish: \prg_do_nothing:
   \@footnotemark
+  \cs_set_eq:NN \__fnote_footnotemark_finish: \__fnote_finish:
   \@footnotetext {#2}
-%-------
-% for multiple flags mainly
-  \UseHook{fnote/after}
-%-------
+  \__fnote_footnotemark_finish:
 }
 
 %-------------------------------------
@@ -498,64 +814,101 @@
 % hyperref support only when loaded (improve integration)
 
 \newcounter{absfootnote}
-\AddToHook{fnmark}{\stepcounter{absfootnote}}  % too simple (fails with opt args)
+\AddToHook{fnmark/begin}{\stepcounter{absfootnote}}  % too simple (fails with opt args)
 
-\AddToHook{fnmark}
-{
-  \cs_if_exist:NT \tag_struct_begin:n
+% \AddToHook{fnmark/begin}
+% {
+%   \cs_if_exist:NT \tag_struct_begin:n
+%      {
+%        \tag_mc_end_push:
+%        \exp_args:Nx
+%        \tag_struct_begin:n{tag=Lbl,ref=fn.\the\c@absfootnote}
+%        \tag_mc_begin:n{tag=Lbl}
+%        \IfPackageLoadedTF{hyperref}{ \hyper@linkstart {link}{fn.\the\c@absfootnote} }{}
+%      }
+% }
+% 
+% \AddToHook{fnmark/end}
+% {
+%   \cs_if_exist:NT \tag_struct_begin:n
+%     {
+%       \IfPackageLoadedTF{hyperref}{ \hyper@linkend }{}
+%       \tag_mc_end:
+%       \tag_struct_end:
+%       \tag_mc_begin_pop:n{}
+%     }
+% }
+
+\cs_new:Npn \tag@FEMark #1 {
+  \cs_if_exist:NTF \tag_struct_begin:n
      {
        \tag_mc_end_push:
        \exp_args:Nx
        \tag_struct_begin:n{tag=Lbl,ref=fn.\the\c@absfootnote}
        \tag_mc_begin:n{tag=Lbl}
-       \IfPackageLoadedTF{hyperref}{ \hyper@linkstart {link}{fn.\the\c@absfootnote} }{}
-     }
-}
-
-\AddToHook{fnmark/end}
-{
-  \cs_if_exist:NT \tag_struct_begin:n
-    {
+       \IfPackageLoadedTF{hyperref}{ \hyper@linkstart
+         {link}{fn.\the\c@absfootnote} }{}
+       #1
       \IfPackageLoadedTF{hyperref}{ \hyper@linkend }{}
       \tag_mc_end:
       \tag_struct_end:
       \tag_mc_begin_pop:n{}
-    }
+     }
+     { #1 }
 }
 
-\AddToHook{fntext/before}
-{
-  \cs_if_exist:NT \tag_struct_begin:n
+\cs_set_eq:NN \@kernel@process@makefnmark \tag@FEMark
+
+
+% \AddToHook{fntext/before}
+% {
+%   \cs_if_exist:NT \tag_struct_begin:n
+%     {
+%       \tag_mc_end_push:
+%       \tag_struct_begin:n { tag=FENote,label=fn.\the\c@absfootnote }
+%     }
+% }
+% 
+% \AddToHook{fntext/after}
+% {
+%   \cs_if_exist:NT \tag_struct_begin:n
+%     {
+%       \tag_struct_end:
+%       \tag_mc_begin_pop:n{}
+%     }
+% }
+
+
+% kernel hook for tagging (2 args)
+\cs_set:Npn \@kernel@process@footnotetext #1#2 {
+  \cs_if_exist:NTF \tag_struct_begin:n
     {
       \tag_mc_end_push:
       \tag_struct_begin:n { tag=FENote,label=fn.\the\c@absfootnote }
-    }
-}
-
-\AddToHook{fntext/after}
-{
-  \cs_if_exist:NT \tag_struct_begin:n
-    {
+      #1 {#2}
       \tag_struct_end:
       \tag_mc_begin_pop:n{}
     }
+    { #1 {#2} }
 }
 
 
-\def \@makefntext@process #1 {
+
+\cs_set:Npn \@makefntext@process #1 {
   \noindent
   \cs_if_exist:NT \tag_struct_begin:n { \tag_mc_end_push: }
   \tag@FELbl { #1 }
 }
 
-\long \def \@makefntext@processii #1 {
+\cs_set:Npn \@makefntext@processii #1 {
   \tag@FENote { #1 }
   \cs_if_exist:NT \tag_struct_begin:n { \tag_mc_begin_pop:n{} }
 }
 
 
 
-\def\tag@FELbl#1{
+
+\cs_new:Npn \tag@FELbl#1{
   \cs_if_exist:NTF \tag_struct_begin:n
     {
       % target should perhaps be raised ...
@@ -591,7 +944,7 @@
 %    \end{macrocode}
 %
 %
-% \section{Reimplementing the \pkg{foomisc} package}
+% \section{Reimplementing the \pkg{footmisc} package}
 %
 %    \begin{macrocode}
 %<*footmisc>
@@ -958,7 +1311,6 @@
 %}
 
 
-\AddToHook{fntext/mark}{}
 \AddToHook{fntext/begin}{\nobreak \hspace{.2em}}
 
 
@@ -1020,9 +1372,8 @@
 \ifFN@multiplefootnote
   \providecommand*{\multiplefootnotemarker}{3sp}
   \providecommand*{\multfootsep}{,}
-  \AddToHook{fnmark/begin}{\FN@mf@check}
+  \AddToHook{fnmark}      {\FN@mf@check}
   \AddToHook{fnmark/end}  {\FN@mf@prepare}
-  \AddToHook{fnote/after} {\FN@mf@prepare}
 %
   \def\FN@mf@prepare{%
     \kern-\multiplefootnotemarker
