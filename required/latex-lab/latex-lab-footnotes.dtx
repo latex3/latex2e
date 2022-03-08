@@ -673,10 +673,14 @@
 % kernel hook for tagging (2 args)
 \cs_new:Npn \@kernel@process@footnotetext {}
 
-% Provide the name \LaTeXe{} is used to
+% Provide the name \LaTeXe{} is used to and do this unconditionally
+%   (no patching of class code if any). This means that if a class provides it own
+%    definition that gets lost and if necessary needs to be handled
+%    with firstaid (or updating of the class.
 
-\cs_set_eq:NN \@footnotetext \fnote_footnotetext:n
-
+\AddToHook{begindocument}{
+  \cs_set_eq:NN \@footnotetext \fnote_footnotetext:n
+}
 
 % alterations not covered:
 %
@@ -736,12 +740,71 @@
 \long \def \@makefntext@processii #1 { #1 }
 
 
-% unconditionally overwrite what the class is doing for the moment
-% should instead do some patching
 
-\AddToHook{class/after}{
-  \cs_set_eq:NN \@makefntext \fnote_makefntext:n
+%    If the definition for \cs{@makefntext} is that of the standard
+%    classes then replace it with \cs{fnote_makefntext:n}, otherwise
+%    try to patch the definition
+
+\newcommand\old@std@class@makefntext[1]{%
+    \parindent 1em%
+    \noindent
+    \hb@xt@1.8em{\hss\@makefnmark}#1}
+
+
+\tl_new:N \l__fnote_patch_tl
+\cs_new_protected:Npn \_fnote_patch:
+  {
+    \tl_set:No \l__fnote_patch_tl { \@makefntext { \@makefntext@processii{##1} } }
+    \tl_if_in:NnTF \l__fnote_patch_tl { \hbox }
+      { \cs_set_eq:NN \_fnote_tmp:w \_fnote_patch_hbox:w }
+      {
+        \tl_if_in:NnTF \l__fnote_patch_tl { \hb@xt@ }
+          { \cs_set_eq:NN \_fnote_tmp:w \_fnote_patch_hb@xt@:w }
+          {
+            \tl_if_in:NnTF \l__fnote_patch_tl { \@makefnmark }
+              { \cs_set_eq:NN \_fnote_tmp:w \_fnote_patch_@makefnmark:w }
+              { \ERROR \cs_set_eq:NN \_fnote_tmp:w \exp_stop_f: }
+          }
+      }
+    \tl_set:Nf \l__fnote_patch_tl
+      { \exp_after:wN \_fnote_tmp:w \l__fnote_patch_tl }
+    \cs_set:Npn \_fnote_tmp:w { \long \def \@makefntext ####1 }
+    \exp_after:wN \_fnote_tmp:w \exp_after:wN { \l__fnote_patch_tl }
+  }
+
+  
+\cs_new:Npn \_fnote_patch_hbox:w #1 \hbox #2 #
+  { \exp_stop_f: #1 \@makefntext@processX { \hbox #2 } }
+\cs_new:Npn \_fnote_patch_hb@xt@:w #1 \hb@xt@ #2 #
+  { \exp_stop_f: #1 \@makefntext@processX { \hb@xt@ #2 } }
+\cs_new:Npn \_fnote_patch_@makefnmark:w #1 \@makefnmark
+  { \exp_stop_f: #1 \@makefntext@processX { \use:n } { \@makefnmark } }
+
+% The code provided by Bruno above expects 2 arguments but we need a
+%    different structure so this is a simple reshuffling. Would be
+%    better if we can patch the right structure in directly, but I'm
+%    not a patch person, so this is the simple way out for now:
+  
+\long\def\@makefntext@processX #1#2{\@makefntext@process{#1{#2}}}
+  
+
+\AddToHook{begindocument}{
+  \cs_if_eq:NNTF \@makefntext \old@std@class@makefntext
+     {
+       \cs_set_eq:NN \@makefntext \fnote_makefntext:n
+     }
+     {
+       \_fnote_patch:
+     }
 }
+
+
+% possibly add the following to check for multiple \hbox in
+% the definition:
+%
+% \seq_set_split:NnV \l__fnote_patch_seq { \hbox } \l__fnote_patch_tl
+% \int_compare:nT { \seq_count:N \l__fnote_patch_seq } > 2 \ERROR
+
 
 
 %    \end{macrocode}
@@ -936,6 +999,7 @@
 
 
 
+  
 %-------------------------------------
 
 

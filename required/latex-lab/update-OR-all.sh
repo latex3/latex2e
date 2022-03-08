@@ -12,9 +12,7 @@ l3build save -cconfig-OR \
 	footmisc-floats-abovefloats-flushbottom \
 	footmisc-floats-belowfloats-flushbottom \
 	footmisc-floats-bottom-abovefloats-flushbottom \
-	footmisc-floats-bottom-belowfloats-flushbottom
-
-l3build save -cconfig-OR \
+	footmisc-floats-bottom-belowfloats-flushbottom \
 	footmisc-000 \
 	footmisc-001 \
 	footmisc-002 \
@@ -28,6 +26,7 @@ l3build save -cconfig-OR \
 	footmisc-010-setspace \
 	footmisc-011-para \
 	footmisc-012-side \
+	footmisc-013-scrartcl \
 	tagging-001 \
 	github-001 \
 	footmisc-symbols-001 \
@@ -49,6 +48,11 @@ l3build save -cconfig-OR \
 	footmisc-twocol-floats-latex
 
 
+
+l3build save -cconfig-OR-local \
+	footmisc-local-uafthesis \
+	footmisc-local-uwthesis \
+	footmisc-local-aastex631
 
 exit
 
