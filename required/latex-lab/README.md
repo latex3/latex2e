@@ -20,7 +20,9 @@ to documents already using the new functionality.
 
 ### Support for `\DocumentMetadata`
 
-### New output routine code (und development)
+### New output routine code (under development)
+
+ - so far there is a first implementation of footnote support
 
 
 ## License
