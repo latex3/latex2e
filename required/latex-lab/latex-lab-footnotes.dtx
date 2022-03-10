@@ -106,6 +106,14 @@
 %
 %    Note: the configuration points do not have an interface mechanism
 %    yet and all their names are temporary right now.
+%    Also note that configuration points are of interest only to very
+%    few specialized packages, mainly \pkg{footmisc}, and packages
+%    providing similar functionality---the current documentation is
+%    therefore fairly sketchy.
+%
+%    In contrast the hooks are of interest to many classes to provide
+%    their layout alterations in a way that it works smoothly with
+%    other packages handling aspects of foonote formatting.
 %
 %
 % \subsection{Formatting the mark in the main text}
@@ -196,13 +204,15 @@
 %
 %    To cater for different layout configurations there are four
 %    configuration points which can be set only by one package or
-%    class. These are:
+%    class, if two packages/classes set them they are mutually
+%    incompatible.
+%    These are:
 %    \begin{description}
 %    \item[\cs{@footnotetext@cfgpoint} (1 argument)]
 %
 %      This receives all material that is to be processed (or stored)
 %      including color protection code and what have you.  The default
-%      definition is to run \cs{insert\footins}.
+%      definition is to run \cs{insert}\cs{footins}.
 %
 %    \item[\cs{@footnotetext@cfgpointii}  (1 argument)]
 %
@@ -563,7 +573,7 @@
 
 % Provide the name \LaTeXe{} is used to.
 
-\let \@footnotemark \fnote_footnotemark:
+\cs_set_eq:NN  \@footnotemark \fnote_footnotemark:
 
 
 
@@ -678,21 +688,21 @@
 }
 
 % default for config point (1 arg)
-\def\@footnotetext@cfgpoint    { \insert\footins }
+\cs_new_protected:Npn \@footnotetext@cfgpoint    { \insert\footins }
 
 % default for config point (1 arg)
-\def\@footnotetext@cfgpointii  { \@makefntext }
+\cs_new_protected:Npn \@footnotetext@cfgpointii  { \@makefntext }
 
 
 % default for config point (0 args)
-\def\@footnotetext@cfgpointiii { \rule\z@\footnotesep }
+\cs_new_protected:Npn \@footnotetext@cfgpointiii { \rule\z@\footnotesep }
 
 % default for config point (0 args)
-\def\@footnotetext@cfgpointiv  { \@finalstrut\strutbox }
+\cs_new_protected:Npn \@footnotetext@cfgpointiv  { \@finalstrut\strutbox }
 
 
 % kernel hook for tagging (2 args)
-\cs_new:Npn \@kernel@process@footnotetext {}
+\cs_new_protected:Npn \@kernel@process@footnotetext {}
 
 % Provide the name \LaTeXe{} is used to and do this unconditionally
 %   (no patching of class code if any). This means that if a class provides it own
@@ -756,22 +766,58 @@
 
 
 % default for config point (1 arg)
-\def \@makefntext@cfgpoint { \noindent }
+\cs_new_protected:Npn \@makefntext@cfgpoint { \noindent }
 
 % default for config point (1 arg)
-\long \def \@makefntext@cfgpointii #1 { #1 }
-
-
-
+\cs_new_protected:Npn \@makefntext@cfgpointii #1 { #1 }
+%    \end{macrocode}
+%
+%
+%
 %    If the definition for \cs{@makefntext} is that of the standard
 %    classes then replace it with \cs{fnote_makefntext:n}, otherwise
-%    try to patch the definition
-
+%    try to patch the definition.
+%
+%    Here is the the definition the way it is in
+%    \texttt{classes.dtx}. Notice that (for saving space) there is no
+%    space after \texttt{em} to terminate the assignment. We need to
+%    mimic that, otherwise a test would return false even if the
+%    definition has not been modified.
+%
+%    \begin{macrocode}
 \newcommand\old@std@class@makefntext[1]{%
     \parindent 1em%
     \noindent
     \hb@xt@1.8em{\hss\@makefnmark}#1}
 
+%    \end{macrocode}
+%    Here is the messy code for patching. Note that this is only there
+%    to help classes along that aren't updated yet so it does some
+%    minimal patching to hopefully add configuration points in the
+%    right place.
+%
+%    What it does is roughly the
+%    following: It look for a definition of \cs{@makefntext} of the form
+%\begin{verbatim}
+%  {AAA \hbox BBB { CCC } DDD #1 EEE }
+%\end{verbatim}
+%    where ``BBB'' is something like \texttt{to 1em} or similar. It then
+%    replaces that with
+%\begin{verbatim}
+%  {AAA \@makefntext@cfgpoint{\hbox BBB { CCC }} DDD
+%       \@makefntext@cfgpointii{#1} EEE }
+%\end{verbatim}
+%    The patching is not very careful, i.e., it assumes there is only
+%    one \verb=#1= in the replacement text and that a \cs{hbox} found
+%    is the right one to patch. But that is enough to cater for all
+%    definitions of \cs{@makefntext} out there in the TL distribution.
+%
+%    If \cs{hbox} is not found it tries the same looking for
+%    \cs{hb@xt@} which is what some classes use and if that is not
+%    found either it assume that this is a version that uses
+%    \cs{@makefnmark} without surrounding it in a box and if that
+%    fails it gives up with an \cs{ERROR} (which needs to get a proper definition).
+%    \begin{macrocode}
 
 \tl_new:N \l__fnote_patch_tl
 \cs_new_protected:Npn \_fnote_patch:
@@ -785,7 +831,8 @@
           {
             \tl_if_in:NnTF \l__fnote_patch_tl { \@makefnmark }
               { \cs_set_eq:NN \_fnote_tmp:w \_fnote_patch_@makefnmark:w }
-              { \ERROR \cs_set_eq:NN \_fnote_tmp:w \exp_stop_f: }
+              { \ERROR
+                \cs_set_eq:NN \_fnote_tmp:w \exp_stop_f: }
           }
       }
     \tl_set:Nf \l__fnote_patch_tl
@@ -793,22 +840,38 @@
     \cs_set:Npn \_fnote_tmp:w { \long \def \@makefntext ####1 }
     \exp_after:wN \_fnote_tmp:w \exp_after:wN { \l__fnote_patch_tl }
   }
-
-  
+%    \end{macrocode}
+%
+%    If \cs{@makefntext} contains \cs{hbox} then grab ``AAA'' as
+%    \verb=#1= and ``BBB'' (up to the open \verb={=)  and return it as
+%\begin{verbatim}
+%   AAA  \@makefntext@processX { \hbox BBB }
+%\end{verbatim}
+%    \begin{macrocode}
 \cs_new:Npn \_fnote_patch_hbox:w #1 \hbox #2 #
   { \exp_stop_f: #1 \@makefntext@processX { \hbox #2 } }
+%    \end{macrocode}
+%    Same for the other cases.
+%    \begin{macrocode}
 \cs_new:Npn \_fnote_patch_hb@xt@:w #1 \hb@xt@ #2 #
   { \exp_stop_f: #1 \@makefntext@processX { \hb@xt@ #2 } }
 \cs_new:Npn \_fnote_patch_@makefnmark:w #1 \@makefnmark
   { \exp_stop_f: #1 \@makefntext@processX { \use:n } { \@makefnmark } }
-
-% The code provided by Bruno above expects 2 arguments but we need a
+%    \end{macrocode}
+%
+%    The code provided by Bruno above expects 2 arguments but we need a
 %    different structure so this is a simple reshuffling. Would be
 %    better if we can patch the right structure in directly, but I'm
 %    not a patch person, so this is the simple way out for now:
-  
-\long\def\@makefntext@processX #1#2{\@makefntext@cfgpoint{#1{#2}}}
-  
+%    
+%    \begin{macrocode}
+\cs_new:Npn \@makefntext@processX #1#2{\@makefntext@cfgpoint{#1{#2}}}
+%    \end{macrocode}
+%    At \verb=\begin{document}= check if the current definition is
+%    that of the standard classes and if so replace it by
+%    \cs{fnote_makefntext:n} otherwise try and patch the definition
+%    using the approach above.
+%    \begin{macrocode}
 
 \AddToHook{begindocument}{
   \cs_if_eq:NNTF \@makefntext \old@std@class@makefntext
@@ -826,8 +889,7 @@
 %
 % \seq_set_split:NnV \l__fnote_patch_seq { \hbox } \l__fnote_patch_tl
 % \int_compare:nT { \seq_count:N \l__fnote_patch_seq } > 2 \ERROR
-
-
+%
 
 %    \end{macrocode}
 %
