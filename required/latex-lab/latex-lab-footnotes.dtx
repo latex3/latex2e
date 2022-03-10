@@ -1,0 +1,1822 @@
+% \iffalse meta-comment
+%
+%% File: latex-lab-footnotes.dtx
+% Copyright (C) 2022 The LaTeX Project
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+%
+% The development version of the bundle can be found below
+%
+%    https://github.com/latex3/latex2e/required/latex-lab
+%
+% for those people who are interested or want to report an issue.
+%
+%<*driver>
+\documentclass{l3doc}
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{latex-lab-footnotes.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+%
+% \title{The \texttt{latex-lab-footnotes} code\thanks{}}
+% \author{Frank Mittelbach, \LaTeX{} Project}
+%
+% \maketitle
+%
+% \newcommand\fmi[1]{\begin{quote} TODO: \itshape #1\end{quote}}
+% \newcommand\NEW[1]{\marginpar{\mbox{}\hfill\fbox{New: #1}}}
+% \providecommand\class[1]{\texttt{#1.cls}}
+% \providecommand\pkg[1]{\texttt{#1}}
+% \providecommand\hook[1]{\texttt{#1}}
+%
+% \begin{abstract}
+%   \emph{to be written}
+% \end{abstract}
+%
+% \tableofcontents
+%
+%
+% \section{Introduction}
+%
+%    This code reimplements the footnote interfaces for \LaTeX{}
+%    offering configurable methods for layout and functionality
+%    adjustments that avoid overwriting each other when used in
+%    classes as well as in packages (as far as possible --- obviously
+%    some adjustments are mutally exclusive). This is achieved by
+%    providing a a larger number of hooks (for areas where different
+%    packages/classes can easily coexist with their adjustments) and a
+%    number of configuration points to which only one class or package
+%    can write to successfully (in case of multiple changes the the
+%    last one wins). The latter are for special functionality, e.g.,
+%    if footnote text is typeset as a single paragraph, it can't be configured
+%    the same time to be typeset vertically with one footnote below
+%    each other.
+%
+%    The interfaces are  set up to support tagged PDF, but in order
+%    for this to work, all packages altering the fontnote setup should
+%    use the inferfaces provided here and not do it through the
+%    legacy methods (though there is some support for the latter as
+%    well, but if will not work in a cases).
+%
+% \subsection{Configuration methods}
+%
+%    Historically, the footnote setup in \LaTeX{} was done by
+%    providing definitions for \cs{@makefnmark} (format the footnote
+%    mark in running text and in front of the footnote text) and
+%    \cs{@makefntext} (formatting the footnote text and placing a mark
+%    in front of it).
+%
+%    There was a default definition for \cs{@makefnmark} in the format
+%    that was used by most document classes,
+%    but \cs{@makefntext} had to be defined in the class itself because
+%    the format didn't provide a default. As a result you will find
+%    definitions for the latter in all document classes and defintions
+%    for \cs{@makefnmark} only in very few.
+%
+%    Furthermore, to enable special footnote layouts or provide
+%    additional functionality a few packages (and a few classes)
+%    overwrote other internal commands of \LaTeX's footnote
+%    mechanism. The commands affected in this way are mainly
+%    \cs{@footnotemark} and \cs{@footnotetext}. These overwrites could
+%    not be used in combination, so either the packages/classes had to
+%    be aware of being loaded together (which they sometimes did or
+%    tried to) or they would fail by overwriting each other
+%    unconditionally.
+%
+%    The present rewrite is an attempt to improve this situation, but
+%    of course, it will only work if all packages/classes make use of
+%    the new interfaces. Fortunately, the number of problematical
+%    packages altering these internal commands are fairly small so
+%    arranging for updates is a realistic goal --- to achieve properly
+%    tagged PDF it is a requirement.
+%
+%
+%
+% \section{Hooks and configuration points}
+%
+%    Note: the configuration points do not have an interface mechanism
+%    yet and all their names are temporary right now.
+%    Also note that configuration points are of interest only to very
+%    few specialized packages, mainly \pkg{footmisc}, and packages
+%    providing similar functionality---the current documentation is
+%    therefore fairly sketchy.
+%
+%    In contrast the hooks are of interest to many classes to provide
+%    their layout alterations in a way that it works smoothly with
+%    other packages handling aspects of foonote formatting.
+%
+%
+% \subsection{Formatting the mark in the main text}
+%
+%    This implements formatting the mark\footnote{Like this one.} and
+%    its relation to surrounding text, e.g., if several marks appear
+%    in the same place, etc.
+%
+%
+% \subsubsection{Configuration points}
+%
+%    None: everything is implemented through a single definition for
+%    \cs{@footnotemark} that offers a number of hooks that can be used
+%    by packages to implement handling of multiple marks and the
+%    formatting of marks.
+%
+%
+% \subsubsection{Hooks}
+%
+%    The hooks to customize the marks in the text are the following:
+%    \begin{description}
+%    \item[\hook{fnmark/before}]
+%
+%      Executed at the very beginning of \cs{footnotemark}. Currently
+%      there are two packages (\pkg{bibarts} and \pkg{chextras}) that
+%      prepend material at this point (not ncessarily correctly, e.g.,
+%      they do not all check that they are in horizontal mode).
+%
+%      This hook is paired with hook \hook{fnmark/after}.
+%
+%    \item[\hook{fnmark}]
+%
+%      Executed in horizontal mode and after the current space factor
+%      has been saved away for reuse. This is where currently code for multiple
+%      marks does its preparation (as done by \pkg{footmisc} and
+%      others).
+%
+%      The hook is only executed in hmode, i.e., not if the mark is
+%      generated in math --- maybe that means the multiple handling
+%      should happen later?
+%
+%      After the hook \cs{nobreak} is executed, so any
+%      ``material'' added in the hook is tied to the following mark
+%      unless it contains its own permissible penalty.
+%
+%    \item[\hook{fnmark/begin}]
+%
+%      This hook is executed directly in front of the typeset mark.
+%      This is the place where \pkg{hyperref} adds part of its code,
+%      i.e., after the \cs{nobreak} mentioned above. With a closer
+%      integration of \pkg{hyperref} this hook may not be necessary at
+%      all.
+%
+%    \item[\hook{fnmark/end}]
+%
+%      This hook is executed directly after the typeset mark. It is
+%      used by \pkg{hyperref}, \pkg{memhfixc}, \pkg{scrlttr2}, and
+%      \pkg{footmisc}. Used, for example, to implement support for
+%      multiple marks in succession.
+%
+%      It is \emph{not} a reversed hook.
+%
+%
+%    \item[\hook{fnmark/after}]
+%
+%      This hook is executed at the very end of the \cs{footnotemark} command.
+%
+%      It is a reversed  hook to pair with \hook{fnmark/before}
+%    \end{description}
+%
+%
+%
+%
+% \subsubsection{Additional configuration possibilities}
+%
+%    The actual formatting is done through \cs{@makefnmark} --- no
+%    special customization support for now.
+%
+%
+%
+% \subsection{Formatting the footnote text}
+%
+%    This implements the formatting of the footnote text the way it
+%    appears at the bottom of the page (default case), or possibly
+%    elsewhere, e.g. in the margin.
+%
+% \subsubsection{Configuration points}
+%
+%    To cater for different layout configurations there are four
+%    configuration points which can be set only by one package or
+%    class, if two packages/classes set them they are mutually
+%    incompatible.
+%    These are:
+%    \begin{description}
+%    \item[\cs{@footnotetext@cfgpoint} (1 argument)]
+%
+%      This receives all material that is to be processed (or stored)
+%      including color protection code and what have you.  The default
+%      definition is to run \cs{insert}\cs{footins}.
+%
+%    \item[\cs{@footnotetext@cfgpointii}  (1 argument)]
+%
+%      The default definition runs \cs{@makefntext} which contains
+%      various hooks for customization. For most scenarios this is
+%      sufficient. However, when running all footnotes as a single
+%      paragraph at the bottom, then each footnote needs to be
+%      prepared prior to storing in the insert and this configuration
+%      point allows running extra code to do that.
+%
+%    \item[\cs{@footnotetext@cfgpointiii} (no argument)]
+%
+%      By default this configuration point adds a strut to the
+%      footnote material. so that consecutive footnotes are properly
+%      spaced vertically. In some use cases this is not appropriate
+%      (e.g., when running all footnotes s a single paragraph) and so
+%      this configuration point can cancel the action or do something
+%      else instead.
+%
+%      The configuration point is executed near the start of the
+%      argument for the configuration point
+%      \cs{@footnotetext@cfgpointii}.
+%
+%    \item[\cs{@footnotetext@cfgpointiv} (no argument)]
+%
+%      This configuration point is executed at the very end of the
+%      argument passed to  \cs{@footnotetext@cfgpointii}.
+%      By default it adds a final strut as long as we are still in
+%      horizontal mode (i.e., processing the footnote text paragraph.
+%      When running several footnotes in one paragraph some additional
+%      material (some horizontal glue) needs adding at this point.
+%
+%    \end{description}
+%    The configuration point \cs{@footnotetext@cfgpointii} runs
+%    \cs{@makefntext} and this command contains two further
+%    configuration points (and a few hooks):
+%    \begin{description}
+%    \item[\cs{@makefntext@cfgpoint} (1 argument)]
+%
+%      This configuration point receives the material to typeset the
+%      footnote mark. By default, all it does is running \cs{indent}
+%      to get a paragraph indentation (if one is set up---in most
+%      layouts it is 0~points)  and then typesets the mark, but in
+%      some designs it executes more elaborate code.
+%
+%      If tagging is produced this configuration point is also
+%      responsible for surrounding the mark with the appropriate tags
+%      marking the mark as an Lbl. It does this using the command \cs{tag@FELbl}.
+%
+%    \item[\cs{@makefntext@cfgpointii} (1 argument)]
+%
+%      This configuration point manages the formatting of the footnote
+%      text once the mark has been typeset. 
+%
+%      If tagging is produced this configuration point is also
+%      responsible for surrounding the mark with the appropriate tags
+%      marking the mark as an MC of type FENote. It does this using
+%      the command \cs{tag@FENote}.
+%
+%    \end{description}
+%
+%
+%    The above configuration points are sufficient to implement all
+%    commonly used footnote layouts assuming L-R typesetting. For R-L
+%    typesetting they or may or may not need some extension (though
+%    that is not clear right now).
+%
+%
+%
+% \subsubsection{Hooks}
+%
+%    \begin{description}
+%    \item[\hook{fntext/before}]
+%
+%      Executed at the very beginning of \cs{footnotetext}. Currently
+%      there is on package (\pkg{linguex}) that
+%      prepends material at this point.
+%
+%      This hook is paired with hook \hook{fnmark/after}.
+%
+%    \item[\hook{fntext}]
+%
+%      Executed at the beginning of the material passed to the first
+%      configuration point.  Typically used to set any baseline
+%      stretch for the footnote text, e.g., by \pkg{setspace},
+%      \pkg{footmisc}, \class{uathesis} and others. Could be done in a
+%      later hook but is a bit more efficient here.
+%
+%      After the hook has run, the font is established, i.e., it can't
+%      be used to set a different font size.
+%
+%    \item[\hook{fntext/para}]
+%
+%      After the font is set default paragraph parameters are set up
+%      including \cs{interlinepenalty}, \cs{hsize}, \cs{parindent} and
+%      a number of others, as some of them depend on the font
+%      size. Then the \hook{fntext/para} is run. If one wants to
+%      change the font size, it is probably necessary to reset these
+%      other parameters too, e.g., \cs{parindent}, which can be done
+%      here.
+%
+%      The configuration point \cs{@footnotetext@cfgpointii} normally
+%      runs the command \cs{@makefntext} or some code that eventually
+%      runs this command, and this then produces the footnote mark (in
+%      front of the footnote text) and the formatted footnote text. In
+%      front of both the mark and the footnote text some classes have
+%      placed paragraph parameter adjustments in their redefinition of
+%      \cs{@makefntext}. However, there is no need to place it there
+%      it could equally well go into the \hook{fntext/para} hook. We
+%      therefore do not provide another hook at this point.
+%
+%    \item[\hook{fntext/begin} \& \hook{fntext/end}]
+%
+%      The footnote text itself is surrounded by the hooks
+%      \hook{fntext/begin} and \hook{fntext/end}. The two hooks are
+%      not paired as they are typically used independently.
+%
+%    \item[\hook{fntext/after}]
+%
+%      At the very end of \cs{footnotetext} we execute the hook
+%      \hook{fntext/after} which is a reversed hook paired with
+%      \hook{fntext/before}. Some packages, e.g., \pkg{linuex}, have
+%      code in that position.
+%
+%    \end{description}
+%
+%
+%
+%
+% \subsubsection{Additional configuration possibilities}
+%
+%    The formatting of the footnote mark in front of the footnote
+%    texts is influenced by the setting of the dimen parameter
+%    \cs{footnotemargin}. By default its value is 1.8em in the current
+%    text font (or \texttt{-}\cs{maxdimen} when the para option is
+%    chosen). The following rules apply:
+%    \begin{itemize}
+%    \item
+%
+%      If it has the value \texttt{-}\cs{maxdimen} then the mark is
+%      generated by \cs{@makefnmark}.
+%
+%    \item
+%
+%      Otherwise, if the value is
+%      negative then the mark is placed into an \cs{llap} left aligned
+%      in a box of size \texttt{-}\cs{footnotemargin}.
+%
+%    \item
+%
+%      If the value is zero an \cs{llap} is used without an inner box.
+%
+%    \item
+%
+%      If the value is greater zero (but less than \cs{maxdimen}) the
+%      mark is placed right aligned into a box of size
+%      \cs{footnotemargin}.
+%
+%    \item
+%
+%      The value \cs{maxdimen} is used as a marker to indicate that
+%      no value was given and that the default should be used,
+%      i.e. 1.8em or \texttt{-}\cs{maxdimen} depending on the chosen
+%      option.
+%    \end{itemize}
+%
+%
+% \section{Tagging support}
+%
+%  \emph{To be documented}
+%
+%
+%
+%
+% \MaybeStop{\setlength\IndexMin{200pt}  \PrintIndex  }
+%
+%
+% \section{The Implementation}
+%
+%    All this is very rough and misses a lot of documentation.
+%
+%    \begin{macrocode}
+%<*kernel>
+%<@@=fnote>
+%    \end{macrocode}
+%
+% \subsection{File declaration}
+%    \begin{macrocode}
+\ProvidesFile{latex-lab-footnotes.ltx}
+        [2022-03-10 v0.6a changes to the footnote interfaces]
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+
+% latex.ltx
+
+        % not looked at yet
+
+\long\def\@mpfootnotetext#1{%
+  \global\setbox\@mpfootins\vbox{%
+    \unvbox\@mpfootins
+    \reset@font\footnotesize
+    \hsize\columnwidth
+    \@parboxrestore
+    \def\@currentcounter{mpfootnote}%
+    \protected@edef\@currentlabel
+         {\csname p@mpfootnote\endcsname\@thefnmark}%
+    \color@begingroup
+      \@makefntext{%
+        \rule\z@\footnotesep\ignorespaces#1\@finalstrut\strutbox}%
+    \par
+    \color@endgroup}}
+
+
+\def\@makefnmark{\hbox{\@textsuperscript{\normalfont\@thefnmark}}}
+
+
+
+\def\@mpfn{footnote}
+\def\thempfn{\thefootnote}
+
+
+
+%-------------------------------------
+
+
+\ExplSyntaxOn
+
+
+\cs_new_protected:Npn \fnote_step_fnmark:nn #1#2 {
+  \tl_if_novalue:nTF {#1}
+    {
+      \stepcounter {#2}
+      \protected@xdef \@thefnmark { \use:c { the#2 } }
+    }
+    {
+     \group_begin:
+%    \end{macrocode}
+%    Note that this is a local assignment even though \LaTeX{}
+%    counters are normally globally changed. This is the way it was in
+%    2e and so far we haven't changed it. The alternative would be to
+%    store the current value and restore it after \cs{@thefnmark} is
+%    altered.
+%    \begin{macrocode}
+        \int_set:cn { c@#2 }{ #1 }
+        \unrestored@protected@xdef \@thefnmark { \use:c { the#2 } }
+     \group_end:
+    }
+}
+
+\cs_new_protected:Npn \fnote_set_fnmark:nn #1#2 {
+  \tl_if_novalue:nTF {#1}
+    {
+      \protected@xdef \@thefnmark { \use:c { the#2 } }
+    }
+    {
+     \group_begin:
+        \int_set:cn { c@#2 }{ #1 }
+        \unrestored@protected@xdef \@thefnmark { \use:c { the#2 } }
+     \group_end:
+    }
+}
+
+%-------------------------------------
+
+% the debugging code is just temp
+\bool_new:N \g_fnote_debug_bool
+\bool_gset_true:N  \g_fnote_debug_bool   % for now we have debugging turned on by default
+
+%-------------------------------------
+
+
+
+\NewMirroredHookPair{fnmark/before}{fnmark/after}
+\NewHook{fnmark}
+\NewHook{fnmark/begin}
+\NewHook{fnmark/end}
+
+
+\cs_new:Npn \@@_debug_footnotemark: {
+  \bool_if:NT \g_fnote_debug_bool
+       {
+         \LogHook{fnmark/before}
+         \LogHook{fnmark}
+         \LogHook{fnmark/begin}
+         \LogHook{fnmark/end}
+         \LogHook{fnmark/after}
+         \cs_gset_eq:NN \@@_debug_footnotemark: \prg_do_nothing:
+       }
+}
+
+
+\cs_new_protected:Npn \fnote_footnotemark: {
+  \@@_debug_footnotemark:
+%-------
+% bibarts
+% chextras  --- actually in the wrong place does an \unskip
+  \UseHook{fnmark/before}
+%-------
+  \leavevmode
+  \ifhmode
+    \edef\@x@sf{\the\spacefactor}
+%-------
+% bxjsja-minimal.def   --- what they do could be done at ``bibarts''
+%                         (a bit less efficient)
+% memhfixc.sty
+% footmisc.sty
+    \UseHook{fnmark}
+%-------
+    \nobreak
+  \fi
+%-------
+% hyperref.sty
+  \UseHook{fnmark/begin}
+%-------
+  \@kernel@process@makefnmark
+     \@makefnmark
+%-------
+%    \end{macrocode}
+%    If a footnote mark is placed by its own then it should finish by
+%    executing \hook{fnmark/end}, resetting the space  factor, and
+%    finishing with \hook{fnmark/after}. However, inf a complete
+%    footnote these actions have to happen only after we have handled
+%    the footnote text (e.g., by placing it into an \cs{insert}. In
+%    such a situation \cs{_@@_footmark_finish:} below does nothing
+%    and the action is carried out later.
+%    \begin{macrocode}
+  \@@_footnotemark_finish:
+}
+
+
+\cs_new:Npn \@@_finish: {
+% hyperref.sty
+% memhfixc.sty  --- could move fnmark/after
+% scrlttr2.cls  --- could vanish if footmisc uses a hook
+% footmisc.sty
+  \UseHook{fnmark/end}
+%-------
+  \ifhmode
+    \spacefactor \@x@sf \relax
+  \fi
+%
+%-------
+  \UseHook{fnmark/after}
+%-------
+}
+
+
+\cs_new_eq:NN \@@_footnotemark_finish: \@@_finish:
+
+
+  
+% Not a public config point but the kernel hook to add tagging
+\def \@kernel@process@makefnmark { }
+
+
+% alterations not covered:
+%
+% ./arabtex/afoot.sty  --- too different (and probably too old)
+
+
+% Provide the name \LaTeXe{} is used to.
+
+\cs_set_eq:NN  \@footnotemark \fnote_footnotemark:
+
+
+
+%-------------------------------------
+
+\NewMirroredHookPair{fntext/before}{fntext/after}
+\NewHook{fntext}
+\NewHook{fntext/para}
+\NewHook{fntext/begin}
+\NewHook{fntext/end}
+
+
+\cs_new:Npn \@@_debug_footnotetext: {
+  \bool_if:NT \g_fnote_debug_bool
+       {
+         \cs_log:N\@footnotetext@cfgpoint
+         \cs_log:N\@footnotetext@cfgpointii
+         \cs_log:N\@footnotetext@cfgpointiii
+         \cs_log:N\@footnotetext@cfgpointiv
+         \cs_log:N\@makefntext@cfgpoint
+         \cs_log:N\@makefntext@cfgpointii
+         \LogHook{fntext/before}
+         \LogHook{fntext}
+         \LogHook{fntext/para}
+         \LogHook{fntext/begin}
+         \LogHook{fntext/end}
+         \LogHook{fntext/after}
+%    \end{macrocode}
+%    Show the info only once (if at all).
+%    \begin{macrocode}
+         \cs_gset_eq:NN \@@_debug_footnotetext: \prg_do_nothing:
+       }
+  }
+
+\cs_new_protected:Npn \fnote_footnotetext:n #1 {
+  \@@_debug_footnotetext:
+%-------
+% ./linguex/linguex.sty
+  \UseHook{fntext/before}
+%-------
+  \@kernel@process@footnotetext
+  \@footnotetext@cfgpoint {  % config point
+%-------
+% resetting baselinestretch ... (could be done further down)
+% ./uafthesis/uafthesis.cls
+% ./setspace/setspace.sty
+% ./footmisc/footmisc.sty (normal)
+    \UseHook{fntext}
+%-------
+    \reset@font
+    \footnotesize
+%-------
+% some classes use a different font size, e.g.,
+% ./nrc/nrc1.cls  ./nrc/nrc2.cls
+% but those could be done in fntext/para instead
+%-------
+%    \end{macrocode}
+%    In case of sidenotes the next settings are pointless, but as they
+%    do not hurt (except for the \cs{hsize} setting) and are needed
+%    for all other cases we make them here and overwrite them for side notes
+%    \begin{macrocode}
+    \interlinepenalty\interfootnotelinepenalty
+    \splittopskip\footnotesep
+    \splitmaxdepth \dp\strutbox
+    \floatingpenalty \@MM
+    \hsize\columnwidth
+    \@parboxrestore
+    \parindent 1em     % typical default used in \@makefntext moved up here
+    \def\@currentcounter{footnote}
+    \protected@edef \@currentlabel { \p@footnote \@thefnmark }
+%-------
+% for altering para parameters ...
+% code for resphilosophica came earlier but it could go here.
+% Has the advantage that one can also overwrite \cs{@currentcounter}
+% and \cs{@currentlabel} is that is necessary.
+%
+% ./resphilosophica/resphilosophica.cls
+    \UseHook{fntext/para}
+%-------
+    \color@begingroup
+%-------
+% fnpara wants to replace \@makefntext{...} and para and side option of footmisc etc too ...
+% so we make this a config point
+%-------
+      \@footnotetext@cfgpointii       % config point
+        {
+%-------
+% ./resphilosophica/resphilosophica.cls
+%-------
+          \@footnotetext@cfgpointiii  % config point
+%-------
+% bibarts
+% fnbreak.sty
+          \UseHook{fntext/begin}
+%-------
+          \ignorespaces
+          #1
+%-------
+% bibarts
+% fnbreak.sty
+          \UseHook{fntext/end}
+%-------
+          \@footnotetext@cfgpointiv   % config point
+        }
+      \par
+    \color@endgroup
+  }
+%-------
+% ./linguex/linguex.sty
+  \UseHook{fntext/after}
+%-------
+}
+
+% default for config point (1 arg)
+\cs_new_protected:Npn \@footnotetext@cfgpoint    { \insert\footins }
+
+% default for config point (1 arg)
+\cs_new_protected:Npn \@footnotetext@cfgpointii  { \@makefntext }
+
+
+% default for config point (0 args)
+\cs_new_protected:Npn \@footnotetext@cfgpointiii { \rule\z@\footnotesep }
+
+% default for config point (0 args)
+\cs_new_protected:Npn \@footnotetext@cfgpointiv  { \@finalstrut\strutbox }
+
+
+% kernel hook for tagging (2 args)
+\cs_new_protected:Npn \@kernel@process@footnotetext {}
+
+% Provide the name \LaTeXe{} is used to and do this unconditionally
+%   (no patching of class code if any). This means that if a class provides it own
+%    definition that gets lost and if necessary needs to be handled
+%    with firstaid (or updating of the class.
+
+\AddToHook{begindocument}{
+  \cs_set_eq:NN \@footnotetext \fnote_footnotetext:n
+}
+
+% alterations not covered:
+%
+% ./revtex4-1/revtex4-1.cls  ./revtex/ltxutil.sty ./revtex/revtex4-2.cls ... (need analysis)
+% ./bigfoot/bigfoot.sty
+
+
+
+% \footnotemargin is the logic implemented by footmisc. Perhaps we
+% don't want to do this like that in the kernel but for now I have
+% used this interface unchanged.
+
+
+\newdimen\footnotemargin
+\footnotemargin\maxdimen         % no value given
+
+\AtBeginDocument{
+  \ifdim \footnotemargin=\maxdimen
+    \setlength\footnotemargin{1.8em}
+  \fi
+}     
+
+
+\cs_new_protected:Npn \fnote_makefntext:n #1 {
+%    \end{macrocode}
+%    Some classes in their redefinition for \cs{@makefntext} have
+%    places some paragraph parameters at this point, but those can
+%    equally well go into the hook \hook{fntext/para}. We therefore do
+%    not provide a further hook at this point.
+%    \begin{macrocode}
+  \@makefntext@cfgpoint
+      {
+        \ifdim\footnotemargin>\z@
+          \hb@xt@ \footnotemargin{\hss\@makefnmark}
+        \else
+          \ifdim\footnotemargin=\z@
+            \llap{\@makefnmark}
+          \else
+          \ifdim\footnotemargin=-\maxdimen
+               \@makefnmark
+            \else
+               \llap{\hb@xt@ -\footnotemargin{\@makefnmark\hss}}
+            \fi
+          \fi
+        \fi
+      }
+  \@makefntext@cfgpointii
+      { #1 }
+}
+
+
+
+
+% default for config point (1 arg)
+\cs_new_protected:Npn \@makefntext@cfgpoint { \noindent }
+
+% default for config point (1 arg)
+\cs_new_protected:Npn \@makefntext@cfgpointii #1 { #1 }
+%    \end{macrocode}
+%
+%
+%
+%    If the definition for \cs{@makefntext} is that of the standard
+%    classes then replace it with \cs{fnote_makefntext:n}, otherwise
+%    try to patch the definition.
+%
+%    Here is the the definition the way it is in
+%    \texttt{classes.dtx}. Notice that (for saving space) there is no
+%    space after \texttt{em} to terminate the assignment. We need to
+%    mimic that, otherwise a test would return false even if the
+%    definition has not been modified.
+%
+%    \begin{macrocode}
+\newcommand\old@std@class@makefntext[1]{%
+    \parindent 1em%
+    \noindent
+    \hb@xt@1.8em{\hss\@makefnmark}#1}
+
+%    \end{macrocode}
+%    Here is the messy code for patching. Note that this is only there
+%    to help classes along that aren't updated yet so it does some
+%    minimal patching to hopefully add configuration points in the
+%    right place.
+%
+%    What it does is roughly the
+%    following: It look for a definition of \cs{@makefntext} of the form
+%\begin{verbatim}
+%  {AAA \hbox BBB { CCC } DDD #1 EEE }
+%\end{verbatim}
+%    where ``BBB'' is something like \texttt{to 1em} or similar. It then
+%    replaces that with
+%\begin{verbatim}
+%  {AAA \@makefntext@cfgpoint{\hbox BBB { CCC }} DDD
+%       \@makefntext@cfgpointii{#1} EEE }
+%\end{verbatim}
+%    The patching is not very careful, i.e., it assumes there is only
+%    one \verb=#1= in the replacement text and that a \cs{hbox} found
+%    is the right one to patch. But that is enough to cater for all
+%    definitions of \cs{@makefntext} out there in the TL distribution.
+%
+%    If \cs{hbox} is not found it tries the same looking for
+%    \cs{hb@xt@} which is what some classes use and if that is not
+%    found either it assume that this is a version that uses
+%    \cs{@makefnmark} without surrounding it in a box and if that
+%    fails it gives up with an \cs{ERROR} (which needs to get a proper definition).
+%    \begin{macrocode}
+
+\tl_new:N \l_@@_patch_tl
+\cs_new_eq:NN \@@_tmp:w \ERROR
+
+\cs_new_protected:Npn \@@_patch:
+  {
+    \tl_set:No \l_@@_patch_tl { \@makefntext { \@makefntext@cfgpointii{##1} } }
+    \tl_if_in:NnTF \l_@@_patch_tl { \hbox }
+      { \cs_set_eq:NN \@@_tmp:w \@@_patch_hbox:w }
+      {
+        \tl_if_in:NnTF \l_@@_patch_tl { \hb@xt@ }
+          { \cs_set_eq:NN \@@_tmp:w \@@_patch_hb@xt@:w }
+          {
+            \tl_if_in:NnTF \l_@@_patch_tl { \@makefnmark }
+              { \cs_set_eq:NN \@@_tmp:w \@@_patch_@makefnmark:w }
+              { \ERROR
+                \cs_set_eq:NN \@@_tmp:w \exp_stop_f: }
+          }
+      }
+    \tl_set:Nf \l_@@_patch_tl
+      { \exp_after:wN \@@_tmp:w \l_@@_patch_tl }
+    \cs_set:Npn \@@_tmp:w { \long \def \@makefntext ####1 }
+    \exp_after:wN \@@_tmp:w \exp_after:wN { \l_@@_patch_tl }
+  }
+%    \end{macrocode}
+%
+%    If \cs{@makefntext} contains \cs{hbox} then grab ``AAA'' as
+%    \verb=#1= and ``BBB'' (up to the open \verb={=)  and return it as
+%\begin{verbatim}
+%   AAA  \@makefntext@processX { \hbox BBB }
+%\end{verbatim}
+%    \begin{macrocode}
+\cs_new:Npn \@@_patch_hbox:w #1 \hbox #2 #
+  { \exp_stop_f: #1 \@makefntext@processX { \hbox #2 } }
+%    \end{macrocode}
+%    Same for the other cases.
+%    \begin{macrocode}
+\cs_new:Npn \@@_patch_hb@xt@:w #1 \hb@xt@ #2 #
+  { \exp_stop_f: #1 \@makefntext@processX { \hb@xt@ #2 } }
+\cs_new:Npn \@@_patch_@makefnmark:w #1 \@makefnmark
+  { \exp_stop_f: #1 \@makefntext@processX { \use:n } { \@makefnmark } }
+%    \end{macrocode}
+%
+%    The code provided by Bruno above expects 2 arguments but we need a
+%    different structure so this is a simple reshuffling. Would be
+%    better if we can patch the right structure in directly, but I'm
+%    not a patch person, so this is the simple way out for now:
+%    
+%    \begin{macrocode}
+\cs_new:Npn \@makefntext@processX #1#2{\@makefntext@cfgpoint{#1{#2}}}
+%    \end{macrocode}
+%    At \verb=\begin{document}= check if the current definition is
+%    that of the standard classes and if so replace it by
+%    \cs{fnote_makefntext:n} otherwise try and patch the definition
+%    using the approach above.
+%    \begin{macrocode}
+
+\AddToHook{begindocument}{
+  \cs_if_eq:NNTF \@makefntext \old@std@class@makefntext
+     {
+       \cs_set_eq:NN \@makefntext \fnote_makefntext:n
+     }
+     {
+       \@@_patch:
+     }
+}
+
+
+% possibly add the following to check for multiple \hbox in
+% the definition:
+%
+% \seq_set_split:NnV \l_@@_patch_seq { \hbox } \l_@@_patch_tl
+% \int_compare:nT { \seq_count:N \l_@@_patch_seq } > 2 \ERROR
+%
+%    \end{macrocode}
+%
+%
+%
+%
+% \subsection{Document-level commands}
+%
+%    \begin{macrocode}
+
+\DeclareDocumentCommand\footnotetext {om} {
+  \fnote_set_fnmark:nn {#1} \@mpfn
+  \@footnotetext {#2}
+}
+
+
+%-------------------------------------
+
+
+\DeclareDocumentCommand\footnote {om} {
+  \fnote_step_fnmark:nn {#1} \@mpfn
+  \cs_set_eq:NN \@@_footnotemark_finish: \prg_do_nothing:
+  \@footnotemark
+  \cs_set_eq:NN \@@_footnotemark_finish: \@@_finish:
+  \@footnotetext {#2}
+  \@@_footnotemark_finish:
+}
+
+%-------------------------------------
+
+
+\DeclareDocumentCommand\footnotemark {o} {
+  \fnote_step_fnmark:nn {#1} { footnote }
+  \@footnotemark
+}
+
+
+%-------------------------------------
+
+\DeclareDocumentCommand\footref {m}{%
+  \begingroup
+    \unrestored@protected@xdef\@thefnmark{\ref{#1}}%
+  \endgroup
+  \@footnotemark
+}
+
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+%<@@=>
+%    \end{macrocode}
+%
+%
+%
+%
+%
+%
+% \subsection{Firstaid for packages and classes}
+%
+% \subsubsection{\pkg{setspace}}
+%
+%    It should not overwrite it any longer but use a hook, so for now we
+%    do just that here.
+%    \begin{macrocode}
+\AddToHook{package/setspace/after}
+   {\let \@footnotetext \fnote_footnotetext:n
+    \AddToHook{fntext}[setspace]{\let\baselinestretch\setspace@singlespace}}
+%    \end{macrocode}
+%
+%
+%
+%
+% \subsubsection{\pkg{hyperref}}
+%
+%    Prevent hyperref from redefining footnote stuff --- this is a
+%    temp solution.
+%    \begin{macrocode}
+\AddToHook{package/hyperref/after}{
+  \let\H@@footnotetext\fnote_footnotetext:n
+  \let\H@@footnotemark\fnote_footnotemark:
+  \let \@footnotetext \fnote_footnotetext:n
+  \let \@footnotemark \fnote_footnotemark:
+}
+
+
+
+%    \end{macrocode}
+%
+% \subsection{Stuff that needs cleanup and documentation}
+%
+%    \begin{macrocode}
+
+
+%-------------------------------------
+
+% use of kerns to mark h-mode positions (unit sp)
+%
+% 1 = CJK
+% 2 = CJK
+% 3 = multiple footnotes (footmisc, koma, eledmac, tufte, memoir,
+%    parnotes, sidenotes)
+% 3 = outer kern in letter spacing (letterspace)
+% 3 = beginning of list (examdesign.cls)
+% 4 = CJK pigin
+% 5 = CJK ruby
+
+% 1-4 = polyglossia for korean
+
+%-------------------------------------
+
+
+
+%-------------------------------------
+%  Tagging
+%-------------------------------------
+
+% hyperref support only when loaded (improve integration)
+
+\newcounter{absfootnote}
+\AddToHook{fnmark/begin}{\stepcounter{absfootnote}}  % too simple (fails with opt args)
+
+
+
+% this is rubbish and should be handled better:
+
+\cs_new_protected:Npn \tag_if_loaded:TF  { \cs_if_exist:NTF \tag_struct_begin:n }
+
+
+
+\cs_new_protected:Npn \tag@FEMark #1 {
+  \tag_if_loaded:TF
+     {
+       \tag_mc_end_push:
+       \exp_args:Nx
+       \tag_struct_begin:n{tag=Lbl,ref=fn.\the\c@absfootnote}
+       \tag_mc_begin:n{tag=Lbl}
+       \IfPackageLoadedTF{hyperref}{ \hyper@linkstart
+         {link}{fn.\the\c@absfootnote} }{}
+       #1
+      \IfPackageLoadedTF{hyperref}{ \hyper@linkend }{}
+      \tag_mc_end:
+      \tag_struct_end:
+      \tag_mc_begin_pop:n{}
+     }
+     { #1 }
+}
+
+% to be done next round around:
+%
+% \the\c@absfootnote should be replaced directly by some command with default meaning
+% \the\c@absfootnote so that the actual reference can be changed from the outside.
+%
+% there are several instances that are curently hardwired.
+
+\cs_set_eq:NN \@kernel@process@makefnmark \tag@FEMark
+
+
+
+% kernel hook for tagging (2 args)
+\cs_set:Npn \@kernel@process@footnotetext #1#2 {
+  \tag_if_loaded:TF
+    {
+      \tag_mc_end_push:
+      \tag_struct_begin:n { tag=FENote,label=fn.\the\c@absfootnote }
+      #1 {#2}
+      \tag_struct_end:
+      \tag_mc_begin_pop:n{}
+    }
+    { #1 {#2} }
+}
+
+
+
+\cs_set:Npn \@makefntext@cfgpoint #1 {
+  \noindent
+  \cs_if_exist:NT \tag_struct_begin:n { \tag_mc_end_push: }
+  \tag@FELbl { #1 }
+}
+
+\cs_set:Npn \@makefntext@cfgpointii #1 {
+  \tag@FENote { #1 }
+  \cs_if_exist:NT \tag_struct_begin:n { \tag_mc_begin_pop:n{} }
+}
+
+
+
+
+\cs_new_protected:Npn \tag@FELbl #1 {
+  \tag_if_loaded:TF
+    {
+      % target should perhaps be raised ...
+      \IfPackageLoadedTF{hyperref}{ \hypertarget{fn.\the\c@absfootnote}{} }{}
+      %\tag_struct_begin:n { tag=FENote,label=fn.\the\c@absfootnote } %alternativ location for structure
+      \tag_struct_begin:n { tag=Lbl }
+        \tag_mc_begin:n { tag=Lbl }
+          #1
+        \tag_mc_end:
+      \tag_struct_end:
+    }
+    { #1 }
+}
+
+\cs_new_protected:Npn \tag@FENote #1 {
+  \tag_if_loaded:TF
+    {
+      \tag_mc_begin:n{tag=FENote}
+      #1
+      \tag_mc_end:
+      %\tag_struct_end: %alternative location for structure end but ends inside a P
+    }
+    { #1 }
+}
+ 
+%-------------------------------------
+
+
+\ExplSyntaxOff
+%</kernel>
+%    \end{macrocode}
+%
+%
+% \section{Reimplementing the \pkg{footmisc} package}
+%
+%    \begin{macrocode}
+%<*footmisc>
+%%
+%% Copyright (c) 1995-2011 Robin Fairbairns
+%% Copyright (c) 2018-2022 Robin Fairbairns, Frank Mittelbach
+%%
+%% This file is part of the `latex-lab Bundle'.
+%% --------------------------------------------
+%%
+%% It may be distributed and/or modified under the
+%% conditions of the LaTeX Project Public License, either version 1.3c
+%% of this license or (at your option) any later version.
+%% The latest version of this license is in
+%%    https://www.latex-project.org/lppl.txt
+%% and version 1.3c or later is part of all distributions of LaTeX
+%% version 2008 or later.
+%%
+%% This work has the LPPL maintenance status 'maintained'.
+%%
+%%
+%% File: footmisc.dtx (C) Copyright 1995-2011 Robin Fairbairns
+%%                    (C) Copyright 2018-2022 Frank Mittelbach
+\NeedsTeXFormat{LaTeX2e}
+\providecommand\DeclareRelease[3]{}
+\providecommand\DeclareCurrentRelease[2]{}
+
+\DeclareRelease{v5}{2011-06-06}{footmisc-2011-06-06.sty}
+\DeclareCurrentRelease{}{2022-02-14}
+\ProvidesPackage{latex-lab-footmisc}%
+        [2022/03/08 v6.0d
+     a miscellany of footnote facilities -- latex-lab version%
+                   ]
+
+\NeedsTeXFormat{LaTeX2e}[2020/10/01]
+\newtoks\FN@temptoken
+\providecommand\protected@writeaux{%
+  \protected@write\@auxout
+}
+\def\l@advance@macro{\@@dvance@macro\edef}
+\def\@@dvance@macro#1#2#3{\expandafter\@tempcnta#2\relax
+  \advance\@tempcnta#3\relax
+  #1#2{\the\@tempcnta}%
+}
+\let\@advance@macro\l@advance@macro
+\DeclareOption{symbol}{\renewcommand\thefootnote{\fnsymbol{footnote}}}
+\newif\ifFN@robust \FN@robustfalse
+\DeclareOption{symbol*}{%
+  \renewcommand\thefootnote{\@fnsymbol\c@footnote}%
+  \FN@robusttrue
+  \AtEndOfPackage{\setfnsymbol{lamport*-robust}}%
+}
+\newif\ifFN@para  \FN@parafalse
+\DeclareOption{para}{%
+%    \end{macrocode}
+%    Options are executed in the order of declaration, thus no point in
+%    checking for side option as footmisc did in the past
+%    \begin{macrocode}
+%    \PackageError{footmisc}{Option "\CurrentOption" incompatible with
+%                            option "side"}%
+%                 {I shall ignore "\CurrentOption"}%
+  \FN@paratrue
+  \setlength\footnotemargin{-\maxdimen}    % default when para is used
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareOption{side}{\ifFN@para
+    \PackageError{footmisc}{Option "\CurrentOption" incompatible with
+                            option "para"}%
+                 {I shall ignore "\CurrentOption"}%
+  \else
+    \def\@footnotetext@cfgpoint {\marginpar}
+    \AddToHook{fntext/para}{%
+      \hsize\marginparwidth     % correct the default \hsize
+      \footnotesep\z@           % don't add a default separation
+    }
+    \def\@footnotetext@cfgpointii  {\@makefntext}
+    \def\@footnotetext@cfgpointiii {}
+    \def\@footnotetext@cfgpointiv  {}
+  \fi
+}
+\let\footnotelayout\@empty
+\DeclareOption{ragged}{%
+  \@ifundefined{RaggedRight}%
+    {\renewcommand\footnotelayout{\linepenalty50 \raggedright}}%
+    {\renewcommand\footnotelayout{\linepenalty50 \RaggedRight}}%
+}
+\newif\ifFN@perpage
+\FN@perpagefalse
+\DeclareOption{perpage}{%
+  \FN@perpagetrue
+}
+\newif\ifFN@fixskip      \FN@fixskipfalse
+
+\let\FN@bottomcases\thr@@
+\newif\ifFN@abovefloats  \FN@abovefloatstrue
+\DeclareOption{bottom}{%
+  \let\FN@bottomcases\@ne
+  \FN@abovefloatsfalse
+  \FN@fixskiptrue
+}
+\DeclareOption{bottomfloats}{%
+  \let\FN@bottomcases\tw@
+  \FN@abovefloatstrue \FN@fixskiptrue
+}
+\DeclareOption{abovefloats}{\FN@abovefloatstrue  \FN@fixskiptrue}
+\DeclareOption{belowfloats}{\FN@abovefloatsfalse \FN@fixskiptrue}
+\DeclareOption{marginal}{%
+  \footnotemargin-0.8em\relax
+}
+\DeclareOption{flushmargin}{%
+  \footnotemargin0pt\relax
+}
+\newif\ifFN@hangfoot  \FN@hangfootfalse
+\DeclareOption{hang}{%
+  \FN@hangfoottrue
+}
+\newcommand*\hangfootparskip{0.5\baselineskip}
+\newcommand*\hangfootparindent{0em}%
+\DeclareOption{norule}{%
+  \renewcommand\footnoterule{}%
+  \advance\skip\footins 4\p@\@plus2\p@\relax
+}
+\DeclareOption{splitrule}{%
+  \gdef\split@prev{0}
+  \let\pagefootnoterule\footnoterule
+  \let\mpfootnoterule\footnoterule
+  \def\splitfootnoterule{\kern-3\p@ \hrule \kern2.6\p@}
+  \def\footnoterule{\relax
+    \ifx \@listdepth\@mplistdepth
+      \mpfootnoterule
+    \else
+      \ifnum\split@prev=\z@
+        \pagefootnoterule
+      \else
+        \splitfootnoterule
+      \fi
+      \xdef\split@prev{\the\insertpenalties}%
+    \fi
+  }%
+}
+\newif\ifFN@stablefootnote  \FN@stablefootnotefalse
+\DeclareOption{stable}{\FN@stablefootnotetrue}
+\newif\ifFN@multiplefootnote  \FN@multiplefootnotefalse
+\DeclareOption{multiple}{\FN@multiplefootnotetrue}
+\ProcessOptions
+%    \end{macrocode}
+%    This version of \pkg{footmisc} can assume that the new OR code is
+%    already available, thus nothing needs loading at this
+%    point. However, as long as we use this code also in a package
+%    version that can be loaded by other package while we are in a
+%    transition phase it is not clear whether not the kernel code is
+%    already available for other packages.
+%    \begin{macrocode}
+%\@ifundefined{@kernel@before@cclv}
+%  {\input{latex-lab-new-or.ltx}}{}
+%    \end{macrocode}
+%
+%    Footnote box layout for para footnotes;
+%    this would also be the hook to support dblfootnotes (from the
+%    \texttt{dblfnote} package if we integrate that).
+%    \begin{macrocode}
+\ifFN@para
+  \def\@makecol@cfgpointii {%
+     \global\setbox\footins\vbox{\FN@makefootnoteparagraph}%
+    }
+\fi
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\ifFN@fixskip
+  \def\@outputbox@removebskip{%
+    \ifx\@textbottom\relax \else
+      \@outputbox@append{%
+        \@tempskipa\lastskip
+        \ifnum \gluestretchorder\@tempskipa>\z@
+          \vskip-\@tempskipa
+          \xdef\@outputbox@reinsertbskip
+              {\noexpand\@outputbox@append{\vskip\the\@tempskipa}}%
+        \else
+          \global\let\@outputbox@reinsertbskip\relax
+        \fi
+      }%
+   \fi
+  }
+\let\@outputbox@reinsertbskip\relax
+\else
+  \let\@outputbox@removebskip \relax
+  \let\@outputbox@reinsertbskip\relax
+\fi
+%    \end{macrocode}
+%
+%
+%
+%    \begin{macrocode}
+\ifcase \FN@bottomcases\relax
+\ERROR
+\or
+  \ifFN@abovefloats
+    \def\@makecol@cfgpoint {%
+       \@if@footnotes@TF
+          {\@outputbox@append{\vfill}}%
+          {\@if@bfloats@TF{\@outputbox@append{\vfill}}%
+                          {\@outputbox@reinsertbskip}}%
+       \@outputbox@appendfootnotes
+       \@outputbox@attachfloats
+      }
+  \else
+    \def\@makecol@cfgpoint {%
+       \@outputbox@attachfloats
+       \@if@footnotes@TF
+          {\@outputbox@append{\vfill}}%
+          {\@outputbox@reinsertbskip}%
+       \@outputbox@appendfootnotes
+    }
+  \fi
+\or
+  \ifFN@abovefloats
+     \def\@makecol@cfgpoint {%
+        \@outputbox@appendfootnotes
+        \@if@bfloats@TF
+            {\@outputbox@append{\vfill}}%
+            {\@outputbox@reinsertbskip}%
+        \@outputbox@attachfloats
+     }
+  \else
+     \def\@makecol@cfgpoint {%
+       \@if@footnotes@TF
+          {\@outputbox@append{\vfill}}%
+          {\@if@bfloats@TF{\@outputbox@append{\vfill}}%
+                          {\@outputbox@reinsertbskip}}%
+        \@outputbox@attachfloats
+        \@outputbox@appendfootnotes
+     }
+  \fi
+\or
+  \ifFN@abovefloats
+    \def\@makecol@cfgpoint {%
+       \@outputbox@appendfootnotes
+       \@outputbox@attachfloats
+       \@outputbox@reinsertbskip
+    }
+  \else
+    \def\@makecol@cfgpoint {%
+       \@outputbox@attachfloats
+       \@outputbox@appendfootnotes
+       \@outputbox@reinsertbskip
+}
+  \fi
+\else
+\ERROR
+\fi
+
+% next can be dropped when cleaned up
+\newif\ifFN@setspace
+\@ifpackageloaded{setspace}%
+ {%
+   \FN@setspacetrue
+   \@ifclassloaded{memoir}%
+     {%
+       \AddToHook{fntext}{\let\baselinestretch\m@m@singlespace}%
+       \let\FN@baselinestretch\m@m@singlespace
+     }%
+     {%
+%       \AddToHook{fntext}{\let\baselinestretch\setspace@singlespace}%
+       \let\FN@baselinestretch\setspace@singlespace
+     }%
+ }%
+ {%
+   \FN@setspacefalse
+ }
+
+
+
+\ifFN@para
+  \def\@footnotetext@cfgpoint {\insert\footins}
+
+  \long\def\@footnotetext@cfgpointii #1{%
+    \setbox\FN@tempboxa\hbox{\@makefntext{#1}}%
+    \dp\FN@tempboxa\z@
+    \ht\FN@tempboxa
+      \dimexpr\wd\FN@tempboxa *%
+              \footnotebaselineskip /\columnwidth\relax
+    \box\FN@tempboxa
+  }
+
+
+  \def\@footnotetext@cfgpointiii {}
+  \def\@footnotetext@cfgpointiv {% config point
+           \strut
+           \penalty-10\relax
+           \hskip\footglue
+  }
+\fi
+
+
+
+\ifFN@para
+  \let\FN@tempboxa\@tempboxa
+  \newbox\FN@tempboxb
+  \newbox\FN@tempboxc
+  \newskip\footglue \footglue=1em plus.3em minus.3em
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  \newdimen\footnotebaselineskip
+
+  % establish late:
+
+\AddToHook{begindocument/before} {%
+  {%
+    \footnotesize
+    \global\footnotebaselineskip=\normalbaselineskip
+  }%
+}
+%    \end{macrocode}
+%    The coding is based on David Kastrup's improvement to Don Knuth's
+%    original implementation. You find in the \TeX{}book if you own
+%    the latest edition.
+%    \begin{macrocode}
+
+  \long\def\FN@makefootnoteparagraph{%
+    \FN@setfootnoteparawidth
+    \@parboxrestore
+    \baselineskip=\footnotebaselineskip
+    \unvbox\footins \FN@removehboxes
+    \RawParEnd
+  }
+  \def\FN@removehboxes{\setbox\FN@tempboxa\lastbox
+    \ifhbox\FN@tempboxa{\FN@removehboxes}%
+      \unhbox\FN@tempboxa
+    \else
+      \RawNoindent
+      \rule\z@\footnotesep
+    \fi
+  }
+\fi
+
+
+\@ifpackageloaded{multicol}
+  {\def\FN@setfootnoteparawidth
+    {\hsize\ifnum\doublecol@number>\@ne
+                  \textwidth
+            \else \columnwidth \fi}}
+  {\def\FN@setfootnoteparawidth{\hsize\columnwidth}}
+
+\ifFN@perpage
+  \RequirePackage{perpage}
+  \MakePerPage{footnote}
+%    \end{macrocode}
+%    Fix a bug in perpage \ldots
+%    \begin{macrocode}
+  \def\@stpelt#1{\global\csname c@#1\endcsname \m@ne
+    \stepcounter{#1}%
+    \pp@fix@MakePerPage{#1}%
+  }
+  \def\pp@fix@MakePerPage#1{%
+      \ifnum \value{#1}>\z@
+        \addtocounter{#1}\m@ne\fi
+  }
+%    \end{macrocode}
+%    The above code may look a bit odd: the \cs{stepcounter} sets the
+%    counter to zero and then we alter it if it is not zero.  The
+%    reason is that \cs{stepcounter} resets other counters and when
+%    perpage is loaded this results in updating counters on the reset
+%    list to 1 (or to a higher starting value if \cs{MakePerPage} is
+%    used with an optional argument, which is precisely the problem
+%    here. By subtracting 1 in that case we set it back to 1 lower
+%    than the starting value.
+%
+%    But to make this fully work we also need to update a support
+%    command in \pkg{perpage}:
+%    \begin{macrocode}
+  \def\pp@cl@end@iii\stepcounter#1\pp@fix@MakePerPage#2{}
+\fi
+
+
+\ifFN@para
+
+% This can use the default interface, except that a negative value for
+% \footnotemargin makes little sense, so we test for this and warn if
+% necessary. But -\maxdimen is ok again, so would need to be a litte bit more elaborate.
+%
+
+%\AddToHook{fntext/para}{
+%  \ifdim \footnotemargin >\z@ \else
+%    \PackageWarningNoline{footmisc}{Option 'para' needs positive \noexpand\footnotemargin}%
+%    \footnotemargin 1.8em\relax
+%  \fi
+%}
+
+
+\AddToHook{fntext/begin}{\nobreak \hspace{.2em}}
+
+
+
+
+\else
+
+  \ifFN@hangfoot
+    \long\def\@makefntext#1{%
+      \bgroup
+        \setbox\@tempboxa\hbox{%
+          \ifdim\footnotemargin>\z@
+            \hb@xt@\footnotemargin{\@makefnmark\hss}%
+          \else
+            \@makefnmark
+          \fi
+        }%
+        \leftmargin\wd\@tempboxa
+        \rightmargin\z@
+        \linewidth \columnwidth
+        \advance \linewidth -\leftmargin
+        \parshape \@ne \leftmargin \linewidth
+        \footnotesize
+        \@setpar{{\@@par}}%
+        \leavevmode
+        \llap{\box\@tempboxa}%
+        \parskip\hangfootparskip\relax
+        \parindent\hangfootparindent\relax
+        \footnotelayout#1%
+        \par
+      \egroup
+    }
+
+ \else
+
+% This is now using the default interface:
+%
+% \long\def\@makefntext#1{%
+%      \parindent1em
+%      \noindent
+%      \ifdim\footnotemargin>\z@
+%        \hb@xt@ \footnotemargin{\hss\@makefnmark}%
+%      \else
+%        \ifdim\footnotemargin=\z@
+%          \llap{\@makefnmark}%
+%        \else
+%          \llap{\hb@xt@ -\footnotemargin{\@makefnmark\hss}}%
+%        \fi
+%      \fi
+%    \footnotelayout#1%
+%  }
+
+ \fi
+\fi
+
+
+
+
+\ifFN@multiplefootnote
+  \providecommand*{\multiplefootnotemarker}{3sp}
+  \providecommand*{\multfootsep}{,}
+  \AddToHook{fnmark}      {\FN@mf@check}
+  \AddToHook{fnmark/end}  {\FN@mf@prepare}
+%
+  \def\FN@mf@prepare{%
+    \kern-\multiplefootnotemarker
+    \kern\multiplefootnotemarker\relax
+  }
+  \def\FN@mf@check{%
+    \ifdim\lastkern=\multiplefootnotemarker\relax
+%?? is that necessary or even correct ??
+      \edef\@x@sf{\the\spacefactor}%
+%?? shouldn't that be 2 unkerns ?? (none would also be ok)
+      \unkern  % new
+      \unkern
+      \textsuperscript{\multfootsep}%
+      \spacefactor\@x@sf\relax
+    \fi
+  }
+\else
+  \let\FN@mf@prepare\relax
+\fi
+\ifFN@stablefootnote
+\let\FN@sf@@footnote\footnote
+\def\footnote{\ifx\protect\@typeset@protect
+    \expandafter\FN@sf@@footnote
+  \else
+    \expandafter\FN@sf@gobble@opt
+  \fi
+}
+\edef\FN@sf@gobble@opt{\noexpand\protect
+  \expandafter\noexpand\csname FN@sf@gobble@opt \endcsname}
+\expandafter\def\csname FN@sf@gobble@opt \endcsname{%
+  \@ifnextchar[%]
+    \FN@sf@gobble@twobracket
+    \@gobble
+}
+\def\FN@sf@gobble@twobracket[#1]#2{}
+\let\FN@sf@@footnotemark\footnotemark
+\def\footnotemark{\ifx\protect\@typeset@protect
+    \expandafter\FN@sf@@footnotemark
+  \else
+    \expandafter\FN@sf@gobble@optonly
+  \fi
+}
+\edef\FN@sf@gobble@optonly{\noexpand\protect
+  \expandafter\noexpand\csname FN@sf@gobble@optonly \endcsname}
+\expandafter\def\csname FN@sf@gobble@optonly \endcsname{%
+  \@ifnextchar[%]
+    \FN@sf@gobble@bracket
+    {}%
+}
+\def\FN@sf@gobble@bracket[#1]{}
+\fi
+\newcommand\setfnsymbol[1]{%
+  \@bsphack
+  \@ifundefined{FN@fnsymbol@#1}%
+  {%
+    \PackageError{footmisc}{Symbol style "#1" not known}%
+    \@eha
+  }{%
+    \expandafter\let\expandafter\@fnsymbol\csname
+                        FN@fnsymbol@#1\endcsname
+  }%
+  \@esphack
+}
+\let\FN@fnsymbol@lamport\@fnsymbol
+\newif\if@tempswb
+\DeclareDocumentCommand\DefineFNsymbols {smO{text}m}{%
+  \expandafter\ifx\csname FN@fnsymbol@#2\endcsname\relax
+    \PackageInfo{footmisc}{Declaring symbol style #2}%
+  \else
+    \PackageWarning{footmisc}{Redeclaring symbol style #2}%
+  \fi
+  \toks@{}%
+  \def\@tempb{\end}%
+  \FN@build@symboldef#4\end
+  \def\@tempc{math}%
+  \def\@tempd{#3}%
+  \expandafter\xdef\csname FN@fnsymbol@#2\endcsname##1{%
+    \ifx\@tempc\@tempd
+      \noexpand\ensuremath
+    \else
+      \noexpand\nfss@text
+    \fi
+    {%
+      \noexpand\ifcase##1%
+      \the\toks@
+      \noexpand\else
+      \IfBooleanTF#1{\noexpand\@ctrerr}%
+        {\noexpand\FN@orange##1}%
+      \noexpand\fi
+    }%
+  }%
+}
+\def\FN@build@symboldef#1{%
+  \def\@tempa{#1}%
+  \ifx\@tempa\@tempb
+  \else
+    \toks@\expandafter{\the\toks@\or#1}%
+    \expandafter\FN@build@symboldef
+  \fi
+}
+\DeclareDocumentCommand\DefineFNsymbolsTM {smm}{%
+  \expandafter\ifx\csname FN@fnsymbol@#2\endcsname\relax
+    \PackageInfo{footmisc}{Declaring symbol style #2}%
+  \else
+    \PackageWarning{footmisc}{Redeclaring symbol style #2}%
+  \fi
+  \toks@{}%
+  \def\@tempb{\end}%
+  \FN@build@symboldefTM#3\end\@null
+  \expandafter\xdef\csname FN@fnsymbol@#2\endcsname##1{%
+    \noexpand\ifcase##1%
+      \the\toks@
+    \noexpand\else
+      \IfBooleanTF#1{\noexpand\@ctrerr}%
+        {\noexpand\FN@orange##1}%
+      \noexpand\fi
+  }%
+}
+\def\FN@build@symboldefTM#1#2{%
+  \def\@tempa{#1}%
+  \ifx\@tempa\@tempb
+  \else
+    \toks@\expandafter{\the\toks@\or\TextOrMath{#1}{#2}}%
+    \expandafter\FN@build@symboldefTM
+  \fi
+}
+\def\FN@orange#1{%
+  \ifFN@robust
+    \@arabic#1%
+    \@bsphack
+    \PackageInfo{footmisc}{Footnote number \number#1 out of range}%
+    \protect\@fnsymbol@orange
+    \@esphack
+  \else \@ctrerr \fi
+}
+\global\let\@diagnose@fnsymbol@orange\relax
+\AtEndDocument{\@diagnose@fnsymbol@orange}
+\def\@fnsymbol@orange{%
+  \gdef\@diagnose@fnsymbol@orange{%
+    \PackageWarningNoLine{footmisc}{Some footnote number(s)
+      were out of range
+      \MessageBreak
+      see log for details%
+    }%
+  }%
+}
+\DefineFNsymbolsTM{bringhurst}{%
+  \textasteriskcentered *%
+  \textdagger    \dagger
+  \textdaggerdbl \ddagger
+  \textsection   \mathsection
+  \textbardbl    \|%
+  \textparagraph \mathparagraph
+}%
+\DefineFNsymbolsTM{chicago}{%
+  \textasteriskcentered *%
+  \textdagger    \dagger
+  \textdaggerdbl \ddagger
+  \textsection   \mathsection
+  \textbardbl    \|%
+  \#\#%
+}%
+\DefineFNsymbolsTM{wiley}{%
+  \textasteriskcentered *%
+  {\textasteriskcentered\textasteriskcentered}{**}%
+  \textdagger    \dagger
+  \textdaggerdbl \ddagger
+  \textsection   \mathsection
+  \textparagraph \mathparagraph
+  \textbardbl    \|%
+}%
+\DefineFNsymbolsTM{lamport-robust}{%
+  \textasteriskcentered *%
+  \textdagger    \dagger
+  \textdaggerdbl \ddagger
+  \textsection   \mathsection
+  \textparagraph \mathparagraph
+  \textbardbl    \|%
+  {\textasteriskcentered\textasteriskcentered}{**}%
+  {\textdagger\textdagger}{\dagger\dagger}%
+  {\textdaggerdbl\textdaggerdbl}{\ddagger\ddagger}%
+}
+\DefineFNsymbolsTM*{lamport*}{%
+  \textasteriskcentered *%
+  \textdagger    \dagger
+  \textdaggerdbl \ddagger
+  \textsection   \mathsection
+  \textparagraph \mathparagraph
+  \textbardbl    \|%
+  {\textasteriskcentered\textasteriskcentered}{**}%
+  {\textdagger\textdagger}{\dagger\dagger}%
+  {\textdaggerdbl\textdaggerdbl}{\ddagger\ddagger}%
+  {\textsection\textsection}{\mathsection\mathsection}%
+  {\textparagraph\textparagraph}{\mathparagraph\mathparagraph}%
+  {\textasteriskcentered\textasteriskcentered\textasteriskcentered}{***}%
+  {\textdagger\textdagger\textdagger}{\dagger\dagger\dagger}%
+  {\textdaggerdbl\textdaggerdbl\textdaggerdbl}{\ddagger\ddagger\ddagger}%
+  {\textsection\textsection\textsection}%%
+    {\mathsection\mathsection\mathsection}%
+  {\textparagraph\textparagraph\textparagraph}%%
+    {\mathparagraph\mathparagraph\mathparagraph}%
+}
+\setfnsymbol{lamport*}
+\DefineFNsymbolsTM{lamport*-robust}{%
+  \textasteriskcentered *%
+  \textdagger    \dagger
+  \textdaggerdbl \ddagger
+  \textsection   \mathsection
+  \textparagraph \mathparagraph
+  \textbardbl    \|%
+  {\textasteriskcentered\textasteriskcentered}{**}%
+  {\textdagger\textdagger}{\dagger\dagger}%
+  {\textdaggerdbl\textdaggerdbl}{\ddagger\ddagger}%
+  {\textsection\textsection}{\mathsection\mathsection}%
+  {\textparagraph\textparagraph}{\mathparagraph\mathparagraph}%
+  {\textasteriskcentered\textasteriskcentered\textasteriskcentered}{***}%
+  {\textdagger\textdagger\textdagger}{\dagger\dagger\dagger}%
+  {\textdaggerdbl\textdaggerdbl\textdaggerdbl}{\ddagger\ddagger\ddagger}%
+  {\textsection\textsection\textsection}%%
+    {\mathsection\mathsection\mathsection}%
+  {\textparagraph\textparagraph\textparagraph}%%
+    {\mathparagraph\mathparagraph\mathparagraph}%
+}
+\newcommand\mpfootnotemark{%
+  \@ifnextchar[%
+    \@xmpfootnotemark
+    {%
+      \stepcounter\@mpfn
+      \protected@xdef\@thefnmark{\thempfn}%
+      \@footnotemark
+    }%
+}
+\def\@xmpfootnotemark[#1]{%
+  \begingroup
+    \csname c@\@mpfn\endcsname #1\relax
+    \unrestored@protected@xdef\@thefnmark{\thempfn}%
+  \endgroup
+  \@footnotemark
+}
+%    \end{macrocode}
+%    TEMP PATCHES FOR TESTING
+%    \begin{macrocode}
+
+\endinput
+%</footmisc>
+%    \end{macrocode}
+% \Finale
+%
