@@ -14,6 +14,8 @@ maindir = "../.."
 installfiles = {"*.ltx", "*.sty"}
 typesetfiles = {
                  "latex-lab-testphase.dtx",
+                 "latex-lab-new-or.dtx",
+                 "latex-lab-footnotes.dtx",
                  "latex-lab-prototype.dtx",
                  "*-doc.tex",
 		 "*-code.tex",
@@ -33,7 +35,7 @@ checkdeps =
     maindir .. "/base"
   }
 
-checkruns     = 2
+checkruns     = 4
 typesetruns   = 2
 
 typesetdeps =
@@ -49,7 +51,7 @@ typesetdeps =
 checksearch  = true
 
 -- Allow for TU and other test configurations
-checkconfigs = {"build","config-TU"}
+checkconfigs = {"build","config-TU","config-OR"}
 
 
 
