@@ -16,6 +16,7 @@ typesetfiles = {
                  "latex-lab-testphase.dtx",
                  "latex-lab-new-or.dtx",
                  "latex-lab-footnotes.dtx",
+                 "latex-lab-prototype.dtx",
                  "*-doc.tex",
 		 "*-code.tex",
 	       }
