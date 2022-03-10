@@ -49,6 +49,8 @@ l3build save -cconfig-OR \
 
 
 
+# those can only be tested locally
+
 l3build save -cconfig-OR-local \
 	footmisc-local-uafthesis \
 	footmisc-local-uwthesis \
