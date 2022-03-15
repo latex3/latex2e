@@ -75,3 +75,4 @@ uploadconfig = {
 
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
+table.insert(checksuppfiles,"supp-pdf.mkii")
