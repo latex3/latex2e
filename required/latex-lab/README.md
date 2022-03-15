@@ -1,5 +1,9 @@
 # LaTeX laboratory
 
+Release 2022-06-01 pre-release 1
+
+## Overview
+
 This bundle holds optional files that are loaded in certain situations
 by kernel code (if available). For example, the new (as of 2021/12)
 `\DocumentMetadata` command in the kernel loads a file from here holding
