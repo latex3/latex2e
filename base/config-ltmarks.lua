@@ -1,7 +1,7 @@
 -- Tests for ltmarks
 
 checkengines = {"etex"}
-checksearch  = false
+checksearch  = true
 testfiledir  = "testfiles-ltmarks"
 
 -- Custom settings for the check system
