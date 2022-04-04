@@ -15,7 +15,7 @@
 %
 %    \begin{macrocode}
 \def\ltmarksversion{v1.0a}
-\def\ltmarksdate{2022/04/02}
+\def\ltmarksdate{2022/04/04}
 %    \end{macrocode}
 %<*driver>
 \documentclass{l3doc}
@@ -766,7 +766,35 @@
   \group_begin:
     \dim_set:Nn \tex_splitmaxdepth:D \c_max_dim
     \int_set:Nn \tex_vbadness:D      \c_max_int
-    \vbox_set:Nn \l_@@_box
+    \dim_set:Nn \tex_vfuzz:D         \c_max_dim
+%    \end{macrocode}
+%    There is a further complication: if the region contains infinite
+%    shrinking glue then a \cs{vsplit} operation will balk with a
+%    low-level error. Now pages or columns, which is our main concern here, can't
+%    have such infinite shrinkage if they are cut straight from the
+%    galley, however the use of \cs{enlargethispage} actually does add
+%    some at the very bottom (and also wraps the whole page into a box
+%    by itself, so if we leave it this way then a) we get this error
+%    and b) we don't see any marks because they are hidden one level
+%    down).
+%    
+%    We therefore do an unskip to get rid of that glue if present and
+%    also check if we have then a \cs{vbox} as the last item and if so
+%    unpack that too. All this is temporary, just for getting the
+%    marks out, so it doesn't affect the final page production. 
+%    
+%    In fact we go one step further and set the box to a large
+%    negative height possible and afterwards take a look at the
+%    reported badness: if it is zero we know that there has still been
+%    infinite shrinkage in the box so that we can't do a
+%    \cs{vsplit}. If that is the case we generate an error message and
+%    bypass extracting the marks. We use only half of \cs{c_max_dim}
+%    because otherwise \TeX{} will report an overfull vbox despite our
+%    setting of \cs{tex_vfuzz:D}. This test will not find existing
+%    infinite shrinkage in all case, e.g., if there are several glues
+%    that cancel each other, but it is the best we can do.
+%    \begin{macrocode}
+    \vbox_set_to_ht:Nnn \l_@@_box { -.5\c_max_dim }
        {
          #2
          \tex_unskip:D
@@ -774,15 +802,25 @@
          \box_if_vertical:NT \l_@@_box
              { \vbox_unpack:N \l_@@_box }
        }
-    \vbox_set_split_to_ht:NNn \l_@@_box \l_@@_box \c_max_dim
+    \int_compare:nNnTF \tex_badness:D > 0
+%    \end{macrocode}
+%    If the box had no infinite shrinkage (or rather if our test
+%    didn't show any) we vsplit it. Note that it
+%    doesn't matter that we set it to this strange size first. If the
+%    was infinite shrinkage after all, we end up with a low-level
+%    \TeX{} error, but if there is it is a coding error and needs
+%    correcting.
+%    \begin{macrocode}
+       {
+         \vbox_set_split_to_ht:NNn \l_@@_box \l_@@_box \c_max_dim
 %    \end{macrocode}
 %    After this action we can get first and last marks of the various
 %    classes through \cs{tex_splitfirstmarks:D} and
 %    \cs{tex_splitbotmarks:D}. So now we loop over all classes stored in
 %    \cs{g_@@_classes_seq}.
 %    \begin{macrocode}
-    \seq_map_inline:Nn \g_@@_classes_seq
-      {
+         \seq_map_inline:Nn \g_@@_classes_seq
+           {
 %    \end{macrocode}
 %    First action: get the last mark from the previous region, i.e.,
 %    \verb=previous-#1= but because it is also still inside \verb=#1=
@@ -791,17 +829,17 @@
 %    need this value in various assignments we store it away which
 %    avoids unnecessary further csname generations.
 %    \begin{macrocode}
-        \tl_gset_eq:Nc \g_@@_new_top_tl { g_@@_ #1 _last_  ##1 _tl }
+             \tl_gset_eq:Nc \g_@@_new_top_tl { g_@@_ #1 _last_  ##1 _tl }
 %    \end{macrocode}
 %    This will first of all become the new top mark for the current class.
 %    \begin{macrocode}
-        \tl_gset_eq:cN { g_@@_ #1 _top_ ##1 _tl } \g_@@_new_top_tl
+             \tl_gset_eq:cN { g_@@_ #1 _top_ ##1 _tl } \g_@@_new_top_tl
 %    \end{macrocode}
 %    Next action is to get ourselves the new last mark from the
 %    material supplied.
 %    \begin{macrocode}
-        \tl_gset:No \g_@@_tmp_tl
-           { \tex_splitbotmarks:D \use:c { c_@@_class_ ##1 _mark } }
+             \tl_gset:No \g_@@_tmp_tl
+                { \tex_splitbotmarks:D \use:c { c_@@_class_ ##1 _mark } }
 %    \end{macrocode}
 %    If this mark doesn't exist then obviously first mark does
 %    neither, so both become the last mark from previous region. We
@@ -813,17 +851,17 @@
 %    appears to be empty but fails the next test (see below how this
 %    is done).
 %    \begin{macrocode}
-        \tl_if_empty:NTF \g_@@_tmp_tl 
-          {
-            \tl_gset_eq:cN { g_@@_ #1 _last_  ##1 _tl } \g_@@_new_top_tl
-            \tl_gset_eq:cN { g_@@_ #1 _first_ ##1 _tl } \g_@@_new_top_tl
-          }
+                \tl_if_empty:NTF \g_@@_tmp_tl 
+                  {
+                    \tl_gset_eq:cN { g_@@_ #1 _last_  ##1 _tl } \g_@@_new_top_tl
+                    \tl_gset_eq:cN { g_@@_ #1 _first_ ##1 _tl } \g_@@_new_top_tl
+                  }
 %    \end{macrocode}
 %    If it wasn't empty, i.e., if it had a real value then we use this
 %    value for our new last mark instead. 
 %    \begin{macrocode}
-          {
-            \tl_gset_eq:cN { g_@@_ #1 _last_ ##1 _tl } \g_@@_tmp_tl
+                 {
+                   \tl_gset_eq:cN { g_@@_ #1 _last_ ##1 _tl } \g_@@_tmp_tl
 %    \end{macrocode}
 %    Because we had a last mark we also have a first mark (which
 %    might be the same, but might be not), so we pick that up and
@@ -831,10 +869,26 @@
 %    checked for the last mark because that makes the processing
 %    faster in case there is none.
 %    \begin{macrocode}
-            \tl_gset:co { g_@@_ #1 _first_ ##1 _tl }
-               { \tex_splitfirstmarks:D \use:c { c_@@_class_ ##1 _mark } }
-          }
-      }
+                   \tl_gset:co { g_@@_ #1 _first_ ##1 _tl }
+                      { \tex_splitfirstmarks:D \use:c { c_@@_class_ ##1 _mark } }
+                 }
+           }
+       }
+%    \end{macrocode}
+%    If the badness was zero (we actually tested for ${}>0$ but it
+%    can't get negative) then we had infinite shrinkage, so we report
+%    that and set all marks to the value the last mark had before.
+%    \begin{macrocode}
+       {
+         \msg_error:nnn { mark } { infinite-shrinkage } {#1}
+         \seq_map_inline:Nn \g_@@_classes_seq
+           {
+             \tl_gset_eq:cc { g_@@_ #1 _top_ ##1 _tl }
+                            { g_@@_ #1 _last_  ##1 _tl }
+             \tl_gset_eq:cc { g_@@_ #1 _first_ ##1 _tl }
+                            { g_@@_ #1 _last_  ##1 _tl }
+           }
+       }
 %    \end{macrocode}
 %    Once all mark classes have been processed the data structures are
 %    up dated and we can close the group which undoes our local
@@ -1049,6 +1103,18 @@
   }
 %    \end{macrocode}
 %
+%    \begin{macrocode}
+\msg_new:nnnn { mark } { infinite-shrinkage }
+  { Infinite~shrinkage~found~in~'#1'. }
+  {
+    \c__msg_coding_error_text_tl
+    The~mark~region~'#1'~contains~some~infinite~negative~glue~
+    allowing~it~to~shrink~to~an~arbitrary~size.~
+    This~makes~it~impossible~to~split~the~region~apart~to~
+    get~at~its~marks.~They~are~lost.
+  }
+%    \end{macrocode}
+%
 %
 %
 % \subsection{Tracing the mark structures}
@@ -1204,20 +1270,21 @@
 %    \end{macrocode}
 %    First we update the \texttt{page} region (which also updates the
 %    \texttt{previous-page}.
-  %    \begin{macrocode}
-  \@@_update_structure:nn {page}
-     {
-%    \end{macrocode}
+%
 %    The \cs{@outputbox} is normally in \cs{vbox} in \LaTeX{} but we
 %    can't take that for granted (an \texttt{amsmath} test document
 %    changed it to an \cs{hbox} just to trip me up) so we are a little
 %    careful with unpack now.
 %    \begin{macrocode}
-       \box_if_vertical:NTF \@outputbox
-           { \vbox_unpack:N }
-           { \hbox_unpack:N }
-       \@outputbox
-     }
+  \box_if_vertical:NTF \@outputbox
+      {
+        \@@_update_structure:nn {page}
+           { \vbox_unpack:N  \@outputbox }
+      }
+      {
+        \@@_update_structure:nn {page}
+           { \hbox_unpack:N  \@outputbox }
+      }
 %    \end{macrocode}
 %    The we provide the necessary updates for the aliases.
 %    \begin{macrocode}
@@ -1250,7 +1317,15 @@
 %    First we update the \texttt{column} and \texttt{previous-column}
 %    regions using the material assembled in \cs{@outputbox}.
 %    \begin{macrocode}
-  \@@_update_structure:nn {column}{ \unvcopy\@outputbox }
+  \box_if_vertical:NTF \@outputbox
+      {
+        \@@_update_structure:nn {column}
+           { \vbox_unpack:N  \@outputbox }
+      }
+      {
+        \@@_update_structure:nn {column}
+           { \hbox_unpack:N  \@outputbox }
+      }
 %    \end{macrocode}
 %    How we have to update the alias regions depends on whether or not
 %    \cs{@opcol} was called to process the first column or to produce
