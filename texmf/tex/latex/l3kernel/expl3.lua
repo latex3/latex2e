@@ -56,6 +56,7 @@ local scan_string  = token.scan_string
 local scan_keyword = token.scan_keyword
 local put_next     = token.put_next
 local token_create = token.create
+local token_new    = token.new
 local token_create_safe
 do
   local is_defined = token.is_defined
@@ -255,9 +256,9 @@ if luatexbase then
   end
 end
 -- File: l3names.dtx
-local minus_tok = token.new(string.byte'-', 12)
-local zero_tok = token.new(string.byte'0', 12)
-local one_tok = token.new(string.byte'1', 12)
+local minus_tok = token_new(string.byte'-', 12)
+local zero_tok = token_new(string.byte'0', 12)
+local one_tok = token_new(string.byte'1', 12)
 luacmd('tex_strcmp:D', function()
   local first = scan_string()
   local second = scan_string()
@@ -267,11 +268,16 @@ luacmd('tex_strcmp:D', function()
     put_next(first == second and zero_tok or one_tok)
   end
 end, 'global')
+local sprint = tex.sprint
 local cprint = tex.cprint
 luacmd('tex_Ucharcat:D', function()
   local charcode = scan_int()
   local catcode = scan_int()
-  cprint(catcode, utf8_char(charcode))
+  if catcode == 10 then
+    sprint(token_new(charcode, 10))
+  else
+    cprint(catcode, utf8_char(charcode))
+  end
 end, 'global')
 luacmd('tex_filesize:D', function()
   local size = filesize(scan_string())
