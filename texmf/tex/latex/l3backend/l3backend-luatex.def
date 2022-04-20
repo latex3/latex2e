@@ -26,7 +26,7 @@
 %% 
 %% File: l3backend-basics.dtx
 \ProvidesExplFile
-  {l3backend-luatex.def}{2022-04-10}{}
+  {l3backend-luatex.def}{2022-04-20}{}
   {L3 backend support: PDF output (LuaTeX)}
 \cs_if_exist:NTF \__kernel_dependency_version_check:nn
   {
@@ -129,7 +129,6 @@
     \tex_pdfextension:D colorstack ~
       \int_eval:n {#1} ~ push ~ {#2}
   }
-\cs_generate_variant:Nn \__kernel_color_backend_stack_push:nn { nx }
 \cs_new_protected:Npn \__kernel_color_backend_stack_pop:n #1
   {
     \tex_pdfextension:D colorstack ~
@@ -181,6 +180,21 @@
   { \__color_backend_select:nn { /#1 ~ cs ~ #2 ~ scn  } { /#1 ~ CS ~ #2 ~ SCN } }
 \cs_new_eq:NN \__color_backend_select_devicen:nn \__color_backend_select_separation:nn
 \cs_new_eq:NN \__color_backend_select_iccbased:nn \__color_backend_select_separation:nn
+\cs_new_protected:Npn \__color_backend_init_resource:n #1
+  {
+    \bool_lazy_and:nnT
+      { \cs_if_exist_p:N \pdfmanagement_if_active_p: }
+      { \pdfmanagement_if_active_p: }
+      {
+        \use:x
+          {
+            \pdfmanagement_add:nnn
+              { Page / Resources / ColorSpace }
+              { #1 }
+              { \pdf_object_ref_last: }
+          }
+      }
+  }
 \cs_new_protected:Npn \__color_backend_separation_init:nnnnn #1#2#3#4#5
   {
     \pdf_object_unnamed_write:nx { dict }
@@ -193,23 +207,16 @@
       }
     \exp_args:Nx \__color_backend_separation_init:nn
       { \str_convert_pdfname:n {#1} } {#2}
-    \bool_lazy_and:nnT
-      { \cs_if_exist_p:N \pdfmanagement_if_active_p: }
-      { \pdfmanagement_if_active_p: }
-      {
-        \use:x
-          {
-            \pdfmanagement_add:nnn
-              { Page / Resources / ColorSpace }
-              { color \int_use:N \g__color_model_int }
-              { \pdf_object_ref_last: }
-          }
-      }
+    \__color_backend_init_resource:n { color \int_use:N \g__color_model_int }
   }
 \cs_new_protected:Npn \__color_backend_separation_init:nn #1#2
   {
-    \pdf_object_unnamed_write:nx { array }
-      { /Separation /#1 ~ #2 ~ \pdf_object_ref_last: }
+    \use:x
+      {
+        \pdf_object_new:nn { color \int_use:N \g__color_model_int } { array }
+        \pdf_object_write:nn { color \int_use:N \g__color_model_int }
+          { /Separation /#1 ~ #2 ~ \pdf_object_ref_last: }
+      }
     \prop_gput:Nnx \g__color_backend_colorant_prop { /#1 }
       { \pdf_object_ref_last: }
   }
@@ -259,26 +266,19 @@
         }
         { {#3} }
      }
-    \pdf_object_unnamed_write:nx { array }
+    \use:x
       {
-        /DeviceN ~
-        [ ~ #1 ~ ] ~
-        #2 ~
-        \pdf_object_ref_last:
-        \__color_backend_devicen_colorants:n {#1}
-      }
-    \bool_lazy_and:nnT
-      { \cs_if_exist_p:N \pdfmanagement_if_active_p: }
-      { \pdfmanagement_if_active_p: }
-      {
-        \use:x
+        \pdf_object_new:nn { color \int_use:N \g__color_model_int } { array }
+        \pdf_object_write:nn { color \int_use:N \g__color_model_int }
           {
-            \pdfmanagement_add:nnn
-              { Page / Resources / ColorSpace }
-              { color \int_use:N \g__color_model_int }
-              { \pdf_object_ref_last: }
+            /DeviceN ~
+            [ ~ #1 ~ ] ~
+            #2 ~
+            \pdf_object_ref_last:
+            \__color_backend_devicen_colorants:n {#1}
           }
       }
+    \__color_backend_init_resource:n { color \int_use:N \g__color_model_int }
   }
 \cs_new:Npn \__color_backend_devicen_init:w #1 ~ #2 \s__color_stop
   {
@@ -302,17 +302,8 @@
       }
     \pdf_object_unnamed_write:nx { array }
       { /ICCBased ~ \pdf_object_ref:n { __color_icc_ #1 } }
-    \cs_if_exist:NT \pdfmanagement_add:nnn
-      {
-        \use:x
-          {
-            \pdfmanagement_add:nnn { Page / Resources / ColorSpace }
-              { color \int_use:N \g__color_model_int }
-              { ~ \pdf_object_ref_last: }
-          }
-      }
+    \__color_backend_init_resource:n { color \int_use:N \g__color_model_int }
   }
-
 \cs_new_protected:Npn \__color_backend_iccbased_device:nnn #1#2#3
   {
     \pdf_object_if_exist:nF { __color_icc_ #1 }
@@ -326,16 +317,7 @@
       }
     \pdf_object_unnamed_write:nx { array }
       { /ICCBased ~ \pdf_object_ref:n { __color_icc_ #1 } }
-    \cs_if_exist:NT \pdfmanagement_add:nnn
-      {
-        \use:x
-          {
-            \pdfmanagement_add:nnn
-              { Page / Resources / ColorSpace }
-              { Default #2 }
-              { \pdf_object_ref_last: }
-          }
-      }
+    \__color_backend_init_resource:n { Default #2 }
   }
 \cs_new_protected:Npn \__color_backend_fill_cmyk:n #1
   { \__color_backend_fill:n { #1 ~ k } }
@@ -348,7 +330,6 @@
     \tl_set:Nn \l__color_backend_fill_tl {#1}
     \__kernel_color_backend_stack_push:nn \l__color_backend_stack_int
       { #1 ~ \l__color_backend_stroke_tl }
-    \group_insert_after:N \__color_backend_reset:
   }
 \cs_new_protected:Npn \__color_backend_stroke_cmyk:n #1
   { \__color_backend_stroke:n { #1 ~ K } }
@@ -361,7 +342,6 @@
     \tl_set:Nn \l__color_backend_stroke_tl {#1}
     \__kernel_color_backend_stack_push:nn \l__color_backend_stack_int
       { \l__color_backend_fill_tl \c_space_tl #1 }
-    \group_insert_after:N \__color_backend_reset:
   }
 \cs_new_protected:Npn \__color_backend_fill_separation:nn #1#2
   { \__color_backend_fill:n { /#1 ~ cs ~ #2 ~ scn } }
@@ -369,6 +349,8 @@
   { \__color_backend_stroke:n { /#1 ~ CS ~ #2 ~ SCN } }
 \cs_new_eq:NN \__color_backend_fill_devicen:nn \__color_backend_fill_separation:nn
 \cs_new_eq:NN \__color_backend_stroke_devicen:nn \__color_backend_stroke_separation:nn
+\cs_new_eq:NN \__color_backend_fill_reset: \__color_backend_reset:
+\cs_new_eq:NN \__color_backend_stroke_reset: \__color_backend_reset:
 %% File: l3backend-box.dtx
 \cs_new_protected:Npn \__box_backend_clip:N #1
   {
@@ -550,7 +532,7 @@
   {
     \seq_set_from_clist:Nn
       \l_graphics_search_ext_seq
-      { .pdf , .eps , .png , .jpg , .jpeg  }
+      { .pdf , .eps , .ps , .png , .jpg , .jpeg  }
   }
 \tl_new:N \l__graphics_graphics_attr_tl
 \cs_new_protected:Npn \__graphics_backend_getbb_jpg:n #1
@@ -650,6 +632,7 @@
           }
           {#1}
      }
+    \cs_new_eq:NN \__graphics_backend_getbb_ps:n \__graphics_backend_getbb_eps:n
     \cs_new_protected:Npn \__graphics_backend_getbb_eps:nn #1#2
       {
         \file_compare_timestamp:nNnT {#2} > {#1}
@@ -674,6 +657,7 @@
               }
           }
       }
+    \cs_new_eq:NN \__graphics_backend_include_ps:n \__graphics_backend_include_eps:n
   }
 \cs_new_protected:Npn \__graphics_backend_get_pagecount:n #1
   {
@@ -912,7 +896,9 @@
     \cs_gset_protected:Npn \__opacity_backend_select_aux:n #1 { }
   }
 \cs_new_protected:Npn \__opacity_backend_reset:
- { \__kernel_color_backend_stack_pop:n \c__opacity_backend_stack_int }
+ {
+    \__kernel_color_backend_stack_pop:n \c__opacity_backend_stack_int
+ }
 \cs_new_protected:Npn \__opacity_backend_fill:n #1
   {
     \__opacity_backend_fill_stroke:xx
@@ -938,7 +924,7 @@
         \pdfmanagement_add:nnn { Page / Resources / ExtGState }
           { opacity.stroke #1 }
           { << /CA ~ #2 >> }
-        \__kernel_color_backend_stack_push:nn \c__opacity_backend_stack_int
+    \__kernel_color_backend_stack_push:nn \c__opacity_backend_stack_int
          { /opacity.fill #1 ~ gs /opacity.stroke #2 ~ gs }
         \group_insert_after:N \__opacity_backend_reset:
       }
