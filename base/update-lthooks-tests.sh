@@ -15,6 +15,9 @@ l3build save -cconfig-lthooks2 \
    shipout2-012 \
    shipout2-013 \
    shipout2-014 \
+   shipout2-015 \
+   shipout2-016 \
+   shipout2-017 \
    github-0360  \
    github-0431  \
    ltpara-001 \
