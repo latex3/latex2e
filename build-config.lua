@@ -29,8 +29,6 @@ checksuppfiles = checksuppfiles     or
     "test209.tex",
     "test2e.tex",
     "regression-test.tex",
-    "xetex.def",
-    "dvips.def",
     "lipsum.ltd.tex",
     "lipsum.sty",
     "*.fd",
