@@ -28,7 +28,7 @@
 \ProvidesFile{ltluatex.dtx}
 %</driver>
 %<*tex>
-[2021/12/27 v1.1x
+[2022/08/13 v1.1y
 %</tex>
 %<plain>  LuaTeX support for plain TeX (core)
 %<*tex>
@@ -1398,9 +1398,7 @@ local callbacktypes = callbacktypes or {
   ligaturing             = simple,
   kerning                = simple,
   insert_local_par       = simple,
-  pre_mlist_to_hlist_filter = list,
-  mlist_to_hlist         = exclusive,
-  post_mlist_to_hlist_filter = reverselist,
+% mlist_to_hlist         = exclusive,
   new_graf               = exclusive,
 %    \end{macrocode}
 % Section 8.5: information reporting callbacks.
@@ -1459,6 +1457,30 @@ local callbacktypes = callbacktypes or {
 %    \begin{macrocode}
 }
 luatexbase.callbacktypes=callbacktypes
+%    \end{macrocode}
+%
+% \changes{v1.1y}{2022/08/13}{shared\_callbacks added}
+% Sometimes multiple callbacks correspond to a single underlying engine level callback.
+% Then the engine level callback should be registered as long as at least one of these
+% callbacks is in use. This is implemented though a shared table which counts how many
+% of the involved callbacks are currently in use. The enging level callback is registered
+% iff this count is not 0.
+%
+% We add |mlist_to_hlist| directly to the list to demonstrate this, but the handler gets
+% added later when it is actually defined.
+%
+% All callbacks in this list are treated as user defined callbacks.
+%
+%    \begin{macrocode}
+local shared_callbacks = {
+  mlist_to_hlist = {
+    callback = "mlist_to_hlist",
+    count = 0,
+    handler = nil,
+  },
+}
+shared_callbacks.pre_mlist_to_hlist_filter = shared_callbacks.mlist_to_hlist
+shared_callbacks.post_mlist_to_hlist_filter = shared_callbacks.mlist_to_hlist
 %    \end{macrocode}
 %
 % \begin{macro}{callback.register}
@@ -1639,11 +1661,7 @@ local defaults = {
 % If a default function is not required, it may be declared as |false|.
 % First we need a list of user callbacks.
 %    \begin{macrocode}
-local user_callbacks_defaults = {
-  pre_mlist_to_hlist_filter = list_handler_default,
-  mlist_to_hlist = node.mlist_to_hlist,
-  post_mlist_to_hlist_filter = list_handler_default,
-}
+local user_callbacks_defaults = {}
 %    \end{macrocode}
 %
 % \begin{macro}{create_callback}
@@ -1738,9 +1756,19 @@ local function add_to_callback(name, func, description)
     l = { }
     callbacklist[name] = l
 %    \end{macrocode}
+% \changes{v1.1y}{2022/08/13}{Adapted code for shared\_callbacks}
+% Handle count for shared engine callbacks.
+%    \begin{macrocode}
+    local shared = shared_callbacks[name]
+    if shared then
+      shared.count = shared.count + 1
+      if shared.count == 1 then
+        callback_register(shared.callback, shared.handler)
+      end
+%    \end{macrocode}
 % If it is not a user defined callback use the primitive callback register.
 %    \begin{macrocode}
-    if user_callbacks_defaults[name] == nil then
+    elseif user_callbacks_defaults[name] == nil then
       callback_register(name, handlers[callbacktypes[name]](name))
     end
   end
@@ -1778,6 +1806,7 @@ luatexbase.add_to_callback = add_to_callback
 % \changes{v1.0k}{2015/12/02}{adjust initialization of cb local (PHG)}
 % \changes{v1.0k}{2015/12/02}{Give more specific error messages (PHG)}
 % \changes{v1.1m}{2020/03/07}{Do not call callback.register for user-defined callbacks}
+% \changes{v1.1y}{2022/08/13}{Adapted code for shared\_callbacks}
 %   Remove a function from a callback. First check arguments.
 %    \begin{macrocode}
 local function remove_from_callback(name, description)
@@ -1823,7 +1852,13 @@ local function remove_from_callback(name, description)
   )
   if #l == 0 then
     callbacklist[name] = nil
-    if user_callbacks_defaults[name] == nil then
+    local shared = shared_callbacks[name]
+    if shared then
+      shared.count = shared.count - 1
+      if shared.count == 0 then
+        callback_register(shared.callback, nil)
+      end
+    elseif user_callbacks_defaults[name] == nil then
       callback_register(name, nil)
     end
   end
@@ -1917,10 +1952,14 @@ luatexbase.uninstall = uninstall
 % \end{macro}
 % \begin{macro}{mlist_to_hlist}
 % \changes{v1.1l}{2020/02/02}{|pre/post_mlist_to_hlist| added}
+% \changes{v1.1y}{2022/08/13}{Use shared\_callback system for pre/post/mlist_to_hlist}
 %   To emulate these callbacks, the ``real'' |mlist_to_hlist| is replaced by a
 %   wrapper calling the wrappers before and after.
 %    \begin{macrocode}
-callback_register("mlist_to_hlist", function(head, display_type, need_penalties)
+create_callback('pre_mlist_to_hlist_filter', 'list')
+create_callback('mlist_to_hlist', 'exclusive', node.mlist_to_hlist)
+create_callback('post_mlist_to_hlist_filter', 'list')
+function shared_callbacks.mlist_to_hlist.handler(head, display_type, need_penalties)
   local current = call_callback("pre_mlist_to_hlist_filter", head, display_type, need_penalties)
   if current == false then
     flush_list(head)
@@ -1933,7 +1972,7 @@ callback_register("mlist_to_hlist", function(head, display_type, need_penalties)
     return nil
   end
   return post
-end)
+end
 %    \end{macrocode}
 % \end{macro}
 % \endgroup
