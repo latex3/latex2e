@@ -1,5 +1,9 @@
 # LaTeX laboratory
 
+Release 2022-06-01 pre-release 4
+
+## Overview
+
 This bundle holds optional files that are loaded in certain situations
 by kernel code (if available). For example, the new (as of 2021/12)
 `\DocumentMetadata` command in the kernel loads a file from here holding
@@ -20,6 +24,10 @@ to documents already using the new functionality.
 
 ### Support for `\DocumentMetadata`
 
+### New output routine code (under development)
+
+ - so far there is a first implementation of footnote support
+
 
 ## License
 
@@ -30,5 +38,5 @@ The license is LPPL 1.3c.
 
 This README file is
 
-Copyright (C) 2021
+Copyright (C) 2021-2022
 The LaTeX Project

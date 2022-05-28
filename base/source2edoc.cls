@@ -2,7 +2,7 @@
 % This class is buggy and needs fixing
 
 \ProvidesClass{source2edoc}
-              [2021/01/14 v0.2b Quick hack to typeset source2.tex
+              [2022/04/03 v0.2c Quick hack to typeset source2.tex
                (not usable for anything else and buggy -- will vanish again)!]
 
 
@@ -171,7 +171,10 @@
          t\or u\or v\or w\or x\or y\or z\or A\or B\or C\or
          D\or E\or F\or G\or H\or I\or J\or K\or L\or M\or
          N\or O\or P\or Q\or R\or S\or T\or U\or V\or W\or
-         X\or Y\or Z\else\@ctrerr\fi}
+         X\or Y\or Z\or
+         aa\or bb\or cc\or  % we are getting definitely too many modules
+         dd%
+         \else\@ctrerr\fi}
 \def\docincludeaux{%
   \def\thepart{\aalph{part}}\def\filesep{\thepart-}%
   \let\filekey\@gobble
@@ -295,11 +298,17 @@ Bug reports can be opened (category \texttt{#1}) at\\%
     \fi}%
 \endgroup%
 
+
+% don't run tocs when they are in some module files
+\AddToHook{cmd/tableofcontents/after}{\global\let\tableofcontents\relax} 
+
+
 \InputIfFileExists{ltxdoc.cfg}
            {\typeout{*************************************^^J%
                      * Local config file ltxdoc.cfg used^^J%
                      *************************************}}
            {}
+
 
 
 \errorstopmode

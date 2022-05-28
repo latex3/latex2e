@@ -1,7 +1,7 @@
 The LaTeX `graphics` bundle
 ===========================
 
-Release 2022-06-01 pre-release 1
+Release 2022-06-01 pre-release 4
 
 Overview
 --------
