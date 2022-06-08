@@ -1,7 +1,7 @@
 The amsmath bundle for LaTeX
 ============================
 
-Release 2021-11-15
+Release 2022-06-01 pre-release 4
 
 Overview
 --------
@@ -77,4 +77,5 @@ version 1.3c or later.
 -----
 
 <p>Copyright (C) 2001-2004, 2007, 2008, 2010, 2011, 2013 American Mathematical Society. <br />
-<p>Copyright (C) 2016-2021 The LaTeX Project and American Mathematical Society. <br />
+<p>Copyright (C) 2016-2022 The LaTeX Project and American Mathematical Society. <br />
+

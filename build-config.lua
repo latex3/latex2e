@@ -11,8 +11,8 @@ typesetdeps = typesetdeps or
   }
 unpackdeps  = unpackdeps  or {maindir .. "/base"}
 
--- We really need 3 on most files (toc + references)
-typesetruns  = 3
+-- We really need 4 on most files (toc + references + index (which needs two runs))
+typesetruns  = 4
 maxprintline = 9999
 
 -- Set up the check system to work in 'stand-alone' mode
@@ -150,12 +150,12 @@ end
 function update_tag_ltx(file,content,tagname,tagdate)
   local year = os.date("%Y")
   if string.match(content,
-    "Copyright %(C%) %d%d%d%d%-%d%d%d%d [^\n]*LaTeX3? Project") then
+    "Copyright %(C%) %d%d%d%d%-%d%d%d%d [^\n]*LaTeX") then
     content = string.gsub(content,
-      "Copyright %(C%) (%d%d%d%d)%-%d%d%d%d ([^\n]*LaTeX3? Project)",
+      "Copyright %(C%) (%d%d%d%d)%-%d%d%d%d ([^\n]*LaTeX)",
       "Copyright (C) %1-" .. year .. " %2")
-  elseif string.match(content,"Copyright %(C%) %d%d%d%d LaTeX") then
-    local oldyear = string.match(content,"Copyright %(C%) (%d%d%d%d) LaTeX")
+  elseif string.match(content,"Copyright %(C%) %d%d%d%d [^\n]*LaTeX") then
+    local oldyear = string.match(content,"Copyright %(C%) (%d%d%d%d) ([^\n]*LaTeX)")
     if year ~= oldyear then
       content = string.gsub(content,
         "Copyright %(C%) %d%d%d%d LaTeX",
@@ -271,10 +271,11 @@ function typeset(file,dir)
     return errorlevel
   end
   for i = 2,typesetruns - 1 do
+-- we have to run tex first then then index otherwise the index isn't run on the second last run!
     errorlevel =
+      tex(file,dir,"batchmode") +
       makeindex(name,dir,".glo",".gls",".glg",glossarystyle) +
-      makeindex(name,dir,".idx",".ind",".ilg",indexstyle)    +
-      tex(file,dir,"batchmode")
+      makeindex(name,dir,".idx",".ind",".ilg",indexstyle)
     if errorlevel ~= 0 then return errorlevel end
   end
   return tex(file,dir)

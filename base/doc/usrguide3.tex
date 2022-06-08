@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-% Copyright (C) 2020-2021
+% Copyright (C) 2020-2022
 % The LaTeX Project and any individual authors listed elsewhere
 % in this file.
 %
@@ -31,12 +31,13 @@
 \documentclass{ltxguide}
 
 \usepackage[T1]{fontenc}  % needed for \textbackslash in tt
+\usepackage{csquotes}
 
 \title{New \LaTeX\ methods for authors (starting 2020)}
-\author{\copyright~Copyright 2020-2021, \LaTeX\ Project Team.\\
+\author{\copyright~Copyright 2020-2022, \LaTeX\ Project Team.\\
    All rights reserved.}
 
-\date{2021-06-11}
+\date{2022-02-19}
 
 \NewDocumentCommand\cs{m}{\texttt{\textbackslash\detokenize{#1}}}
 \NewDocumentCommand\marg{m}{\arg{#1}}
@@ -47,6 +48,18 @@
 \makeatletter
 \renewcommand \verbatim@font {\normalfont \ttfamily}
 \makeatother
+
+
+% for fpeval documentation
+
+\providecommand\fpop[1]{\mathop{\texttt{#1}}}
+\providecommand\fpbin[1]{\mathbin{\texttt{#1}}}
+\providecommand\fprel[1]{\mathrel{\texttt{#1}}}
+\providecommand\nan{\texttt{NaN}}
+
+\ExplSyntaxOn
+\ProvideExpandableDocumentCommand \fpeval { m } { \fp_eval:n {#1} }
+\ExplSyntaxOff
 
 \begin{document}
 
@@ -227,6 +240,11 @@ defined.
    same name.  This should be used sparingly.
 \end{itemize}
 
+If the \meta{cmd} can't be provided as a single token but needs
+\enquote{constructing}, you can use \cs{ExpandArgs} as explained in
+Section~\ref{sec:preconstructing-csnames} which also gives an example
+in which this is needed.
+
 \begin{decl}
   |\NewDocumentEnvironment|     \arg{env} \arg{arg spec} \arg{beg-code} \arg{end-code} \\
   |\RenewDocumentEnvironment|   \arg{env} \arg{arg spec} \arg{beg-code} \arg{end-code} \\
@@ -288,7 +306,7 @@ must exist). So after
 \end{verbatim}
 the user input |\foo{arg1}[arg2]{arg3}| and \verb*|\foo{arg1} [arg2] {arg3}|
 will both be parsed in the same way.
- 
+
 The behavior of optional arguments \emph{after} any mandatory arguments is
 selectable. The standard settings will allow spaces here, and thus with
 \begin{verbatim}
@@ -338,6 +356,8 @@ defaults with testing for missing values.
 Optional arguments make use of dedicated variables to return information about
 the nature of the argument received.
 
+
+
 \begin{decl}
   |\IfNoValueTF| \arg{arg} \arg{true code} \arg{false code} \\
   |\IfNoValueT|  \arg{arg} \arg{true code} \\
@@ -373,11 +393,12 @@ will be logically \texttt{false}.
 When two optional arguments follow each other (a syntax we typically
 discourage), it can make sense to allow users of the command to
 specify only the second argument by providing an empty first
-argument.  Rather than testing separately for emptiness and for
+argument.
+\NEWdescription{2022/06/01}
+Rather than testing separately for emptiness and for
 |-NoValue-| it is then best to use the argument type~|O| with an
-empty default value, and simply test for emptiness using the
-\pkg{expl3} conditional \cs{tl_if_blank:nTF} or its \pkg{etoolbox}
-analogue \cs{ifblank}.
+empty default value, and then test for emptiness using the
+conditional \cs{IfBlankTF} (described below) instead.
 
 \begin{decl}
   |\IfValueTF| \arg{arg} \arg{true code} \arg{false code} \\
@@ -387,6 +408,51 @@ analogue \cs{ifblank}.
 The reverse form of the \cs{IfNoValue(TF)} tests are also available
 as \cs{IfValue(TF)}. The context will determine which logical
 form makes the most sense for a given code scenario.
+
+
+
+
+
+\begin{decl}[2022/06/01]
+  |\IfBlankTF| \arg{arg} \arg{true code} \arg{false code} \\
+  |\IfBlankT|  \arg{arg} \arg{true code} \\
+  |\IfBlankF|  \arg{arg} \arg{false code}
+\end{decl}
+
+
+The \cs{IfNoValueTF} command chooses the \meta{true code} if the optional argument has not
+been used at all (and it returns the special \texttt{-NoValue-}
+marker), but not if it has been given an empty value. In contrast
+\cs{IfBlankTF} returns true if its argument is either truly empty or
+only contains one or more normal blanks.
+For example
+\begin{verbatim}
+\NewDocumentCommand\foo{m!o}{\par #1:
+   \IfNoValueTF{#2}{No optional}%
+                   {\IfBlankTF{#2}{Blanks in or empty}%
+                                  {Real content in}}%
+                    \space argument!}
+\foo{1}[bar] \foo{2}[  ] \foo{3}[] \foo{4}[\space] \foo{5} [x]
+\end{verbatim}
+results
+in the following output:
+\begin{quote}
+  \NewDocumentCommand\foo{m!o}{\par #1:
+    \IfNoValueTF{#2}{No optional}%
+                {\IfBlankTF{#2}{Blanks in or empty}%
+                  {Real content in}}%
+                \space argument!}
+  \foo{1}[bar] \foo{2}[  ] \foo{3}[] \foo{4}[\space] \foo{5} [x]
+\end{quote}
+  
+Note that the \cs{space} in (4) is considered real content---because it is
+a command and not a \enquote{space} character---even though it results
+in producing a space. You can also observe in (5) the effect of the
+\texttt{!} specifier, preventing the last \cs{foo}
+from interpreting \texttt{[x]} as its optional argument.
+
+
+
 
 \begin{decl}
   |\BooleanFalse|  \\
@@ -554,10 +620,12 @@ spaces are trimmed at both ends of the body: in the example there would
 otherwise be spaces coming from the ends the lines after |[\itshape]| and
 |world!|. Putting the prefix |!| before \texttt{b} suppresses space-trimming.
 
-When \texttt{b} is used in the argument specification, the last argument of the environment declaration (e.g., \cs{NewDocumentEnvironment}), which consists of an \meta{end code} to insert at
-|\end|\marg{environment}, is redundant since one can simply put that code at
-the end of the \meta{start code}. Nevertheless this (empty) \meta{end code}
-must be provided.
+When \texttt{b} is used in the argument specification, the last
+argument of the environment declaration (e.g.,
+\cs{NewDocumentEnvironment}), which consists of an \meta{end code} to
+insert at |\end|\marg{environment}, is redundant since one can simply
+put that code at the end of the \meta{start code}. Nevertheless this
+(empty) \meta{end code} must be provided.
 
 Environments that use this feature can be nested.
 
@@ -665,7 +733,7 @@ with both calls to the command seeing the delimiter |\x|.
 \subsection{Creating new argument processors}
 
 \begin{decl}
-  |\ProcessedArgument| 
+  |\ProcessedArgument|
 \end{decl}
 Argument processors allow manipulation of a grabbed argument before it is
 passed to the underlying code. New processor implementations may be created
@@ -709,5 +777,281 @@ These functions show the current argument specification for the
 requested \meta{function} or \meta{environment} at the terminal. If
 the \meta{function} or \meta{environment} has no known argument
 specification then an error is issued.
+
+
+
+\section{Copying and showing (robust) commands}
+
+If you want to (slightly) alter an existing command you may want to
+save the current definition under a new name and then use that in a
+new definition. If the existing command is robust, then the old trick of
+using the low-level \cs{let} for this doesn't work, because it only
+copies the top-level definition, but not the part that actually does
+the work. As most \LaTeX{} commands are nowadays robust, \LaTeX{}
+now offers some high-level declarations for this instead.
+
+However, please note that it is usually better to make use of
+available hooks (e.g., the generic command or environment hooks),
+instead of copying the current definition and thereby freezing it; see
+the hook management documentation \texttt{lthooks-doc.pdf} for
+details.
+
+\begin{decl}
+  |\NewCommandCopy|       \arg{cmd} \arg{existing-cmd} \\
+  |\RenewCommandCopy|     \arg{cmd} \arg{existing-cmd} \\
+  |\DeclareCommandCopy|   \arg{cmd} \arg{existing-cmd}
+\end{decl}
+
+This copies the definition of \meta{existing-cmd} to \meta{cmd}. After
+this \meta{existing-cmd} can be redefined and \meta{cmd}
+still works! This allows you to then provide a new definition for
+\meta{existing-cmd} that makes use of \meta{cmd} (i.e., of its old
+definition). For example, after
+\begin{verbatim}
+  \NewCommandCopy\LaTeXorig\LaTeX
+  \RenewDocumentCommand\LaTeX{}{\textcolor{blue}{\LaTeXorig}}
+\end{verbatim}
+all \LaTeX{} logos generated with \cs{LaTeX} will come out in blue
+(assuming you have a color package loaded).
+
+The differences between \cs{New...} and \cs{Renew...} are as
+elsewhere: i.e., you get an error depending on whether or not
+\meta{cmd} already exists, or in case of \cs{Declare...} it is copied
+regardless. Note that there is no \cs{Provide...} declaration, because
+that would be of limited value.
+
+
+If the \meta{cmd} or \meta{existing-cmd} can't be provided as a single
+token but need \enquote{constructing}, you can use \cs{ExpandArgs}
+as explained in
+Section~\ref{sec:preconstructing-csnames}.
+
+
+
+
+\begin{decl}
+  |\ShowCommand|       \arg{cmd}
+\end{decl}
+
+This displays the meaning of the \meta{cmd} on the terminal and then
+stops (just like the primitive \cs{show}). The difference is that it
+correctly shows the meaning of more complex commands, e.g., in case of
+robust commands it displays not only the top-level definition but
+also the actual payload code and in case of commands declared with
+\cs{NewDocumentCommand}, etc.\ it also gives you detailed information
+about the argument signature.
+
+
+\section[Preconstructing command names \\ (or otherwise expanding arguments)]
+        {Preconstructing command names (or otherwise expanding arguments)}
+\label{sec:preconstructing-csnames}
+
+When declaring new commands with \cs{NewDocumentCommand} or
+\cs{NewCommandCopy} or similar, it is sometimes necessary to
+``construct'' the csname. As a general mechanism the L3 programming
+layer has \cs{exp_args:N...} for this, but there is no mechanism for
+it if \cs{ExplSyntaxOn} is not active (and mixing programming and user
+interface level commands is not a good approach anyhow). We therefore
+offer a mechanism to access this ability using CamelCase naming.
+
+\begin{decl}
+  |\UseName|  \arg{string} \\
+  |\ExpandArgs| \arg{spec} \arg{cmd} \arg{arg1} \dots
+\end{decl}
+
+\cs{UseName} turns the \meta{string} directly into a csname and
+then executes it: this is equivalent to the long-standing
+\LaTeXe{} internal command \cs{@nameuse}, or the L3 programming
+equivalent \cs{use:c}. \cs{ExpandArgs} takes a \meta{spec} which
+describes how to expand the \meta{arguments}, carries out these
+operations then executes the \meta{cmd}. The \meta{spec} uses
+the descriptions offered by the L3 programming layer, and the
+relevant \cs{exp_args:N...} function must exist. Common cases will
+have a \meta{spec} of \texttt{c}, \texttt{cc} or \texttt{Nc}: see below.
+
+As an example, the following declaration provides a method to generate
+copyedit commands:
+\begin{verbatim}
+\NewDocumentCommand\newcopyedit{mO{red}}
+  {\newcounter{todo#1}%
+   \ExpandArgs{c}\NewDocumentCommand{#1}{s m}%
+     {\stepcounter{todo#1}%
+      \IfBooleanTF {##1}%
+         {\todo[color=#2!10]{\UseName{thetodo#1}: ##2}}%
+         {\todo[inline,color=#2!10]{\UseName{thetodo#1}: ##2}}%
+     }%
+  }
+\end{verbatim}
+Given that declaration you can then write
+\verb/\newcopyedit{note}[blue]/ which defines the command \cs{note}
+and the corresponding counter for you.
+
+A second example is to copy a command by string name using
+\cs{NewCommandCopy}: here we might need to construct both command
+names.
+\begin{verbatim}
+\NewDocumentCommand\savebyname{m}
+  {\ExpandArgs{cc}\NewCommandCopy{saved#1}{#1}}
+\end{verbatim}
+
+In the \meta{spec} each \texttt{c} stands for one argument that is
+turned into a `\texttt{c}'ommand. An \texttt{n} represents a
+`\texttt{n}'ormal argument that is not altered and \texttt{N} stands for
+a `\texttt{N}'ormal argument which is also left unchanged, but one
+consisting only of a single token (and usually unbraced). Thus, to
+construct a command from a string only for the second argument of
+\cs{NewCommandCopy} you would write
+\begin{verbatim}
+\ExpandArgs{Nc}\NewCommandCopy\mysectionctr{c@section}
+\end{verbatim}
+There are several other single letters supported in the L3 programming
+layer that \emph{could} be used in the \meta{spec} to manipulate
+arguments in other ways.  If you are interested, take a look at the
+\enquote{Argument expansion} section in the L3 programming layer
+documentation in \texttt{interface3.pdf}.
+
+
+
+\section{Expandable floating point (and other) calculations}
+
+The \LaTeX3 programming layer which is part of the format offers a
+rich interface to manipulate floating point variables and values. To
+allow for (simpler) applications to use this on document-level or in
+packages otherwise not making use of the L3 programming layer a few
+interface commands are made available.
+
+
+\begin{decl}
+  |\fpeval| \arg{floating point expression}
+\end{decl}
+
+The expandable command \cs{fpeval} takes as its argument a floating
+point expression and produces a result using the normal rules of
+mathematics. As this command is expandable it can be used where \TeX{}
+requires a number and for example within a low-level \cs{edef} operation
+to give a purely numerical result.
+
+
+
+Briefly, the floating point expressions may comprise:
+\begin{itemize}
+  \item Basic arithmetic: addition $x\fpbin{+}y$, subtraction $x\fpbin{-}y$,
+    multiplication $x\fpbin{*}y$, division $x\fpbin{/}y$, square root~$\sqrt{x}$,
+    and parentheses.
+  \item Comparison operators: $x\fprel{<}y$,
+    $x\fprel{<=}y$, $x\fprel{>?}y$,
+    $x\fprel{!=}y$ \emph{etc.}
+  \item Boolean logic: sign $\fpop{sign} x$,
+    negation $\fpop{!}x$, conjunction
+    $x\fprel{\&\&}y$, disjunction $x\fprel{\string|\string|}y$, ternary
+    operator $x\fprel{?}y\fprel{:}z$.
+  \item Exponentials: $\fpop{exp} x$, $\fpop{ln} x$, $x\mathord{\texttt{\^{}}}y$.
+  \item Integer factorial: $\fpop{fact} x$.
+  \item Trigonometry: $\fpop{sin} x$, $\fpop{cos} x$, $\fpop{tan} x$, $\fpop{cot} x$, $\fpop{sec}
+    x$, $\fpop{csc} x$ expecting their arguments in radians, and
+    $\fpop{sind} x$, $\fpop{cosd} x$,
+    $\fpop{tand} x$, $\fpop{cotd} x$,
+    $\fpop{secd} x$, $\fpop{cscd} x$ expecting their
+    arguments in degrees.
+  \item Inverse trigonometric functions: $\fpop{asin} x$,
+    $\fpop{acos} x$, $\fpop{atan} x$,
+    $\fpop{acot} x$, $\fpop{asec} x$,
+    $\fpop{acsc} x$ giving a result in radians, and
+    $\fpop{asind} x$, $\fpop{acosd} x$,
+    $\fpop{atand} x$, $\fpop{acotd} x$,
+    $\fpop{asecd} x$, $\fpop{acscd} x$ giving a result
+    in degrees.
+  \item Extrema: $\fpop{max}(x_{1},x_{2},\ldots)$, $\fpop{min}(x_{1},x_{2},\ldots)$,
+    $\fpop{abs}(x)$.
+  \item Rounding functions, controlled by two optional
+    values,  $n$ (number of places, $0$ by default) and
+      $t$ (behavior on a tie, $\nan$ by default):
+    \begin{itemize}
+    \item $\fpop{trunc}(x,n)$ rounds towards zero,
+    \item $\fpop{floor}(x,n)$ rounds towards~$-\infty$,
+    \item $\fpop{ceil}(x,n)$ rounds towards~$+\infty$,
+    \item $\fpop{round}(x,n,t)$ rounds to the closest value, with
+    ties rounded to an even value by default, towards zero if $t=0$,
+    towards $+\infty$ if $t>0$ and towards $-\infty$ if $t<0$.
+    \end{itemize}
+  \item Random numbers: $\fpop{rand}()$, $\fpop{randint}(m,n)$.
+  \item Constants: \texttt{pi}, \texttt{deg} (one degree in radians).
+  \item Dimensions, automatically expressed in points, \emph{e.g.},
+    \texttt{pc} is~$12$.
+  \item Automatic conversion (no need for \cs{number}) of
+    integer, dimension, and skip variables to floating points numbers,
+    expressing dimensions in points and ignoring the stretch and
+    shrink components of skips.
+  \item Tuples: $(x_1,\ldots{},x_n)$ that can be added together,
+    multiplied or divided by a floating point number, and nested.
+\end{itemize}
+
+An example of use could be the following:
+\begin{verbatim}
+  \LaTeX{} can now compute: $ \frac{\sin (3.5)}{2} + 2\cdot 10^{-3}
+  = \fpeval{sin(3.5)/2 + 2e-3} $.
+\end{verbatim}
+which produces the following output:
+\begin{quote}
+  \LaTeX{} can now compute: $ \frac{\sin (3.5)}{2} + 2\cdot 10^{-3}
+  = \fpeval{sin(3.5)/2 + 2e-3} $.
+\end{quote}
+
+\begin{decl}
+  |\inteval| \arg{integer expression}
+\end{decl}
+
+  The expandable command \cs{inteval} takes as its argument an integer
+  expression and produces a result using the normal rules of
+  mathematics with some restrictions, see below. The operations
+  recognized are |+|, |-|, |*| and |/| plus parentheses.  As this
+  command is expandable it can be used where \TeX{} requires a number
+  and for example within a low-level \cs{edef} operation to give a
+  purely numerical result.
+
+  This is basically a thin wrapper for the primitive \cs{numexpr}
+  command and therefore has some syntax restrictions. These are:
+  \begin{itemize}
+  \item \texttt{/} denotes division rounded to the closest integer with
+    ties rounded away from zero;
+  \item there is an error and the overall expression evaluates to zero
+    whenever the absolute value of any intermediate result exceeds
+    $2^{31}-1$, except in the case of scaling operations
+    $a$\texttt{*}$b$\texttt{/}$c$, for which $a$\texttt{*}$b$ may be
+    arbitrarily large;
+  \item parentheses may not appear after unary \texttt{+} or
+    \texttt{-}, namely placing \texttt{+(} or \texttt{-(} at the start
+    of an expression or after \texttt{+}, \texttt{-}, \texttt{*},
+    \texttt{/} or~\texttt{(} leads to an error.
+  \end{itemize}
+
+An example of use could be the following.
+\begin{verbatim}
+\LaTeX{} can now compute: The sum of the numbers is $\inteval{1 + 2 + 3}$.
+\end{verbatim}
+which results in
+\enquote{\LaTeX{} can now compute: The sum of the numbers is $\inteval{1 + 2 + 3}$.}
+
+
+\begin{decl}
+  |\dimeval| \arg{dimen expression} \qquad
+  |\skipeval| \arg{skip expression}
+\end{decl}
+
+Similar to \cs{inteval} but computing a length (\texttt{dimen}) or a
+rubber length (\texttt{skip}) value. Both are thin wrappers around
+the corresponding engine primitives, which makes them fast, but
+therefore shows the same syntax peculiars as discussed
+above. Nevertheless, in practice they are usually sufficient.  For
+example
+\begin{verbatim}
+\newcommand\calulateheight[1]{%
+  \setlength\textheight{\dimeval{\topskip+\baselineskip*\inteval{#1-1}}}}
+\end{verbatim}
+sets the \cs{textheight} to the appropriate value if a page should
+hold a specific number of text lines. Thus after |\calulateheight{40}|
+it is set to \dimeval{\topskip+\baselineskip*\inteval{40-1}}, given
+the values \cs{topskip} (\dimeval{\topskip}) and \cs{baselineskip}
+(\dimeval{\baselineskip}) in the current document.
 
 \end{document}

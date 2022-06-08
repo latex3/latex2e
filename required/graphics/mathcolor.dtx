@@ -1,0 +1,431 @@
+% \iffalse meta-comment
+%
+%% File: mathcolor.dtx (C) Copyright 2021-2022
+%       Frank Mittelbach, LaTeX Team
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+%
+%%% From File: mathcolor.dtx
+%
+%    \begin{macrocode}
+\def\mathcolorversion{v1.0b}
+\def\mathcolordate{2022/01/28}
+%    \end{macrocode}
+%<*driver>
+\documentclass{l3doc}
+
+%\makeatletter \input{mathcolor.ltx} \makeatother
+
+\usepackage{color}
+
+% Fixing footnotes in  functions and variables: this should be in l3doc!
+
+\newcommand\fixfootnote[2]{\footnotemark
+  \AddToHookNext{env/#1/after}{\footnotetext{#2}}}
+\AddToHook{env/function/begin}{\def\footnote{\fixfootnote{function}}}
+\AddToHook{env/variable/begin}{\def\footnote{\fixfootnote{variable}}}
+
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{mathcolor.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+
+
+
+%
+% \title{Providing color in math\thanks{This file has version
+%    \mathcolorversion\ dated \mathcolordate, \copyright\ \LaTeX\
+%    Project.}}
+% \author{Frank Mittelbach}
+%
+% \maketitle
+%
+%
+% \section{Introduction}
+%
+%    It is possible to use the \cs{color} command in math formulas but
+%    doing that has a number of restrictions and often leads to rather
+%    unreadable input. For example, to color the summation sign in red
+%    in the following formula
+% \[
+%     X = \color{red} \sum_{{\color{black} i=1}}^{{\color{black} n}} \color{black} x_i
+% \]
+%    A total of four color commands and a number of seemingly
+%    unnecessary extra braces in the sub and superscript are needed:
+%\begin{verbatim}
+%  \[ X = \color{red} \sum
+%         _{{\color{black} i=1}}  % without {{ the superscript is misplaced
+%         ^{{\color{black} n}}    % without {{ the \sum is black
+%        \color{black}            % without the x_i is red
+%        x_i                  \]
+%\end{verbatim}
+%    While this is ugly but at least works, other things are simply
+%    impossible, e.g.,
+% \[  \left\{ \frac{1}{2} \mathcolor{red}{\right\}} \]
+%    are not achievable at all because of the fact that \cs{left} and
+%    \cs{right} form a group. Thus, a \cs{color} command immediately
+%    before the \cs{right} has no effect and \verb=\}= remains black.
+%    Putting the color change before the \cs{left} and then resetting
+%    the color inside would work if you want to color both braces, but
+%    the above combination or the attempt to color only the left brace
+%    fails always.
+%
+%    Using \cs{textcolor} in formulas appears to work on first glance,
+%    but it produces spacing problems that are not easy to overcome
+%    either, because it generates a single \cs{mathord} and no
+%    longer reflects its input, thus
+%    \verb/\[ a = b \textcolor{red}{\neq} c \]/
+%    produces
+%  \[ a = b \textcolor{red}{\neq} c \]
+%    This is a case one could mend by wrapping the
+%    \cs{textcolor} and its arguments in a \cs{mathrel}, but even when
+%    that is possible, the resulting formula source is difficult to
+%    maintain and in other situations the solutions are even more
+%    complicated or there is no solution at all.
+%
+%    We therefore offer now a dedicated math coloring command named
+%    \cs{mathcolor}.
+%
+% \begin{function}{\mathcolor}
+% \begin{syntax}
+%   \cs{mathcolor} \oarg{model} \Arg{color-spec} \Arg{math material}
+% \end{syntax}
+%    It has the same arguments as \cs{textcolor} but is intended for
+%    use in formulas. The command does not generate a group and the
+%    \meta{math material} retains its math atom states and it correctly
+%    handles sub and superscripts that follow.
+% \end{function}
+%
+%    The command can also be used to color a single opening or closing
+%    symbol, e.g., the correct input to our earlier example is
+%\begin{verbatim}
+%    \[  \left\{ \frac{1}{2} \mathcolor{red}{\right\}} \]
+%\end{verbatim}
+%    which is how it was produced.
+%
+%    If you attempt to color large operators that use explicit
+%    \cs{limits}, \cs{nolimits}, or \cs{displaylimits}, then these
+%    limit controls need to immediately follow the operator. However,
+%    \cs{mathcolor} is written in a way that it is possible write
+%\begin{verbatim}
+%     \[  \mathcolor{red}{\int}\limits_0^1 \textrm{ or }
+%         \mathcolor{red}{\int\limits}_0^1                \]
+%\end{verbatim}
+%    and achieve the same effect:
+%     \[  \mathcolor{red}{\int}\limits_0^1 \textrm{ or }
+%         \mathcolor{red}{\int\limits}_0^1                \]
+
+%
+%
+% \MaybeStop{\setlength\IndexMin{200pt}  \PrintIndex  }
+%
+%
+% \section{The Implementation}
+%
+%    The code is called inside of the \pkg{color} or \pkg{xcolor}
+%    packages, so \texttt{@} is already a letter, but the
+%    coding here is done in the L3 programming layer, so we need to
+%    activate that. But first we check if this file was loaded before,
+%    e.g., when both \pkg{color} and \pkg{xcolor} are in the preamble
+%    and in that case we stop immediately.
+%    \begin{macrocode}
+%<*code>
+\ifcsname mathcolor\endcsname \endinput \fi
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\ExplSyntaxOn
+%<@@=mathcolor>
+%    \end{macrocode}
+%
+%  \begin{macro}{\g_@@_seq}
+%    We need to keep our own stack of color commands, so we allocate a
+%    sequence for that.
+%    \begin{macrocode}
+\seq_new:N \g_@@_seq
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\mathcolor}
+%    The document-level command which expects a color (if unnamed then
+%    the optional argument is the model) and colors the content of the
+%    second argument (like \cs{textcolor}, but without spacing
+%    problems in math).
+%    \begin{macrocode}
+\DeclareDocumentCommand \mathcolor { o m m } {
+%    \end{macrocode}
+%    The \cs{mathcolor} is only supported in math mode because in text
+%    mode it has problems scanning away a space after it, for example.
+%    We therefore raise an error if it executes
+%    anywhere else. The \LaTeXe{} error command is a
+%    bit strangely named, because in the kernel it is only used for
+%    math alphabets, but the message it gives is fine.
+% \changes{v1.0b}{2022/01/28}{Restrict command to math mode}
+%    \begin{macrocode}
+  \mode_if_math:F { \non@alpherr {\mathcolor\space} }
+%    \end{macrocode}
+%    First real action is to save the current color value on a stack
+%    (needed if the command is nested or contains some further color
+%    changes with \cs{color} inside).
+%    \begin{macrocode}
+  \seq_gpush:No \g_@@_seq \current@color
+%    \end{macrocode}
+%    Then we switch to the new color, but we do not want to reset the
+%    color after the group (which is done by \cs{color} using
+%    \cs{aftergroup}\cs{reset@color}). The best solution here would be
+%    if the color packages  would provide a command doing just the
+%    color switching, but for now we simply undo that part by pushing
+%    \cs{use_none:n} which gobbles the \cs{reset@color} added by
+%    \cs{color} with \cs{aftergroup}.
+%    \begin{macrocode}
+  \group_insert_after:N \use_none:n
+%    \end{macrocode}
+%    Switching the color is also slightly suboptimal, because
+%    depending on whether or not we have a \meta{model} argument, we
+%    have to call \cs{color} with or without the optional argument. But
+%    going low-level here is not an option as we need to support
+%    different color packages and their internals are not identical.
+%    \begin{macrocode}
+  \IfValueTF{#1} { \color[#1]{#2} }{ \color{#2} }
+%    \end{macrocode}
+%    Then comes the math material we want to see colored:
+%    \begin{macrocode}
+  #3
+%    \end{macrocode}
+%    After that we need to reset the color ourselves (without a group
+%    that does it for us), i.e., popping the saved  color from our
+%    stack, but there are some twists to that so we do this in a
+%    separate command (which in fact needs to be called several times,
+%    so inlining the code wouldn't be possible.
+%    \begin{macrocode}
+  \@@_scan_for_scripts:w
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\@@_scan_for_scripts:w}
+%    The complication when changing the color back is due to the fact
+%    that the \cs{mathcolor} may be followed by \verb=^= or \verb=_=
+%    or the hidden superscript \texttt{'} and its argument may end in a
+%    \cs{mathop} in which case the sub and superscripts may be
+%    attached as \cs{limits} instead of after the material. All cases
+%    need separate treatment.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_scan_for_scripts:w {
+%    \end{macrocode}
+%    We therefore first parse for a \cs{c_math_subscript_token}
+%    ignoring (dropping) any spaces and \cs{relax} as \TeX{} would
+%    do. We do this with expansion so that hidden sub or superscripts
+%    in macros are still found as long as the macros are expandable.
+%    \begin{macrocode}
+  \@@_peek_catcode_ignore_filler_expand:NTF \c_math_subscript_token
+%    \end{macrocode}
+%    If we found that character we call a function that handles sub or
+%    superscripts.
+%    \begin{macrocode}
+    { \@@_handle_scripts:Nw }
+%    \end{macrocode}
+%    Otherwise check if this token we peeked at (which is now stored
+%    in \cs{l_peek_token} is a superscript token.
+%    \begin{macrocode}
+    { \token_if_math_superscript:NTF \l_peek_token
+%    \end{macrocode}
+%    If found we call the sub/superscript handler.
+%    \begin{macrocode}
+      { \@@_handle_scripts:Nw }
+%    \end{macrocode}
+%    Otherwise we check if it was any of the limit operation
+%    primitives. If that is the case, e.g., if we have a situation
+%    such as
+%\begin{verbatim}
+%    \mathcolor{red}{\int}\limits_1
+%\end{verbatim}
+%    we have to move it directly after the \cs{int} to ensure there
+%    is no color reset between the operator and the \cs{limits} command.
+%    \begin{macrocode}
+      { \token_case_meaning:NnTF \l_peek_token
+          {
+            \limits   { \limits }
+            \nolimits { \nolimits }
+            \displaylimits { \displaylimits }
+          }
+%    \end{macrocode}
+%    Once that is done, we have to get rid of the token we peeked at
+%    and then restart scanning for sub or superscripts. Given that
+%    \cs{@@_scan_for_scripts:w} expands while scanning the simplest
+%    solution is to add \cs{use_none:n} in front of the peeked at token.
+%    \begin{macrocode}
+          { \@@_scan_for_scripts:w \use_none:n }
+%    \end{macrocode}
+%    If it was one of these we look for a \texttt{'} and if found remove it and
+%    replace it by its expansion. The reason we have to do this (and
+%    not rely on the earlier peeking to expand for us is the fact
+%    that \texttt{'} is only ``math active'' and that doesn't expand
+%    under \cs{expanded} or \cs{expandafter}.
+%    \begin{macrocode}
+          { \peek_meaning_remove:NTF '
+            { \@@_handle_scripts:Nw ^\c_group_begin_token \prim@s }
+%    \end{macrocode}
+%    If it is anything else we finish off which means we reset the
+%    color (because we prevented that before to happen automatically
+%    after the next group) and pop the color stack setting \cs{current@color}.
+%    \begin{macrocode}
+            { \reset@color
+              \seq_gpop:NN \g_@@_seq \current@color
+            }
+          }
+      }
+    }
+}
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+%  \begin{macro}{\@@_handle_scripts:Nw}
+%    The tricky part of handling sub and superscripts is that we have
+%    to reset color to the one that is on the stack but reset it back
+%    to what it was before to allow for cases like
+%\begin{verbatim}
+%    \[  \mathcolor{red}{a+\sum}_{i=1}^n  \]
+%\end{verbatim}
+%    Here, \TeX{} constructs a \cs{vbox} stacking subscript, summation
+%    sign, and superscript. So technically the superscript comes first
+%    and the \cs{sum} that should get colored red is the middle.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_handle_scripts:Nw #1 {
+%    \end{macrocode}
+%    The argument is either \verb=^= or \verb=_=, so we execute it and
+%    explicitly open two \verb={= groups. We need two because color
+%    resets are always done after a group, so the first group is for
+%    script material (in case it was just something like \verb=_i=)
+%    and the second is needed for the color reset to keep it within
+%    the super or subscript. If that reset would happen after it then
+%    the color \cs{special} would interfere with \TeX{} math spacing.
+%    \begin{macrocode}
+    #1 \c_group_begin_token \c_group_begin_token
+%    \end{macrocode}
+%    Now it is time to change the color back to the one on the stack.
+%    \begin{macrocode}
+    \seq_get:NN \g_@@_seq \current@color
+    \set@color
+%    \end{macrocode}
+%    \cs{set@color} adds \cs{aftergroup}\cs{reset@color}. We now a add
+%    bit more so that the code executed after the current (inner) group
+%    looks like this:
+%\begin{verbatim}
+%      \reset@color } \@@_scan_for_scripts:w
+%\end{verbatim}
+%    The \cs{_@@_scan_for_scripts:w} then retakes control and initiates
+%    parsing for another sub or superscript.
+%    \begin{macrocode}
+    \group_insert_after:N \c_group_end_token
+    \group_insert_after:N \@@_scan_for_scripts:w
+%    \end{macrocode}
+%    Before we give control to \TeX{} to process the sub or
+%    superscript some final adjustment is necessary: if the input was
+%    \verb=^{...}= then we have one \verb={= too many, because we
+%    already supplied the outer one already. In that case we drop
+%    it. Otherwise we have an unbraced single token sub or superscript
+%    which means we are missing a closing \verb=}= at the end and need
+%    to account for that: this is done in \cs{_@@_handle_unbraced_script:N}.
+%    \begin{macrocode}
+    \@@_peek_catcode_ignore_filler_expand:NTF \c_group_begin_token
+      { \peek_catcode_remove:NT \c_group_begin_token { } }
+      { \@@_handle_unbraced_script:N }
+  }%    \end{macrocode}
+%  \end{macro}
+
+
+%  \begin{macro}{\@@_handle_unbraced_script:N}
+%    All we have to do here is to add the final closing brace.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_handle_unbraced_script:N #1 {
+  #1 \c_group_end_token }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+% \subsection{Utility function for the peek module}
+%
+%    This peek is expanding and ignores spaces and \cs{relax} (even
+%    though the name doesn't say so)
+%    but \cs{relax} is usually allowed in such places where we so it
+%    may not be bad to have it in this way in general --- maybe this
+%    should move to expl3 peek functions (or otherwise the naming
+%    should perhaps be adjusted).
+%
+%
+%    \begin{macrocode}
+\tl_new:N \l_@@_peek_tmp_tl
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_peek_catcode_ignore_filler_expand:NTF #1#2#3
+  {
+    \tl_set:Nn \l_@@_peek_tmp_tl
+      { \token_if_eq_catcode:NNTF \l_peek_token #1 {#2} {#3} }
+    \@@_peek_expand:w
+  }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_peek_expand:w
+  {
+    \exp_after:wN \peek_catcode_remove:NTF
+    \exp_after:wN \c_space_token
+    \exp_after:wN \@@_peek_test_expand:w
+    \exp_after:wN \@@_peek_test_relax:w
+    \exp:w \exp_end_continue_f:w
+  }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_peek_test_expand:w
+  {
+    \token_if_expandable:NTF \l_peek_token
+      { \@@_peek_expand:w }
+      { \l_@@_peek_tmp_tl      }
+  }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_peek_test_relax:w
+   {
+    \peek_meaning_remove:NTF \scan_stop:
+      { \@@_peek_expand:w }
+      { \@@_peek_test_expand:w   }
+   }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<@@=>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\ExplSyntaxOff
+%</code>
+%    \end{macrocode}
+%
+% \Finale
+%
+%
+
+%%%%%%%%%%%%%%%%
+\endinput
+%%%%%%%%%%%%%%%%
+

@@ -15,6 +15,9 @@ l3build save -cconfig-lthooks2 \
    shipout2-012 \
    shipout2-013 \
    shipout2-014 \
+   shipout2-015 \
+   shipout2-016 \
+   shipout2-017 \
    github-0360  \
    github-0431  \
    ltpara-001 \
@@ -50,6 +53,7 @@ l3build save -cconfig-lthooks \
    filehook-007 \
    filehook-008 \
    filehook-009 \
+   filehook-013 \
    filehook-bug-140 \
    lthooks-000 \
    lthooks-001 \
@@ -81,6 +85,8 @@ l3build save -cconfig-lthooks \
    lthooks-029 \
    lthooks-029-deprecated \
    lthooks-030 \
+   lthooks-031 \
+   lthooks-032 \
    lthooks-errors \
    lthooks-errors-deprecated \
    lthooks-etoolbox \
@@ -97,7 +103,8 @@ l3build save -cconfig-lthooks \
    github-0565 \
    github-0606 \
    github-0648 \
-   github-0648b 
+   github-0648b \
+   github-0818
 
 
 

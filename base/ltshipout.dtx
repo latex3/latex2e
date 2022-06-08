@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %%
-%% Copyright (C) 2020-2021
+%% Copyright (C) 2020-2022
 %%               Frank Mittelbach, LaTeX Team
 %%
 %
@@ -32,8 +32,8 @@
 %%% From File: ltshipout.dtx
 %
 %    \begin{macrocode}
-\providecommand\ltshipoutversion{v1.0j}
-\providecommand\ltshipoutdate{2021/06/09}
+\providecommand\ltshipoutversion{v1.0m}
+\providecommand\ltshipoutdate{2022/05/08}
 %    \end{macrocode}
 %
 %<*driver>
@@ -327,7 +327,10 @@
 % \subsection{Legacy \LaTeX{} commands}
 %
 % \begin{function}{\AtBeginDvi,\AtEndDvi}
-%    \cs{AtBeginDvi} is the existing \LaTeXe{} interface to fill the
+%    \begin{syntax}
+%      \cs{AtBeginDvi} \Arg{code}
+%    \end{syntax}
+ %    \cs{AtBeginDvi} is the existing \LaTeXe{} interface to fill the
 %    \hook{shipout/firstpage} hook. This is not really a good name
 %    as it is not just supporting \texttt{.dvi} but also \texttt{.pdf}
 %    output or \texttt{.xdv}.
@@ -335,15 +338,24 @@
 %    \cs{AtEndDvi} is the counterpart that was not available in the
 %    kernel but only through the package \pkg{atenddvi}. It fills the
 %    \hook{shipout/lastpage} hook.
+%
+%    Neither interface can set a code label but uses the current default label.
+%
 % \end{function}
 %
 %    As these two wrappers have been available for a long time we
-%    continue offering them. However, for new code we suggest using
-%    the high-level hook management commands directly instead of
-%    ``randomly-named'' wrappers.  This will lead to code that is
-%    easier to understand and to maintain.  For this reason we do not
-%    provide any other wrapper commands for the above hooks in the
-%    kernel.
+%    continue offering them (but not enhancing them, e.g., by providing
+%    support for code labels).
+%
+%    For new code we strongly suggest using the high-level hook
+%    management commands directly instead of ``randomly-named''
+%    wrappers.  This will lead to code that is easier to understand
+%    and to maintain and it also allows you to set code labels if
+%    needed.
+%
+%    For this reason we do not provide any other ``new'' wrapper
+%    commands for the above hooks in the kernel, but only keep
+%    the existing ones for backward compatibility.
 %
 %
 % \subsection{Special commands for use inside the hooks}
@@ -644,7 +656,7 @@
 % \end{function}
 %
 %
-% \StopEventually{\setlength\IndexMin{200pt}  \PrintIndex  }
+% \MaybeStop{\setlength\IndexMin{200pt}  \PrintIndex  }
 %
 %
 % \section{The Implementation}
@@ -734,21 +746,21 @@
 %    \begin{macrocode}
 \sys_if_engine_luatex:TF
   {
-    \newluafunction \@@_finalize_box:
+    \newprotectedluacmd \@@_finalize_box:
     \exp_args:Nx \everyjob {
       \exp_not:V \everyjob
       \exp_not:N \lua_now:n {
         luatexbase.create_callback('pre_shipout_filter', 'list')
         local~call, getbox, setbox = luatexbase.call_callback, tex.getbox, tex.setbox~
-        lua.get_functions_table()[\the \@@_finalize_box:] = function()
-          local~result = call('pre_shipout_filter', getbox(\the \l_shipout_box))
-          if~not (result == true) then~
+        lua.get_functions_table()[\the \allocationnumber] = function()
+          local~head = getbox(\the \l_shipout_box)
+          local~result = call('pre_shipout_filter', head)
+          if~not (result == head) then~
             setbox(\the \l_shipout_box, result~or~nil)
           end~
         end
       }
     }
-    \protected \luadef \@@_finalize_box: \the \@@_finalize_box:
   } {
     \cs_set_eq:NN \@@_finalize_box: \scan_stop:
   }
@@ -1002,8 +1014,14 @@
                       \_@@_add_foreground_box:n
                           { \UseHook{shipout/lastpage}
                             \@kernel@after@shipout@lastpage }
+                      \bool_gset_true:N \g_@@_lastpage_handled_bool
+%    \end{macrocode}
+%    We record that we have handled the \hook{shipout/lastpage} hook
+%    but only if we really did.
+% \changes{v1.0m}{2022/05/08}{Handle case where shipout/lastpage is
+%    run too early (gh/813)}
+%    \begin{macrocode}
                     }
-                    \bool_gset_true:N \g_@@_lastpage_handled_bool
                 }
               \@@_finalize_box:
 %    \end{macrocode}
@@ -1711,15 +1729,35 @@
           \gdef\string\@abspage@last {\int_use:N \g_shipout_readonly_int}}
      \fi
 %    \end{macrocode}
-%    But we may have guessed wrongly earlier and we still have to run the
+%    But we may have guessed wrongly earlier and have run it too early
+%    or we still have to run the
 %    \hook{shipout/lastpage} even though there is no page to place
 %    it into. If that is the case we make a trivial extra page and put
 %    it there. This temporary page will then vanish again on the next
 %    run but helps to keep pdf viewers happy.
+%    In either case we should put out an appropriate ``rerun'' warning.
+% \changes{v1.0m}{2022/05/08}{Handle case where shipout/lastpage is
+%    run too early (gh/813)}
 %    \begin{macrocode}
-      \bool_if:NF \g_@@_lastpage_handled_bool
+      \bool_if:NTF \g_@@_lastpage_handled_bool
          {
 %    \end{macrocode}
+%    If the hook was already executed, we have to test if that total
+%    shipouts match the shipouts from last run (because that
+%    corresponds to the page it was executed). If not we output a warning.
+%    \begin{macrocode}
+           \int_compare:nNnF \@abspage@last = \g_shipout_readonly_int
+            {
+              \@latex@warning@no@line{Hook~ 'shipout/lastpage'~ executed~
+                on~ wrong~ page~ (\@abspage@last\space not~
+                \int_use:N\g_shipout_readonly_int).\MessageBreak
+                Rerun~ to~ correct~ this}%
+            } 
+         }
+         {
+%    \end{macrocode}
+%    If the hook was not run, we need to add an extra page and place
+%    it there.
 %    However, making this extra page in case the hook is actually
 %    empty would be forcing a rerun without any reason, so we check
 %    that condition and also check if
@@ -1966,15 +2004,17 @@
 %
 %
 %  \begin{macro}{\AtEndDvi}
-%    This package has only one public command to simulating it is easy
+%    This package has only one public command, so simulating it is easy
 %    and actually sensible to provide as part of the kernel.
+% \changes{v1.0l}{2022/01/06}{Correctly simulate \cs{AtEndDvi} without
+%    extending the syntax}
 %    \begin{macrocode}
 %</2ekernel>
 %<*2ekernel|latexrelease>
 %<latexrelease>\IncludeInRelease{2020/10/01}%
 %<latexrelease>                 {\AtEndDvi}{atenddvi emulation}%
 \ExplSyntaxOn
-\cs_new_protected:Npn \AtEndDvi {\AddToHook{shipout/lastpage}}
+\cs_new_protected:Npn \AtEndDvi #1 {\AddToHook{shipout/lastpage}{#1}}
 \ExplSyntaxOff
 %    \end{macrocode}
 %    As the package is integrate we prevent loading (no need to roll that back):
@@ -2041,9 +2081,11 @@
 %
 %  \begin{macro}{\AtBeginShipout,\AtBeginShipoutNext}
 %    Filling hooks
+% \changes{v1.0l}{2022/01/06}{Correctly simulate \cs{AtBeginShipout}
+%    and \cs{AtBeginShipoutNext} without extending the syntax}
 %    \begin{macrocode}
-\protected \def \AtBeginShipout     {\AddToHook{shipout/before}}
-\protected \def \AtBeginShipoutNext {\AddToHookNext{shipout/before}}
+\protected\long\def\AtBeginShipout     #1{\AddToHook{shipout/before}{#1}}
+\protected\long\def\AtBeginShipoutNext #1{\AddToHookNext{shipout/before}{#1}}
 %    \end{macrocode}
 %  \end{macro}
 %

@@ -1,0 +1,1649 @@
+% \iffalse meta-comment
+%
+%% File: ltmarks.dtx (C) Copyright 2022
+%       Frank Mittelbach, LaTeX Team
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+%
+%%% From File: ltmarks.dtx
+%
+%    \begin{macrocode}
+\def\ltmarksversion{v1.0d}
+\def\ltmarksdate{2022/06/01}
+%    \end{macrocode}
+%<*driver>
+\documentclass{l3doc}
+
+%\usepackage{ltmarks}
+
+% Fixing footnotes in  functions and variables: this should be in l3doc!
+
+\newcommand\fixfootnote[2]{\footnotemark
+  \AddToHookNext{env/#1/after}{\footnotetext{#2}}}
+\AddToHook{env/function/begin}{\def\footnote{\fixfootnote{function}}}
+\AddToHook{env/variable/begin}{\def\footnote{\fixfootnote{variable}}}
+
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{ltmarks.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+% \providecommand\hook[1]{\texttt{#1}}
+% \providecommand\env[1]{\texttt{#1}}
+%
+%
+%
+% \title{The \texttt{ltmarks.dtx} code\thanks{This file has version
+%    \ltmarksversion\ dated \ltmarksdate, \copyright\ \LaTeX\
+%    Project.}}
+% \author{^^A
+%  Frank Mittelbach, \LaTeX{} Project\thanks
+%    {^^A
+%      E-mail:
+%        \href{mailto:latex-team@latex-project.org}
+%          {latex-team@latex-project.org}^^A
+%    }^^A
+% }
+%
+% \maketitle
+%
+%
+% \begin{abstract}
+%    Marks are used to communicate information about the content of a
+%    page to the output routine. For example, in order to construct
+%    running headers, the output routine needs information about which
+%    section names are present on a page, and this information is
+%    passed to it through the mark system. However, marks may also be
+%    used for other purposes. This module provides a generalized
+%    mechanism for marks of independent classes.
+% \end{abstract}
+%
+% \tableofcontents
+%
+% ^^A \begin{documentation}
+%
+% \section{Introduction}
+%
+%    The \TeX{} engines offer a low-level mark mechanism to
+%    communicate information about the content of the current page to
+%    the asynchronous operating output routine. It works by placing
+%    \cs{mark} commands into the source document. When the material
+%    for the current page is assembled in box 255, \TeX{} scans for
+%    such marks and sets the commands \cs{topmark}, \cs{firstmark} and
+%    \cs{botmark}.  The \cs{firstmark} receives the content of the
+%    first \cs{mark} seen in box 255 and \cs{botmark} the content of
+%    the last mark seen.  The \cs{topmark} holds the content of the
+%    last mark seen on the previous page or more exactly the value of
+%    \cs{botmark} from the previous page.  If there are no marks on
+%    the current page then all three are made equal to the
+%    \cs{botmark} from the previous page.
+%
+%    This mechanism works well for simple formats (such as plain \TeX)
+%    whose output routines are only called to generate pages. It
+%    fails, however, in \LaTeX{} (and other more complex formats),
+%    because here the output routine is sometimes called without
+%    producing a page, e.g., when encountering a float and placing it
+%    into one of the float regions. In that case the output routine is
+%    called, determines where to place the float, alters the goal for
+%    assembling text material (if the float was added to the top or
+%    bottom region) and then it resumes collecting textual material.
+%
+%    As a result the \cs{botmark} gets updated and so \cs{topmark} no
+%    longer reflects the situation at the top of the next page when that
+%    page is finally boxed.
+%
+%    Another problem for \LaTeX{} was that it wanted to use several
+%    \enquote{independent} marks and in the early implementations of
+%    \TeX{} there was only a single \cs{mark} command available.
+%    For that reason \LaTeX{} implemented its own mark
+%    mechanism where the marks always contained two parts with their
+%    own interfaces: \cs{markboth} and \cs{markright} to set marks and
+%    \cs{leftmark} and \cs{rightmark} to retrieve them.
+%
+%    However, this extended mechanism (while supporting scenarios such
+%    as chapter/section marks) was far from general. The mark
+%    situation at the top of a page (i.e., \cs{topmark}) remained
+%    unusable and the two marks offered were not really independent of
+%    each other because \cs{markboth} (as the name indicates) was
+%    always setting both.
+%
+%    The new mechanism overcomes both
+%    issues:
+%    \begin{itemize}
+%    \item
+%      It provides arbitrarily many, fully independent named marks, that
+%      can be allocated and, from that point onwards, used.
+%    \item
+%      It offers access for each such marks to retrieve its top,
+%      first, and bottom values separately.
+%    \item
+%      Furthermore, the mechanism is augmented to give access to marks
+%      in different \enquote{regions} which may not be just full pages.
+%    \end{itemize}
+%
+%
+% \section{Design-level and code-level interfaces}
+%
+%    The interfaces are mainly meant for package developers, but they
+%    are usable (with appropriate care) also in the document
+%    preamble, for example, when setting up special running headers
+%    with \pkg{fancyhdr}, etc. They are therefore available both as
+%    CamelCase commands as well as commands for use in the L3
+%    programming layer. Both are described together below.
+%
+% \begin{function}{\NewMarkClass,\mark_new_class:n}
+%   \begin{syntax}
+%     \cs{NewMarkClass} \Arg{class}
+%     \cs{mark_new_class:n} \Arg{class}
+%   \end{syntax}
+%   Declares a new \meta{class} of marks to be tracked by \LaTeX{}. Each \meta{class}
+%   must be declared before it is used.
+%
+%   Mark classes can only be declared before \verb=\begin{document}=.
+% \end{function}
+%
+% \begin{function}{\InsertMark,\mark_insert:nn}
+%   \begin{syntax}
+%     \cs{InsertMark} \Arg{class} \Arg{text}
+%     \cs{mark_insert:nn}  \Arg{class} \Arg{text}
+%   \end{syntax}
+%   Adds a mark to the current galley for the \meta{class}, containing the
+%   \meta{text}.
+%
+%   It has no effect in places in which you can't place floats, e.g.,
+%   a mark inside a box or inside a footnote never shows up anywhere.
+%
+%   If used in vertical mode it obeys \LaTeX's internal
+%   \cs{@nobreak} switch, i.e., it does not introduce a
+%   breakpoint if used after a heading. If used in horizontal mode it
+%   doesn't handle spacing (like, for example, \cs{index} or
+%   \cs{label} does, so it should be attached to material that is
+%   typeset.
+% \end{function}
+%
+% \begin{variable}{insertmark}
+%   \begin{syntax}
+%     \cs{AddToHook} \texttt{\{insertmark\}} \Arg{code}
+%   \end{syntax}
+%  When marks are inserted, the mark content may need some special
+%  treatment, e.g., by default \cs{label}, \cs{index}, and
+%  \cs{glossary} do not expand at this time (but only later if and when the
+%  mark content is actually used.
+%  In order to allow packages to augment or alter this setup there is
+%  a public hook \hook{insertmark} that is executed at this point.  It
+%  runs in a group so local modification to commands are only applied
+%  to the \meta{text} argument of \cs{InsertMark} or \cs{mark_insert:nn}.
+% \end{variable}
+%
+% \begin{function}[EXP]{\TopMark, \FirstMark, \LastMark,
+%      \mark_use_top:nn,\mark_use_first:nn,\mark_use_last:nn,}
+%   \begin{syntax}
+%     \cs{TopMark}   \oarg{region} \Arg{class}
+%     \cs{FirstMark} \oarg{region} \Arg{class}
+%     \cs{LastMark}  \oarg{region} \Arg{class}
+%     \cs{mark_use_top:nn}   \Arg{region} \Arg{class}
+%     \cs{mark_use_first:nn} \Arg{region} \Arg{class}
+%     \cs{mark_use_last:nn}  \Arg{region} \Arg{class}
+%   \end{syntax}
+%   These functions expand to the appropriate mark \meta{text} for
+%   the given \meta{class} in the specified \meta{region}.
+%   The default \meta{region} in the design-level commands is \texttt{page}.
+%   Note that with the L3 layer commands there are no
+%   optional arguments, i.e., both arguments have to be provided.
+%   \begin{texnote}
+%     The result is returned within the \tn{unexpanded}
+%     primitive (\cs{exp_not:n}), which means that the \meta{text}
+%     does not expand further when appearing in an \texttt{x}-type
+%     or \texttt{e}-type argument expansion.
+%   \end{texnote}
+%
+%   The \enquote{first} and \enquote{last} marks are
+%   those seen first and last in the current region/page, respectively. The
+%   \enquote{top} mark is the last mark of the \meta{class} seen
+%   in an earlier region, i.e., the \meta{text} what would be \enquote{current} at the
+%   very top of the region.
+%
+%   \noindent\llap{\bfseries Important!\qquad}\indent
+%   The commands are only meaningful inside the output routine, in
+%   other places their result is (while not random) unpredictable due
+%   to the way \LaTeX{} cuts text material into pages.
+%% \end{function}
+%
+%
+%
+%   Currently, \meta{region} is one of
+%   \texttt{page},
+%   \texttt{previous-page},
+%   \texttt{column}, and
+%   \texttt{previous-column}.
+%   If a page has just been finished then the region \texttt{page}
+%   refers to the current page and \texttt{previous-page}, as the name
+%   indicates, to the page that has been finished previously. This
+%   means you are able to access mark information for the current page
+%   as well as for the page before if you are inside the output
+%   routine, without the need to explicitly save that information
+%   beforehand.
+%
+%   In single column documents the \texttt{column} is the same as the
+%   \texttt{page} region, but in two-column documents, \texttt{column}
+%   refers to the current column that just got finished and
+%   \text{previous-column} to the one previously finished.  Code for
+%   running headers are (in standard \LaTeX{}) only evaluated when
+%   both columns are assembled, which is another way of saying that in
+%   that case \texttt{previous-column} refers to the left column and
+%   \texttt{column} to the right column.
+%   However, to make this a bit nicer to access, there are also alias
+%   regions named \texttt{first-column} and
+%   \texttt{last-column}\footnote{This is called \enquote{last} not \enquote{second}
+%   in anticipation of extending the mechanism to multiple columns,
+%   where first and last would still make sense.} to
+%   access these regions.\footnote{At the moment there aren't any
+%   \texttt{previous-...-column} regions to access the columns from
+%   the previous page. If necessary, the mechanism could be
+%   easily augmented to cover them too, though.}
+%
+%   Note that you can only look backwards at already processed regions,
+%   e.g., in a \texttt{twoside} document finishing a recto (odd,
+%   right-hand) page  you can access the data from the facing verso
+%   (left-hand) page, but if you are finishing a left-hand page you
+%   can't integrate data from the upcoming right-hand page. If such a
+%   scenario needs to be realized then it is necessary to save the
+%   left-hand page temporarily instead of finalizing it, process
+%   material for the right-hand page and once both are ready, attach
+%   running headers and footers and shipout out both in one
+%   go.\footnote{As of now that scenario is not yet officially supported.}
+%
+% \begin{function}[EXP]{\IfMarksEqualTF,\mark_if_eq:nnnnTF,\mark_if_eq:nnnnnnTF}
+%   \begin{syntax}
+%     \cs{IfMarksEqualTF}    \oarg{region} \Arg{class} \Arg{pos_1} \Arg{pos_2} \Arg{true} \Arg{false}
+%     \cs{mark_if_eq:nnnnTF} \Arg{region} \Arg{class} \Arg{pos_1} \Arg{pos_2} \Arg{true} \Arg{false}
+%     \cs{mark_if_eq:nnnnnnTF} \Arg{region_1} \Arg{class_1} \Arg{pos_1}
+%  \verb=                    = \Arg{region_2} \Arg{class_2} \Arg{pos_2} \Arg{true} \Arg{false}
+%   \end{syntax}
+%   These conditionals allow you to compare the content of two marks
+%   and act based on the result. The commands work in an expansion
+%   context, if necessary.
+% \end{function}
+%
+%    It is quite common when programming with marks to need to
+%    interrogate conditions such as whether marks have appeared on a
+%    previous page, or if there are multiple marks present on the
+%    current page, and so on.
+%    The tests above allow for the construction of a variety of
+%    typical test scenarios, with three examples presented below.
+%
+%    The first two conditionals cover only the common scenarios.  Both
+%    marks are picked up from the same \meta{region} (by default
+%    \texttt{page}) and they have to be of the same
+%    \meta{class}.\footnote{If an undeclared mark class is used the
+%    tests return \emph{true} (not an error).}
+%    The \meta{pos\textsubscript{\itshape i}} argument can be either
+%    \texttt{top}, \texttt{first}, or \texttt{last}.
+%
+%    If you wish to compare marks across different regions or across
+%    different classes, you have to do it using the generic test only
+%    available in the L3 programming layer or do it manually, i.e.,
+%    get the marks and then compare the values yourself.\footnote{If
+%    two undeclared mark classes are compared the result is always
+%    \emph{true}; if a declared and an undeclared mark class is used
+%    it is always \emph{false}.}
+%
+%   However, the basic version is enough for the following typical use cases:
+%   \begin{description}
+%   \item[Test for at most one mark of class \texttt{myclass} on current
+%      page:]
+%
+%      If the first and last mark in a region are the same then
+%      either there was no mark at all, or there was at most one. To test
+%      this on the current page:
+%\begin{verbatim}
+%  \NewMarkClass{myclass}
+%  \IfMarksEqualTF{myclass}{first}{last}
+%                 { <zero or one mark> }{ <two or more marks> }
+%\end{verbatim}
+%
+%   \item[Test for no mark of class \texttt{myclass} in the previous
+%      page:]
+%
+%      If the top mark is the same as the first mark, there is no mark
+%      in the region at all. If we wanted to do this test for the
+%      previous page:
+%\begin{verbatim}
+%  \IfMarksEqualTF[previous-page]{myclass}{top}{first}
+%                 { <no marks> }{ <at least one mark> }
+%\end{verbatim}
+%      Comparing \texttt{top} and \texttt{last} would give you the
+%      same result.
+%
+%   \item[Test for zero, one, or more than one:]
+%
+%      Combining the two tests from above you can test for zero, one
+%      or more than one mark.
+%\begin{verbatim}
+%  \IfMarksEqualTF{myclass}{top}{first}
+%                 { <no marks> }
+%                 {\IfMarksEqualTF{myclass}{first}{last}
+%                   { <exactly one mark> }{ <more than one mark> }}
+%\end{verbatim}
+%
+% \end{description}
+%
+% If  you need one of such tests more often (or if you want a separate
+% command for it for readability), then consider defining:
+%\begin{verbatim}
+%  \providecommand\IfNoMarkTF[2][page]{\IfMarksEqualTF[#1]{#2}{first}{last}}
+%\end{verbatim}
+%
+%
+%
+% \subsection{Debugging mark code}
+%
+%
+% \begin{function}{\DebugMarksOn,\DebugMarksOff,
+%                  \mark_debug_on:,\mark_debug_off:}
+%   \begin{syntax}
+%     \cs{DebugMarksOn} ...  \cs{DebugMarksOff}
+%   \end{syntax}
+%
+%    Commands to turn the debugging of mark code on or off. The
+%    debugging output is rather coarse and not really intended for
+%    normal use at this point in time.
+%
+% \end{function}
+%
+%
+%
+% \section{Application examples}
+%
+% If you want to figure out if a break was taken at a specific point,
+% e.g., whether a heading appears at the top of the page,
+% you can do something like this:
+%\begin{verbatim}
+% \newcounter{breakcounter}
+% \NewMarkClass{break}
+% \newcommand\markedbreak[1]{\stepcounter{breakcounter}%
+%                            \InsertMark{break}{\arabic{breakcounter}%
+%                            \penalty #1\relax
+%                            \InsertMark{break}{-\arabic{breakcounter}}
+%\end{verbatim}
+% To test if the break was taken you can test if
+% \verb=\TopMark{break}= is positive (taken) or negative (not taken)
+% or zero (there was never any marked break so far).
+%  The absolute value can be used to keep track of which break it
+% was (with some further coding).
+%
+%
+% \emph{to be extended with additional application examples}
+%
+%
+%
+% \section{Legacy \LaTeXe{} interface}
+%
+%  Here we describe the interfaces that \LaTeXe{} offered since the
+%  early nineties and some minor extensions.
+%
+% \subsection{Legacy design-level and document-level interfaces}
+%
+% \begin{function}{\markboth, \markright}
+%   \begin{syntax}
+%     \cs{markboth}   \Arg{left} \Arg{right}
+%     \cs{markright}  \Arg{right}
+%   \end{syntax}
+% \LaTeXe{} uses two marks which aren't fully independent. A
+%   \enquote{left} mark generated by the first argument of \cs{markboth}
+%   and a \enquote{right} mark generated by the second argument of
+%   \cs{markboth} or by the only argument of \cs{markright}. The
+%   command \cs{markboth} and \cs{markright} are in turn called from
+%   heading commands such as \cs{chaptermark} or \cs{sectionmark} and
+%   their behavior is controlled by the document class.
+%
+% For example, in the \cls{article} class with \texttt{twoside} in
+%   force the \cs{sectionmark} will issue \cs{markboth} with an empty
+%   second argument and \cs{subsectionmark} will issue
+%   \cs{markright}. As a result the left mark will contain chapter
+%   titles and the right mark subsection titles.
+%
+% Note, however, that in one-sided documents the standard behavior is
+%   that only \cs{markright} is used, i.e., there will only be
+%   right-marks but no left marks!
+% \end{function}
+%
+% \begin{function}[EXP]{\leftmark, \rightmark}
+%   \begin{syntax}
+%     \cs{leftmark}
+%     \cs{rightmark}
+%   \end{syntax}
+%   These functions return the appropriate mark value from the current page
+%   and work as before, that is \cs{leftmark} will get the last (!)
+%   left mark from the page and \cs{rightmark} the first (!) right
+%   mark.
+%
+%   In other words they work reasonably well if you want to show the
+%   section title that is current when you are about to turn the page and
+%   also show the first subsection title on the current page (or the last
+%   from the previous page if there wasn't one). Other combinations
+%   can't be shown using this interface.
+%
+%   The commands are fully expandable, because this is how they have
+%   been always defined in \LaTeX{}. However, this is of course
+%   only true if the content of the mark they return is itself
+%   expandable and does not contain any fragile material. Given that
+%   this can't be guaranteed for arbitrary content, a programmer using
+%   them in this way should use \cs{protected@edef} and \emph{not}
+%   \cs{edef} to avoid bad surprises as far as this is possible, or use
+%   the new interfaces (\cs{TopMark}, \cs{FirstMark}, and \cs{LastMark})
+%   which return the \meta{text} in \cs{exp_not:n} to prevent
+%   uncontrolled expansion.
+% \end{function}
+%
+%
+% \subsection{Legacy interface extensions}
+%
+%   The new implementation adds three mark classes: \texttt{2e-left},
+%   \texttt{2e-right} and \texttt{2e-right-nonempty} and patches
+%   \cs{markboth} and \cs{markright} slightly so that they also update
+%   these new mark classes, so that the new classes work with existing
+%   document classes.
+%
+%   As a result you can use \verb=\LastMark{2e-left}= and
+%   \verb=\FirstMark{2e-right}= instead of \cs{leftmark} and
+%   \cs{rightmark}. But more importantly, you can use any of the other
+%   retrieval commands to get a different status value from those
+%   marks, e.g., \verb=\LastMark{2e-right}= would return the last
+%   subsection on the page (instead of the first as
+%   returned by \cs{rightmark}).
+%
+%   The difference between \texttt{2e-right} and
+%   \texttt{2e-right-nonempty}  is that the latter will only be updated
+%   if the material for the mark is not empty. Thus
+%   \verb=\markboth{title}{}= as issued by, say, \cs{sectionmark},
+%   sets a \texttt{2e-left} mark with \texttt{title} and a
+%   \texttt{2e-right} mark with the empty string but does not add a
+%   \texttt{2e-right-nonempty} mark.
+%
+%   Thus, if you have a section at the start of a page and you would
+%   ask for \verb=\FirstMark{2e-right}= you would get an empty string
+%   even if there are subsections on that page. But
+%   \texttt{2e-right-nonempty} would then give you the first or last subsection
+%   on that page. Of course, nothing is simple. If there are no
+%   subsections it would tell you the last subsection from an earlier
+%   page. We therefore need comparison tools, e.g., if top and
+%   first are identical you know that the value is
+%   bogus, i.e., a suitable implementation would be
+%\begin{verbatim}
+% \IfMarksEqualTF{2e-right-nonempty}{top}{first}
+%                { <appropriate action if there was no real mark> }
+%                {\FirstMark{2e-right-nonempty}}
+%\end{verbatim}
+%
+%
+%
+% \section{Notes on the mechanism}
+%
+% In contrast to vanilla \TeX, \eTeX{} extends the mark system to
+% allow multiple independent marks. However, it does not solve the
+% \cs{topmark} problem which means that \LaTeX{} still needs to manage
+% marks almost independently of \TeX{}. The reason for this is that
+% the more complex output routine used by \LaTeX{} to handle floats
+% (and related structures) means that \tn{topmark(s)} remain
+% unreliable. Each time the output routine is fired up, \TeX{} moves
+% \tn{botmark} to \tn{topmark}, and while \eTeX{} extends this to
+% multiple registers the fundamental concept remains the same. That
+% means that the state of marks needs to be tracked by \LaTeX{}
+% itself. An early implementation of this package used \TeX{}'s
+% \tn{botmark} only to ensure the correct interaction with the output
+% routine (this was before the \eTeX{} mechanism was even
+% available). However, other than in a prototype implementation for
+% \LaTeX3, this package was never made public.
+%
+% The new implementation now uses \eTeX{}'s marks as they have some
+% advantages, because with them we can leave the mark text within the
+% galley and only extract the marks during the output routine when we
+% are finally shipping out a page or storing away a column for use in
+% the next page. That means we do not have to maintain a global data
+% structure that we have to keep in sync with informational marks in
+% the galley but can rely on everything being in one place and thus
+% manipulations (e.g.~reordering of material) will take the marks with
+% them without a need for updating a fragile linkage.
+
+% To allow for completely independent marks we use the following
+% procedure:
+% \begin{itemize}
+%   \item
+%
+%     For every type of marks we allocate a mark class so
+%     that in the output routine \TeX{} can calculate for each class
+%     the current
+%     top, first, and bottom mark independently. For this we use
+%     \cs{newmarks}, i.e., one marks register per class.
+%
+%   \item
+%
+%     As already mentioned firing up an output routine without
+%     shipping out a page means that \TeX's top marks get wrong so it
+%     is impossible to rely on \TeX's approach directly. What we do
+%     instead is to keep track of the real marks (for the last page or
+%     more generally last region) in some global variables.
+%
+%   \item
+%
+%     These variables are updated in the output routine at defined
+%     places, i.e., when we do real output processing but not if we
+%     use special output routines to do internal housekeeping.
+%
+%   \item
+%
+%     The trick we use to get correctly updated variables is the
+%     following: the material that contains new marks (for example the
+%     page to be shipped out) is stored in a box. We then use \TeX{}
+%     primitive box splitting functions by splitting off the largest
+%     amount possible (which should be the whole box if nothing goes
+%     really wrong). While that seems a rather pointless thing to do, it
+%     has one important side effect: \TeX{} sets up first and bottom
+%     marks for each mark class from the material it has split off. This
+%     way we get the first and last marks (if there have been any) from
+%     the material in the box.
+%
+%   \item
+%
+%     The top marks are simply the last marks from the previous
+%     page or region. And if there hasn't been a first or bottom mark in
+%     the box then the new top mark also becomes new first and last mark
+%     for that class.
+%
+%   \item
+%
+%     That mark data is then stored in global token lists for use
+%     during the output routine and legacy commands such as
+%     \cs{leftmark} or new commands such as \cs{TopMark} simply access
+%     the data stored in these token lists.
+%  \end{itemize}
+%  That's about it in a nutshell. Of course, there are some details to
+%  be taken care of---those are discussed in the implementation sections.
+%
+%
+% \section{Internal output routine functions}
+%
+% The functions in this section are tied to the output routine and used in the
+% interface to \LaTeXe{} and perhaps at some later time within a new
+% output routine
+% for \LaTeX. They are not meant for general use and are therefore made internal.
+% Internal means that \verb|@@| automatically gets
+% replaced in the code (and in the documentation) so we have to give
+% it a suitable value.
+%    \begin{macrocode}
+%<@@=mark>
+%    \end{macrocode}
+%
+% \begin{function}{\@@_update_singlecol_structures:}
+%   \begin{syntax}
+%     \cs{@@_update_singlecol_structures:}
+%   \end{syntax}
+%   \LaTeXe{} integration function in case we are doing single column
+%   layouts.  It assumes that the page content is already stored in
+%   \cs{@outputbox} and processes the marks inside that box. It is
+%   called as part of \cs{@opcol}.
+% \end{function}
+%
+%
+% \begin{function}{\@@_update_dblcol_structures:}
+%   \begin{syntax}
+%     \cs{@@_update_singlecol_structures:}
+%   \end{syntax}
+%   \LaTeXe{} integration function mark used when we are doing double
+%   column documents. It assumes that the page content is already
+%   stored in \cs{@outputbox} and processes the marks inside that
+%   box. It then does different post-processing depending on the start
+%   of the switch \cs{if@firstcolumn}. If we are in the second column
+%   it also has to update page marks, otherwise it only updates column
+%   marks. It too is called as part of \cs{@opcol}.
+% \end{function}
+%
+% \begin{function}{\@@_update_structure:nn}
+%   \begin{syntax}
+%     \cs{@@_update_structure:nn}  \Arg{region} \Arg{material with marks}
+%   \end{syntax}
+%   Helper function that inspects the marks
+%   inside the second argument and assigns new mark values based on
+%   that to the \meta{region} given in the first argument.
+%   For this it first copies the mark structure from \meta{region} to
+%   \texttt{previous-}\meta{region} and then takes all last mark
+%   values currently in the region and makes them the new top mark
+%   values. Finally it assigns new first and last values for all mark
+%   classes based on what was found in the second argument.
+%
+%   As a consequence, the allowed values for \meta{region} are
+%   \texttt{page} and \texttt{column} because only they have
+%   \texttt{previous-...} counterparts.
+%
+%   Another important part to keep in mind is that marks are only
+%   recognized if they appear on top-level, e.g., if we want to
+%   process material stored in boxes we need to put it unboxed (using
+%   \cs{unvcopy} etc.)\ into the second argument.
+% \end{function}
+%
+%
+%
+% \begin{function}{\@@_update_structure_alias:nn}
+%   \begin{syntax}
+%     \cs{@@_update_structure_alias:nn} \Arg{alias} \Arg{source}
+%   \end{syntax}
+%   Helper function that copies all mark values in the \meta{source}
+%   region to \meta{alias}, i.e., make the structures identical. Used
+%   to update the \texttt{previous-...} structures inside
+%   \cs{@@_update_structure:nn} and \texttt{first-column} and
+%   \texttt{last-column} structures inside
+%   \cs{@@_update_singlecol_structures:} or
+%   \cs{@@_update_dblcol_structures:}.
+% \end{function}
+%
+%
+%
+%
+% \begin{function}{\@@_update_structure_to_err:n}
+%   \begin{syntax}
+%     \cs{@@_update_structure_to_err:n} \Arg{region}
+%   \end{syntax}
+%   Helper function that sets all mark values in the \meta{region} to
+%   an error message. This is currently used for \texttt{last-column}
+%   at times where using marks from it would be questionable/wrong, i.e.,
+%   when we have just processed the first column in a two-column document.
+% \end{function}
+%
+%
+%
+% ^^A \end{documentation}
+%
+%
+%
+%
+%
+% \StopEventually{\setlength\IndexMin{200pt}  \PrintIndex  }
+%
+%
+% \section{The Implementation}
+%
+%
+%
+%    \begin{macrocode}
+%<*2ekernel|latexrelease>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\ExplSyntaxOn
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<latexrelease>\NewModuleRelease{2022/06/01}{ltmarks}
+%<latexrelease>                 {Marks~handling}
+%    \end{macrocode}
+%
+% \subsection{Allocating new mark classes}
+%
+%
+% \begin{variable}{\g_@@_classes_seq}
+%    A list holding all the mark classes that have been declared.
+%    \begin{macrocode}
+\seq_new:N \g_@@_classes_seq
+%    \end{macrocode}
+% \end{variable}
+%
+%
+%
+%
+% \begin{macro}{\mark_new_class:n,\@@_new_class:nn}
+%    A mark class is created by initializing a number of data
+%    structures.  First, we get a register number to refer to the mark class.
+%    The new mark class is then added to the \cs{g_@@_classes_seq}
+%    sequence to be able to easily loop over all classes.  Finally a
+%    number of top-level global token lists are declared that hold
+%    various versions of the mark for access.
+%    \begin{macrocode}
+\cs_new_protected:Npn \mark_new_class:n #1
+{
+  \seq_if_in:NnTF \g_@@_classes_seq {#1}
+      {
+        \msg_error:nnn { mark } { class-already-defined }
+          {#1}
+      }
+      { \@@_new_class:nn {#1} }
+}
+%    \end{macrocode}
+%    This is only available in the preamble.
+% \changes{v1.0c}{2022/05/06}{Wrong command made \cs{@onlypreamble}}
+%    \begin{macrocode}
+\@onlypreamble \mark_new_class:n
+%    \end{macrocode}
+%    The internal command carries out the necessary allocations.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_new_class:nn #1
+{
+%<*trace>
+  \@@_debug:n { \iow_term:x { Marks:~new~mark:~#1~\msg_line_context: } }
+%</trace>
+%    \end{macrocode}
+%    Use the \LaTeXe{} interface for now as the L3 programming layer
+%    doesn't have one for marks yet.
+%    \begin{macrocode}
+  \exp_args:Nc \newmarks {c_@@_class_ #1 _mark}
+%    \end{macrocode}
+%    Remember the new class in the sequence.
+%    \begin{macrocode}
+  \seq_gput_right:Nn \g_@@_classes_seq {#1}
+%    \end{macrocode}
+%    We need three token lists for each region, one for top, first,
+%    and last.
+%    \begin{macrocode}
+  \tl_new:c   { g_@@_page_top_   #1 _tl }
+  \tl_new:c   { g_@@_page_first_ #1 _tl }
+  \tl_new:c   { g_@@_page_last_  #1 _tl }
+%    \end{macrocode}
+%    For the \texttt{page} region we also keep track of the
+%    \texttt{previous-page}.
+%    \begin{macrocode}
+  \tl_new:c   { g_@@_previous-page_top_   #1 _tl }
+  \tl_new:c   { g_@@_previous-page_first_ #1 _tl }
+  \tl_new:c   { g_@@_previous-page_last_  #1 _tl }
+%    \end{macrocode}
+%    Same game for \texttt{column} and \texttt{previous-column}
+%    \begin{macrocode}
+  \tl_new:c   { g_@@_column_top_   #1 _tl }
+  \tl_new:c   { g_@@_column_first_ #1 _tl }
+  \tl_new:c   { g_@@_column_last_  #1 _tl }
+  \tl_new:c   { g_@@_previous-column_top_   #1 _tl }
+  \tl_new:c   { g_@@_previous-column_first_ #1 _tl }
+  \tl_new:c   { g_@@_previous-column_last_  #1 _tl }
+%    \end{macrocode}
+%    But for columns we also allocate token lists for the alias
+%    regions \texttt{first-column} and \texttt{last-column}.
+%    \begin{macrocode}
+  \tl_new:c   { g_@@_first-column_top_   #1 _tl }
+  \tl_new:c   { g_@@_first-column_first_ #1 _tl }
+  \tl_new:c   { g_@@_first-column_last_  #1 _tl }
+  \tl_new:c   { g_@@_last-column_top_    #1 _tl }
+  \tl_new:c   { g_@@_last-column_first_  #1 _tl }
+  \tl_new:c   { g_@@_last-column_last_   #1 _tl }
+}
+%    \end{macrocode}
+% \end{macro}
+%
+%
+%
+%
+% \subsection{Updating mark structures}
+%
+%
+%  \begin{macro}{\l_@@_box,\g_@@_tmp_tl,\g_@@_new_top_tl}
+%    For some operations we need a temporary private box and two
+%    private global token lists.
+%    \begin{macrocode}
+\box_new:N \l_@@_box
+\tl_new:N  \g_@@_tmp_tl
+\tl_new:N  \g_@@_new_top_tl
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\@@_update_structure:nn}
+%
+%    This function updates the mark structures. The first argument is
+%    the region to update and second argument receives the material
+%    that holds the marks. Out of this material we extract the first
+%    and last marks for all classes (if there are any) to do the
+%    assignments.
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_update_structure:nn #1#2
+  {
+%    \end{macrocode}
+%    First thing we do is copying the current structure to
+%    \texttt{previous-...}; this leaves the current structure
+%    untouched so we can update it class by class (which is necessary).
+%    \begin{macrocode}
+    \@@_update_structure_alias:nn { previous-#1 } {#1}
+%    \end{macrocode}
+%    Getting the first and last marks out of the material in \verb=#2=
+%    is done by putting the material in a box and then doing a
+%    split operation to the maximum size possible (which hopefully
+%    means all of the content).\footnote{We could verify this, maybe we
+%    should.} Because this is an action only for the sake of getting
+%    at the mark values we don't want any underfull
+%    box warnings so we turn those (locally) off.
+%    \begin{macrocode}
+    \group_begin:
+      \dim_set_eq:NN \tex_splitmaxdepth:D \c_max_dim
+      \int_set_eq:NN \tex_vbadness:D      \c_max_int
+      \dim_set_eq:NN \tex_vfuzz:D         \c_max_dim
+%    \end{macrocode}
+%    There is a further complication: if the region contains infinite
+%    shrinking glue then a \tn{vsplit} operation will balk with a
+%    low-level error. Now pages or columns, which are our main concern here, can't
+%    have such infinite shrinkage if they are cut straight from the
+%    galley, however the use of \tn{enlargethispage} actually does add
+%    some at the very bottom (and also wraps the whole page into a box
+%    by itself, so if we leave it this way then a) we get this error
+%    and b) we don't see any marks because they are hidden one level
+%    down).
+%      
+%    Another possible issue are packages or user code that place stray
+%    \tn{vbox}es directly into the main galley (an example is
+%    \pkg{marginnote} that attaches its marginals in this way). If such
+%    boxes end up as the last item on the page we should not unpack
+%    them.
+%
+%    We therefore do an \tn{unskip} to get rid of that glue if present and
+%    also check if we have then a \tn{vbox} as the last item and if so
+%    unpack that too, but only under certain conditions, see
+%    below. All this is temporary, just for getting the
+%    marks out, so it doesn't affect the final page production.
+%
+%    In fact, we go one step further and set the box to a large
+%    negative height possible and afterwards take a look at the
+%    reported badness: if it is zero we know that there has still been
+%    infinite shrinkage in the box so that we can't do a
+%    \tn{vsplit}. If that is the case we generate an error message and
+%    bypass extracting the marks. We use only half of \cs{c_max_dim}
+%    because otherwise \TeX{} will report an overfull vbox despite our
+%    setting of \cs{tex_vfuzz:D}. This test will not find existing
+%    infinite shrinkage in all cases, e.g., if there are several glues
+%    that cancel each other, but it is the best we can do.
+%    \begin{macrocode}
+      \vbox_set_to_ht:Nnn \l_@@_box { -.5\c_max_dim }
+        {
+          #2
+          \tex_unskip:D
+          \box_set_to_last:N \l_@@_box
+%    \end{macrocode}
+%    After having removed the last box from the current list (if there
+%    was one)
+%    we check if the list is now empty. If not, the the last box is
+%    definitely not the one from \tn{enlargethispage} and so we can
+%    and should leave it alone. Otherwise we check if this last box is
+%    a \tn{vbox}.
+% \changes{v1.0d}{2022/06/01}{Extend the logic for detecting the marks
+%    in the box (gh/836)}
+%    \begin{macrocode}
+          \int_compare:nNnT \tex_lastnodetype:D < 0
+            {
+              \box_if_vertical:NT \l_@@_box
+                {
+%    \end{macrocode}
+%    If it is we do a further test and reset the \cs{l_@@_box}
+%    to check if it contains infinitely shrinkable glue.
+%    \begin{macrocode}
+                  \vbox_set_to_ht:Nnn \l_@@_box { -.5\c_max_dim }
+                    {
+                      \vbox_unpack:N \l_@@_box
+                      \tex_kern:D \c_zero_dim % ensure that box
+                                              % is not empty
+                    }
+%    \end{macrocode}
+%    If not, then we unpack it, if yes we still ignore it for the process of
+%    mark extraction. We do not generate an error though, because in all
+%    likelihood this is an ordinary box like a marginal that does
+%    contain something like \tn{vss}.
+%    \begin{macrocode}
+                    \int_compare:nNnT \tex_badness:D > 0
+                      { \vbox_unpack:N \l_@@_box }
+                  }
+            }
+%    \end{macrocode}
+%    If it wasn't a vbox, it was either an hbox or there was no box.
+%    Given that we are only interested in the marks we don't need put
+%    it back in that case. However, we have to make sure that the
+%    outer box under construction
+%    is not totally empty (which it might have been from the start, or
+%    now), because \TeX{} does not report a badness for empty boxes
+%    and that means our test would incorrectly conclude that we have
+%    infinite shrinking glue. A simple \tn{kern} is enough to avoid
+%    this (the same was already done above).
+%    \begin{macrocode}
+          \tex_kern:D \c_zero_dim
+        }
+      \int_compare:nNnTF \tex_badness:D > 0
+%    \end{macrocode}
+%    If the box had no infinite shrinkage (or rather if our test
+%    didn't show any) we vsplit it. Note that it
+%    doesn't matter that we set it to this strange size first. If there
+%    was infinite shrinkage after all, we end up with a low-level
+%    \TeX{} error, but if there is, it is a coding error and needs
+%    correcting.
+%    \begin{macrocode}
+        {
+          \vbox_set_split_to_ht:NNn \l_@@_box \l_@@_box \c_max_dim
+%    \end{macrocode}
+%    After this action we can get first and last marks of the various
+%    classes through \cs{tex_splitfirstmarks:D} and
+%    \cs{tex_splitbotmarks:D}. So now we loop over all classes stored in
+%    \cs{g_@@_classes_seq}.
+%    \begin{macrocode}
+          \seq_map_inline:Nn \g_@@_classes_seq
+            {
+%    \end{macrocode}
+%    First action: get the last mark from the previous region, i.e.,
+%    \verb=previous-#1=.  But because it is also still inside \verb=#1=,
+%    at the moment we use that to construct the name because this is a
+%    tiny bit faster. Given that we
+%    need this value in various assignments we store it away which
+%    avoids unnecessary further csname generations.
+%    \begin{macrocode}
+              \tl_gset_eq:Nc \g_@@_new_top_tl { g_@@_#1_last_##1_tl }
+%    \end{macrocode}
+%    This will first of all become the new top mark for the current class.
+%    \begin{macrocode}
+              \tl_gset_eq:cN { g_@@_#1_top_##1_tl } \g_@@_new_top_tl
+%    \end{macrocode}
+%    Next action is to get ourselves the new last mark from the
+%    material supplied.
+%    \begin{macrocode}
+              \tl_gset:No \g_@@_tmp_tl
+                { \tex_splitbotmarks:D \use:c { c_@@_class_##1_mark } }
+%    \end{macrocode}
+%    If this mark doesn't exist then obviously first mark does
+%    neither, so both become the last mark from the previous region. We
+%    have to be a little careful here: something like
+%    \verb=\mark_insert:nn{foo}{}= adds an \enquote{empty} mark that should
+%    not be confused with no mark at all. But no mark in our material
+%    will result in \cs{g_@@_tmp_tl} being fully empty. This is why we
+%    have to make sure that \enquote{empty} from \cs{mark_insert:nn} only
+%    appears to be empty but fails the next test (see below how this
+%    is done).
+%    \begin{macrocode}
+              \tl_if_empty:NTF \g_@@_tmp_tl
+                {
+                  \tl_gset_eq:cN { g_@@_#1_last_ ##1_tl }
+                    \g_@@_new_top_tl
+                  \tl_gset_eq:cN { g_@@_#1_first_##1_tl }
+                    \g_@@_new_top_tl
+                }
+%    \end{macrocode}
+%    If it wasn't empty, i.e., if it had a real value then we use this
+%    value for our new last mark instead.
+%    \begin{macrocode}
+                {
+                  \tl_gset_eq:cN { g_@@_#1_last_##1_tl } \g_@@_tmp_tl
+%    \end{macrocode}
+%    Because we had a last mark we also have a first mark (which
+%    might be the same, but might be not), so we pick that up and
+%    assign it to the appropriate token list. This explains why we first
+%    checked for the last mark because that makes the processing
+%    faster in case there is none.
+%    \begin{macrocode}
+                  \tl_gset:co { g_@@_#1_first_##1_tl }
+                    {
+                      \tex_splitfirstmarks:D
+                        \use:c { c_@@_class_##1_mark }
+                    }
+                }
+            }
+        }
+%    \end{macrocode}
+%    If the badness was zero (we actually tested for${}>0$ but it
+%    can't get negative) then we had infinite shrinkage, so we report
+%    that and set all marks to the value the last mark had before.
+%    \begin{macrocode}
+        {
+          \msg_error:nnn { mark } { infinite-shrinkage } {#1}
+          \seq_map_inline:Nn \g_@@_classes_seq
+            {
+              \tl_gset_eq:cc { g_@@_#1_top_  ##1_tl }
+                             { g_@@_#1_last_ ##1_tl }
+              \tl_gset_eq:cc { g_@@_#1_first_##1_tl }
+                             { g_@@_#1_last_ ##1_tl }
+            }
+        }
+%    \end{macrocode}
+%    Once all mark classes have been processed the data structures are
+%    updated and we can close the group which undoes our local
+%    changes and retains only the global ones.
+%    \begin{macrocode}
+    \group_end:
+  }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\@@_update_structure_alias:nn}
+%    This function copies the structure for one region to  another
+%    (name), e.g., from \texttt{page} to \texttt{previous-page} above,
+%    or later from \texttt{column} to \texttt{first-column}, etc.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_update_structure_alias:nn #1#2 {
+%    \end{macrocode}
+%    This requires a simple loop through all mark classes copying the
+%    token list from one name to the next.
+%    \begin{macrocode}
+  \seq_map_inline:Nn \g_@@_classes_seq
+    {
+      \tl_gset_eq:cc { g_@@_ #1 _top_   ##1 _tl }
+                     { g_@@_ #2 _top_   ##1 _tl }
+      \tl_gset_eq:cc { g_@@_ #1 _first_ ##1 _tl }
+                     { g_@@_ #2 _first_ ##1 _tl }
+      \tl_gset_eq:cc { g_@@_ #1 _last_  ##1 _tl }
+                     { g_@@_ #2 _last_  ##1 _tl }
+    }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\@@_update_structure_to_err:n,\@@_error:n}
+%    A slight variation is to install a fixed error message as the value.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_update_structure_to_err:n #1 {
+  \seq_map_inline:Nn \g_@@_classes_seq
+      {
+        \tl_gset:cn { g_@@_ #1 _top_   ##1 _tl } { \@@_error:n {#1} }
+        \tl_gset:cn { g_@@_ #1 _first_ ##1 _tl } { \@@_error:n {#1} }
+        \tl_gset:cn { g_@@_ #1 _last_  ##1 _tl } { \@@_error:n {#1} }
+      }
+}
+%    \end{macrocode}
+%    Given that this is used in only one place, we could hardwire the
+%    argument which would be a bit more compact, but who knows,
+%    perhaps we end up with another reason to use this error command
+%    elsewhere, so for now we keep the argument.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_error:n #1 {
+  \msg_error:nnn { mark } { invalid-use } {#1}
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+% \subsection{Placing and retrieving marks}
+%
+%
+%
+%  \begin{macro}{\mark_insert:nn}
+%    This function puts a mark for some \meta{class} at the current point.
+%    \begin{macrocode}
+\cs_new_protected:Npn \mark_insert:nn #1#2
+{
+  \seq_if_in:NnTF \g_@@_classes_seq {#1}
+      {
+%    \end{macrocode}
+%    We need to pass the evaluated argument into the mark but protected
+%    commands should not expand including those protected using the \cs{protect} approach of
+%    \LaTeXe{}. We also  disable \cs{label} and the
+%    like.\footnote{Straight copy from \texttt{latex.ltx} but is this
+%    even correct? At least a label in a running header makes little
+%    sense if it get set several times! Maybe that needs looking at in
+%    the 2e kernel.}
+%
+%    At this point the code eventually should get a public
+%    (and a kernel) hook instead of a set of hardwired settings.
+%    \begin{macrocode}
+        \group_begin:
+%    \end{macrocode}
+%    Within the group we alter some comments, e.g, \cs{label} or
+%    \cs{index}, to do the right at this point. This is done in the
+%    kernel hook \cs{@kernel@before@insertmark} which is followed by
+%    the public hook \hook{insertmark} that can be used by packages to
+%    augment or alter that setup as necessary.
+%    \begin{macrocode}
+          \@kernel@before@insertmark
+          \hook_use:n { insertmark }
+          \unrestored@protected@xdef \g_@@_tmp_tl {#2}
+%<*trace>
+          \@@_debug:n{ \iow_term:x { Marks:~ set~#1~<-~
+              '\tl_to_str:V \g_@@_tmp_tl' ~ \msg_line_context: } }
+%</trace>
+          \tex_marks:D \use:c { c_@@_class_ #1 _mark }
+            {
+%    \end{macrocode}
+%    Here is the trick to avoid truly empty marks: if the result from
+%    the above processing is empty we add something which eventually
+%    becomes empty, but not immediately; otherwise we just put
+%    \cs{g_@@_tmp_tl} in.
+%    \begin{macrocode}
+              \tl_if_empty:NTF \g_@@_tmp_tl
+                { \exp_not:n { \prg_do_nothing: } }
+                { \exp_not:o { \g_@@_tmp_tl } }
+            }
+        \group_end:
+%    \end{macrocode}
+%    A mark introduces a possible break point and in certain
+%    situations that should not happen in vertical mode in \LaTeX{}.
+%    This needs some cleanup \ldots.
+%    \begin{macrocode}
+        \if@nobreak\ifvmode\nobreak\fi\fi
+      }
+%    \end{macrocode}
+%    If the mark class was not known, raise an error.
+%    \begin{macrocode}
+      {
+        \msg_error:nnx { mark } { unknown-class }
+          { \tl_to_str:n {#1} }
+      }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+% \begin{macro}[int]{\@kernel@before@insertmark}
+% \begin{macro}{insertmark}
+%    By default \cs{label}, \cs{index}, and \cs{glossary} do nothing
+%    when the mark is inserted.
+%    \begin{macrocode}
+\cs_new:Npn \@kernel@before@insertmark {
+          \cs_set_eq:NN \label    \scan_stop:
+          \cs_set_eq:NN \index    \scan_stop:
+          \cs_set_eq:NN \glossary \scan_stop:
+}
+%    \end{macrocode}
+%    The public hook to augment the setup.
+%    \begin{macrocode}
+\hook_new:n {insertmark}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}[EXP]{\mark_use_top:nn, \mark_use_first:nn, \mark_use_last:nn}
+%
+%    To retrieve the first, last or top region mark, we grab the
+%    appropriate value stored in the corresponding token list variable
+%    and pass its contents back. These functions should be used only
+%    in output routines after \cs{@@_update_structure:nn} has acted,
+%    otherwise their value will be wrong.
+%
+%    If used with an unknown class or region they generate an error
+%    (fairly low-level because we are in an expandable context).
+%    \begin{macrocode}
+\cs_new:Npn \mark_use_first:nn #1#2 { \exp_not:v { g_@@_#1_first_#2_tl } }
+\cs_new:Npn \mark_use_last:nn #1#2  { \exp_not:v { g_@@_#1_last_#2_tl }  }
+\cs_new:Npn \mark_use_top:nn #1#2   { \exp_not:v { g_@@_#1_top_#2_tl }   }
+%    \end{macrocode}
+% \end{macro}
+%
+%
+%
+%
+% \subsection{Comparing mark values}
+%
+%
+%
+%  \begin{macro}[TF,EXP]{\mark_if_eq:nnnn,\mark_if_eq:nnnnnn}
+%    Test if in a given region (\verb=#1=) for a given class
+%   (\verb=#2=) the marks in position \verb=#3= and \verb=#4= (top,
+%   first, or last) are identical
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \mark_if_eq:nnnn #1#2#3#4 { T , F , TF }
+{
+  \tl_if_eq:ccTF { g_@@_ #1 _#3_ #2 _tl }
+                 { g_@@_ #1 _#4_ #2 _tl }
+                 \prg_return_true:
+                 \prg_return_false:
+}
+%    \end{macrocode}
+%    The fully general test (with two triplets of the form
+%    \meta{region}, \meta{class}, and \meta{position}) is this:
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \mark_if_eq:nnnnnn #1#2#3#4#5#6 { T , F , TF }
+{
+  \tl_if_eq:ccTF { g_@@_ #1 _#3_ #2 _tl }
+                 { g_@@_ #4 _#6_ #5 _tl }
+                 \prg_return_true:
+                 \prg_return_false:
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+% \subsection{Messages}
+%
+%    Mark errors are LaTeX kernel errors:
+% \changes{v1.0d}{2022/06/01}{Marks are kernel errors}
+%    \begin{macrocode}
+\prop_gput:Nnn \g_msg_module_type_prop { mark } { LaTeX }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\msg_new:nnnn { mark } { class-already-defined }
+  { Mark~class~'#1'~already~defined }
+  {
+    \c__msg_coding_error_text_tl
+    LaTeX~was~asked~to~define~a~new~mark~class~called~'#1':~
+    this~mark~class~already~exists.
+    \c__msg_return_text_tl
+  }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\msg_new:nnnn { mark } { unknown-class }
+  { Unknown~mark~class~'#1'. }
+  {
+    \c__msg_coding_error_text_tl
+    LaTeX~was~asked~to~manipulate~a~mark~of~class~'#1',~
+    but~this~class~of~marks~does~not~exist.
+  }
+%    \end{macrocode}
+%
+%
+%    \begin{macrocode}
+
+\msg_new:nnnn { mark } { invalid-use }
+  { Mark~region~'#1'~not ~usable }
+  {
+    \c__msg_coding_error_text_tl
+    The~region~'#1'~can~only~be~used~after~
+    all~columns~have~been~assembled.
+    \c__msg_return_text_tl
+  }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\msg_new:nnnn { mark } { infinite-shrinkage }
+  { Infinite~shrinkage~found~in~'#1'. }
+  {
+    \c__msg_coding_error_text_tl
+    The~mark~region~'#1'~contains~some~infinite~negative~glue~
+    allowing~it~to~shrink~to~an~arbitrary~size.~
+    This~makes~it~impossible~to~split~the~region~apart~to~
+    get~at~its~marks.~They~are~lost.
+  }
+%    \end{macrocode}
+%
+%
+%
+% \subsection{Debugging the mark structures}
+%
+%  Code and commands in this section are not final, it needs more
+%  experimentation to see what kind of tracing information is going to
+%  be useful in practice. For now the tracing is mainly meant to be used
+%  for code testing and not so much for application testing.
+%
+% It is quite likely that the
+% commands and the behavior of the tracing might change in the
+% future once we gained some experience with it.
+%
+%  \begin{macro}{\g_@@_debug_bool}
+%    Holds the current debugging state.
+%    \begin{macrocode}
+\bool_new:N \g_@@_debug_bool
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\mark_debug_on:,\mark_debug_off:}
+%  \begin{macro}{\@@_debug:n}
+%  \begin{macro}{\@@_debug_gset:}
+%    Turns debugging on and off by redefining \cs{@@_debug:n}.
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_debug:n \use_none:n
+\cs_new_protected:Npn \mark_debug_on:
+  {
+    \bool_gset_true:N \g_@@_debug_bool
+    \@@_debug_gset:
+  }
+\cs_new_protected:Npn \mark_debug_off:
+  {
+    \bool_gset_false:N \g_@@_debug_bool
+    \@@_debug_gset:
+  }
+\cs_new_protected:Npn \@@_debug_gset:
+  {
+    \cs_gset_protected:Npx \@@_debug:n ##1
+      { \bool_if:NT \g_@@_debug_bool {##1} }
+  }
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\DebugMarksOn,\DebugMarksOff}
+%    CamelCase commands for debugging.
+%    \begin{macrocode}
+\cs_new_eq:NN \DebugMarksOn   \mark_debug_on:
+\cs_new_eq:NN \DebugMarksOff  \mark_debug_off:
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\@@_class_status:nn}
+%    Shows the mark values across all regions for one mark class
+%    (\verb=#2=). The first argument gives some \meta{info} to help
+%    identifying where the command was called.
+%    \begin{macrocode}
+%<*trace>
+\cs_new_protected:Npn \@@_class_status:nn #1#2
+   {
+           \typeout{ Marks:~#2~ #1:}
+           \typeout{\@spaces page~ (current):
+             | \exp_not:v { g_@@_page_top_ #2 _tl }
+             | \exp_not:v { g_@@_page_first_ #2 _tl }
+             | \exp_not:v { g_@@_page_last_ #2 _tl }     |}
+           \typeout{\@spaces page~ (previous):
+             | \exp_not:v { g_@@_previous-page_top_ #2 _tl }
+             | \exp_not:v { g_@@_previous-page_first_ #2 _tl }
+             | \exp_not:v { g_@@_previous-page_last_ #2 _tl }     |}
+           \typeout{\@spaces column~ (previous):
+             | \exp_not:v { g_@@_previous-column_top_ #2 _tl }
+             | \exp_not:v { g_@@_previous-column_first_ #2 _tl }
+             | \exp_not:v { g_@@_previous-column_last_ #2 _tl }     |}
+           \typeout{\@spaces column~ (current):
+             | \exp_not:v { g_@@_column_top_ #2 _tl }
+             | \exp_not:v { g_@@_column_first_ #2 _tl }
+             | \exp_not:v { g_@@_column_last_ #2 _tl }     |}
+           \typeout{\@spaces column~ (first):
+             | \exp_not:v { g_@@_first-column_top_ #2 _tl }
+             | \exp_not:v { g_@@_first-column_first_ #2 _tl }
+             | \exp_not:v { g_@@_first-column_last_ #2 _tl }     |}
+           \typeout{\@spaces column~ (second):
+             | \exp_not:v { g_@@_last-column_top_ #2 _tl }
+             | \exp_not:v { g_@@_last-column_first_ #2 _tl }
+             | \exp_not:v { g_@@_last-column_last_ #2 _tl }     |}
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%  \begin{macro}{\@@_status:n}
+%    Show all mark class values across all regions.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_status:n #1
+  {
+    \seq_map_inline:Nn \g_@@_classes_seq
+      { \@@_class_status:nn {#1} {##1} }
+  }
+%</trace>
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+% \subsection{Designer-level interfaces}
+%
+%
+% \begin{macro}{\NewMarkClass,\InsertMark}
+%    These two are identical to the L3 programming layer commands.
+%    \begin{macrocode}
+\cs_new_eq:NN  \NewMarkClass \mark_new_class:n
+\@onlypreamble \NewMarkClass
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_eq:NN \InsertMark  \mark_insert:nn
+%    \end{macrocode}
+% \end{macro}
+%
+%
+% \begin{macro}[EXP]{\TopMark, \FirstMark, \LastMark}
+%    The following commands take an optional argument that defaults to
+%    page. There is no checking that the region is actually valid. If
+%    not there is simply an empty return.
+%    \begin{macrocode}
+\NewExpandableDocumentCommand \FirstMark { O{page} m }
+                    { \mark_use_first:nn {#1}{#2} }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\NewExpandableDocumentCommand \LastMark { O{page} m }
+                    { \mark_use_last:nn {#1}{#2} }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\NewExpandableDocumentCommand \TopMark { O{page} m }
+                    { \mark_use_top:nn {#1}{#2} }
+%    \end{macrocode}
+% \end{macro}
+%
+%
+%
+%  \begin{macro}[EXP]{\IfMarksEqualTF}
+%    We only provide a CamelCase command for the case with one region
+%    (optional) and one class. One could think of also providing a
+%    version for the general case with several optional arguments, but
+%    use cases for this are most likely rare, so not done yet.
+%    \begin{macrocode}
+\NewExpandableDocumentCommand \IfMarksEqualTF {O{page}mmm} {
+  \mark_if_eq:nnnnTF {#1}{#2}{#3}{#4}
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%  \section{\LaTeXe{} integration}
+%
+%  \subsection{Core \LaTeXe{} integration}
+%
+%  \begin{macro}{\@@_update_singlecol_structures:}
+%    This command updates the mark structures if we are producing a
+%    single column document.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_update_singlecol_structures: {
+%    \end{macrocode}
+%    First we update the \texttt{page} region (which also updates the
+%    \texttt{previous-page}.
+%
+%    The \cs{@outputbox} is normally in \cs{vbox} in \LaTeX{} but we
+%    can't take that for granted (an \pkg{amsmath} test document
+%    changed it to an \cs{hbox} just to trip me up) so we are a little
+%    careful with unpack now.
+%    \begin{macrocode}
+  \box_if_vertical:NTF \@outputbox
+      {
+        \@@_update_structure:nn {page}
+           { \vbox_unpack:N  \@outputbox }
+      }
+      {
+        \@@_update_structure:nn {page}
+           { \hbox_unpack:N  \@outputbox }
+      }
+%    \end{macrocode}
+%    The we provide the necessary updates for the aliases.
+%    \begin{macrocode}
+  \@@_update_structure_alias:nn {previous-column}{previous-page}
+  \@@_update_structure_alias:nn {column}{page}
+  \@@_update_structure_alias:nn {first-column}{page}
+  \@@_update_structure_alias:nn {last-column}{page}
+%<*trace>
+% move this into status itself?
+     \@@_debug:n
+         {
+           \@@_status:n
+                { in~ OR~ (
+                  \legacy_if:nTF {@twoside}
+                         { twoside-
+                           \int_if_odd:nTF \c@page
+                               { odd }{ even }
+                         }
+                         { oneside }
+                         )
+                }
+         }
+%</trace>
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\@@_update_dblcol_structures:}
+%    This commands handles the updates if we are doing two-column pages.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_update_dblcol_structures: {
+%    \end{macrocode}
+%    First we update the \texttt{column} and \texttt{previous-column}
+%    regions using the material assembled in \cs{@outputbox}.
+%    \begin{macrocode}
+  \box_if_vertical:NTF \@outputbox
+      {
+        \@@_update_structure:nn {column}
+           { \vbox_unpack:N  \@outputbox }
+      }
+      {
+        \@@_update_structure:nn {column}
+           { \hbox_unpack:N  \@outputbox }
+      }
+%    \end{macrocode}
+%    How we have to update the alias regions depends on whether or not
+%    \cs{@opcol} was called to process the first column or to produce
+%    the completed page
+%    \begin{macrocode}
+  \legacy_if:nTF {@firstcolumn}
+    {
+%    \end{macrocode}
+%    If we are processing the first column then \texttt{column} is our
+%    \texttt{first-column} and there is no \texttt{last-column} yet,
+%    so we make those an error.
+%    \begin{macrocode}
+      \@@_update_structure_alias:nn {first-column}{column}
+      \@@_update_structure_to_err:n {last-column}
+    }
+    {
+%    \end{macrocode}
+%    If we produce the completed page then the \texttt{first-column}
+%    is the same as the new \texttt{previous-column}. However, the
+%    structure should already be correct if you think about it
+%    (because is was set to \texttt{column} last time which is now the
+%    \texttt{previous-column}), thus there is no need to make an update.
+%    \begin{macrocode}
+%     \@@_update_structure_alias:nn {first-column}{previous-column}
+%    \end{macrocode}
+%    However, we now have a proper \texttt{last-column} so we assign that.
+%    \begin{macrocode}
+      \@@_update_structure_alias:nn {last-column}{column}
+%    \end{macrocode}
+%    What now remains doing is to update the \texttt{page} and
+%    \texttt{previous-page} regions. For this we have to copy the
+%    settings in \texttt{page} into \texttt{previous-page} and then
+%    update \texttt{page} such that the top and first marks are taken
+%    from the \texttt{first-column} region and the last marks are
+%    taken from the \texttt{last-column} region. All this has to be
+%    done for all mark classes so we loop over our sequence.
+%
+%    Note that one loop is needed if we arrange the copy statements in
+%    a suitable way.
+%    \begin{macrocode}
+      \seq_map_inline:Nn \g_@@_classes_seq
+        {
+          \tl_gset_eq:cc { g_@@_previous-page_top_   ##1 _tl }
+                         { g_@@_page_top_            ##1 _tl }
+          \tl_gset_eq:cc { g_@@_previous-page_first_ ##1 _tl }
+                         { g_@@_page_first_          ##1 _tl }
+          \tl_gset_eq:cc { g_@@_previous-page_last_  ##1 _tl }
+                         { g_@@_page_last_           ##1 _tl }
+%    \end{macrocode}
+%    The \texttt{page} updates need to come after the corresponding
+%    updates for \texttt{previous-page} otherwise we loose the
+%    necessary value.
+%    \begin{macrocode}
+          \tl_gset_eq:cc { g_@@_page_top_           ##1 _tl }
+                         { g_@@_first-column_top_   ##1 _tl }
+          \tl_gset_eq:cc { g_@@_ page_first_        ##1 _tl }
+                         { g_@@_first-column_first_ ##1 _tl }
+          \tl_gset_eq:cc { g_@@_page_last_          ##1 _tl }
+                         { g_@@_last-column_last_   ##1 _tl }
+        }
+    }
+%<*trace>
+     \@@_debug:n
+         {
+           \@@_status:n
+              { in~ OR~ (
+                \legacy_if:nTF {@twoside}
+                       { twoside-
+                         \int_if_odd:nTF \c@page
+                             { odd }{ even }
+                       }
+                       { oneside }
+                       \space
+                       \legacy_if:nTF {@firstcolumn}
+                              { first~ }{ second~ }
+                              column )
+              }
+         }
+%</trace>
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%    \begin{macrocode}
+%<@@=>
+%    \end{macrocode}
+%
+%  \begin{macro}[int]{\@expl@@@mark@update@singlecol@structures@@,
+%                \@expl@@@mark@update@dblcol@structures@@}
+%    \begin{macrocode}
+\cs_new_eq:NN  \@expl@@@mark@update@singlecol@structures@@
+               \__mark_update_singlecol_structures:
+\cs_new_eq:NN  \@expl@@@mark@update@dblcol@structures@@
+               \__mark_update_dblcol_structures:
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \subsection{Other \LaTeXe{} output routines}
+%
+%  This section will cover \pkg{multicol} and other packages altering
+%  or providing their own output routine. Not done yet.
+%
+%
+%
+%
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{0000/00/00}{ltmarks}%
+%<latexrelease>                 {Undo~Marks~handling}
+%<latexrelease>
+%    \end{macrocode}
+%    We keep the interface commands around even if we roll back in
+%    case they are used in packages that don't roll back. Not likely
+%    to do a lot of good, but then there is not much we can do, but
+%    this at least then doesn't give errors.
+%    \begin{macrocode}
+%<latexrelease>\DeclareRobustCommand \NewMarkClass[1]{}
+%<latexrelease>\DeclareRobustCommand \InsertMark[2]{}
+%<latexrelease>\RenewExpandableDocumentCommand \FirstMark { O{} m } { }
+%<latexrelease>\RenewExpandableDocumentCommand \LastMark { O{} m } { }
+%<latexrelease>\RenewExpandableDocumentCommand \TopMark { O{} m } { }
+%<latexrelease>\RenewExpandableDocumentCommand \IfMarksEqualTF { O{} mmm }{ }
+%<latexrelease>
+%    \end{macrocode}
+%    Same here, this avoided extra roll back code in the OR.
+%    \begin{macrocode}
+%<latexrelease>\let \@expl@@@mark@update@singlecol@structures@@ \relax
+%<latexrelease>\let \@expl@@@mark@update@dblcol@structures@@ \relax
+%<latexrelease>
+%<latexrelease>
+%<latexrelease>\EndModuleRelease
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\ExplSyntaxOff
+%    \end{macrocode}
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%    \end{macrocode}
+%
+%    Reset module prefix:
+%    \begin{macrocode}
+%<@@=>
+%    \end{macrocode}
+%
+%
+%
+%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\endinput
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
