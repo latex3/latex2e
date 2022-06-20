@@ -1,7 +1,7 @@
 The LaTeX kernel
 ================
 
-Release 2022-06-01 patch level 1
+Release 2022-06-01 patch level 2
 
 Overview
 --------
