@@ -9,7 +9,7 @@ Overview
 This bundle provides the core LaTeX kernel. In addition to this bundle,
 a minimal LaTeX system also needs the files contained in the
 
-- LaTeX team documentation (`doc`)
+
 - L3 programming layer (`l3kernel`)
 - L3 backend interfaces (`l3backend`)
 - L3 unicode support (`unicode-data`)
@@ -55,17 +55,11 @@ The following files contain further information:
 
 - `ltx3info.tex` gives you some historical information about the LaTeX3
    project
-- `manual.err` lists errata in _LaTeX: A Document Preparation System_ (Lamport)
+- `lamport-manual.err` lists errata in _LaTeX: A Document Preparation System_ (Lamport)
 - `tlc2.err` lists errata in _The LaTeX Companion_ (Mittelbach et al.)
 
 The files `ltnews*.tex` (part of the `doc` bundle) contain the LaTeX
 newsletters, the highest number being the most recent.
-
-For historical reasons, the base distribution and the core documentation
-are bundled separately. Documentation is found in the `doc` bundle. In an
-installed TeX system, `base` and `doc` should be placed within the same
-location; the distinction is therefore primarily of importance when looking
-at the development code.
 
 Installation
 ------------
@@ -80,10 +74,9 @@ Requirements
 ------------
 
 The LaTeX kernel requires the e-TeX extensions to TeX, which were finalised
-in the late 1990s and are available in modern TeX-derived engines. Some new
-features require `\ifincsname`, which is currently available in release
-versions of pdfTeX, XeTeX and LuaTeX, and is being introduced shortly in
-e-pTeX and e-upTeX.
+in the late 1990s and are available in modern TeX-derived engines. It also
+requires a set of common post-e-TeX extensions, generally known as the
+pdfTeX additions. These are available in all modern TeX engines.
 
 License
 -------

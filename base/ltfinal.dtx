@@ -33,7 +33,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltfinal.dtx}
-             [2022/06/02 v2.2u LaTeX Kernel (Final Settings)]
+             [2022/07/05 v2.2w LaTeX Kernel (Final Settings)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltfinal.dtx}
@@ -1063,11 +1063,12 @@
 %    \end{macrocode}
 %
 % \begin{macro}{\MakeUppercase}
-% \begin{macro}{\MakeUppercase}
+% \begin{macro}{\MakeLowercase}
+% \begin{macro}{\MakeTitlecase}
 % \begin{macro}{\NoCaseChange}
-% \begin{macro}{\@uclclist}
-% \begin{macro}{\@expl@text@lowercase@@n}
-% \begin{macro}{\@expl@text@uppercase@@n}
+% \begin{macro}{\AddToNoCaseChangeList}
+% \begin{macro}{\CaseSwitch}
+% \begin{macro}{\DeclareCaseChangeEquivalent}
 % \begin{macro}{\@uclclist}
 %
 %
@@ -1077,52 +1078,61 @@
 %    And whilst we're doing things with uc/lc tables, here are two
 %    commands to upper- and lower-case a string.
 %
-%    \emph{Note} that this implementation is subject to change!  At
-%    the moment we're not providing any way to extend the list of
-%    uc/lc commands, since finding a good interface is difficult.
-%    These commands have some nasty features, such as uppercasing
-%    mathematics, environment names, labels, etc.  A much better
-%    long-term solution is to use all-caps fonts, but these aren't
-%    generally available.
 %
-% Two wrappers around the L3 case changing functions.
-% |\protected| to make them mostly safe as replacements for |uppercase|
-% and |\lowercase|.  
-%    \begin{macrocode}
-\ExplSyntaxOn
-\protected\def\@expl@text@lowercase@@n{\text_lowercase:n}
-\protected\def\@expl@text@uppercase@@n{\text_uppercase:n}
-%    \end{macrocode}
-%
-% \changes{v2.2u}{2022/06/02}{Add \cs{NoCaseChange}}
-% |\NoCaseChange| protects its argument from the case change functions.
-%    \begin{macrocode}
-\tl_put_right:Nn \l_text_case_exclude_arg_tl  { \NoCaseChange }
-\cs_new_protected:Npn \NoCaseChange #1 {#1}
-\ExplSyntaxOff
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-\DeclareRobustCommand{\MakeUppercase}[1]{{%
-      \def\i{I}\def\j{J}%
-      \def\reserved@a##1##2{\let##1##2\reserved@a}%
-      \expandafter\reserved@a\@uclclist\reserved@b{\reserved@b\@gobble}%
-%    \end{macrocode}
-%    Tell UTF-8 processing to process chars even though we are in an \cs{protected@edef}.
 % \changes{v2.1h}{2019/09/14}{Expand UTF8 chars when case changing (github/177)}
 % \changes{v2.2r}{2022/02/20}
 %                {Use \cs{@expl@text@uppercase@@n}, removing local redefinition of \cs{UTF@two@octets@noexpand}}%
 % \changes{v2.2t}{2022/04/21}{Support \cs{noexpand} in argument of \cs{@expl@text@uppercase@@n}}
+% \changes{v2.2v}{2022/06/30}{Just use \cs{text_lowercase:n} without \cs{protectd@edf} gh/881x}%
+% \changes{v2.2w}{2022/07/04}{Introduced \cs{CaseSwitch}, \cs{DeclareCaseChangeEquivalent} and \cs{MakeTitlecase} to support hooking into case changing gh/889}%
+% Wrappers around the L3 case changing functions.
+% |\protected| to make them mostly safe as replacements for |uppercase|
+% and |\lowercase|.  
+%
+% In
+%\begin{verbatim}
+%    \markboth{\MakeUppercase\contentsname}
+%             {\MakeUppercase\contentsname}
+%\end{verbatim}
+%    then the uppercasing is only done to the first letter of the
+%    contents name, since the mark expands out to:
+%\begin{verbatim}
+%    \mark{\MakeUppercase Table of Contents}
+%         {\MakeUppercase Table of Contents}
+%\end{verbatim}
+%    In order to get round this, we redefine |\MakeUppercase| and
+% |\MakeLowercase| to grab their argument and brace it. 
+%
+% Earlier versions needed to procsss |\@uclclist| in an |\edef|
+% to handle legacy input encodings, but recent (2022) expl3 versions
+% handle non-UTF8 text natively so we simply call the |\text_...case:n|
+% functions.
 %    \begin{macrocode}
-      \protected@edef\reserved@a{\@expl@text@uppercase@@n{\noexpand\unexpanded{#1}}}%
-      \reserved@a
-   }}
-\DeclareRobustCommand{\MakeLowercase}[1]{{%
-      \def\reserved@a##1##2{\let##2##1\reserved@a}%
-      \expandafter\reserved@a\@uclclist\reserved@b{\reserved@b\@gobble}%
-      \protected@edef\reserved@a{\@expl@text@lowercase@@n{\noexpand\unexpanded{#1}}}%
-      \reserved@a
-   }}
+\ExplSyntaxOn
+\cs_new_protected_nopar:cpn{MakeUppercase~}{\text_uppercase:n}
+\cs_set_nopar:Npx\MakeUppercase#1{\use:c{MakeUppercase~}{#1}}
+\cs_new_protected_nopar:cpn{MakeLowercase~}{\text_lowercase:n}
+\cs_set_nopar:Npx\MakeLowercase#1{\use:c{MakeLowercase~}{#1}}
+\cs_new_protected_nopar:cpn{MakeTitlecase~}{\text_titlecase:n}
+\cs_set_nopar:Npx\MakeTitlecase#1{\use:c{MakeTitlecase~}{#1}}
+%    \end{macrocode}
+%
+% \changes{v2.2u}{2022/06/02}{Add \cs{NoCaseChange}}
+% \changes{v2.2u}{2022/06/30}{Add \cs{AddToNoCaseChangeList}}
+% |\NoCaseChange| protects its argument from the case change functions.
+%
+% |\AddToNoCaseChangeList| Allows new commands to protect their arguments, eg
+% |AddToNoCaseChangeList{\eqref}| would protect the argument of |\eqref|
+% in the same way as the argument of |\ref|.
+%    \begin{macrocode}
+\cs_new_protected_nopar:Npn\AddToNoCaseChangeList
+         {\tl_put_right:Nn \l_text_case_exclude_arg_tl}
+\AddToNoCaseChangeList{ \NoCaseChange }
+\cs_new_protected:Npn \NoCaseChange #1 {#1}
+\cs_new_eq:NN \CaseSwitch \text_case_switch:nnnn
+\cs_new_eq:NN \DeclareCaseChangeEquivalent
+  \text_declare_case_equivalent:Nn
+\ExplSyntaxOff
 %    \end{macrocode}
 %
 % \changes{v2.2q}{2021/09/06}{Correctly upper and lowercase
@@ -1131,28 +1141,8 @@
 \def\@uclclist{\oe\OE\o\O\ae\AE
       \dh\DH\dj\DJ\l\L\ng\NG\ss\SS\ij\IJ\th\TH}
 %    \end{macrocode}
-%    The above code works, but has the nasty side-effect that if you
-%    say something like:
-%\begin{verbatim}
-%    \markboth{\MakeUppercase\contentsname}
-%             {\MakeUppercase\contentsname}
-%\end{verbatim}
-%    then the uppercasing is only done to the first letter of the
-%    contents name, since the mark expands out to:
-%\begin{verbatim}
-%    \mark{\protect\MakeUppercase Table of Contents}
-%         {\protect\MakeUppercase Table of Contents}
-%\end{verbatim}
-%    In order to get round this, we redefine |\MakeUppercase| and
-%    |\MakeLowercase| to grab their argument and brace it.  This is a
-%    very low-level hack, and is \emph{not} recommended practice!
-%    This is an instance of a general problem that makes it unsafe to
-%    grab arguments unbraced, and probably needs a more general
-%    solution.  For the moment though, this hack will do:
-%    \begin{macrocode}
-\protected@edef\MakeUppercase#1{\MakeUppercase{#1}}
-\protected@edef\MakeLowercase#1{\MakeLowercase{#1}}
-%    \end{macrocode}
+%
+% \end{macro}
 % \end{macro}
 % \end{macro}
 % \end{macro}
