@@ -14,8 +14,8 @@
 %%% From File: mathcolor.dtx
 %
 %    \begin{macrocode}
-\def\mathcolorversion{v1.0b}
-\def\mathcolordate{2022/01/28}
+\def\mathcolorversion{v1.0c}
+\def\mathcolordate{2022/07/25}
 %    \end{macrocode}
 %<*driver>
 \documentclass{l3doc}
@@ -223,11 +223,36 @@
 %    \cs{mathop} in which case the sub and superscripts may be
 %    attached as \cs{limits} instead of after the material. All cases
 %    need separate treatment.
+%    And we need to watch out for an upcoming \verb=&= and avoid
+%    prematurely triggering the end of an alignment cell.
+% \changes{v1.0c}{2022/07/25}{Avoid ending an alignment cell
+%    prematurely when hitting an \texttt{\&} during
+%                             scanning (gh/901)}
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_scan_for_scripts:w {
 %    \end{macrocode}
-%    We therefore first parse for a \cs{c_math_subscript_token}
-%    ignoring (dropping) any spaces and \cs{relax} as \TeX{} would
+%    To avoid problems hitting on \verb=&= we start with a
+%    \cs{group_align_safe_begin:}. That has to be ended with
+%    \cs{group_align_safe_end:} when the
+%    danger (aka scanning) is over, which, due to the branching below, happens at
+%    four different points, i.e., when the \cs{mathcolor} is    
+% \begin{enumerate}
+% \item
+%    followed by a \enquote{normal} token;
+% \item
+%    followed by a braced sub/superscript;
+% \item
+%    followed by an unbraced sub/superscript;
+% \item
+%    followed by one of the \cs{limit}s primitives.
+% \end{enumerate}
+%    In each case we have to end the align save group and we mark the
+%    points below in the code for easy reference.   
+%    \begin{macrocode}
+  \group_align_safe_begin:
+%    \end{macrocode}
+%    We first parse for a \cs{c_math_subscript_token}
+%    ignoring (and dropping) any spaces and \cs{relax} as \TeX{} would
 %    do. We do this with expansion so that hidden sub or superscripts
 %    in macros are still found as long as the macros are expandable.
 %    \begin{macrocode}
@@ -236,7 +261,7 @@
 %    If we found that character we call a function that handles sub or
 %    superscripts.
 %    \begin{macrocode}
-    { \@@_handle_scripts:Nw }
+     { \@@_handle_scripts:Nw }
 %    \end{macrocode}
 %    Otherwise check if this token we peeked at (which is now stored
 %    in \cs{l_peek_token} is a superscript token.
@@ -266,11 +291,16 @@
 %    Once that is done, we have to get rid of the token we peeked at
 %    and then restart scanning for sub or superscripts. Given that
 %    \cs{@@_scan_for_scripts:w} expands while scanning the simplest
-%    solution is to add \cs{use_none:n} in front of the peeked at token.
+%    solution is to add \cs{use_none:n} in front of the peeked at
+%    token.
+%
+%    Here we end the align save group and
+%    \cs{@@_scan_for_scripts:w} will start a new one.
 %    \begin{macrocode}
-          { \@@_scan_for_scripts:w \use_none:n }
+          { \group_align_safe_end:                % case 4
+            \@@_scan_for_scripts:w \use_none:n }
 %    \end{macrocode}
-%    If it was one of these we look for a \texttt{'} and if found remove it and
+%    If it was not one of these we look for a \texttt{'} and if found remove it and
 %    replace it by its expansion. The reason we have to do this (and
 %    not rely on the earlier peeking to expand for us is the fact
 %    that \texttt{'} is only ``math active'' and that doesn't expand
@@ -283,7 +313,8 @@
 %    color (because we prevented that before to happen automatically
 %    after the next group) and pop the color stack setting \cs{current@color}.
 %    \begin{macrocode}
-            { \reset@color
+            { \group_align_safe_end:              % case 1
+              \reset@color
               \seq_gpop:NN \g_@@_seq \current@color
             }
           }
@@ -341,19 +372,27 @@
 %    already supplied the outer one already. In that case we drop
 %    it. Otherwise we have an unbraced single token sub or superscript
 %    which means we are missing a closing \verb=}= at the end and need
-%    to account for that: this is done in \cs{_@@_handle_unbraced_script:N}.
+%    to account for that: this is done in
+%    \cs{_@@_handle_unbraced_script:N}.
+%
+%    After scanning for a brace all scanning is done, so here are the
+%    other two points where we have to end the align save group (in
+%    the true and false case).
 %    \begin{macrocode}
     \@@_peek_catcode_ignore_filler_expand:NTF \c_group_begin_token
-      { \peek_catcode_remove:NT \c_group_begin_token { } }
-      { \@@_handle_unbraced_script:N }
-  }%    \end{macrocode}
+       { \group_align_safe_end:              % case 2
+         \peek_catcode_remove:NT \c_group_begin_token { } }
+       { \@@_handle_unbraced_script:N }
+  }
+%    \end{macrocode}
 %  \end{macro}
-
-
+%
+%
 %  \begin{macro}{\@@_handle_unbraced_script:N}
 %    All we have to do here is to add the final closing brace.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_handle_unbraced_script:N #1 {
+  \group_align_safe_end:              % case 3
   #1 \c_group_end_token }
 %    \end{macrocode}
 %  \end{macro}
