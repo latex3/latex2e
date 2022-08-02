@@ -31,8 +31,8 @@
 %%% From File: lthooks.dtx
 %
 %    \begin{macrocode}
-\def\lthooksversion{v1.0t}
-\def\lthooksdate{2022/04/14}
+\def\lthooksversion{v1.0v}
+\def\lthooksdate{2022/06/15}
 %    \end{macrocode}
 %
 %<*driver>
@@ -2196,7 +2196,6 @@
 % \end{macro}
 %
 %
-%
 % \subsection{Providing new hooks}
 %
 % \subsubsection{The data structures of a hook}
@@ -2650,6 +2649,13 @@
             \@@_make_usable:n {#1}
             \tl_gset:cx { g_@@_#1_reversed_tl }
               { \@@_if_generic_reversed:nT {#1} { - } }
+%    \end{macrocode}
+%    Reflect that we have activated the generic hook and set its
+%    execution code.
+% \changes{v1.0v}{2022/06/15}{Ensure that a newly activated generic hook
+%               gets its execution code set}
+%    \begin{macrocode}
+            \@@_update_hook_code:n {#1}
           }
       }
   }
@@ -3627,6 +3633,11 @@
 %    \end{macrocode}
 %
 %    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2022/06/01}{\@@_gset_rule:nnnn}
+%<latexrelease>                 {Refuse~setting~rule~for~one-time~hooks}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
 \cs_new_protected:Npn \@@_gset_rule:nnnn #1#2#3#4
   {
     \@@_if_deprecated_generic:nT {#1}
@@ -3634,7 +3645,13 @@
         \@@_deprecated_generic_warn:n {#1}
         \@@_do_deprecated_generic:Nn \@@_gset_rule:nnnn {#1}
           {#2} {#3} {#4}
-        \exp_after:wN \use_none:nnnnnnnnn \use_none:n
+        \@@_clean_to_scan:w
+      }
+    \@@_if_execute_immediately:nT {#1}
+      {
+        \msg_error:nnnnnn { hooks } { rule-too-late }
+          {#1} {#2} {#3} {#4}
+        \@@_clean_to_scan:w
       }
 %    \end{macrocode}
 %    First we ensure the basic data structure of the hook exists:
@@ -3653,9 +3670,40 @@
           {#1} {#2} {#4}
         \@@_update_hook_code:n {#1}
       }
-      { \msg_error:nnnnnn { hooks } { unknown-rule }
-                          {#1} {#2} {#3} {#4}        }
+      {
+        \msg_error:nnnnnn { hooks } { unknown-rule }
+          {#1} {#2} {#3} {#4}
+      }
+    \s_@@_mark
   }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{2020/10/01}{\@@_gset_rule:nnnn}
+%<latexrelease>                 {Refuse~setting~rule~for~one-time~hooks}
+%<latexrelease>\cs_new_protected:Npn \@@_gset_rule:nnnn #1#2#3#4
+%<latexrelease>  {
+%<latexrelease>    \@@_if_deprecated_generic:nT {#1}
+%<latexrelease>      {
+%<latexrelease>        \@@_deprecated_generic_warn:n {#1}
+%<latexrelease>        \@@_do_deprecated_generic:Nn \@@_gset_rule:nnnn {#1}
+%<latexrelease>          {#2} {#3} {#4}
+%<latexrelease>        \exp_after:wN \use_none:nnnnnnnnn \use_none:n
+%<latexrelease>      }
+%<latexrelease>    \@@_init_structure:n {#1}
+%<latexrelease>    \@@_rule_gclear:nnn {#1} {#2} {#4}
+%<latexrelease>    \cs_if_exist_use:cTF { @@_rule_#3_gset:nnn }
+%<latexrelease>      {
+%<latexrelease>          {#1} {#2} {#4}
+%<latexrelease>        \@@_update_hook_code:n {#1}
+%<latexrelease>      }
+%<latexrelease>      {
+%<latexrelease>        \msg_error:nnnnnn { hooks } { unknown-rule }
+%<latexrelease>          {#1} {#2} {#3} {#4}
+%<latexrelease>      }
+%<latexrelease>  }
+%<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 % \end{macro}
 % \end{macro}
@@ -3834,7 +3882,6 @@
 %  \end{macro}
 %
 %
-%
 %  \begin{macro}{\@@_initialize_hook_code:n}
 %    Initializing or reinitializing the fast execution hook code. In
 %    the preamble this is selectively done in case a hook gets used
@@ -3843,8 +3890,8 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_initialize_hook_code:n #1
   {
-    \@@_debug:n{ \iow_term:x{^^JUpdate~ code~ for~ hook~
-                                    '#1' \on@line :^^J} }
+    \@@_debug:n
+      { \iow_term:x { ^^J Update~code~for~hook~'#1' \on@line :^^J } }
 %    \end{macrocode}
 %    This does the sorting and the updates.
 %    First thing we do is to check if a legacy hook macro exists and
@@ -3862,6 +3909,7 @@
 %    \cs{@@_initialize_single:NNn} and pass to it ready made csnames
 %    as they are needed several times inside. This way we save a bit
 %    on processing time if we do that up front.
+% \changes{v1.0u}{2022/05/17}{Refuse sorting one-time hooks (gh/818).}
 %    \begin{macrocode}
     \@@_if_usable:nT {#1}
       {
@@ -3876,7 +3924,7 @@
           {
 %    \end{macrocode}
 %    By default the algorithm sorts the code chunks and then saves the
-%    result in a token list for fast execution; this is done by adding the code chunks 
+%    result in a token list for fast execution; this is done by adding the code chunks
 %    one after another, using \cs{tl_gput_right:NV}. When we sort code for
 %    a reversed hook, all we have to do is to add the code chunks in
 %    the opposite order into the token list. So all we have to do
@@ -3905,8 +3953,8 @@
 %    i.e., we are only interested in storing the keys and the value is
 %    arbitrary.
 %    \begin{macrocode}
-            \@@_debug:n{ \exp_args:NNx \prop_gput:Nnn
-                                       \g_@@_used_prop {#1}{} }
+            \@@_debug:n
+              { \exp_args:NNx \prop_gput:Nnn \g_@@_used_prop {#1} { } }
           }
       }
   }
@@ -4323,16 +4371,17 @@
 %     \@@_apply_-rule_>:nnn,
 %     \@@_apply_-rule_<-:nnn,
 %     \@@_apply_-rule_->:nnn,
-%     \@@_apply_-rule_x:nnn,
+%     \@@_apply_-rule_xW:nnn,
+%     \@@_apply_-rule_xE:nnn,
 %   }
 %   Reversed rules.
 %    \begin{macrocode}
-\cs_new_eq:cc { @@_apply_-rule_<:nnn  } { @@_apply_rule_>:nnn }
-\cs_new_eq:cc { @@_apply_-rule_>:nnn  } { @@_apply_rule_<:nnn }
+\cs_new_eq:cc { @@_apply_-rule_<:nnn } { @@_apply_rule_>:nnn }
+\cs_new_eq:cc { @@_apply_-rule_>:nnn } { @@_apply_rule_<:nnn }
 \cs_new_eq:cc { @@_apply_-rule_<-:nnn } { @@_apply_rule_<-:nnn }
 \cs_new_eq:cc { @@_apply_-rule_->:nnn } { @@_apply_rule_->:nnn }
-\cs_new_eq:cc { @@_apply_-rule_xE:nnn  } { @@_apply_rule_xE:nnn }
-\cs_new_eq:cc { @@_apply_-rule_xW:nnn  } { @@_apply_rule_xW:nnn }
+\cs_new_eq:cc { @@_apply_-rule_xE:nnn } { @@_apply_rule_xE:nnn }
+\cs_new_eq:cc { @@_apply_-rule_xW:nnn } { @@_apply_rule_xW:nnn }
 %    \end{macrocode}
 % \end{macro}
 %
@@ -4850,6 +4899,7 @@
 %   clears the hook so that any further call to \cs{hook_use:n} or
 %   \cs{hook_use_once:n} will expand to nothing.
 % \changes{v1.0r}{2021/09/06}{Clean up after \cs{UseOneTimeHook} (gh/606)}
+% \changes{v1.0u}{2022/05/13}{Check if prop exists to avoid l3debug error}
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_use_once_set:n #1
   { \@@_tl_gset:cn { g_@@_#1_reversed_tl } { I } }
@@ -4858,7 +4908,7 @@
     \@@_tl_gclear:c { @@~#1 }
     \@@_tl_gclear:c { @@_next~#1 }
     \@@_tl_gclear:c { @@_toplevel~#1 }
-    \prop_gclear:c { g_@@_#1_code_prop }
+    \prop_gclear_new:c { g_@@_#1_code_prop }
   }
 %    \end{macrocode}
 % \end{macro}
@@ -4875,7 +4925,7 @@
 %   empty.
 % \changes{v1.0r}{2021/09/06}{Macro added (gh/606)}
 %    \begin{macrocode}
-\prg_new_conditional:Npnn \@@_if_execute_immediately:n #1 { F, TF }
+\prg_new_conditional:Npnn \@@_if_execute_immediately:n #1 { T, F, TF }
   {
     \@@_if_usable:nTF {#1}
       {
@@ -5116,7 +5166,8 @@
 %
 %    \begin{macrocode}
 \msg_new:nnnn { hooks } { unknown-rule }
-  { Unknown~ relationship~ '#3'~
+  {
+    Unknown~ relationship~ '#3'~
     between~ labels~ '#2'~ and~ '#4'~
     \str_if_eq:nnF {#1} {??} { ~in~hook~'#1' }. ~
     Perhaps~ a~ misspelling?
@@ -5129,6 +5180,22 @@
     'incompatible-error',~
     'voids'~ or~
     'unrelated'.
+  }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\msg_new:nnnn { hooks } { rule-too-late }
+  {
+    Sorting~rule~for~'#1'~hook~applied~too~late.\\
+    Try~setting~this~rule~earlier.
+  }
+  {
+    You~tried~to~set~the~ordering~of~hook~'#1'~using\\
+    \ \ \iow_char:N\\DeclareHookRule{#1}{#2}{#3}{#4}\\
+    but~hook~'#1'~was~already~used~as~a~one-time~hook,~
+    thus~sorting~is\\
+    no~longer~possible.~Declare~the~rule~
+    before~the~hook~is~used.
   }
 %    \end{macrocode}
 %

@@ -50,6 +50,9 @@ local cprint     = tex.cprint
 local write      = tex.write
 local write_nl   = texio.write_nl
 local utf8_char  = utf8.char
+local package_loaded    = package.loaded
+local package_searchers = package.searchers
+local table_concat      = table.concat
 
 local scan_int     = token.scan_int or token.scan_integer
 local scan_string  = token.scan_string
@@ -57,6 +60,7 @@ local scan_keyword = token.scan_keyword
 local put_next     = token.put_next
 local token_create = token.create
 local token_new    = token.new
+local set_macro    = token.set_macro
 local token_create_safe
 do
   local is_defined = token.is_defined
@@ -217,6 +221,39 @@ local luacmd do
     end
   end
 end
+local function try_require(name)
+  if package_loaded[name] then
+    return true, package_loaded[name]
+  end
+
+  local failure_details = {}
+  for _, searcher in ipairs(package_searchers) do
+    local loader, data = searcher(name)
+    if type(loader) == 'function' then
+      package_loaded[name] = loader(name, data) or true
+      return true, package_loaded[name]
+    elseif type(loader) == 'string' then
+      failure_details[#failure_details + 1] = loader
+    end
+  end
+
+  return false, table_concat(failure_details, '\n')
+end
+local char_given   = command_id'char_given'
+local c_true_bool  = token_create(1, char_given)
+local c_false_bool = token_create(0, char_given)
+local c_str_cctab  = token_create('c_str_cctab').mode
+
+luacmd('__lua_load_module_p:n', function()
+  local success, result = try_require(scan_string())
+  if success then
+    set_macro(c_str_cctab, 'l__lua_err_msg_str', '')
+    put_next(c_true_bool)
+  else
+    set_macro(c_str_cctab, 'l__lua_err_msg_str', result)
+    put_next(c_false_bool)
+  end
+end)
 local register_luadata, get_luadata
 
 if luatexbase then
