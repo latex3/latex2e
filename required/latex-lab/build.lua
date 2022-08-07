@@ -26,7 +26,16 @@ sourcefiles  = {"*.dtx", "*.ins", "*-????-??-??.sty"}
 
 -- not testing xetex in the lab, we may want to switch to pdftex instead of etex though
 
-checkengines = { "etex", "luatex" }
+checkengines = { "pdftex", "luatex" }
+
+-- specialformats
+specialformats = specialformats or {}
+
+specialformats["latex"] = specialformats["latex"] or
+  {
+    luatex     = {binary="luahbtex",format = "lualatex-dev"},
+    pdftex     = {binary="pdftex",format = "pdflatex-dev"},
+  }
 
 
 checkdeps =
@@ -50,7 +59,7 @@ typesetdeps =
 checksearch  = true
 
 -- Allow for TU and other test configurations
-checkconfigs = {"build","config-TU","config-OR"}
+checkconfigs = {"build","config-TU","config-OR","config-pdftex","config-pdftex-luatex"}
 
 
 
