@@ -34,8 +34,8 @@
 %%% From File: ltcmd.dtx
 %
 %    \begin{macrocode}
-\def\ltcmdversion{v1.0l}
-\def\ltcmddate{2022-03-18}
+\def\ltcmdversion{v1.1a}
+\def\ltcmddate{2022-08-10}
 %    \end{macrocode}
 %
 %<*driver>
@@ -244,6 +244,15 @@
 %   Used to indicate that an argument is long, on a per-argument basis.
 %    \begin{macrocode}
 \bool_new:N \l_@@_long_bool
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_suppress_strip_bool}
+% \changes{v1.1a}{2022/08/10}{New switch}
+%   Used to indicate that an a pair of braces should not be stripped from
+%   an optional argument.
+%    \begin{macrocode}
+\bool_new:N \l_@@_suppress_strip_bool
 %    \end{macrocode}
 % \end{variable}
 %
@@ -874,7 +883,7 @@
 %   \item Check that each argument has the correct number of data items
 %     associated with it, and that where a single character is required,
 %     one has actually been supplied.
-%   \item Check that processors and the markers~|+| and~|!| are followed
+%   \item Check that processors and the markers~|+|, |!| and~|=| are followed
 %     by an argument for which they make sense, and are not redundant.
 %   \item Check the absence of forbidden types for expandable commands,
 %     namely \texttt{G}/\texttt{v} always, and \texttt{l}/\texttt{u}
@@ -918,6 +927,7 @@
     \bool_set_true:N \l_@@_grab_expandably_bool
     \bool_set_false:N \l_@@_obey_spaces_bool
     \bool_set_false:N \l_@@_long_bool
+    \bool_set_false:N \l_@@_suppress_strip_bool
     \bool_set_false:N \l_@@_some_obey_spaces_bool
     \bool_set_false:N \l_@@_some_long_bool
     \bool_set_false:N \l_@@_some_short_bool
@@ -1020,7 +1030,11 @@
 %     \@@_normalize_type_>:w,
 %     \@@_normalize_type_+:w,
 %     \@@_normalize_type_!:w,
+%     \@@_normalize_type_=:w
 %   }
+% \changes{v1.1a}{2022/08/10}{Refactor to use common auxiliary}
+% \changes{v1.1a}{2022/08/10}{Add support for \texttt{=} modifier}
+% \begin{macro}{\@@_normalize_type_aux:NnNn}
 %   Check that these prefixes have arguments, namely that the next token
 %   is not \cs{q_recursion_tail}, and remember to leave it after the
 %   looping macro.  Processors are forbidden in expandable commands.
@@ -1044,32 +1058,45 @@
   }
 \cs_new_protected:cpn { @@_normalize_type_+:w } #1
   {
-    \quark_if_recursion_tail_stop_do:nn {#1} { \@@_bad_arg_spec:wn }
-    \bool_if:NT \l_@@_long_bool
-      {
-        \msg_error:nnxx { cmd } { two-markers }
-          { \@@_environment_or_command: } { + }
-        \@@_bad_def:wn
-      }
-    \bool_set_true:N \l_@@_long_bool
-    \int_decr:N \l_@@_current_arg_int
-    \@@_normalize_arg_spec_loop:n {#1}
+    \@@_normalize_type_aux:NnNn + {#1}
+      \l_@@_long_bool
+      { \bool_set_true:N \l_@@_long_bool }
   }
 \cs_new_protected:cpn { @@_normalize_type_!:w } #1
   {
-    \quark_if_recursion_tail_stop_do:nn {#1} { \@@_bad_arg_spec:wn }
-    \bool_if:NT \l_@@_obey_spaces_bool
+    \@@_normalize_type_aux:NnNn ! {#1}
+      \l_@@_obey_spaces_bool
+      {
+        \bool_set_true:N \l_@@_obey_spaces_bool
+        \bool_set_true:N \l_@@_some_obey_spaces_bool
+      }
+  }
+\cs_new_protected:cpn { @@_normalize_type_=:w } #1#2
+  {
+    \@@_normalize_type_aux:NnNn = {#2}
+      \l_@@_suppress_strip_bool
+      {
+        \bool_set_true:N \l_@@_suppress_strip_bool
+        \bool_set_false:N \l_@@_grab_expandably_bool
+        \tl_put_right:Nx \l_@@_arg_spec_tl
+          { > { \@@_arg_to_keyvalue:nn { \tl_trim_spaces:n {#1} } } }
+      }
+  }
+\cs_new_protected:Npn \@@_normalize_type_aux:NnNn #1#2#3#4
+  {
+    \quark_if_recursion_tail_stop_do:nn {#2} { \@@_bad_arg_spec:wn }
+    \bool_if:NT #3
       {
         \msg_error:nnxx { cmd } { two-markers }
-          { \@@_environment_or_command: } { ! }
+          { \@@_environment_or_command: } { #1 }
         \@@_bad_def:wn
       }
-    \bool_set_true:N \l_@@_obey_spaces_bool
-    \bool_set_true:N \l_@@_some_obey_spaces_bool
+    #4
     \int_decr:N \l_@@_current_arg_int
-    \@@_normalize_arg_spec_loop:n {#1}
+    \@@_normalize_arg_spec_loop:n {#2}
   }
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 %
 % \begin{macro}
@@ -1224,12 +1251,12 @@
 % \end{macro}
 %
 % \begin{macro}{\@@_allowed_token_check:N}
-%   Some tokens are now allowed as delimiters for some argument types,
+%   Some tokens are not allowed as delimiters for some argument types,
 %   notably implicit begin/end-group tokens (|\bgroup|/|\egroup|).
 %   The major problem with these tokens is that for |\peek_...| functions,
 %   a literal~|{|$_1$. is virtually indistinguishable from a |\bgroup| or
 %   other token which was |\let| to a~|{|$_1$, and the same goes
-%   for~|}|$_2$.  All other tokens can be easily distingushed from their
+%   for~|}|$_2$.  All other tokens can be easily distinguished from their
 %   implicit counterparts by grabbing them and looking at the string
 %   length (see \cs{@@_token_if_cs:NTF}), but for begin/end group tokens
 %   that is not possible without the risk of mistakenly grabbing the
@@ -1324,13 +1351,13 @@
 % \begin{macro}{\@@_add_arg_spec:n, \@@_add_arg_spec_mandatory:n}
 %   When adding an argument to the argument specification, set the
 %   \texttt{some_long} or \texttt{some_short} booleans as appropriate
-%   and clear the booleans keeping track of |+| and |!| markers.
+%   and clear the booleans keeping track of |+|, |!| and |=| markers.
 %   Before that, test for a short argument following some long
 %   arguments: this is forbidden for expandable commands and prevents
 %   grabbing arguments expandably.
 %
 %   For mandatory arguments do some more work, in particular complain if
-%   they were preceeded by~|!|.
+%   they were preceded by~|!|.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_add_arg_spec:n #1
   {
@@ -1387,6 +1414,7 @@
     \int_zero:N \l_@@_current_arg_int
     \bool_set_false:N \l_@@_long_bool
     \bool_set_false:N \l_@@_obey_spaces_bool
+    \bool_set_false:N \l_@@_suppress_strip_bool
     \int_zero:N \l_@@_m_args_int
     \bool_set_false:N \l_@@_defaults_bool
     \tl_clear:N \l_@@_defaults_tl
@@ -1479,6 +1507,22 @@
     \bool_set_true:N \l_@@_prefixed_bool
     \bool_set_true:N \l_@@_process_some_bool
     \tl_put_left:Nn \l_@@_process_one_tl { {#1} }
+    \@@_prepare_signature_bypass:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_add_type_=:}
+% \changes{v1.1a}{2022/08/10}{Add support for \texttt{=} modifier}
+%   A mix of the ideas from above: set a flag and add a processor.
+%    \begin{macrocode}
+\cs_new_protected:cpn { @@_add_type_=:w } #1
+  {
+    \@@_flush_m_args:
+    \bool_set_true:N \l_@@_prefixed_bool
+    \bool_set_true:N \l_@@_suppress_sstrip_Bool
+    \bool_set_true:N \l_@@_process_some_bool
+    \tl_put_left:Nn \l_@@_process_one_tl { \@@_arg_to_keyvalue:nn {#1} }
     \@@_prepare_signature_bypass:N
   }
 %    \end{macrocode}
@@ -1677,11 +1721,16 @@
             @@_grab_ #1
             \bool_if:NT \l_@@_long_bool { _long }
             \bool_if:NT \l_@@_obey_spaces_bool { _obey_spaces }
+            \bool_lazy_and:nnT
+              { \l_@@_suppress_strip_bool }
+              { \str_if_eq_p:nn {#1} { D } }
+              { _no_strip }
             :w
           }
       }
     \bool_set_false:N \l_@@_long_bool
     \bool_set_false:N \l_@@_obey_spaces_bool
+    \bool_set_false:N \l_@@_suppress_strip_bool
     \tl_put_right:Nx \l_@@_process_all_tl
       {
         {
@@ -2615,6 +2664,7 @@
 %     \@@_grab_b_aux:NNw,
 %     \@@_grab_b_end:Nw
 %   }
+% \changes{v1.1a}{2022/08/10}{Track changes in \texttt{D}-type implementation}
 %   This uses the well-tested code of \texttt{D}-type arguments,
 %   skipping the peeking step because the \texttt{b}-type argument is
 %   always present, and adding a cleanup stage at the end by hijacking
@@ -2640,7 +2690,7 @@
   { \@@_grab_b_aux:NNw \cs_set_protected:Npn \exp_not:n }
 \cs_new_protected:Npn \@@_grab_b_aux:NNw #1#2#3 \@@_run_code:
   {
-    \@@_grab_D_aux:NNnN \begin \end {#3} #1
+    \@@_grab_D_aux:NNnNN \begin \end {#3} #1 \use_ii:nn
     \tl_put_left:Nn \l_@@_signature_tl { \@@_grab_b_end:Nw #2 }
     \tl_set_eq:NN \l_@@_saved_args_tl \l_@@_args_tl
     \tl_clear:N \l_@@_args_tl
@@ -2660,37 +2710,69 @@
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{\@@_grab_D:w}
-% \begin{macro}{\@@_grab_D_long:w}
-% \begin{macro}{\@@_grab_D_obey_spaces:w}
-% \begin{macro}{\@@_grab_D_long_obey_spaces:w}
+% \begin{macro}
+%   {
+%     \@@_grab_D:w                          ,
+%     \@@_grab_D_long:w                     ,
+%     \@@_grab_D_obey_spaces:w              ,
+%     \@@_grab_D_long_obey_spaces:w         ,
+%     \@@_grab_D_no_strip:w                 ,
+%     \@@_grab_D_long_no_strip:w            ,
+%     \@@_grab_D_obey_spaces_no_strip:w     ,
+%     \@@_grab_D_long_obey_spaces_no_strip:w
+%   }
+% \changes{v1.1a}{2022/08/10}{Add support for skipping brace stripping}
 %   The generic delimited argument grabber. The auxiliary function does
 %   a peek test before calling \cs{@@_grab_D_call:Nw}, so that the
 %   optional nature of the argument works as expected.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_grab_D:w #1#2#3 \@@_run_code:
   {
-    \@@_grab_D_aux:NNnNN #1 #2 {#3} \cs_set_protected_nopar:Npn
-      \@@_peek_nonspace_remove:NTF
+    \@@_grab_D_aux:NNnNNN #1 #2 {#3} \cs_set_protected_nopar:Npn
+      \@@_peek_nonspace_remove:NTF \use_ii:nn
   }
 \cs_new_protected:Npn \@@_grab_D_long:w #1#2#3 \@@_run_code:
   {
-    \@@_grab_D_aux:NNnNN #1 #2 {#3} \cs_set_protected:Npn
-      \@@_peek_nonspace_remove:NTF
+    \@@_grab_D_aux:NNnNNN #1 #2 {#3} \cs_set_protected:Npn
+      \@@_peek_nonspace_remove:NTF \use_ii:nn
   }
 \cs_new_protected:Npn \@@_grab_D_obey_spaces:w #1#2#3 \@@_run_code:
   {
-    \@@_grab_D_aux:NNnNN #1 #2 {#3} \cs_set_protected_nopar:Npn
-      \@@_peek_meaning_remove:NTF
+    \@@_grab_D_aux:NNnNNN #1 #2 {#3} \cs_set_protected_nopar:Npn
+      \@@_peek_meaning_remove:NTF \use_ii:nn
   }
 \cs_new_protected:Npn \@@_grab_D_long_obey_spaces:w #1#2#3 \@@_run_code:
   {
-    \@@_grab_D_aux:NNnNN #1 #2 {#3} \cs_set_protected:Npn
-      \@@_peek_meaning_remove:NTF
+    \@@_grab_D_aux:NNnNNN #1 #2 {#3} \cs_set_protected:Npn
+      \@@_peek_meaning_remove:NTF \use_ii:nn
+  }
+\cs_new_protected:Npn \@@_grab_D_no_strip:w
+  #1#2#3 \@@_run_code:
+  {
+    \@@_grab_D_aux:NNnNNN #1 #2 {#3} \cs_set_protected_nopar:Npn
+      \@@_peek_nonspace_remove:NTF \use_none:n
+  }
+\cs_new_protected:Npn \@@_grab_D_long_no_strip:w
+  #1#2#3 \@@_run_code:
+  {
+    \@@_grab_D_aux:NNnNNN #1 #2 {#3} \cs_set_protected:Npn
+      \@@_peek_nonspace_remove:NTF \use_none:n
+  }
+\cs_new_protected:Npn \@@_grab_D_obey_spaces_no_strip:w
+  #1#2#3 \@@_run_code:
+  {
+    \@@_grab_D_aux:NNnNNN #1 #2 {#3} \cs_set_protected_nopar:Npn
+      \@@_peek_meaning_remove:NTF \use_none:n
+  }
+\cs_new_protected:Npn \@@_grab_D_long_obey_spaces_no_strip:w
+  #1#2#3 \@@_run_code:
+  {
+    \@@_grab_D_aux:NNnNNN #1 #2 {#3} \cs_set_protected:Npn
+      \@@_peek_meaning_remove:NTF \use_none:n
   }
 %    \end{macrocode}
+% \begin{macro}{\@@_grab_D_aux:NNnNNN}
 % \begin{macro}{\@@_grab_D_aux:NNnNN}
-% \begin{macro}{\@@_grab_D_aux:NNnN}
 %   This is a bit complicated. The idea is that, in order to check for
 %   nested optional argument tokens (\texttt{[[...]]} and so on) the
 %   argument needs to be grabbed without removing any braces at all. If
@@ -2699,9 +2781,9 @@
 %   prevents loss of braces, and there is then a test to see if there are
 %   nested delimiters to handle.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_grab_D_aux:NNnNN #1#2#3#4#5
+\cs_new_protected:Npn \@@_grab_D_aux:NNnNNN #1#2#3#4#5#6
   {
-    \@@_grab_D_aux:NNnN #1#2 {#3} #4
+    \@@_grab_D_aux:NNnNN #1#2 {#3} #4 #6
     #5 #1
       { \@@_grab_D_call:Nw #1 }
       { \@@_add_arg:o \c_novalue_tl }
@@ -2712,9 +2794,10 @@
 %   extra factors to allow for: the argument might be entirely empty, and
 %   spaces at the start and end of the input must be retained around a brace
 %   group. Also notice that a \emph{blank} argument might still contain
-%   spaces.
+%   spaces. To allow for suppression of brace stripping, the business end
+%   is passed here as |#5|.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_grab_D_aux:NNnN #1#2#3#4
+\cs_new_protected:Npn \@@_grab_D_aux:NNnNN #1#2#3#4#5
   {
     \tl_set:Nn \l_@@_signature_tl {#3}
     \exp_after:wN #4 \l_@@_fn_tl ##1 #2
@@ -2728,16 +2811,13 @@
                 \str_if_eq:eeTF
                   { \exp_not:o { \use_none:n ##1 } }
                   { { \exp_not:o { \use_ii:nnn ##1 \q_nil } } }
-                  { \@@_add_arg:o { \use_ii:nn ##1 } }
+                  { \@@_add_arg:o { #5 ##1 } }
                   { \@@_add_arg:o { \use_none:n ##1 } }
               }
           }
       }
   }
 %    \end{macrocode}
-% \end{macro}
-% \end{macro}
-% \end{macro}
 % \end{macro}
 % \end{macro}
 % \end{macro}
@@ -3039,6 +3119,7 @@
 %
 % \begin{macro}{\@@_grab_R:w, \@@_grab_R_long:w}
 % \begin{macro}{\@@_grab_R_aux:NNnN}
+% \changes{v1.1a}{2022/08/10}{Track changes in \texttt{D}-type implementation}
 %  The grabber for \texttt{R}-type arguments is basically the same as
 %  that for \texttt{D}-type ones, but always skips spaces (as it is mandatory)
 %  and has a hard-coded error message.
@@ -3049,7 +3130,7 @@
   { \@@_grab_R_aux:NNnN #1 #2 {#3} \cs_set_protected:Npn }
 \cs_new_protected:Npn \@@_grab_R_aux:NNnN #1#2#3#4
   {
-    \@@_grab_D_aux:NNnN #1 #2 {#3} #4
+    \@@_grab_D_aux:NNnNN #1 #2 {#3} #4 \use_ii:nn
     \@@_peek_nonspace_remove:NTF #1
       { \@@_grab_D_call:Nw #1 }
       {
@@ -3871,6 +3952,166 @@
 \cs_new_protected:Npn \@@_trim_spaces:n #1
   { \tl_set:Nx \ProcessedArgument { \tl_trim_spaces:n {#1} } }
 %    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Conversion to key--value form}
+%
+% This is implemented as a process but with no public interfaces,
+% hence is treated separately from the others: it's a feature of
+% \pkg{ltcmd} which just happens to use the same mechanism as a processor.
+%
+% \begin{macro}{\@@_arg_to_keyvalue:nn}
+% \changes{v1.1a}{2022/08/10}{New internal arg-to-keyval processor}
+% \begin{macro}{\@@_arg_to_keyvalue_auxi:nnn}
+% \begin{macro}{\@@_arg_to_keyvalue_auxii:nnNw}
+% \begin{macro}{\@@_arg_to_keyvalue_auxiii:nnn}
+% \begin{macro}{\@@_arg_to_keyvalue_auxiv:nnNw}
+% \begin{macro}{\@@_arg_to_keyvalue_auxv:nn}
+% \begin{macro}{\@@_arg_to_keyvalue_loop:nnw}
+% \begin{macro}{\@@_arg_to_keyvalue_loop_group:nnn}
+% \begin{macro}{\@@_arg_to_keyvalue_loop_space:nnw}
+% \begin{macro}{\@@_arg_to_keyvalue_loop_N_type:nnN}
+% \begin{macro}{\@@_arg_to_keyvalue_math:nnw}
+% \begin{macro}{\@@_arg_to_keyvalue_math_N_type:nnN}
+% \begin{macro}{\@@_arg_to_keyvalue_math_group:nnn}
+% \begin{macro}{\@@_arg_to_keyvalue_math_space:nnw}
+%   If the entire argument is braced, we treat as free text and return as
+%   the value for the text key. Alternatively, if the start of the input is
+%   |=,| then it is forced to be key--value. To avoid needing to worry about
+%   catcodes for this, and to allow spaces around the |=|, we use a
+%   series of steps rather than a delimited argument.
+%     \begin{macrocode}
+\cs_new_protected:Npn \@@_arg_to_keyvalue:nn #1#2
+  {
+    \str_if_eq:eeTF { \exp_not:n {#2} } { \exp_not:o { { \use:n #2 } } }
+      { \tl_set:Nn \ProcessedArgument { #1 = #2 } }
+      {
+        \exp_args:Ne \@@_arg_to_keyvalue_auxi:nnn
+          { \tl_trim_spaces:n {#2} } {#1} {#2}
+      }
+  }
+\cs_new_protected:Npn \@@_arg_to_keyvalue_auxi:nnn #1#2#3
+  {
+    \tl_if_head_is_N_type:nTF {#1}
+      { \@@_arg_to_keyvalue_auxii:nnNw {#2} {#3} #1 \q_@@_stop }
+      { \@@_arg_to_keyvalue_auxv:nn {#2} {#3} }
+  }
+\cs_new_protected:Npn \@@_arg_to_keyvalue_auxii:nnNw
+  #1#2#3#4 \q_@@_stop
+  {
+    \str_if_eq:nnTF {#3} { = }
+      {
+        \exp_args:Ne \@@_arg_to_keyvalue_auxiii:nnn
+          { \tl_trim_spaces:n {#4} } {#1} {#2}
+      }
+      { \@@_arg_to_keyvalue_auxv:nn {#1} {#2} }
+  }
+\cs_new_protected:Npn \@@_arg_to_keyvalue_auxiii:nnn #1#2#3
+  {
+    \tl_if_head_is_N_type:nTF {#1}
+      { \@@_arg_to_keyvalue_auxiv:nnNw {#2} {#3} #1 \q_@@_stop }
+      { \@@_arg_to_keyvalue_auxv:nn {#2} {#3} }
+  }
+\cs_new_protected:Npn \@@_arg_to_keyvalue_auxiv:nnNw
+  #1#2#3#4 \q_@@_stop
+  {
+    \str_if_eq:nnTF {#3} { , }
+      { \tl_set:Nn \ProcessedArgument {#4} }
+      { \@@_arg_to_keyvalue_auxv:nn {#1} {#2} }
+  }
+%    \end{macrocode}
+%   The two clear-cut cases have been eliminated, and we therefore have to deal
+%   with a search for |=| signs. We need an \enquote{action} loop here
+%   so we do not get mislead by for example |{=}|. As the code here is for
+%   very much predictable types of input, we hard-code what constitutes
+%   math mode opening and closing.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_arg_to_keyvalue_auxv:nn #1#2
+  {
+    \@@_arg_to_keyvalue_loop:nnw {#1} {#2} #2
+      \q_recursion_tail \q_recursion_stop
+  }
+\cs_new_protected:Npn \@@_arg_to_keyvalue_loop:nnw
+  #1#2#3 \q_recursion_stop
+  {
+    \tl_if_head_is_N_type:nTF {#3}
+      { \@@_arg_to_keyvalue_loop_N_type:nnN }
+      {
+         \tl_if_head_is_group:nTF {#3}
+           { \@@_arg_to_keyvalue_loop_group:nnn }
+           { \@@_arg_to_keyvalue_loop_space:nnw }
+      }
+        {#1} {#2} #3 \q_recursion_stop
+  }
+\cs_new_protected:Npn \@@_arg_to_keyvalue_loop_group:nnn #1#2#3
+  { \@@_arg_to_keyvalue_loop:nnw {#1} {#2} }
+\use:x
+  {
+    \cs_new_protected:Npn
+      \exp_not:N \@@_arg_to_keyvalue_loop_space:nnw ##1##2 \c_space_tl
+  }
+  { \@@_arg_to_keyvalue_loop:nnw {#1} {#2} }
+\cs_new_protected:Npn \@@_arg_to_keyvalue_loop_N_type:nnN #1#2#3
+  {
+    \quark_if_recursion_tail_stop_do:Nn #3
+      { \tl_set:Nn \ProcessedArgument { #1 = {#2} } }
+    \str_if_eq:nnTF {#1} { = }
+      {
+        \use_i_delimit_by_q_recursion_stop:nw
+          { \tl_set:Nn \ProcessedArgument {#2} }
+      }
+      {
+        \bool_lazy_or:nnTF
+          { \str_if_eq_p:nn {#1} { $ } }
+          { \str_if_eq_p:nn {#1} { \( } }
+          { \@@_arg_to_keyvalue_math:nnw {#1} {#2} }
+          { \@@_arg_to_keyvalue_loop:nnw {#1} {#2} }
+      }
+  }
+\cs_new_protected:Npn \@@_arg_to_keyvalue_math:nnw
+  #1#2#3 \q_recursion_stop
+  {
+    \tl_if_head_is_N_type:nTF {#3}
+      { \@@_arg_to_keyvalue_math_N_type:nnN }
+      {
+         \tl_if_head_is_group:nTF {#3}
+           { \@@_arg_to_keyvalue_math_group:nnn }
+           { \@@_arg_to_keyvalue_math_space:nnw }
+      }
+        {#1} {#2} #3 \q_recursion_stop
+  }
+\cs_new_protected:Npn \@@_arg_to_keyvalue_math_N_type:nnN #1#2#3
+  {
+    \quark_if_recursion_tail_stop_do:Nn #3
+      { \tl_set:Nn \ProcessedArgument { #1 = {#2} } }
+    \bool_lazy_or:nnTF
+      { \str_if_eq_p:nn {#1} { $ } }
+      { \str_if_eq_p:nn {#1} { \) } }
+      { \@@_arg_to_keyvalue_loop:nnw {#1} {#2} }
+      { \@@_arg_to_keyvalue_math:nnw {#1} {#2} }
+  }
+\cs_new_protected:Npn \@@_arg_to_keyvalue_math_group:nnn #1#2#3
+  { \@@_arg_to_keyvalue_math:nnw {#1} {#2} }
+\use:x
+  {
+    \cs_new_protected:Npn
+      \exp_not:N \@@_arg_to_keyvalue_loop_math:nnw ##1##2 \c_space_tl
+  }
+  { \@@_arg_to_keyvalue_math:nnw {#1} {#2} }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
 % \end{macro}
 %
 % \subsection{Access to the argument specification}
