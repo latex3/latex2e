@@ -26,7 +26,7 @@
 %% 
 %% File: l3backend-basics.dtx
 \ProvidesExplFile
-  {l3backend-dvips.def}{2022-08-05}{}
+  {l3backend-dvips.def}{2022-09-28}{}
   {L3 backend support: dvips}
 \cs_if_exist:NTF \__kernel_dependency_version_check:nn
   {
@@ -83,27 +83,21 @@
 \cs_new_protected:Npn \__kernel_backend_scope_end:
   { \__kernel_backend_literal:n { ps:grestore } }
 %% File: l3backend-color.dtx
-\cs_new_protected:Npn \__color_backend_pickup:N #1 { }
-\cs_if_exist:cT { ver@color.sty }
+\cs_new_protected:Npn \__color_backend_pickup:N #1
   {
-    \cs_set_protected:Npn \__color_backend_pickup:N #1
+    \exp_args:NV \tl_if_head_is_space:nTF \current@color
       {
-        \exp_args:NV \tl_if_head_is_space:nTF \current@color
-          {
-            \tl_set:Nx #1
-               {
-                 { named }
-                 { \exp_after:wN \use:n \current@color }
-               }
-          }
-          {
-            \exp_last_unbraced:Nx \__color_backend_pickup:w
-              { \current@color } \s__color_stop #1
-          }
+        \tl_set:Nn #1 { { gray } { 0 } }
+        \msg_warning:nnx { color } { unhandled }
+          { \current@color }
       }
-    \cs_new_protected:Npn \__color_backend_pickup:w #1 ~ #2 \s__color_stop #3
-      { \tl_set:Nn #3 { {#1} {#2} } }
+      {
+        \exp_last_unbraced:Nx \__color_backend_pickup:w
+          { \current@color } \s__color_stop #1
+      }
   }
+\cs_new_protected:Npn \__color_backend_pickup:w #1 ~ #2 \s__color_stop #3
+  { \tl_set:Nn #3 { {#1} {#2} } }
 \cs_new_protected:Npn \__color_backend_select_cmyk:n #1
   { \__color_backend_select:n { cmyk ~ #1 } }
 \cs_new_protected:Npn \__color_backend_select_gray:n #1
@@ -642,25 +636,29 @@
 \cs_new_protected:Npn \__pdf_backend_info_gput:nn #1#2
   { \__pdf_backend_pdfmark:n { /#1 ~ #2 /DOCINFO } }
 \int_new:N \g__pdf_backend_object_int
-\prop_new:N \g__pdf_backend_object_prop
-\cs_new_protected:Npn \__pdf_backend_object_new:nn #1#2
+\cs_new_protected:Npn \__pdf_backend_object_new:n #1
   {
     \int_gincr:N \g__pdf_backend_object_int
     \int_const:cn
-      { c__pdf_backend_object_ \tl_to_str:n {#1} _int }
+      { c__pdf_object_ \tl_to_str:n {#1} _int }
       { \g__pdf_backend_object_int }
-    \prop_gput:Nnn \g__pdf_backend_object_prop {#1} {#2}
   }
 \cs_new:Npn \__pdf_backend_object_ref:n #1
-  { { pdf.obj \int_use:c { c__pdf_backend_object_ \tl_to_str:n {#1} _int } } }
-\cs_new_protected:Npn \__pdf_backend_object_write:nn #1#2
+  { { pdf.obj \int_use:c { c__pdf_object_ \tl_to_str:n {#1} _int } } }
+\cs_new_protected:Npn \__pdf_backend_object_write:nnn #1#2#3
+  {
+    \__pdf_backend_object_write_aux:nnn
+      { \__pdf_backend_object_ref:n {#1} }
+      {#2} {#3}
+  }
+\cs_generate_variant:Nn \__pdf_backend_object_write:nnn { nnx }
+\cs_new_protected:Npn \__pdf_backend_object_write_aux:nnn #1#2#3
   {
     \__pdf_backend_pdfmark:x
       {
-        /_objdef ~ \__pdf_backend_object_ref:n {#1}
+        /_objdef ~ #1
         /type
-        \str_case_e:nn
-          { \prop_item:Nn \g__pdf_backend_object_prop {#1} }
+        \str_case:nn {#2}
           {
             { array }   { /array }
             { dict }    { /dict }
@@ -669,11 +667,8 @@
           }
         /OBJ
       }
-    \use:c
-      { __pdf_backend_object_write_ \prop_item:Nn \g__pdf_backend_object_prop {#1} :nn }
-      { \__pdf_backend_object_ref:n {#1} } {#2}
+    \use:c { __pdf_backend_object_write_ #2 :nn } {#1} {#3}
   }
-\cs_generate_variant:Nn \__pdf_backend_object_write:nn { nx }
 \cs_new_protected:Npn \__pdf_backend_object_write_array:nn #1#2
   {
     \__pdf_backend_pdfmark:x
@@ -715,22 +710,9 @@
 \cs_new_protected:Npn \__pdf_backend_object_now:nn #1#2
   {
     \int_gincr:N \g__pdf_backend_object_int
-    \__pdf_backend_pdfmark:x
-      {
-        /_objdef ~ { pdf.obj \int_use:N \g__pdf_backend_object_int }
-        /type
-        \str_case:nn
-          {#1}
-          {
-            { array }   { /array }
-            { dict }    { /dict }
-            { fstream } { /stream }
-            { stream }  { /stream }
-          }
-        /OBJ
-      }
-    \exp_args:Nnx \use:c { __pdf_backend_object_write_ #1 :nn }
-      { { pdf.obj \int_use:N \g__pdf_backend_object_int } } {#2}
+    \__pdf_backend_object_write_aux:nnn
+      { { pdf.obj \int_use:N \g__pdf_backend_object_int } }
+      {#1} {#2}
   }
 \cs_generate_variant:Nn \__pdf_backend_object_now:nn { nx }
 \cs_new:Npn \__pdf_backend_object_last:
@@ -1046,6 +1028,20 @@
   { \__pdf_backend_pdfmark:n { /#1 ~ #2 /BDC } }
 \cs_new_protected:Npn \__pdf_backend_emc:
   { \__pdf_backend_pdfmark:n { /EMC } }
+\cs_new_protected:Npn \__pdf_backend_pagesize_set:nn #1#2
+  {
+    \__kernel_backend_first_shipout:n
+      {
+        \__kernel_backend_literal:e
+          {
+            papersize =
+              \__pdf_backend_pagesize_set:n {#1} ,
+              \__pdf_backend_pagesize_set:n {#2}
+          }
+      }
+  }
+\cs_new:Npn \__pdf_backend_pagesize_set:n #1
+  { \fp_to_dim:n { \tex_mag:D / 1000 * (#1) } }
 %% File: l3backend-opacity.dtx
 \cs_new_protected:Npn \__opacity_backend_select:n #1
   {
