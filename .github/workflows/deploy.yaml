@@ -39,14 +39,35 @@ jobs:
           restore-keys: texlive2022-v0-
       # We need Ghostscript for dvips and XeTeX tests.
       - run: sudo apt-get update && sudo apt-get install ghostscript
+      # Determine the name of the tag we are working on. Sadly GH Actions only provides
+      # github.ref which has the name prefixed with github.ref and no way to remove a prefix
+      # in normal expressions, so we need an action for that.
+      - name: Get name
+        uses: frabert/replace-string-action@9b62dfe3ae936b1cc380f2421c8ac9e63a4a3e85
+        id: name
+        if: ${{ always() }}
+        with:
+          pattern: "^refs/(?:heads|tags)/"
+          string: ${{ github.ref }}
+          replace-with: ""
       - name: Install TeX Live
         uses: zauguin/install-texlive@v1
         with:
           # List the required TeX Live packages in a separate file to allow reuse in
           # different workflows.
           package_file: .github/tl_packages
+      # For tags starting with dev- or release- we do full builds of all components
       - name: Run l3build
+        if: ${{ startsWith(github.ref, 'refs/tags/dev-') || startsWith(github.ref, 'refs/tags/release-') }}
         run: l3build ctan -q -H --show-log-on-error
+      # Otherwise we assume that the part before the first -2 is the name of the `required` package we want to
+      # build. Therefore we switch to the right directors first. Afterwards we have to move the generated artifacts
+      # back to the main directory so that they are found in the next step.
+      - name: Run l3build
+        if: ${{ !(startsWith(github.ref, 'refs/tags/dev-') || startsWith(github.ref, 'refs/tags/release-')) }}
+        env:
+          tagname: ${{steps.name.outputs.replaced}}
+        run: cd "required/${tagname%%-2*}" && l3build ctan -q -H --show-log-on-error && mv *.zip ../../
       - name: Archive failed test output
         if: ${{ always() }}
         uses: zauguin/l3build-failure-artifacts@v1
@@ -62,17 +83,6 @@ jobs:
           artifacts: "*.zip"
           token: ${{ secrets.GITHUB_TOKEN }}
           prerelease: ${{ startsWith(github.ref, 'refs/tags/dev-') }}
-      # Determine the name of the tag we are working on. Sadly GH Actions only provides
-      # github.ref which has the name prefixed with github.ref and no way to remove a prefix
-      # in normal expressions, so we need an action for that.
-      - name: Get name
-        uses: frabert/replace-string-action@9b62dfe3ae936b1cc380f2421c8ac9e63a4a3e85
-        id: name
-        if: ${{ always() }}
-        with:
-          pattern: "^refs/(?:heads|tags)/"
-          string: ${{ github.ref }}
-          replace-with: ""
       # While the normal notification job only informs about failed runs, we additionally want to notify about successful releases.
       - name: Send mail
         # The explicit commit hash ensures that this can't be used by dawidd6 as a
