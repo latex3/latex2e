@@ -33,7 +33,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltkeys.dtx}
-             [2022/07/05 v1.0i LaTeX Kernel (Kevyal options)]
+             [2022/10/22 v1.0l LaTeX Kernel (Keyval options)]
 % \iffalse
 \documentclass{l3doc}
 \GetFileInfo{ltkeys.dtx}
@@ -72,6 +72,7 @@
 %   \begin{itemize}
 %    \item \texttt{.code} --- execute arbitrary code
 %     \item \texttt{.if} --- sets a \TeX{} \cs{if...} switch
+%     \item \texttt{.ifnot} --- sets an inverted \TeX{} \cs{if...} switch
 %     \item \texttt{.store} --- stores a value in a macro
 %     \item \texttt{.usage} -- defines whether the option can be given only
 %       when loading (\texttt{load}), in the preamble (\texttt{preamble}) or
@@ -152,11 +153,13 @@
 %
 % \subsection{Key properties}
 %
-% \begin{macro}{.code, .if, .store, .usage}
+% \begin{macro}{.code, .if, .ifnot, .store, .usage}
 % \changes{v1.0b}{2022/02/05}
 %         {Create properties in \texttt{ltlkeys}}
 % \changes{v1.0c}{2022/02/07}
 %         {Correct \texttt.{.code} property}
+% \changes{v1.0i}{2022/06/22}
+%         {Add \texttt.{.notif} property}
 %    \begin{macrocode}
 \group_begin:
   \cs_set_protected:Npn \@@_tmp:nn #1#2
@@ -170,6 +173,7 @@
   \@@_tmp:nn
     { code:n }          { code }
     { legacy_if_set:n } { if }
+    { legacy_if_set_inverse:n } { ifnot }
     { tl_set:N }        { store }
     { usage:n }         { usage }
     { \q_recursion_tail } { }
@@ -205,6 +209,8 @@
 % \begin{macro}{\@@_options_aux:n}
 % \changes{v1.0b}{2022/01/15}
 %         {Clear option list in end-of-package hook}
+% \changes{v1.0l}{2022/10/20}
+%         {Define key option handler in \pkg{ltkeys}}
 % \changes{v1.0i}{2022/07/05}{Support \cs{CurrentOption}}
 % \begin{macro}{\@@_options_end:}
 %   The main function calls functions to collect up the global and local
@@ -221,7 +227,8 @@
   { \@@_options_expand_module:Nn \@@_options_aux:n {#1} }
 \cs_new_protected:Npn \@@_options_aux:n #1
   {
-    \cs_gset_nopar:cpn { opt@fam@\@currname.\@currext } {#1}
+    \cs_gset_protected:cpn { opt@handler@\@currname.\@currext }
+      { \ProcessKeyOptions [ #1 ] }
     \cs_set_protected:Npn \@@_option_end: { }
     \clist_clear:N \l_@@_options_clist
     \@@_options_global:n {#1}
@@ -247,11 +254,15 @@
     \@@_option_end:
     \@@_options_loaded:n {#1}
   }
+%    \end{macrocode}
+% \changes{v1.0j}{2022/07/23}
+%         {Output `public' package name in messages}
+%    \begin{macrocode}
 \msg_new:nnnn { keys } { option-unknown }
   { Unknown~option~'#1'~for~package~#2. }
   {
     LaTeX~has~been~asked~to~set~an~option~called~'#1'~
-    but~the~#2~package~has~not~created~an~option~with~this~name.
+    but~the~package~"\msg_module_name:n {#2}"~has~not~created~an~option~with~this~name.
   }
 %    \end{macrocode}
 % \end{macro}
@@ -286,6 +297,7 @@
 % \begin{macro}{\@@_options_class:nnn}
 % \changes{v1.0h}{2022/06/20}{New function}
 % \changes{v1.0i}{2022/07/05}{Correct naming of raw class options storage}
+% \changes{v1.0l}{2022/10/22}{Correct handling of unused option list}
 %   For classes, each option (stripped of any content after |=|)
 %   is checked for existence as a key. If found, the option is added to
 %   the combined list for processing. On the other hand, unused options
@@ -315,11 +327,12 @@
 \cs_new_protected:Npn \@@_options_class:nnn #1#2#3
   {
     \keys_if_exist:nnTF {#3} {#1}
-      { \clist_put_right:Nn \l_@@_options_clist {#2} }
       {
-        \str_if_eq:eeF
-          { \exp_not:v { @raw@opt@ \@currname . \@currext } }
-          { \exp_not:V \@raw@classoptionslist }
+        \clist_put_right:Nn \l_@@_options_clist {#2}
+        \clist_remove_all:Nn \@unusedoptionlist {#1}
+      }
+      {
+        \clist_if_in:NnF \@unusedoptionlist {#1}
           { \clist_put_right:Nn \@unusedoptionlist {#1} }
       }
   }
@@ -467,6 +480,7 @@
 %
 % \begin{macro}{\@@_options_loaded:n}
 % \begin{macro}{\@@_options_loaded:nn}
+% \changes{v1.0l}{2022/10/20}{Correct an argument for a message}
 %   Indicates that the load-time options for a package have been processed:
 %   once this has happened, make them unavailable either with a warning or
 %   an error.
@@ -488,19 +502,33 @@
 \cs_new_protected:Npn \@@_options_loaded:nn #1#2
   {
     \bool_if:NTF \l_@@_options_loading_bool
-      {
-        \msg_warning:nnxx { keys } { load-option-ignored }
-          { \use:c { opt@fam@\@currname.\@currext } } {#2}
-      }
-      { \msg_error:nnnn { keys } { load-only } {#1} {#2} }
+      { \msg_warning:nnnn { keys } { load-option-ignored } }
+      { \msg_error:nnnn { keys } { load-only } }
+        {#1} {#2}
   }
+%    \end{macrocode}
+% \changes{v1.0j}{2022/07/23}
+%         {Output `public' package name in messages}
+%    \begin{macrocode}
 \msg_new:nnn { keys } { load-option-ignored }
-  { Package~"#1"~has~already~been~loaded:~ignoring~load-time~option~"#2". }
+  {
+    Package~"\msg_module_name:n {#1}"~has~already~been~loaded:~
+    ignoring~load-time~option~"#2".
+  }
+%    \end{macrocode}
+% \changes{v1.0j}{2022/07/23}
+%         {Output `public' package name in messages}
+% \changes{v1.0k}{2022/08/21}
+%         {Correct error message}
+%    \begin{macrocode}
 \msg_new:nnnn { keys } { load-only }
-  { Key~"#2"~may~only~be~used~in~the~during~loading~of~package~"#1". }
+  {
+    Key~"#2"~may~only~be~used~during~loading~of~package~
+    "\msg_module_name:n {#1}".
+  }
   {
     LaTeX~was~asked~to~set~a~key~called~"#2",~but~this~is~only~allowed~
-    in~the~optional~argument~when~loading~package~"#1".
+    in~the~optional~argument~when~loading~package~"\msg_module_name:n{#1}".
   }
 %    \end{macrocode}
 % \end{macro}

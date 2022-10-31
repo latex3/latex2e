@@ -35,35 +35,10 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ~/texlive
-          key: texlive-v1-${{ steps.get-id.outputs.id }}
-          restore-keys: texlive-v1-
+          key: texlive2022-v0-${{ steps.get-id.outputs.id }}
+          restore-keys: texlive2022-v0-
       # We need Ghostscript for dvips and XeTeX tests.
       - run: sudo apt-get update && sudo apt-get install ghostscript
-      - name: Install TeX Live
-        uses: zauguin/install-texlive@v1
-        with:
-          repository: https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2021/tlnet-final
-          # List the required TeX Live packages in a separate file to allow reuse in
-          # different workflows.
-          package_file: .github/tl_packages
-      - name: Run l3build
-        run: l3build ctan -q -H --show-log-on-error
-      - name: Archive failed test output
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v2
-        with:
-          name: testfiles
-          path: build/test*/*.diff
-          # Decide how long to keep the test output artifact:
-          retention-days: 3
-      # Now create the release (this only runs if the previous steps were successful)
-      - name: Create GitHub release
-        uses: ncipollo/release-action@880be3d0a71bc0fa98db60201d2cbdc27324f547
-        id: release
-        with:
-          artifacts: "*.zip"
-          token: ${{ secrets.GITHUB_TOKEN }}
-          prerelease: ${{ startsWith(github.ref, 'refs/tags/dev-') }}
       # Determine the name of the tag we are working on. Sadly GH Actions only provides
       # github.ref which has the name prefixed with github.ref and no way to remove a prefix
       # in normal expressions, so we need an action for that.
@@ -75,6 +50,39 @@ jobs:
           pattern: "^refs/(?:heads|tags)/"
           string: ${{ github.ref }}
           replace-with: ""
+      - name: Install TeX Live
+        uses: zauguin/install-texlive@v1
+        with:
+          # List the required TeX Live packages in a separate file to allow reuse in
+          # different workflows.
+          package_file: .github/tl_packages
+      # For tags starting with dev- or release- we do full builds of all components
+      - name: Run l3build
+        if: ${{ startsWith(github.ref, 'refs/tags/dev-') || startsWith(github.ref, 'refs/tags/release-') }}
+        run: l3build ctan -q -H --show-log-on-error
+      # Otherwise we assume that the part before the first -2 is the name of the `required` package we want to
+      # build. Therefore we switch to the right directors first. Afterwards we have to move the generated artifacts
+      # back to the main directory so that they are found in the next step.
+      - name: Run l3build
+        if: ${{ !(startsWith(github.ref, 'refs/tags/dev-') || startsWith(github.ref, 'refs/tags/release-')) }}
+        env:
+          tagname: ${{steps.name.outputs.replaced}}
+        run: cd "required/${tagname%%-2*}" && l3build ctan -q -H --show-log-on-error && mv *.zip ../../
+      - name: Archive failed test output
+        if: ${{ always() }}
+        uses: zauguin/l3build-failure-artifacts@v1
+        with:
+          name: testfiles
+          # Decide how long to keep the test output artifact:
+          retention-days: 3
+      # Now create the release (this only runs if the previous steps were successful)
+      - name: Create GitHub release
+        uses: ncipollo/release-action@880be3d0a71bc0fa98db60201d2cbdc27324f547
+        id: release
+        with:
+          artifacts: "*.zip"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          prerelease: ${{ startsWith(github.ref, 'refs/tags/dev-') }}
       # While the normal notification job only informs about failed runs, we additionally want to notify about successful releases.
       - name: Send mail
         # The explicit commit hash ensures that this can't be used by dawidd6 as a
