@@ -22,6 +22,7 @@ sourcefiles  = {"*.dtx", "*.ins", "*-????-??-??.sty"}
 checkdeps =
   {
     maindir .. "/base",
+    maindir .. "/required/amsmath",
     maindir .. "/required/tools"
   }
 
