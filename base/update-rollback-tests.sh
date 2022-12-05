@@ -9,6 +9,8 @@ l3build save -eetex,xetex,luatex \
 	tlb-rollback-005 \
 	github-0479-often
 
+l3build save  \
+	tlb-latexrelease-rollback-2023-06-01
 
 
 exit
