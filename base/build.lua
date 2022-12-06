@@ -151,7 +151,8 @@ indexstyle = "source2e.ist"
 
 -- Allow for TU and other test configurations
 checkconfigs = {"build","config-1run","config-TU","config-legacy","config-lthooks",
-                "config-lthooks2","config-ltcmd","config-doc","config-ltmarks"}
+                "config-lthooks2","config-ltcmd","config-doc","config-ltmarks",
+                "config-ptex"}
 
 update_tag = update_tag_base
 
