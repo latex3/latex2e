@@ -124,10 +124,10 @@
 %
 % \subsection{Content grabbing}
 %
-% \begin{macro}{\@@_grab_inline_dollar:w}
+% \begin{macro}{\@@_grab_dollar:w}
 %   Grab up to a single |$|, for inline math mode.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_grab_inline_dollar:w % $
+\cs_new_protected:Npn \@@_grab_dollar:w % $
   #1 $
   {
     \@@_process:n {#1} % $
@@ -147,6 +147,18 @@
 %    \end{macrocode}
 % \end{macro}
 %
+% \begin{macro}{\@@_grab_inline:w}
+%   Collect inline math content and deal with the need to move to math mode.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_inline:w % \(
+  #1 \)
+  {
+    \@@_process:n {#1}
+    $ #1 $
+    \bool_set_false:N \l_@@_collected_bool
+  }
+%    \end{macrocode}
+% \end{macro}
 % \begin{macro}{\@@_grab_eqn:w}
 %   For the most common use of \cs{[}/\cs{]}: turn into an environment.
 %    \begin{macrocode}
@@ -157,31 +169,6 @@
 % \end{macro}
 %
 % \subsection{Document commands}
-%
-% \begin{macro}{\(, \)}
-%   Here, we need to add the boolean around the structure; we also need to
-%   ensure that the conditional is finished before the |$| activates. To do
-%   that, we switch to an \pkg{expl3} structure for ease. There's no downside
-%   here to engine-protected, so we also simplify the setup a little.
-%    \begin{macrocode}
-\cs_gset_protected:Npn \( % \)
-  {
-    \bool_set_true:N \l_@@_cmd_bool
-    \mode_if_math:TF
-      { \@badmath }
-      { $ }
-  } % \(
-\cs_gset_protected:Npn \) %
-  {
-    \mode_if_math:TF
-      { $ }
-      { \@badmath }
-    \bool_set_false:N \l_@@_cmd_bool
-  }
-\cs_undefine:c { ( \c_space_tl }
-\cs_undefine:c { ) \c_space_tl }
-%    \end{macrocode}
-% \end{macro}
 %
 % \begin{macro}
 %   {\equation, \@@_equation_begin:, \equation*, \@@_equation_star_begin:}
@@ -216,6 +203,34 @@
 % \end{macro}
 % \end{macro}
 %
+% \begin{macro}{\(, \)}
+%  If math mode has not been collected, we need to  do that; otherwise, worry
+%  about whether we are in math mode or not. The closing command here can only
+%  occur inside a collected math block: otherwise it will be simply used as
+%  a delimiter.
+%    \begin{macrocode}
+\cs_gset_protected:Npn \( % \)
+  {
+    \bool_if:NTF \l_@@_collected_bool
+      {
+        \mode_if_math:TF
+          { \@badmath }
+          { $ }
+      }
+      {
+        \bool_set_true:N \l_@@_collected_bool
+        \@@_grab_inline:w
+      }
+  } % \(
+\cs_gset_protected:Npn \)
+  {
+    \mode_if_math:TF
+      { $ }
+      { \@badmath }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
 % \begin{macro}{\[, \]}
 %   Again, we need to watch for when \pkg{amsmath} is loaded after this code.
 %   The flag usage here is to cover the case where \cs{[}/\cs{]} is nested
@@ -235,8 +250,6 @@
           { \end{ equation* } }
           { \@badmath }
       }
-    \cs_undefine:c { [ \c_space_tl }
-    \cs_undefine:c { ] \c_space_tl }
   }
 %    \end{macrocode}
 % \end{macro}
@@ -275,9 +288,7 @@
     \bool_if:NF \l_@@_collected_bool
       {
         \bool_set_true:N \l_@@_collected_bool
-        \bool_if:NTF \l_@@_cmd_bool
-          { \@@_grab_inline_cmd:w }
-          { \@@_grab_inline_dollar:w }
+        \@@_grab_dollar:w
       }
   }
 \exp_args:No \tex_everydisplay:D
