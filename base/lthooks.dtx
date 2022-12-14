@@ -2113,10 +2113,11 @@
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{\@@_clean_to_scan:w}
+% \begin{macro}{\@@_clean_to_scan:w,\@@_use_i_delimit_by_s_mark:nw}
 %   Removes tokens until the next \cs{s_@@_mark}.
 %    \begin{macrocode}
 \cs_new:Npn \@@_clean_to_scan:w #1 \s_@@_mark { }
+\cs_new:Npn \@@_use_i_delimit_by_s_mark:nw #1 #2 \s_@@_mark {#1}
 %    \end{macrocode}
 % \end{macro}
 %
@@ -2159,12 +2160,16 @@
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{\@@_tl_gput_right:Nn,\@@_tl_gput_right:No,\@@_tl_gput_right:cn}
+% \begin{macro}{
+%     \@@_tl_gput_right:Nn,
+%     \@@_tl_gput_right:Ne,
+%     \@@_tl_gput_right:cn,
+%   }
 %   Same as above.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_tl_gput_right:Nn #1#2
   { \@@_tl_gset:Nx #1 { \__kernel_exp_not:w \exp_after:wN { #1 #2 } } }
-\cs_generate_variant:Nn \@@_tl_gput_right:Nn { No, cn }
+\cs_generate_variant:Nn \@@_tl_gput_right:Nn { Ne, cn }
 %    \end{macrocode}
 % \end{macro}
 %
@@ -2429,10 +2434,12 @@
 %    This token list stores the parameter text of the hook code
 %    (a simple run of parameters):
 %    \begin{macrocode}
-        \__kernel_cs_parm_from_arg_count:nnF
-          { \tl_const:cn { c_@@_#1_parameter_tl } }
-            {#2}
-          { \tl_const:cn { c_@@_#1_parameter_tl } { } }
+        \int_compare:nNnT {#2} > { 0 }
+          {
+            \__kernel_cs_parm_from_arg_count:nnF
+              { \tl_const:cn { c_@@_#1_parameter_tl } } {#2}
+              { \msg_error:nnn { hooks } { too-many-args } {#1} {#2} }
+          }
 %    \end{macrocode}
 %    This is only used by the actual code of the current hook, so
 %    declare it normally:
@@ -2473,18 +2480,85 @@
 %    \end{macrocode}
 %  \end{macro}
 %
-% \begin{macro}{\@@_code_gset:nn}
+% \begin{macro}{
+%     \@@_code_gset:nn,\@@_code_gset:ne,\@@_code_gset:nV,
+%     \@@_toplevel_gset:nn,
+%     \@@_next_gset:nn,
+%     \@@_code_gset_aux:nnn
+%   }
 %   A simple auxiliary that defines the hook code macro
 %   \cs[no-index]{@@~\meta{hook}} with the defined number of arguments.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_code_gset:nn #1 #2
+\cs_new_protected:Npn \@@_code_gset:nn
+  { \@@_code_gset_aux:nnn { } }
+\cs_new_protected:Npn \@@_toplevel_gset:nn
+  { \@@_code_gset_aux:nnn { _toplevel } }
+\cs_new_protected:Npn \@@_next_gset:nn
+  { \@@_code_gset_aux:nnn { _next } }
+\cs_new_protected:Npn \@@_code_gset_aux:nnn #1 #2 #3
   {
-    \exp_args:Nf \use_ii_i:nn
-      { \cs_if_exist_use:c { c_@@_#1_parameter_tl } }
-      { \cs_gset:cpn { @@~#1 } } {#2}
+    \tl_if_exist:cTF { c_@@_#2_parameter_tl }
+      {
+        \exp_args:Nv \use_ii_i:nn { c_@@_#2_parameter_tl }
+          { \cs_gset:cpn { @@#1~#2 } }
+      }
+      { \@@_tl_gset:cn { @@#1~#2 } }
+        {#3}
   }
-\cs_generate_variant:Nn \@@_code_gset:nn { no, nV }
+\cs_generate_variant:Nn \@@_code_gset:nn { ne, nV }
 %    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}[pTF]{\@@_cs_if_empty:c}
+%   Check if the expansion of a control sequence is empty by looking at
+%   its replacement text.
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \@@_cs_if_empty:c #1 { p, T, F, TF }
+  {
+    \if:w \scan_stop: \cs_replacement_spec:c {#1} \scan_stop:
+      \prg_return_true:
+    \else:
+      \prg_return_false:
+    \fi:
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_cs_gput_right:nnn}
+% \begin{macro}{\@@_braced_parameter:n,\@@_braced_loop:w}
+%   Check if the expansion of a control sequence is empty by looking at
+%   its replacement text.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_cs_gput_right:nnn #1 #2 #3
+  {
+    \exp_args:Ne \use_ii_i:nn
+      {
+        {
+          \exp_args:No \exp_not:o
+            {
+              \cs:w @@#1~#2 \exp_last_unbraced:Ne \cs_end:
+                { \@@_braced_parameter:n {#2} }
+              #3
+            }
+        }
+      }
+      { \@@_code_gset_aux:nnn {#1} {#2} }
+  }
+\cs_new:Npn \@@_braced_parameter:n #1
+  {
+    \exp_last_unbraced:Nf \@@_braced_loop:w
+      { \cs_if_exist_use:c { c_@@_#1_parameter_tl } } ?? \s_@@_mark
+  }
+\cs_new:Npn \@@_braced_loop:w #1#2
+  {
+    \if:w ? #1
+      \@@_use_i_delimit_by_s_mark:nw
+    \fi:
+    {#1#2}
+    \@@_braced_loop:w
+  }
+%    \end{macrocode}
+% \end{macro}
 % \end{macro}
 %
 %
@@ -2508,8 +2582,8 @@
     \@@_if_structure_exist:nF {#1}
       {
         \prop_new:c { g_@@_#1_code_prop }
-        \tl_new:c { @@_toplevel~#1 }
-        \tl_new:c { @@_next~#1 }
+        \@@_toplevel_gset:nn {#1} { }
+        \@@_next_gset:nn {#1} { }
       }
   }
 %    \end{macrocode}
@@ -3092,7 +3166,7 @@
 %    with \cs{@@_init_structure:n}.
 %    \begin{macrocode}
             \@@_init_structure:n {#1}
-            \@@_tl_gput_right:cn { @@_toplevel~#1 } {#3}
+            \@@_cs_gput_right:nnn { _toplevel } {#1} {#3}
           }
           { \msg_error:nnn { hooks } { misused-top-level } {#1} }
       }
@@ -3584,8 +3658,8 @@
         \str_if_eq:nnTF {#2} {*}
           {
             \prop_gclear:c { g_@@_#1_code_prop }
-            \@@_tl_gclear:c { @@_toplevel~#1 }
-            \@@_tl_gclear:c { @@_next~#1 }
+            \@@_toplevel_gset:nn {#1} { }
+            \@@_next_gset:nn {#1} { }
           }
           {
 %    \end{macrocode}
@@ -3593,7 +3667,7 @@
 %    there is under the same label.
 %    \begin{macrocode}
             \str_if_eq:nnTF {#2} { top-level }
-              { \@@_tl_gclear:c { @@_toplevel~#1 } }
+              { \@@_toplevel_gset:nn {#1} { } }
               {
                 \prop_gpop:cnNF { g_@@_#1_code_prop } {#2} \l_@@_return_tl
                   { \msg_warning:nnnn { hooks } { cannot-remove } {#1} {#2} }
@@ -3963,10 +4037,10 @@
       {
         \prop_if_empty:cTF { g_@@_#1_code_prop }
           {
-            \@@_code_gset:no {#1}
+            \@@_code_gset:ne {#1}
               {
-                \cs:w @@_toplevel~#1 \exp_after:wN \cs_end:
-                \cs:w @@_next~#1 \cs_end:
+                \exp_not:c { @@_toplevel~#1 } \@@_braced_parameter:n {#1}
+                \exp_not:c { @@_next~#1 } \@@_braced_parameter:n {#1}
               }
           }
           {
@@ -4231,8 +4305,10 @@
 %    change for a reversed hook (then |top-level| is the very first code
 %    chunk added).  The |next| code is always added last.
 %    \begin{macrocode}
-    \exp_args:NNo \@@_tl_gput:Nn #1 { \cs:w @@_toplevel~#3 \cs_end: }
-    \@@_tl_gput_right:No #1 { \cs:w @@_next~#3 \cs_end: }
+    \exp_args:NNe \@@_tl_gput:Nn #1
+      { \exp_not:c { @@_toplevel~#3 } \@@_braced_parameter:n {#3} }
+    \@@_tl_gput_right:Ne #1
+      { \exp_not:c { @@_next~#3 } \@@_braced_parameter:n {#3} }
     \int_compare:nNnT { \tl_count:c { c_@@_#3_parameter_tl } } > { 0 }
       { \@@_code_gset:nV {#3} #1 }
   }
@@ -4751,7 +4827,7 @@
       { \@@_update_hook_code:n {#2} }
     \tl_if_empty:NT #1
       { \@@_tl_gset:Nn #1 { \@@_clear_next:n {#2} } }
-    \@@_tl_gput_right:Nn #1
+    \@@_cs_gput_right:nnn { _next } {#2}
   }
 %    \end{macrocode}
 %  \end{macro}
@@ -4765,7 +4841,7 @@
 \cs_new_protected:Npn \hook_gclear_next_code:n #1
   { \@@_normalize_hook_args:Nn \@@_clear_next:n {#1} }
 \cs_new_protected:Npn \@@_clear_next:n #1
-  { \cs_gset_eq:cN { @@_next~#1 } \c_empty_tl }
+  { \@@_next_gset:nn {#1} { } }
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -4956,8 +5032,8 @@
 \cs_new_protected:Npn \@@_use_once_clear:n #1
   {
     \@@_code_gset:nn {#1} { }
-    \@@_tl_gclear:c { @@_next~#1 }
-    \@@_tl_gclear:c { @@_toplevel~#1 }
+    \@@_next_gset:nn {#1} { }
+    \@@_toplevel_gset:nn {#1} { }
     \prop_gclear_new:c { g_@@_#1_code_prop }
   }
 %    \end{macrocode}
@@ -5185,6 +5261,16 @@
     { There~ already~ exists~ a~ hook~ declaration~ with~ this~
       name.\\
       Please~ use~ a~ different~ name~ for~ your~ hook.}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\msg_new:nnnn { hooks } { too-many-args }
+  { Too~many~arguments~for~hook~'#1'. }
+  {
+    You~tried~to~declare~a~hook~with~#2~arguments,~but~a~
+    hook~can~only~have~up~to~nine.~LaTeX~will~define~this~
+    hook~without~arguments.
+  }
 %    \end{macrocode}
 %
 %
