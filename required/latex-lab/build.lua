@@ -48,7 +48,7 @@ typesetdeps =
 checksearch  = true
 
 -- Allow for TU and other test configurations
-checkconfigs = {"build","config-TU","config-OR"}
+checkconfigs = {"build","config-TU","config-OR","config-mathcapture"}
 
 
 
@@ -66,7 +66,6 @@ uploadconfig = {
  uploader = "LaTeX Project team",
  email = "latex-team@latex-project.org",
  update = true ,
- note = [[Uploaded automatically by l3build...]],
 }
 
 
