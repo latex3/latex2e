@@ -60,14 +60,20 @@
 %
 % \subsection{Code level interfaces}
 %
-% \begin{function}{\math_register_env:n}
+% \begin{function}{\math_register_env:n, \math_register_env:nn}
 %   \begin{syntax}
 %     \cs{math_register_env:n} \Arg{env}
+%     \cs{math_register_env:n} \Arg{env} \Arg{options}
 %   \end{syntax}
 %   Registers the \meta{env} as a math environment which should be captured
 %   and made available. This is necessary for all top-level math mode
 %   environments: low-level errors may result if these are not correct
-%   set up.
+%   set up. One or more key--value \meta{options} may also be given:
+%   \begin{itemize}
+%     \item[\texttt{arg-spec}] The argument specification taken by the
+%       beginning of the environment; this is used to remove non-mathematical
+%       material.
+%   \end{itemize}
 % \end{function}
 %
 % \begin{function}{\math_processor:n}
@@ -83,12 +89,17 @@
 %
 % \begin{function}{\RegisterMathEnvironment}
 %   \begin{syntax}
-%     \cs{RegisterMathEnvironment} \Arg{env}
+%     \cs{RegisterMathEnvironment} \oarg{options} \Arg{env}
 %   \end{syntax}
 %   Registers the \meta{env} as a math environment which should be captured
 %   and made available. This is necessary for all top-level math mode
 %   environments: low-level errors may result if these are not correct
-%   set up.
+%   set up. One or more key--value \meta{options} may also be given:
+%   \begin{itemize}
+%     \item[\texttt{arg-spec}] The argument specification taken by the
+%       beginning of the environment; this is used to remove non-mathematical
+%       material.
+%   \end{itemize}
 % \end{function}
 %
 % \MaybeStop{\setlength\IndexMin{200pt}  \PrintIndex  }
@@ -215,30 +226,72 @@
 % A general mechanism for math mode environments that do no grab their
 % content (\emph{cf.}~most \pkg{amsmath} environments).
 %
+% \begin{variable}{\l_@@_env_name_tl}
+%  To allow us to carry out \enquote{special effects}
+%    \begin{macrocode}
+\tl_new:N \l_@@_env_name_tl
+%    \end{macrocode}
+% \end{variable}
+%
+% Here we set up specialised handling of environments. The idea for the
+% \texttt{arg-spec} key is that if an environment takes arguments, we
+% don't worry during the main grabbing. Rather, we remove the arguments
+% from the grabbed content and forward only the payload. That is done by
+% (ab)using \pkg{ltcmd}.
+%    \begin{macrocode}
+\keys_define:nn { @@ }
+  {
+     arg-spec .code:n =
+       {
+         \ExpandArgs { c } \DeclareDocumentCommand
+           { @@_env \l_@@_env_name_tl _aux: }
+           {#1}
+           { \@@_env_forward:w }
+       }
+  }
+%    \end{macrocode}
+%
+% \begin{macro}{\math_register_env:nn}
 % \begin{macro}{\math_register_env:n}
 % \begin{macro}{\RegisterMathEnvironment}
 %   Set up to capture environment content and make available.
 %    \begin{macrocode}
-\cs_new_protected:Npn \math_register_env:n #1
+\cs_new_protected:Npn \math_register_env:nn #1#2
   {
+    \tl_set:Nn \l_@@_env_name_tl {#1}
+    \keys_set:nn { @@ } {#2}
     \cs_gset_eq:cc { @@_env_ #1 _begin: } {#1}
     \cs_gset_eq:cc { @@_env_ #1 _end: } { end #1 }
     \ExpandArgs { nnx } \RenewDocumentEnvironment {#1} { b }
       {
         \bool_set_true:N \exp_not:N \l_@@_collected_bool
-        \exp_not:N \@@_process:nn {#1} {####1}
+        \cs_if_exist:cTF { @@_env #1 _aux: }
+          {
+            \exp_not:c { @@_env #1 _aux: }
+              ####1 \exp_not:N \@@_env_end: {#1}
+          }
+          { \exp_not:N \@@_process:nn {#1} {####1} }
         \exp_not:c { @@_env_ #1 _begin: }
         ####1
         \exp_not:c { @@_env_ #1 _end: }
       }
       { }
   }
-\NewDocumentCommand \RegisterMathEnvironment { m }
-  { \math_register_env:n {#1} }
+\cs_new_protected:Npn \math_register_env:n #1
+  { \math_register_env:nn {#1} { } }
+\NewDocumentCommand \RegisterMathEnvironment { O{} m }
+  { \math_register_env:nn {#2} {#1} }
 %    \end{macrocode}
 % \end{macro}
 % \end{macro}
 %
+% \begin{macro}{\@@_env_forward:w}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_env_forward:w #1 \@@_env_end: #2 
+  { \@@_process:nn {#2} {#1} }
+%    \end{macrocode}
+% \end{macro}
+% 
 % \subsection{Document commands}
 %
 % \begin{macro}
