@@ -99,6 +99,7 @@ typesetfiles_list = {
     "*.err",
     "lppl.tex",
     "cfgguide.tex",
+    "clsguide.tex",
     "clsguide-historic.tex",
     "cyrguide.tex",
     "encguide.tex",
