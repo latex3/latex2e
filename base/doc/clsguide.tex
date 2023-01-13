@@ -425,6 +425,16 @@ for example, the |twocolumn| option is declared by the |article| class. Note
 that the name of an option should contain only those characters allowed in a
 `\LaTeX{} name'; in particular it must not contain any control sequences.
 
+\LaTeX{} supports two methods for creating options: a key--value system and a
+`simple text` approach. The key--value system is recommended for new classes
+and packages, and is more flexible in handling of option classes than the
+simple text approach. Both option methods use the same basic structure within
+the \LaTeX{} source: declaration of options first then processing options in a
+second step. Both also allow options to be passed on to other packages or an
+underlying class. As the `classical' simple text approach is conceptually more
+straight-forward to illustrate, it is used here to show the general structure:
+see Section~\ref{Sec:opt:keyval} for full details of the key--value approach.
+
 An option is declared as follows:
 \begin{verbatim}
    \DeclareOption{<option>}{<code>}
@@ -697,67 +707,129 @@ The two |WithOptions| versions simply load the class (or package) file with
 exactly those options that are being used by the current file (class or
 package). See below, in \ref{Sec:opmove}, for further discussion of their use.
 
-\subsection{Option declaration}
-\label{Sec:commands.options.dec}
+\subsection{Delaying code}
+\label{Sec:delays}
 
-The following commands deal with the declaration and handling of options to
-document classes and packages. Every option name must be a `\LaTeX{} name'.
+As noted earlier, a sophisticated hook system is available and described in
+\texttt{lthooks}. Here, we document a small set of convenient short names for
+common hooks.
 
-There are some commands designed especially for use within the \m{code}
-argument of these commands (see below).
+These first two commands are also intended primarily for use within the
+\m{code} argument of |\DeclareOption| or |\DeclareOption*|.
 
 \begin{decl}
-  |\DeclareOption| \arg{option-name} \arg{code}
+  |\AtEndOfClass| \arg{code}\\
+  |\AtEndOfPackage| \arg{code}
 \end{decl}
-This makes \m{option-name} a `declared option' of the class or package in which
-it is put.
+These commands declare \m{code} that is saved away internally and then executed
+after processing the whole of the current class or package file.
 
-The \m{code} argument contains the code to be executed if that option is
-specified for the class or package; it can contain any valid \LaTeXe{}
-construct.
+Repeated use of these commands is permitted: the code in the arguments is
+stored (and later executed) in the order of their declarations.
 
-Example:
+\begin{decl}
+  |\AtBeginDocument| \arg{code}\\
+  |\AtEndDocument| \arg{code}
+\end{decl}
+These commands declare \m{code} to be saved internally and executed while
+\LaTeX{} is executing |\begin{document}| or |\end{document}|.
+
+The \m{code} specified in the argument to |\AtBeginDocument| is executed near
+the end of the |\begin{document}| code, \emph{after} the font selection tables
+have been set up. It is therefore a useful place to put code which needs to be
+executed after everything has been prepared for typesetting and when the normal
+font for the document is the current font.
+
+The |\AtBeginDocument| hook should not be used for code that does any
+typesetting since the typeset result would be unpredictable.
+
+The \m{code} specified in the argument to |\AtEndDocument| is executed at the
+beginning of the |\end{document}| code, \emph{before} the final page is
+finished and before any leftover floating environments are processed. If some
+of the \m{code} is to be executed after these two processes, you should include
+a |\clearpage| at the appropriate point in \m{code}.
+
+Repeated use of these commands is permitted: the code in the arguments is
+stored (and later executed) in the order of their declarations.
+
+\subsection{Creating and using keyval options}
+\label{Sec:opt:keyval}
+
+As with any key--value input, using key--value pairs as package or class
+options has two parts: creating the key options and setting (using) them.
+Options created in this way \emph{may} be used after package loading as general
+key--value settings: this will depend on the nature of the underlying code.
+
+\begin{decl}
+  |\DeclareKeys| \oarg{family} \arg{declarations}
+\end{decl}
+This command creates a series of options from a comma-separated
+\m{declarations} list. Each entry in this list is a key--value pair, with the
+\m{key} having one or more \m{properties}. A small number of `basic'
+\m{properties} are described below. The full range of properties, provided by
+\texttt{l3keys}, can also be used for more powerful processing. See
+\texttt{interface3} for the full details.
+   
+The basic properties provided here are
+\begin{itemize}
+  \item \texttt{.code} --- execute arbitrary code
+  \item \texttt{.if} --- sets a \TeX{} |\if...| switch
+  \item \texttt{.ifnot} --- sets an inverted \TeX{} |\if...| switch
+  \item \texttt{.store} --- stores a value in a macro
+  \item \texttt{.usage} -- defines whether the option can be given only
+    when loading (\texttt{load}), in the preamble (\texttt{preamble}) or
+    has no limitation on scope (\texttt{general})
+\end{itemize}
+The part of the \meta{key} before the \m{property} is the \m{name}, with the
+\m{value} working with the \m{property} to define the behaviour of the option.
+
+For example, with
 \begin{verbatim}
-   \DeclareOption{twoside}{\@twosidetrue}
+\DeclareKeys[mypkg]
+ {
+   draft.if          = @mypkg@draft      ,
+   draft.usage       = preamble          ,
+   name.store        = \@mypkg@name      ,
+   name.usage        = load              ,
+   second-name.store = \@mypkg@other@name
+ }
 \end{verbatim}
+three options would be create. The option \texttt{draft} can be given anywhere
+in the preamble, and will set a switch called |\if@mypkg@draft|. The option
+\texttt{name} can only be given during package loading, and will save whatever
+value it is given in |\@mypkg@name|. Finally, the option \texttt{second-name}
+can be given anywhere, and will save its value in |\@mypkg@other@name|.
+
+Keys created \emph{before} the use of |\ProcessKeyOptions|act as package
+options.
 
 \begin{decl}
-  |\DeclareOption*| \arg{code}
+  |\DeclareUnknownKeyHandler| \oarg{family} \arg{code}
 \end{decl}
-This declares the \m{code} to be executed for every option which is specified
-for, but otherwise not explicitly declared by, the class or package; this code
-is called the `default option code' and it can contain any valid \LaTeXe{}
-construct.
-
-If a class file contains no |\DeclareOption*| then, by default, all specified
-but undeclared options for that class will be silently passed to all packages
-(as will the specified and declared options for that class).
-
-If a package file contains no |\DeclareOption*| then, by default, each
-specified but undeclared option for that package will produce an error.
-
-\subsection{Commands within option code}
-\label{Sec:within.code}
-
-These two commands can be used only within the \m{code} argument of either
-|\DeclareOption| or |\DeclareOption*|. Other commands commonly used within
-these arguments can be found in the next few subsections.
+The command |\DeclareUnknownKeyHandler| may be used to define the behavior when
+an undefined key is encountered. The \m{code} will receive the unknown key name
+as |#1| and the value as |#2|. These can then be processed as appropriate,
+e.g.~by forwarding to another package.
 
 \begin{decl}
-  |\CurrentOption|
+  |\ProcessKeyOptions| \oarg{family}
 \end{decl}
-This expands to the name of the current option.
+The |\ProcessKeyOptions| function is used to check the current option list
+against the keys defined for \m{family}. Global (class) options and local
+(package) options are checked when this function is called in a package.
 
 \begin{decl}
-  |\OptionNotUsed|
+  |\SetKeys| \oarg{family} \arg{keyvals}
 \end{decl}
-This causes the current option to be added to the list of `unused options'.
+Sets (applies) the explicit list of \m{keyvals} for the \m{family}: it the
+latter is not given, the value of |\@currname| used. This command may be used
+within a package to set options before or after using |\ProcessKeyOptions|.
 
 \subsection{Passing options around}
 \label{Sec:opmove}
 
 These two commands are also very useful within the \m{code} argument of
-|\DeclareOption| or |\DeclareOption*|:
+options.
 \begin{decl}
   |\PassOptionsToPackage| \arg{options-list} \arg{package-name}\\
   |\PassOptionsToClass| \arg{options-list} \arg{class-name}
@@ -826,50 +898,296 @@ contrast, in the second example it will never be called with option
 the default option handler, but this handler is not used for |landscape|
 because that option is explicitly declared.
 
-\subsection{Delaying code}
-\label{Sec:delays}
+\subsection{Safe file commands}
 
-As noted earlier, a sophisticated hook system is available and described in
-\texttt{lthooks}. Here, we document a small set of convenient short names for
-common hooks.
-
-These first two commands are also intended primarily for use within the
-\m{code} argument of |\DeclareOption| or |\DeclareOption*|.
+These commands deal with file input; they ensure that the non-existence of a
+requested file can be handled in a user-friendly way.
 
 \begin{decl}
-  |\AtEndOfClass| \arg{code}\\
-  |\AtEndOfPackage| \arg{code}
+|\IfFileExists| \arg{file-name} \arg{true} \arg{false}
 \end{decl}
-These commands declare \m{code} that is saved away internally and then executed
-after processing the whole of the current class or package file.
+If the file exists then the code specified in \m{true} is executed.
 
-Repeated use of these commands is permitted: the code in the arguments is
-stored (and later executed) in the order of their declarations.
+If the file does not exist then the code specified in \m{false} is executed.
+
+This command does \emph{not} input the file.
 
 \begin{decl}
-  |\AtBeginDocument| \arg{code}\\
-  |\AtEndDocument| \arg{code}
+  |\InputIfFileExists| \arg{file-name} \arg{true} \arg{false}
 \end{decl}
-These commands declare \m{code} to be saved internally and executed while
-\LaTeX{} is executing |\begin{document}| or |\end{document}|.
+This inputs the file \m{file-name} if it exists and, immediately before the
+input, the code specified in \m{true} is executed.
 
-The \m{code} specified in the argument to |\AtBeginDocument| is executed near
-the end of the |\begin{document}| code, \emph{after} the font selection tables
-have been set up. It is therefore a useful place to put code which needs to be
-executed after everything has been prepared for typesetting and when the normal
-font for the document is the current font.
+If the file does not exist then the code specified in \m{false} is executed.
 
-The |\AtBeginDocument| hook should not be used for code that does any
-typesetting since the typeset result would be unpredictable.
+It is implemented using |\IfFileExists|.
 
-The \m{code} specified in the argument to |\AtEndDocument| is executed at the
-beginning of the |\end{document}| code, \emph{before} the final page is
-finished and before any leftover floating environments are processed. If some
-of the \m{code} is to be executed after these two processes, you should include
-a |\clearpage| at the appropriate point in \m{code}.
+\subsection{Reporting errors, etc}
 
-Repeated use of these commands is permitted: the code in the arguments is
-stored (and later executed) in the order of their declarations.
+These commands should be used by third party classes and packages to report
+errors, or to provide information to authors.
+
+\begin{decl}
+  |\ClassError| \arg{class-name} \arg{error-text} \arg{help-text}\\
+  |\PackageError| \arg{package-name} \arg{error-text} \arg{help-text}
+\end{decl}
+These produce an error message. The \m{error-text} is displayed and the |?|
+error prompt is shown. If the user types |h|, they will be shown the
+\m{help-text}.
+
+Within the \m{error-text} and \m{help-text}: |\protect| can be used to stop a
+command from expanding; |\MessageBreak| causes a line-break; and |\space|
+prints a space.
+
+Note that the \m{error-text} will have a full stop added to it, so do not put
+one into the argument.
+
+For example:
+\begin{verbatim}
+   \newcommand{\foo}{FOO}
+   \PackageError{ethel}{%
+      Your hovercraft is full of eels,\MessageBreak
+      and \protect\foo\space is \foo
+   }{%
+      Oh dear! Something's gone wrong.\MessageBreak
+      \space \space Try typing \space <<return>>
+      \space to proceed, ignoring \protect\foo.
+   }
+\end{verbatim}
+produces this display:
+\begin{verbatim}
+   ! Package ethel Error: Your hovercraft is full of eels,
+   (ethel)                and \foo is FOO.
+
+   See the ethel package documentation for explanation.
+\end{verbatim}
+If the user types |h|, this will be shown:
+\begin{verbatim}
+   Oh dear! Something's gone wrong.
+     Try typing  <<return>>  to proceed, ignoring \foo.
+\end{verbatim}
+
+\begin{decl}
+  |\ClassWarning| \arg{class-name} \arg{warning-text}\\
+  |\PackageWarning| \arg{package-name} \arg{warning-text}\\
+  |\ClassWarningNoLine| \arg{class-name} \arg{warning-text}\\
+  |\PackageWarningNoLine| \arg{package-name} \arg{warning-text}\\
+  |\ClassInfo| \arg{class-name} \arg{info-text}\\
+  |\PackageInfo| \arg{package-name} \arg{info-text}
+\end{decl}
+The four |Warning| commands are similar to the error commands, except that they
+produce only a warning on the screen, with no error prompt.
+
+The first two, |Warning| versions, also show the line number where the warning
+occurred, whilst the second two, |WarningNoLine| versions, do not.
+
+The two |Info| commands are similar except that they log the information only
+in the transcript file, including the line number. There are no |NoLine|
+versions of these two.
+
+Within the \m{warning-text} and \m{info-text}: |\protect| can be used to stop a
+command from expanding; |\MessageBreak| causes a line-break; and |\space|
+prints a space. Also, these should not end with a full stop as one is
+automatically added.
+
+\section{Miscellaneous commands, etc.}
+\label{Sec:commands.misc}
+
+\subsection{Layout parameters}
+
+\begin{decl}
+|\paperheight|\\
+|\paperwidth|
+\end{decl}
+These two parameters are usually set by the class to be the size of the paper
+being used. This should be actual paper size, unlike |\textwidth| and
+|\textheight| which are the size of the main text body within the margins.
+
+\subsection{Case changing}
+\label{sec:case}
+
+\begin{decl}
+  |\MakeUppercase| \arg{text} \\
+  |\MakeLowercase| \arg{text} \\
+  |\MakeTitlecase| \arg{text}
+\end{decl}
+
+As described in \texttt{usrguide}, case changing for text should be carried out
+using the commands |\MakeUppercase|, |\MakeLowercase| and
+|\MakeTitlecase|. If you need to change the cae of programmatic material, the
+team strongly suggest using the L3 programming layer commands in the
+\texttt{str} module. If you do not wish to do this, you should use the \TeX{}
+|\uppercase| and |\lowercase| primitives \emph{in this situation only}.
+
+\subsection{Better user-defined math display environments}
+
+\begin{decl}
+  |\ignorespacesafterend|
+\end{decl}
+
+Suppose that you want to define an environment for displaying text that is
+numbered as an equation. A straightforward way to do this is as follows:
+\begin{verbatim}
+  \newenvironment{texteqn}
+    {\begin{equation}
+       \begin{minipage}{0.9\linewidth}}
+      {\end{minipage}
+     \end{equation}}
+\end{verbatim}
+However, if you have tried this then you will probably have noticed that it
+does not work perfectly when used in the middle of a paragraph because an
+inter-word space appears at the beginning of the first line after the
+environment.
+
+You can to avoid this problem using |\ignorespacesafterend|; it should be
+inserted as shown here:
+\begin{verbatim}
+  \newenvironment{texteqn}
+    {\begin{equation}
+       \begin{minipage}{0.9\linewidth}}
+      {\end{minipage}
+     \end{equation}
+     \ignorespacesafterend}
+\end{verbatim}
+
+This command may also have other uses.
+
+\subsection{Normalising spacing}
+
+\begin{decl}
+  |\normalsfcodes|
+\end{decl}
+
+This command should be used to restore the normal settings of the
+parameters that affect spacing between words, sentences, etc.
+
+An important use of this feature is to correct a problem, reported by Donald
+Arseneau, that punctuation in page headers has always (in all known \TeX{}
+formats) been potentially wrong whenever a page break happens while a local
+setting of the space codes is in effect. These space codes are changed by, for
+example, the command \verb|\frenchspacing|) and the \textsf{verbatim}
+environment.
+
+It is normally given the correct definition automatically in |\begin{document}|
+and so need not be explicitly set; however, if it is explicitly made non-empty
+in a class file then automatic default setting will be over-ridden.
+
+\section{Deprecated commands in wide use}
+
+A small number of commands were introduced as part of \LaTeXe{} in the
+mid-1990s, are widely used but have been superseded by more modern methods.
+These are covered here as they are likely to be encountered routinely in
+existing classes and packages.
+
+\subsection{Defining commands}
+
+The \texttt{*}-forms of these commands should be used to define
+commands that are not, in \TeX{} terms, long.  This can be useful for
+error-trapping with commands whose arguments are not intended to
+contain whole paragraphs of text.
+
+\begin{decl}
+  |\DeclareRobustCommand| \arg{cmd} \oarg{num} \oarg{default}
+     \arg{definition}\\
+  |\DeclareRobustCommand*| \arg{cmd} \oarg{num} \oarg{default}
+     \arg{definition}
+\end{decl}
+This command takes the same arguments as |\newcommand| but it declares a robust
+command, even if some code within the \m{definition} is fragile. You can use
+this command to define new robust commands, or to redefine existing commands
+and make them robust. A log is put into the transcript file if a command is
+redefined.
+
+For example, if |\seq| is defined as follows:
+\begin{verbatim}
+   \DeclareRobustCommand{\seq}[2][n]{%
+     \ifmmode
+       #1_{1}\ldots#1_{#2}%
+     \else
+       \PackageWarning{fred}{You can't use \protect\seq\space in text}%
+     \fi
+   }
+\end{verbatim}
+Then the command |\seq| can be used in moving arguments, even though
+|\ifmmode| cannot, for example:
+\begin{verbatim}
+   \section{Stuff about sequences $\seq{x}$}
+\end{verbatim}
+
+Note also that there is no need to put a |\relax| before the |\ifmmode| at the
+beginning of the definition; this is because the protection given by this
+|\relax| against expansion at the wrong time will be provided internally.
+
+\begin{decl}
+  |\CheckCommand| \arg{cmd} \oarg{num} \oarg{default}
+     \arg{definition}\\
+  |\CheckCommand*| \arg{cmd} \oarg{num} \oarg{default}
+     \arg{definition}
+\end{decl}
+This takes the same arguments as |\newcommand| but, rather than define \m{cmd},
+it just checks that the current definition of \m{cmd} is exactly as given by
+\m{definition}. An error is raised if these definitions differ.
+
+This command is useful for checking the state of the system before your package
+starts altering the definitions of commands. It allows you to check, in
+particular, that no other package has redefined the same command.
+
+\subsection{Option declaration}
+\label{Sec:commands.options.dec}
+
+The following commands deal with the declaration and handling of options to
+document classes and packages using a classical `simple text' approach. Every
+option name must be a `\LaTeX{} name'.
+
+There are some commands designed especially for use within the \m{code}
+argument of these commands (see below).
+
+\begin{decl}
+  |\DeclareOption| \arg{option-name} \arg{code}
+\end{decl}
+This makes \m{option-name} a `declared option' of the class or package in which
+it is put.
+
+The \m{code} argument contains the code to be executed if that option is
+specified for the class or package; it can contain any valid \LaTeXe{}
+construct.
+
+Example:
+\begin{verbatim}
+   \DeclareOption{twoside}{\@twosidetrue}
+\end{verbatim}
+
+\begin{decl}
+  |\DeclareOption*| \arg{code}
+\end{decl}
+This declares the \m{code} to be executed for every option which is specified
+for, but otherwise not explicitly declared by, the class or package; this code
+is called the `default option code' and it can contain any valid \LaTeXe{}
+construct.
+
+If a class file contains no |\DeclareOption*| then, by default, all specified
+but undeclared options for that class will be silently passed to all packages
+(as will the specified and declared options for that class).
+
+If a package file contains no |\DeclareOption*| then, by default, each
+specified but undeclared option for that package will produce an error.
+
+\subsection{Commands within option code}
+\label{Sec:within.code}
+
+These two commands can be used only within the \m{code} argument of either
+|\DeclareOption| or |\DeclareOption*|. Other commands commonly used within
+these arguments can be found in the next few subsections.
+
+\begin{decl}
+  |\CurrentOption|
+\end{decl}
+This expands to the name of the current option.
+
+\begin{decl}
+  |\OptionNotUsed|
+\end{decl}
+This causes the current option to be added to the list of `unused options'.
 
 \subsection{Option processing}
 \label{Sec:commands.options}
@@ -990,239 +1308,5 @@ it could specify:
 \begin{verbatim}
    \ExecuteOptions{11pt,twoside,twocolumn}
 \end{verbatim}
-
-\subsection{Safe file commands}
-
-These commands deal with file input; they ensure that the non-existence of a
-requested file can be handled in a user-friendly way.
-
-\begin{decl}
-|\IfFileExists| \arg{file-name} \arg{true} \arg{false}
-\end{decl}
-If the file exists then the code specified in \m{true} is executed.
-
-If the file does not exist then the code specified in \m{false} is executed.
-
-This command does \emph{not} input the file.
-
-\begin{decl}
-  |\InputIfFileExists| \arg{file-name} \arg{true} \arg{false}
-\end{decl}
-This inputs the file \m{file-name} if it exists and, immediately before the
-input, the code specified in \m{true} is executed.
-
-If the file does not exist then the code specified in \m{false} is executed.
-
-It is implemented using |\IfFileExists|.
-
-\subsection{Reporting errors, etc}
-
-These commands should be used by third party classes and packages to report
-errors, or to provide information to authors.
-
-\begin{decl}
-  |\ClassError| \arg{class-name} \arg{error-text} \arg{help-text}\\
-  |\PackageError| \arg{package-name} \arg{error-text} \arg{help-text}
-\end{decl}
-These produce an error message. The \m{error-text} is displayed and the |?|
-error prompt is shown. If the user types |h|, they will be shown the
-\m{help-text}.
-
-Within the \m{error-text} and \m{help-text}: |\protect| can be used to stop a
-command from expanding; |\MessageBreak| causes a line-break; and |\space|
-prints a space.
-
-Note that the \m{error-text} will have a full stop added to it, so do not put
-one into the argument.
-
-For example:
-\begin{verbatim}
-   \newcommand{\foo}{FOO}
-   \PackageError{ethel}{%
-      Your hovercraft is full of eels,\MessageBreak
-      and \protect\foo\space is \foo
-   }{%
-      Oh dear! Something's gone wrong.\MessageBreak
-      \space \space Try typing \space <<return>>
-      \space to proceed, ignoring \protect\foo.
-   }
-\end{verbatim}
-produces this display:
-\begin{verbatim}
-   ! Package ethel Error: Your hovercraft is full of eels,
-   (ethel)                and \foo is FOO.
-
-   See the ethel package documentation for explanation.
-\end{verbatim}
-If the user types |h|, this will be shown:
-\begin{verbatim}
-   Oh dear! Something's gone wrong.
-     Try typing  <<return>>  to proceed, ignoring \foo.
-\end{verbatim}
-
-\begin{decl}
-  |\ClassWarning| \arg{class-name} \arg{warning-text}\\
-  |\PackageWarning| \arg{package-name} \arg{warning-text}\\
-  |\ClassWarningNoLine| \arg{class-name} \arg{warning-text}\\
-  |\PackageWarningNoLine| \arg{package-name} \arg{warning-text}\\
-  |\ClassInfo| \arg{class-name} \arg{info-text}\\
-  |\PackageInfo| \arg{package-name} \arg{info-text}
-\end{decl}
-The four |Warning| commands are similar to the error commands, except that they
-produce only a warning on the screen, with no error prompt.
-
-The first two, |Warning| versions, also show the line number where the warning
-occurred, whilst the second two, |WarningNoLine| versions, do not.
-
-The two |Info| commands are similar except that they log the information only
-in the transcript file, including the line number. There are no |NoLine|
-versions of these two.
-
-Within the \m{warning-text} and \m{info-text}: |\protect| can be used to stop a
-command from expanding; |\MessageBreak| causes a line-break; and |\space|
-prints a space. Also, these should not end with a full stop as one is
-automatically added.
-
-\section{Miscellaneous commands, etc.}
-\label{Sec:commands.misc}
-
-\subsection{Layout parameters}
-
-\begin{decl}
-|\paperheight|\\
-|\paperwidth|
-\end{decl}
-These two parameters are usually set by the class to be the size of the paper
-being used. This should be actual paper size, unlike |\textwidth| and
-|\textheight| which are the size of the main text body within the margins.
-
-\subsection{Case changing}
-\label{sec:case}
-
-\begin{decl}
-  |\MakeUppercase| \arg{text} \\
-  |\MakeLowercase| \arg{text} \\
-  |\MakeTitlecase| \arg{text}
-\end{decl}
-
-As described in \texttt{usrguide}, case changing for text should be carried out
-using the commands \cs{MakeUppercase}, \cs{MakeLowercase} and
-\cs{MakeTitlecase}. If you need to change the cae of programmatic material, the
-team strongly suggest using the L3 programming layer commands in the
-\texttt{str} module. If you do not wish to do this, you should use the \TeX{}
-\cs{uppercase} and \cs{lowercase} primitives \emph{in this situation only}.
-
-\subsection{Better user-defined math display environments}
-
-\begin{decl}
-  |\ignorespacesafterend|
-\end{decl}
-
-Suppose that you want to define an environment for displaying text that is
-numbered as an equation. A straightforward way to do this is as follows:
-\begin{verbatim}
-  \newenvironment{texteqn}
-    {\begin{equation}
-       \begin{minipage}{0.9\linewidth}}
-      {\end{minipage}
-     \end{equation}}
-\end{verbatim}
-However, if you have tried this then you will probably have noticed that it
-does not work perfectly when used in the middle of a paragraph because an
-inter-word space appears at the beginning of the first line after the
-environment.
-
-You can to avoid this problem using \cs{ignorespacesafterend}; it should be
-inserted as shown here:
-\begin{verbatim}
-  \newenvironment{texteqn}
-    {\begin{equation}
-       \begin{minipage}{0.9\linewidth}}
-      {\end{minipage}
-     \end{equation}
-     \ignorespacesafterend}
-\end{verbatim}
-
-This command may also have other uses.
-
-\subsection{Normalising spacing}
-
-\begin{decl}
-  |\normalsfcodes|
-\end{decl}
-
-This command should be used to restore the normal settings of the
-parameters that affect spacing between words, sentences, etc.
-
-An important use of this feature is to correct a problem, reported by Donald
-Arseneau, that punctuation in page headers has always (in all known \TeX{}
-formats) been potentially wrong whenever a page break happens while a local
-setting of the space codes is in effect. These space codes are changed by, for
-example, the command \verb|\frenchspacing|) and the \textsf{verbatim}
-environment.
-
-It is normally given the correct definition automatically in |\begin{document}|
-and so need not be explicitly set; however, if it is explicitly made non-empty
-in a class file then automatic default setting will be over-ridden.
-
-\section{Deprecated commands in wide use}
-
-A small number of commands were introduced as part of \LaTeXe{} in the
-mid-1990s, are widely used but have been superseded by more modern methods.
-These are covered here as they are likely to be encountered routinely in
-existing classes and packages.
-
-\subsection{Defining commands}
-
-The \texttt{*}-forms of these commands should be used to define
-commands that are not, in \TeX{} terms, long.  This can be useful for
-error-trapping with commands whose arguments are not intended to
-contain whole paragraphs of text.
-
-\begin{decl}
-  |\DeclareRobustCommand| \arg{cmd} \oarg{num} \oarg{default}
-     \arg{definition}\\
-  |\DeclareRobustCommand*| \arg{cmd} \oarg{num} \oarg{default}
-     \arg{definition}
-\end{decl}
-This command takes the same arguments as |\newcommand| but it declares a robust
-command, even if some code within the \m{definition} is fragile. You can use
-this command to define new robust commands, or to redefine existing commands
-and make them robust. A log is put into the transcript file if a command is
-redefined.
-
-For example, if |\seq| is defined as follows:
-\begin{verbatim}
-   \DeclareRobustCommand{\seq}[2][n]{%
-     \ifmmode
-       #1_{1}\ldots#1_{#2}%
-     \else
-       \PackageWarning{fred}{You can't use \protect\seq\space in text}%
-     \fi
-   }
-\end{verbatim}
-Then the command |\seq| can be used in moving arguments, even though
-|\ifmmode| cannot, for example:
-\begin{verbatim}
-   \section{Stuff about sequences $\seq{x}$}
-\end{verbatim}
-
-Note also that there is no need to put a |\relax| before the |\ifmmode| at the
-beginning of the definition; this is because the protection given by this
-|\relax| against expansion at the wrong time will be provided internally.
-
-\begin{decl}
-  |\CheckCommand| \arg{cmd} \oarg{num} \oarg{default}
-     \arg{definition}\\
-  |\CheckCommand*| \arg{cmd} \oarg{num} \oarg{default}
-     \arg{definition}
-\end{decl}
-This takes the same arguments as |\newcommand| but, rather than define \m{cmd},
-it just checks that the current definition of \m{cmd} is exactly as given by
-\m{definition}. An error is raised if these definitions differ.
-
-This command is useful for checking the state of the system before your package
-starts altering the definitions of commands. It allows you to check, in
-particular, that no other package has redefined the same command.
 
 \end{document}
