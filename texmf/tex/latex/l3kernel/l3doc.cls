@@ -6,7 +6,7 @@
 %%
 %% l3doc.dtx  (with options: `class')
 %% 
-%% Copyright (C) 1990-2022 The LaTeX Project
+%% Copyright (C) 1990-2023 The LaTeX Project
 %% 
 %% It may be distributed and/or modified under the conditions of
 %% the LaTeX Project Public License (LPPL), either version 1.3c of
