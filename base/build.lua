@@ -128,8 +128,6 @@ unpacksuppfiles =
     "t1lmss.fd",
     "t1lmtt.fd",
     "ts1lmr.fd",
-    "pdflatex.ini",
-    "pdftexconfig.tex"
   }
 
 -- Custom settings for the check system
