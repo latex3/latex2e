@@ -28,16 +28,6 @@ sourcefiles  = {"*.dtx", "*.ins", "*-????-??-??.sty"}
 
 checkengines = { "pdftex", "luatex" }
 
--- specialformats
-specialformats = specialformats or {}
-
---specialformats["latex"] = specialformats["latex"] or
---  {
---    luatex     = {binary="luahbtex",format = "lualatex-dev"},
---    pdftex     = {binary="pdftex",format = "pdflatex-dev"},
---  }
-
-
 checkdeps =
   {
     maindir .. "/base"
