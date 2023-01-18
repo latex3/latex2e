@@ -17,8 +17,8 @@ maxprintline = 9999
 
 -- Set up the check system to work in 'stand-alone' mode
 -- This relies on a format being built by the 'base' dependency
-asciiengines   = asciiengines       or {"etex"}
-checkengines   = checkengines       or {"etex", "xetex", "luatex"}
+asciiengines   = asciiengines       or {"etex", "pdftex"}
+checkengines   = checkengines       or {"pdftex", "xetex", "luatex"}
 checkruns      = checkruns          or  2
 checksuppfiles = checksuppfiles     or
   {
@@ -38,7 +38,6 @@ checksuppfiles = checksuppfiles     or
     "luaotfload*.lua",
     "fixup_mathaxis.lua",
   }
-stdengine      = stdengine          or "etex"
 tagfiles       = tagfiles or {"*.dtx","*.ins","*.tex","README.md"}
 typesetsuppfiles = typesetsuppfiles or
   {"color.cfg", "graphics.cfg", "ltxdoc.cfg", "ltxguide.cfg"}

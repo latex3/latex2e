@@ -26,7 +26,7 @@ sourcefiles  = {"*.dtx", "*.ins", "*-????-??-??.sty"}
 
 -- not testing xetex in the lab, we may want to switch to pdftex instead of etex though
 
-checkengines = { "etex", "luatex" }
+checkengines = { "pdftex", "luatex" }
 
 
 checkdeps =
