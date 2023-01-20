@@ -13,9 +13,7 @@ maindir = "../.."
 -- Minor modifications to file types
 installfiles = {"*.ltx", "*.sty"}
 typesetfiles = {
-                 "latex-lab-testphase.dtx",
-                 "latex-lab-new-or.dtx",
-                 "latex-lab-footnotes.dtx",
+                 "latex-lab-*.dtx",
                  "*-doc.tex",
 		 "*-code.tex",
 	       }
@@ -49,7 +47,8 @@ typesetdeps =
 checksearch  = true
 
 -- Allow for TU and other test configurations
-checkconfigs = {"build","config-TU","config-OR","config-pdftex","config-pdftex-luatex"}
+
+checkconfigs = {"build","config-TU","config-OR","config-mathcapture";"config-pdftex","config-pdftex-luatex"}
 
 
 
@@ -67,7 +66,6 @@ uploadconfig = {
  uploader = "LaTeX Project team",
  email = "latex-team@latex-project.org",
  update = true ,
- note = [[Uploaded automatically by l3build...]],
 }
 
 

@@ -38,5 +38,5 @@ The license is LPPL 1.3c.
 
 This README file is
 
-Copyright (C) 2021-2022
+Copyright (C) 2021-2023
 The LaTeX Project
