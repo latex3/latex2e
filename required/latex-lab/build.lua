@@ -48,7 +48,7 @@ checksearch  = true
 
 -- Allow for TU and other test configurations
 
-checkconfigs = {"build","config-TU","config-OR","config-mathcapture";"config-pdftex","config-pdftex-luatex"}
+checkconfigs = {"build","config-TU","config-OR","config-mathcapture","config-OR-luatex"}
 
 
 
