@@ -1,5 +1,6 @@
 if not modules then modules = { } end modules ['font-onr'] = {
     version   = 1.001,
+    optimize  = true,
     comment   = "companion to font-ini.mkiv",
     author    = "Hans Hagen, PRAGMA-ADE, Hasselt NL",
     copyright = "PRAGMA ADE / ConTeXt Development Team",
@@ -21,7 +22,7 @@ add features.</p>
 
 local fonts, logs, trackers, resolvers = fonts, logs, trackers, resolvers
 
-local next, type, tonumber, rawget, rawset = next, type, tonumber, rawget, rawset
+local next, type, tonumber, rawset = next, type, tonumber, rawset
 local match, lower, gsub, strip, find = string.match, string.lower, string.gsub, string.strip, string.find
 local char, byte, sub = string.char, string.byte, string.sub
 local abs = math.abs

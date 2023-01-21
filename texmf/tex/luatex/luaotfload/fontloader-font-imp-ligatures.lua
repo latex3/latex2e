@@ -104,14 +104,14 @@ local function blockligatures(str)
                 before  = before,
                 current = { one, two },
                 after   = after,
-                lookups = { 1 }, -- not shared !
+                lookups = { 1, false }, -- not shared !
             }
             revert[new] = {
              -- before = before,
                 current = { one, zwj },
              -- after   = { two, unpack(after) },
                 after   = { two },
-                lookups = { 1 }, -- not shared !
+                lookups = { 1, false }, -- not shared !
             }
         end
     end

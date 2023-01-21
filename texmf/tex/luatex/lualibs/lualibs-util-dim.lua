@@ -44,8 +44,8 @@ local dimenfactors = allocate {
     ["pc"] = (    1/   12)/65536,
     ["dd"] = ( 1157/ 1238)/65536,
     ["cc"] = ( 1157/14856)/65536,
-    ["nd"] = (20320/21681)/65536,
-    ["nc"] = ( 5080/65043)/65536
+ -- ["nd"] = (20320/21681)/65536,
+ -- ["nc"] = ( 5080/65043)/65536
 }
 
 -- print(table.serialize(dimenfactors))
@@ -61,9 +61,9 @@ local dimenfactors = allocate {
 --   ["ex"]=6.103515625e-005,
 --   ["in"]=2.1113586636917117e-007,
 --   ["mm"]=5.3628510057769473e-008,
---   ["nc"]=1.1917446679504327e-006,
---   ["nd"]=1.4300936015405194e-005,
---   ["pc"]=1.2715657552083333e-006,
+-- --["nc"]=1.1917446679504327e-006,
+-- --["nd"]=1.4300936015405194e-005,
+-- --["pc"]=1.2715657552083333e-006,
 --   ["pt"]=1.52587890625e-005,
 --   ["sp"]=1,
 --  }
@@ -79,8 +79,8 @@ local dimenfactors = allocate {
 --   ["ex"]=0.00006103515625,
 --   ["in"]=0.00000021113587,
 --   ["mm"]=0.00000005362851,
---   ["nc"]=0.00000119174467,
---   ["nd"]=0.00001430093602,
+-- --["nc"]=0.00000119174467,
+-- --["nd"]=0.00001430093602,
 --   ["pc"]=0.00000127156576,
 --   ["pt"]=0.00001525878906,
 --   ["sp"]=1,
@@ -128,8 +128,8 @@ function number.tobasepoints  (n,fmt) return numbertodimen(n,"bp",fmt) end
 function number.topicas       (n,fmt) return numbertodimen(n "pc",fmt) end
 function number.todidots      (n,fmt) return numbertodimen(n,"dd",fmt) end
 function number.tociceros     (n,fmt) return numbertodimen(n,"cc",fmt) end
-function number.tonewdidots   (n,fmt) return numbertodimen(n,"nd",fmt) end
-function number.tonewciceros  (n,fmt) return numbertodimen(n,"nc",fmt) end
+-------- number.tonewdidots   (n,fmt) return numbertodimen(n,"nd",fmt) end
+-------- number.tonewciceros  (n,fmt) return numbertodimen(n,"nc",fmt) end
 
 --[[ldx--
 <p>More interesting it to implement a (sort of) dimen datatype, one

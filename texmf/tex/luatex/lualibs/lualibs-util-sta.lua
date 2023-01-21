@@ -81,6 +81,8 @@ end
 
 function stacker.new(name)
 
+    -- to be sped up, mmaybe foo:bar syntax here but then quite some access
+
     local report = logs.reporter("stacker",name or nil)
 
     local s
@@ -93,6 +95,7 @@ function stacker.new(name)
     local hashing = true
 
     local function push(...)
+        -- todo check if more than 1 argument
         for i=1,select("#",...) do
             insert(stack,(select(i,...))) -- watch the ()
         end
@@ -153,8 +156,12 @@ function stacker.new(name)
 
     local function resolve_step(ti) -- keep track of changes outside function !
         -- todo: optimize for n=1 etc
+        if not top then
+         -- report("messed op stacker %a",name)
+            return
+        end
         local result = nil
-        local noftop = top and #top or 0
+        local noftop = #top
         if ti > 0 then
             local current = list[ti]
             if current then

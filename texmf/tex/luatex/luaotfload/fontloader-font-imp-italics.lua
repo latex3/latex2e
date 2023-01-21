@@ -79,33 +79,7 @@ if context then
     registerotffeature(specification)
     registerafmfeature(specification)
 
-end
-
--- no longer used
-
--- if context then
---
---  -- local function initializemathitalics(tfmdata,value) -- yes no delay
---  --     tfmdata.properties.mathitalics = toboolean(value)
---  -- end
---  --
---  -- local specification = {
---  --     name         = "mathitalics",
---  --     description  = "use alternative math italic correction",
---  --     initializers = {
---  --         base = initializemathitalics,
---  --         node = initializemathitalics,
---  --     }
---  -- }
---  --
---  -- registerotffeature(specification)
---  -- registerafmfeature(specification)
---
--- end
-
--- -- also not used, only when testing
-
-if context then
+    -- only used when testing
 
     local letter = characters.is_letter
     local always = true

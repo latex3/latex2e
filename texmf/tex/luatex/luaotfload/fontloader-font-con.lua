@@ -40,7 +40,6 @@ local setmetatableindex      = table.setmetatableindex
 -- will be directives
 
 constructors.dontembed       = allocate()
-constructors.autocleanup     = true
 constructors.namemode        = "fullpath" -- will be a function
 
 constructors.version         = 1.01
@@ -50,6 +49,8 @@ constructors.privateoffset   = fonts.privateoffsets.textbase or 0xF0000
 constructors.cacheintex      = true -- so we see the original table in fonts.font
 
 constructors.addtounicode    = true
+
+constructors.fixprotrusion   = true
 
 -- This might become an interface:
 
@@ -134,21 +135,10 @@ make this profitable and the <l n='lua'/> based variant was just faster. A days
 wasted day but an experience richer.</p>
 --ldx]]--
 
--- we can get rid of the tfm instance when we have fast access to the
--- scaled character dimensions at the tex end, e.g. a fontobject.width
--- actually we already have some of that now as virtual keys in glyphs
---
--- flushing the kern and ligature tables from memory saves a lot (only
--- base mode) but it complicates vf building where the new characters
--- demand this data .. solution: functions that access them
-
 function constructors.cleanuptable(tfmdata)
-    if constructors.autocleanup and tfmdata.properties.virtualized then
-        for k, v in next, tfmdata.characters do
-            if v.commands then v.commands = nil end
-        --  if v.kerns    then v.kerns    = nil end
-        end
-    end
+    -- This no longer makes sense because the addition of font.getcopy and its
+    -- possible usage in generic implicates that we need to return the whole
+    -- lot now.
 end
 
 -- experimental, sharing kerns (unscaled and scaled) saves memory
@@ -201,6 +191,9 @@ function constructors.assignmathparameters(target,original) -- simple variant, n
         if not mathparameters.FractionDelimiterDisplayStyleSize then
             targetmathparameters.FractionDelimiterDisplayStyleSize = 2.40 * targetparameters.size
         end
+        if not targetmathparameters.SpaceBeforeScript then
+            targetmathparameters.SpaceBeforeScript = targetmathparameters.SpaceAfterScript
+        end
         target.mathparameters = targetmathparameters
     end
 end
@@ -220,59 +213,44 @@ end
 -- we default to false, so a macro package has to enable it explicitly. In
 -- LuaTeX the fullname is used to identify a font as being unique.
 
-constructors.sharefonts     = false
-constructors.nofsharedfonts = 0
-local sharednames           = { }
+local nofinstances = 0
+local instances    = setmetatableindex(function(t,k)
+    nofinstances = nofinstances + 1
+    t[k] = nofinstances
+    return nofinstances
+end)
 
 function constructors.trytosharefont(target,tfmdata)
-    if constructors.sharefonts then -- not robust !
-        local characters = target.characters
-        local n = 1
-        local t = { target.psname }
-        local u = sortedkeys(characters)
-        for i=1,#u do
-            local k = u[i]
-            n = n + 1 ; t[n] = k
-            n = n + 1 ; t[n] = characters[k].index or k
-        end
-        local h = md5.HEX(concat(t," "))
-        local s = sharednames[h]
-        if s then
-            if trace_defining then
-                report_defining("font %a uses backend resources of font %a",target.fullname,s)
-            end
-            target.fullname = s
-            constructors.nofsharedfonts = constructors.nofsharedfonts + 1
-            target.properties.sharedwith = s
+    local properties = target.properties
+    local instance   = properties.instance
+    if instance then
+        local fullname = target.fullname
+        local fontname = target.fontname
+        local psname   = target.psname
+        local format   = tfmdata.properties.format
+        if format == "opentype" then
+            target.streamprovider = 1
+        elseif format == "truetype" then
+            target.streamprovider = 2
         else
-            sharednames[h] = target.fullname
+            target.streamprovider = 0
+        end
+        if target.streamprovider > 0 then
+            if fullname then
+                fullname = fullname .. ":" .. instances[instance]
+                target.fullname = fullname
+            end
+            if fontname then
+                fontname = fontname .. ":" .. instances[instance]
+                target.fontname = fontname
+            end
+            if psname then
+                psname = psname   .. ":" .. instances[instance]
+                target.psname = psname
+            end
         end
     end
 end
-
--- function constructors.enhanceparameters(parameters)
---     local xheight = parameters.x_height
---     local quad    = parameters.quad
---     local space   = parameters.space
---     local stretch = parameters.space_stretch
---     local shrink  = parameters.space_shrink
---     local extra   = parameters.extra_space
---     local slant   = parameters.slant
---     -- synonyms
---     parameters.xheight       = xheight
---     parameters.spacestretch  = stretch
---     parameters.spaceshrink   = shrink
---     parameters.extraspace    = extra
---     parameters.em            = quad
---     parameters.ex            = xheight
---     parameters.slantperpoint = slant
---     parameters.spacing = {
---         width   = space,
---         stretch = stretch,
---         shrink  = shrink,
---         extra   = extra,
---     }
--- end
 
 local synonyms = {
     exheight      = "x_height",
@@ -444,9 +422,10 @@ function constructors.scale(tfmdata,specification)
  -- boundarychar       = 65536, -- there is now a string 'right_boundary'
  -- false_boundarychar = 65536, -- produces invalid tfm in luatex
     --
-    targetproperties.language = properties.language or "dflt" -- inherited
-    targetproperties.script   = properties.script   or "dflt" -- inherited
-    targetproperties.mode     = properties.mode     or "base" -- inherited
+    targetproperties.language   = properties.language or "dflt" -- inherited
+    targetproperties.script     = properties.script   or "dflt" -- inherited
+    targetproperties.mode       = properties.mode     or "base" -- inherited
+    targetproperties.method     = properties.method
     --
     local askedscaledpoints   = scaledpoints
     local scaledpoints, delta = constructors.calculatescale(tfmdata,scaledpoints,nil,specification) -- no shortcut, dan be redefined
@@ -465,12 +444,14 @@ function constructors.scale(tfmdata,specification)
     target.size          = scaledpoints
     --
     target.encodingbytes = properties.encodingbytes or 1
+    target.subfont       = properties.subfont
     target.embedding     = properties.embedding or "subset"
     target.tounicode     = 1
     target.cidinfo       = properties.cidinfo
     target.format        = properties.format
     target.cache         = constructors.cacheintex and "yes" or "renew"
     --
+    local original = properties.original or tfmdata.original
     local fontname = properties.fontname or tfmdata.fontname
     local fullname = properties.fullname or tfmdata.fullname
     local filename = properties.filename or tfmdata.filename
@@ -482,6 +463,7 @@ function constructors.scale(tfmdata,specification)
     --
     local psname, psfixed = fixedpsname(psname,fontname or fullname or file.nameonly(filename))
     --
+    target.original = original
     target.fontname = fontname
     target.fullname = fullname
     target.filename = filename
@@ -586,6 +568,15 @@ function constructors.scale(tfmdata,specification)
     targetparameters.quad          = targetquad
     targetparameters.extra_space   = targetextra_space
     --
+    local hshift = parameters.hshift
+    if hshift then
+        targetparameters.hshift = delta * hshift
+    end
+    local vshift = parameters.vshift
+    if vshift then
+        targetparameters.vshift = delta * vshift
+    end
+    --
     local ascender = parameters.ascender
     if ascender then
         targetparameters.ascender  = delta * ascender
@@ -597,7 +588,10 @@ function constructors.scale(tfmdata,specification)
     --
     constructors.enhanceparameters(targetparameters) -- official copies for us, now virtual
     --
-    local protrusionfactor = (targetquad ~= 0 and 1000/targetquad) or 0
+    -- I need to fix this in luatex ... get rid of quad there so that we can omit this here.
+    --
+    local protrusionfactor = constructors.fixprotrusion and ((targetquad ~= 0 and 1000/targetquad) or 1) or 1
+    --
     local scaledwidth      = defaultwidth  * hdelta
     local scaledheight     = defaultheight * vdelta
     local scaleddepth      = defaultdepth  * vdelta
@@ -606,13 +600,17 @@ function constructors.scale(tfmdata,specification)
     --
     if hasmath then
         constructors.assignmathparameters(target,tfmdata) -- does scaling and whatever is needed
-        properties.hasmath      = true
-        target.nomath           = false
-        target.MathConstants    = target.mathparameters
+        properties.hasmath       = true
+        target.nomath            = false
+        target.MathConstants     = target.mathparameters
+        --
+        local oldmath            = properties.oldmath
+        targetproperties.oldmath = oldmath
+        target.oldmath           = oldmath
     else
-        properties.hasmath      = false
-        target.nomath           = true
-        target.mathparameters   = nil -- nop
+        properties.hasmath       = false
+        target.nomath            = true
+        target.mathparameters    = nil -- nop
     end
     --
     -- Here we support some context specific trickery (this might move to a plugin). During the
@@ -1033,6 +1031,7 @@ function constructors.finalize(tfmdata)
     properties.psname        = properties.psname   or tfmdata.psname
     --
     properties.encodingbytes = tfmdata.encodingbytes or 1
+    properties.subfont       = tfmdata.subfont       or nil
     properties.embedding     = tfmdata.embedding     or "subset"
     properties.tounicode     = tfmdata.tounicode     or 1
     properties.cidinfo       = tfmdata.cidinfo       or nil
@@ -1066,6 +1065,7 @@ function constructors.finalize(tfmdata)
     tfmdata.psname           = nil
     --
     tfmdata.encodingbytes    = nil
+    tfmdata.subfont          = nil
     tfmdata.embedding        = nil
     tfmdata.tounicode        = nil
     tfmdata.cidinfo          = nil
@@ -1142,6 +1142,7 @@ hashmethods.normal = function(list)
                     m = m + 1
                     t[m] = k .. '=' .. tostring(v)
                 end
+                sort(t)
                 s[n] = k .. '={' .. concat(t,",") .. "}"
             else
                 s[n] = k .. '=' .. tostring(v)
