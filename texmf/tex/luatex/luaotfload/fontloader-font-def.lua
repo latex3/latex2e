@@ -45,7 +45,6 @@ specifiers.variants = variants
 definers.methods    = definers.methods or { }
 
 local internalized  = allocate() -- internal tex numbers (private)
-local lastdefined   = nil -- we don't want this one to end up in s-tra-02
 
 local loadedfonts   = constructors.loadedfonts
 local designsizes   = constructors.designsizes
@@ -208,9 +207,6 @@ function resolvers.name(specification)
                     features.normal = normal
                 end
                 normal.instance = instance
-             -- if not callbacks.supported.glyph_stream_provider then
-             --     normal.variableshapes = true -- for the moment
-             -- end
             end
             --
             local suffix = lower(suffixonly(resolved))
@@ -455,10 +451,6 @@ not gain much. By the way, passing id's back to in the callback was
 introduced later in the development.</p>
 --ldx]]--
 
-function definers.current() -- or maybe current
-    return lastdefined
-end
-
 function definers.registered(hash)
     local id = internalized[hash]
     return id, id and fontdata[id]
@@ -497,7 +489,9 @@ function definers.read(specification,size,id) -- id can be optional, name can al
         end
     else
         tfmdata = definers.loadfont(specification) -- can be overloaded
+-- put in properties instead
         if tfmdata then
+            tfmdata.original = specification.specification
             if trace_defining then
                 report_defining("loaded and hashed: %s",hash)
             end
@@ -511,7 +505,6 @@ function definers.read(specification,size,id) -- id can be optional, name can al
             end
         end
     end
-    lastdefined = tfmdata or id -- todo ! ! ! ! !
     if not tfmdata then -- or id?
         report_defining( "unknown font %a, loading aborted",specification.name)
     elseif trace_defining and type(tfmdata) == "table" then
@@ -533,4 +526,6 @@ end
 <p>We overload the <l n='tfm'/> reader.</p>
 --ldx]]--
 
-callbacks.register('define_font', definers.read, "definition of fonts (tfmdata preparation)")
+if not context then
+    callbacks.register('define_font', definers.read, "definition of fonts (tfmdata preparation)")
+end

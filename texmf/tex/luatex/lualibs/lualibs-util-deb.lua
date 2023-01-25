@@ -346,3 +346,25 @@ debugger.showtraceback = showtraceback
 -- debug.showtraceback = showtraceback
 
 -- showtraceback()
+
+-- For now also here because we want it in mtxrun (taken from lmt file):
+
+if luac then
+
+    local show, dump = luac.print, string.dump
+
+    function luac.inspect(v)
+        if type(v) == "function" then
+            local ok, str = xpcall(dump,function() end,v)
+            if ok then
+                v = str
+            end
+        end
+        if type(v) == "string" then
+            show(v,true)
+        else
+            print(v)
+        end
+    end
+
+end

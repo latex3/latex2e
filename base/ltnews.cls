@@ -429,6 +429,30 @@
 \newcommand{\@year}{\ClassError{ltnews}
    {No \protect\publicationyear~given}\@eha}
 
+\newcommand{\publicationday}{\renewcommand{\@day}}
+\newcommand{\@day}{01} % most releases happen on 1st of a month
+
+\newcommand{\publicationdate}{%
+  % support draft ltnews, \publicationyear{2023 --- DRAFT ...}
+  \expandafter\@gobblenonyear\@year\@nil
+  -\@julianmonthtonum\@month-\two@digits\@day}
+
+\newcommand{\@julianmonthtonum}[1]{\@nameuse{@juliantonum#1}}
+\def\@juliantonumJanuary  {01}
+\def\@juliantonumFebruary {02}
+\def\@juliantonumMarch    {03}
+\def\@juliantonumApril    {04}
+\def\@juliantonumMay      {05}
+\def\@juliantonumJune     {06}
+\def\@juliantonumJuly     {07}
+\def\@juliantonumAugust   {08}
+\def\@juliantonumSeptember{09}
+\def\@juliantonumOctober  {10}
+\def\@juliantonumNovember {11}
+\def\@juliantonumDecember {12}
+
+\long\def\@gobblenonyear#1#2#3#4#5\@nil{#1#2#3#4}
+
 \newcommand{\publicationissue}{\renewcommand{\@issue}}
 \newcommand{\@issue}{\ClassError{ltnews}
    {No \protect\publicationissue~given}\@eha}
@@ -449,7 +473,8 @@
    \twocolumn[{%
       \parbox[t][7\baselineskip]{\textwidth}{%
          \@titlefont\@title\\[\medskipamount]
-         \normalfont\normalsize\issuename~\@issue, \@month~\@year
+         \normalfont\normalsize\issuename~\@issue,
+         \@month~\@year~(\publicationdate)%
       }%
    }]%
    \thispagestyle{titlepage}
