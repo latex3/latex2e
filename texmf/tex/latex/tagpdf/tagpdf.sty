@@ -28,7 +28,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: tagpdf.dtx
-\ProvidesExplPackage {tagpdf} {2022-12-22} {0.98a}
+\ProvidesExplPackage {tagpdf} {2023-01-24} {0.98b}
   { A package to experiment with pdf tagging }
 
 \bool_if:nF
@@ -70,6 +70,7 @@
                 {
                   {abspage} { \int_use:N \g_shipout_readonly_int}
                   {tagmcabs}{ \int_use:N \c@g__tag_MCID_abs_int }
+                  {tagstruct}{\int_use:N \c@g__tag_struct_abs_int }
                 }
             }
        }
@@ -744,6 +745,54 @@
           { \pdf_object_ref:n { __tag/struct/0 } }
       }
   }
+\int_new:N\g__tag_tree_id_pad_int
+\cs_generate_variant:Nn \tl_count:n {e}
+\hook_gput_code:nnn{begindocument}{tagpdf}
+ {
+   \int_gset:Nn\g__tag_tree_id_pad_int
+    {\tl_count:e { \__tag_ref_value_lastpage:nn{tagstruct}{1000}}+1}
+ }
+
+\cs_new_protected:Npn \__tag_tree_write_idtree:
+  {
+    \tl_clear:N \l__tag_tmpa_tl
+    \tl_clear:N \l__tag_tmpb_tl
+    \int_zero:N \l__tag_tmpa_int
+    \int_step_inline:nn {\c@g__tag_struct_abs_int}
+      {
+        \int_incr:N\l__tag_tmpa_int
+        \tl_put_right:Nx \l__tag_tmpa_tl
+          {
+            \__tag_struct_get_id:n{##1}~\pdf_object_ref:n{__tag/struct/##1}~
+          }
+        \int_compare:nNnF {\l__tag_tmpa_int}<{50} %
+          {
+            \pdf_object_unnamed_write:nx {dict}
+              { /Limits~[\__tag_struct_get_id:n{##1-\l__tag_tmpa_int+1}~\__tag_struct_get_id:n{##1}]
+                /Names~[\l__tag_tmpa_tl]
+              }
+            \tl_put_right:Nx\l__tag_tmpb_tl {\pdf_object_ref_last:\c_space_tl}
+            \int_zero:N \l__tag_tmpa_int
+            \tl_clear:N \l__tag_tmpa_tl
+          }
+      }
+     \tl_if_empty:NF \l__tag_tmpa_tl
+      {
+        \pdf_object_unnamed_write:nx {dict}
+          {
+           /Limits~
+             [\__tag_struct_get_id:n{\c@g__tag_struct_abs_int-\l__tag_tmpa_int+1}~
+              \__tag_struct_get_id:n{\c@g__tag_struct_abs_int}]
+           /Names~[\l__tag_tmpa_tl]
+          }
+        \tl_put_right:Nx\l__tag_tmpb_tl {\pdf_object_ref_last:}
+      }
+      \pdf_object_unnamed_write:nx {dict}{/Kids~[\l__tag_tmpb_tl]}
+      \__tag_prop_gput:cnx
+          { g__tag_struct_0_prop }
+          { IDTree }
+          { \pdf_object_ref_last: }
+   }
 \pdf_version_compare:NnTF < {2.0}
  {
    \cs_new_protected:Npn \__tag_tree_write_structtreeroot:
@@ -756,7 +805,14 @@
           { g__tag_struct_0_prop }
           { RoleMap }
           { \pdf_object_ref:n { __tag/tree/rolemap } }
-        \__tag_struct_write_obj:n { 0 }
+        \__tag_struct_fill_kid_key:n { 0 }
+        \__tag_struct_get_dict_content:nN { 0 } \l__tag_tmpa_tl
+        \pdf_object_write:nnx
+            { __tag/struct/0 }
+            {dict}
+            {
+             \l__tag_tmpa_tl
+            }
      }
  }
  {
@@ -766,7 +822,14 @@
           { g__tag_struct_0_prop }
           { ParentTree }
           { \pdf_object_ref:n { __tag/tree/parenttree } }
-        \__tag_struct_write_obj:n { 0 }
+        \__tag_struct_fill_kid_key:n { 0 }
+        \__tag_struct_get_dict_content:nN { 0 } \l__tag_tmpa_tl
+        \pdf_object_write:nnx
+            { __tag/struct/0 }
+            {dict}
+            {
+             \l__tag_tmpa_tl
+            }
      }
  }
 \cs_new_protected:Npn \__tag_tree_write_structelements:
@@ -966,6 +1029,7 @@
         \hook_use:n {tagpdf/finish/before}
         \__tag_tree_final_checks:
         \__tag_tree_write_parenttree:
+        \__tag_tree_write_idtree:
         \__tag_tree_write_rolemap:
         \__tag_tree_write_classmap:
         \__tag_tree_write_namespaces:
@@ -1645,6 +1709,22 @@
   }
 \cs_generate_variant:Nn\__tag_check_parent_child:nnN {VVN}
 \cs_generate_variant:Nn\__tag_check_parent_child:nnnnN {VVVVN,nVnVN,VVnnN}
+\prg_set_protected_conditional:Npnn \tag_check_child:nn #1 #2 {T,F,TF}
+ {
+   \seq_get:NN\g__tag_struct_stack_seq\l__tag_tmpa_tl
+   \__tag_struct_get_tag_info:eNN
+      {\l__tag_tmpa_tl}
+      \l__tag_get_parent_tmpa_tl
+      \l__tag_get_parent_tmpb_tl
+   \__tag_check_parent_child:VVnnN
+     \l__tag_get_parent_tmpa_tl
+     \l__tag_get_parent_tmpb_tl
+      {#1}{#2}
+      \l__tag_parent_child_check_tl
+   \int_compare:nNnTF {  \l__tag_parent_child_check_tl } < {0}
+      {\prg_return_false:}
+      {\prg_return_true:}
+ }
 \tl_new:N \l__tag_role_remap_tag_tl
 \tl_new:N \l__tag_role_remap_NS_tl
 \cs_new_protected:Npn \__tag_role_remap: {  }
@@ -1832,6 +1912,16 @@
   { g__tag_struct_0_prop }
   { Namespaces }
   { \pdf_object_ref:n { __tag/tree/namespaces } }
+\cs_new:Npn \__tag_struct_get_id:n #1 %#1=struct num
+  {
+    (
+     ID.
+     \prg_replicate:nn
+      { \int_abs:n{\g__tag_tree_id_pad_int - \tl_count:e { \int_to_arabic:n { #1 } }} }
+      { 0 }
+     \int_to_arabic:n { #1 }
+    )
+  }
 
 \pdf_version_compare:NnTF < {2.0}
  {
@@ -2042,7 +2132,8 @@
             { __tag/struct/#1 }
             {dict}
             {
-              \l__tag_tmpa_tl
+              \l__tag_tmpa_tl\c_space_tl
+              /ID~\__tag_struct_get_id:n{#1}
             }
       }
       {
@@ -2094,6 +2185,10 @@
      {
        \prop_item:cn {g__tag_struct_\g__tag_struct_stack_current_tl _prop}{S}
      }
+  }
+\cs_new:Npn \__tag_get_data_struct_id:
+  {
+    \__tag_struct_get_id:n {\g__tag_struct_stack_current_tl}
   }
 \keys_define:nn { __tag / struct }
   {
@@ -2927,6 +3022,7 @@
   }
 \AddToHook{begindocument/before}
  {
+   \@ifundefined{@mult@ptagging@hook}{\RequirePackage{output-patches-tmp-ltx}}{} %
    \bool_if:NF \g__tag_mode_lua_bool
      {
         \cs_if_exist:NT \@kernel@before@footins
