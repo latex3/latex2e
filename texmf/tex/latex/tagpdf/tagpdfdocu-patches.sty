@@ -1,0 +1,188 @@
+%\RequirePackage[enable-debug]{expl3}[2018/06/14]
+\ProvidesExplPackage {tagpdfdocu-patches} {2022-12-22} {0.98a}
+ {patches/commands for the tagpdf documentation}
+\RequirePackage{etoolbox,xpatch}
+
+%vLogos
+
+\ExplSyntaxOn
+\DeclareRobustCommand\TeX{
+  \tag_mc_end_push:
+   \tag_struct_begin:n{tag=Span,alt=TeX,actualtext=TeX}
+    \tagmcbegin{}
+     T\kern-.1667em\lower.5ex\hbox{E}\kern-.125emX\@
+    \tagmcend
+   \tag_struct_end:
+  \tag_mc_begin_pop:n{}}
+\DeclareRobustCommand{\LaTeX}{L\kern-.36em%
+  {
+        \tag_mc_end_push:
+        \tag_struct_begin:n{tag=Span,alt=LaTeX,actualtext=LaTeX}
+        \tagmcbegin{}
+        \sbox\z@ T%
+         \vbox to\ht\z@{\hbox{\check@mathfonts
+                              \fontsize\sf@size\z@
+                              \math@fontsfalse\selectfont
+                              A}%
+                        \vss}%
+        }%
+        \kern-.15em%
+        T\kern-.1667em\lower.5ex\hbox{E}\kern-.125emX\@
+        \tagmcend
+        \tag_struct_end:
+        \tag_mc_begin_pop:n{}    
+  }
+% textbf
+
+\AddToHook{cmd/textbf/before}
+  {\leavevmode\tag_mc_end_push:\tag_struct_begin:n{tag=Strong}\tagmcbegin{}}
+
+\AddToHook{cmd/textbf/after}
+  {\tag_mc_end:\tag_struct_end:\tag_mc_begin_pop:n{}}
+  
+  
+\newcommand\minisec[1]{%
+    \if@noskipsec \leavevmode \fi
+    \par
+    \@afterindentfalse
+    \if@nobreak
+      \everypar{}%
+    \else
+      \addpenalty\@secpenalty\addvspace{1.5ex}%
+    \fi
+  {\tagpdfsetup{paratag=H10}\parindent \z@    
+   \setlength{\parfillskip}{\z@ plus 1fil}%
+    \raggedright\normalfont\bfseries\nobreak
+    \nobreak\interlinepenalty \@M #1\par\nobreak%
+  }\nobreak
+  \@afterheading
+}                    
+
+
+      
+%%%%
+%% Lists
+%% patches enumitem internals!
+%%%%
+\tagpdfsetup
+  {
+     newattribute =
+        {itemize}{/O /List /ListNumbering/Unordered},
+     newattribute =
+        {enumerate}{/O /List /ListNumbering/Ordered},        
+     newattribute =
+        {description}{/O /List /ListNumbering/Description},            
+  }
+\AddToHook{env/itemize/begin}{\par\tagstructbegin{tag=L,attribute-class=itemize}}%\par is needed to close the paragraph before.
+\AddToHook{env/itemize/end}{\par\tagstructend\tagstructend\tagstructend}%LBody,LI,L
+\AddToHook{env/enumerate/begin}{\par\tagstructbegin{tag=L,attribute-class=enumerate}}
+\AddToHook{env/enumerate/end}{\par\tagstructend\tagstructend\tagstructend}%LBody,LI,L
+\AddToHook{env/description/begin}{\par\tagstructbegin{tag=L,attribute-class=description}}
+\AddToHook{env/description/end}{\par\tagstructend\tagstructend\tagstructend}%LBody,LI,L
+
+\newcommand\tag@enit@format@preset[1]{%
+ \str_if_eq:eeTF { \prop_item:cn { g__tag_struct_\g__tag_struct_stack_current_tl _prop }{S} }{/L}
+  {
+   %\typeout{BEGIN~OF~LIST}
+  }
+  {%\typeout{NEXT ITEM}
+   \tagstructend\tagstructend} % for the LBody/LI
+  \tagstructbegin{tag=LI}
+  \tagstructbegin{tag=Lbl}
+  \tagmcbegin{}
+    #1
+  \tagmcend
+  \tagstructend
+  \tagstructbegin{tag=LBody}
+  }
+
+\ExplSyntaxOff
+\xpatchcmd\enit@preset{\@firstofone}{\tag@enit@format@preset}{}{\fail}
+%close mc from paratagging and reopen ...
+% this disturbs someone docCommand which has then a MC outside a P.
+\xpatchcmd\@item{\box\@labels}{\tagmcend \box\@labels \tagmcbegin{tag=P}}{}{\fail}
+\ExplSyntaxOn
+
+% keys that overwrite \enit@format must be patched, eg like the follow
+% the font key should be patched in a similar way
+\enitkv@key{}{format}{% new enumitem don't use first argument
+  \def\enit@format{%
+   \tagstructbegin{tag=LI}%
+   \tagstructbegin{tag=Lbl}%
+   \tagmcbegin{}%
+   #1\tagmcend}}
+
+
+% listings + verbatim
+% the paragraph code could create span around the lines ...
+% we use Code for every line.
+
+\AddToHook{env/lstlisting/begin}{\tagpdfsetup{paratag=Code}}
+\AddToHook{env/lstlisting/end}{}
+
+\AddToHook{env/verbatim/begin}{\tagpdfsetup{paratag=Code}}
+\AddToHook{env/verbatim/end}{}
+
+\AddToHook{env/docCommand/begin}{\tagstructbegin{tag=P}\tagpdfsetup{paratag=Code}}
+\AddToHook{env/docCommand/end}  {\tagstructend}
+
+% ======== marginnote ==========
+% TODO marginnote has a bug (a \par is missing) so it messes up tagging.
+% but currently unneeded as we marked them up as artifacts anyway as they don't contain
+% meaningful contents
+
+\NewDocumentCommand\sidenote{m}
+ {
+   \tag_mc_artifact_group_begin:n{notype}\tagpdfparaOff\marginnote{#1}\tag_mc_artifact_group_end:
+ }
+
+% ======== tikzpicture ==========
+% TODO this needs some investigation: it messes up the stack if one add paraOff
+
+\AddToHook{env/tikzpicture/begin}{}
+
+%======== tcolorbox ========
+% We switch of paratagging at the begin and reenable it locally in before upper.
+% the before upper setting is dangerous as it can be overwritten by
+% users. So a more stable hook is needed.
+%\AddToHook{env/tcolorbox/begin}{\tagpdfparaOff}
+%\AddToHook{env/docCommand/begin}{\tagpdfparaOff}
+%\tcbset{before~upper=\tagpdfparaOn}
+\AddToHook{env/tcolorbox/begin}{\tagpdfparaOff \tcbset{before~upper=\tagpdfparaOn}}
+\AddToHook{env/docCommand/begin}{\tagpdfparaOff \tcbset{before~upper=\tagpdfparaOn}}
+\ExplSyntaxOff
+% ======= footnote ========
+% done in testphase code
+
+% ======= bibliography ========
+% biblatex. Creates some empty mc-chunks.
+% no internal patches, but redefining begentry/finentry is not safe.
+% better hook is needed.
+
+\newbibmacro*{begentry}{\tagstructbegin{tag=BibEntry}\tagmcbegin{}}
+\newbibmacro*{finentry}{\finentry\tagmcend\tagstructend}
+
+% ====== hyperref ========
+% this should probably go into tagpdf, but it is related to
+% problem of pdf strings and context ....
+
+\AddToHook{package/hyperref/after}
+ {%
+  \pdfstringdefDisableCommands{%
+   \let\tagstructbegin\@gobble
+   \let\tagmcbegin\@gobble
+   \let\tagmcend\relax
+   \let\tagstructend\relax
+ }}{}
+
+
+%====== pictures ========
+% PAC3 complained that the BBox is missing, so we are cheating for now
+% and add a fix size.
+\tagpdfsetup
+  {
+     newattribute =
+        {bbox}{/O /Layout /BBox [0 0 100 100]}
+  }
+
+\endinput

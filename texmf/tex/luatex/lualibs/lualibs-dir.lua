@@ -230,18 +230,18 @@ if onwindows then -- we could sanitize here
 
 --     pattern = Ct {
     pattern = {
-        [1] = (Cs(P(".") + slash^1) + Cs(R("az","AZ") * P(":") * slash^0) + Cc("./")) * V(2) * V(3),
-        [2] = Cs(((1-S("*?/\\"))^0 * slash)^0),
-        [3] = Cs(P(1)^0)
+        (Cs(P(".") + slash^1) + Cs(R("az","AZ") * P(":") * slash^0) + Cc("./")) * V(2) * V(3),
+        Cs(((1-S("*?/\\"))^0 * slash)^0),
+        Cs(P(1)^0)
     }
 
 else -- assume unix
 
 --     pattern = Ct {
     pattern = {
-        [1] = (C(P(".") + P("/")^1) + Cc("./")) * V(2) * V(3),
-        [2] = C(((1-S("*?/"))^0 * P("/"))^0),
-        [3] = C(P(1)^0)
+        (C(P(".") + P("/")^1) + Cc("./")) * V(2) * V(3),
+        C(((1-S("*?/"))^0 * P("/"))^0),
+        C(P(1)^0)
     }
 
 end

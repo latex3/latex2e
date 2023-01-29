@@ -203,12 +203,14 @@ local collapser        = Cs(spacer^0/"" * nonspacer^0 * ((spacer^0/" " * nonspac
 local nospacer         = Cs((whitespace^1/"" + nonwhitespace^1)^0)
 
 local b_collapser      = Cs( whitespace^0              /"" * (nonwhitespace^1 + whitespace^1/" ")^0)
-local e_collapser      = Cs((whitespace^1 * endofstring/"" +  nonwhitespace^1 + whitespace^1/" ")^0)
 local m_collapser      = Cs(                                 (nonwhitespace^1 + whitespace^1/" ")^0)
+local e_collapser      = Cs((whitespace^1 * endofstring/"" +  nonwhitespace^1 + whitespace^1/" ")^0)
+local x_collapser      = Cs(                                 (nonwhitespace^1 + whitespace^1/"" )^0)
 
 local b_stripper       = Cs( spacer^0              /"" * (nonspacer^1 + spacer^1/" ")^0)
-local e_stripper       = Cs((spacer^1 * endofstring/"" +  nonspacer^1 + spacer^1/" ")^0)
 local m_stripper       = Cs(                             (nonspacer^1 + spacer^1/" ")^0)
+local e_stripper       = Cs((spacer^1 * endofstring/"" +  nonspacer^1 + spacer^1/" ")^0)
+local x_stripper       = Cs(                             (nonspacer^1 + spacer^1/"" )^0)
 
 patterns.stripper      = stripper
 patterns.fullstripper  = fullstripper
@@ -218,10 +220,12 @@ patterns.nospacer      = nospacer
 patterns.b_collapser   = b_collapser
 patterns.m_collapser   = m_collapser
 patterns.e_collapser   = e_collapser
+patterns.x_collapser   = x_collapser
 
 patterns.b_stripper    = b_stripper
 patterns.m_stripper    = m_stripper
 patterns.e_stripper    = e_stripper
+patterns.x_stripper    = x_stripper
 
 patterns.lowercase     = lowercase
 patterns.uppercase     = uppercase
@@ -295,7 +299,7 @@ patterns.longtostring  = Cs(whitespace^0/"" * ((patterns.quoted + nonwhitespace^
 --     return P { P(pattern) + 1 * V(1) }
 -- end
 
-function anywhere(pattern) -- faster
+local function anywhere(pattern) -- faster
     return (1-P(pattern))^0 * P(pattern)
 end
 
@@ -503,7 +507,7 @@ end
 
 -- todo: cache when string
 
-function lpeg.replacer(one,two,makefunction,isutf) -- in principle we should sort the keys
+function lpeg.replacer(one,two,makefunction,isutf) -- in principle we should sort the keys but we have a better one anyway
     local pattern
     local u = isutf and utf8char or 1
     if type(one) == "table" then
@@ -661,12 +665,12 @@ end
 -- lpeg.print(lpeg.P("a","b","c"))
 -- lpeg.print(lpeg.S("a","b","c"))
 
--- print(lpeg.count("äáàa",lpeg.P("á") + lpeg.P("à")))
--- print(lpeg.count("äáàa",lpeg.UP("áà")))
--- print(lpeg.count("äáàa",lpeg.US("àá")))
--- print(lpeg.count("äáàa",lpeg.UR("aá")))
--- print(lpeg.count("äáàa",lpeg.UR("àá")))
--- print(lpeg.count("äáàa",lpeg.UR(0x0000,0xFFFF)))
+-- print(lpeg.counter(lpeg.P("á") + lpeg.P("à"))("äáàa"))
+-- print(lpeg.counter(lpeg.UP("áà"))("äáàa"))
+-- print(lpeg.counter(lpeg.US("àá"))("äáàa"))
+-- print(lpeg.counter(lpeg.UR("aá"))("äáàa"))
+-- print(lpeg.counter(lpeg.UR("àá"))("äáàa"))
+-- print(lpeg.counter(lpeg.UR(0x0000,0xFFFF)))
 
 function lpeg.is_lpeg(p)
     return p and lpegtype(p) == "pattern"

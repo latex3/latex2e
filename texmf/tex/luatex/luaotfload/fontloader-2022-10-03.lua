@@ -1,14 +1,14 @@
 --[[info-----------------------------------------------------------------------
   Luaotfload fontloader package
-  build 2019-08-13 18:34:34
+  build 2022-10-03 20:21:57
 -------------------------------------------------------------------------------
 
-  © 2019 PRAGMA ADE / ConTeXt Development Team
+  © 2022 PRAGMA ADE / ConTeXt Development Team
 
   The code in this file is provided under the GPL v2.0 license. See the
   file COPYING in the Luaotfload repository for details.
 
-  Report bugs to github.com/u-fischer/luaotfload
+  Report bugs to https://github.com/latex3/luaotfload
 
   This file has been assembled from components taken from Context. See
   the Luaotfload documentation for details:
@@ -50,6 +50,7 @@
     · fontloader-fonts-tfm.lua
     · fontloader-font-lua.lua
     · fontloader-font-def.lua
+    · fontloader-font-shp.lua
     · fontloader-fonts-def.lua
     · fontloader-fonts-ext.lua
     · fontloader-font-imp-tex.lua
@@ -62,7 +63,7 @@
 --info]]-----------------------------------------------------------------------
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “data-con” 7ce546725b1550f655c78ac9d69419ca] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “data-con” 23a0f5386d46a1c157ae82a373e35fa0] ---
 
 if not modules then modules={} end modules ['data-con']={
  version=1.100,
@@ -71,6 +72,7 @@ if not modules then modules={} end modules ['data-con']={
  copyright="PRAGMA ADE / ConTeXt Development Team",
  license="see context related readme files"
 }
+local setmetatable=setmetatable
 local format,lower,gsub=string.format,string.lower,string.gsub
 local trace_cache=false  trackers.register("resolvers.cache",function(v) trace_cache=v end)
 local trace_containers=false  trackers.register("resolvers.containers",function(v) trace_containers=v end)
@@ -78,16 +80,21 @@ local trace_storage=false  trackers.register("resolvers.storage",function(v) tra
 containers=containers or {}
 local containers=containers
 containers.usecache=true
+local getwritablepath=caches.getwritablepath
+local getreadablepaths=caches.getreadablepaths
+local cacheiswritable=caches.is_writable
+local loaddatafromcache=caches.loaddata
+local savedataincache=caches.savedata
 local report_containers=logs.reporter("resolvers","containers")
 local allocated={}
 local mt={
  __index=function(t,k)
   if k=="writable" then
-   local writable=caches.getwritablepath(t.category,t.subcategory) or { "." }
+   local writable=getwritablepath(t.category,t.subcategory) or { "." }
    t.writable=writable
    return writable
   elseif k=="readables" then
-   local readables=caches.getreadablepaths(t.category,t.subcategory) or { "." }
+   local readables=getreadablepaths(t.category,t.subcategory) or { "." }
    t.readables=readables
    return readables
   end
@@ -118,7 +125,7 @@ function containers.define(category,subcategory,version,enabled)
  end
 end
 function containers.is_usable(container,name)
- return container.enabled and caches and caches.is_writable(container.writable,name)
+ return container.enabled and caches and cacheiswritable(container.writable,name)
 end
 function containers.is_valid(container,name)
  if name and name~="" then
@@ -132,7 +139,7 @@ function containers.read(container,name)
  local storage=container.storage
  local stored=storage[name]
  if not stored and container.enabled and caches and containers.usecache then
-  stored=caches.loaddata(container.readables,name,container.writable)
+  stored=loaddatafromcache(container.readables,name,container.writable)
   if stored and stored.cache_version==container.version then
    if trace_cache or trace_containers then
     report_containers("action %a, category %a, name %a","load",container.subcategory,name)
@@ -148,17 +155,20 @@ function containers.read(container,name)
  end
  return stored
 end
-function containers.write(container,name,data)
+function containers.write(container,name,data,fast)
  if data then
   data.cache_version=container.version
   if container.enabled and caches then
-   local unique,shared=data.unique,data.shared
-   data.unique,data.shared=nil,nil
-   caches.savedata(container.writable,name,data)
+   local unique=data.unique
+   local shared=data.shared
+   data.unique=nil
+   data.shared=nil
+   savedataincache(container.writable,name,data,fast)
    if trace_cache or trace_containers then
     report_containers("action %a, category %a, name %a","save",container.subcategory,name)
    end
-   data.unique,data.shared=unique,shared
+   data.unique=unique
+   data.shared=shared
   end
   if trace_cache or trace_containers then
    report_containers("action %a, category %a, name %a","store",container.subcategory,name)
@@ -174,10 +184,10 @@ function containers.cleanname(name)
  return (gsub(lower(name),"[^%w\128-\255]+","-")) 
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “data-con”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “data-con”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “basics-nod” 65064d03c2650a1761ee13ebd9e1400a] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “basics-nod” 1750af43148def9e7a75c6900a96f9dc] ---
 
 if not modules then modules={} end modules ['luatex-fonts-nod']={
  version=1.001,
@@ -230,8 +240,9 @@ end
 nodes.nodecodes=nodecodes
 nodes.glyphcodes=glyphcodes
 nodes.disccodes=disccodes
-nodes.handlers.protectglyphs=node.protect_glyphs   
-nodes.handlers.unprotectglyphs=node.unprotect_glyphs
+nodes.dirvalues={ lefttoright=0,righttoleft=1 }
+nodes.handlers.protectglyphs=node.protectglyphs   or node.protect_glyphs   
+nodes.handlers.unprotectglyphs=node.unprotectglyphs or node.unprotect_glyphs
 local direct=node.direct
 local nuts={}
 nodes.nuts=nuts
@@ -244,9 +255,9 @@ nuts.tonut=tonut
 nuts.getattr=direct.get_attribute
 nuts.getboth=direct.getboth
 nuts.getchar=direct.getchar
-nuts.getcomponents=direct.getcomponents
 nuts.getdirection=direct.getdirection
 nuts.getdisc=direct.getdisc
+nuts.getreplace=direct.getreplace
 nuts.getfield=direct.getfield
 nuts.getfont=direct.getfont
 nuts.getid=direct.getid
@@ -254,6 +265,7 @@ nuts.getkern=direct.getkern
 nuts.getlist=direct.getlist
 nuts.getnext=direct.getnext
 nuts.getoffsets=direct.getoffsets
+nuts.getoptions=direct.getoptions or function() return 0 end
 nuts.getprev=direct.getprev
 nuts.getsubtype=direct.getsubtype
 nuts.getwidth=direct.getwidth
@@ -263,7 +275,8 @@ nuts.setchar=direct.setchar
 nuts.setcomponents=direct.setcomponents
 nuts.setdirection=direct.setdirection
 nuts.setdisc=direct.setdisc
-nuts.setfield=setfield
+nuts.setreplace=direct.setreplace
+nuts.setfield=direct.setfield
 nuts.setkern=direct.setkern
 nuts.setlink=direct.setlink
 nuts.setlist=direct.setlist
@@ -273,32 +286,33 @@ nuts.setprev=direct.setprev
 nuts.setsplit=direct.setsplit
 nuts.setsubtype=direct.setsubtype
 nuts.setwidth=direct.setwidth
-nuts.getglyphdata=nuts.getattr
-nuts.setglyphdata=nuts.setattr
-nuts.ischar=direct.is_char
-nuts.isglyph=direct.is_glyph
+nuts.getglyphdata=nuts.getattribute or nuts.getattr
+nuts.setglyphdata=nuts.setattribute or nuts.setattr
+nuts.ischar=direct.ischar  or direct.is_char
+nuts.isglyph=direct.isglyph    or direct.is_glyph
 nuts.copy=direct.copy
-nuts.copy_list=direct.copy_list
-nuts.copy_node=direct.copy
-nuts.delete=direct.delete
-nuts.end_of_math=direct.end_of_math
+nuts.copynode=direct.copy
+nuts.copylist=direct.copylist   or direct.copy_list
+nuts.endofmath=direct.endofmath  or direct.end_of_math
 nuts.flush=direct.flush
-nuts.flush_list=direct.flush_list
-nuts.flush_node=direct.flush_node
+nuts.flushlist=direct.flushlist  or direct.flush_list
+nuts.flushnode=direct.flushnode  or direct.flush_node
 nuts.free=direct.free
-nuts.insert_after=direct.insert_after
-nuts.insert_before=direct.insert_before
-nuts.is_node=direct.is_node
+nuts.insertafter=direct.insertafter   or direct.insert_after
+nuts.insertbefore=direct.insertbefore  or direct.insert_before
+nuts.isnode=direct.isnode  or direct.is_node
+nuts.isdirect=direct.isdirect   or direct.is_direct
+nuts.isnut=direct.isdirect   or direct.is_direct
 nuts.kerning=direct.kerning
 nuts.ligaturing=direct.ligaturing
 nuts.new=direct.new
 nuts.remove=direct.remove
 nuts.tail=direct.tail
 nuts.traverse=direct.traverse
-nuts.traverse_char=direct.traverse_char
-nuts.traverse_glyph=direct.traverse_glyph
-nuts.traverse_id=direct.traverse_id
-local propertydata=direct.get_properties_table()
+nuts.traversechar=direct.traversechar  or direct.traverse_char
+nuts.traverseglyph=direct.traverseglyph or direct.traverse_glyph
+nuts.traverseid=direct.traverseid or direct.traverse_id
+local propertydata=(direct.getpropertiestable or direct.get_properties_table)()
 nodes.properties={ data=propertydata }
 if direct.set_properties_mode then
  direct.set_properties_mode(true,true)
@@ -328,63 +342,122 @@ local getnext=nuts.getnext
 local setlink=nuts.setlink
 local getfield=nuts.getfield
 local setfield=nuts.setfield
-local getcomponents=nuts.getcomponents
-local setcomponents=nuts.setcomponents
+local getsubtype=nuts.getsubtype
+local isglyph=nuts.isglyph
 local find_tail=nuts.tail
-local flush_list=nuts.flush_list
-local flush_node=nuts.flush_node
-local traverse_id=nuts.traverse_id
-local copy_node=nuts.copy_node
+local flushlist=nuts.flushlist
+local flushnode=nuts.flushnode
+local traverseid=nuts.traverseid
+local copynode=nuts.copynode
 local glyph_code=nodes.nodecodes.glyph
-function nuts.copy_no_components(g,copyinjection)
- local components=getcomponents(g)
- if components then
-  setcomponents(g)
-  local n=copy_node(g)
-  if copyinjection then
-   copyinjection(n,g)
-  end
-  setcomponents(g,components)
-  return n
- else
-  local n=copy_node(g)
-  if copyinjection then
-   copyinjection(n,g)
-  end
-  return n
+local ligature_code=nodes.glyphcodes.ligature
+do 
+ local p=nodecodes.localpar or nodecodes.local_par
+ if p then
+  nodecodes.par=p
+  nodecodes[p]="par"
+  nodecodes.localpar=p 
+  nodecodes.local_par=p 
  end
 end
-function nuts.copy_only_glyphs(current)
- local head=nil
- local previous=nil
- for n in traverse_id(glyph_code,current) do
-  n=copy_node(n)
-  if head then
-   setlink(previous,n)
+do
+ local getcomponents=node.direct.getcomponents
+ local setcomponents=node.direct.setcomponents
+ local function copynocomponents(g,copyinjection)
+  local components=getcomponents(g)
+  if components then
+   setcomponents(g)
+   local n=copynode(g)
+   if copyinjection then
+    copyinjection(n,g)
+   end
+   setcomponents(g,components)
+   return n
   else
-   head=n
+   local n=copynode(g)
+   if copyinjection then
+    copyinjection(n,g)
+   end
+   return n
   end
-  previous=n
  end
- return head
+ local function copyonlyglyphs(current)
+  local head=nil
+  local previous=nil
+  for n in traverseid(glyph_code,current) do
+   n=copynode(n)
+   if head then
+    setlink(previous,n)
+   else
+    head=n
+   end
+   previous=n
+  end
+  return head
+ end
+ local function countcomponents(start,marks)
+  local char=isglyph(start)
+  if char then
+   if getsubtype(start)==ligature_code then
+    local n=0
+    local components=getcomponents(start)
+    while components do
+     n=n+countcomponents(components,marks)
+     components=getnext(components)
+    end
+    return n
+   elseif not marks[char] then
+    return 1
+   end
+  end
+  return 0
+ end
+ local function flushcomponents()
+ end
+ nuts.components={
+  set=setcomponents,
+  get=getcomponents,
+  copyonlyglyphs=copyonlyglyphs,
+  copynocomponents=copynocomponents,
+  count=countcomponents,
+  flush=flushcomponents,
+ }
 end
-nuts.uses_font=direct.uses_font
+nuts.usesfont=direct.usesfont or direct.uses_font
 do
  local dummy=tonut(node.new("glyph"))
  nuts.traversers={
-  glyph=nuts.traverse_id(nodecodes.glyph,dummy),
-  glue=nuts.traverse_id(nodecodes.glue,dummy),
-  disc=nuts.traverse_id(nodecodes.disc,dummy),
-  boundary=nuts.traverse_id(nodecodes.boundary,dummy),
-  char=nuts.traverse_char(dummy),
+  glyph=nuts.traverseid(nodecodes.glyph,dummy),
+  glue=nuts.traverseid(nodecodes.glue,dummy),
+  disc=nuts.traverseid(nodecodes.disc,dummy),
+  boundary=nuts.traverseid(nodecodes.boundary,dummy),
+  char=nuts.traversechar(dummy),
   node=nuts.traverse(dummy),
  }
 end
+if not nuts.setreplace then
+ local getdisc=nuts.getdisc
+ local setfield=nuts.setfield
+ function nuts.getreplace(n)
+  local _,_,h,_,_,t=getdisc(n,true)
+  return h,t
+ end
+ function nuts.setreplace(n,h)
+  setfield(n,"replace",h)
+ end
+end
+do
+ local getsubtype=nuts.getsubtype
+ function nuts.startofpar(n)
+  local s=getsubtype(n)
+  return s==0 or s==2 
+ end
+end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “basics-nod”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “basics-nod”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “basics-chr” 58b7ef0c486e06090b362971b9f85e27] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “basics-chr” ce4afac7ba19471f3c8f90800839f315] ---
 
 
 characters=characters or {}
@@ -587,6 +660,7 @@ characters.classifiers={
  [1562]=5,
  [1563]=6,
  [1564]=6,
+ [1565]=6,
  [1566]=6,
  [1567]=6,
  [1568]=2,
@@ -1053,9 +1127,9 @@ characters.classifiers={
  [2131]=2,
  [2132]=3,
  [2133]=2,
- [2134]=4,
- [2135]=4,
- [2136]=4,
+ [2134]=3,
+ [2135]=3,
+ [2136]=3,
  [2137]=5,
  [2138]=5,
  [2139]=5,
@@ -1070,6 +1144,47 @@ characters.classifiers={
  [2152]=2,
  [2153]=3,
  [2154]=3,
+ [2160]=3,
+ [2161]=3,
+ [2162]=3,
+ [2163]=3,
+ [2164]=3,
+ [2165]=3,
+ [2166]=3,
+ [2167]=3,
+ [2168]=3,
+ [2169]=3,
+ [2170]=3,
+ [2171]=3,
+ [2172]=3,
+ [2173]=3,
+ [2174]=3,
+ [2175]=3,
+ [2176]=3,
+ [2177]=3,
+ [2178]=3,
+ [2179]=2,
+ [2180]=2,
+ [2181]=2,
+ [2182]=2,
+ [2183]=4,
+ [2184]=4,
+ [2185]=2,
+ [2186]=2,
+ [2187]=2,
+ [2188]=2,
+ [2189]=2,
+ [2190]=3,
+ [2192]=4,
+ [2193]=4,
+ [2200]=5,
+ [2201]=5,
+ [2202]=5,
+ [2203]=5,
+ [2204]=5,
+ [2205]=5,
+ [2206]=5,
+ [2207]=5,
  [2208]=2,
  [2209]=2,
  [2210]=2,
@@ -1091,6 +1206,7 @@ characters.classifiers={
  [2226]=3,
  [2227]=2,
  [2228]=2,
+ [2229]=2,
  [2230]=2,
  [2231]=2,
  [2232]=2,
@@ -1099,6 +1215,26 @@ characters.classifiers={
  [2235]=2,
  [2236]=2,
  [2237]=2,
+ [2238]=2,
+ [2239]=2,
+ [2240]=2,
+ [2241]=2,
+ [2242]=2,
+ [2243]=2,
+ [2244]=2,
+ [2245]=2,
+ [2246]=2,
+ [2247]=2,
+ [2248]=2,
+ [2250]=5,
+ [2251]=5,
+ [2252]=5,
+ [2253]=5,
+ [2254]=5,
+ [2255]=5,
+ [2256]=5,
+ [2257]=5,
+ [2258]=5,
  [2259]=5,
  [2260]=5,
  [2261]=5,
@@ -1218,6 +1354,7 @@ characters.classifiers={
  [2883]=5,
  [2884]=5,
  [2893]=5,
+ [2901]=5,
  [2902]=5,
  [2914]=5,
  [2915]=5,
@@ -1226,6 +1363,7 @@ characters.classifiers={
  [3021]=5,
  [3072]=5,
  [3076]=5,
+ [3132]=5,
  [3134]=5,
  [3135]=5,
  [3136]=5,
@@ -1259,6 +1397,7 @@ characters.classifiers={
  [3405]=5,
  [3426]=5,
  [3427]=5,
+ [3457]=5,
  [3530]=5,
  [3538]=5,
  [3539]=5,
@@ -1438,6 +1577,7 @@ characters.classifiers={
  [6156]=5,
  [6157]=5,
  [6158]=4,
+ [6159]=5,
  [6176]=2,
  [6177]=2,
  [6178]=2,
@@ -1622,6 +1762,22 @@ characters.classifiers={
  [6843]=5,
  [6844]=5,
  [6845]=5,
+ [6847]=5,
+ [6848]=5,
+ [6849]=5,
+ [6850]=5,
+ [6851]=5,
+ [6852]=5,
+ [6853]=5,
+ [6854]=5,
+ [6855]=5,
+ [6856]=5,
+ [6857]=5,
+ [6858]=5,
+ [6859]=5,
+ [6860]=5,
+ [6861]=5,
+ [6862]=5,
  [6912]=5,
  [6913]=5,
  [6914]=5,
@@ -1754,6 +1910,7 @@ characters.classifiers={
  [7671]=5,
  [7672]=5,
  [7673]=5,
+ [7674]=5,
  [7675]=5,
  [7676]=5,
  [7677]=5,
@@ -1855,6 +2012,7 @@ characters.classifiers={
  [43019]=5,
  [43045]=5,
  [43046]=5,
+ [43052]=5,
  [43072]=2,
  [43073]=2,
  [43074]=2,
@@ -2131,6 +2289,8 @@ characters.classifiers={
  [68901]=5,
  [68902]=5,
  [68903]=5,
+ [69291]=5,
+ [69292]=5,
  [69424]=2,
  [69425]=2,
  [69426]=2,
@@ -2168,6 +2328,56 @@ characters.classifiers={
  [69458]=2,
  [69459]=2,
  [69460]=3,
+ [69488]=2,
+ [69489]=2,
+ [69490]=2,
+ [69491]=2,
+ [69492]=3,
+ [69493]=3,
+ [69494]=2,
+ [69495]=2,
+ [69496]=2,
+ [69497]=2,
+ [69498]=2,
+ [69499]=2,
+ [69500]=2,
+ [69501]=2,
+ [69502]=2,
+ [69503]=2,
+ [69504]=2,
+ [69505]=2,
+ [69506]=5,
+ [69507]=5,
+ [69508]=5,
+ [69509]=5,
+ [69552]=2,
+ [69553]=4,
+ [69554]=2,
+ [69555]=2,
+ [69556]=3,
+ [69557]=3,
+ [69558]=3,
+ [69559]=4,
+ [69560]=2,
+ [69561]=3,
+ [69562]=3,
+ [69563]=2,
+ [69564]=2,
+ [69565]=3,
+ [69566]=2,
+ [69567]=2,
+ [69568]=4,
+ [69569]=2,
+ [69570]=3,
+ [69571]=3,
+ [69572]=2,
+ [69573]=4,
+ [69574]=4,
+ [69575]=4,
+ [69576]=4,
+ [69577]=3,
+ [69578]=2,
+ [69579]=1,
  [69633]=5,
  [69688]=5,
  [69689]=5,
@@ -2184,6 +2394,9 @@ characters.classifiers={
  [69700]=5,
  [69701]=5,
  [69702]=5,
+ [69744]=5,
+ [69747]=5,
+ [69748]=5,
  [69759]=5,
  [69760]=5,
  [69761]=5,
@@ -2194,6 +2407,7 @@ characters.classifiers={
  [69817]=5,
  [69818]=5,
  [69821]=4,
+ [69826]=5,
  [69837]=4,
  [69888]=5,
  [69889]=5,
@@ -2226,6 +2440,7 @@ characters.classifiers={
  [70090]=5,
  [70091]=5,
  [70092]=5,
+ [70095]=5,
  [70191]=5,
  [70192]=5,
  [70193]=5,
@@ -2336,6 +2551,10 @@ characters.classifiers={
  [71735]=5,
  [71737]=5,
  [71738]=5,
+ [71995]=5,
+ [71996]=5,
+ [71998]=5,
+ [72003]=5,
  [72148]=5,
  [72149]=5,
  [72150]=5,
@@ -2473,8 +2692,78 @@ characters.classifiers={
  [94096]=5,
  [94097]=5,
  [94098]=5,
+ [94180]=5,
  [113821]=5,
  [113822]=5,
+ [118528]=5,
+ [118529]=5,
+ [118530]=5,
+ [118531]=5,
+ [118532]=5,
+ [118533]=5,
+ [118534]=5,
+ [118535]=5,
+ [118536]=5,
+ [118537]=5,
+ [118538]=5,
+ [118539]=5,
+ [118540]=5,
+ [118541]=5,
+ [118542]=5,
+ [118543]=5,
+ [118544]=5,
+ [118545]=5,
+ [118546]=5,
+ [118547]=5,
+ [118548]=5,
+ [118549]=5,
+ [118550]=5,
+ [118551]=5,
+ [118552]=5,
+ [118553]=5,
+ [118554]=5,
+ [118555]=5,
+ [118556]=5,
+ [118557]=5,
+ [118558]=5,
+ [118559]=5,
+ [118560]=5,
+ [118561]=5,
+ [118562]=5,
+ [118563]=5,
+ [118564]=5,
+ [118565]=5,
+ [118566]=5,
+ [118567]=5,
+ [118568]=5,
+ [118569]=5,
+ [118570]=5,
+ [118571]=5,
+ [118572]=5,
+ [118573]=5,
+ [118576]=5,
+ [118577]=5,
+ [118578]=5,
+ [118579]=5,
+ [118580]=5,
+ [118581]=5,
+ [118582]=5,
+ [118583]=5,
+ [118584]=5,
+ [118585]=5,
+ [118586]=5,
+ [118587]=5,
+ [118588]=5,
+ [118589]=5,
+ [118590]=5,
+ [118591]=5,
+ [118592]=5,
+ [118593]=5,
+ [118594]=5,
+ [118595]=5,
+ [118596]=5,
+ [118597]=5,
+ [118598]=5,
  [119143]=5,
  [119144]=5,
  [119145]=5,
@@ -2672,6 +2961,7 @@ characters.classifiers={
  [123188]=5,
  [123189]=5,
  [123190]=5,
+ [123566]=5,
  [123628]=5,
  [123629]=5,
  [123630]=5,
@@ -2839,6 +3129,7 @@ characters.indicgroups={
   [2879]=true,
   [2902]=true,
   [3376]=true,
+  [5901]=true,
  },
  ["after_postscript"]={
   [2433]=true,
@@ -3014,6 +3305,7 @@ characters.indicgroups={
   [2915]=true,
   [3009]=true,
   [3010]=true,
+  [3132]=true,
   [3170]=true,
   [3171]=true,
   [3260]=true,
@@ -3432,6 +3724,7 @@ characters.indicgroups={
   [4225]=true,
   [4226]=true,
   [4238]=true,
+  [5901]=true,
   [43488]=true,
   [43489]=true,
   [43490]=true,
@@ -3756,6 +4049,7 @@ characters.indicgroups={
   [3090]=true,
   [3091]=true,
   [3092]=true,
+  [3165]=true,
   [3168]=true,
   [3169]=true,
   [3205]=true,
@@ -3772,6 +4066,7 @@ characters.indicgroups={
   [3218]=true,
   [3219]=true,
   [3220]=true,
+  [3293]=true,
   [3296]=true,
   [3297]=true,
   [3333]=true,
@@ -3812,6 +4107,7 @@ characters.indicgroups={
   [2620]=true,
   [2748]=true,
   [2876]=true,
+  [3132]=true,
   [3260]=true,
  },
  ["post_mark"]={
@@ -3915,6 +4211,7 @@ characters.indicgroups={
   [3120]=true,
   [3248]=true,
   [3376]=true,
+  [5901]=true,
  },
  ["stress_tone_mark"]={
   [2385]=true,
@@ -3994,10 +4291,10 @@ characters.indicgroups={
  },
 }
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “basics-chr”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “basics-chr”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-ini” 4299a02110bbd7c0d27e131235c5319d] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-ini” 5343de60613adb24cdd7a8d2ee1d153c] ---
 
 if not modules then modules={} end modules ['font-ini']={
  version=1.001,
@@ -4034,11 +4331,14 @@ fonts.privateoffsets={
  mathbase=0xFF000,
  keepnames=false,
 }
+if node and not tex.getfontoffamily then
+ tex.getfontoffamily=node.family_font 
+end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-ini”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-ini”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “fonts-mis” bc9eb43c27f63ce9d0fff67e104fe1c6] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “fonts-mis” 17e967c9ec4d001deefd43ddf25e98f7] ---
 
 if not modules then modules={} end modules ['luatex-font-mis']={
  version=1.001,
@@ -4070,10 +4370,10 @@ function font.each()
  return table.sortedhash(fonts.hashes.identifiers)
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “fonts-mis”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “fonts-mis”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-con” ca733211a0555d9a93b1e2f7ebc937d3] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-con” 724e5dd14aec2d4d189f8619898004cf] ---
 
 if not modules then modules={} end modules ['font-con']={
  version=1.001,
@@ -4101,13 +4401,13 @@ fonts.handlers=handlers
 local allocate=utilities.storage.allocate
 local setmetatableindex=table.setmetatableindex
 constructors.dontembed=allocate()
-constructors.autocleanup=true
 constructors.namemode="fullpath" 
 constructors.version=1.01
 constructors.cache=containers.define("fonts","constructors",constructors.version,false)
 constructors.privateoffset=fonts.privateoffsets.textbase or 0xF0000
 constructors.cacheintex=true 
 constructors.addtounicode=true
+constructors.fixprotrusion=true
 local designsizes=allocate()
 constructors.designsizes=designsizes
 local loadedfonts=allocate()
@@ -4159,11 +4459,6 @@ function constructors.getmathparameter(tfmdata,name)
  end
 end
 function constructors.cleanuptable(tfmdata)
- if constructors.autocleanup and tfmdata.properties.virtualized then
-  for k,v in next,tfmdata.characters do
-   if v.commands then v.commands=nil end
-  end
- end
 end
 function constructors.calculatescale(tfmdata,scaledpoints)
  local parameters=tfmdata.parameters
@@ -4199,6 +4494,9 @@ function constructors.assignmathparameters(target,original)
   if not mathparameters.FractionDelimiterDisplayStyleSize then
    targetmathparameters.FractionDelimiterDisplayStyleSize=2.40*targetparameters.size
   end
+  if not targetmathparameters.SpaceBeforeScript then
+   targetmathparameters.SpaceBeforeScript=targetmathparameters.SpaceAfterScript
+  end
   target.mathparameters=targetmathparameters
  end
 end
@@ -4206,31 +4504,40 @@ function constructors.beforecopyingcharacters(target,original)
 end
 function constructors.aftercopyingcharacters(target,original)
 end
-constructors.sharefonts=false
-constructors.nofsharedfonts=0
-local sharednames={}
+local nofinstances=0
+local instances=setmetatableindex(function(t,k)
+ nofinstances=nofinstances+1
+ t[k]=nofinstances
+ return nofinstances
+end)
 function constructors.trytosharefont(target,tfmdata)
- if constructors.sharefonts then 
-  local characters=target.characters
-  local n=1
-  local t={ target.psname }
-  local u=sortedkeys(characters)
-  for i=1,#u do
-   local k=u[i]
-   n=n+1;t[n]=k
-   n=n+1;t[n]=characters[k].index or k
-  end
-  local h=md5.HEX(concat(t," "))
-  local s=sharednames[h]
-  if s then
-   if trace_defining then
-    report_defining("font %a uses backend resources of font %a",target.fullname,s)
-   end
-   target.fullname=s
-   constructors.nofsharedfonts=constructors.nofsharedfonts+1
-   target.properties.sharedwith=s
+ local properties=target.properties
+ local instance=properties.instance
+ if instance then
+  local fullname=target.fullname
+  local fontname=target.fontname
+  local psname=target.psname
+  local format=tfmdata.properties.format
+  if format=="opentype" then
+   target.streamprovider=1
+  elseif format=="truetype" then
+   target.streamprovider=2
   else
-   sharednames[h]=target.fullname
+   target.streamprovider=0
+  end
+  if target.streamprovider>0 then
+   if fullname then
+    fullname=fullname..":"..instances[instance]
+    target.fullname=fullname
+   end
+   if fontname then
+    fontname=fontname..":"..instances[instance]
+    target.fontname=fontname
+   end
+   if psname then
+    psname=psname..":"..instances[instance]
+    target.psname=psname
+   end
   end
  end
 end
@@ -4376,7 +4683,8 @@ function constructors.scale(tfmdata,specification)
  local units=parameters.units or 1000
  targetproperties.language=properties.language or "dflt" 
  targetproperties.script=properties.script   or "dflt" 
- targetproperties.mode=properties.mode  or "base"
+ targetproperties.mode=properties.mode  or "base" 
+ targetproperties.method=properties.method
  local askedscaledpoints=scaledpoints
  local scaledpoints,delta=constructors.calculatescale(tfmdata,scaledpoints,nil,specification)
  local hdelta=delta
@@ -4389,17 +4697,20 @@ function constructors.scale(tfmdata,specification)
  properties.direction=direction
  target.size=scaledpoints
  target.encodingbytes=properties.encodingbytes or 1
+ target.subfont=properties.subfont
  target.embedding=properties.embedding or "subset"
  target.tounicode=1
  target.cidinfo=properties.cidinfo
  target.format=properties.format
  target.cache=constructors.cacheintex and "yes" or "renew"
+ local original=properties.original or tfmdata.original
  local fontname=properties.fontname or tfmdata.fontname
  local fullname=properties.fullname or tfmdata.fullname
  local filename=properties.filename or tfmdata.filename
  local psname=properties.psname   or tfmdata.psname
  local name=properties.name  or tfmdata.name
  local psname,psfixed=fixedpsname(psname,fontname or fullname or file.nameonly(filename))
+ target.original=original
  target.fontname=fontname
  target.fullname=fullname
  target.filename=filename
@@ -4489,6 +4800,14 @@ function constructors.scale(tfmdata,specification)
  targetparameters.x_height=targetx_height
  targetparameters.quad=targetquad
  targetparameters.extra_space=targetextra_space
+ local hshift=parameters.hshift
+ if hshift then
+  targetparameters.hshift=delta*hshift
+ end
+ local vshift=parameters.vshift
+ if vshift then
+  targetparameters.vshift=delta*vshift
+ end
  local ascender=parameters.ascender
  if ascender then
   targetparameters.ascender=delta*ascender
@@ -4498,7 +4817,7 @@ function constructors.scale(tfmdata,specification)
   targetparameters.descender=delta*descender
  end
  constructors.enhanceparameters(targetparameters)
- local protrusionfactor=(targetquad~=0 and 1000/targetquad) or 0
+ local protrusionfactor=constructors.fixprotrusion and ((targetquad~=0 and 1000/targetquad) or 1) or 1
  local scaledwidth=defaultwidth*hdelta
  local scaledheight=defaultheight*vdelta
  local scaleddepth=defaultdepth*vdelta
@@ -4508,6 +4827,9 @@ function constructors.scale(tfmdata,specification)
   properties.hasmath=true
   target.nomath=false
   target.MathConstants=target.mathparameters
+  local oldmath=properties.oldmath
+  targetproperties.oldmath=oldmath
+  target.oldmath=oldmath
  else
   properties.hasmath=false
   target.nomath=true
@@ -4881,6 +5203,7 @@ function constructors.finalize(tfmdata)
  properties.name=properties.name  or tfmdata.name
  properties.psname=properties.psname   or tfmdata.psname
  properties.encodingbytes=tfmdata.encodingbytes or 1
+ properties.subfont=tfmdata.subfont    or nil
  properties.embedding=tfmdata.embedding  or "subset"
  properties.tounicode=tfmdata.tounicode  or 1
  properties.cidinfo=tfmdata.cidinfo    or nil
@@ -4906,6 +5229,7 @@ function constructors.finalize(tfmdata)
  tfmdata.name=nil 
  tfmdata.psname=nil
  tfmdata.encodingbytes=nil
+ tfmdata.subfont=nil
  tfmdata.embedding=nil
  tfmdata.tounicode=nil
  tfmdata.cidinfo=nil
@@ -4968,6 +5292,7 @@ hashmethods.normal=function(list)
      m=m+1
      t[m]=k..'='..tostring(v)
     end
+    sort(t)
     s[n]=k..'={'..concat(t,",").."}"
    else
     s[n]=k..'='..tostring(v)
@@ -5416,10 +5741,10 @@ function constructors.addcoreunicodes(unicodes)
  return unicodes
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-con”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-con”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “fonts-enc” 3e71a54297e8f85a1ac438bb0f20dd79] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “fonts-enc” c24fd6b4f34f87b9c4ff5e6193ce2656] ---
 
 if not modules then modules={} end modules ['luatex-font-enc']={
  version=1.001,
@@ -5436,10 +5761,16 @@ local encodings={}
 fonts.encodings=encodings
 encodings.agl={}
 encodings.known={}
+encodings.glyphlistfilename="font-age.lua"
 setmetatable(encodings.agl,{ __index=function(t,k)
  if k=="unicodes" then
   logs.report("fonts","loading (extended) adobe glyph list")
-  local unicodes=dofile(resolvers.findfile("font-age.lua"))
+  local foundname=resolvers.findfile(encodings.glyphlistfilename) or ""
+  local unicodes=foundname~="" and dofile(foundname)
+  if type(unicodes)~="table" then
+   logs.report("fonts","missing or invalid (extended) adobe glyph list")
+   unicodes={}
+  end
   encodings.agl={ unicodes=unicodes }
   return unicodes
  else
@@ -5488,10 +5819,10 @@ function encodings.load(filename)
  return containers.write(encodings.cache,name,data)
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “fonts-enc”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “fonts-enc”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-cid” 4d87988efa86020a14708ee03c23415f] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-cid” 22b0367742fb253deef84ef7ccf5e8de] ---
 
 if not modules then modules={} end modules ['font-cid']={
  version=1.001,
@@ -5642,13 +5973,14 @@ function cid.getmap(specification)
  return found
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-cid”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-cid”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-map” f486746e90fe972de4b73e208ac7cbb2] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-map” 27ee748150e56f5f0e5f0fefc864f35e] ---
 
 if not modules then modules={} end modules ['font-map']={
  version=1.001,
+ optimize=true,
  comment="companion to font-ini.mkiv",
  author="Hans Hagen, PRAGMA-ADE, Hasselt NL",
  copyright="PRAGMA ADE / ConTeXt Development Team",
@@ -5659,7 +5991,7 @@ local match,format,find,concat,gsub,lower=string.match,string.format,string.find
 local P,R,S,C,Ct,Cc,lpegmatch=lpeg.P,lpeg.R,lpeg.S,lpeg.C,lpeg.Ct,lpeg.Cc,lpeg.match
 local formatters=string.formatters
 local sortedhash,sortedkeys=table.sortedhash,table.sortedkeys
-local rshift=bit32.rshift
+local idiv=number.idiv
 local trace_loading=false  trackers.register("fonts.loading",function(v) trace_loading=v end)
 local trace_mapping=false  trackers.register("fonts.mapping",function(v) trace_mapping=v end)
 local report_fonts=logs.reporter("fonts","loading")
@@ -5692,12 +6024,21 @@ local function makenameparser(str)
 end
 local f_single=formatters["%04X"]
 local f_double=formatters["%04X%04X"]
+local s_unknown="FFFD"
 local function tounicode16(unicode)
  if unicode<0xD7FF or (unicode>0xDFFF and unicode<=0xFFFF) then
   return f_single(unicode)
+ elseif unicode>=0x00E000 and unicode<=0x00F8FF then
+  return s_unknown
+ elseif unicode>=0x0F0000 and unicode<=0x0FFFFF then
+  return s_unknown
+ elseif unicode>=0x100000 and unicode<=0x10FFFF then
+  return s_unknown
+ elseif unicode>=0x00D800 and unicode<=0x00DFFF then
+  return s_unknown
  else
   unicode=unicode-0x10000
-  return f_double(rshift(unicode,10)+0xD800,unicode%1024+0xDC00)
+  return f_double(idiv(k,0x400)+0xD800,unicode%0x400+0xDC00)
  end
 end
 local function tounicode16sequence(unicodes)
@@ -5706,22 +6047,30 @@ local function tounicode16sequence(unicodes)
   local u=unicodes[l]
   if u<0xD7FF or (u>0xDFFF and u<=0xFFFF) then
    t[l]=f_single(u)
+  elseif unicode>=0x00E000 and unicode<=0x00F8FF then
+   t[l]=s_unknown
+  elseif unicode>=0x0F0000 and unicode<=0x0FFFFF then
+   t[l]=s_unknown
+  elseif unicode>=0x100000 and unicode<=0x10FFFF then
+   t[l]=s_unknown
+  elseif unicode>=0x00D7FF and unicode<=0x00DFFF then
+   t[l]=s_unknown
   else
    u=u-0x10000
-   t[l]=f_double(rshift(u,10)+0xD800,u%1024+0xDC00)
+   t[l]=f_double(idiv(k,0x400)+0xD800,u%0x400+0xDC00)
   end
  end
  return concat(t)
 end
-local unknown=f_single(0xFFFD)
 local hash={}
 local conc={}
 table.setmetatableindex(hash,function(t,k)
+ local v
  if k<0xD7FF or (k>0xDFFF and k<=0xFFFF) then
   v=f_single(k)
  else
   local k=k-0x10000
-  v=f_double(rshift(k,10)+0xD800,k%1024+0xDC00)
+  v=f_double(idiv(k,0x400)+0xD800,k%0x400+0xDC00)
  end
  t[k]=v
  return v
@@ -5734,11 +6083,13 @@ local function tounicode(k)
   end
   return concat(conc,"",1,n)
  elseif k>=0x00E000 and k<=0x00F8FF then
-  return unknown
+  return s_unknown
  elseif k>=0x0F0000 and k<=0x0FFFFF then
-  return unknown
+  return s_unknown
  elseif k>=0x100000 and k<=0x10FFFF then
-  return unknown
+  return s_unknown
+ elseif k>=0x00D7FF and k<=0x00DFFF then
+  return s_unknown
  else
   return hash[k]
  end
@@ -5813,9 +6164,9 @@ function mappings.addtounicode(data,filename,checklookups,forceligatures)
  local usedmap=cidinfo and fonts.cid.getmap(cidinfo)
  local uparser=makenameparser() 
  if usedmap then
-    oparser=usedmap and makenameparser(cidinfo.ordering)
-    cidnames=usedmap.names
-    cidcodes=usedmap.unicodes
+  oparser=usedmap and makenameparser(cidinfo.ordering)
+  cidnames=usedmap.names
+  cidcodes=usedmap.unicodes
  end
  local ns=0
  local nl=0
@@ -6033,10 +6384,10 @@ function mappings.addtounicode(data,filename,checklookups,forceligatures)
  end
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-map”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-map”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-vfc” 94937140f2c909e9c831ba021f1ab303] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-vfc” a81c29eda98cd62cbebdb6c93544b50d] ---
 
 if not modules then modules={} end modules ['font-vfc']={
  version=1.001,
@@ -6050,7 +6401,6 @@ local insert=table.insert
 local fonts=fonts
 local helpers=fonts.helpers
 local setmetatableindex=table.setmetatableindex
-local makeweak=table.makeweak
 local push={ "push" }
 local pop={ "pop" }
 local dummy={ "comment" }
@@ -6134,19 +6484,20 @@ helpers.commands=utilities.storage.allocate {
  dummy=dummy,
 }
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-vfc”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-vfc”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-otr” b1c03925c949027c86f781785fa7a208] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-otr” 1896ac990a961f6d6fec551ca9b52a83] ---
 
 if not modules then modules={} end modules ['font-otr']={
  version=1.001,
+ optimize=true,
  comment="companion to font-ini.mkiv",
  author="Hans Hagen, PRAGMA-ADE, Hasselt NL",
  copyright="PRAGMA ADE / ConTeXt Development Team",
  license="see context related readme files"
 }
-local next,type,tonumber=next,type,tonumber
+local next,type,tonumber,rawget=next,type,tonumber,rawget
 local byte,lower,char,gsub=string.byte,string.lower,string.char,string.gsub
 local fullstrip=string.fullstrip
 local floor,round=math.floor,math.round
@@ -6378,15 +6729,15 @@ local weights={
  [900]="black",
 }
 local widths={
- [1]="ultracondensed",
- [2]="extracondensed",
- [3]="condensed",
- [4]="semicondensed",
- [5]="normal",
- [6]="semiexpanded",
- [7]="expanded",
- [8]="extraexpanded",
- [9]="ultraexpanded",
+ "ultracondensed",
+ "extracondensed",
+ "condensed",
+ "semicondensed",
+ "normal",
+ "semiexpanded",
+ "expanded",
+ "extraexpanded",
+ "ultraexpanded",
 }
 setmetatableindex(weights,function(t,k)
  local r=floor((k+50)/100)*100
@@ -6396,30 +6747,28 @@ end)
 setmetatableindex(widths,function(t,k)
  return "normal"
 end)
-local panoseweights={
- [ 0]="normal",
- [ 1]="normal",
- [ 2]="verylight",
- [ 3]="light",
- [ 4]="thin",
- [ 5]="book",
- [ 6]="medium",
- [ 7]="demi",
- [ 8]="bold",
- [ 9]="heavy",
- [10]="black",
+local panoseweights={ [0]="normal",
+ "normal",
+ "verylight",
+ "light",
+ "thin",
+ "book",
+ "medium",
+ "demi",
+ "bold",
+ "heavy",
+ "black",
 }
-local panosewidths={
- [ 0]="normal",
- [ 1]="normal",
- [ 2]="normal",
- [ 3]="normal",
- [ 4]="normal",
- [ 5]="expanded",
- [ 6]="condensed",
- [ 7]="veryexpanded",
- [ 8]="verycondensed",
- [ 9]="monospaced",
+local panosewidths={ [0]="normal",
+ "normal",
+ "normal",
+ "normal",
+ "normal",
+ "expanded",
+ "condensed",
+ "veryexpanded",
+ "verycondensed",
+ "monospaced",
 }
 local helpers={}
 readers.helpers=helpers
@@ -6853,7 +7202,7 @@ readers.post=function(f,fontdata,specification)
   local version=readulong(f)
   fontdata.postscript={
    version=version,
-   italicangle=round(1000*readfixed(f))/1000,
+   italicangle=readfixed(f),
    underlineposition=readfword(f),
    underlinethickness=readfword(f),
    monospaced=readulong(f),
@@ -6893,8 +7242,6 @@ readers.post=function(f,fontdata,specification)
      if length>0 then
       glyphs[mapping].name=readstring(f,length)
      else
-      report("quit post name fetching at %a of %a: %s",i,maxnames,"overflow")
-      break
      end
     end
    end
@@ -7472,6 +7819,7 @@ local function getinfo(maindata,sub,platformnames,rawfamilynames,metricstoo,inst
    pfmwidth=metrics.widthclass or 5,
    panosewidth=metrics.panosewidth,
    panoseweight=metrics.panoseweight,
+   fstype=metrics.fstype or 0,
    italicangle=postscript.italicangle or 0,
    units=fontheader.units or 0,
    designsize=fontdata.designsize,
@@ -7582,16 +7930,10 @@ local function readtable(tag,f,fontdata,specification,...)
   reader(f,fontdata,specification,...)
  end
 end
-local variablefonts_supported=(context and true) or (logs and logs.application and true) or false
 local function readdata(f,offset,specification)
  local fontdata,tables=loadtables(f,specification,offset)
  if specification.glyphs then
   prepareglyps(fontdata)
- end
- if not variablefonts_supported then
-  specification.instance=nil
-  specification.variable=nil
-  specification.factors=nil
  end
  fontdata.temporary={}
  readtable("name",f,fontdata,specification)
@@ -7607,60 +7949,58 @@ local function readdata(f,offset,specification)
  readtable("stat",f,fontdata,specification)
  readtable("avar",f,fontdata,specification)
  readtable("fvar",f,fontdata,specification)
- if variablefonts_supported then
-  local variabledata=fontdata.variabledata
-  if variabledata then
-   local instances=variabledata.instances
-   local axis=variabledata.axis
-   if axis and (not instances or #instances==0) then
-    instances={}
-    variabledata.instances=instances
-    local function add(n,subfamily,value)
-     local values={}
-     for i=1,#axis do
-      local a=axis[i]
-      values[i]={
-       axis=a.tag,
-       value=i==n and value or a.default,
-      }
-     end
-     instances[#instances+1]={
-      subfamily=subfamily,
-      values=values,
-     }
-    end
+ local variabledata=fontdata.variabledata
+ if variabledata then
+  local instances=variabledata.instances
+  local axis=variabledata.axis
+  if axis and (not instances or #instances==0) then
+   instances={}
+   variabledata.instances=instances
+   local function add(n,subfamily,value)
+    local values={}
     for i=1,#axis do
      local a=axis[i]
-     local tag=a.tag
-     add(i,"default"..tag,a.default)
-     add(i,"minimum"..tag,a.minimum)
-     add(i,"maximum"..tag,a.maximum)
+     values[i]={
+      axis=a.tag,
+      value=i==n and value or a.default,
+     }
     end
+    instances[#instances+1]={
+     subfamily=subfamily,
+     values=values,
+    }
+   end
+   for i=1,#axis do
+    local a=axis[i]
+    local tag=a.tag
+    add(i,"default"..tag,a.default)
+    add(i,"minimum"..tag,a.minimum)
+    add(i,"maximum"..tag,a.maximum)
    end
   end
-  if not specification.factors then
-   local instance=specification.instance
-   if type(instance)=="string" then
-    local factors=helpers.getfactors(fontdata,instance)
-    if factors then
-     specification.factors=factors
-     fontdata.factors=factors
-     fontdata.instance=instance
-     report("user instance: %s, factors: % t",instance,factors)
-    else
-     report("user instance: %s, bad factors",instance)
-    end
-   end
-  end
-  if not fontdata.factors then
-   if fontdata.variabledata then
-    local factors=helpers.getfactors(fontdata,true)
-    if factors then
-     specification.factors=factors
-     fontdata.factors=factors
-    end
+ end
+ if not specification.factors then
+  local instance=specification.instance
+  if type(instance)=="string" then
+   local factors=helpers.getfactors(fontdata,instance)
+   if factors then
+    specification.factors=factors
+    fontdata.factors=factors
+    fontdata.instance=instance
+    report("user instance: %s, factors: % t",instance,factors)
    else
+    report("user instance: %s, bad factors",instance)
    end
+  end
+ end
+ if not fontdata.factors then
+  if fontdata.variabledata then
+   local factors=helpers.getfactors(fontdata,true)
+   if factors then
+    specification.factors=factors
+    fontdata.factors=factors
+   end
+  else
   end
  end
  readtable("os/2",f,fontdata,specification)
@@ -7884,6 +8224,7 @@ function readers.loadfont(filename,n,instance)
     hascolor=fontdata.hascolor or false,
     instance=fontdata.instance,
     factors=fontdata.factors,
+    nofsubfonts=fontdata.subfonts and #fontdata.subfonts or nil,
    },
    resources={
     filename=filename,
@@ -7954,13 +8295,13 @@ function readers.getinfo(filename,specification)
   }
  end
 end
-function readers.rehash(fontdata,hashmethod)
+function readers.rehash() 
  report("the %a helper is not yet implemented","rehash")
 end
-function readers.checkhash(fontdata)
+function readers.checkhash() 
  report("the %a helper is not yet implemented","checkhash")
 end
-function readers.pack(fontdata,hashmethod)
+function readers.pack() 
  report("the %a helper is not yet implemented","pack")
 end
 function readers.unpack(fontdata)
@@ -7971,6 +8312,9 @@ function readers.expand(fontdata)
 end
 function readers.compact(fontdata)
  report("the %a helper is not yet implemented","compact")
+end
+function readers.condense(fontdata)
+ report("the %a helper is not yet implemented","condense")
 end
 local extenders={}
 function readers.registerextender(extender)
@@ -7987,10 +8331,10 @@ function readers.extend(fontdata)
  end
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-otr”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-otr”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-oti” dbae7722baae24d917a17176553825cf] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-oti” 309a75f9c14b77d87e94eba827dc4e71] ---
 
 if not modules then modules={} end modules ['font-oti']={
  version=1.001,
@@ -8133,10 +8477,10 @@ function otffeatures.checkeddefaultlanguage(featuretype,autolanguage,languages)
  end
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-oti”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-oti”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-ott” aba6d8335a5f38a5a62d3631492f3392] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-ott” 3f67b1b1d40bbc222681d8db4aff0f42] ---
 
 if not modules then modules={} end modules ["font-ott"]={
  version=1.001,
@@ -9213,9 +9557,6 @@ function otffeatures.normalize(features,wrap)
     h.script=rawget(verbosescripts,v) or (scripts[v] and v) or "dflt" 
    elseif k=="axis" then
     h[k]=normalizedaxis(value)
-    if not callbacks.supported.glyph_stream_provider then
-     h.variableshapes=true 
-    end
    else
     local uk=usedfeatures[key]
     local uv=uk[value]
@@ -9255,21 +9596,22 @@ function otffeatures.normalize(features,wrap)
  end
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-ott”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-ott”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-cff” 98d5a660ea803b65cb883c009ecf3c0b] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-cff” 651c74e4804fbb85d31267210298f466] ---
 
 if not modules then modules={} end modules ['font-cff']={
  version=1.001,
+ optimize=true,
  comment="companion to font-ini.mkiv",
  author="Hans Hagen, PRAGMA-ADE, Hasselt NL",
  copyright="PRAGMA ADE / ConTeXt Development Team",
  license="see context related readme files"
 }
 local next,type,tonumber,rawget=next,type,tonumber,rawget
-local byte,char,gmatch=string.byte,string.char,string.gmatch
-local concat,remove,unpack=table.concat,table.remove,table.unpack
+local byte,char,gmatch,sub=string.byte,string.char,string.gmatch,string.sub
+local concat,insert,remove,unpack=table.concat,table.insert,table.remove,table.unpack
 local floor,abs,round,ceil,min,max=math.floor,math.abs,math.round,math.ceil,math.min,math.max
 local P,C,R,S,C,Cs,Ct=lpeg.P,lpeg.C,lpeg.R,lpeg.S,lpeg.C,lpeg.Cs,lpeg.Ct
 local lpegmatch=lpeg.match
@@ -9375,12 +9717,51 @@ local defaultstrings={ [0]=
  "Thornsmall","Ydieresissmall","001.000","001.001","001.002","001.003",
  "Black","Bold","Book","Light","Medium","Regular","Roman","Semibold",
 }
+local standardnames={ [0]=
+ false,false,false,false,false,false,false,false,false,false,false,
+ false,false,false,false,false,false,false,false,false,false,false,
+ false,false,false,false,false,false,false,false,false,false,
+ "space","exclam","quotedbl","numbersign","dollar","percent",
+ "ampersand","quoteright","parenleft","parenright","asterisk","plus",
+ "comma","hyphen","period","slash","zero","one","two","three","four",
+ "five","six","seven","eight","nine","colon","semicolon","less",
+ "equal","greater","question","at","A","B","C","D","E","F","G","H",
+ "I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W",
+ "X","Y","Z","bracketleft","backslash","bracketright","asciicircum",
+ "underscore","quoteleft","a","b","c","d","e","f","g","h","i","j",
+ "k","l","m","n","o","p","q","r","s","t","u","v","w","x","y",
+ "z","braceleft","bar","braceright","asciitilde",false,false,false,
+ false,false,false,false,false,false,false,false,false,false,false,
+ false,false,false,false,false,false,false,false,false,false,false,
+ false,false,false,false,false,false,false,false,false,"exclamdown",
+ "cent","sterling","fraction","yen","florin","section","currency",
+ "quotesingle","quotedblleft","guillemotleft","guilsinglleft",
+ "guilsinglright","fi","fl",false,"endash","dagger","daggerdbl",
+ "periodcentered",false,"paragraph","bullet","quotesinglbase",
+ "quotedblbase","quotedblright","guillemotright","ellipsis","perthousand",
+ false,"questiondown",false,"grave","acute","circumflex","tilde",
+ "macron","breve","dotaccent","dieresis",false,"ring","cedilla",false,
+ "hungarumlaut","ogonek","caron","emdash",false,false,false,false,
+ false,false,false,false,false,false,false,false,false,false,false,
+ false,"AE",false,"ordfeminine",false,false,false,false,"Lslash",
+ "Oslash","OE","ordmasculine",false,false,false,false,false,"ae",
+ false,false,false,"dotlessi",false,false,"lslash","oslash","oe",
+ "germandbls",false,false,false,false
+}
 local cffreaders={
  readbyte,
  readushort,
  readuint,
  readulong,
 }
+directives.register("fonts.streamreader",function()
+ cffreaders={
+  readbyte,
+  readushort,
+  readuint,
+  readulong,
+ }
+end)
 local function readheader(f)
  local offset=getposition(f)
  local major=readbyte(f)
@@ -9668,14 +10049,18 @@ do
   top=0
  end
  local p_dictionary=(
-  p_byte+p_positive+p_negative+p_short+p_long+p_nibbles+p_single+p_double+p_unsupported
+  p_byte+p_positive+p_negative+p_short+p_long+p_nibbles+p_single+p_double
++p_unsupported
  )^1
- parsedictionaries=function(data,dictionaries,what)
+ parsedictionaries=function(data,dictionaries,version)
   stack={}
   strings=data.strings
+  if trace_charstrings then
+   report("charstring format %a",version)
+  end
   for i=1,#dictionaries do
    top=0
-   result=what=="cff" and {
+   result=version=="cff" and {
     monospaced=false,
     italicangle=0,
     underlineposition=-100,
@@ -9736,6 +10121,8 @@ do
  local x=0
  local y=0
  local width=false
+ local lsb=0
+local result={}
  local r=0
  local stems=0
  local globalbias=0
@@ -9759,8 +10146,16 @@ do
  local factors=false
  local axis=false
  local vsindex=0
- local function showstate(where)
-  report("%w%-10s : [%s] n=%i",depth*2,where,concat(stack," ",1,top),top)
+ local justpass=false
+ local seacs={}
+ local procidx=nil
+ local function showstate(where,i,n)
+  if i then
+   local j=i+n-1
+   report("%w%-10s : [%s] step",depth*2+2,where,concat(stack," ",i,j<=top and j or top))
+  else
+   report("%w%-10s : [%s] n=%i",depth*2,where,concat(stack," ",1,top),top)
+  end
  end
  local function showvalue(where,value,showstack)
   if showstack then
@@ -9876,9 +10271,9 @@ do
    ymin=y
   end
  end
- local function xycurveto(x1,y1,x2,y2,x3,y3) 
+ local function xycurveto(x1,y1,x2,y2,x3,y3,i,n) 
   if trace_charstrings then
-   showstate("curveto")
+   showstate("curveto",i,n)
   end
   if keepcurve then
    r=r+1
@@ -10015,6 +10410,15 @@ do
   if trace_charstrings then
    showstate("rrcurveto")
   end
+if top==6 then
+ local ax=x+stack[1] 
+ local ay=y+stack[2] 
+ local bx=ax+stack[3] 
+ local by=ay+stack[4] 
+ x=bx+stack[5]  
+ y=by+stack[6]  
+ xycurveto(ax,ay,bx,by,x,y,1,6)
+else
   for i=1,top,6 do
    local ax=x+stack[i]   
    local ay=y+stack[i+1] 
@@ -10022,8 +10426,9 @@ do
    local by=ay+stack[i+3] 
    x=bx+stack[i+4]  
    y=by+stack[i+5]  
-   xycurveto(ax,ay,bx,by,x,y)
+   xycurveto(ax,ay,bx,by,x,y,i,6)
   end
+end
   top=0
  end
  local function hhcurveto()
@@ -10035,6 +10440,15 @@ do
    y=y+stack[1]     
    s=2
   end
+if top==4 then
+   local ax=x+stack[1]  
+   local ay=y
+   local bx=ax+stack[2] 
+   local by=ay+stack[3] 
+   x=bx+stack[4]  
+   y=by
+   xycurveto(ax,ay,bx,by,x,y,1,4)
+else
   for i=s,top,4 do
    local ax=x+stack[i] 
    local ay=y
@@ -10042,8 +10456,9 @@ do
    local by=ay+stack[i+2] 
    x=bx+stack[i+3]  
    y=by
-   xycurveto(ax,ay,bx,by,x,y)
+   xycurveto(ax,ay,bx,by,x,y,i,4)
   end
+end
   top=0
  end
  local function vvcurveto()
@@ -10056,6 +10471,16 @@ do
    d=stack[1]      
    s=2
   end
+if top==4 then
+ local ax=x+d
+ local ay=y+stack[1]  
+ local bx=ax+stack[2] 
+ local by=ay+stack[3] 
+ x=bx
+ y=by+stack[4]  
+ xycurveto(ax,ay,bx,by,x,y,1,4)
+ d=0
+else
   for i=s,top,4 do
    local ax=x+d
    local ay=y+stack[i] 
@@ -10063,9 +10488,10 @@ do
    local by=ay+stack[i+2] 
    x=bx
    y=by+stack[i+3]  
-   xycurveto(ax,ay,bx,by,x,y)
+   xycurveto(ax,ay,bx,by,x,y,i,4)
    d=0
   end
+end
   top=0
  end
  local function xxcurveto(swap)
@@ -10073,6 +10499,33 @@ do
   if last then
    top=top-1
   end
+if top==4 then
+  local ax,ay,bx,by
+  if swap then
+   ax=x+stack[1]
+   ay=y
+   bx=ax+stack[2]
+   by=ay+stack[3]
+   y=by+stack[4]
+   if last then
+    x=bx+last
+   else
+    x=bx
+   end
+  else
+   ax=x
+   ay=y+stack[1]
+   bx=ax+stack[2]
+   by=ay+stack[3]
+   x=bx+stack[4]
+   if last then
+    y=by+last
+   else
+    y=by
+   end
+  end
+  xycurveto(ax,ay,bx,by,x,y,1,4)
+else
   for i=1,top,4 do
    local ax,ay,bx,by
    if swap then
@@ -10100,8 +10553,9 @@ do
     end
     swap=true
    end
-   xycurveto(ax,ay,bx,by,x,y)
+   xycurveto(ax,ay,bx,by,x,y,i,4)
   end
+end
   top=0
  end
  local function hvcurveto()
@@ -10127,7 +10581,7 @@ do
    local by=ay+stack[i+3] 
    x=bx+stack[i+4] 
    y=by+stack[i+5] 
-   xycurveto(ax,ay,bx,by,x,y)
+   xycurveto(ax,ay,bx,by,x,y,i,6)
   end
   x=x+stack[top-1] 
   y=y+stack[top]   
@@ -10298,14 +10752,14 @@ do
   top=0
  end
  local function divide()
-  if version==1 then
+  if version=="cff" then
    local d=stack[top]
    top=top-1
    stack[top]=stack[top]/d
   end
  end
  local function closepath()
-  if version==1 then
+  if version=="cff" then
    if trace_charstrings then
     showstate("closepath")
    end
@@ -10313,54 +10767,73 @@ do
   top=0
  end
  local function hsbw()
-  if version==1 then
+  if version=="cff" then
    if trace_charstrings then
     showstate("hsbw")
    end
+   lsb=stack[top-1] or 0
    width=stack[top]
   end
   top=0
  end
+ local function sbw()
+  if version=="cff" then
+   if trace_charstrings then
+    showstate("sbw")
+   end
+   lsb=stack[top-3]
+   width=stack[top-1]
+  end
+  top=0
+ end
  local function seac()
-  if version==1 then
+  if version=="cff" then
    if trace_charstrings then
     showstate("seac")
    end
   end
   top=0
  end
- local function sbw()
-  if version==1 then
-   if trace_charstrings then
-    showstate("sbw")
-   end
-   width=stack[top-1]
-  end
-  top=0
- end
+ local popped=3
+ local hints=3
  local function callothersubr()
-  if version==1 then
+  if version=="cff" then
    if trace_charstrings then
-    showstate("callothersubr (unsupported)")
+    showstate("callothersubr")
    end
+   if stack[top]==hints then
+    popped=stack[top-2]
+   else
+    popped=3
+   end
+   local t=stack[top-1]
+   if t then
+    top=top-(t+2)
+    if top<0 then
+     top=0
+    end
+   else
+    top=0
+   end
+  else
+   top=0
   end
-  top=0
  end
  local function pop()
-  if version==1 then
+  if version=="cff" then
    if trace_charstrings then
-    showstate("pop (unsupported)")
+    showstate("pop")
    end
    top=top+1
-   stack[top]=0 
+   stack[top]=popped
   else
    top=0
   end
  end
  local function setcurrentpoint()
-  if version==1 then
+  if version=="cff" then
    if trace_charstrings then
-    showstate("pop (unsupported)")
+    showstate("setcurrentpoint (unsupported)")
    end
    x=x+stack[top-1]
    y=y+stack[top]
@@ -10370,7 +10843,7 @@ do
  local reginit=false
  local function updateregions(n) 
   if regions then
-   local current=regions[n] or regions[1]
+   local current=regions[n+1] or regions[1]
    nofregions=#current
    if axis and n~=reginit then
     factors={}
@@ -10451,6 +10924,7 @@ do
     end
    end
   else
+   top=top-nofregions*n
   end
  end
  local actions={ [0]=unsupported,
@@ -10485,6 +10959,39 @@ do
   unsupported,
   vhcurveto,
   hvcurveto,
+ }
+ local reverse={ [0]="unsupported",
+  "getstem",
+  "unsupported",
+  "getstem",
+  "vmoveto",
+  "rlineto",
+  "hlineto",
+  "vlineto",
+  "rrcurveto",
+  "unsupported",
+  "unsupported",
+  "unsupported",
+  "unsupported",
+  "hsbw",
+  "unsupported",
+  "setvsindex",
+  "blend",
+  "unsupported",
+  "getstem",
+  "getmask",
+  "getmask",
+  "rmoveto",
+  "hmoveto",
+  "getstem",
+  "rcurveline",
+  "rlinecurve",
+  "vvcurveto",
+  "hhcurveto",
+  "unsupported",
+  "unsupported",
+  "vhcurveto",
+  "hvcurveto",
  }
  local subactions={
   [000]=dotsection,
@@ -10599,7 +11106,7 @@ do
  local function call(scope,list,bias) 
   depth=depth+1
   if top==0 then
-   showstate(formatters["unknown %s call %s"](scope,"?"))
+   showstate(formatters["unknown %s call %s, case %s"](scope,"?",1))
    top=0
   else
    local index=stack[top]+bias
@@ -10611,13 +11118,12 @@ do
    if tab then
     process(tab)
    else
-    showstate(formatters["unknown %s call %s"](scope,index))
+    showstate(formatters["unknown %s call %s, case %s"](scope,index,2))
     top=0
    end
   end
   depth=depth-1
  end
- local justpass=false
  process=function(tab)
   local i=1
   local n=#tab
@@ -10635,12 +11141,12 @@ do
      stack[top]=-t*256+64148-tab[i+1]
      i=i+2
     else
-     local n=0x100*tab[i+1]+tab[i+2]
-     if n>=0x8000 then
-      stack[top]=n-0x10000+(0x100*tab[i+3]+tab[i+4])/0xFFFF
-     else
-      stack[top]=n+(0x100*tab[i+3]+tab[i+4])/0xFFFF
+     local n1=0x100*tab[i+1]+tab[i+2]
+     local n2=0x100*tab[i+3]+tab[i+4]
+     if n1>=0x8000 then
+      n1=n1-0x10000
      end
+     stack[top]=n1+n2/0xFFFF
      i=i+5
     end
    elseif t==28 then
@@ -10688,6 +11194,17 @@ do
       r=r+1;result[r]=chars[12]
       r=r+1;result[r]=chars[t]
       top=0
+     elseif t==6 then
+      seacs[procidx]={
+       asb=stack[1],
+       adx=stack[2],
+       ady=stack[3],
+       base=stack[4],
+       accent=stack[5],
+       width=width,
+       lsb=lsb,
+      }
+      top=0
      else
       local a=subactions[t]
       if a then
@@ -10717,47 +11234,81 @@ do
      i=i+s+1
     elseif t==1 or t==3 or t==18 or operation==23 then
      p_getstem() 
-if true then
-     if top>0 then
-      for i=1,top do
-       r=r+1;result[r]=encode[stack[i]]
+     if version=="cff" then
+      if top>0 then
+       for i=1,top do
+        r=r+1;result[r]=encode[stack[i]]
+       end
+       top=0
       end
+      r=r+1;result[r]=chars[t]
+     else
       top=0
      end
-     r=r+1;result[r]=chars[t]
-else
- top=0
-end
      i=i+1
     elseif t==19 or t==20 then
-     local s=p_getmask() or 0 
-if true then
-     if top>0 then
-      for i=1,top do
-       r=r+1;result[r]=encode[stack[i]]
+     local s=p_getmask() or 0
+     if true then
+      if top>0 then
+       for i=1,top do
+        r=r+1;result[r]=encode[stack[i]]
+       end
+       top=0
       end
+      r=r+1;result[r]=chars[t]
+      for j=1,s do
+       i=i+1
+       r=r+1;result[r]=chars[tab[i]]
+      end
+     else
+      i=i+s
       top=0
      end
-     r=r+1;result[r]=chars[t]
-     for j=1,s do
-      i=i+1
-      r=r+1;result[r]=chars[tab[i]]
-     end
-else
- i=i+s
- top=0
-end
      i=i+1
     elseif t==9 then
      top=0
      i=i+1
     elseif t==13 then
-     local s=hsbw() or 0
-     i=i+s+1
+     hsbw()
+     if true then
+      r=r+1;result[r]=encode[lsb]
+      r=r+1;result[r]=chars[22]
+     else
+     end
+     i=i+1
     else
+     if trace_charstrings then
+      showstate(reverse[t] or "<action>")
+     end
      if top>0 then
-      for i=1,top do
-       r=r+1;result[r]=encode[stack[i]]
+      if t==8 and top>48 then
+       local n=0
+       for i=1,top do
+        if n==48 then
+         local zero=encode[0]
+         local res3=result[r-3]
+         local res2=result[r-2]
+         local res1=result[r-1]
+         local res0=result[r]
+         result[r-3]=zero
+         result[r-2]=zero
+         r=r+1;result[r]=chars[t]
+         r=r+1;result[r]=zero
+         r=r+1;result[r]=zero
+         r=r+1;result[r]=res3
+         r=r+1;result[r]=res2
+         r=r+1;result[r]=res1
+         r=r+1;result[r]=res0
+         n=1
+        else
+         n=n+1
+        end
+        r=r+1;result[r]=encode[stack[i]]
+       end
+      else
+       for i=1,top do
+        r=r+1;result[r]=encode[stack[i]]
+       end
       end
       top=0
      end
@@ -10775,7 +11326,7 @@ end
      end
     else
      if trace_charstrings then
-      showvalue("<action>",t)
+      showstate(reverse[t] or "<action>")
      end
      top=0
      i=i+1
@@ -10794,7 +11345,7 @@ end
     ((l<1240 and 107) or (l<33900 and 1131) or 32768)+1
   end
  end
- local function processshape(tab,index)
+ local function processshape(tab,index,hack)
   if not tab then
    glyphs[index]={
     boundingbox={ 0,0,0,0 },
@@ -10807,10 +11358,13 @@ end
   x=0
   y=0
   width=false
+  lsb=0
   r=0
   top=0
   stems=0
   result={} 
+  popped=3
+  procidx=index
   xmin=0
   xmax=0
   ymin=0
@@ -10824,6 +11378,9 @@ end
    updateregions(vsindex)
   end
   process(tab)
+  if hack then
+   return x,y
+  end
   local boundingbox={
    round(xmin),
    round(ymin),
@@ -10840,6 +11397,7 @@ end
    r=r+1
    result[r]=c_endchar
    local stream=concat(result)
+result=nil
    if glyph then
     glyph.stream=stream
    else
@@ -10861,6 +11419,7 @@ end
     width=width,
     name=charset and charset[index] or nil,
    }
+result=nil
   else
    glyphs[index]={
     boundingbox=boundingbox,
@@ -10878,8 +11437,14 @@ end
   axis=false
   regions=data.regions
   justpass=streams==true
+  popped=3
+  seacs={}
   if regions then
-   regions={ regions } 
+   regions={}
+   local deltas=data.deltas
+   for i=1,#deltas do
+    regions[i]=deltas[i].regions
+   end
    axis=data.factors or false
   end
  end
@@ -10891,6 +11456,8 @@ end
   locals=false
   globals=false
   strings=false
+  popped=3
+  seacs={}
  end
  local function setwidths(private)
   if not private then
@@ -10920,6 +11487,29 @@ end
    for index=1,#charstrings do
     processshape(charstrings[index],index-1)
    end
+   if justpass and next(seacs) then
+    local charset=data.dictionaries[1].charset
+    if charset then
+     local lookup=table.swapped(charset)
+     for index,v in next,seacs do
+      local bindex=lookup[standardnames[v.base]]
+      local aindex=lookup[standardnames[v.accent]]
+      local bglyph=bindex and glyphs[bindex]
+      local aglyph=aindex and glyphs[aindex]
+      if bglyph and aglyph then
+       local jp=justpass
+       justpass=false
+       local x,y=processshape(charstrings[bindex+1],bindex,true)
+       justpass=jp
+       local base=bglyph.stream
+       local accent=aglyph.stream
+       local moveto=encode[-x-v.asb+v.adx]..chars[22]..encode[-y+v.ady]..chars[ 4]
+       base=sub(base,1,#base-1)
+       glyphs[index].stream=base..moveto..accent
+      end
+     end
+    end
+   end
    stopparsing(fontdata,data)
   else
    report("no charstrings")
@@ -10936,13 +11526,14 @@ end
   vsindex=dictionary.vsindex or 0
   glyphs=glphs or {}
   justpass=streams==true
+  seacs={}
   globalbias,localbias=setbias(globals,locals,nobias)
   nominalwidth,defaultwidth=setwidths(dictionary.private)
   processshape(tab,index-1)
  end
 end
-local function readglobals(f,data)
- local routines=readlengths(f)
+local function readglobals(f,data,version)
+ local routines=readlengths(f,version=="cff2")
  for i=1,#routines do
   routines[i]=readbytetable(f,routines[i])
  end
@@ -10996,14 +11587,14 @@ local function readprivates(f,data)
   private.data=readstring(f,private.size)
  end
 end
-local function readlocals(f,data,dictionary)
+local function readlocals(f,data,dictionary,version)
  local header=data.header
  local private=dictionary.private
  if private then
   local subroutineoffset=private.data.subroutines
   if subroutineoffset~=0 then
    setposition(f,header.offset+private.offset+subroutineoffset)
-   local subroutines=readlengths(f)
+   local subroutines=readlengths(f,version=="cff2")
    for i=1,#subroutines do
     subroutines[i]=readbytetable(f,subroutines[i])
    end
@@ -11016,7 +11607,7 @@ local function readlocals(f,data,dictionary)
   dictionary.subroutines={}
  end
 end
-local function readcharstrings(f,data,what)
+local function readcharstrings(f,data,version)
  local header=data.header
  local dictionaries=data.dictionaries
  local dictionary=dictionaries[1]
@@ -11025,7 +11616,7 @@ local function readcharstrings(f,data,what)
  if type(offset)~="number" then
  elseif stringtype==2 then
   setposition(f,header.offset+offset)
-  local charstrings=readlengths(f,what=="cff2")
+  local charstrings=readlengths(f,version=="cff2")
   local nofglyphs=#charstrings
   for i=1,nofglyphs do
    charstrings[i]=readstring(f,charstrings[i])
@@ -11055,7 +11646,8 @@ readers.parsecharstrings=parsecharstrings
 local function readnoselect(f,fontdata,data,glyphs,doshapes,version,streams)
  local dictionaries=data.dictionaries
  local dictionary=dictionaries[1]
- readglobals(f,data)
+ local cid=not dictionary.private and dictionary.cid
+ readglobals(f,data,version)
  readcharstrings(f,data,version)
  if version=="cff2" then
   dictionary.charset=nil
@@ -11063,9 +11655,27 @@ local function readnoselect(f,fontdata,data,glyphs,doshapes,version,streams)
   readencodings(f,data)
   readcharsets(f,data,dictionary)
  end
+ if cid then
+  local fdarray=cid.fdarray
+  if fdarray then
+   setposition(f,data.header.offset+fdarray)
+   local dictionaries=readlengths(f,version=="cff2")
+   local nofdictionaries=#dictionaries
+   if nofdictionaries>0 then
+    for i=1,nofdictionaries do
+     dictionaries[i]=readstring(f,dictionaries[i])
+    end
+    parsedictionaries(data,dictionaries)
+    dictionary.private=dictionaries[1].private
+    if nofdictionaries>1 then
+     report("ignoring dictionaries > 1 in cid font")
+    end
+   end
+  end
+ end
  readprivates(f,data)
  parseprivates(data,data.dictionaries)
- readlocals(f,data,dictionary)
+ readlocals(f,data,dictionary,version)
  startparsing(fontdata,data,streams)
  parsecharstrings(fontdata,data,glyphs,doshapes,version,streams)
  stopparsing(fontdata,data)
@@ -11076,7 +11686,7 @@ local function readfdselect(f,fontdata,data,glyphs,doshapes,version,streams)
  local dictionary=dictionaries[1]
  local cid=dictionary.cid
  local cidselect=cid and cid.fdselect
- readglobals(f,data)
+ readglobals(f,data,version)
  readcharstrings(f,data,version)
  if version~="cff2" then
   readencodings(f,data)
@@ -11115,26 +11725,35 @@ local function readfdselect(f,fontdata,data,glyphs,doshapes,version,streams)
    end
   end
  else
+  report("unsupported fd index format %i",format)
  end
  if maxindex>=0 then
   local cidarray=cid.fdarray
   if cidarray then
    setposition(f,header.offset+cidarray)
-   local dictionaries=readlengths(f)
-   for i=1,#dictionaries do
-    dictionaries[i]=readstring(f,dictionaries[i])
+   local dictionaries=readlengths(f,version=="cff2")
+   if #dictionaries>0 then
+    for i=1,#dictionaries do
+     dictionaries[i]=readstring(f,dictionaries[i])
+    end
+    parsedictionaries(data,dictionaries)
+    cid.dictionaries=dictionaries
+    readcidprivates(f,data)
+    for i=1,#dictionaries do
+     readlocals(f,data,dictionaries[i],version)
+    end
+    startparsing(fontdata,data,streams)
+    for i=1,#charstrings do
+     local dictionary=dictionaries[fdindex[i]+1]
+     if dictionary then
+      parsecharstring(fontdata,data,dictionary,charstrings[i],glyphs,i,doshapes,version,streams)
+     else
+     end
+    end
+    stopparsing(fontdata,data)
+   else
+    report("no cid dictionaries")
    end
-   parsedictionaries(data,dictionaries)
-   cid.dictionaries=dictionaries
-   readcidprivates(f,data)
-   for i=1,#dictionaries do
-    readlocals(f,data,dictionaries[i])
-   end
-   startparsing(fontdata,data,streams)
-   for i=1,#charstrings do
-    parsecharstring(fontdata,data,dictionaries[fdindex[i]+1],charstrings[i],glyphs,i,doshapes,version,streams)
-   end
-   stopparsing(fontdata,data)
   else
    report("no cid array")
   end
@@ -11282,13 +11901,14 @@ function readers.cffcheck(filename)
  end
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-cff”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-cff”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-ttf” 44e61cef50dab9b1aaf48130f9367c34] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-ttf” a3ff07150b3535fd32f68748d53fcd36] ---
 
 if not modules then modules={} end modules ['font-ttf']={
  version=1.001,
+ optimize=true,
  comment="companion to font-ini.mkiv",
  author="Hans Hagen, PRAGMA-ADE, Hasselt NL",
  copyright="PRAGMA ADE / ConTeXt Development Team",
@@ -11296,7 +11916,7 @@ if not modules then modules={} end modules ['font-ttf']={
 }
 local next,type,unpack=next,type,unpack
 local band,rshift=bit32.band,bit32.rshift
-local sqrt,round=math.sqrt,math.round
+local sqrt,round,abs,min,max=math.sqrt,math.round,math.abs,math.min,math.max
 local char,rep=string.char,string.rep
 local concat=table.concat
 local idiv=number.idiv
@@ -11409,7 +12029,7 @@ local function mergecomposites(glyphs,shapes)
   shape.components=nil
   return contours,points
  end
- for index=0,#glyphs-1 do
+ for index=0,#glyphs do
   local shape=shapes[index]
   if shape then
    local components=shape.components
@@ -11430,69 +12050,192 @@ local function curveto(m_x,m_y,l_x,l_y,r_x,r_y)
   r_x+2/3*(m_x-r_x),r_y+2/3*(m_y-r_y),
   r_x,r_y,"c"
 end
+local xv={} 
+local yv={} 
 local function applyaxis(glyph,shape,deltas,dowidth)
  local points=shape.points
  if points then
   local nofpoints=#points
-  local h=nofpoints+2 
-  local l=nofpoints+1
   local dw=0
   local dl=0
   for i=1,#deltas do
    local deltaset=deltas[i]
    local xvalues=deltaset.xvalues
    local yvalues=deltaset.yvalues
-   local dpoints=deltaset.points
-   local factor=deltaset.factor
-   if dpoints then
-    local nofdpoints=#dpoints
-    for i=1,nofdpoints do
-     local d=dpoints[i]
-     local p=points[d]
-     if p then
-      if xvalues then
-       local x=xvalues[i]
-       if x and x~=0 then
+   if xvalues and yvalues then
+    local dpoints=deltaset.points
+    local factor=deltaset.factor
+    if dpoints then
+     local cnt=#dpoints
+     if dowidth then
+      cnt=cnt-4
+     end
+     if cnt==1 then
+      local d=dpoints[1]
+      local x=xvalues[d]*factor
+      local y=yvalues[d]*factor
+      for i=1,nofpoints do
+       local p=points[i]
+       if x~=0 then
+        p[1]=p[1]+x
+       end
+       if y~=0 then
+        p[2]=p[2]+y
+       end
+      end
+     elseif cnt>0 then
+      local contours=shape.contours
+      local nofcontours=#contours
+      local first=1
+      local firstindex=1
+      for contour=1,nofcontours do
+       local last=contours[contour]
+       if last>=first then
+        local lastindex=cnt
+        if firstindex<cnt then
+         for currentindex=firstindex,cnt do
+          local found=dpoints[currentindex]
+          if found<=first then
+           firstindex=currentindex
+          end
+          if found==last then
+           lastindex=currentindex
+           break;
+          elseif found>last then
+           break
+          end
+         end
+        end
+        local function find(i)
+         local prv=lastindex
+         for j=firstindex,lastindex do
+          local nxt=dpoints[j]
+          if nxt==i then
+           return false,j,false
+          elseif nxt>i then
+           return prv,false,j
+          end
+          prv=j
+         end
+         return prv,false,firstindex
+        end
+        for point=first,last do
+         local d1,d2,d3=find(point)
+         local p2=points[point]
+         if d2 then
+          xv[point]=xvalues[d2]
+          yv[point]=yvalues[d2]
+         else
+          local n1=dpoints[d1]
+          local n3=dpoints[d3]
+          if n1>nofpoints then
+           n1=nofpoints
+          end
+          if n3>nofpoints then
+           n3=nofpoints
+          end
+          local p1=points[n1]
+          local p3=points[n3]
+          local p1x=p1[1]
+          local p2x=p2[1]
+          local p3x=p3[1]
+          local p1y=p1[2]
+          local p2y=p2[2]
+          local p3y=p3[2]
+          local x1=xvalues[d1]
+          local y1=yvalues[d1]
+          local x3=xvalues[d3]
+          local y3=yvalues[d3]
+          local fx
+          local fy
+          if p1x==p3x then
+           if x1==x3 then
+            fx=x1
+           else
+            fx=0
+           end
+          elseif p2x<=min(p1x,p3x) then
+           if p1x<p3x then
+            fx=x1
+           else
+            fx=x3
+           end
+          elseif p2x>=max(p1x,p3x) then
+           if p1x>p3x then
+            fx=x1
+           else
+            fx=x3
+           end
+          else
+           fx=(p2x-p1x)/(p3x-p1x)
+           fx=(1-fx)*x1+fx*x3
+          end
+          if p1y==p3y then
+           if y1==y3 then
+            fy=y1
+           else
+            fy=0
+           end
+          elseif p2y<=min(p1y,p3y) then
+           if p1y<p3y then
+            fy=y1
+           else
+            fy=y3
+           end
+          elseif p2y>=max(p1y,p3y) then
+           if p1y>p3y then
+            fy=y1
+           else
+            fy=y3
+           end
+          else
+           fy=(p2y-p1y)/(p3y-p1y)
+           fy=(1-fy)*y1+fy*y3
+          end
+          xv[point]=fx
+          yv[point]=fy
+         end
+        end
+        if lastindex<cnt then
+         firstindex=lastindex+1
+        end
+       end
+       first=last+1
+      end
+      for i=1,nofpoints do
+       local pi=points[i]
+       local fx=xv[i]
+       local fy=yv[i]
+       if fx~=0 then
+        pi[1]=pi[1]+factor*fx
+       end
+       if fy~=0 then
+        pi[2]=pi[2]+factor*fy
+       end
+      end
+     else
+      report("bad deltapoint data, maybe a missing hvar table")
+     end
+    else
+     for i=1,nofpoints do
+      local p=points[i]
+      local x=xvalues[i]
+      if x then
+       local y=yvalues[i]
+       if x~=0 then
         p[1]=p[1]+factor*x
        end
-      end
-      if yvalues then
-       local y=yvalues[i]
-       if y and y~=0 then
+       if y~=0 then
         p[2]=p[2]+factor*y
        end
-      end
-     elseif dowidth then
-      if d==h then
-       local x=xvalues[i]
-       if x then
-        dw=dw+factor*x
-       end
-      elseif d==l then
-       local x=xvalues[i]
-       if x then
-        dl=dl+factor*x
-       end
-      end
-     end
-    end
-   else
-    for i=1,nofpoints do
-     local p=points[i]
-     if xvalues then
-      local x=xvalues[i]
-      if x and x~=0 then
-       p[1]=p[1]+factor*x
-      end
-     end
-     if yvalues then
-      local y=yvalues[i]
-      if y and y~=0 then
-       p[2]=p[2]+factor*y
+      else
+       break
       end
      end
     end
     if dowidth then
+     local h=nofpoints+2 
+     local l=nofpoints+1
      local x=xvalues[h]
      if x then
       dw=dw+factor*x
@@ -11839,7 +12582,7 @@ local function repackpoints(glyphs,shapes)
  local result={} 
  local xpoints={} 
  local ypoints={} 
- for index=0,#glyphs-1 do
+ for index=0,#glyphs do
   local shape=shapes[index]
   if shape then
    local r=0
@@ -12071,13 +12814,13 @@ local function readcomposite(f)
     yoffset=yoffset*yscale
    end
   elseif band(flags,0x0080)~=0 then 
-   xscale=read2dot14(f)
-   xrotate=read2dot14(f)
-   yrotate=read2dot14(f)
-   yscale=read2dot14(f)
+   xscale=read2dot14(f) 
+   xrotate=read2dot14(f) 
+   yrotate=read2dot14(f) 
+   yscale=read2dot14(f) 
    if f_xyarg and f_offset then
-    xoffset=xoffset*sqrt(xscale^2+xrotate^2)
-    yoffset=yoffset*sqrt(yrotate^2+yscale^2)
+    xoffset=xoffset*sqrt(xscale^2+yrotate^2) 
+    yoffset=yoffset*sqrt(xrotate^2+yscale^2) 
    end
   end
   nofcomponents=nofcomponents+1
@@ -12230,40 +12973,6 @@ local function readpoints(f)
    end
   end
   return points,p
- end
-end
-local function readdeltas(f,nofpoints)
- local deltas={}
- local p=0
- local z=0
- while nofpoints>0 do
-  local control=readbyte(f)
-if not control then
- break
-end
-  local allzero=band(control,0x80)~=0
-  local runlength=band(control,0x3F)+1
-  if allzero then
-   z=z+runlength
-  else
-   local runreader=band(control,0x40)~=0 and readshort or readinteger
-   if z>0 then
-    for i=1,z do
-     p=p+1
-     deltas[p]=0
-    end
-    z=0
-   end
-   for i=1,runlength do
-    p=p+1
-    deltas[p]=runreader(f)
-   end
-  end
-  nofpoints=nofpoints-runlength
- end
- if p>0 then
-  return deltas
- else
  end
 end
 local function readdeltas(f,nofpoints)
@@ -12455,13 +13164,14 @@ function readers.gvar(f,fontdata,specification,glyphdata,shapedata)
  end
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-ttf”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-ttf”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-dsp” b5bf2f1c198e027a0d4ededcdf3947b4] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-dsp” 23a82ec8fdb9f226427e78904402e48a] ---
 
 if not modules then modules={} end modules ['font-dsp']={
  version=1.001,
+ optimize=true,
  comment="companion to font-ini.mkiv",
  author="Hans Hagen, PRAGMA-ADE, Hasselt NL",
  copyright="PRAGMA ADE / ConTeXt Development Team",
@@ -12819,7 +13529,6 @@ local function readvariationdata(f,storeoffset,factors)
   end
   regions[i]=t
  end
- if factors then
   for i=1,nofdeltadata do
    setposition(f,storeoffset+deltadata[i])
    local nofdeltasets=readushort(f)
@@ -12843,7 +13552,6 @@ local function readvariationdata(f,storeoffset,factors)
     scales=factors and getscales(usedregions,factors) or nil,
    }
   end
- end
  setposition(f,position)
  return regions,deltadata
 end
@@ -13102,7 +13810,7 @@ local function readfirst(f,offset)
  end
  return { readushort(f) }
 end
-function readarray(f,offset)
+local function readarray(f,offset)
  if offset then
   setposition(f,offset)
  end
@@ -14505,7 +15213,7 @@ do
    local scriptoffset=tableoffset+readushort(f)
    local featureoffset=tableoffset+readushort(f)
    local lookupoffset=tableoffset+readushort(f)
-   local variationsoffset=version>0x00010000 and (tableoffset+readulong(f)) or 0
+   local variationsoffset=version>0x00010000 and readulong(f) or 0
    if not scriptoffset then
     return
    end
@@ -14525,7 +15233,7 @@ do
     resolvelookups(f,lookupoffset,fontdata,lookups,lookuptypes,lookuphandlers,what,tableoffset)
    end
    if variationsoffset>0 then
-    loadvariations(f,fontdata,variationsoffset,lookuptypes,featurehash,featureorder)
+    loadvariations(f,fontdata,tableoffset+variationsoffset,lookuptypes,featurehash,featureorder)
    end
   end
  end
@@ -15092,6 +15800,8 @@ function readers.cpal(f,fontdata,specification)
   fontdata.colorpalettes=palettes
  end
 end
+local compress=gzip and gzip.compress
+local compressed=compress and gzip.compressed
 function readers.svg(f,fontdata,specification)
  local tableoffset=gotodatatable(f,fontdata,"svg",specification.glyphs)
  if tableoffset then
@@ -15113,10 +15823,14 @@ function readers.svg(f,fontdata,specification)
   for i=1,nofentries do
    local entry=entries[i]
    setposition(f,entry.offset)
+   local data=readstring(f,entry.length)
+   if compressed and not compressed(data) then
+    data=compress(data)
+   end
    entries[i]={
     first=entry.first,
     last=entry.last,
-    data=readstring(f,entry.length)
+    data=data
    }
   end
   fontdata.svgshapes=entries
@@ -15153,6 +15867,7 @@ function readers.sbix(f,fontdata,specification)
    end
   end)
   local glyphs={}
+  local delayed=CONTEXTLMTXMODE and CONTEXTLMTXMODE>0 or fonts.handlers.typethree
   for i=1,nofstrikes do
    local strike=strikes[i]
    local strikeppem=strike.ppem
@@ -15169,13 +15884,25 @@ function readers.sbix(f,fontdata,specification)
      local datasize=nextoffset-glyphoffset
      if datasize>0 then
       setposition(f,strikeoffset+glyphoffset)
+      local x=readshort(f)
+      local y=readshort(f)
+      local tag=readtag(f) 
+      local size=datasize-8
+      local data=nil
+      local offset=nil
+      if delayed then
+       offset=getposition(f)
+       data=nil
+      else
+       data=readstring(f,size)
+       size=nil
+      end
       shapes[i]={
-       x=readshort(f),
-       y=readshort(f),
-       tag=readtag(f),
-       data=readstring(f,datasize-8),
-       ppem=strikeppem,
-       ppi=strikeppi,
+       x=x,
+       y=y,
+       o=offset,
+       s=size,
+       data=data,
       }
       done=done+1
       if done==nofglyphs then
@@ -15354,29 +16081,46 @@ do
    end
    local default={ width=0,height=0 }
    local glyphs=fontdata.glyphs
+   local delayed=CONTEXTLMTXMODE and CONTEXTLMTXMODE>0 or fonts.handlers.typethree
    for index,subtable in sortedhash(shapes) do
     if type(subtable)=="table" then
      local data=nil
+     local size=nil
      local metrics=default
      local format=subtable.format
      local offset=subtable.offsets[index]
      setposition(f,offset)
      if format==17 then
       metrics=getsmallmetrics(f)
-      data=readstring(f,readulong(f))
+      size=true
      elseif format==18 then
       metrics=getbigmetrics(f)
-      data=readstring(f,readulong(f))
+      size=true
      elseif format==19 then
       metrics=subtable.metrics
-      data=readstring(f,readulong(f))
+      size=true
      else
+     end
+     if size then
+      size=readulong(f)
+      if delayed then
+       offset=getposition(f)
+       data=nil
+      else
+       offset=nil
+       data=readstring(f,size)
+       size=nil
+      end
+     else
+      offset=nil
      end
      local x=metrics.width
      local y=metrics.height
      shapes[index]={
       x=x,
       y=y,
+      o=offset,
+      s=size,
       data=data,
      }
      local glyph=glyphs[index]
@@ -15592,6 +16336,7 @@ function readers.hvar(f,fontdata,specification)
  end
  local tableoffset=gotodatatable(f,fontdata,"hvar",specification.variable)
  if not tableoffset then
+  report("no hvar table, expect problems due to messy widths")
   return
  end
  local version=readulong(f) 
@@ -15603,6 +16348,7 @@ function readers.hvar(f,fontdata,specification)
  local variations={}
  local innerindex={} 
  local outerindex={} 
+ local deltas={}
  if variationoffset>0 then
   regions,deltas=readvariationdata(f,variationoffset,factors)
  end
@@ -15699,10 +16445,10 @@ function readers.mvar(f,fontdata,specification)
  end
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-dsp”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-dsp”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-oup” 669e479e716999edc626a1f045bd76fa] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-oup” 76dc3379061e5650f772909966b5759e] ---
 
 if not modules then modules={} end modules ['font-oup']={
  version=1.001,
@@ -15715,6 +16461,7 @@ local next,type=next,type
 local P,R,S=lpeg.P,lpeg.R,lpeg.S
 local lpegmatch=lpeg.match
 local insert,remove,copy,unpack=table.insert,table.remove,table.copy,table.unpack
+local find=string.find
 local formatters=string.formatters
 local sortedkeys=table.sortedkeys
 local sortedhash=table.sortedhash
@@ -15737,9 +16484,9 @@ local f_index=formatters["I%05X"]
 local f_character_y=formatters["%C"]
 local f_character_n=formatters["[ %C ]"]
 local check_duplicates=true 
-local check_soft_hyphen=true 
+local check_soft_hyphen=context 
 directives.register("otf.checksofthyphen",function(v)
- check_soft_hyphen=v
+ check_soft_hyphen=v 
 end)
 local function replaced(list,index,replacement)
  if type(list)=="number" then
@@ -16128,27 +16875,30 @@ local function copyduplicates(fontdata)
   local resources=fontdata.resources
   local duplicates=resources.duplicates
   if check_soft_hyphen then
-   local ds=descriptions[0xAD]
-   if not ds or ds.width==0 then
-    if ds then
+   local dh=descriptions[0x2D]
+   if dh then
+    local ds=descriptions[0xAD]
+    if not ds or ds.width~=dh.width then
      descriptions[0xAD]=nil
-     if trace_unicodes then
-      report_unicodes("patching soft hyphen")
+     if ds then
+      if trace_unicodes then
+       report_unicodes("patching soft hyphen")
+      end
+     else
+      if trace_unicodes then
+       report_unicodes("adding soft hyphen")
+      end
      end
-    else
-     if trace_unicodes then
-      report_unicodes("adding soft hyphen")
+     if not duplicates then
+      duplicates={}
+      resources.duplicates=duplicates
      end
-    end
-    if not duplicates then
-     duplicates={}
-     resources.duplicates=duplicates
-    end
-    local dh=duplicates[0x2D]
-    if dh then
-     dh[#dh+1]={ [0xAD]=true }
-    else
-     duplicates[0x2D]={ [0xAD]=true }
+     local d=duplicates[0x2D]
+     if d then
+      d[0xAD]=true
+     else
+      duplicates[0x2D]={ [0xAD]=true }
+     end
     end
    end
   end
@@ -16379,6 +17129,9 @@ local function checklookups(fontdata,missing,nofmissing)
   end
  end
 end
+local firstprivate=fonts.privateoffsets and fonts.privateoffsets.textbase or 0xF0000
+local puafirst=0xE000
+local pualast=0xF8FF
 local function unifymissing(fontdata)
  if not fonts.mappings then
   require("font-map")
@@ -16389,18 +17142,19 @@ local function unifymissing(fontdata)
  resources.unicodes=unicodes
  for unicode,d in next,fontdata.descriptions do
   if unicode<privateoffset then
-   local name=d.name
-   if name then
-    unicodes[name]=unicode
+   if unicode>=puafirst and unicode<=pualast then
+   else
+    local name=d.name
+    if name then
+     unicodes[name]=unicode
+    end
    end
+  else
   end
  end
  fonts.mappings.addtounicode(fontdata,fontdata.filename,checklookups)
  resources.unicodes=nil
 end
-local firstprivate=fonts.privateoffsets and fonts.privateoffsets.textbase or 0xF0000
-local puafirst=0xE000
-local pualast=0xF8FF
 local function unifyglyphs(fontdata,usenames)
  local private=fontdata.private or privateoffset
  local glyphs=fontdata.glyphs
@@ -16410,6 +17164,7 @@ local function unifyglyphs(fontdata,usenames)
  local resources=fontdata.resources
  local zero=glyphs[0]
  local zerocode=zero.unicode
+ local nofglyphs=#glyphs
  if not zerocode then
   zerocode=private
   zero.unicode=zerocode
@@ -16424,7 +17179,7 @@ local function unifyglyphs(fontdata,usenames)
   indices[0]=zerocode
  end
  if names then
-  for index=1,#glyphs do
+  for index=1,nofglyphs do
    local glyph=glyphs[index]
    local unicode=glyph.unicode 
    if not unicode then
@@ -16457,7 +17212,7 @@ local function unifyglyphs(fontdata,usenames)
    descriptions[unicode]=glyph
   end
  elseif trace_unicodes then
-  for index=1,#glyphs do
+  for index=1,nofglyphs do
    local glyph=glyphs[index]
    local unicode=glyph.unicode 
    if not unicode then
@@ -16498,7 +17253,7 @@ local function unifyglyphs(fontdata,usenames)
    descriptions[unicode]=glyph
   end
  else
-  for index=1,#glyphs do
+  for index=1,nofglyphs do
    local glyph=glyphs[index]
    local unicode=glyph.unicode 
    if not unicode then
@@ -16524,7 +17279,7 @@ local function unifyglyphs(fontdata,usenames)
    descriptions[unicode]=glyph
   end
  end
- for index=1,#glyphs do
+ for index=1,nofglyphs do
   local math=glyphs[index].math
   if math then
    local list=math.vparts
@@ -16547,7 +17302,7 @@ local function unifyglyphs(fontdata,usenames)
  end
  local colorpalettes=resources.colorpalettes
  if colorpalettes then
-  for index=1,#glyphs do
+  for index=1,nofglyphs do
    local colors=glyphs[index].colors
    if colors then
     for i=1,#colors do
@@ -16562,63 +17317,140 @@ local function unifyglyphs(fontdata,usenames)
  fontdata.names=names
  fontdata.descriptions=descriptions
  fontdata.hashmethod=hashmethod
+ fontdata.nofglyphs=nofglyphs
  return indices,names
 end
-local p_crappyname  do
+local stripredundant  do
  local p_hex=R("af","AF","09")
  local p_digit=R("09")
  local p_done=S("._-")^0+P(-1)
+ local p_style=P(".")
  local p_alpha=R("az","AZ")
  local p_ALPHA=R("AZ")
- p_crappyname=(
+ local p_crappyname=(
   lpeg.utfchartabletopattern({ "uni","u" },true)*S("Xx_")^0*p_hex^1
 +lpeg.utfchartabletopattern({ "identity","glyph","jamo" },true)*p_hex^1
 +lpeg.utfchartabletopattern({ "index","afii" },true)*p_digit^1
 +p_digit*p_hex^3+p_alpha*p_digit^1
 +P("aj")*p_digit^1+P("eh_")*(p_digit^1+p_ALPHA*p_digit^1)+(1-P("_"))^1*P("_uni")*p_hex^1+P("_")*P(1)^1
  )*p_done
-end
-local forcekeep=false 
-directives.register("otf.keepnames",function(v)
- report_cleanup("keeping weird glyph names, expect larger files and more memory usage")
- forcekeep=v
-end)
-local function stripredundant(fontdata)
- local descriptions=fontdata.descriptions
- if descriptions then
-  local n=0
-  local c=0
-  if (not context and fonts.privateoffsets.keepnames) or forcekeep then
-   for unicode,d in next,descriptions do
-    if d.class=="base" then
-     d.class=nil
-     c=c+1
+ if context then
+  local forcekeep=false
+  directives.register("otf.keepnames",function(v)
+   report_cleanup("keeping weird glyph names, expect larger files and more memory usage")
+   forcekeep=v
+  end)
+  local function stripvariants(descriptions,list)
+   local n=list and #list or 0
+   if n>0 then
+    for i=1,n do
+     local g=list[i]
+     if g then
+      local d=descriptions[g]
+      if d and d.name then
+       d.name=nil
+       n=n+1
+      end
+     end
     end
    end
-  else
-   for unicode,d in next,descriptions do
-    local name=d.name
-    if name and lpegmatch(p_crappyname,name) then
-     d.name=nil
-     n=n+1
+   return n
+  end
+  local function stripparts(descriptions,list)
+   local n=list and #list or 0
+   if n>0 then
+    for i=1,n do
+     local g=list[i].glyph
+     if g then
+      local d=descriptions[g]
+      if d and d.name then
+       d.name=nil
+       n=n+1
+      end
+     end
     end
-    if d.class=="base" then
-     d.class=nil
-     c=c+1
+   end
+   return n
+  end
+  local function collectsimple(fontdata)
+   return nil
+  end
+  stripredundant=function(fontdata)
+   local descriptions=fontdata.descriptions
+   if descriptions then
+    local n=0
+    local c=0
+    for unicode,d in next,descriptions do
+     local m=d.math
+     if m then
+      n=n+stripvariants(descriptions,m.vvariants)
+      n=n+stripvariants(descriptions,m.hvariants)
+      n=n+stripparts   (descriptions,m.vparts)
+      n=n+stripparts   (descriptions,m.hparts)
+     end
+    end
+    if forcekeep then
+     for unicode,d in next,descriptions do
+      if d.class=="base" then
+       d.class=nil
+       c=c+1
+      end
+     end
+    else
+     local keeplist=collectsimple(fontdata)
+     for unicode,d in next,descriptions do
+      local name=d.name
+      if name then
+       if keeplist and keeplist[name] then
+       elseif lpegmatch(p_crappyname,name) then
+        d.name=nil
+        n=n+1
+       end
+      end
+      if d.class=="base" then
+       d.class=nil
+       c=c+1
+      end
+     end
+    end
+    if trace_cleanup then
+     if n>0 then
+      report_cleanup("%s bogus names removed (verbose unicode)",n)
+     end
+     if c>0 then
+      report_cleanup("%s base class tags removed (default is base)",c)
+     end
     end
    end
   end
-  if trace_cleanup then
-   if n>0 then
-    report_cleanup("%s bogus names removed (verbose unicode)",n)
-   end
-   if c>0 then
-    report_cleanup("%s base class tags removed (default is base)",c)
+ else
+  stripredundant=function(fontdata)
+   local descriptions=fontdata.descriptions
+   if descriptions then
+    if fonts.privateoffsets.keepnames then
+     for unicode,d in next,descriptions do
+      if d.class=="base" then
+       d.class=nil
+      end
+     end
+    else
+     for unicode,d in next,descriptions do
+      local name=d.name
+      if name then
+       if lpegmatch(p_crappyname,name) then
+        d.name=nil
+       end
+      end
+      if d.class=="base" then
+       d.class=nil
+      end
+     end
+    end
    end
   end
  end
+ readers.stripredundant=stripredundant
 end
-readers.stripredundant=stripredundant
 function readers.getcomponents(fontdata) 
  local resources=fontdata.resources
  if resources then
@@ -16634,6 +17466,10 @@ function readers.getcomponents(fontdata)
       local function traverse(p,k,v)
        if k=="ligature" then
         collected[v]={ unpack(l) }
+       elseif tonumber(v) then
+        insert(l,k)
+        collected[v]={ unpack(l) }
+        remove(l)
        else
         insert(l,k)
         for k,vv in next,v do
@@ -16698,8 +17534,7 @@ readers.unifymissing=unifymissing
 function readers.rehash(fontdata,hashmethod) 
  if not (fontdata and fontdata.glyphs) then
   return
- end
- if hashmethod=="indices" then
+ elseif hashmethod=="indices" then
   fontdata.hashmethod="indices"
  elseif hashmethod=="names" then
   fontdata.hashmethod="names"
@@ -16794,7 +17629,6 @@ local function tabstr_flat(t)
  end
 end
 local function tabstr_mixed(t) 
- local s={}
  local n=#t
  if n==0 then
   return ""
@@ -16808,6 +17642,7 @@ local function tabstr_mixed(t)
    return tostring(k) 
   end
  else
+  local s={}
   for i=1,n do
    local k=t[i]
    if k==true then
@@ -17942,6 +18777,28 @@ local function checkkerns(lookup)
  end
  return kerned
 end
+local strip_pairs=true
+local compact_pairs=true
+local compact_singles=true
+local merge_pairs=true
+local merge_singles=true
+local merge_substitutions=true
+local merge_alternates=true
+local merge_multiples=true
+local merge_ligatures=true
+local merge_cursives=true
+local merge_marks=true
+directives.register("otf.strip.pairs",function(v) strip_pairs=v end)
+directives.register("otf.compact.pairs",function(v) compact_pairs=v end)
+directives.register("otf.compact.singles",function(v) compact_singles=v end)
+directives.register("otf.merge.pairs",function(v) merge_pairs=v end)
+directives.register("otf.merge.singles",function(v) merge_singles=v end)
+directives.register("otf.merge.substitutions",function(v) merge_substitutions=v end)
+directives.register("otf.merge.alternates",function(v) merge_alternates=v end)
+directives.register("otf.merge.multiples",function(v) merge_multiples=v end)
+directives.register("otf.merge.ligatures",function(v) merge_ligatures=v end)
+directives.register("otf.merge.cursives",function(v) merge_cursives=v end)
+directives.register("otf.merge.marks",function(v) merge_marks=v end)
 local function checkpairs(lookup)
  local steps=lookup.steps
  local nofsteps=lookup.nofsteps
@@ -17989,26 +18846,27 @@ local function checkpairs(lookup)
  end
  return kerned
 end
-local compact_pairs=true
-local compact_singles=true
-local merge_pairs=true
-local merge_singles=true
-local merge_substitutions=true
-local merge_alternates=true
-local merge_multiples=true
-local merge_ligatures=true
-local merge_cursives=true
-local merge_marks=true
-directives.register("otf.compact.pairs",function(v) compact_pairs=v end)
-directives.register("otf.compact.singles",function(v) compact_singles=v end)
-directives.register("otf.merge.pairs",function(v) merge_pairs=v end)
-directives.register("otf.merge.singles",function(v) merge_singles=v end)
-directives.register("otf.merge.substitutions",function(v) merge_substitutions=v end)
-directives.register("otf.merge.alternates",function(v) merge_alternates=v end)
-directives.register("otf.merge.multiples",function(v) merge_multiples=v end)
-directives.register("otf.merge.ligatures",function(v) merge_ligatures=v end)
-directives.register("otf.merge.cursives",function(v) merge_cursives=v end)
-directives.register("otf.merge.marks",function(v) merge_marks=v end)
+local function strippairs(lookup)
+ local steps=lookup.steps
+ local nofsteps=lookup.nofsteps
+ local stripped=0
+ for i=1,nofsteps do
+  local step=steps[i]
+  if step.format=="pair" then
+   local coverage=step.coverage
+   for g1,d1 in next,coverage do
+    for g2,d2 in next,d1 do
+     if d2[2] then
+     elseif d2[1]==true then
+      d1[g2]=nil
+      stripped=stripped+1
+     end
+    end
+   end
+  end
+ end
+ return stripped
+end
 function readers.compact(data)
  if not data or data.compacted then
   return
@@ -18016,6 +18874,7 @@ function readers.compact(data)
   data.compacted=true
  end
  local resources=data.resources
+ local stripped=0
  local merged=0
  local kerned=0
  local allsteps=0
@@ -18053,6 +18912,9 @@ function readers.compact(data)
        kerned=kerned+checkkerns(lookup)
       end
      elseif kind=="gpos_pair" then
+      if strip_pairs then
+       stripped=stripped+strippairs(lookup) 
+      end
       if merge_pairs then
        merged=merged+mergesteps_2(lookup)
       end
@@ -18093,11 +18955,93 @@ function readers.compact(data)
  compact("sequences")
  compact("sublookups")
  if trace_optimizations then
+  if stripped>0 then
+   report_optimizations("%i zero positions stripped before merging",stripped)
+  end
   if merged>0 then
    report_optimizations("%i steps of %i removed due to merging",merged,allsteps)
   end
   if kerned>0 then
    report_optimizations("%i steps of %i steps turned from pairs into kerns",kerned,allsteps)
+  end
+ end
+end
+if CONTEXTLMTXMODE and CONTEXTLMTXMODE>0 then
+ local done=0
+ local function condense_1(k,v,t)
+  if type(v)=="table" then
+   local u=false
+   local l=false
+   for k,v in next,v do
+    if k=="ligature" then
+     l=v
+     if u then
+      break
+     end
+    elseif u then
+     break
+    else
+     u=true
+    end
+   end
+   if l and not u then
+    t[k]=l
+    done=done+1
+   end
+   if u then
+    for k,vv in next,v do
+     if k~="ligature" then
+      condense_1(k,vv,v)
+     end
+    end
+   end
+  end
+ end
+ local function condensesteps_1(lookup)
+  done=0
+  if lookup.type=="gsub_ligature" then
+   local steps=lookup.steps
+   if steps then
+    for i=1,#steps do
+     local step=steps[i]
+     local coverage=step.coverage
+     if coverage then
+      for k,v in next,coverage do
+       if condense_1(k,v,coverage) then
+        coverage[k]=v.ligature
+        done=done+1
+       end
+      end
+     end
+    end
+   end
+  end
+  return done
+ end
+ function readers.condense(data)
+  if not data or data.condensed then
+   return
+  else
+   data.condensed=true
+  end
+  local resources=data.resources
+  local condensed=0
+  local function condense(what)
+   local lookups=resources[what]
+   if lookups then
+    for i=1,#lookups do
+     condensed=condensed+condensesteps_1(lookups[i])
+    end
+   elseif trace_optimizations then
+    report_optimizations("no lookups in %a",what)
+   end
+  end
+  condense("sequences")
+  condense("sublookups")
+  if trace_optimizations then
+   if condensed>0 then
+    report_optimizations("%i ligatures condensed",condensed)
+   end
   end
  end
 end
@@ -18205,7 +19149,7 @@ function readers.expand(data)
    end
   end
  end
- local function expandlookups(sequences)
+ local function expandlookups(sequences,whatever)
   if sequences then
    for i=1,#sequences do
     local sequence=sequences[i]
@@ -18278,6 +19222,9 @@ function readers.expand(data)
           if lookups then
            for k,v in next,lookups do 
             local lookup=sublookups[v]
+if not lookup and whatever then
+ lookup=whatever[v]
+end
             if lookup then
              lookups[k]=lookup
              if not subtype then
@@ -18336,13 +19283,13 @@ function readers.expand(data)
   end
  end
  expandlookups(sequences)
- expandlookups(sublookups)
+ expandlookups(sublookups,sequences)
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-oup”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-oup”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-otl” 940f9c5ad84f4968a8488f4da2d15e2d] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-otl” 308b1aab04bc131da7eb8e8c3b0471d4] ---
 
 if not modules then modules={} end modules ['font-otl']={
  version=1.001,
@@ -18354,7 +19301,7 @@ if not modules then modules={} end modules ['font-otl']={
 local lower=string.lower
 local type,next,tonumber,tostring,unpack=type,next,tonumber,tostring,unpack
 local abs=math.abs
-local derivetable=table.derive
+local derivetable,sortedhash=table.derive,table.sortedhash
 local formatters=string.formatters
 local setmetatableindex=table.setmetatableindex
 local allocate=utilities.storage.allocate
@@ -18370,11 +19317,12 @@ local trace_defining=false  registertracker("fonts.defining",function(v) trace_d
 local report_otf=logs.reporter("fonts","otf loading")
 local fonts=fonts
 local otf=fonts.handlers.otf
-otf.version=3.109 
+otf.version=3.120 
 otf.cache=containers.define("fonts","otl",otf.version,true)
 otf.svgcache=containers.define("fonts","svg",otf.version,true)
 otf.pngcache=containers.define("fonts","png",otf.version,true)
 otf.pdfcache=containers.define("fonts","pdf",otf.version,true)
+otf.mpscache=containers.define("fonts","mps",otf.version,true)
 otf.svgenabled=false
 otf.pngenabled=false
 local otfreaders=otf.readers
@@ -18504,6 +19452,9 @@ function otf.load(filename,sub,instance)
    if cleanup==0 then
     checkmemory(used,threshold,tracememory)
    end
+   if context then
+    otfreaders.condense(data)
+   end
    otfreaders.pack(data)
    report_otf("loading done")
    report_otf("saving %a in cache",filename)
@@ -18574,7 +19525,7 @@ local function copytotfm(data,cache_id)
   local properties=derivetable(data.properties)
   local descriptions=derivetable(data.descriptions)
   local goodies=derivetable(data.goodies)
-  local characters={}
+  local characters={} 
   local parameters={}
   local mathparameters={}
   local resources=data.resources
@@ -18734,7 +19685,6 @@ local function copytotfm(data,cache_id)
   parameters.units=units
   parameters.vheight=metadata.defaultvheight
   properties.space=spacer
-  properties.encodingbytes=2
   properties.format=data.format or formats.otf
   properties.filename=filename
   properties.fontname=fontname
@@ -18742,6 +19692,27 @@ local function copytotfm(data,cache_id)
   properties.psname=psname
   properties.name=filename or fullname
   properties.subfont=subfont
+if not CONTEXTLMTXMODE or CONTEXTLMTXMODE==0 then
+ properties.encodingbytes=2
+elseif CONTEXTLMTXMODE then
+ local duplicates=resources and resources.duplicates
+ if duplicates then
+  local maxindex=data.nofglyphs or metadata.nofglyphs
+  if maxindex then
+   for u,d in sortedhash(duplicates) do
+    local du=descriptions[u]
+    if du then
+     for uu in sortedhash(d) do
+      maxindex=maxindex+1
+      descriptions[uu].dupindex=du.index
+      descriptions[uu].index=maxindex
+     end
+    else
+    end
+   end
+  end
+ end
+end
   properties.private=properties.private or data.private or privateoffset
   return {
    characters=characters,
@@ -18820,6 +19791,7 @@ local function read_from_otf(specification)
  if tfmdata then
   tfmdata.properties.name=specification.name
   tfmdata.properties.sub=specification.sub
+  tfmdata.properties.id=specification.id
   tfmdata=constructors.scale(tfmdata,specification)
   local allfeatures=tfmdata.shared.features or specification.features.normal
   constructors.applymanipulators("otf",tfmdata,allfeatures,trace_features,report_otf)
@@ -19045,10 +20017,10 @@ otf.coverup={
  end
 }
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-otl”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-otl”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-oto” 52804afd96f4be005f513a012b874668] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-oto” 9febc4d75d17a543cd73fb17918f7307] ---
 
 if not modules then modules={} end modules ['font-oto']={ 
  version=1.001,
@@ -19060,7 +20032,7 @@ if not modules then modules={} end modules ['font-oto']={
 local concat,unpack=table.concat,table.unpack
 local insert,remove=table.insert,table.remove
 local format,gmatch,gsub,find,match,lower,strip=string.format,string.gmatch,string.gsub,string.find,string.match,string.lower,string.strip
-local type,next,tonumber,tostring,rawget=type,next,tonumber,tostring,rawget
+local type,next,tonumber,tostring=type,next,tonumber,tostring
 local trace_baseinit=false  trackers.register("otf.baseinit",function(v) trace_baseinit=v end)
 local trace_singles=false  trackers.register("otf.singles",function(v) trace_singles=v end)
 local trace_multiples=false  trackers.register("otf.multiples",function(v) trace_multiples=v end)
@@ -19108,7 +20080,7 @@ local function gref(descriptions,n)
  end
 end
 local function cref(feature,sequence)
- return formatters["feature %a, type %a, chain lookup %a"](feature,sequence.type,sequence.name)
+ return formatters["feature %a, type %a, (chain) lookup %a"](feature,sequence.type,sequence.name)
 end
 local function report_substitution(feature,sequence,descriptions,unicode,substitution)
  if unicode==substitution then
@@ -19169,49 +20141,60 @@ end
 local function makefake(tfmdata,name,present)
  local private=getprivate(tfmdata)
  local character={ intermediate=true,ligatures={} }
- resources.unicodes[name]=private
+ tfmdata.resources.unicodes[name]=private
  tfmdata.characters[private]=character
  tfmdata.descriptions[private]={ name=name }
  present[name]=private
  return character
 end
 local function make_1(present,tree,name)
- for k,v in next,tree do
-  if k=="ligature" then
-   present[name]=v
+ if tonumber(tree) then
+  present[name]=v
+ else
+  for k,v in next,tree do
+   if k=="ligature" then
+    present[name]=v
+   else
+    make_1(present,v,name.."_"..k)
+   end
+  end
+ end
+end
+local function make_3(present,tfmdata,characters,tree,name,preceding,unicode,done,v)
+ local character=characters[preceding]
+ if not character then
+  if trace_baseinit then
+   report_prepare("weird ligature in lookup %a, current %C, preceding %C",sequence.name,v,preceding)
+  end
+  character=makefake(tfmdata,name,present)
+ end
+ local ligatures=character.ligatures
+ if ligatures then
+  ligatures[unicode]={ char=v }
+ else
+  character.ligatures={ [unicode]={ char=v } }
+ end
+ if done then
+  local d=done[name]
+  if not d then
+   done[name]={ "dummy",v }
   else
-   make_1(present,v,name.."_"..k)
+   d[#d+1]=v
   end
  end
 end
 local function make_2(present,tfmdata,characters,tree,name,preceding,unicode,done)
- for k,v in next,tree do
-  if k=="ligature" then
-   local character=characters[preceding]
-   if not character then
-    if trace_baseinit then
-     report_prepare("weird ligature in lookup %a, current %C, preceding %C",sequence.name,v,preceding)
-    end
-    character=makefake(tfmdata,name,present)
-   end
-   local ligatures=character.ligatures
-   if ligatures then
-    ligatures[unicode]={ char=v }
+ if tonumber(tree) then
+  make_3(present,tfmdata,characters,tree,name,preceding,unicode,done,tree)
+ else
+  for k,v in next,tree do
+   if k=="ligature" then
+    make_3(present,tfmdata,characters,tree,name,preceding,unicode,done,v)
    else
-    character.ligatures={ [unicode]={ char=v } }
+    local code=present[name] or unicode
+    local name=name.."_"..k
+    make_2(present,tfmdata,characters,v,name,code,k,done)
    end
-   if done then
-    local d=done[name]
-    if not d then
-     done[name]={ "dummy",v }
-    else
-     d[#d+1]=v
-    end
-   end
-  else
-   local code=present[name] or unicode
-   local name=name.."_"..k
-   make_2(present,tfmdata,characters,v,name,code,k,done)
   end
  end
 end
@@ -19506,13 +20489,14 @@ registerotffeature {
 }
 otf.basemodeinitializer=featuresinitializer
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-oto”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-oto”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-otj” 66c7a910d95d4a52b81061de776898e1] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-otj” b2c165bd6771a57633f992d07384b739] ---
 
 if not modules then modules={} end modules ['font-otj']={
  version=1.001,
+ optimize=true,
  comment="companion to font-lib.mkiv",
  author="Hans Hagen, PRAGMA-ADE, Hasselt NL",
  copyright="PRAGMA ADE / ConTeXt Development Team",
@@ -19558,6 +20542,8 @@ local getoffsets=nuts.getoffsets
 local getboth=nuts.getboth
 local getdisc=nuts.getdisc
 local setdisc=nuts.setdisc
+local getreplace=nuts.getreplace
+local setreplace=nuts.setreplace
 local setoffsets=nuts.setoffsets
 local ischar=nuts.ischar
 local getkern=nuts.getkern
@@ -19567,38 +20553,38 @@ local setwidth=nuts.setwidth
 local getwidth=nuts.getwidth
 local nextchar=nuts.traversers.char
 local nextglue=nuts.traversers.glue
-local insert_node_before=nuts.insert_before
-local insert_node_after=nuts.insert_after
+local insertnodebefore=nuts.insertbefore
+local insertnodeafter=nuts.insertafter
 local properties=nodes.properties.data
 local fontkern=nuts.pool and nuts.pool.fontkern   
 local italickern=nuts.pool and nuts.pool.italickern 
-local useitalickerns=false
+local useitalickerns=false 
 directives.register("fonts.injections.useitalics",function(v)
  if v then
   report_injections("using italics for space kerns (tracing only)")
  end
  useitalickerns=v
 end)
-do if not fontkern then 
+if not fontkern then 
  local thekern=nuts.new("kern",0) 
  local setkern=nuts.setkern
- local copy_node=nuts.copy_node
+ local copy_node=nuts.copy
  fontkern=function(k)
   local n=copy_node(thekern)
   setkern(n,k)
   return n
  end
-end end
-do if not italickern then 
+end
+if not italickern then 
  local thekern=nuts.new("kern",3) 
  local setkern=nuts.setkern
- local copy_node=nuts.copy_node
+ local copy_node=nuts.copy
  italickern=function(k)
   local n=copy_node(thekern)
   setkern(n,k)
   return n
  end
-end end
+end
 function injections.installnewkern() end 
 local nofregisteredkerns=0
 local nofregisteredpositions=0
@@ -20051,7 +21037,15 @@ local function inject_kerns_only(head,where)
     if i then
      local leftkern=i.leftkern
      if leftkern and leftkern~=0 then
-      head=insert_node_before(head,current,fontkern(leftkern))
+      if prev and getid(prev)==glue_code then
+       if useitalickerns then
+        head=insertnodebefore(head,current,italickern(leftkern))
+       else
+        setwidth(prev,getwidth(prev)+leftkern)
+       end
+      else
+       head=insertnodebefore(head,current,fontkern(leftkern))
+      end
      end
     end
     if prevdisc then
@@ -20104,7 +21098,7 @@ local function inject_kerns_only(head,where)
       if i then
        local leftkern=i.leftkern
        if leftkern and leftkern~=0 then
-        pre=insert_node_before(pre,n,fontkern(leftkern))
+        pre=insertnodebefore(pre,n,fontkern(leftkern))
         done=true
        end
       end
@@ -20119,7 +21113,7 @@ local function inject_kerns_only(head,where)
       if i then
        local leftkern=i.leftkern
        if leftkern and leftkern~=0 then
-        post=insert_node_before(post,n,fontkern(leftkern))
+        post=insertnodebefore(post,n,fontkern(leftkern))
         done=true
        end
       end
@@ -20134,7 +21128,7 @@ local function inject_kerns_only(head,where)
       if i then
        local leftkern=i.leftkern
        if leftkern and leftkern~=0 then
-        replace=insert_node_before(replace,n,fontkern(leftkern))
+        replace=insertnodebefore(replace,n,fontkern(leftkern))
         done=true
        end
       end
@@ -20194,24 +21188,36 @@ local function inject_positions_only(head,where)
       if rightkern and leftkern==-rightkern then
        setoffsets(current,leftkern,false)
        rightkern=0
+      elseif prev and getid(prev)==glue_code then
+       if useitalickerns then
+        head=insertnodebefore(head,current,italickern(leftkern))
+       else
+        setwidth(prev,getwidth(prev)+leftkern)
+       end
       else
-       head=insert_node_before(head,current,fontkern(leftkern))
+       head=insertnodebefore(head,current,fontkern(leftkern))
       end
      end
      if rightkern and rightkern~=0 then
-      insert_node_after(head,current,fontkern(rightkern))
+      if next and getid(next)==glue_code then
+       if useitalickerns then
+        insertnodeafter(head,current,italickern(rightkern))
+       else
+        setwidth(next,getwidth(next)+rightkern)
+       end
+      else
+       insertnodeafter(head,current,fontkern(rightkern))
+      end
      end
-    else
+    elseif next then
      local i=p.emptyinjections
      if i then
       local rightkern=i.rightkern
-      if rightkern and rightkern~=0 then
-       if next and getid(next)==disc_code then
-        if replace then
-        else
-         replace=fontkern(rightkern) 
-         done=true	
-        end
+      if rightkern and rightkern~=0 and getid(next)==disc_code then
+       local replace=getreplace(next)
+       if replace then
+       else
+        setreplace(next,fontkern(rightkern))
        end
       end
      end
@@ -20272,12 +21278,12 @@ local function inject_positions_only(head,where)
        end
        local leftkern=i.leftkern
        if leftkern and leftkern~=0 then
-        pre=insert_node_before(pre,n,fontkern(leftkern))
+        pre=insertnodebefore(pre,n,fontkern(leftkern))
         done=true
        end
        local rightkern=i.rightkern
        if rightkern and rightkern~=0 then
-        insert_node_after(pre,n,fontkern(rightkern))
+        insertnodeafter(pre,n,fontkern(rightkern))
         done=true
        end
       end
@@ -20296,12 +21302,12 @@ local function inject_positions_only(head,where)
        end
        local leftkern=i.leftkern
        if leftkern and leftkern~=0 then
-        post=insert_node_before(post,n,fontkern(leftkern))
+        post=insertnodebefore(post,n,fontkern(leftkern))
         done=true
        end
        local rightkern=i.rightkern
        if rightkern and rightkern~=0 then
-        insert_node_after(post,n,fontkern(rightkern))
+        insertnodeafter(post,n,fontkern(rightkern))
         done=true
        end
       end
@@ -20320,12 +21326,12 @@ local function inject_positions_only(head,where)
        end
        local leftkern=i.leftkern
        if leftkern and leftkern~=0 then
-        replace=insert_node_before(replace,n,fontkern(leftkern))
+        replace=insertnodebefore(replace,n,fontkern(leftkern))
         done=true
        end
        local rightkern=i.rightkern
        if rightkern and rightkern~=0 then
-        insert_node_after(replace,n,fontkern(rightkern))
+        insertnodeafter(replace,n,fontkern(rightkern))
         done=true
        end
       end
@@ -20340,7 +21346,7 @@ local function inject_positions_only(head,where)
       if i then
        local rightkern=i.rightkern
        if rightkern and rightkern~=0 then
-        pre=insert_node_before(pre,pre,fontkern(rightkern))
+        pre=insertnodebefore(pre,pre,fontkern(rightkern))
         done=true
        end
       end
@@ -20353,7 +21359,7 @@ local function inject_positions_only(head,where)
       if i then
        local rightkern=i.rightkern
        if rightkern and rightkern~=0 then
-        replace=insert_node_before(replace,replace,fontkern(rightkern))
+        replace=insertnodebefore(replace,replace,fontkern(rightkern))
         done=true
        end
       end
@@ -20456,8 +21462,8 @@ local function inject_everything(head,where)
      if trace_injections then
       report_injections("correcting non zero width mark %C",getchar(n))
      end
-     insert_node_before(n,n,fontkern(-wn))
-     insert_node_after(n,n,fontkern(-wn))
+     insertnodebefore(n,n,fontkern(-wn))
+     insertnodeafter(n,n,fontkern(-wn))
     end
    end
   end
@@ -20547,25 +21553,37 @@ local function inject_everything(head,where)
        if rightkern and leftkern==-rightkern then
         setoffsets(current,leftkern,false)
         rightkern=0
+       elseif prev and getid(prev)==glue_code then
+        if useitalickerns then
+         head=insertnodebefore(head,current,italickern(leftkern))
+        else
+         setwidth(prev,getwidth(prev)+leftkern)
+        end
        else
-        head=insert_node_before(head,current,fontkern(leftkern))
+        head=insertnodebefore(head,current,fontkern(leftkern))
        end
       end
       if rightkern and rightkern~=0 then
-       insert_node_after(head,current,fontkern(rightkern))
+       if next and getid(next)==glue_code then
+        if useitalickerns then
+         insertnodeafter(head,current,italickern(rightkern))
+        else
+         setwidth(next,getwidth(next)+rightkern)
+        end
+       else
+        insertnodeafter(head,current,fontkern(rightkern))
+       end
       end
      end
-    else
+    elseif next then
      local i=p.emptyinjections
      if i then
       local rightkern=i.rightkern
-      if rightkern and rightkern~=0 then
-       if next and getid(next)==disc_code then
-        if replace then
-        else
-         replace=fontkern(rightkern)
-         done=true
-        end
+      if rightkern and rightkern~=0 and getid(next)==disc_code then
+       local replace=getreplace(next)
+       if replace then
+       else
+        setreplace(next,fontkern(rightkern))
        end
       end
      end
@@ -20640,12 +21658,12 @@ local function inject_everything(head,where)
        end
        local leftkern=i.leftkern
        if leftkern and leftkern~=0 then
-        pre=insert_node_before(pre,n,fontkern(leftkern))
+        pre=insertnodebefore(pre,n,fontkern(leftkern))
         done=true
        end
        local rightkern=i.rightkern
        if rightkern and rightkern~=0 then
-        insert_node_after(pre,n,fontkern(rightkern))
+        insertnodeafter(pre,n,fontkern(rightkern))
         done=true
        end
        if hasmarks then
@@ -20670,12 +21688,12 @@ local function inject_everything(head,where)
        end
        local leftkern=i.leftkern
        if leftkern and leftkern~=0 then
-        post=insert_node_before(post,n,fontkern(leftkern))
+        post=insertnodebefore(post,n,fontkern(leftkern))
         done=true
        end
        local rightkern=i.rightkern
        if rightkern and rightkern~=0 then
-        insert_node_after(post,n,fontkern(rightkern))
+        insertnodeafter(post,n,fontkern(rightkern))
         done=true
        end
        if hasmarks then
@@ -20700,12 +21718,12 @@ local function inject_everything(head,where)
        end
        local leftkern=i.leftkern
        if leftkern and leftkern~=0 then
-        replace=insert_node_before(replace,n,fontkern(leftkern))
+        replace=insertnodebefore(replace,n,fontkern(leftkern))
         done=true
        end
        local rightkern=i.rightkern
        if rightkern and rightkern~=0 then
-        insert_node_after(replace,n,fontkern(rightkern))
+        insertnodeafter(replace,n,fontkern(rightkern))
         done=true
        end
        if hasmarks then
@@ -20726,7 +21744,7 @@ local function inject_everything(head,where)
       if i then
        local rightkern=i.rightkern
        if rightkern and rightkern~=0 then
-        pre=insert_node_before(pre,pre,fontkern(rightkern))
+        pre=insertnodebefore(pre,pre,fontkern(rightkern))
         done=true
        end
       end
@@ -20739,7 +21757,7 @@ local function inject_everything(head,where)
       if i then
        local rightkern=i.rightkern
        if rightkern and rightkern~=0 then
-        replace=insert_node_before(replace,replace,fontkern(rightkern))
+        replace=insertnodebefore(replace,replace,fontkern(rightkern))
         done=true
        end
       end
@@ -20892,8 +21910,8 @@ local function injectspaces(head)
       if trace_spaces then
        report_spaces("%C [%p + %p + %p] %C",prevchar,lnew,old,rnew,nextchar)
       end
-      head=insert_node_before(head,n,italickern(lnew))
-      insert_node_after(head,n,italickern(rnew))
+      head=insertnodebefore(head,n,italickern(lnew))
+      insertnodeafter(head,n,italickern(rnew))
      else
       local new=old+(leftkern+rightkern)*factor
       if trace_spaces then
@@ -20908,7 +21926,7 @@ local function injectspaces(head)
       if trace_spaces then
        report_spaces("%C [%p + %p]",prevchar,old,new)
       end
-      insert_node_after(head,n,italickern(new)) 
+      insertnodeafter(head,n,italickern(new)) 
      else
       local new=old+leftkern*factor
       if trace_spaces then
@@ -20925,16 +21943,17 @@ local function injectspaces(head)
     if useitalickerns then
      local new=rightkern*factor
      if trace_spaces then
-      report_spaces("%C [%p + %p]",nextchar,old,new)
+      report_spaces("[%p + %p] %C",old,new,nextchar)
      end
-     insert_node_after(head,n,italickern(new))
+     insertnodeafter(head,n,italickern(new))
     else
      local new=old+rightkern*factor
      if trace_spaces then
-      report_spaces("[%p -> %p] %C",nextchar,old,new)
+      report_spaces("[%p -> %p] %C",old,new,nextchar)
      end
      setwidth(n,new)
     end
+   else
    end
    rightkern=false
   end
@@ -20966,10 +21985,10 @@ function injections.handler(head,where)
  end
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-otj”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-otj”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-ota” d6dfb94563d6a52675e274b2e673e4a6] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-ota” 2bb12d708e35bc05443eba791e2554e7] ---
 
 if not modules then modules={} end modules ['font-ota']={
  version=1.001,
@@ -20979,6 +21998,7 @@ if not modules then modules={} end modules ['font-ota']={
  license="see context related readme files"
 }
 local type=type
+local setmetatableindex=table.setmetatableindex
 if not trackers then trackers={ register=function() end } end
 local fonts,nodes,node=fonts,nodes,node
 local allocate=utilities.storage.allocate
@@ -20988,7 +22008,6 @@ local initializers=allocate()
 local methods=allocate()
 analyzers.initializers=initializers
 analyzers.methods=methods
-local a_state=attributes.private('state')
 local nuts=nodes.nuts
 local tonut=nuts.tonut
 local getnext=nuts.getnext
@@ -20999,7 +22018,7 @@ local setprop=nuts.setprop
 local getsubtype=nuts.getsubtype
 local getchar=nuts.getchar
 local ischar=nuts.ischar
-local end_of_math=nuts.end_of_math
+local endofmath=nuts.endofmath
 local nodecodes=nodes.nodecodes
 local disc_code=nodecodes.disc
 local math_code=nodecodes.math
@@ -21008,6 +22027,23 @@ local categories=characters and characters.categories or {}
 local chardata=characters and characters.data
 local otffeatures=fonts.constructors.features.otf
 local registerotffeature=otffeatures.register
+local setstate=nuts.setstate
+local getstate=nuts.getstate
+if not setstate or not getstate then
+ setstate=function(n,v)
+  setprop(n,"state",v)
+ end
+ getstate=function(n,v)
+  local s=getprop(n,"state")
+  if v then
+   return s==v
+  else
+   return s
+  end
+ end
+ nuts.setstate=setstate
+ nuts.getstate=getstate
+end
 local s_init=1 local s_rphf=7
 local s_medi=2 local s_half=8
 local s_fina=3 local s_pref=9
@@ -21055,61 +22091,61 @@ function analyzers.setstate(head,font)
  current=tonut(current)
  while current do
   local char,id=ischar(current,font)
-  if char and not getprop(current,a_state) then
+  if char and not getstate(current) then
    done=true
    local d=descriptions[char]
    if d then
     if d.class=="mark" then
      done=true
-     setprop(current,a_state,s_mark)
+     setstate(current,s_mark)
     elseif useunicodemarks and categories[char]=="mn" then
      done=true
-     setprop(current,a_state,s_mark)
+     setstate(current,s_mark)
     elseif n==0 then
      first,last,n=current,current,1
-     setprop(current,a_state,s_init)
+     setstate(current,s_init)
     else
      last,n=current,n+1
-     setprop(current,a_state,s_medi)
+     setstate(current,s_medi)
     end
    else 
     if first and first==last then
-     setprop(last,a_state,s_isol)
+     setstate(last,s_isol)
     elseif last then
-     setprop(last,a_state,s_fina)
+     setstate(last,s_fina)
     end
     first,last,n=nil,nil,0
    end
   elseif char==false then
    if first and first==last then
-    setprop(last,a_state,s_isol)
+    setstate(last,s_isol)
    elseif last then
-    setprop(last,a_state,s_fina)
+    setstate(last,s_fina)
    end
    first,last,n=nil,nil,0
    if id==math_code then
-    current=end_of_math(current)
+    current=endofmath(current)
    end
   elseif id==disc_code then
-   setprop(current,a_state,s_medi)
+   setstate(current,s_medi)
    last=current
   else 
    if first and first==last then
-    setprop(last,a_state,s_isol)
+    setstate(last,s_isol)
    elseif last then
-    setprop(last,a_state,s_fina)
+    setstate(last,s_fina)
    end
    first,last,n=nil,nil,0
    if id==math_code then
-    current=end_of_math(current)
+    current=endofmath(current)
    end
   end
   current=getnext(current)
  end
  if first and first==last then
-  setprop(last,a_state,s_isol)
+  setstate(last,s_isol)
  elseif last then
-  setprop(last,a_state,s_fina)
+  setstate(last,s_fina)
  end
  return head,done
 end
@@ -21176,7 +22212,7 @@ if not classifiers then
  local f_mandiac,l_mandiac=characters.blockrange("mandiac")
  local f_nko,l_nko=characters.blockrange("nko")
  local f_ext_a,l_ext_a=characters.blockrange("arabicextendeda")
- classifiers=table.setmetatableindex(function(t,k)
+ classifiers=setmetatableindex(function(t,k)
   if type(k)=="number" then
    local c=chardata[k]
    local v=false
@@ -21213,87 +22249,87 @@ function methods.arab(head,font,attr)
  current=tonut(current)
  while current do
   local char,id=ischar(current,font)
-  if char and not getprop(current,a_state) then
+  if char and not getstate(current) then
    done=true
    local classifier=classifiers[char]
    if not classifier then
     if last then
      if c_last==s_medi or c_last==s_fina then
-      setprop(last,a_state,s_fina)
+      setstate(last,s_fina)
      else
       warning(last,"fina")
-      setprop(last,a_state,s_error)
+      setstate(last,s_error)
      end
      first,last=nil,nil
     elseif first then
      if c_first==s_medi or c_first==s_fina then
-      setprop(first,a_state,s_isol)
+      setstate(first,s_isol)
      else
       warning(first,"isol")
-      setprop(first,a_state,s_error)
+      setstate(first,s_error)
      end
      first=nil
     end
    elseif classifier==s_mark then
-    setprop(current,a_state,s_mark)
+    setstate(current,s_mark)
    elseif classifier==s_isol then
     if last then
      if c_last==s_medi or c_last==s_fina then
-      setprop(last,a_state,s_fina)
+      setstate(last,s_fina)
      else
       warning(last,"fina")
-      setprop(last,a_state,s_error)
+      setstate(last,s_error)
      end
      first,last=nil,nil
     elseif first then
      if c_first==s_medi or c_first==s_fina then
-      setprop(first,a_state,s_isol)
+      setstate(first,s_isol)
      else
       warning(first,"isol")
-      setprop(first,a_state,s_error)
+      setstate(first,s_error)
      end
      first=nil
     end
-    setprop(current,a_state,s_isol)
+    setstate(current,s_isol)
    elseif classifier==s_medi then
     if first then
      last=current
      c_last=classifier
-     setprop(current,a_state,s_medi)
+     setstate(current,s_medi)
     else
-     setprop(current,a_state,s_init)
+     setstate(current,s_init)
      first=current
      c_first=classifier
     end
    elseif classifier==s_fina then
     if last then
-     if getprop(last,a_state)~=s_init then
-      setprop(last,a_state,s_medi)
+     if getstate(last)~=s_init then
+      setstate(last,s_medi)
      end
-     setprop(current,a_state,s_fina)
+     setstate(current,s_fina)
      first,last=nil,nil
     elseif first then
-     setprop(current,a_state,s_fina)
+     setstate(current,s_fina)
      first=nil
     else
-     setprop(current,a_state,s_isol)
+     setstate(current,s_isol)
     end
    else 
-    setprop(current,a_state,s_rest)
+    setstate(current,s_rest)
     if last then
      if c_last==s_medi or c_last==s_fina then
-      setprop(last,a_state,s_fina)
+      setstate(last,s_fina)
      else
       warning(last,"fina")
-      setprop(last,a_state,s_error)
+      setstate(last,s_error)
      end
      first,last=nil,nil
     elseif first then
      if c_first==s_medi or c_first==s_fina then
-      setprop(first,a_state,s_isol)
+      setstate(first,s_isol)
      else
       warning(first,"isol")
-      setprop(first,a_state,s_error)
+      setstate(first,s_error)
      end
      first=nil
     end
@@ -21301,40 +22337,40 @@ function methods.arab(head,font,attr)
   else
    if last then
     if c_last==s_medi or c_last==s_fina then
-     setprop(last,a_state,s_fina)
+     setstate(last,s_fina)
     else
      warning(last,"fina")
-     setprop(last,a_state,s_error)
+     setstate(last,s_error)
     end
     first,last=nil,nil
    elseif first then
     if c_first==s_medi or c_first==s_fina then
-     setprop(first,a_state,s_isol)
+     setstate(first,s_isol)
     else
      warning(first,"isol")
-     setprop(first,a_state,s_error)
+     setstate(first,s_error)
     end
     first=nil
    end
    if id==math_code then 
-    current=end_of_math(current)
+    current=endofmath(current)
    end
   end
   current=getnext(current)
  end
  if last then
   if c_last==s_medi or c_last==s_fina then
-   setprop(last,a_state,s_fina)
+   setstate(last,s_fina)
   else
    warning(last,"fina")
-   setprop(last,a_state,s_error)
+   setstate(last,s_error)
   end
  elseif first then
   if c_first==s_medi or c_first==s_fina then
-   setprop(first,a_state,s_isol)
+   setstate(first,s_isol)
   else
    warning(first,"isol")
-   setprop(first,a_state,s_error)
+   setstate(first,s_error)
   end
  end
  return head,done
@@ -21342,17 +22378,118 @@ end
 methods.syrc=methods.arab
 methods.mand=methods.arab
 methods.nko=methods.arab
+do
+ local joining=setmetatableindex(function(t,k)
+  if type(k)=="number" then
+   local c=chardata[k]
+   local v=false
+   if c then
+    local mongolian=c.mongolian
+    v=mongolian
+   end
+   t[k]=v
+   return v
+  end
+ end)
+ function methods.mong(head,font,attr)
+  local first,last
+  local current=head
+  local done=false
+  local prevjoin=nil
+  local prestate=nil
+  current=tonut(current)
+  local function wrapup()
+   if last then
+    if last~=first then
+     local s=getstate(last)
+     if s==s_medi then
+      setstate(last,s_fina)
+     elseif s==s_init then
+      setstate(last,s_isol)
+     end
+    end
+    last=nil
+    first=nil
+    prevjoin=nil
+    prestate=nil
+   end
+  end
+  while current do
+   local char,id=ischar(current,font)
+   if char and not getstate(current) then
+    local currjoin=joining[char]
+    done=true
+    if not last then
+     setstate(current,s_isol)
+     prevjoin=currjoin
+     first=current
+     last=current
+     prevstate=s_isol
+    elseif currjoin=="t" then
+     last=current
+    elseif prevjoin=="d" or prevjoin=="jc" or prevjoin=="l" then
+     if currjoin=="d" or prevjoin=="jc" or prevjoin=="r" then
+      local s=getstate(last)
+      if s==s_isol then
+       setstate(last,s_init)
+      elseif s==s_fina then
+       setstate(last,s_medi)
+      end
+      setstate(current,s_fina)
+      prevstate=s_fina
+     elseif prevjoin=="nj" or prevjoin=="l" then
+      local s=getstate(last)
+      if s==s_medi then
+       setstate(last,s_fina)
+      elseif s==s_init then
+       setstate(last,s_isol)
+      end
+      setstate(current,s_isol)
+      prevstate=s_isol
+     end
+     prevjoin=currjoin
+     last=current
+    elseif prevjoin=="nj" or prevjoin=="r" then
+     if s==s_medi then
+      setstate(last,s_fina)
+     elseif s==s_init then
+      setstate(last,s_isol)
+     end
+     setstate(current,s_isol)
+     prevjoin=currjoin
+     prevstate=s_isol
+     last=current
+    elseif last then
+     wrapup()
+    end
+   else
+    if last then
+     wrapup()
+    end
+    if id==math_code then 
+     current=endofmath(current)
+    end
+   end
+   current=getnext(current)
+  end
+  if last then
+   wrapup()
+  end
+  return head,done
+ end
+end
 directives.register("otf.analyze.useunicodemarks",function(v)
  analyzers.useunicodemarks=v
 end)
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-ota”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-ota”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-ots” d5504847a278385cd0d20ecf1b3d59cc] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-ots” 55316a605d11a1d07d38795224c90a63] ---
 
 if not modules then modules={} end modules ['font-ots']={ 
  version=1.001,
+ optimize=true,
  comment="companion to font-ini.mkiv",
  author="Hans Hagen, PRAGMA-ADE, Hasselt NL",
  copyright="PRAGMA ADE / ConTeXt Development Team",
@@ -21390,6 +22527,7 @@ local trace_compruns=false  registertracker("otf.compruns",function(v) trace_com
 local trace_testruns=false  registertracker("otf.testruns",function(v) trace_testruns=v end)
 local forcediscretionaries=false
 local forcepairadvance=false 
+local repeatablemultiples=context or false
 directives.register("otf.forcediscretionaries",function(v)
  forcediscretionaries=v
 end)
@@ -21408,7 +22546,6 @@ registertracker("otf.actions","otf.substitutions","otf.positions")
 registertracker("otf.sample","otf.steps","otf.substitutions","otf.positions","otf.analyzing")
 registertracker("otf.sample.silent","otf.steps=silent","otf.substitutions","otf.positions","otf.analyzing")
 local nuts=nodes.nuts
-local getfield=nuts.getfield
 local getnext=nuts.getnext
 local setnext=nuts.setnext
 local getprev=nuts.getprev
@@ -21416,31 +22553,36 @@ local setprev=nuts.setprev
 local getboth=nuts.getboth
 local setboth=nuts.setboth
 local getid=nuts.getid
-local getprop=nuts.getprop
-local setprop=nuts.setprop
+local getstate=nuts.getstate
 local getsubtype=nuts.getsubtype
 local setsubtype=nuts.setsubtype
 local getchar=nuts.getchar
 local setchar=nuts.setchar
 local getdisc=nuts.getdisc
 local setdisc=nuts.setdisc
+local getreplace=nuts.getreplace
 local setlink=nuts.setlink
-local getcomponents=nuts.getcomponents 
-local setcomponents=nuts.setcomponents 
 local getwidth=nuts.getwidth
 local getattr=nuts.getattr
 local getglyphdata=nuts.getglyphdata
+local components=nuts.components
+local copynocomponents=components.copynocomponents
+local copyonlyglyphs=components.copyonlyglyphs
+local countcomponents=components.count
+local setcomponents=components.set
+local getcomponents=components.get
+local flushcomponents=components.flush
 local ischar=nuts.ischar
-local isglyph=nuts.isglyph
-local usesfont=nuts.uses_font
-local insert_node_after=nuts.insert_after
+local usesfont=nuts.usesfont
+local insertnodeafter=nuts.insertafter
 local copy_node=nuts.copy
-local copy_node_list=nuts.copy_list
+local copy_node_list=nuts.copylist
 local remove_node=nuts.remove
 local find_node_tail=nuts.tail
-local flush_node_list=nuts.flush_list
-local flush_node=nuts.flush_node
-local end_of_math=nuts.end_of_math
+local flushnodelist=nuts.flushlist
+local flushnode=nuts.flushnode
+local endofmath=nuts.endofmath
+local startofpar=nuts.startofpar
 local setmetatable=setmetatable
 local setmetatableindex=table.setmetatableindex
 local nextnode=nuts.traversers.node
@@ -21452,10 +22594,11 @@ local glue_code=nodecodes.glue
 local disc_code=nodecodes.disc
 local math_code=nodecodes.math
 local dir_code=nodecodes.dir
-local localpar_code=nodecodes.localpar
+local par_code=nodecodes.par
+local lefttoright_code=nodes.dirvalues.lefttoright
+local righttoleft_code=nodes.dirvalues.righttoleft
 local discretionarydisc_code=disccodes.discretionary
 local ligatureglyph_code=glyphcodes.ligature
-local a_state=attributes.private('state')
 local a_noligature=attributes.private("noligature")
 local injections=nodes.injections
 local setmark=injections.setmark
@@ -21570,12 +22713,12 @@ local function flattendisk(head,disc)
  local prev,next=getboth(disc)
  local ishead=head==disc
  setdisc(disc)
- flush_node(disc)
+ flushnode(disc)
  if pre then
-  flush_node_list(pre)
+  flushnodelist(pre)
  end
  if post then
-  flush_node_list(post)
+  flushnodelist(post)
  end
  if ishead then
   if replace then
@@ -21616,27 +22759,6 @@ local function appenddisc(disc,list)
  end
  setdisc(disc,pre,post,replace)
 end
-local copy_no_components=nuts.copy_no_components
-local copy_only_glyphs=nuts.copy_only_glyphs
-local set_components=setcomponents
-local take_components=getcomponents
-local function count_components(start,marks)
- local char=isglyph(start)
- if char then
-  if getsubtype(start)==ligatureglyph_code then
-   local i=0
-   local components=getcomponents(start)
-   while components do
-    i=i+count_components(components,marks)
-    components=getnext(components)
-   end
-   return i
-  elseif not marks[char] then
-   return 1
-  end
- end
- return 0
-end
 local function markstoligature(head,start,stop,char)
  if start==stop and getchar(start)==char then
   return head,start
@@ -21645,20 +22767,32 @@ local function markstoligature(head,start,stop,char)
   local next=getnext(stop)
   setprev(start)
   setnext(stop)
-  local base=copy_no_components(start,copyinjection)
+  local base=copynocomponents(start,copyinjection)
   if head==start then
    head=base
   end
   resetinjection(base)
   setchar(base,char)
   setsubtype(base,ligatureglyph_code)
-  set_components(base,start)
+  setcomponents(base,start)
   setlink(prev,base,next)
+  flushcomponents(start)
   return head,base
  end
 end
+local no_left_ligature_code=1
+local no_right_ligature_code=2
+local no_left_kern_code=4
+local no_right_kern_code=8
+local hasglyphoption=function(n,c)
+ if c==no_left_ligature_code or c==no_right_ligature_code then
+  return getattr(n,a_noligature)==1
+ else
+  return false
+ end
+end
 local function toligature(head,start,stop,char,dataset,sequence,skiphash,discfound,hasmarks) 
- if getattr(start,a_noligature)==1 then
+ if hasglyphoption(start,no_right_ligature_code) then
   return head,start
  end
  if start==stop and getchar(start)==char then
@@ -21671,18 +22805,18 @@ local function toligature(head,start,stop,char,dataset,sequence,skiphash,discfou
  local comp=start
  setprev(start)
  setnext(stop)
- local base=copy_no_components(start,copyinjection)
+ local base=copynocomponents(start,copyinjection)
  if start==head then
   head=base
  end
  resetinjection(base)
  setchar(base,char)
  setsubtype(base,ligatureglyph_code)
- set_components(base,comp)
+ setcomponents(base,comp)
  setlink(prev,base,next)
  if not discfound then
   local deletemarks=not skiphash or hasmarks
-  local components=start
+  local components=start 
   local baseindex=0
   local componentindex=0
   local head=base
@@ -21691,17 +22825,17 @@ local function toligature(head,start,stop,char,dataset,sequence,skiphash,discfou
    local char=getchar(start)
    if not marks[char] then
     baseindex=baseindex+componentindex
-    componentindex=count_components(start,marks)
+    componentindex=countcomponents(start,marks)
    elseif not deletemarks then
     setligaindex(start,baseindex+getligaindex(start,componentindex))
     if trace_marks then
-     logwarning("%s: keep mark %s, gets index %s",pref(dataset,sequence),gref(char),getligaindex(start))
+     logwarning("%s: keep ligature mark %s, gets index %s",pref(dataset,sequence),gref(char),getligaindex(start))
     end
     local n=copy_node(start)
     copyinjection(n,start) 
-    head,current=insert_node_after(head,current,n) 
+    head,current=insertnodeafter(head,current,n) 
    elseif trace_marks then
-    logwarning("%s: delete mark %s",pref(dataset,sequence),gref(char))
+    logwarning("%s: delete ligature mark %s",pref(dataset,sequence),gref(char))
    end
    start=getnext(start)
   end
@@ -21712,7 +22846,7 @@ local function toligature(head,start,stop,char,dataset,sequence,skiphash,discfou
     if marks[char] then
      setligaindex(start,baseindex+getligaindex(start,componentindex))
      if trace_marks then
-      logwarning("%s: set mark %s, gets index %s",pref(dataset,sequence),gref(char),getligaindex(start))
+      logwarning("%s: set ligature mark %s, gets index %s",pref(dataset,sequence),gref(char),getligaindex(start))
      end
      start=getnext(start)
     else
@@ -21722,30 +22856,30 @@ local function toligature(head,start,stop,char,dataset,sequence,skiphash,discfou
     break
    end
   end
+  flushcomponents(components)
  else
   local discprev,discnext=getboth(discfound)
   if discprev and discnext then
    local pre,post,replace,pretail,posttail,replacetail=getdisc(discfound,true)
    if not replace then
     local prev=getprev(base)
-    local comp=take_components(base)
-    local copied=copy_only_glyphs(comp)
+    local copied=copyonlyglyphs(comp)
     if pre then
      setlink(discprev,pre)
     else
      setnext(discprev) 
     end
-    pre=comp
+    pre=comp 
     if post then
      setlink(posttail,discnext)
-     setprev(post)
+     setprev(post) 
     else
      post=discnext
      setprev(discnext) 
     end
     setlink(prev,discfound,next)
     setboth(base)
-    set_components(base,copied)
+    setcomponents(base,copied)
     replace=base
     if forcediscretionaries then
      setdisc(discfound,pre,post,replace,discretionarydisc_code)
@@ -21769,18 +22903,50 @@ local function multiple_glyphs(head,start,multiple,skiphash,what,stop)
     local n=copy_node(start) 
     resetinjection(n)
     setchar(n,multiple[k])
-    insert_node_after(head,start,n)
+    insertnodeafter(head,start,n)
     start=n
    end
-   if what==true then
-   elseif what>1 then
-    local m=multiple[nofmultiples]
-    for i=2,what do
-     local n=copy_node(start) 
-     resetinjection(n)
-     setchar(n,m)
-     insert_node_after(head,start,n)
-     start=n
+   if what~=true and repeatablemultiples then
+    local kind=type(what)
+    local m,f,l
+    if kind=="string" then
+     local what,n=string.match(what,"^repeat(.-)[:=](%d+)$")
+     if what=="middle" then
+      m=tonumber(n)
+     elseif what=="first" then
+      f=tonumber(n)
+     elseif what=="last" then
+      l=tonumber(n)
+     end
+    elseif kind=="table" then
+       m=what.middle
+       f=what.first
+       l=what.last
+    end
+    if f or m or l then
+     if m and m>1 and nofmultiples==3 then
+      local middle=getnext(first)
+      for i=2,m do
+       local n=copynode(middle) 
+       resetinjection(n)
+       insertnodeafter(head,first,n)
+      end
+     end
+     if f and f>1 then
+      for i=2,f do
+       local n=copynode(first) 
+       resetinjection(n)
+       insertnodeafter(head,first,n)
+      end
+     end
+     if l and l>1 then
+      for i=2,l do
+       local n=copynode(start) 
+       resetinjection(n)
+       insertnodeafter(head,start,n)
+       start=n
+      end
+     end
     end
    end
   end
@@ -21868,7 +23034,7 @@ function handlers.gsub_ligature(head,start,dataset,sequence,ligature,rlmode,skip
   while current do
    local char=ischar(current,currentfont)
    if char then
-    local lg=ligature[char]
+    local lg=not tonumber(ligature) and ligature[char]
     if lg then
      stop=current
      ligature=lg
@@ -21881,14 +23047,14 @@ function handlers.gsub_ligature(head,start,dataset,sequence,ligature,rlmode,skip
    end
   end
   if stop then
-   local lig=ligature.ligature
-   if lig then
+   local ligature=tonumber(ligature) or ligature.ligature
+   if ligature then
     if trace_ligatures then
      local stopchar=getchar(stop)
-     head,start=markstoligature(head,start,stop,lig)
+     head,start=markstoligature(head,start,stop,ligature)
      logprocess("%s: replacing %s upto %s by ligature %s case 1",pref(dataset,sequence),gref(startchar),gref(stopchar),gref(getchar(start)))
     else
-     head,start=markstoligature(head,start,stop,lig)
+     head,start=markstoligature(head,start,stop,ligature)
     end
     return head,start,true,false
    else
@@ -21903,7 +23069,7 @@ function handlers.gsub_ligature(head,start,dataset,sequence,ligature,rlmode,skip
     if skiphash and skiphash[char] then
      current=getnext(current)
     else
-     local lg=ligature[char]
+     local lg=not tonumber(ligature) and ligature[char]
      if lg then
       if marks[char] then
        hasmarks=true
@@ -21929,20 +23095,20 @@ function handlers.gsub_ligature(head,start,dataset,sequence,ligature,rlmode,skip
    local match
    if replace then
     local char=ischar(replace,currentfont)
-    if char and ligature[char] then
+    if char and (not tonumber(ligature) and ligature[char]) then
      match=true
     end
    end
    if not match and pre then
     local char=ischar(pre,currentfont)
-    if char and ligature[char] then
+    if char and (not tonumber(ligature) and ligature[char]) then
      match=true
     end
    end
    if not match and not pre or not replace then
     local n=getnext(discfound)
     local char=ischar(n,currentfont)
-    if char and ligature[char] then
+    if char and (not tonumber(ligature) and ligature[char]) then
      match=true
     end
    end
@@ -21985,21 +23151,21 @@ function handlers.gsub_ligature(head,start,dataset,sequence,ligature,rlmode,skip
     return head,start,true,true
    end
   end
-  local lig=ligature.ligature
-  if lig then
+  local ligature=tonumber(ligature) or ligature.ligature
+  if ligature then
    if stop then
     if trace_ligatures then
      local stopchar=getchar(stop)
-     head,start=toligature(head,start,stop,lig,dataset,sequence,skiphash,false,hasmarks)
-     logprocess("%s: replacing %s upto %s by ligature %s case 2",pref(dataset,sequence),gref(startchar),gref(stopchar),gref(lig))
+     head,start=toligature(head,start,stop,ligature,dataset,sequence,skiphash,false,hasmarks)
+     logprocess("%s: replacing %s upto %s by ligature %s case 2",pref(dataset,sequence),gref(startchar),gref(stopchar),gref(ligature))
     else
-     head,start=toligature(head,start,stop,lig,dataset,sequence,skiphash,false,hasmarks)
+     head,start=toligature(head,start,stop,ligature,dataset,sequence,skiphash,false,hasmarks)
     end
    else
     resetinjection(start)
-    setchar(start,lig)
+    setchar(start,ligature)
     if trace_ligatures then
-     logprocess("%s: replacing %s by (no real) ligature %s case 3",pref(dataset,sequence),gref(startchar),gref(lig))
+     logprocess("%s: replacing %s by (no real) ligature %s case 3",pref(dataset,sequence),gref(startchar),gref(ligature))
     end
    end
    return head,start,true,false
@@ -22009,78 +23175,86 @@ function handlers.gsub_ligature(head,start,dataset,sequence,ligature,rlmode,skip
  return head,start,false,false
 end
 function handlers.gpos_single(head,start,dataset,sequence,kerns,rlmode,skiphash,step,injection)
- local startchar=getchar(start)
- local format=step.format
- if format=="single" or type(kerns)=="table" then 
-  local dx,dy,w,h=setposition(0,start,factor,rlmode,kerns,injection)
-  if trace_kerns then
-   logprocess("%s: shifting single %s by %s xy (%p,%p) and wh (%p,%p)",pref(dataset,sequence),gref(startchar),format,dx,dy,w,h)
-  end
- else
-  local k=(format=="move" and setmove or setkern)(start,factor,rlmode,kerns,injection)
-  if trace_kerns then
-   logprocess("%s: shifting single %s by %s %p",pref(dataset,sequence),gref(startchar),format,k)
-  end
- end
- return head,start,true
-end
-function handlers.gpos_pair(head,start,dataset,sequence,kerns,rlmode,skiphash,step,injection)
- local snext=getnext(start)
- if not snext then
+ if hasglyphoption(start,no_right_kern_code) then
   return head,start,false
  else
-  local prev=start
-  while snext do
-   local nextchar=ischar(snext,currentfont)
-   if nextchar then
-    if skiphash and skiphash[nextchar] then 
-     prev=snext
-     snext=getnext(snext)
-    else
-     local krn=kerns[nextchar]
-     if not krn then
-      break
-     end
-     local format=step.format
-     if format=="pair" then
-      local a=krn[1]
-      local b=krn[2]
-      if a==true then
-      elseif a then 
-       local x,y,w,h=setposition(1,start,factor,rlmode,a,injection)
-       if trace_kerns then
-        local startchar=getchar(start)
-        logprocess("%s: shifting first of pair %s and %s by xy (%p,%p) and wh (%p,%p) as %s",pref(dataset,sequence),gref(startchar),gref(nextchar),x,y,w,h,injection or "injections")
-       end
-      end
-      if b==true then
-       start=snext 
-      elseif b then 
-       local x,y,w,h=setposition(2,snext,factor,rlmode,b,injection)
-       if trace_kerns then
-        local startchar=getchar(start)
-        logprocess("%s: shifting second of pair %s and %s by xy (%p,%p) and wh (%p,%p) as %s",pref(dataset,sequence),gref(startchar),gref(nextchar),x,y,w,h,injection or "injections")
-       end
-       start=snext 
-      elseif forcepairadvance then
-       start=snext 
-      end
-      return head,start,true
-     elseif krn~=0 then
-      local k=(format=="move" and setmove or setkern)(snext,factor,rlmode,krn,injection)
-      if trace_kerns then
-       logprocess("%s: inserting %s %p between %s and %s as %s",pref(dataset,sequence),format,k,gref(getchar(prev)),gref(nextchar),injection or "injections")
-      end
-      return head,start,true
-     else 
-      break
-     end
-    end
-   else
-    break
+  local startchar=getchar(start)
+  local format=step.format
+  if format=="single" or type(kerns)=="table" then 
+   local dx,dy,w,h=setposition(0,start,factor,rlmode,kerns,injection)
+   if trace_kerns then
+    logprocess("%s: shifting single %s by %s xy (%p,%p) and wh (%p,%p)",pref(dataset,sequence),gref(startchar),format,dx,dy,w,h)
+   end
+  else
+   local k=(format=="move" and setmove or setkern)(start,factor,rlmode,kerns,injection)
+   if trace_kerns then
+    logprocess("%s: shifting single %s by %s %p",pref(dataset,sequence),gref(startchar),format,k)
    end
   end
+  return head,start,true
+ end
+end
+function handlers.gpos_pair(head,start,dataset,sequence,kerns,rlmode,skiphash,step,injection)
+ if hasglyphoption(start,no_right_kern_code) then
   return head,start,false
+ else
+  local snext=getnext(start)
+  if not snext then
+   return head,start,false
+  else
+   local prev=start
+   while snext do
+    local nextchar=ischar(snext,currentfont)
+    if nextchar then
+     if skiphash and skiphash[nextchar] then 
+      prev=snext
+      snext=getnext(snext)
+     else
+      local krn=kerns[nextchar]
+      if not krn then
+       break
+      end
+      local format=step.format
+      if format=="pair" then
+       local a=krn[1]
+       local b=krn[2]
+       if a==true then
+       elseif a then 
+        local x,y,w,h=setposition(1,start,factor,rlmode,a,injection)
+        if trace_kerns then
+         local startchar=getchar(start)
+         logprocess("%s: shifting first of pair %s and %s by xy (%p,%p) and wh (%p,%p) as %s",pref(dataset,sequence),gref(startchar),gref(nextchar),x,y,w,h,injection or "injections")
+        end
+       end
+       if b==true then
+        start=snext 
+       elseif b then 
+        local x,y,w,h=setposition(2,snext,factor,rlmode,b,injection)
+        if trace_kerns then
+         local startchar=getchar(start)
+         logprocess("%s: shifting second of pair %s and %s by xy (%p,%p) and wh (%p,%p) as %s",pref(dataset,sequence),gref(startchar),gref(nextchar),x,y,w,h,injection or "injections")
+        end
+        start=snext 
+       elseif forcepairadvance then
+        start=snext 
+       end
+       return head,start,true
+      elseif krn~=0 then
+       local k=(format=="move" and setmove or setkern)(snext,factor,rlmode,krn,injection)
+       if trace_kerns then
+        logprocess("%s: inserting %s %p between %s and %s as %s",pref(dataset,sequence),format,k,gref(getchar(prev)),gref(nextchar),injection or "injections")
+       end
+       return head,start,true
+      else 
+       break
+      end
+     end
+    else
+     break
+    end
+   end
+   return head,start,false
+  end
  end
 end
 function handlers.gpos_mark2base(head,start,dataset,sequence,markanchors,rlmode,skiphash)
@@ -22186,7 +23360,7 @@ function handlers.gpos_mark2ligature(head,start,dataset,sequence,markanchors,rlm
       end
      end
     elseif trace_bugs then
-     onetimemessage(currentfont,basechar,"no base anchors",report_fonts)
+     onetimemessage(currentfont,basechar,"no base anchors")
     end
    elseif trace_bugs then
     logwarning("%s: prev node is no char, case %i",pref(dataset,sequence),1)
@@ -22465,7 +23639,7 @@ function chainprocs.gsub_ligature(head,start,stop,dataset,sequence,currentlookup
      if skiphash and skiphash[schar] then
        current=getnext(current)
      else
-      local lg=ligatures[schar]
+      local lg=not tonumber(ligatures) and ligatures[schar]
       if lg then
        ligatures=lg
        last=current
@@ -22484,7 +23658,7 @@ function chainprocs.gsub_ligature(head,start,stop,dataset,sequence,currentlookup
      end
     end
    end
-   local ligature=ligatures.ligature
+   local ligature=tonumber(ligatures) or ligatures.ligature
    if ligature then
     if chainindex then
      stop=last
@@ -22510,89 +23684,93 @@ function chainprocs.gsub_ligature(head,start,stop,dataset,sequence,currentlookup
  return head,start,false,0,false
 end
 function chainprocs.gpos_single(head,start,stop,dataset,sequence,currentlookup,rlmode,skiphash,chainindex)
- local mapping=currentlookup.mapping
- if mapping==nil then
-  mapping=getmapping(dataset,sequence,currentlookup)
- end
- if mapping then
-  local startchar=getchar(start)
-  local kerns=mapping[startchar]
-  if kerns then
-   local format=currentlookup.format
-   if format=="single" then
-    local dx,dy,w,h=setposition(0,start,factor,rlmode,kerns) 
-    if trace_kerns then
-     logprocess("%s: shifting single %s by %s (%p,%p) and correction (%p,%p)",cref(dataset,sequence),gref(startchar),format,dx,dy,w,h)
+ if not hasglyphoption(start,no_right_kern_code) then
+  local mapping=currentlookup.mapping
+  if mapping==nil then
+   mapping=getmapping(dataset,sequence,currentlookup)
+  end
+  if mapping then
+   local startchar=getchar(start)
+   local kerns=mapping[startchar]
+   if kerns then
+    local format=currentlookup.format
+    if format=="single" then
+     local dx,dy,w,h=setposition(0,start,factor,rlmode,kerns) 
+     if trace_kerns then
+      logprocess("%s: shifting single %s by %s (%p,%p) and correction (%p,%p)",cref(dataset,sequence),gref(startchar),format,dx,dy,w,h)
+     end
+    else 
+     local k=(format=="move" and setmove or setkern)(start,factor,rlmode,kerns,injection)
+     if trace_kerns then
+      logprocess("%s: shifting single %s by %s %p",cref(dataset,sequence),gref(startchar),format,k)
+     end
     end
-   else 
-    local k=(format=="move" and setmove or setkern)(start,factor,rlmode,kerns,injection)
-    if trace_kerns then
-     logprocess("%s: shifting single %s by %s %p",cref(dataset,sequence),gref(startchar),format,k)
-    end
+    return head,start,true
    end
-   return head,start,true
   end
  end
  return head,start,false
 end
-function chainprocs.gpos_pair(head,start,stop,dataset,sequence,currentlookup,rlmode,skiphash,chainindex) 
- local mapping=currentlookup.mapping
- if mapping==nil then
-  mapping=getmapping(dataset,sequence,currentlookup)
- end
- if mapping then
-  local snext=getnext(start)
-  if snext then
-   local startchar=getchar(start)
-   local kerns=mapping[startchar] 
-   if kerns then
-    local prev=start
-    while snext do
-     local nextchar=ischar(snext,currentfont)
-     if not nextchar then
-      break
-     end
-     if skiphash and skiphash[nextchar] then
-      prev=snext
-      snext=getnext(snext)
-     else
-      local krn=kerns[nextchar]
-      if not krn then
+function chainprocs.gpos_pair(head,start,stop,dataset,sequence,currentlookup,rlmode,skiphash,chainindex)
+ if not hasglyphoption(start,no_right_kern_code) then
+  local mapping=currentlookup.mapping
+  if mapping==nil then
+   mapping=getmapping(dataset,sequence,currentlookup)
+  end
+  if mapping then
+   local snext=getnext(start)
+   if snext then
+    local startchar=getchar(start)
+    local kerns=mapping[startchar] 
+    if kerns then
+     local prev=start
+     while snext do
+      local nextchar=ischar(snext,currentfont)
+      if not nextchar then
        break
       end
-      local format=currentlookup.format
-      if format=="pair" then
-       local a=krn[1]
-       local b=krn[2]
-       if a==true then
-       elseif a then
-        local x,y,w,h=setposition(1,start,factor,rlmode,a,"injections") 
-        if trace_kerns then
-         local startchar=getchar(start)
-         logprocess("%s: shifting first of pair %s and %s by (%p,%p) and correction (%p,%p)",cref(dataset,sequence),gref(startchar),gref(nextchar),x,y,w,h)
-        end
-       end
-       if b==true then
-        start=snext 
-       elseif b then 
-        local x,y,w,h=setposition(2,snext,factor,rlmode,b,"injections")
-        if trace_kerns then
-         local startchar=getchar(start)
-         logprocess("%s: shifting second of pair %s and %s by (%p,%p) and correction (%p,%p)",cref(dataset,sequence),gref(startchar),gref(nextchar),x,y,w,h)
-        end
-        start=snext 
-       elseif forcepairadvance then
-        start=snext 
-       end
-       return head,start,true
-      elseif krn~=0 then
-       local k=(format=="move" and setmove or setkern)(snext,factor,rlmode,krn)
-       if trace_kerns then
-        logprocess("%s: inserting %s %p between %s and %s",cref(dataset,sequence),format,k,gref(getchar(prev)),gref(nextchar))
-       end
-       return head,start,true
+      if skiphash and skiphash[nextchar] then
+       prev=snext
+       snext=getnext(snext)
       else
-       break
+       local krn=kerns[nextchar]
+       if not krn then
+        break
+       end
+       local format=currentlookup.format
+       if format=="pair" then
+        local a=krn[1]
+        local b=krn[2]
+        if a==true then
+        elseif a then
+         local x,y,w,h=setposition(1,start,factor,rlmode,a,"injections") 
+         if trace_kerns then
+          local startchar=getchar(start)
+          logprocess("%s: shifting first of pair %s and %s by (%p,%p) and correction (%p,%p)",cref(dataset,sequence),gref(startchar),gref(nextchar),x,y,w,h)
+         end
+        end
+        if b==true then
+         start=snext 
+        elseif b then 
+         local x,y,w,h=setposition(2,snext,factor,rlmode,b,"injections")
+         if trace_kerns then
+          local startchar=getchar(start)
+          logprocess("%s: shifting second of pair %s and %s by (%p,%p) and correction (%p,%p)",cref(dataset,sequence),gref(startchar),gref(nextchar),x,y,w,h)
+         end
+         start=snext 
+        elseif forcepairadvance then
+         start=snext 
+        end
+        return head,start,true
+       elseif krn~=0 then
+        local k=(format=="move" and setmove or setkern)(snext,factor,rlmode,krn)
+        if trace_kerns then
+         logprocess("%s: inserting %s %p between %s and %s",cref(dataset,sequence),format,k,gref(getchar(prev)),gref(nextchar))
+        end
+        return head,start,true
+       else
+        break
+       end
       end
      end
     end
@@ -22822,7 +24000,7 @@ function chainprocs.gpos_cursive(head,start,stop,dataset,sequence,currentlookup,
         end
        end
       elseif trace_bugs then
-       onetimemessage(currentfont,startchar,"no entry anchors",report_fonts)
+       onetimemessage(currentfont,startchar,"no entry anchors")
       end
       break
      end
@@ -22857,13 +24035,13 @@ local function checked(head)
     if next then
      setlink(kern,next)
     end
-    flush_node(current)
+    flushnode(current)
     head=kern
     current=next
    else
     local prev,next=getboth(current)
     setlink(prev,kern,next)
-    flush_node(current)
+    flushnode(current)
     current=next
    end
   else
@@ -22892,7 +24070,7 @@ local function chainrun(head,start,last,dataset,sequence,rlmode,skiphash,ck)
     local chainproc=chainprocs[chainkind]
     if chainproc then
      local ok
-     head,start,ok=chainproc(head,start,last,dataset,sequence,chainstep,rlmode,skiphash)
+     head,start,ok=chainproc(head,start,last,dataset,sequence,chainstep,rlmode,skiphash,1)
      if ok then
       done=true
      end
@@ -22979,6 +24157,7 @@ local function chaindisk(head,start,dataset,sequence,rlmode,skiphash,ck)
  local sweepnode=sweepnode
  local sweeptype=sweeptype
  local sweepoverflow=false
+ local checkdisc=getprev(head)
  local keepdisc=not sweepnode
  local lookaheaddisc=nil
  local backtrackdisc=nil
@@ -23002,7 +24181,7 @@ local function chaindisk(head,start,dataset,sequence,rlmode,skiphash,ck)
    if keepdisc then
     keepdisc=false
     lookaheaddisc=current
-    local replace=getfield(current,"replace")
+    local replace=getreplace(current)
     if not replace then
      sweepoverflow=true
      sweepnode=current
@@ -23074,7 +24253,7 @@ local function chaindisk(head,start,dataset,sequence,rlmode,skiphash,ck)
      if notmatchpre[current]~=notmatchreplace[current] then
       lookaheaddisc=current
      end
-     local replace=getfield(current,"replace")
+     local replace=getreplace(current)
      while replace and i<s do
       if getid(replace)==glyph_code then
        i=i+1
@@ -23102,7 +24281,7 @@ local function chaindisk(head,start,dataset,sequence,rlmode,skiphash,ck)
   local current=prev
   local i=f
   local t=sweeptype=="pre" or sweeptype=="replace"
-  if not current and t and current==checkdisk then
+  if not current and t and current==checkdisc then
    current=getprev(sweepnode)
   end
   while current and i>1 do 
@@ -23118,7 +24297,7 @@ local function chaindisk(head,start,dataset,sequence,rlmode,skiphash,ck)
      if notmatchpost[current]~=notmatchreplace[current] then
       backtrackdisc=current
      end
-     local replace=getfield(current,"replace")
+     local replace=getreplace(current)
      while replace and i>1 do
       if getid(replace)==glyph_code then
        i=i-1
@@ -23130,7 +24309,7 @@ local function chaindisk(head,start,dataset,sequence,rlmode,skiphash,ck)
     end
    end
    current=getprev(current)
-   if t and current==checkdisk then
+   if t and current==checkdisc then
     current=getprev(sweepnode)
    end
   end
@@ -23308,252 +24487,36 @@ local function handle_contextchain(head,start,dataset,sequence,contexts,rlmode,s
   local ck=contexts[k]
   local seq=ck[3]
   local f=ck[4] 
+local last=start
   if not startchar or not seq[f][startchar] then
    goto next
   end
   local s=seq.n 
-  local l=ck[5] 
-  local current=start
-  local last=start
-  if l>f then
-   local discfound 
-   local n=f+1
-   last=startnext 
-   while n<=l do
-    if postreplace and not last then
-     last=getnext(sweepnode)
-     sweeptype=nil
-    end
-    if last then
-     local char,id=ischar(last,currentfont)
-     if char then
-      if skiphash and skiphash[char] then
-       skipped=true
-       if trace_skips then
-        show_skip(dataset,sequence,char,ck,classes[char])
-       end
-       last=getnext(last)
-      elseif seq[n][char] then
-       if n<l then
-        last=getnext(last)
-       end
-       n=n+1
-      elseif discfound then
-       notmatchreplace[discfound]=true
-       if notmatchpre[discfound] then
-        goto next
-       else
-        break
-       end
-      else
-       goto next
-      end
-     elseif char==false then
-      if discfound then
-       notmatchreplace[discfound]=true
-       if notmatchpre[discfound] then
-        goto next
-       else
-        break
-       end
-      else
-       goto next
-      end
-     elseif id==disc_code then
-      discseen=true
-      discfound=last
-      notmatchpre[last]=nil
-      notmatchpost[last]=true
-      notmatchreplace[last]=nil
-      local pre,post,replace=getdisc(last)
-      if pre then
-       local n=n
-       while pre do
-        if seq[n][getchar(pre)] then
-         n=n+1
-         if n>l then
-          break
-         end
-         pre=getnext(pre)
-        else
-         notmatchpre[last]=true
-         break
-        end
-       end
-      else
-       notmatchpre[last]=true
-      end
-      if replace then
-       while replace do
-        if seq[n][getchar(replace)] then
-         n=n+1
-         if n>l then
-          break
-         end
-         replace=getnext(replace)
-        else
-         notmatchreplace[last]=true
-         if notmatchpre[last] then
-          goto next
-         else
-          break
-         end
-        end
-       end
-       if notmatchpre[last] then
-        goto next
-       end
-      end
-      last=getnext(last)
-     else
-      goto next
-     end
-    else
-     goto next
-    end
-   end
-  end
-  if f>1 then
-   if startprev then
-    local prev=startprev
-    if prereplace and prev==checkdisc then
-     prev=getprev(sweepnode)
-    end
-    if prev then
-     local discfound 
-     local n=f-1
-     while n>=1 do
-      if prev then
-       local char,id=ischar(prev,currentfont)
-       if char then
-        if skiphash and skiphash[char] then
-         skipped=true
-         if trace_skips then
-          show_skip(dataset,sequence,char,ck,classes[char])
-         end
-         prev=getprev(prev)
-        elseif seq[n][char] then
-         if n>1 then
-          prev=getprev(prev)
-         end
-         n=n-1
-        elseif discfound then
-         notmatchreplace[discfound]=true
-         if notmatchpost[discfound] then
-          goto next
-         else
-          break
-         end
-        else
-         goto next
-        end
-       elseif char==false then
-        if discfound then
-         notmatchreplace[discfound]=true
-         if notmatchpost[discfound] then
-          goto next
-         end
-        else
-         goto next
-        end
-        break
-       elseif id==disc_code then
-        discseen=true
-        discfound=prev
-        notmatchpre[prev]=true
-        notmatchpost[prev]=nil
-        notmatchreplace[prev]=nil
-        local pre,post,replace,pretail,posttail,replacetail=getdisc(prev,true)
-        if pre~=start and post~=start and replace~=start then
-         if post then
-          local n=n
-          while posttail do
-           if seq[n][getchar(posttail)] then
-            n=n-1
-            if posttail==post or n<1 then
-             break
-            else
-             posttail=getprev(posttail)
-            end
-           else
-            notmatchpost[prev]=true
-            break
-           end
-          end
-          if n>=1 then
-           notmatchpost[prev]=true
-          end
-         else
-          notmatchpost[prev]=true
-         end
-         if replace then
-          while replacetail do
-           if seq[n][getchar(replacetail)] then
-            n=n-1
-            if replacetail==replace or n<1 then
-             break
-            else
-             replacetail=getprev(replacetail)
-            end
-           else
-            notmatchreplace[prev]=true
-            if notmatchpost[prev] then
-             goto next
-            else
-             break
-            end
-           end
-          end
-         else
-         end
-        end
-        prev=getprev(prev)
-       elseif id==glue_code then
-        local sn=seq[n]
-        if (sn[32] and spaces[prev]) or sn[0xFFFC] then
-         n=n-1
-         prev=getprev(prev)
-        else
-         goto next
-        end
-       elseif seq[n][0xFFFC] then
-        n=n-1
-        prev=getprev(prev)
-       else
-        goto next
-       end
-      else
-       goto next
-      end
-     end
-    else
-     goto next
-    end
-   else
-    goto next
-   end
-  end
-  if s>l then
-   local current=last and getnext(last)
-   if not current and postreplace then
-    current=getnext(sweepnode)
-   end
-   if current then
+  if s==1 then
+  else
+   local l=ck[5] 
+   local current=start
+   if l>f then
     local discfound 
-    local n=l+1
-    while n<=s do
-     if current then
-      local char,id=ischar(current,currentfont)
+    local n=f+1
+    last=startnext 
+    while n<=l do
+     if postreplace and not last then
+      last=getnext(sweepnode)
+      sweeptype=nil
+     end
+     if last then
+      local char,id=ischar(last,currentfont)
       if char then
        if skiphash and skiphash[char] then
         skipped=true
         if trace_skips then
          show_skip(dataset,sequence,char,ck,classes[char])
         end
-        current=getnext(current) 
+        last=getnext(last)
        elseif seq[n][char] then
-        if n<s then 
-         current=getnext(current) 
+        if n<l then
+         last=getnext(last)
         end
         n=n+1
        elseif discfound then
@@ -23579,64 +24542,53 @@ local function handle_contextchain(head,start,dataset,sequence,contexts,rlmode,s
        end
       elseif id==disc_code then
        discseen=true
-       discfound=current
-       notmatchpre[current]=nil
-       notmatchpost[current]=true
-       notmatchreplace[current]=nil
-       local pre,post,replace=getdisc(current)
+       discfound=last
+       notmatchpre[last]=nil
+       notmatchpost[last]=true
+       notmatchreplace[last]=nil
+       local pre,post,replace=getdisc(last)
        if pre then
         local n=n
         while pre do
          if seq[n][getchar(pre)] then
           n=n+1
-          if n>s then
+          if n>l then
            break
-          else
-           pre=getnext(pre)
           end
+          pre=getnext(pre)
          else
-          notmatchpre[current]=true
+          notmatchpre[last]=true
           break
          end
         end
-        if n<=s then
-         notmatchpre[current]=true
+        if n<=l then
+         notmatchpre[last]=true
         end
        else
-        notmatchpre[current]=true
+        notmatchpre[last]=true
        end
        if replace then
         while replace do
          if seq[n][getchar(replace)] then
           n=n+1
-          if n>s then
+          if n>l then
            break
-          else
-           replace=getnext(replace)
           end
+          replace=getnext(replace)
          else
-          notmatchreplace[current]=true
-          if notmatchpre[current] then
+          notmatchreplace[last]=true
+          if notmatchpre[last] then
            goto next
           else
            break
           end
          end
         end
-       else
+        if notmatchpre[last] then
+         goto next
+        end
        end
-       current=getnext(current)
-      elseif id==glue_code then
-       local sn=seq[n]
-       if (sn[32] and spaces[current]) or sn[0xFFFC] then
-        n=n+1
-        current=getnext(current)
-       else
-        goto next
-       end
-      elseif seq[n][0xFFFC] then
-       n=n+1
-       current=getnext(current)
+       last=getnext(last)
       else
        goto next
       end
@@ -23644,8 +24596,241 @@ local function handle_contextchain(head,start,dataset,sequence,contexts,rlmode,s
       goto next
      end
     end
-   else
-    goto next
+   end
+   if f>1 then
+    if startprev then
+     local prev=startprev
+     if prereplace and prev==checkdisc then
+      prev=getprev(sweepnode)
+     end
+     if prev then
+      local discfound 
+      local n=f-1
+      while n>=1 do
+       if prev then
+        local char,id=ischar(prev,currentfont)
+        if char then
+         if skiphash and skiphash[char] then
+          skipped=true
+          if trace_skips then
+           show_skip(dataset,sequence,char,ck,classes[char])
+          end
+          prev=getprev(prev)
+         elseif seq[n][char] then
+          if n>1 then
+           prev=getprev(prev)
+          end
+          n=n-1
+         elseif discfound then
+          notmatchreplace[discfound]=true
+          if notmatchpost[discfound] then
+           goto next
+          else
+           break
+          end
+         else
+          goto next
+         end
+        elseif char==false then
+         if discfound then
+          notmatchreplace[discfound]=true
+          if notmatchpost[discfound] then
+           goto next
+          end
+         else
+          goto next
+         end
+         break
+        elseif id==disc_code then
+         discseen=true
+         discfound=prev
+         notmatchpre[prev]=true
+         notmatchpost[prev]=nil
+         notmatchreplace[prev]=nil
+         local pre,post,replace,pretail,posttail,replacetail=getdisc(prev,true)
+         if pre~=start and post~=start and replace~=start then
+          if post then
+           local n=n
+           while posttail do
+            if seq[n][getchar(posttail)] then
+             n=n-1
+             if posttail==post or n<1 then
+              break
+             else
+              posttail=getprev(posttail)
+             end
+            else
+             notmatchpost[prev]=true
+             break
+            end
+           end
+           if n>=1 then
+            notmatchpost[prev]=true
+           end
+          else
+           notmatchpost[prev]=true
+          end
+          if replace then
+           while replacetail do
+            if seq[n][getchar(replacetail)] then
+             n=n-1
+             if replacetail==replace or n<1 then
+              break
+             else
+              replacetail=getprev(replacetail)
+             end
+            else
+             notmatchreplace[prev]=true
+             if notmatchpost[prev] then
+              goto next
+             else
+              break
+             end
+            end
+           end
+          else
+          end
+         end
+         prev=getprev(prev)
+        elseif id==glue_code then
+         local sn=seq[n]
+         if (sn[32] and spaces[prev]) or sn[0xFFFC] then
+          n=n-1
+          prev=getprev(prev)
+         else
+          goto next
+         end
+        elseif seq[n][0xFFFC] then
+         n=n-1
+         prev=getprev(prev)
+        else
+         goto next
+        end
+       else
+        goto next
+       end
+      end
+     else
+      goto next
+     end
+    else
+     goto next
+    end
+   end
+   if s>l then
+    local current=last and getnext(last)
+    if not current and postreplace then
+     current=getnext(sweepnode)
+    end
+    if current then
+     local discfound 
+     local n=l+1
+     while n<=s do
+      if current then
+       local char,id=ischar(current,currentfont)
+       if char then
+        if skiphash and skiphash[char] then
+         skipped=true
+         if trace_skips then
+          show_skip(dataset,sequence,char,ck,classes[char])
+         end
+         current=getnext(current) 
+        elseif seq[n][char] then
+         if n<s then 
+          current=getnext(current) 
+         end
+         n=n+1
+        elseif discfound then
+         notmatchreplace[discfound]=true
+         if notmatchpre[discfound] then
+          goto next
+         else
+          break
+         end
+        else
+         goto next
+        end
+       elseif char==false then
+        if discfound then
+         notmatchreplace[discfound]=true
+         if notmatchpre[discfound] then
+          goto next
+         else
+          break
+         end
+        else
+         goto next
+        end
+       elseif id==disc_code then
+        discseen=true
+        discfound=current
+        notmatchpre[current]=nil
+        notmatchpost[current]=true
+        notmatchreplace[current]=nil
+        local pre,post,replace=getdisc(current)
+        if pre then
+         local n=n
+         while pre do
+          if seq[n][getchar(pre)] then
+           n=n+1
+           if n>s then
+            break
+           else
+            pre=getnext(pre)
+           end
+          else
+           notmatchpre[current]=true
+           break
+          end
+         end
+         if n<=s then
+          notmatchpre[current]=true
+         end
+        else
+         notmatchpre[current]=true
+        end
+        if replace then
+         while replace do
+          if seq[n][getchar(replace)] then
+           n=n+1
+           if n>s then
+            break
+           else
+            replace=getnext(replace)
+           end
+          else
+           notmatchreplace[current]=true
+           if notmatchpre[current] then
+            goto next
+           else
+            break
+           end
+          end
+         end
+        else
+        end
+        current=getnext(current)
+       elseif id==glue_code then
+        local sn=seq[n]
+        if (sn[32] and spaces[current]) or sn[0xFFFC] then
+         n=n+1
+         current=getnext(current)
+        else
+         goto next
+        end
+       elseif seq[n][0xFFFC] then
+        n=n+1
+        current=getnext(current)
+       else
+        goto next
+       end
+      else
+       goto next
+      end
+     end
+    else
+     goto next
+    end
    end
   end
   if trace_contexts then
@@ -23922,7 +25107,7 @@ local function testrun(disc,t_run,c_run,...)
  end
  local pre,post,replace,pretail,posttail,replacetail=getdisc(disc,true)
  local renewed=false
- if (post or replace) then 
+ if post or replace then 
   if post then
    setlink(posttail,next)
   else
@@ -24022,6 +25207,7 @@ local nesting=0
 local function c_run_single(head,font,attr,lookupcache,step,dataset,sequence,rlmode,skiphash,handler)
  local done=false
  local sweep=sweephead[head]
+ local start
  if sweep then
   start=sweep
   sweephead[head]=false
@@ -24082,7 +25268,7 @@ local function t_run_single(start,stop,font,attr,lookupcache)
      end
      while getid(s)==disc_code do
       ss=getnext(s)
-      s=getfield(s,"replace")
+      s=getreplace(s)
       if not s then
        s=ss
        ss=nil
@@ -24093,7 +25279,7 @@ local function t_run_single(start,stop,font,attr,lookupcache)
      while s do
       local char=ischar(s,font)
       if char then
-       local lg=lookupmatch[char]
+       local lg=not tonumber(lookupmatch) and lookupmatch[char]
        if lg then
         if sstop then
          d=1
@@ -24109,13 +25295,13 @@ local function t_run_single(start,stop,font,attr,lookupcache)
         end
         while getid(s)==disc_code do
          ss=getnext(s)
-         s=getfield(s,"replace")
+         s=getreplace(s)
          if not s then
           s=ss
           ss=nil
          end
         end
-lookupmatch=lg
+        lookupmatch=lg
        else
         break
        end
@@ -24123,7 +25309,7 @@ lookupmatch=lg
        break
       end
      end
-     if l and l.ligature then 
+     if l and (tonumber(l) or l.ligature) then 
       lastd=d
      end
     else
@@ -24150,7 +25336,7 @@ local function k_run_single(sub,injection,last,font,attr,lookupcache,step,datase
    if n==last then
     break
    end
-   local char=ischar(n)
+   local char=ischar(n,font)
    if char then
     local lookupmatch=lookupcache[char]
     if lookupmatch then
@@ -24166,6 +25352,7 @@ end
 local function c_run_multiple(head,font,attr,steps,nofsteps,dataset,sequence,rlmode,skiphash,handler)
  local done=false
  local sweep=sweephead[head]
+ local start
  if sweep then
   start=sweep
   sweephead[head]=false
@@ -24236,7 +25423,7 @@ local function t_run_multiple(start,stop,font,attr,steps,nofsteps)
       end
       while getid(s)==disc_code do
        ss=getnext(s)
-       s=getfield(s,"replace")
+       s=getreplace(s)
        if not s then
         s=ss
         ss=nil
@@ -24247,7 +25434,7 @@ local function t_run_multiple(start,stop,font,attr,steps,nofsteps)
       while s do
        local char=ischar(s)
        if char then
-        local lg=lookupmatch[char]
+        local lg=not tonumber(lookupmatch) and lookupmatch[char]
         if lg then
          if sstop then
           d=1
@@ -24263,13 +25450,13 @@ local function t_run_multiple(start,stop,font,attr,steps,nofsteps)
          end
          while getid(s)==disc_code do
           ss=getnext(s)
-          s=getfield(s,"replace")
+          s=getreplace(s)
           if not s then
            s=ss
            ss=nil
           end
          end
-lookupmatch=lg
+         lookupmatch=lg
         else
          break
         end
@@ -24277,7 +25464,7 @@ lookupmatch=lg
         break
        end
       end
-      if l and l.ligature then
+      if l and (tonumber(l) or l.ligature) then
        lastd=d
       end
      end
@@ -24323,8 +25510,6 @@ local function k_run_multiple(sub,injection,last,font,attr,steps,nofsteps,datase
 end
 local txtdirstate,pardirstate  do 
  local getdirection=nuts.getdirection
- local lefttoright=0
- local righttoleft=1
  txtdirstate=function(start,stack,top,rlparmode)
   local dir,pop=getdirection(start)
   if pop then
@@ -24332,19 +25517,19 @@ local txtdirstate,pardirstate  do
     return 0,rlparmode
    else
     top=top-1
-    if stack[top]==righttoleft then
+    if stack[top]==righttoleft_code then
      return top,-1
     else
      return top,1
     end
    end
-  elseif dir==lefttoright then
+  elseif dir==lefttoright_code then
    top=top+1
-   stack[top]=lefttoright
+   stack[top]=lefttoright_code
    return top,1
-  elseif dir==righttoleft then
+  elseif dir==righttoleft_code then
    top=top+1
-   stack[top]=righttoleft
+   stack[top]=righttoleft_code
    return top,-1
   else
    return top,rlparmode
@@ -24352,13 +25537,9 @@ local txtdirstate,pardirstate  do
  end
  pardirstate=function(start)
   local dir=getdirection(start)
-  if dir==lefttoright then
+  if dir==lefttoright_code then
    return 1,1
-  elseif dir==righttoleft then
-   return -1,-1
-  elseif dir=="TLT" then
-   return 1,1
-  elseif dir=="TRT" then
+  elseif dir==righttoleft_code then
    return -1,-1
   else
    return 0,0
@@ -24411,9 +25592,9 @@ do
    checkstep(head)
   end
   local initialrl=0
-  if getid(head)==localpar_code and getsubtype(head)==0 then
+  if getid(head)==par_code and startofpar(head) then
    initialrl=pardirstate(head)
-  elseif direction==1 or direction=="TRT" then
+  elseif direction==righttoleft_code then
    initialrl=-1
   end
   local datasets=otfdataset(tfmdata,font,attr)
@@ -24492,10 +25673,10 @@ do
         if lookupmatch then
          local a 
          if attr then
-          if getglyphdata(start)==attr and (not attribute or getprop(start,a_state)==attribute) then
+          if getglyphdata(start)==attr and (not attribute or getstate(start,attribute)) then
            a=true
           end
-         elseif not attribute or getprop(start,a_state)==attribute then
+         elseif not attribute or getstate(start,attribute) then
           a=true
          end
          if a then
@@ -24528,7 +25709,7 @@ do
         start=getnext(start)
        end
       elseif id==math_code then
-       start=getnext(end_of_math(start))
+       start=getnext(endofmath(start))
       elseif id==dir_code then
        topstack,rlmode=txtdirstate(start,dirstack,topstack,rlparmode)
        start=getnext(start)
@@ -24548,10 +25729,10 @@ do
         if m then
          local a 
          if attr then
-          if getglyphdata(start)==attr and (not attribute or getprop(start,a_state)==attribute) then
+          if getglyphdata(start)==attr and (not attribute or getstate(start,attribute)) then
            a=true
           end
-         elseif not attribute or getprop(start,a_state)==attribute then
+         elseif not attribute or getstate(start,attribute) then
           a=true
          end
          if a then
@@ -24598,7 +25779,7 @@ do
         start=getnext(start)
        end
       elseif id==math_code then
-       start=getnext(end_of_math(start))
+       start=getnext(endofmath(start))
       elseif id==dir_code then
        topstack,rlmode=txtdirstate(start,dirstack,topstack,rlparmode)
        start=getnext(start)
@@ -24637,7 +25818,7 @@ do
   local done=false
   local dirstack={ nil } 
   local start=head
-  local initialrl=(direction==1 or direction=="TRT") and -1 or 0
+  local initialrl=(direction==righttoleft_code) and -1 or 0
   local rlmode=initialrl
   local rlparmode=initialrl
   local topstack=0
@@ -24676,7 +25857,7 @@ do
    elseif char==false or id==glue_code then
     start=getnext(start)
    elseif id==math_code then
-    start=getnext(end_of_math(start))
+    start=getnext(endofmath(start))
    elseif id==dir_code then
     topstack,rlmode=txtdirstate(start,dirstack,topstack,rlparmode)
     start=getnext(start)
@@ -24687,44 +25868,52 @@ do
   return head
  end
 end
-local plugins={}
-otf.plugins=plugins
-local report=logs.reporter("fonts")
-function otf.registerplugin(name,f)
- if type(name)=="string" and type(f)=="function" then
-  plugins[name]={ name,f }
-  report()
-  report("plugin %a has been loaded, please be aware of possible side effects",name)
-  report()
-  if logs.pushtarget then
-   logs.pushtarget("log")
-  end
-  report("Plugins are not officially supported unless stated otherwise. This is because")
-  report("they bypass the regular font handling and therefore some features in ConTeXt")
-  report("(especially those related to fonts) might not work as expected or might not work")
-  report("at all. Some plugins are for testing and development only and might change")
-  report("whenever we feel the need for it.")
-  report()
-  if logs.poptarget then
-   logs.poptarget()
+do
+ local plugins={}
+ otf.plugins=plugins
+ local report=logs.reporter("fonts")
+ local warned=false
+ local okay={ text=true }
+ function otf.registerplugin(name,f)
+  if type(name)=="string" and type(f)=="function" then
+   plugins[name]={ name,f }
+   if okay[name] then
+   else
+    report("plugin %a has been loaded, please be aware of possible side effects",name)
+    if not warned then
+     if logs.pushtarget then
+      logs.pushtarget("log")
+     end
+     report("Plugins are not officially supported unless stated otherwise. This is because")
+     report("they bypass the regular font handling and therefore some features in ConTeXt")
+     report("(especially those related to fonts) might not work as expected or might not work")
+     report("at all. Some plugins are for testing and development only and might change")
+     report("whenever we feel the need for it.")
+     report()
+     if logs.poptarget then
+      logs.poptarget()
+     end
+     warned=true
+    end
+   end
   end
  end
-end
-function otf.plugininitializer(tfmdata,value)
- if type(value)=="string" then
-  tfmdata.shared.plugin=plugins[value]
- end
-end
-function otf.pluginprocessor(head,font,attr,direction) 
- local s=fontdata[font].shared
- local p=s and s.plugin
- if p then
-  if trace_plugins then
-   report_process("applying plugin %a",p[1])
+ function otf.plugininitializer(tfmdata,value)
+  if type(value)=="string" then
+   tfmdata.shared.plugin=plugins[value]
   end
-  return p[2](head,font,attr,direction)
- else
-  return head,false
+ end
+ function otf.pluginprocessor(head,font,dynamic,direction) 
+  local s=fontdata[font].shared
+  local p=s and s.plugin
+  if p then
+   if trace_plugins then
+    report_process("applying plugin %a",p[1])
+   end
+   return p[2](head,font,dynamic,direction)
+  else
+   return head,false
+  end
  end
 end
 function otf.featuresinitializer(tfmdata,value)
@@ -24743,19 +25932,25 @@ registerotffeature {
   plug=otf.pluginprocessor,
  }
 }
+local function markinitializer(tfmdata,value)
+ local properties=tfmdata.properties
+ properties.checkmarks=value
+end
+registerotffeature {
+ name="checkmarks",
+ description="check mark widths",
+ default=true,
+ initializers={
+  node=markinitializer,
+ },
+}
 otf.handlers=handlers
+if context then
+ return
+else
+end
 local setspacekerns=nodes.injections.setspacekerns if not setspacekerns then os.exit() end
-local tag="kern" 
-if fontfeatures then
- function handlers.trigger_space_kerns(head,dataset,sequence,initialrl,font,attr)
-  local features=fontfeatures[font]
-  local enabled=features and features.spacekern and features[tag]
-  if enabled then
-   setspacekerns(font,sequence)
-  end
-  return head,enabled
- end
-else 
+local tag="kern"
  function handlers.trigger_space_kerns(head,dataset,sequence,initialrl,font,attr)
   local shared=fontdata[font].shared
   local features=shared and shared.features
@@ -24765,7 +25960,6 @@ else
   end
   return head,enabled
  end
-end
 local function hasspacekerns(data)
  local resources=data.resources
  local sequences=resources.sequences
@@ -24950,23 +26144,11 @@ registerotffeature {
   node=spaceinitializer,
  },
 }
-local function markinitializer(tfmdata,value)
- local properties=tfmdata.properties
- properties.checkmarks=value
-end
-registerotffeature {
- name="checkmarks",
- description="check mark widths",
- default=true,
- initializers={
-  node=markinitializer,
- },
-}
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-ots”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-ots”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-osd” 79eb2fc4a71364fd73c8b996a109f5df] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-osd” 1716513d8fe5f28e0e88daad2be0e05b] ---
 
 if not modules then modules={} end modules ['font-osd']={ 
  version=1.001,
@@ -24975,8 +26157,10 @@ if not modules then modules={} end modules ['font-osd']={
  copyright="TAT Zetwerk / PRAGMA ADE / ConTeXt Development Team",
  license="see context related readme files"
 }
-local insert,imerge,copy,tohash=table.insert,table.imerge,table.copy,table.tohash
-local next,type=next,type
+local insert,remove,imerge,copy,tohash=table.insert,table.remove,table.imerge,table.copy,table.tohash
+local next,type,rawget=next,type,rawget
+local formatters=string.formatters
+local settings_to_hash=utilities.parsers.settings_to_hash
 local report=logs.reporter("otf","devanagari")
 fonts=fonts       or {}
 fonts.analyzers=fonts.analyzers   or {}
@@ -24986,6 +26170,7 @@ local handlers=otf.handlers
 local methods=fonts.analyzers.methods
 local otffeatures=fonts.constructors.features.otf
 local registerotffeature=otffeatures.register
+local trace_steps=false
 local nuts=nodes.nuts
 local getnext=nuts.getnext
 local getprev=nuts.getprev
@@ -25000,17 +26185,19 @@ local setprev=nuts.setprev
 local setchar=nuts.setchar
 local getprop=nuts.getprop
 local setprop=nuts.setprop
+local getstate=nuts.getstate
+local setstate=nuts.setstate
 local ischar=nuts.ischar
-local insert_node_after=nuts.insert_after
+local insertnodeafter=nuts.insertafter
 local copy_node=nuts.copy
 local remove_node=nuts.remove
-local flush_list=nuts.flush_list
-local flush_node=nuts.flush_node
+local flushlist=nuts.flushlist
+local flushnode=nuts.flushnode
 local copyinjection=nodes.injections.copy 
 local unsetvalue=attributes.unsetvalue
 local fontdata=fonts.hashes.identifiers
-local a_state=attributes.private('state')
-local a_syllabe=attributes.private('syllabe')
+local a_syllabe="syllable"  
+local a_reordered="reordered" 
 local dotted_circle=0x25CC
 local c_nbsp=0x00A0
 local c_zwnj=0x200C
@@ -25030,14 +26217,27 @@ replace_all_nbsp=function(head)
  return replace_all_nbsp(head)
 end
 local processcharacters=nil
+local logprocess=nil
 if context then
  local fontprocesses=fonts.hashes.processes
+ local tracers=nodes.tracers
+ local registermessage=(tracers and tracers.steppers.message) or function() end
  function processcharacters(head,font)
   local processors=fontprocesses[font]
   for i=1,#processors do
    head=processors[i](head,font,0)
   end
   return head
+ end
+ trackers.register("otf.steps",function(v) trace_steps=v end)
+ logprocess=function(str)
+  if trace_steps then
+   registermessage("devanagari %s",str)
+   if trace_steps=="silent" then
+    return
+   end
+  end
+  report(str)
  end
 else
  function processcharacters(head,font)
@@ -25046,6 +26246,8 @@ else
    head=processors[i](head,font,0)
   end
   return head
+ end
+ logprocess=function(str)
  end
 end
 local indicgroups=characters and characters.indicgroups
@@ -25156,7 +26358,7 @@ local before_subscript=indicgroups.before_subscript
 local after_subscript=indicgroups.after_subscript
 local before_main=indicgroups.before_main
 local after_main=indicgroups.after_main
-local mark_four=table.merged (
+local mark_pre_above_below_post=table.merged (
  pre_mark,
  above_mark,
  below_mark,
@@ -25167,6 +26369,11 @@ local mark_above_below_post=table.merged (
  below_mark,
  post_mark
 )
+local devanagarihash=table.setmetatableindex(function(t,k)
+ local v=fontdata[k].resources.devanagari or false
+ t[k]=v
+ return v
+end)
 local zw_char={ 
  [c_zwnj]=true,
  [c_zwj ]=true,
@@ -25287,7 +26494,7 @@ local function initializedevanagi(tfmdata)
   local resources=tfmdata.resources
   local devanagari=resources.devanagari
   if not devanagari then
-   report("adding devanagari features to font")
+   report("adding features to font")
    local gsubfeatures=resources.features.gsub
    local sequences=resources.sequences
    local sharedfeatures=tfmdata.shared.features
@@ -25314,7 +26521,7 @@ local function initializedevanagi(tfmdata)
          for k,v in next,pre_mark do
           local locl=coverage[k]
           if locl then
-           if #locl>0 then	
+           if #locl>0 then
             for j=1,#locl do
              local ck=locl[j]
              local f=ck[4]
@@ -25335,6 +26542,7 @@ local function initializedevanagi(tfmdata)
               end
              end
             end
+           else
            end
            if locl then
             reorder_matras.steps[1].coverage[locl]=true
@@ -25347,7 +26555,7 @@ local function initializedevanagi(tfmdata)
       if basic_shaping_forms[k] then
        lastmatch=lastmatch+1
        if s~=lastmatch then
-        table.insert(sequences,lastmatch,table.remove(sequences,s))
+        insert(sequences,lastmatch,remove(sequences,s))
        end
       end
      end
@@ -25365,9 +26573,7 @@ local function initializedevanagi(tfmdata)
    local vatucache={}
    local pstfcache={}
    local seqsubset={}
-   local rephstep={
-    coverage={} 
-   }
+   local rephstep={ coverage={} } 
    local devanagari={
     reph=false,
     vattu=false,
@@ -25392,7 +26598,7 @@ local function initializedevanagi(tfmdata)
     local has_pstf=features.pstf
     if has_rphf and has_rphf[script] then
      devanagari.reph=true
-    elseif (has_blwf and has_blwf[script] ) or (has_vatu and has_vatu[script] ) then
+    elseif (has_blwf and has_blwf[script]) or (has_vatu and has_vatu[script]) then
      devanagari.vattu=true
      for i=1,nofsteps do
       local step=steps[i]
@@ -25400,10 +26606,8 @@ local function initializedevanagi(tfmdata)
       if coverage then
        for k,v in next,coverage do
         for h,w in next,halant do
-         if v[h] then
-          if not blwfcache[k] then
-           blwfcache[k]=v
-          end
+         if v[h] and not blwfcache[k] then
+          blwfcache[k]=v
          end
          if has_vatu and has_vatu[script] and not vatucache[k] then
           vatucache[k]=v
@@ -25426,32 +26630,36 @@ local function initializedevanagi(tfmdata)
         local r=coverage[k]
         if r then
          local found=false
-         if #r>0 then  
+         if #r>0 then
           for j=1,#r do
            local ck=r[j]
            local f=ck[4]
            local chainlookups=ck[6]
-           if chainlookups and chainlookups[f] then	
+           if chainlookups then
             local chainlookup=chainlookups[f]
-            for j=1,#chainlookup do
-             local chainstep=chainlookup[j]
-             local steps=chainstep.steps
-             local nofsteps=chainstep.nofsteps
-             for i=1,nofsteps do
-              local step=steps[i]
-              local coverage=step.coverage
-              if coverage then
-               local h=coverage[k]
-               if h then
-                for k,v in next,h do
-                 found=v and v.ligature
+            if chainlookup then
+             for j=1,#chainlookup do
+              local chainstep=chainlookup[j]
+              local steps=chainstep.steps
+              local nofsteps=chainstep.nofsteps
+              for i=1,nofsteps do
+               local step=steps[i]
+               local coverage=step.coverage
+               if coverage then
+                local h=coverage[k]
+                if h then
+                 for k,v in next,h do
+                  if v then
+                   found=tonumber(v) or v.ligature
+                   if found then
+                    pre_base_reordering_consonants[found]=true
+                    break
+                   end
+                  end
+                 end
                  if found then
-                  pre_base_reordering_consonants[found]=true
                   break
                  end
-                end
-                if found then
-                 break
                 end
                end
               end
@@ -25461,10 +26669,12 @@ local function initializedevanagi(tfmdata)
           end
          else
           for k,v in next,r do
-           found=v and v.ligature
-           if found then
-            pre_base_reordering_consonants[found]=true
-            break
+           if v then
+            found=tonumber(v) or v.ligature
+            if found then
+             pre_base_reordering_consonants[found]=true
+             break
+            end
            end
           end
          end
@@ -25482,14 +26692,15 @@ local function initializedevanagi(tfmdata)
        local step=steps[i]
        local coverage=step.coverage
        if coverage then
-        local reph,rephbase=false,false
+        local reph=false
+        local base=false
         if kind=="rphf" then
          for k,v in next,ra do
           local r=coverage[k]
           if r then
-           rephbase=k
+           base=k
            local h=false
-           if #r>0 then	
+           if #r>0 then
             for j=1,#r do
              local ck=r[j]
              local f=ck[4]
@@ -25509,7 +26720,7 @@ local function initializedevanagi(tfmdata)
                   for k,v in next,halant do
                    local h=r[k]
                    if h then
-                    reph=h.ligature or false
+                    reph=tonumber(h) or h.ligature or false
                     break
                    end
                   end
@@ -25526,7 +26737,7 @@ local function initializedevanagi(tfmdata)
             for k,v in next,halant do
              local h=r[k]
              if h then
-              reph=h.ligature or false
+              reph=tonumber(h) or h.ligature or false
               break
              end
             end
@@ -25537,7 +26748,7 @@ local function initializedevanagi(tfmdata)
           end
          end
         end
-        seqsubset[#seqsubset+1]={ kind,coverage,reph,rephbase }
+         seqsubset[#seqsubset+1]={ kind,coverage,reph,base }
        end
       end
      end
@@ -25552,7 +26763,7 @@ local function initializedevanagi(tfmdata)
          local h=coverage[k]
          if h then
           local found=false
-          if #h>0 then 
+          if #h>0 then
            for j=1,#h do
             local ck=h[j]
             local f=ck[4]
@@ -25570,10 +26781,12 @@ local function initializedevanagi(tfmdata)
                 local h=coverage[k]
                 if h then
                  for k,v in next,h do
-                  found=v and v.ligature
-                  if found then
-                   pre_base_reordering_consonants[found]=true
-                   break
+                  if v then
+                   found=tonumber(v) or v.ligature
+                   if found then
+                    pre_base_reordering_consonants[found]=true
+                    break
+                   end
                   end
                  end
                  if found then
@@ -25587,7 +26800,7 @@ local function initializedevanagi(tfmdata)
            end
           else
            for k,v in next,h do
-            found=v and v.ligature
+            found=v and (tonumber(v) or v.ligature)
             if found then
              pre_base_reordering_consonants[found]=true
              break
@@ -25613,9 +26826,6 @@ local function initializedevanagi(tfmdata)
     sharedfeatures["dv03"]=true 
     sharedfeatures["dv04"]=true 
    end
-   if script=="mlym" or script=="taml" then
-    devanagari.left_matra_before_base=true
-   end
   end
  end
 end
@@ -25627,6 +26837,44 @@ registerotffeature {
   node=initializedevanagi,
  },
 }
+local function initializeconjuncts(tfmdata,value)
+ if value then
+  local resources=tfmdata.resources
+  local devanagari=resources.devanagari
+  if devanagari then
+   local conjuncts="auto" 
+   local movematra="auto" 
+   if type(value)=="string" and value~="auto" then
+    value=settings_to_hash(value)
+    conjuncts=rawget(value,"conjuncts") or conjuncts
+    movematra=rawget(value,"movematra") or movematra
+   end
+   if conjuncts=="auto" then
+    conjuncts="mixed" 
+   end
+   if movematra=="auto" and
+      script=="mlym" or
+      script=="taml" then
+    movematra="leftbeforebase"
+   else
+    movematra="default"
+   end
+   devanagari.conjuncts=conjuncts
+   devanagari.movematra=movematra
+   if trace_steps then
+    report("conjuncts %a, movematra %a",conjuncts,movematra)
+   end
+  end
+ end
+end
+registerotffeature {
+ name="indic",
+ description="control indic",
+ default="auto",
+ initializers={
+  node=initializeconjuncts,
+ },
+}
 local show_syntax_errors=false
 local function inject_syntax_error(head,current,char)
  local signal=copy_node(current)
@@ -25636,7 +26884,7 @@ local function inject_syntax_error(head,current,char)
  else
   setchar(current,dotted_circle)
  end
- return insert_node_after(head,current,signal)
+ return insertnodeafter(head,current,signal)
 end
 local function initialize_one(font,attr) 
  local tfmdata=fontdata[font]
@@ -25672,36 +26920,40 @@ local function initialize_one(font,attr)
 end
 local function contextchain(contexts,n)
  local char=getchar(n)
- for k=1,#contexts do
-  local ck=contexts[k]
-  local seq=ck[3]
-  local f=ck[4]
-  local l=ck[5]
-  if (l-f)==1 and seq[f+1][char] then
-   local ok=true
-   local c=n
-   for i=l+1,#seq do
-    c=getnext(c)
-    if not c or not seq[i][ischar(c)] then
-     ok=false
-     break
-    end
-   end
-   if ok then
-    c=getprev(n)
-    for i=1,f-1 do
-     c=getprev(c)
-     if not c or not seq[f-i][ischar(c)] then
+ if not contexts.n then
+  return contexts[char]
+ else
+  for k=1,#contexts do
+   local ck=contexts[k]
+   local seq=ck[3]
+   local f=ck[4]
+   local l=ck[5]
+   if (l-f)==1 and seq[f+1][char] then
+    local ok=true
+    local c=n
+    for i=l+1,#seq do
+     c=getnext(c)
+     if not c or not seq[i][ischar(c)] then
       ok=false
+      break
      end
     end
-   end
-   if ok then
-    return true
+    if ok then
+     c=getprev(n)
+     for i=1,f-1 do
+      c=getprev(c)
+      if not c or not seq[f-i][ischar(c)] then
+       ok=false
+      end
+     end
+    end
+    if ok then
+     return true
+    end
    end
   end
+  return false
  end
- return false
 end
 local function order_matras(c)
  local cn=getnext(c)
@@ -25730,9 +26982,9 @@ local function order_matras(c)
   char=getchar(cn)
  end
 end
+local swapped=table.swapped(states)
 local function reorder_one(head,start,stop,font,attr,nbspaces)
- local reph,vattu,blwfcache,vatucache,pstfcache=initialize_one(font,attr) 
- local devanagari=fontdata[font].resources.devanagari
+ local reph,vattu,blwfcache,vatucache,pstfcache=initialize_one(font,attr)
  local current=start
  local n=getnext(start)
  local base=nil
@@ -25747,14 +26999,17 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
    current=start
   else
    current=getnext(n)
-   setprop(start,a_state,s_rphf)
+   setstate(start,s_rphf)
   end
  end
  if getchar(current)==c_nbsp then
   if current==stop then
    stop=getprev(stop)
    head=remove_node(head,current)
-   flush_node(current)
+   flushnode(current)
+   if trace_steps then
+    logprocess("reorder one, remove nbsp")
+   end
    return head,stop,nbspaces
   else
    nbspaces=nbspaces+1
@@ -25780,11 +27035,11 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
       local nextcurrent=copy_node(current)
       copyinjection(nextcurrent,current) 
       setlink(tempcurrent,nextcurrent)
-      setprop(tempcurrent,a_state,s_blwf)
+      setstate(tempcurrent,s_blwf)
       tempcurrent=processcharacters(tempcurrent,font)
-      setprop(tempcurrent,a_state,unsetvalue)
+      setstate(tempcurrent,unsetvalue)
       if getchar(next)==getchar(tempcurrent) then
-       flush_list(tempcurrent)
+       flushlist(tempcurrent)
        if show_syntax_errors then
         head,current=inject_syntax_error(head,current,char)
        end
@@ -25792,11 +27047,14 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
        setchar(current,getchar(tempcurrent)) 
        local freenode=getnext(current)
        setlink(current,tmp)
-       flush_node(freenode)
-       flush_list(tempcurrent)
+       flushnode(freenode)
+       flushlist(tempcurrent)
        if changestop then
         stop=current
        end
+      end
+      if trace_steps then
+       logprocess("reorder one, handle nbsp")
       end
      end
     end
@@ -25806,7 +27064,7 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
  while not basefound do
   local char=getchar(current)
   if consonant[char] then
-   setprop(current,a_state,s_half)
+   setstate(current,s_half)
    if not firstcons then
     firstcons=current
    end
@@ -25814,9 +27072,9 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
    if not base then
     base=current
    elseif blwfcache[char] then
-    setprop(current,a_state,s_blwf)
+    setstate(current,s_blwf)
    elseif pstfcache[char] then
-    setprop(current,a_state,s_pstf)
+    setstate(current,s_pstf)
    else
     base=current
    end
@@ -25852,6 +27110,9 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
    if lastcons==stop then
     stop=n
    end
+   if trace_steps then
+    logprocess("reorder one, handle halant")
+   end
   end
  end
  n=getnext(start)
@@ -25876,19 +27137,22 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
   if matra==stop then
    stop=n
   end
+  if trace_steps then
+   logprocess("reorder one, handle matra")
+  end
  end
  local current=start
  while current~=stop do
   local next=getnext(current)
   if next~=stop and halant[getchar(next)] and getchar(getnext(next))==c_zwnj then
-   setprop(current,a_state,unsetvalue)
+   setstate(current,unsetvalue)
   end
   current=next
  end
- if base~=stop and getprop(base,a_state) then 
+ if base~=stop and getstate(base) then 
   local next=getnext(base)
   if halant[getchar(next)] and not (next~=stop and getchar(getnext(next))==c_zwj) then
-   setprop(base,a_state,unsetvalue)
+   setstate(base,unsetvalue)
   end
  end
  local current,allreordered,moved=start,false,{ [base]=true }
@@ -25914,14 +27178,19 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
      ch=getchar(n)
     end
     local tpm=twopart_mark[ch]
-    while tpm do
-     local extra=copy_node(n)
-     copyinjection(extra,n)
-     ch=tpm[1]
-     setchar(n,ch)
-     setchar(extra,tpm[2])
-     head=insert_node_after(head,current,extra)
-     tpm=twopart_mark[ch]
+    if tpm then
+     while tpm do
+      local extra=copy_node(n)
+      copyinjection(extra,n)
+      ch=tpm[1]
+      setchar(n,ch)
+      setchar(extra,tpm[2])
+      head=insertnodeafter(head,current,extra)
+      tpm=twopart_mark[ch]
+     end
+     if trace_steps then
+      logprocess("reorder one, handle mark")
+     end
     end
     while c~=stop and dependent_vowel[ch] do
      c=n
@@ -25944,9 +27213,10 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
   local bp=getprev(firstcons)
   local cn=getnext(current)
   local last=getnext(c)
+  local done=false
   while cn~=last do
    if pre_mark[getchar(cn)] then
-    if devanagari.left_matra_before_base then
+    if devanagarihash[font].movematra=="leftbeforebase" then
      local prev,next=getboth(cn)
      setlink(prev,next)
      if cn==stop then
@@ -25983,6 +27253,7 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
      end
      cn=next
     end
+    done=true
    elseif current~=base and dependent_vowel[getchar(cn)] then
     local prev,next=getboth(cn)
     if next then
@@ -25995,6 +27266,7 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
     setlink(b,cn,getnext(b))
     order_matras(cn)
     cn=next
+    done=true
    elseif current==base and dependent_vowel[getchar(cn)] then
     local cnn=getnext(cn)
     order_matras(cn)
@@ -26008,9 +27280,14 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
   end
   allreordered=c==stop
   current=getnext(c)
+  if done and trace_steps then
+   logprocess("reorder one, matra")
+  end
  end
  if reph or vattu then
-  local current,cns=start,nil
+  local current=start
+  local cns=nil
+  local done=false
   while current~=stop do
    local c=current
    local n=getnext(current)
@@ -26025,7 +27302,7 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
      end
      bn=next
     end
-    if getprop(current,a_state)==s_rphf then
+    if getstate(current,s_rphf) then
      if b~=current then
       if current==start then
        if head==start then
@@ -26041,13 +27318,15 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
       local next=getnext(b)
       setlink(c,next)
       setlink(b,current)
+      done=true
      end
     elseif cns and getnext(cns)~=current then
      local cp=getprev(current)
      local cnsn=getnext(cns)
      setlink(cp,n)
-     setlink(cns,current)
+     setlink(cns,current) 
      setlink(c,cnsn)
+     done=true
      if c==stop then
       stop=cp
       break
@@ -26087,14 +27366,17 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
    end
    current=getnext(current)
   end
+  if done and trace_steps then
+   logprocess("reorder one, handle reph and vata") 
+  end
  end
  if getchar(base)==c_nbsp then
   nbspaces=nbspaces-1
   if base==stop then
-  	stop=getprev(stop)
+   stop=getprev(stop)
   end
   head=remove_node(head,base)
-  flush_node(base)
+  flushnode(base)
  end
  return head,stop,nbspaces
 end
@@ -26119,6 +27401,9 @@ function handlers.devanagari_reorder_matras(head,start)
     setlink(start,next)
     setlink(current,start)
     start=startnext
+    if trace_steps then
+     logprocess("reorder matra")
+    end
     break
    end
   else
@@ -26147,6 +27432,9 @@ function handlers.devanagari_reorder_reph(head,start)
    local char=ischar(current,startfont)
    if char and getprop(current,a_syllabe)==startattr then
     if halant[char] then
+     if trace_steps then
+      logprocess("reorder reph, handling halant")
+     end
      local next=getnext(current)
      if next then
       local nextchar=ischar(next,startfont)
@@ -26176,7 +27464,10 @@ function handlers.devanagari_reorder_reph(head,start)
    while current do
     local char=ischar(current,startfont)
     if char and getprop(current,a_syllabe)==startattr then
-     if consonant[char] and not getprop(current,a_state)==s_pref then
+     if consonant[char] and not getstate(current,s_pref) then
+      if trace_steps then
+       logprocess("reorder reph, handling consonant")
+      end
       startnext=getnext(start)
       head=remove_node(head,start)
       setlink(current,start)
@@ -26200,7 +27491,10 @@ function handlers.devanagari_reorder_reph(head,start)
    while current do
     local char=ischar(current,startfont)
     if char and getprop(current,a_syllabe)==startattr then
-     if getprop(current,a_state)==s_pstf then 
+     if getstate(current,s_pstf) then 
+      if trace_steps then
+       logprocess("reorder reph, before postscript, post base")
+      end
       startnext=getnext(start)
       head=remove_node(head,start)
       setlink(getprev(current),start)
@@ -26208,12 +27502,15 @@ function handlers.devanagari_reorder_reph(head,start)
       start=startnext
       startattr=getprop(start,a_syllabe)
       break
-     elseif not c and (vowel_modifier[char] or stress_tone_mark[char] ) then
+     elseif not c and (vowel_modifier[char] or stress_tone_mark[char]) then
       c=current
      end
      current=getnext(current)
     else
      if c then
+      if trace_steps then
+       logprocess("reorder reph, before postscript")
+      end
       startnext=getnext(start)
       head=remove_node(head,start)
       setlink(getprev(c),start)
@@ -26233,10 +27530,16 @@ function handlers.devanagari_reorder_reph(head,start)
   while current do
    local char=ischar(current,startfont)
    if char and getprop(current,a_syllabe)==startattr then
-    local state=getprop(current,a_state)
+    local state=getstate(current)
     if before_subscript[rephbase] and (state==s_blwf or state==s_pstf) then
      c=current
+     if trace_steps then
+      logprocess("reorder reph, before subscript")
+     end
     elseif after_subscript[rephbase] and (state==s_pstf) then
+     if trace_steps then
+      logprocess("reorder reph, after subscript")
+     end
      c=current
     end
     current=getnext(current)
@@ -26267,6 +27570,9 @@ function handlers.devanagari_reorder_reph(head,start)
    end
   end
   if start~=current then
+   if trace_steps then
+    logprocess("reorder reph, to end")
+   end
    startnext=getnext(start)
    head=remove_node(head,start)
    setlink(start,getnext(current))
@@ -26276,9 +27582,8 @@ function handlers.devanagari_reorder_reph(head,start)
  end
  return head,start,true
 end
-local reordered_pre_base_reordering_consonants={} 
 function handlers.devanagari_reorder_pre_base_reordering_consonants(head,start)
- if reordered_pre_base_reordering_consonants[start] then
+ if getprop(start,a_reordered) then
   return head,start,true
  end
  local current=start 
@@ -26289,6 +27594,9 @@ function handlers.devanagari_reorder_pre_base_reordering_consonants(head,start)
   local next=getnext(current)
   if char and getprop(current,a_syllabe)==startattr then
    if halant[char] then 
+    if trace_steps then
+     logprocess("reorder pre base consonants, handle halant")
+    end
     if next then
      local char=ischar(next,startfont)
      if char and zw_char[char] and getprop(next,a_syllabe)==startattr then
@@ -26300,7 +27608,7 @@ function handlers.devanagari_reorder_pre_base_reordering_consonants(head,start)
     head=remove_node(head,start)
     setlink(start,next)
     setlink(current,start)
-    reordered_pre_base_reordering_consonants[start]=true
+    setprop(start,"reordered",true)
     start=startnext
     return head,start,true
    end
@@ -26313,7 +27621,10 @@ function handlers.devanagari_reorder_pre_base_reordering_consonants(head,start)
  local current=getprev(start)
  while current and getprop(current,a_syllabe)==startattr do
   local char=ischar(current)
-  if (not dependent_vowel[char] and not getprop(current,a_state) or getprop(current,a_state)==s_init) then
+  if (not dependent_vowel[char] and (not getstate(current) or getstate(current,s_init))) then
+   if trace_steps then
+    logprocess("reorder pre base consonants, handle vowel or initial")
+   end
    startnext=getnext(start)
    head=remove_node(head,start)
    if current==head then
@@ -26323,7 +27634,7 @@ function handlers.devanagari_reorder_pre_base_reordering_consonants(head,start)
     setlink(getprev(current),start)
     setlink(start,current)
    end
-   reordered_pre_base_reordering_consonants[start]=true
+   setprop(start,"reordered",true)
    start=startnext
    break
   end
@@ -26354,7 +27665,10 @@ function handlers.devanagari_remove_joiners(head,start,kind,lookupname,replaceme
  if head==start then
   head=stop
  end
- flush_list(start)
+ flushlist(start)
+ if trace_steps then
+  logprocess("remove joiners")
+ end
  return head,stop,true
 end
 local function initialize_two(font,attr)
@@ -26371,15 +27685,17 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
  local basepos=nil
  local subpos=nil
  local postpos=nil
- reorderreph.coverage={}
+ reorderreph.coverage={} 
  rephbase[font]={}
  for i=1,#seqsubset do
   local subset=seqsubset[i]
   local kind=subset[1]
   local lookupcache=subset[2]
   if kind=="rphf" then
-   reorderreph.coverage[subset[3]]=true 
-   rephbase[font][subset[3]]=subset[4]
+   local reph=subset[3]
+   local base=subset[4]
+   reorderreph.coverage[reph]=true 
+   rephbase[font][reph]=base
    local current=start
    local last=getnext(stop)
    while current~=last do
@@ -26388,15 +27704,15 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
      local found=lookupcache[c]
      if found then
       local next=getnext(current)
-      if found[getchar(next)] or contextchain(found,next) then 
+      if contextchain(found,next) then 
        local afternext=next~=stop and getnext(next)
        if afternext and zw_char[getchar(afternext)] then 
         current=afternext 
        elseif current==start then
-        setprop(current,a_state,s_rphf)
-        current=next
+        setstate(current,s_rphf)
+        current=next 
        else
-        current=next
+        current=next 
        end
       end
      end
@@ -26412,10 +27728,10 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
      local found=lookupcache[c]
      if found then 
       local next=getnext(current)
-      if found[getchar(next)] or contextchain(found,next) then
-       if (not getprop(current,a_state) and not getprop(next,a_state)) then	
-        setprop(current,a_state,s_pref)
-        setprop(next,a_state,s_pref)
+      if contextchain(found,next) then
+       if not getstate(current) and not getstate(next) then 
+        setstate(current,s_pref)
+        setstate(next,s_pref)
         current=next
        end
       end
@@ -26432,11 +27748,11 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
      local found=lookupcache[c]
      if found then
       local next=getnext(current)
-      if found[getchar(next)] or contextchain(found,next) then
+      if contextchain(found,next) then
        if next~=stop and getchar(getnext(next))==c_zwnj then 
         current=next
-       elseif (not getprop(current,a_state)) then	
-        setprop(current,a_state,s_half)
+       elseif not getstate(current) then 
+        setstate(current,s_half)
         if not halfpos then
          halfpos=current
         end
@@ -26456,10 +27772,10 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
      local found=lookupcache[c]
      if found then
       local next=getnext(current)
-      if found[getchar(next)] or contextchain(found,next) then
-       if (not getprop(current,a_state) and not getprop(next,a_state)) then	
-        setprop(current,a_state,s_blwf)
-        setprop(next,a_state,s_blwf)
+      if contextchain(found,next) then
+       if not getstate(current) and not getstate(next) then 
+        setstate(current,s_blwf)
+        setstate(next,s_blwf)
         current=next
         subpos=current
        end
@@ -26477,10 +27793,10 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
      local found=lookupcache[c]
      if found then
       local next=getnext(current)
-      if found[getchar(next)] or contextchain(found,next) then
-       if (not getprop(current,a_state) and not getprop(next,a_state)) then	
-        setprop(current,a_state,s_pstf)
-        setprop(next,a_state,s_pstf)
+      if contextchain(found,next) then
+       if not getstate(current) and not getstate(next) then 
+        setstate(current,s_pstf)
+        setstate(next,s_pstf)
         current=next
         postpos=current
        end
@@ -26492,14 +27808,17 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
   end
  end
  local current,base,firstcons=start,nil,nil
- if getprop(start,a_state)==s_rphf then
+ if getstate(start,s_rphf) then
   current=getnext(getnext(start))
  end
  if current~=getnext(stop) and getchar(current)==c_nbsp then
   if current==stop then
    stop=getprev(stop)
    head=remove_node(head,current)
-   flush_node(current)
+   flushnode(current)
+   if trace_steps then
+    logprocess("reorder two, remove nbsp")
+   end
    return head,stop,nbspaces
   else
    nbspaces=nbspaces+1
@@ -26519,13 +27838,13 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
       local tmp=getnext(next)
       local changestop=next==stop
       setnext(next)
-      setprop(current,a_state,s_pref)
+      setstate(current,s_pref)
       current=processcharacters(current,font)
-      setprop(current,a_state,s_blwf)
+      setstate(current,s_blwf)
       current=processcharacters(current,font)
-      setprop(current,a_state,s_pstf)
+      setstate(current,s_pstf)
       current=processcharacters(current,font)
-      setprop(current,a_state,unsetvalue)
+      setstate(current,unsetvalue)
       if halant[getchar(current)] then
        setnext(getnext(current),tmp)
        if show_syntax_errors then
@@ -26540,8 +27859,11 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
      end
     end
    end
+   if trace_steps then
+    logprocess("reorder two, handle nbsp")
+   end
   end
- else 
+ else
   local last=getnext(stop)
   while current~=last do 
    local next=getnext(current)
@@ -26550,7 +27872,7 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
      if not firstcons then
       firstcons=current
      end
-     local a=getprop(current,a_state)
+     local a=getstate(current)
      if not (a==s_blwf or a==s_pstf or (a~=s_rphf and a~=s_blwf and ra[getchar(current)])) then
       base=current
      end
@@ -26563,13 +27885,13 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
   end
  end
  if not base then
-  if getprop(start,a_state)==s_rphf then
-   setprop(start,a_state,unsetvalue)
+  if getstate(start,s_rphf) then
+   setstate(start,unsetvalue)
   end
   return head,stop,nbspaces
  else
-  if getprop(base,a_state) then 
-   setprop(base,a_state,unsetvalue)
+  if getstate(base) then 
+   setstate(base,unsetvalue)  
   end
   basepos=base
  end
@@ -26590,16 +27912,21 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
   local target=nil
   local cn=getnext(current)
   local tpm=twopart_mark[char]
-  while tpm do
-   local extra=copy_node(current)
-   copyinjection(extra,current)
-   char=tpm[1]
-   setchar(current,char)
-   setchar(extra,tpm[2])
-   head=insert_node_after(head,current,extra)
-   tpm=twopart_mark[char]
+  if tpm then
+   while tpm do
+    local extra=copy_node(current)
+    copyinjection(extra,current)
+    char=tpm[1]
+    setchar(current,char)
+    setchar(extra,tpm[2])
+    head=insertnodeafter(head,current,extra)
+    tpm=twopart_mark[char]
+   end
+   if tpm and trace_steps then
+    logprocess("reorder two, handle matra")
+   end
   end
-  if not moved[current] and dependent_vowel[char] then
+  if dependent_vowel[char] then
    if pre_mark[char] then 
     moved[current]=true
     local prev,next=getboth(current)
@@ -26615,7 +27942,7 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
     end
     local ppos=getprev(pos) 
     while ppos and getprop(ppos,a_syllabe)==getprop(pos,a_syllabe) do
-     if getprop(ppos,a_state)==s_pref then
+     if getstate(ppos,s_pref) then
       pos=ppos
      end
      ppos=getprev(ppos)
@@ -26638,6 +27965,9 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
     end
     setlink(getprev(pos),current)
     setlink(current,pos)
+    if trace_steps then
+     logprocess("reorder two, handle pre mark")
+    end
    elseif above_mark[char] then
     target=basepos
     if subpos==basepos then
@@ -26677,6 +28007,9 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
      end
      setlink(current,getnext(target))
      setlink(target,current)
+     if trace_steps then
+      logprocess("reorder two, handle mark")
+     end
     end
    end
   end
@@ -26687,7 +28020,7 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
  while current~=last do
   local char=getchar(current)
   local cn=getnext(current)
-  if halant[char] and ra[ischar(cn)] and getprop(cn,a_state)~=s_rphf and getprop(cn,a_state)~=s_blwf then
+  if halant[char] and ra[ischar(cn)] and (not getstate(cn,s_rphf)) and (not getstate(cn,s_blwf)) then
    if after_main[ischar(cn)] then
     local prev=getprev(current)
     local next=getnext(cn)
@@ -26704,6 +28037,9 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
       stop=prev
      end
      cn=next
+     if trace_steps then
+      logprocess("reorder two, handle halant and ra")
+     end
     end
    end
   end
@@ -26736,6 +28072,9 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
     setprev(nextnextnext,current)
    end
    setlink(nextnext,c)
+   if trace_steps then
+    logprocess("reorder two, handle nukta")
+   end
   end
   if stop==current then break end
   current=getnext(current)
@@ -26746,7 +28085,10 @@ local function reorder_two(head,start,stop,font,attr,nbspaces)
   end
   nbspaces=nbspaces-1
   head=remove_node(head,base)
-  flush_node(base)
+  flushnode(base)
+  if trace_steps then
+   logprocess("reorder two, handle nbsp")
+  end
  end
  return head,stop,nbspaces
 end
@@ -26763,8 +28105,8 @@ local function analyze_next_chars_one(c,font,variant)
  if not n then
   return c
  end
+ local v=ischar(n,font)
  if variant==1 then
-  local v=ischar(n,font)
   if v and nukta[v] then
    n=getnext(n)
    if n then
@@ -26797,7 +28139,6 @@ local function analyze_next_chars_one(c,font,variant)
    end
   end
  elseif variant==2 then
-  local v=ischar(n,font)
   if v and nukta[v] then
    c=n
   end
@@ -26821,11 +28162,11 @@ local function analyze_next_chars_one(c,font,variant)
    end
   end
  end
- local n=getnext(c)
+ n=getnext(c)
  if not n then
   return c
  end
- local v=ischar(n,font)
+ v=ischar(n,font)
  if not v then
   return c
  end
@@ -26834,21 +28175,42 @@ local function analyze_next_chars_one(c,font,variant)
  local already_below_mark 
  local already_post_mark  
  while dependent_vowel[v] do
-	 local vowels=twopart_mark[v] or { v }
-	 for k,v in next,vowels do
-			if pre_mark[v] and not already_pre_mark then
-				already_pre_mark=true
-			elseif above_mark[v] and not already_above_mark then
-				already_above_mark=true
-			elseif below_mark[v] and not already_below_mark then
-				already_below_mark=true
-			elseif post_mark[v] and not already_post_mark then
-				already_post_mark=true
-			else
-				return c
-			end
-	 end
-  c=getnext(c)
+  local vowels=twopart_mark[v]
+  if vowels then
+   for k=1,#vowels do
+    local v=vowels[k]
+    if pre_mark[v] and not already_pre_mark then
+     already_pre_mark=true
+    elseif above_mark[v] and not already_above_mark then
+     already_above_mark=true
+    elseif below_mark[v] and not already_below_mark then
+     already_below_mark=true
+    elseif post_mark[v] and not already_post_mark then
+     already_post_mark=true
+    elseif devanagarihash[font].conjuncts=="continue" then
+    else
+     return c
+    end
+   end
+  else
+   if pre_mark[v] and not already_pre_mark then
+    already_pre_mark=true
+   elseif post_mark[v] and not already_post_mark then
+    if devanagarihash[font].conjuncts=="mixed" then
+     return c
+    else
+     already_post_mark=true
+    end
+   elseif below_mark[v] and not already_below_mark then
+    already_below_mark=true
+   elseif above_mark[v] and not already_above_mark then
+    already_above_mark=true
+   elseif devanagarihash[font].conjuncts=="continue" then
+   else
+    return c
+   end
+  end
+  c=n
   n=getnext(c)
   if not n then
    return c
@@ -26859,7 +28221,7 @@ local function analyze_next_chars_one(c,font,variant)
   end
  end
  if nukta[v] then
-  c=getnext(c)
+  c=n
   n=getnext(c)
   if not n then
    return c
@@ -26870,7 +28232,7 @@ local function analyze_next_chars_one(c,font,variant)
   end
  end
  if halant[v] then
-  c=getnext(c)
+  c=n
   n=getnext(c)
   if not n then
    return c
@@ -26881,7 +28243,7 @@ local function analyze_next_chars_one(c,font,variant)
   end
  end
  if vowel_modifier[v] then
-  c=getnext(c)
+  c=n
   n=getnext(c)
   if not n then
    return c
@@ -26892,7 +28254,7 @@ local function analyze_next_chars_one(c,font,variant)
   end
  end
  if stress_tone_mark[v] then
-  c=getnext(c)
+  c=n
   n=getnext(c)
   if not n then
    return c
@@ -26972,11 +28334,11 @@ local function analyze_next_chars_two(c,font)
  if not c then
   return
  end
- local n=getnext(c)
+ n=getnext(c)
  if not n then
   return c
  end
- local v=ischar(n,font)
+ v=ischar(n,font)
  if not v then
   return c
  end
@@ -27016,22 +28378,43 @@ local function analyze_next_chars_two(c,font)
   local already_pre_mark   
   local already_above_mark 
   local already_below_mark 
-  local already_post_mark  
-		while dependent_vowel[v] do
-			local vowels=twopart_mark[v] or { v }
-			for k,v in next,vowels do
-				if pre_mark[v] and not already_pre_mark then
-					already_pre_mark=true
-				elseif above_mark[v] and not already_above_mark then
-					already_above_mark=true
-				elseif below_mark[v] and not already_below_mark then
-					already_below_mark=true
-				elseif post_mark[v] and not already_post_mark then
-					already_post_mark=true
-				else
-					return c
-				end
-			end
+  local already_post_mark
+  while dependent_vowel[v] do
+   local vowels=twopart_mark[v]
+   if vowels then
+    for k=1,#vowels do
+     local v=vowels[k]
+     if pre_mark[v] and not already_pre_mark then
+      already_pre_mark=true
+     elseif above_mark[v] and not already_above_mark then
+      already_above_mark=true
+     elseif below_mark[v] and not already_below_mark then
+      already_below_mark=true
+     elseif post_mark[v] and not already_post_mark then
+      already_post_mark=true
+     elseif devanagarihash[font].conjuncts=="continue" then
+     else
+      return c
+     end
+    end
+   else
+    if pre_mark[v] and not already_pre_mark then
+     already_pre_mark=true
+    elseif post_mark[v] and not already_post_mark then
+     if devanagarihash[font].conjuncts=="mixed" then
+      return c
+     else
+      already_post_mark=true
+     end
+    elseif below_mark[v] and not already_below_mark then
+     already_below_mark=true
+    elseif above_mark[v] and not already_above_mark then
+     already_above_mark=true
+    elseif devanagarihash[font].conjuncts=="continue" then
+    else
+     return c
+    end
+   end
    c=n
    n=getnext(c)
    if not n then
@@ -27266,7 +28649,7 @@ local function method_one(head,font,attr)
      end
     else
      if show_syntax_errors then
-      local mark=mark_four[char]
+      local mark=mark_pre_above_below_post[char]
       if mark then
        head,current=inject_syntax_error(head,current,char)
       end
@@ -27287,15 +28670,15 @@ local function method_one(head,font,attr)
  while current do
   local char=ischar(current,font)
   if char then
-			if n==0 and not getprop(current,a_state) then
-				setprop(current,a_state,s_init)
-			end
-			n=n+1
-		else
-			n=0
-		end
-		current=getnext(current)
-	end
+   if n==0 and not getstate(current) then
+    setstate(current,s_init)
+   end
+   n=n+1
+  else
+   n=0
+  end
+  current=getnext(current)
+ end
  return head,done
 end
 local function method_two(head,font,attr)
@@ -27364,8 +28747,8 @@ local function method_two(head,font,attr)
   end
   if not syllableend and show_syntax_errors then
    local char=ischar(current,font)
-   if char and not getprop(current,a_state) then 
-    local mark=mark_four[char]
+   if char and not getstate(current) then 
+    local mark=mark_pre_above_below_post[char]
     if mark then
      head,current=inject_syntax_error(head,current,char)
     end
@@ -27382,15 +28765,15 @@ local function method_two(head,font,attr)
  while current do
   local char=ischar(current,font)
   if char then
-			if n==0 and not getprop(current,a_state) then	
-				setprop(current,a_state,s_init)
-			end
-			n=n+1
-		else
-			n=0
-		end
-		current=getnext(current)
-	end
+   if n==0 and not getstate(current) then 
+    setstate(current,s_init)
+   end
+   n=n+1
+  else
+   n=0
+  end
+  current=getnext(current)
+ end
  return head,done
 end
 for i=1,nofscripts do
@@ -27398,10 +28781,10 @@ for i=1,nofscripts do
  methods[scripts_two[i]]=method_two
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-osd”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-osd”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-ocl” b720867fb19a23f0b50377efd2a3c54a] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-ocl” 2a377351ae23c339764ec8ce2e8e9164] ---
 
 if not modules then modules={} end modules ['font-ocl']={
  version=1.001,
@@ -27412,7 +28795,8 @@ if not modules then modules={} end modules ['font-ocl']={
 }
 local tostring,tonumber,next=tostring,tonumber,next
 local round,max=math.round,math.round
-local sortedkeys,sortedhash=table.sortedkeys,table.sortedhash
+local gsub,find=string.gsub,string.find
+local sortedkeys,sortedhash,concat=table.sortedkeys,table.sortedhash,table.concat
 local setmetatableindex=table.setmetatableindex
 local formatters=string.formatters
 local tounicode=fonts.mappings.tounicode
@@ -27422,6 +28806,7 @@ local rightcommand=helpers.commands.right
 local leftcommand=helpers.commands.left
 local downcommand=helpers.commands.down
 local otf=fonts.handlers.otf
+local otfregister=otf.features.register
 local f_color=formatters["%.3f %.3f %.3f rg"]
 local f_gray=formatters["%.3f g"]
 if context then
@@ -27512,10 +28897,10 @@ local function convert(t,k)
  t[k]=v
  return v
 end
-local start={ "pdf","mode","font" }
+local mode={ "pdf","mode","font" }
 local push={ "pdf","page","q" }
 local pop={ "pdf","page","Q" }
-local function initialize(tfmdata,kind,value)
+local function initializeoverlay(tfmdata,kind,value)
  if value then
   local resources=tfmdata.resources
   local palettes=resources.colorpalettes
@@ -27557,52 +28942,40 @@ local function initialize(tfmdata,kind,value)
       local s=#colorlist
       local goback=w~=0 and leftcommand[w] or nil 
       local t={
-       start,
-       not u and actualb or { "pdf","page",(getactualtext(tounicode(u))) }
+       mode,
+       not u and actualb or { "pdf","page",(getactualtext(tounicode(u))) },
+       push,
       }
-      local n=2
+      local n=3
       local l=nil
-      local f=false
       for i=1,s do
        local entry=colorlist[i]
        local v=colorvalues[entry.class] or default
        if v and l~=v then
-        if f then
-         n=n+1 t[n]=pop
-        end
-        n=n+1 t[n]=push
-        f=true
         n=n+1 t[n]=v
         l=v
-       else
-        if f then
-         n=n+1 t[n]=pop
-        end
-        f=false
-        l=nil
        end
        n=n+1 t[n]=charcommand[entry.slot]
        if s>1 and i<s and goback then
         n=n+1 t[n]=goback
        end
       end
-      if f then
-       n=n+1 t[n]=pop
-      end
+      n=n+1 t[n]=pop
       n=n+1 t[n]=actuale
       character.commands=t
      end
     end
    end
+   return true
   end
  end
 end
-fonts.handlers.otf.features.register {
+otfregister {
  name="colr",
  description="color glyphs",
  manipulators={
-  base=initialize,
-  node=initialize,
+  base=initializeoverlay,
+  node=initializeoverlay,
  }
 }
 do
@@ -27653,11 +29026,17 @@ local function pdftovirtual(tfmdata,pdfshapes,kind)
    local data=nil
    local dx=nil
    local dy=nil
+   local scale=1
    if typ=="table" then
     data=pdf.data
-    dx=pdf.dx or 0
-    dy=pdf.dy or 0
+    dx=pdf.x or pdf.dx or 0
+    dy=pdf.y or pdf.dy or 0
+    scale=pdf.scale or 1
    elseif typ=="string" then
+    data=pdf
+    dx=0
+    dy=0
+   elseif typ=="number" then
     data=pdf
     dx=0
     dy=0
@@ -27669,9 +29048,9 @@ local function pdftovirtual(tfmdata,pdfshapes,kind)
     local dp=character.depth  or 0
     character.commands={
      not unicode and actualb or { "pdf","page",(getactualtext(unicode)) },
-     downcommand[dp+dy*hfactor],
-     rightcommand[dx*hfactor],
-     vfimage(wd,ht,dp,data,name),
+     downcommand [dp+dy*hfactor],
+     rightcommand[  dx*hfactor],
+     vfimage(scale*wd,ht,dp,data,pdfshapes.filename or ""),
      actuale,
     }
     character[kind]=true
@@ -27687,42 +29066,57 @@ do
  local loaddata=io.loaddata
  local savedata=io.savedata
  local remove=os.remove
- if context and xml.convert then
+if context then
   local xmlconvert=xml.convert
   local xmlfirst=xml.first
   function otfsvg.filterglyph(entry,index)
-   local svg=xmlconvert(entry.data)
+   local d=entry.data
+   if gzip.compressed(d) then
+    d=gzip.decompress(d) or d
+   end
+   local svg=xmlconvert(d)
    local root=svg and xmlfirst(svg,"/svg[@id='glyph"..index.."']")
    local data=root and tostring(root)
    return data
   end
- else
+else
   function otfsvg.filterglyph(entry,index) 
    return entry.data
   end
- end
+end
  local runner=sandbox and sandbox.registerrunner {
   name="otfsvg",
   program="inkscape",
   method="pipeto",
-  template="--shell > temp-otf-svg-shape.log",
+  template="--export-area-drawing --shell > temp-otf-svg-shape.log",
   reporter=report_svg,
  }
  if not runner then
   runner=function()
-   return io.open("inkscape --shell > temp-otf-svg-shape.log","w")
+   return io.popen("inkscape --export-area-drawing --shell > temp-otf-svg-shape.log","w")
   end
  end
- function otfsvg.topdf(svgshapes)
+ local new=nil
+ local function inkscapeformat(suffix)
+  if new==nil then
+   new=os.resultof("inkscape --version") or ""
+   new=new=="" or not find(new,"Inkscape%s*0")
+  end
+  return new and "filename" or suffix
+ end
+ function otfsvg.topdf(svgshapes,tfmdata)
   local pdfshapes={}
   local inkscape=runner()
   if inkscape then
+   local descriptions=tfmdata.descriptions
    local nofshapes=#svgshapes
+   local s_format=inkscapeformat("pdf") 
    local f_svgfile=formatters["temp-otf-svg-shape-%i.svg"]
    local f_pdffile=formatters["temp-otf-svg-shape-%i.pdf"]
-   local f_convert=formatters["%s --export-pdf=%s\n"]
+   local f_convert=formatters[new and "file-open:%s; export-%s:%s; export-do\n" or "%s --export-%s=%s\n"]
    local filterglyph=otfsvg.filterglyph
    local nofdone=0
+   local processed={}
    report_svg("processing %i svg containers",nofshapes)
    statistics.starttiming()
    for i=1,nofshapes do
@@ -27733,24 +29127,51 @@ do
       local svgfile=f_svgfile(index)
       local pdffile=f_pdffile(index)
       savedata(svgfile,data)
-      inkscape:write(f_convert(svgfile,pdffile))
-      pdfshapes[index]=true
+      inkscape:write(f_convert(svgfile,s_format,pdffile))
+      processed[index]=true
       nofdone=nofdone+1
-      if nofdone%100==0 then
-       report_svg("%i shapes processed",nofdone)
+      if nofdone%25==0 then
+       report_svg("%i shapes submitted",nofdone)
       end
      end
     end
    end
+   if nofdone%25~=0 then
+    report_svg("%i shapes submitted",nofdone)
+   end
+   report_svg("processing can be going on for a while")
    inkscape:write("quit\n")
    inkscape:close()
    report_svg("processing %i pdf results",nofshapes)
-   for index in next,pdfshapes do
+   for index in next,processed do
     local svgfile=f_svgfile(index)
     local pdffile=f_pdffile(index)
-    pdfshapes[index]=loaddata(pdffile)
+    local pdfdata=loaddata(pdffile)
+    if pdfdata and pdfdata~="" then
+     pdfshapes[index]={
+      data=pdfdata,
+     }
+    end
     remove(svgfile)
     remove(pdffile)
+   end
+   local characters=tfmdata.characters
+   for k,v in next,characters do
+    local d=descriptions[k]
+    local i=d.index
+    if i then
+     local p=pdfshapes[i]
+     if p then
+      local w=d.width
+      local l=d.boundingbox[1]
+      local r=d.boundingbox[3]
+      p.scale=(r-l)/w
+      p.x=l
+     end
+    end
+   end
+   if not next(pdfshapes) then
+    report_svg("there are no converted shapes, fix your setup")
    end
    statistics.stoptiming()
    if statistics.elapsedseconds then
@@ -27770,19 +29191,20 @@ local function initializesvg(tfmdata,kind,value)
   end
   local pdffile=containers.read(otf.pdfcache,hash)
   local pdfshapes=pdffile and pdffile.pdfshapes
-  if not pdfshapes or pdffile.timestamp~=timestamp then
+  if not pdfshapes or pdffile.timestamp~=timestamp or not next(pdfshapes) then
    local svgfile=containers.read(otf.svgcache,hash)
    local svgshapes=svgfile and svgfile.svgshapes
-   pdfshapes=svgshapes and otfsvg.topdf(svgshapes) or {}
+   pdfshapes=svgshapes and otfsvg.topdf(svgshapes,tfmdata,otf.pdfcache.writable,hash) or {}
    containers.write(otf.pdfcache,hash,{
     pdfshapes=pdfshapes,
     timestamp=timestamp,
    })
   end
   pdftovirtual(tfmdata,pdfshapes,"svg")
+  return true
  end
 end
-fonts.handlers.otf.features.register {
+otfregister {
  name="svg",
  description="svg glyphs",
  manipulators={
@@ -27865,9 +29287,10 @@ local function initializepng(tfmdata,kind,value)
    })
   end
   pdftovirtual(tfmdata,pdfshapes,"png")
+  return true
  end
 end
-fonts.handlers.otf.features.register {
+otfregister {
  name="sbix",
  description="sbix glyphs",
  manipulators={
@@ -27875,7 +29298,7 @@ fonts.handlers.otf.features.register {
   node=initializepng,
  }
 }
-fonts.handlers.otf.features.register {
+otfregister {
  name="cblc",
  description="cblc glyphs",
  manipulators={
@@ -27883,11 +29306,36 @@ fonts.handlers.otf.features.register {
   node=initializepng,
  }
 }
+if context then
+ local function initializecolor(tfmdata,kind,value)
+  if value=="auto" then
+   return
+    initializeoverlay(tfmdata,kind,value) or
+    initializesvg(tfmdata,kind,value) or
+    initializepng(tfmdata,kind,value)
+  elseif value=="overlay" then
+   return initializeoverlay(tfmdata,kind,value)
+  elseif value=="svg" then
+   return initializesvg(tfmdata,kind,value)
+  elseif value=="png" or value=="bitmap" then
+   return initializepng(tfmdata,kind,value)
+  else
+  end
+ end
+ otfregister {
+  name="color",
+  description="color glyphs",
+  manipulators={
+   base=initializecolor,
+   node=initializecolor,
+  }
+ }
+end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-ocl”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-ocl”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-otc” 95a4ff28ba4afb55a978a4aecfd688bf] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-otc” 57f5270b894e40efa93149c7d3fb0209] ---
 
 if not modules then modules={} end modules ['font-otc']={
  version=1.001,
@@ -27907,9 +29355,10 @@ local fonts=fonts
 local otf=fonts.handlers.otf
 local registerotffeature=otf.features.register
 local setmetatableindex=table.setmetatableindex
-local checkmerge=fonts.helpers.checkmerge
-local checkflags=fonts.helpers.checkflags
-local checksteps=fonts.helpers.checksteps
+local fonthelpers=fonts.helpers
+local checkmerge=fonthelpers.checkmerge
+local checkflags=fonthelpers.checkflags
+local checksteps=fonthelpers.checksteps
 local normalized={
  substitution="substitution",
  single="substitution",
@@ -27977,6 +29426,7 @@ local function validspecification(specification,name)
  else
   dataset={ { data=specification.data } }
   specification.data=nil
+  specification.coverage=dataset
   specification.dataset=dataset
  end
  local first=dataset[1]
@@ -28002,7 +29452,7 @@ local function validspecification(specification,name)
   return specification,name
  end
 end
-local function addfeature(data,feature,specifications)
+local function addfeature(data,feature,specifications,prepareonly)
  if not specifications then
   report_otf("missing specification")
   return
@@ -28031,6 +29481,7 @@ local function addfeature(data,feature,specifications)
  local done=0
  local skip=0
  local aglunicodes=false
+ local privateslot=fonthelpers.privateslot
  local specifications=validspecification(specifications,feature)
  if not specifications then
   return
@@ -28049,6 +29500,12 @@ local function addfeature(data,feature,specifications)
   end
   if utflen(code)==1 then
    u=utfbyte(code)
+   if u then
+    return u
+   end
+  end
+  if privateslot then
+   u=privateslot(code) 
    if u then
     return u
    end
@@ -28082,7 +29539,7 @@ local function addfeature(data,feature,specifications)
      replacement=replacement[1]
     end
     replacement=tounicode(replacement)
-    if replacement and descriptions[replacement] then
+    if replacement and (nocheck or descriptions[replacement]) then
      cover(coverage,unicode,replacement)
      done=done+1
     else
@@ -28269,12 +29726,31 @@ local function addfeature(data,feature,specifications)
   return coverage
  end
  local prepare_single=prepare_pair 
- local function prepare_chain(list,featuretype,sublookups)
+ local function hassteps(lookups)
+  if lookups then
+   for i=1,#lookups do
+    local l=lookups[i]
+    if l then
+     for j=1,#l do
+      local l=l[j]
+      if l then
+       local n=l.nofsteps
+       if not n then
+        return true
+       elseif n>0 then
+        return true
+       end
+      end
+     end
+    end
+   end
+  end
+  return false
+ end
+ local function prepare_chain(list,featuretype,sublookups,nocheck)
   local rules=list.rules
   local coverage={}
   if rules then
-   local rulehash={}
-   local rulesize=0
    local lookuptype=types[featuretype]
    for nofrules=1,#rules do
     local rule=rules[nofrules]
@@ -28305,6 +29781,15 @@ local function addfeature(data,feature,specifications)
     local lookups=rule.lookups or false
     local subtype=nil
     if lookups and sublookups then
+     if #lookups>0 then
+      local ns=stop-start+1
+      for i=1,ns do
+       if lookups[i]==nil then
+        lookups[i]=0
+       end
+      end
+     end
+     local l={}
      for k,v in sortedhash(lookups) do
       local t=type(v)
       if t=="table" then
@@ -28314,58 +29799,71 @@ local function addfeature(data,feature,specifications)
          v[i]={ vi }
         end
        end
+       l[k]=v
       elseif t=="number" then
        local lookup=sublookups[v]
        if lookup then
-        lookups[k]={ lookup }
+        l[k]={ lookup }
         if not subtype then
          subtype=lookup.type
         end
        elseif v==0 then
-        lookups[k]={ { type="gsub_remove" } }
+        l[k]={ { type="gsub_remove",nosteps=true } }
        else
-        lookups[k]=false 
+        l[k]=false 
        end
       else
-       lookups[k]=false 
+       l[k]=false 
       end
      end
+     if nocheck then
+      rule.lookups=l 
+     end
+     lookups=l
     end
     if nofsequences>0 then
-     local hashed={}
-     for i=1,nofsequences do
-      local t={}
-      local s=sequence[i]
-      for i=1,#s do
-       local u=tounicode(s[i])
-       if u then
-        t[u]=true
+     if hassteps(lookups) then
+      local hashed={}
+      for i=1,nofsequences do
+       local t={}
+       local s=sequence[i]
+       for i=1,#s do
+        local u=tounicode(s[i])
+        if u then
+         t[u]=true
+        end
+       end
+       hashed[i]=t
+      end
+      sequence=hashed
+      local ruleset={
+       nofrules,
+       lookuptype,
+       sequence,
+       start,
+       stop,
+       lookups,
+       replacements,
+       subtype,
+      }
+      for unic in sortedhash(sequence[start]) do
+       local cu=coverage[unic]
+       if cu then
+        local n=cu.n+1
+        cu[n]=ruleset
+        cu.n=n
+       else
+        coverage[unic]={
+         ruleset,
+         n=1,
+        }
        end
       end
-      hashed[i]=t
+      sequence.n=nofsequences
+     else
      end
-     sequence=hashed
-     rulesize=rulesize+1
-     rulehash[rulesize]={
-      nofrules,
-      lookuptype,
-      sequence,
-      start,
-      stop,
-      lookups,
-      replacements,
-      subtype,
-     }
-     for unic in sortedhash(sequence[start]) do
-      local cu=coverage[unic]
-      if not cu then
-       coverage[unic]=rulehash 
-      end
-     end
-     sequence.n=nofsequences
     end
    end
-   rulehash.n=rulesize
   end
   return coverage
  end
@@ -28449,127 +29947,151 @@ local function addfeature(data,feature,specifications)
    end
    local askedfeatures=specification.features or everywhere
    local askedsteps=specification.steps or specification.subtables or { specification.data } or {}
-   local featuretype=normalized[specification.type or "substitution"] or "substitution"
+   local featuretype=specification.type or "substitution"
+   local featureaction=false
    local featureflags=specification.flags or noflags
    local nocheck=specification.nocheck
-   local futuresteps=specification.futuresteps
+   local mapping=specification.mapping
    local featureorder=specification.order or { feature }
    local featurechain=(featuretype=="chainsubstitution" or featuretype=="chainposition") and 1 or 0
    local nofsteps=0
    local steps={}
    local sublookups=specification.lookups
    local category=nil
+   local steptype=nil
+   local sequence=nil
+   if fonts.handlers.otf.handlers[featuretype] then
+    featureaction=true 
+   else
+    featuretype=normalized[specification.type or "substitution"] or "substitution"
+   end
    checkflags(specification,resources)
-   if sublookups then
-    local s={}
-    for i=1,#sublookups do
-     local specification=sublookups[i]
-     local askedsteps=specification.steps or specification.subtables or { specification.data } or {}
-     local featuretype=normalized[specification.type or "substitution"] or "substitution"
-     local featureflags=specification.flags or noflags
-     local nofsteps=0
-     local steps={}
-     for i=1,#askedsteps do
-      local list=askedsteps[i]
-      local coverage=nil
-      local format=nil
-      if featuretype=="substitution" then
-       coverage=prepare_substitution(list,featuretype,nocheck)
-      elseif featuretype=="ligature" then
-       coverage=prepare_ligature(list,featuretype,nocheck)
-      elseif featuretype=="alternate" then
-       coverage=prepare_alternate(list,featuretype,nocheck)
-      elseif featuretype=="multiple" then
-       coverage=prepare_multiple(list,featuretype,nocheck)
-      elseif featuretype=="kern" or featuretype=="move" then
-       format=featuretype
-       coverage=prepare_kern(list,featuretype)
-      elseif featuretype=="pair" then
-       format="pair"
-       coverage=prepare_pair(list,featuretype)
-      elseif featuretype=="single" then
-       format="single"
-       coverage=prepare_single(list,featuretype)
-      end
-      if coverage and next(coverage) then
-       nofsteps=nofsteps+1
-       steps[nofsteps]=register(coverage,featuretype,format,feature,nofsteps,descriptions,resources)
-      end
-     end
-     checkmerge(specification)
-     checksteps(specification)
-     s[i]={
-      [stepkey]=steps,
-      nofsteps=nofsteps,
-      flags=featureflags,
-      type=types[featuretype],
-     }
-    end
-    sublookups=s
-   end
-   for i=1,#askedsteps do
-    local list=askedsteps[i]
-    local coverage=nil
-    local format=nil
-    if featuretype=="substitution" then
-     category="gsub"
-     coverage=prepare_substitution(list,featuretype,nocheck)
-    elseif featuretype=="ligature" then
-     category="gsub"
-     coverage=prepare_ligature(list,featuretype,nocheck)
-    elseif featuretype=="alternate" then
-     category="gsub"
-     coverage=prepare_alternate(list,featuretype,nocheck)
-    elseif featuretype=="multiple" then
-     category="gsub"
-     coverage=prepare_multiple(list,featuretype,nocheck)
-    elseif featuretype=="kern" or featuretype=="move" then
-     category="gpos"
-     format=featuretype
-     coverage=prepare_kern(list,featuretype)
-    elseif featuretype=="pair" then
-     category="gpos"
-     format="pair"
-     coverage=prepare_pair(list,featuretype)
-    elseif featuretype=="single" then
-     category="gpos"
-     format="single"
-     coverage=prepare_single(list,featuretype)
-    elseif featuretype=="chainsubstitution" then
-     category="gsub"
-     coverage=prepare_chain(list,featuretype,sublookups)
-    elseif featuretype=="chainposition" then
-     category="gpos"
-     coverage=prepare_chain(list,featuretype,sublookups)
-    else
-     report_otf("not registering feature %a, unknown category",feature)
-     return
-    end
-    if coverage and next(coverage) then
-     nofsteps=nofsteps+1
-     steps[nofsteps]=register(coverage,featuretype,format,feature,nofsteps,descriptions,resources)
+   for k,v in next,askedfeatures do
+    if v[1] then
+     askedfeatures[k]=tohash(v)
     end
    end
-   if nofsteps>0 then
-    for k,v in next,askedfeatures do
-     if v[1] then
-      askedfeatures[k]=tohash(v)
-     end
-    end
-    if featureflags[1] then featureflags[1]="mark" end
-    if featureflags[2] then featureflags[2]="ligature" end
-    if featureflags[3] then featureflags[3]="base" end
-    local steptype=types[featuretype]
-    local sequence={
-     chain=featurechain,
+   if featureflags[1] then featureflags[1]="mark" end
+   if featureflags[2] then featureflags[2]="ligature" end
+   if featureflags[3] then featureflags[3]="base" end
+   if featureaction then
+    category="gsub"
+    sequence={
      features={ [feature]=askedfeatures },
      flags=featureflags,
      name=feature,
      order=featureorder,
-     [stepkey]=steps,
-     nofsteps=nofsteps,
-     type=steptype,
+     type=featuretype,
+     nofsteps=0,
     }
+   else
+    if sublookups then
+     local s={}
+     for i=1,#sublookups do
+      local specification=sublookups[i]
+      local askedsteps=specification.steps or specification.subtables or { specification.data } or {}
+      local featuretype=normalized[specification.type or "substitution"] or "substitution"
+      local featureflags=specification.flags or noflags
+      local nofsteps=0
+      local steps={}
+      for i=1,#askedsteps do
+       local list=askedsteps[i]
+       local coverage=nil
+       local format=nil
+       if featuretype=="substitution" then
+        coverage=prepare_substitution(list,featuretype,nocheck)
+       elseif featuretype=="ligature" then
+        coverage=prepare_ligature(list,featuretype,nocheck)
+       elseif featuretype=="alternate" then
+        coverage=prepare_alternate(list,featuretype,nocheck)
+       elseif featuretype=="multiple" then
+        coverage=prepare_multiple(list,featuretype,nocheck)
+       elseif featuretype=="kern" or featuretype=="move" then
+        format=featuretype
+        coverage=prepare_kern(list,featuretype)
+       elseif featuretype=="pair" then
+        format="pair"
+        coverage=prepare_pair(list,featuretype)
+       elseif featuretype=="single" then
+        format="single"
+        coverage=prepare_single(list,featuretype)
+       end
+       if coverage and next(coverage) then
+        nofsteps=nofsteps+1
+        steps[nofsteps]=register(coverage,featuretype,format,feature,nofsteps,descriptions,resources)
+       end
+      end
+      checkmerge(specification)
+      checksteps(specification)
+      s[i]={
+       [stepkey]=steps,
+       nofsteps=nofsteps,
+       flags=featureflags,
+       type=types[featuretype],
+      }
+     end
+     sublookups=s
+    end
+    for i=1,#askedsteps do
+     local list=askedsteps[i]
+     local coverage=nil
+     local format=nil
+     if featuretype=="substitution" then
+      category="gsub"
+      coverage=(mapping and list) or prepare_substitution(list,featuretype,nocheck)
+     elseif featuretype=="ligature" then
+      category="gsub"
+      coverage=prepare_ligature(list,featuretype,nocheck)
+     elseif featuretype=="alternate" then
+      category="gsub"
+      coverage=prepare_alternate(list,featuretype,nocheck)
+     elseif featuretype=="multiple" then
+      category="gsub"
+      coverage=prepare_multiple(list,featuretype,nocheck)
+     elseif featuretype=="kern" or featuretype=="move" then
+      category="gpos"
+      format=featuretype
+      coverage=prepare_kern(list,featuretype)
+     elseif featuretype=="pair" then
+      category="gpos"
+      format="pair"
+      coverage=prepare_pair(list,featuretype)
+     elseif featuretype=="single" then
+      category="gpos"
+      format="single"
+      coverage=prepare_single(list,featuretype)
+     elseif featuretype=="chainsubstitution" then
+      category="gsub"
+      coverage=prepare_chain(list,featuretype,sublookups,nocheck)
+     elseif featuretype=="chainposition" then
+      category="gpos"
+      coverage=prepare_chain(list,featuretype,sublookups,nocheck)
+     else
+      report_otf("not registering feature %a, unknown category",feature)
+      return
+     end
+     if coverage and next(coverage) then
+      nofsteps=nofsteps+1
+      steps[nofsteps]=register(coverage,featuretype,format,feature,nofsteps,descriptions,resources)
+     end
+    end
+    if nofsteps>0 then
+     sequence={
+      chain=featurechain,
+      features={ [feature]=askedfeatures },
+      flags=featureflags,
+      name=feature,
+      order=featureorder,
+      [stepkey]=steps,
+      nofsteps=nofsteps,
+      type=specification.handler or types[featuretype],
+     }
+     if prepareonly then
+      return sequence
+     end
+    end
+   end
+   if sequence then
     checkflags(sequence,resources)
     checkmerge(sequence)
     checksteps(sequence)
@@ -28637,20 +30159,21 @@ end
 otf.enhancers.enhance=enhance
 otf.enhancers.register("check extra features",enhance)
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-otc”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-otc”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-onr” d4d2449b4084e6afb1837ae5835082cc] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-onr” 6d161533f3437435e12a0ad64866df44] ---
 
 if not modules then modules={} end modules ['font-onr']={
  version=1.001,
+ optimize=true,
  comment="companion to font-ini.mkiv",
  author="Hans Hagen, PRAGMA-ADE, Hasselt NL",
  copyright="PRAGMA ADE / ConTeXt Development Team",
  license="see context related readme files"
 }
 local fonts,logs,trackers,resolvers=fonts,logs,trackers,resolvers
-local next,type,tonumber,rawget,rawset=next,type,tonumber,rawget,rawset
+local next,type,tonumber,rawset=next,type,tonumber,rawset
 local match,lower,gsub,strip,find=string.match,string.lower,string.gsub,string.strip,string.find
 local char,byte,sub=string.char,string.byte,string.sub
 local abs=math.abs
@@ -29012,13 +30535,14 @@ function readers.getinfo(filename)
  end
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-onr”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-onr”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-one” 987c5c5ed3754ad2feab80985067d59e] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-one” bd39d42055a44ca2002f8ddbbbbf27c3] ---
 
 if not modules then modules={} end modules ['font-one']={
  version=1.001,
+ optimize=true,
  comment="companion to font-ini.mkiv",
  author="Hans Hagen, PRAGMA-ADE, Hasselt NL",
  copyright="PRAGMA ADE / ConTeXt Development Team",
@@ -29513,7 +31037,6 @@ local function copytotfm(data)
   parameters.descender=abs(metadata.descender or 0)
   parameters.units=1000
   properties.spacer=spacer
-  properties.encodingbytes=2
   properties.format=fonts.formats[filename] or "type1"
   properties.filename=filename
   properties.fontname=fontname
@@ -29521,6 +31044,9 @@ local function copytotfm(data)
   properties.psname=fullname
   properties.name=filename or fullname or fontname
   properties.private=properties.private or data.private or privateoffset
+if not CONTEXTLMTXMODE or CONTEXTLMTXMODE==0 then
+  properties.encodingbytes=2
+end
   if next(characters) then
    return {
     characters=characters,
@@ -29623,6 +31149,7 @@ local function read_from_afm(specification)
  local tfmdata=afmtotfm(specification)
  if tfmdata then
   tfmdata.properties.name=specification.name
+  tfmdata.properties.id=specification.id
   tfmdata=constructors.scale(tfmdata,specification)
   local allfeatures=tfmdata.shared.features or specification.features.normal
   constructors.applymanipulators("afm",tfmdata,allfeatures,trace_features,report_afm)
@@ -29726,10 +31253,10 @@ registerafmenhancer("normalize features",enhance_normalize_features)
 registerafmenhancer("check extra features",otfenhancers.enhance)
 registerafmenhancer("fix names",enhance_fix_names)
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-one”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-one”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-afk” 54d554530e75c57c56ee76234724e26d] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-afk” 9da14e0fb22129c053acc599d1312544] ---
 
 if not modules then modules={} end modules ['font-afk']={
  version=1.001,
@@ -29896,10 +31423,10 @@ fonts.handlers.afm.helpdata={
  }
 }
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-afk”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-afk”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “fonts-tfm” 3bbba3214fd0b8c6f35ad85592fc2917] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “fonts-tfm” f0eb5e2a8068b17ad401bb7efdba1630] ---
 
 if not modules then modules={} end modules ['luatex-fonts-tfm']={
  version=1.001,
@@ -30414,10 +31941,10 @@ registertfmfeature {
  }
 }
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “fonts-tfm”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “fonts-tfm”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-lua” 55b281fb98f7bd848fc19928f376f647] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-lua” 1fbfdf7b689b2bdfd0e3bb9bf74ce136] ---
 
 if not modules then modules={} end modules ['font-lua']={
  version=1.001,
@@ -30457,10 +31984,10 @@ function readers.lua(specification)
  return check_lua(specification,fullname)
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-lua”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-lua”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-def” f66c365dae4499f982d8bf16e5d37de3] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-def” b9d908c2338b7dc443ce9d1e9fcb7139] ---
 
 if not modules then modules={} end modules ['font-def']={
  version=1.001,
@@ -30492,7 +32019,6 @@ local variants=allocate()
 specifiers.variants=variants
 definers.methods=definers.methods or {}
 local internalized=allocate() 
-local lastdefined=nil 
 local loadedfonts=constructors.loadedfonts
 local designsizes=constructors.designsizes
 local resolvefile=fontgoodies and fontgoodies.filenames and fontgoodies.filenames.resolve or function(s) return s end
@@ -30791,9 +32317,6 @@ function constructors.readanddefine(name,size)
  end
  return fontdata[id],id
 end
-function definers.current() 
- return lastdefined
-end
 function definers.registered(hash)
  local id=internalized[hash]
  return id,id and fontdata[id]
@@ -30829,8 +32352,9 @@ function definers.read(specification,size,id)
    report_defining("already hashed: %s",hash)
   end
  else
-  tfmdata=definers.loadfont(specification) 
+  tfmdata=definers.loadfont(specification)
   if tfmdata then
+   tfmdata.original=specification.specification
    if trace_defining then
     report_defining("loaded and hashed: %s",hash)
    end
@@ -30844,7 +32368,6 @@ function definers.read(specification,size,id)
    end
   end
  end
- lastdefined=tfmdata or id 
  if not tfmdata then 
   report_defining("unknown font %a, loading aborted",specification.name)
  elseif trace_defining and type(tfmdata)=="table" then
@@ -30860,12 +32383,382 @@ end
 function font.getfont(id)
  return fontdata[id] 
 end
-callbacks.register('define_font',definers.read,"definition of fonts (tfmdata preparation)")
+if not context then
+ callbacks.register('define_font',definers.read,"definition of fonts (tfmdata preparation)")
+end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-def”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-def”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “fonts-def” 5ad79120ebc5e60f4d322fb3ee13bffe] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-shp” a40862fe382d26c1f3753431254bcfdd] ---
+
+if not modules then modules={} end modules ['font-shp']={
+ version=1.001,
+ comment="companion to font-ini.mkiv",
+ author="Hans Hagen, PRAGMA-ADE, Hasselt NL",
+ copyright="PRAGMA ADE / ConTeXt Development Team",
+ license="see context related readme files"
+}
+local tonumber,next=tonumber,next
+local concat=table.concat
+local formatters,lower=string.formatters,string.lower
+local otf=fonts.handlers.otf
+local afm=fonts.handlers.afm
+local pfb=fonts.handlers.pfb
+local hashes=fonts.hashes
+local identifiers=hashes.identifiers
+local version=otf.version or 0.011
+local shapescache=containers.define("fonts","shapes",version,true)
+local streamscache=containers.define("fonts","streams",version,true)
+local compact_streams=false
+directives.register("fonts.streams.compact",function(v) compact_streams=v end)
+local function packoutlines(data,makesequence)
+ local subfonts=data.subfonts
+ if subfonts then
+  for i=1,#subfonts do
+   packoutlines(subfonts[i],makesequence)
+  end
+  return
+ end
+ local common=data.segments
+ if common then
+  return
+ end
+ local glyphs=data.glyphs
+ if not glyphs then
+  return
+ end
+ if makesequence then
+  for index=0,#glyphs do
+   local glyph=glyphs[index]
+   if glyph then
+    local segments=glyph.segments
+    if segments then
+     local sequence={}
+     local nofsequence=0
+     for i=1,#segments do
+      local segment=segments[i]
+      local nofsegment=#segment
+      nofsequence=nofsequence+1
+      sequence[nofsequence]=segment[nofsegment]
+      for i=1,nofsegment-1 do
+       nofsequence=nofsequence+1
+       sequence[nofsequence]=segment[i]
+      end
+     end
+     glyph.sequence=sequence
+     glyph.segments=nil
+    end
+   end
+  end
+ else
+  local hash={}
+  local common={}
+  local reverse={}
+  local last=0
+  for index=0,#glyphs do
+   local glyph=glyphs[index]
+   if glyph then
+    local segments=glyph.segments
+    if segments then
+     for i=1,#segments do
+      local h=concat(segments[i]," ")
+      hash[h]=(hash[h] or 0)+1
+     end
+    end
+   end
+  end
+  for index=0,#glyphs do
+   local glyph=glyphs[index]
+   if glyph then
+    local segments=glyph.segments
+    if segments then
+     for i=1,#segments do
+      local segment=segments[i]
+      local h=concat(segment," ")
+      if hash[h]>1 then 
+       local idx=reverse[h]
+       if not idx then
+        last=last+1
+        reverse[h]=last
+        common[last]=segment
+        idx=last
+       end
+       segments[i]=idx
+      end
+     end
+    end
+   end
+  end
+  if last>0 then
+   data.segments=common
+  end
+ end
+end
+local function unpackoutlines(data)
+ local subfonts=data.subfonts
+ if subfonts then
+  for i=1,#subfonts do
+   unpackoutlines(subfonts[i])
+  end
+  return
+ end
+ local common=data.segments
+ if not common then
+  return
+ end
+ local glyphs=data.glyphs
+ if not glyphs then
+  return
+ end
+ for index=0,#glyphs do
+  local glyph=glyphs[index]
+  if glyph then
+   local segments=glyph.segments
+   if segments then
+    for i=1,#segments do
+     local c=common[segments[i]]
+     if c then
+      segments[i]=c
+     end
+    end
+   end
+  end
+ end
+ data.segments=nil
+end
+local readers=otf.readers
+local cleanname=otf.readers.helpers.cleanname
+local function makehash(filename,sub,instance)
+ local name=cleanname(file.basename(filename))
+ if instance then
+  return formatters["%s-%s-%s"](name,sub or 0,cleanname(instance))
+ else
+  return formatters["%s-%s"]   (name,sub or 0)
+ end
+end
+local function loadoutlines(cache,filename,sub,instance)
+ local base=file.basename(filename)
+ local name=file.removesuffix(base)
+ local kind=file.suffix(filename)
+ local attr=lfs.attributes(filename)
+ local size=attr and attr.size or 0
+ local time=attr and attr.modification or 0
+ local sub=tonumber(sub)
+ if size>0 and (kind=="otf" or kind=="ttf" or kind=="tcc") then
+  local hash=makehash(filename,sub,instance)
+  data=containers.read(cache,hash)
+  if not data or data.time~=time or data.size~=size then
+   data=otf.readers.loadshapes(filename,sub,instance)
+   if data then
+    data.size=size
+    data.format=data.format or (kind=="otf" and "opentype") or "truetype"
+    data.time=time
+    packoutlines(data)
+    containers.write(cache,hash,data)
+    data=containers.read(cache,hash) 
+   end
+  end
+  unpackoutlines(data)
+ elseif size>0 and (kind=="pfb") then
+  local hash=containers.cleanname(base) 
+  data=containers.read(cache,hash)
+  if not data or data.time~=time or data.size~=size then
+   data=afm.readers.loadshapes(filename)
+   if data then
+    data.size=size
+    data.format="type1"
+    data.time=time
+    packoutlines(data)
+    containers.write(cache,hash,data)
+    data=containers.read(cache,hash) 
+   end
+  end
+  unpackoutlines(data)
+ else
+  data={
+   filename=filename,
+   size=0,
+   time=time,
+   format="unknown",
+   units=1000,
+   glyphs={}
+  }
+ end
+ return data
+end
+local function cachethem(cache,hash,data)
+ containers.write(cache,hash,data,compact_streams) 
+ return containers.read(cache,hash) 
+end
+local function loadstreams(cache,filename,sub,instance)
+ local base=file.basename(filename)
+ local name=file.removesuffix(base)
+ local kind=lower(file.suffix(filename))
+ local attr=lfs.attributes(filename)
+ local size=attr and attr.size or 0
+ local time=attr and attr.modification or 0
+ local sub=tonumber(sub)
+ if size>0 and (kind=="otf" or kind=="ttf" or kind=="ttc") then
+  local hash=makehash(filename,sub,instance)
+  data=containers.read(cache,hash)
+  if not data or data.time~=time or data.size~=size then
+   data=otf.readers.loadshapes(filename,sub,instance,true)
+   if data then
+    local glyphs=data.glyphs
+    local streams={}
+    if glyphs then
+     for i=0,#glyphs do
+      local glyph=glyphs[i]
+      if glyph then
+       streams[i]=glyph.stream or ""
+      else
+       streams[i]=""
+      end
+     end
+    end
+    data.streams=streams
+    data.glyphs=nil
+    data.size=size
+    data.format=data.format or (kind=="otf" and "opentype") or "truetype"
+    data.time=time
+    data=cachethem(cache,hash,data)
+   end
+  end
+ elseif size>0 and (kind=="pfb") then
+  local hash=makehash(filename,sub,instance)
+  data=containers.read(cache,hash)
+  if not data or data.time~=time or data.size~=size then
+   local names,encoding,streams,metadata=pfb.loadvector(filename,false,true)
+   if streams then
+    local fontbbox=metadata.fontbbox or { 0,0,0,0 }
+    for i=0,#streams do
+     streams[i]=streams[i].stream or "\14"
+    end
+    data={
+     filename=filename,
+     size=size,
+     time=time,
+     format="type1",
+     streams=streams,
+     fontheader={
+      fontversion=metadata.version,
+      units=1000,
+      xmin=fontbbox[1],
+      ymin=fontbbox[2],
+      xmax=fontbbox[3],
+      ymax=fontbbox[4],
+     },
+     horizontalheader={
+      ascender=0,
+      descender=0,
+     },
+     maximumprofile={
+      nofglyphs=#streams+1,
+     },
+     names={
+      copyright=metadata.copyright,
+      family=metadata.familyname,
+      fullname=metadata.fullname,
+      fontname=metadata.fontname,
+      subfamily=metadata.subfamilyname,
+      trademark=metadata.trademark,
+      notice=metadata.notice,
+      version=metadata.version,
+     },
+     cffinfo={
+      familyname=metadata.familyname,
+      fullname=metadata.fullname,
+      italicangle=metadata.italicangle,
+      monospaced=metadata.isfixedpitch and true or false,
+      underlineposition=metadata.underlineposition,
+      underlinethickness=metadata.underlinethickness,
+      weight=metadata.weight,
+     },
+    }
+    data=cachethem(cache,hash,data)
+   end
+  end
+ else
+  data={
+   filename=filename,
+   size=0,
+   time=time,
+   format="unknown",
+   streams={}
+  }
+ end
+ return data
+end
+local loadedshapes={}
+local loadedstreams={}
+local function loadoutlinedata(fontdata,streams)
+ local properties=fontdata.properties
+ local filename=properties.filename
+ local subindex=fontdata.subindex
+ local instance=properties.instance
+ local hash=makehash(filename,subindex,instance)
+ local loaded=loadedshapes[hash]
+ if not loaded then
+  loaded=loadoutlines(shapescache,filename,subindex,instance)
+  loadedshapes[hash]=loaded
+ end
+ return loaded
+end
+hashes.shapes=table.setmetatableindex(function(t,k)
+ local f=identifiers[k]
+ if f then
+  return loadoutlinedata(f)
+ end
+end)
+local function getstreamhash(fontid)
+ local fontdata=identifiers[fontid]
+ if fontdata then
+  local properties=fontdata.properties
+  return makehash(properties.filename,properties.subfont,properties.instance),fontdata
+ end
+end
+local function loadstreamdata(fontdata)
+ local properties=fontdata.properties
+ local shared=fontdata.shared
+ local rawdata=shared and shared.rawdata
+ local metadata=rawdata and rawdata.metadata
+ local filename=properties.filename
+ local subindex=metadata and metadata.subfontindex
+ local instance=properties.instance
+ local hash=makehash(filename,subindex,instance)
+ local loaded=loadedstreams[hash]
+ if not loaded then
+  loaded=loadstreams(streamscache,filename,subindex,instance)
+  loadedstreams[hash]=loaded
+ end
+ return loaded
+end
+hashes.streams=table.setmetatableindex(function(t,k)
+ local f=identifiers[k]
+ if f then
+  return loadstreamdata(f)
+ end
+end)
+otf.loadoutlinedata=loadoutlinedata 
+otf.loadstreamdata=loadstreamdata  
+otf.loadshapes=loadshapes
+otf.getstreamhash=getstreamhash   
+local streams=fonts.hashes.streams
+callback.register("glyph_stream_provider",function(id,index,mode)
+ if id>0 then
+  local streams=streams[id].streams
+  if streams then
+   return streams[index] or ""
+  end
+ end
+ return ""
+end)
+
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-shp”] ---
+
+
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “fonts-def” f435e0875f203f343157baeff876ec9c] ---
 
 if not modules then modules={} end modules ['luatex-fonts-def']={
  version=1.001,
@@ -30946,10 +32839,10 @@ function fonts.definers.applypostprocessors(tfmdata)
  return tfmdata
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “fonts-def”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “fonts-def”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “fonts-ext” 01015ab3758cdc2af29394e6d502a91a] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “fonts-ext” 32013cbc5d5d336be8b1d1e5879d86c4] ---
 
 if not modules then modules={} end modules ['luatex-fonts-ext']={
  version=1.001,
@@ -31135,10 +33028,10 @@ registerotffeature {
  }
 }
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “fonts-ext”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “fonts-ext”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-imp-tex” 77c374b0ef00c2fb12188ec42beb4257] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-imp-tex” ceb087ef6fa2f89aed7179f60ddf8f35] ---
 
 if not modules then modules={} end modules ['font-imp-tex']={
  version=1.001,
@@ -31237,10 +33130,10 @@ registerotffeature {
  description="arabic digits",
 }
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-imp-tex”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-imp-tex”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-imp-ligatures” 043daa4fcccf2560868da359d71d3a4a] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-imp-ligatures” 250f6f4488ee770c23177afb2ff75676] ---
 
 if not modules then modules={} end modules ['font-imp-ligatures']={
  version=1.001,
@@ -31335,12 +33228,12 @@ local function blockligatures(str)
     before=before,
     current={ one,two },
     after=after,
-    lookups={ 1 },
+    lookups={ 1,false },
    }
    revert[new]={
     current={ one,zwj },
     after={ two },
-    lookups={ 1 },
+    lookups={ 1,false },
    }
   end
  end
@@ -31354,10 +33247,10 @@ if context then
  }
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-imp-ligatures”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-imp-ligatures”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-imp-italics” fe1ca80fb5ea4a2f8d2d5c484e7ba913] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-imp-italics” defcb415bc1e0a0999b27773902adc18] ---
 
 if not modules then modules={} end modules ['font-imp-italics']={
  version=1.001,
@@ -31426,8 +33319,6 @@ if context then
  }
  registerotffeature(specification)
  registerafmfeature(specification)
-end
-if context then
  local letter=characters.is_letter
  local always=true
  local function collapseitalics(tfmdata,key,value)
@@ -31463,10 +33354,10 @@ if context then
  registerafmfeature(dimensions_specification)
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-imp-italics”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-imp-italics”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “font-imp-effects” 73a660359a0ec71e44cc2b7225a715ac] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “font-imp-effects” d05997c1826355548ec9aec1346f9f23] ---
 
 if not modules then modules={} end modules ['font-imp-effects']={
  version=1.001,
@@ -31650,13 +33541,13 @@ local rules={
  "FractionRuleThickness",
  "UnderbarRuleThickness",
 }
-local function setmathparameters(tfmdata,characters,mathparameters,dx,dy,squeeze)
- if delta~=0 then
+local function setmathparameters(tfmdata,characters,mathparameters,dx,dy,squeeze,multiplier)
+ if dy~=0 then
   for i=1,#rules do
    local name=rules[i]
    local value=mathparameters[name]
    if value then
-      mathparameters[name]=(squeeze or 1)*(value+dx)
+      mathparameters[name]=(squeeze or 1)*(value+dy)
    end
   end
  end
@@ -31720,7 +33611,8 @@ local function manipulateeffect(tfmdata)
   local factor=(1+effect.factor)*factor
   local hfactor=(1+effect.hfactor)*hfactor
   local vfactor=(1+effect.vfactor)*vfactor
-  local vshift=vshift~=0 and upcommand[vshift] or false
+  vshift=vshift~=0 and upcommand[vshift] or false
+  hshift=rightcommand[hshift]
   for unicode,character in next,characters do
    local oldwidth=character.width
    local oldheight=character.height
@@ -31728,7 +33620,6 @@ local function manipulateeffect(tfmdata)
    if oldwidth and oldwidth>0 then
     character.width=oldwidth+wdelta
     local commands=character.commands
-    local hshift=rightcommand[hshift]
     if vshift then
      if commands then
       prependcommands (commands,
@@ -31744,14 +33635,14 @@ local function manipulateeffect(tfmdata)
      end
     else
      if commands then
-      prependcommands (commands,
-       hshift
-      )
+       prependcommands (commands,
+        hshift
+       )
      else
       character.commands={
        hshift,
        charcommand[unicode]
-      }
+       }
      end
     end
    end
@@ -31763,7 +33654,7 @@ local function manipulateeffect(tfmdata)
    end
   end
   if mathparameters then
-   setmathparameters(tfmdata,characters,mathparameters,dx,dy,squeeze)
+   setmathparameters(tfmdata,characters,mathparameters,dx,dy,squeeze,multiplier)
    setmathcharacters(tfmdata,characters,mathparameters,dx,dy,squeeze,wdelta,hdelta,ddelta)
   end
   parameters.factor=factor
@@ -31823,10 +33714,10 @@ local specification={
 registerotffeature(specification)
 registerafmfeature(specification)
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “font-imp-effects”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “font-imp-effects”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “fonts-lig” b9dbe77ce747d4c35bb2a20ffbe5aa51] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “fonts-lig” fbd251eea3810a43a8d5542319361d68] ---
 
 
 fonts.handlers.otf.addfeature {
@@ -33895,10 +35786,10 @@ fonts.handlers.otf.addfeature {
  ["type"]="ligature",
 }
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “fonts-lig”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “fonts-lig”] ---
 
 
-do  --- [luaotfload, fontloader-2019-08-13.lua scope for “fonts-gbn” d25472d54c4841db43a745764a63533e] ---
+do  --- [luaotfload, fontloader-2022-10-03.lua scope for “fonts-gbn” 34e4543a02f6fbc8c2ade896cb6dc7df] ---
 
 if not modules then modules={} end modules ['luatex-fonts-gbn']={
  version=1.001,
@@ -33914,8 +35805,8 @@ local next=next
 local fonts=fonts
 local nodes=nodes
 local nuts=nodes.nuts 
-local traverse_id=nuts.traverse_id
-local flush_node=nuts.flush_node
+local traverseid=nuts.traverseid
+local flushnode=nuts.flushnode
 local glyph_code=nodes.nodecodes.glyph
 local disc_code=nodes.nodecodes.disc
 local tonode=nuts.tonode
@@ -33974,7 +35865,7 @@ local function nodepass(head,groupcode,size,packtype,direction)
   local variants=nil
   local redundant=nil
   local nofused=0
-  for n in traverse_id(glyph_code,head) do
+  for n in traverseid(glyph_code,head) do
    local font=getfont(n)
    if font~=prevfont then
     if basefont then
@@ -34052,13 +35943,13 @@ local function nodepass(head,groupcode,size,packtype,direction)
       end
      end
     end
-    flush_node(r)
+    flushnode(r)
    end
   end
-  for d in traverse_id(disc_code,head) do
+  for d in traverseid(disc_code,head) do
    local _,_,r=getdisc(d)
    if r then
-    for n in traverse_id(glyph_code,r) do
+    for n in traverseid(glyph_code,r) do
      local font=getfont(n)
      if font~=prevfont then
       prevfont=font
@@ -34126,7 +36017,7 @@ local function basepass(head)
  end
  return head
 end
-local protectpass=node.direct.protect_glyphs
+local protectpass=node.direct.protectglyphs or node.direct.protect_glyphs
 local injectpass=nodes.injections.handler
 function nodes.handlers.nodepass(head,...)
  if head then
@@ -34163,7 +36054,7 @@ function nodes.simple_font_handler(head,groupcode,size,packtype,direction)
  return head
 end
 
-end --- [luaotfload, fontloader-2019-08-13.lua scope for “fonts-gbn”] ---
+end --- [luaotfload, fontloader-2022-10-03.lua scope for “fonts-gbn”] ---
 
 
 --- vim:ft=lua:sw=2:ts=8:et:tw=79
