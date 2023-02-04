@@ -26,7 +26,6 @@ sourcefiles  = {"*.dtx", "*.ins", "*-????-??-??.sty"}
 
 checkengines = { "pdftex", "luatex" }
 
-
 checkdeps =
   {
     maindir .. "/base"
@@ -48,7 +47,8 @@ typesetdeps =
 checksearch  = true
 
 -- Allow for TU and other test configurations
-checkconfigs = {"build","config-TU","config-OR","config-mathcapture"}
+
+checkconfigs = {"build","config-TU","config-OR","config-mathcapture","config-OR-luatex"}
 
 
 
