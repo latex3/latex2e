@@ -132,7 +132,11 @@
 % \subsection{File declaration}
 %    \begin{macrocode}
 \ProvidesFile{latex-lab-mathcapture.ltx}
-        [2023-01-31 v0.2a Grab all the math(s)]
+        [2023-02-04 v0.2a Grab all the math(s) and tag it (experiments)]
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\AddToHook{begindocument/before}{\RequirePackage{l3lists2}}
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -209,10 +213,18 @@
 \cs_new_protected:Npn \@@_grab_dollar:w % $
   #1 $
   {
+%    \end{macrocode}
+%    \fmi{what's that test doing?}
+%    \begin{macrocode}
     \tl_if_blank:nF {#1}
       {
         \@@_process:nn { math } {#1} % $
+% fairly simple this one
+        \tagmcend %end P-chunk, in code: \tag_mc_end_push:
+        \@kernel@math@begin
         #1 $
+        \@kernel@math@end
+        \tagmcbegin{}  % restart P-chunk (whatsits in pdftex)
       }
   }
 %    \end{macrocode}
@@ -220,15 +232,47 @@
 % \begin{macro}{\@@_grab_dollardollar:w}
 %   And for the classical \TeX{} display structure.
 %    \begin{macrocode}
+
+\skip_new:N \l_@@_tmpa_skip
+  
 \cs_new_protected:Npn \@@_grab_dollardollar:w % $$
   #1 $$
   {
     \tl_if_blank:nF {#1}
       {
-        \@@_process:nn { equation* } {#1} % $$
-        #1 $$
+        \@@_tag_dollardollar_display:nn { equation* }{#1}
+        #1
+        $$
       }
   }
+
+
+\cs_new_protected:Npn \@@_tag_dollardollar_display:nn #1#2 {
+  \@@_process:nn {#1} {#2}
+  \tagmcend %end P-chunk, in code: \tag_mc_end_push:
+  \@kernel@math@begin
+%        \skip_set:Nn \belowdisplayskip      {-\belowdisplayskip}
+%        \skip_set:Nn \belowdisplayshortskip {-\belowdisplayshortskip}
+%        \int_set:Nn \postdisplaypenalty {10000}
+%%
+%        \group_insert_after:N \@@_tag_dollardollar_display_end:
+}
+
+\cs_new_protected:Npn \@@_tag_dollardollar_display_end: {
+%  \typeout{== tag dollarldollar display end}
+%  \ShowTagging{struct-stack}
+  \tagpdfparaOff
+  \para_raw_end:
+  \tagpdfparaOn
+  \l_@@_tmpa_skip \lastskip  
+  \@kernel@math@end
+  \penalty \postdisplaypenalty
+  \skip_vertical:n { -\l_@@_tmpa_skip }
+%
+  \@doendpe             % this has no \end{...} to take care of it
+}
+
+
 %    \end{macrocode}
 % \end{macro}
 %
@@ -252,7 +296,10 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_grab_eqn:w % \[
   #1 \]
-  { \begin { equation* } #1 \end { equation* } }
+   {
+%     \typeout{collected? = \bool_if:NTF \l_@@_collected_bool {true}{false}}
+     \begin { equation* } #1 \end { equation* }
+   }
 %    \end{macrocode}
 % \end{macro}
 %
@@ -291,27 +338,181 @@
 % \begin{macro}{\RegisterMathEnvironment}
 %   Set up to capture environment content and make available.
 %    \begin{macrocode}
+
 \cs_new_protected:Npn \math_register_env:nn #1#2
   {
     \tl_set:Nn \l_@@_env_name_tl {#1}
     \keys_set:nn { @@ } {#2}
     \cs_gset_eq:cc { @@_env_ #1 _begin: } {#1}
     \cs_gset_eq:cc { @@_env_ #1 _end: } { end #1 }
+%
     \ExpandArgs { nnx } \RenewDocumentEnvironment {#1} { b }
       {
-        \bool_set_true:N \exp_not:N \l_@@_collected_bool
-        \cs_if_exist:cTF { @@_env #1 _aux: }
+%        \bool_set_true:N \exp_not:N \l_@@_collected_bool
+%        \cs_if_exist:cTF { @@_env #1 _aux: }
+%          {
+%            \exp_not:c { @@_env #1 _aux: }
+%              ####1 \exp_not:N \@@_env_end: {#1}
+%          }
+%          { \exp_not:N \@@_process:nn {#1} {####1} }
+        \exp_not:N \bool_if:NTF \exp_not:N \l_@@_collected_bool
           {
-            \exp_not:c { @@_env #1 _aux: }
-              ####1 \exp_not:N \@@_env_end: {#1}
+%            \typeout{===>B1}
           }
-          { \exp_not:N \@@_process:nn {#1} {####1} }
+          {
+%            \typeout{===>B2}
+            \cs_if_exist:cTF { @@_env #1 _aux: }
+              {
+                \exp_not:c { @@_env #1 _aux: }
+                  ####1 \exp_not:N \@@_env_end: {#1}
+              }
+              { \exp_not:N \@@_process:nn {#1} {####1} }
+            \exp_not:n { \@kernel@math@registered@begin }
+            \bool_set_true:N \exp_not:N \l_@@_collected_bool
+          }
+%        \exp_not:N \tracingall  
         \exp_not:c { @@_env_ #1 _begin: }
         ####1
         \exp_not:c { @@_env_ #1 _end: }
+%        \exp_not:c { @@_env_ #1 _end: }
+%        \exp_not:N \tracingnone
+%        \exp_not:n { \@kernel@math@registered@end }
+     }
+      {
       }
-      { }
   }
+
+\cs_set_protected:Npn \__cs_tmp:w #1
+  {
+    \group_begin:
+      \exp_args:No \__cs_generate_internal_variant:n
+        { \tl_to_str:n {#1} }
+    \group_end:
+  }
+\__cs_tmp:w { nnxx }
+  
+  
+\cs_new_protected:Npn \math_register_halign_env:nn #1#2
+  {
+    \tl_set:Nn \l_@@_env_name_tl {#1}
+    \keys_set:nn { @@ } {#2}
+    \cs_gset_eq:cc { @@_env_ #1 _begin: } {#1}
+    \cs_gset_eq:cc { @@_env_ #1 _end: } { end #1 }
+%
+    \ExpandArgs { nnxx } \RenewDocumentEnvironment {#1} { b }
+      {
+%        \bool_set_true:N \exp_not:N \l_@@_collected_bool
+%        \cs_if_exist:cTF { @@_env #1 _aux: }
+%          {
+%            \exp_not:c { @@_env #1 _aux: }
+%              ####1 \exp_not:N \@@_env_end: {#1}
+%          }
+%          { \exp_not:N \@@_process:nn {#1} {####1} }
+        \exp_not:N \bool_if:NTF \exp_not:N \l_@@_collected_bool
+          {
+%            \typeout{===>B1}
+          }
+          {
+%            \typeout{===>B2}
+            \cs_if_exist:cTF { @@_env #1 _aux: }
+              {
+                \exp_not:c { @@_env #1 _aux: }
+                  ####1 \exp_not:N \@@_env_end: {#1}
+              }
+              { \exp_not:N \@@_process:nn {#1} {####1} }
+            \exp_not:n { \@kernel@math@registered@begin }
+            \bool_set_true:N \exp_not:N \l_@@_collected_bool
+          }
+%        \exp_not:N \tracingall  
+        \exp_not:c { @@_env_ #1 _begin: }
+        ####1
+%        \exp_not:c { @@_env_ #1 _end: }
+%        \exp_not:N \tracingnone
+     }
+      {
+        \exp_not:c { @@_env_ #1 _end: }
+      }
+  }
+
+\cs_new_protected:Npn \math_register_odd_env:nn #1#2
+  {
+    \tl_set:Nn \l_@@_env_name_tl {#1}
+    \keys_set:nn { @@ } {#2}
+    \cs_gset_eq:cc { @@_env_ #1 _begin: } {#1}
+    \cs_gset_eq:cc { @@_env_ #1 _end: } { end #1 }
+%
+    \ExpandArgs { nnxx } \RenewDocumentEnvironment {#1} { b }
+      {
+        \exp_not:N \bool_if:NTF \exp_not:N \l_@@_collected_bool
+          {
+%            \typeout{===>B1}
+          }
+          {
+%            \typeout{===>B2}
+            \cs_if_exist:cTF { @@_env #1 _aux: }
+              {
+                \exp_not:c { @@_env #1 _aux: }
+                  ####1 \exp_not:N \@@_env_end: {#1}
+              }
+              { \exp_not:N \@@_process:nn {#1} {####1} }
+            \exp_not:n { \@kernel@math@registered@begin }
+            \bool_set_true:N \exp_not:N \l_@@_collected_bool
+          }
+%        \exp_not:N \tracingall  
+        \exp_not:c { @@_env_ #1 _begin: }
+        ####1
+     }
+      {
+        \exp_not:c { @@_env_ #1 _end: }
+% needed if we don't have $$...$$        
+        \exp_not:n { \typeout{---> @kernel@math@registered@end }}
+        \exp_not:n { \@kernel@math@registered@end }
+      }
+  }
+
+
+
+  \DeclareRobustCommand*\begin[1]{%
+  \UseHook{env/#1/before}%
+  \@ifundefined{#1}%
+    {\def\reserved@a{\@latex@error{Environment #1 undefined}\@eha}}%
+    {\def\reserved@a{\def\@currenvir{#1}%
+        \edef\@currenvline{\on@line}%
+        \@execute@begin@hook{#1}%
+        \csname #1\endcsname}}%
+  \@ignorefalse
+  \begingroup
+  \@endpefalse  % tmp!!! is it ok to dop this here?
+  \reserved@a}
+
+
+\cs_new:Npn \@kernel@math@registered@begin {
+%  \ShowTagging{struct-stack} 
+  \mode_if_vertical:TF
+       {
+%         \legacy_if:nTF { @endpe }
+%           { \legacy_if_set_false:n { @endpe } }
+%           { \__block_list_beginpar_vmode: }
+         \str_if_eq:onF \g__tag_struct_tag_tl { P }
+             { \__block_list_beginpar_vmode: }
+       }
+       { 
+         \tagmcend
+       }
+  \@kernel@math@begin
+  \tagpdfparaOff
+%  \typeout{==>MC1}\ShowTagging{mc-current}
+}
+
+\cs_new:Npn \@kernel@math@registered@end {
+%  \typeout{==>MC2}\ShowTagging{mc-current}
+  \para_raw_end:
+  \tagpdfparaOn
+  \@kernel@math@end
+%  \typeout{==>MC3}\ShowTagging{mc-current}
+  \@endpetrue
+}
+  
 \cs_new_protected:Npn \math_register_env:n #1
   { \math_register_env:nn {#1} { } }
 \NewDocumentCommand \RegisterMathEnvironment { O{} m }
@@ -342,7 +543,12 @@
   {
     \math_register_env:n { equation }
     \math_register_env:n { equation* }
-    \math_register_env:n { math }
+% at the moment register_env can only do display math
+%    \math_register_env:n { math }
+    \RenewDocumentEnvironment{math} {b}{$#1$}{}
+% and this one doesn't work either    
+%    \math_register_env:n { displaymath }
+    \RenewDocumentEnvironment{displaymath} {b}{\[#1\]}{}    
   }
 %    \end{macrocode}
 % \end{macro}
@@ -378,13 +584,14 @@
 %
 % \begin{macro}{\[, \]}
 %   Again, we need to watch for when \pkg{amsmath} is loaded after this code.
-%   The flag usage here is to cover the case where \cs{[}/\cs{]} is nested
-%   inside another environment.
+%   The flag usage here is to cover the case where \cs{[}/\cs{]} is hidden
+%   inside another environment. In this case the grabbing happens on
+%    the outer level and should not be repeated.
 %    \begin{macrocode}
 \tl_gput_right:Nn \@kernel@before@begindocument
   {
     \cs_gset_protected:Npn \[ % \]
-      {
+       {
         \bool_if:NTF \l_@@_collected_bool
           { \begin { equation* } }
           { \@@_grab_eqn:w }
@@ -400,23 +607,23 @@
 % \end{macro}
 %
 % \begin{macro}{\ensuremath}
-%   A bit of nesting fun to make sure we collect only if required.
+%   A bit of nesting fun to make sure we collect only if required.\fmi{why does ensuremath needs handling at all?}
 %    \begin{macrocode}
-\cs_gset_protected:Npn \ensuremath #1
-  {
-    \mode_if_math:TF
-      {#1}
-      {
-        \bool_if:NTF \l_@@_collected_bool
-          { \@ensuredmath {#1} }
-          {
-            \bool_set_true:N \l_@@_collected_bool
-            \@@_process:nn { math } {#1}
-            \@ensuredmath {#1}
-            \bool_set_false:N \l_@@_collected_bool
-          }
-      }
-  }
+%\cs_gset_protected:Npn \ensuremath #1
+%  {
+%    \mode_if_math:TF
+%      {#1}
+%      {
+%        \bool_if:NTF \l_@@_collected_bool
+%          { \@ensuredmath {#1} }
+%          {
+%            \bool_set_true:N \l_@@_collected_bool
+%            \@@_process:nn { math } {#1}
+%            \@ensuredmath {#1}
+%            \bool_set_false:N \l_@@_collected_bool
+%          }
+%      }
+%  }
 %    \end{macrocode}
 % \end{macro}
 %
@@ -426,6 +633,31 @@
 % display. Most display math mode is actually handled elsewhere, as we
 % have macro control.
 %    \begin{macrocode}
+
+\tl_new:N\tmpmathcontent
+
+  
+\def\@kernel@math@begin {
+  \typeout{==>~math~begin}
+%  \special{!begin!}
+  \tl_set:Nx\tmpmathcontent
+     {\exp_not:N\begin{\g__math_grabbed_env_tl}
+       \space
+       \exp_not:V\g__math_grabbed_math_tl
+       \space
+       \exp_not:N\end{\g__math_grabbed_env_tl} 
+    }
+  \tagstructbegin{tag=Formula,AFinline-o=\tmpmathcontent,alt=\tmpmathcontent}   %whatsits!
+  \tagmcbegin{}  %whatsits in pdftex
+}
+\def\@kernel@math@end {
+  \typeout{==>~math~end}
+%  \ShowTagging{struct-stack} 
+  \tagmcend %whatsits in pdftex
+  \tagstructend
+%  \ShowTagging{struct-stack} 
+}
+  
 \exp_args:No \tex_everymath:D
   {
     \tex_the:D \tex_everymath:D
@@ -438,6 +670,16 @@
 \exp_args:No \tex_everydisplay:D
   {
     \tex_the:D \tex_everydisplay:D
+    \iftrue  % this may have to be a settable flag!
+%      {
+\typeout{==>~ in~ everydisplay}
+        \skip_set:Nn \belowdisplayskip      {-\belowdisplayskip}
+        \skip_set:Nn \belowdisplayshortskip {-\belowdisplayshortskip}
+        \int_set:Nn \postdisplaypenalty {10000}
+%
+        \group_insert_after:N \@@_tag_dollardollar_display_end:
+%      }
+    \fi
     \bool_if:NF \l_@@_collected_bool
       {
         \bool_set_true:N \l_@@_collected_bool
@@ -451,6 +693,7 @@
 %   We need to cover this even though it is of course not encouraged.
 %    \begin{macrocode}
 \math_register_env:n { eqnarray }
+\math_register_env:n { eqnarray* }
 %    \end{macrocode}
 %
 % Places where math mode is (ab)used.
@@ -495,44 +738,165 @@
 %   Without the precaution, we'd get two copies of the grabbed math, the second
 %   of which would start with \cs{split@tag}.
 %    \begin{macrocode}
-\clist_map_inline:nn
-  { align , alignat , flalign , gather , multline , xalignat , xxalignat }
-  {
-    \AddToHook{ env / #1 / begin }
-      { \bool_set_true:N \l_@@_collected_bool }
-    \AddToHook{ env / #1* / begin }
-      { \bool_set_true:N \l_@@_collected_bool }
+
+
+
+\tl_gput_right:Nn \@kernel@before@begindocument {
+%
+\renewenvironment{gather*}{%
+  \start@gather\st@rredtrue
+}
+{%
+% this redirection doesn't work if we alter "gather"!
+  %  \endgather
+% so replace it with its real meaning
+  \math@cr \black@\totwidth@ \egroup
+  $$\ignorespacesafterend
+}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\def\common@align@ending {
+  \math@cr \black@\totwidth@
+  \egroup
+  \ifingather@
+    \restorealignstate@
+    \egroup
+    \nonumber
+    \ifnum0=`{\fi\iffalse}\fi
+  \else
+    $$%
+  \fi
+  \ignorespacesafterend
+}
+\renewenvironment{alignat}{%
+  \start@align\z@\st@rredfalse
+}{%
+  \common@align@ending
+}
+\renewenvironment{alignat*}{%
+  \start@align\z@\st@rredtrue
+}{%
+  \common@align@ending
+}
+\renewenvironment{xalignat}{%
+  \start@align\@ne\st@rredfalse
+}{%
+  \common@align@ending
+}
+\renewenvironment{xalignat*}{%
+  \start@align\@ne\st@rredtrue
+}{%
+  \common@align@ending
+}
+\renewenvironment{xxalignat}{%
+  \start@align\tw@\st@rredtrue
+}{%
+  \common@align@ending
+}
+\renewenvironment{align}{%
+  \start@align\@ne\st@rredfalse\m@ne
+}{%
+  \common@align@ending
+}
+\renewenvironment{align*}{%
+  \start@align\@ne\st@rredtrue\m@ne
+}{%
+  \common@align@ending
+}
+\renewenvironment{flalign}{%
+  \start@align\tw@\st@rredfalse\m@ne
+}{%
+  \common@align@ending
+}
+\renewenvironment{flalign*}{%
+  \start@align\tw@\st@rredtrue\m@ne
+}{%
+  \common@align@ending
+}
+%
+\renewenvironment{multline*}{\start@multline\st@rredtrue}
+{%
+  \iftagsleft@ \@xp\lendmultline@ \else \@xp\rendmultline@ \fi
+  \ignorespacesafterend
+}
+%    \end{macrocode}
+%    Also for "false?"
+%    \begin{macrocode}
+%\def\measuring@true{\let\ifmeasuring@\iftrue\tag_stop:}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%    
+  \math_register_halign_env:nn {align}{}
+  \math_register_halign_env:nn {align*}{}
+  \math_register_halign_env:nn {flalign}{}
+  \math_register_halign_env:nn {flalign*}{}
+  \math_register_halign_env:nn {gather}{}
+  \math_register_halign_env:nn {gather*}{}
+  \math_register_halign_env:nn {multline}{}
+  \math_register_halign_env:nn {multline*}{}
+  \math_register_halign_env:nn {xalignat}{}
+  \math_register_halign_env:nn {xalignat*}{}
+  \math_register_halign_env:nn {xxalignat}{}
+  %
+  \@namedef{maketag @ @ @} #1{%
+%    \typeout{--->maketag @ @ @}
+    \ifmeasuring@
+      \hbox{\m@th\normalfont#1}%
+    \else
+      \tagmcend \tagstructbegin{tag=Lbl}%
+      \tagmcbegin{tag=Lbl}%
+      \hbox{\m@th\normalfont#1}%
+      \tagmcend \tagstructend \tagmcbegin{}%
+    \fi
   }
-\tl_gput_right:Nn \@kernel@before@begindocument
-  {
-    \cs_new_eq:NN \@@_amsmath_align@:nn \align@
-    \cs_gset_protected:Npn \align@ #1#2
-      {
-        \@@_process:Vn \@currenvir {#2}
-        \@@_amsmath_align@:nn {#1} {#2}
-      }
-    \cs_new_eq:NN \@@_amsmath_gather@:n \gather@
-    \cs_gset_protected:Npn \gather@ #1
-      {
-        \tl_if_head_eq_meaning:nNF {#1} { \split@tag }
-          { \@@_process:Vn \@currenvir {#1} }
-        \@@_amsmath_gather@:n {#1}
-      }
-    \cs_new_eq:NN \@@_amsmath_multline@:n \multline@
-    \cs_gset_protected:Npn \multline@ #1
-      {
-        \@@_process:Vn \@currenvir {#1}
-        \@@_amsmath_multline@:n {#1}
-      }
-  }
+%  
+  \def\intertext@{%
+    \def\intertext##1{%
+      \ifvmode\else\\\@empty\fi
+      \noalign{%
+        \penalty\postdisplaypenalty\vskip\belowdisplayskip
+        \vbox{\normalbaselines
+          \ifdim\linewidth=\columnwidth
+          \else \parshape\@ne \@totalleftmargin \linewidth
+          \fi
+% this isn't quite right!          
+          \ifmeasuring@ \tag_stop: \else \tag_start: \fi
+          \noindent\ignorespaces##1\par
+%          \ifmeasuring@\else\tagpdfparaOff\fi
+        }%
+        \penalty\predisplaypenalty\vskip\abovedisplayskip%
+      }%
+  }}
+}
+  
 %    \end{macrocode}
 % \end{macro}
 % \end{macro}
 % \end{macro}
 % \end{macro}
 %
+%    The breqn packages changes catcodes and that isn't yet covered
+%    by our mechanism.
+%    \begin{macrocode}
+%\AddToHook{package/breqn/after}{
+%  \typeout{===>~ in~ hook}
+%  \math_register_halign_env:nn {dmath}{}
+%  \math_register_halign_env:nn {dgroup*}{}
+%}  
+%    \end{macrocode}
+%    
 %    \begin{macrocode}
 \ExplSyntaxOff
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+%<@@=>
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+%
 %    \end{macrocode}
 %
 %    \begin{macrocode}
