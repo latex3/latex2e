@@ -52,7 +52,7 @@ typesetdeps =
 checksearch  = true
 
 -- Allow for TU and other test configurations
-checkconfigs = {"build","config-TU","config-OR","config-mathcapture"}
+checkconfigs = {"build","config-TU","config-OR","config-mathtagging"}
 
 
 

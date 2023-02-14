@@ -1,4 +1,4 @@
-l3build save -cconfig-mathcapture \
+l3build save -cconfig-mathtagging \
 	mathcapture-001 \
 	mathcapture-002 \
 	mathcapture-003 \

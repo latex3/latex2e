@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-%% File: latex-lab-mathcapture.dtx
+%% File: latex-lab-mathtagging.dtx
 %
 % Copyright (C) 2022-2023 The LaTeX Project
 %
@@ -26,15 +26,15 @@
 \usepackage{todonotes}
 
 \begin{document}
-  \DocInput{latex-lab-mathcapture.dtx}
+  \DocInput{latex-lab-mathtagging.dtx}
 \end{document}
 %</driver>
 %
 % \fi
 %
 %
-% \title{The \texttt{latex-lab-mathcapture} code\thanks{}}
-% \author{\LaTeX{} Project}
+% \title{The \texttt{latex-lab-mathtagging} code\thanks{}}
+% \author{Frank Mittelbach, Joseph Wright, \LaTeX{} Project}
 %
 % \maketitle
 %
@@ -131,8 +131,8 @@
 %
 % \subsection{File declaration}
 %    \begin{macrocode}
-\ProvidesFile{latex-lab-mathcapture.ltx}
-        [2023-02-04 v0.2a Grab all the math(s) and tag it (experiments)]
+\ProvidesFile{latex-lab-mathtagging.ltx}
+        [2023-02-06 v0.5a Grab all the math(s) and tag it (experiments)]
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -465,7 +465,7 @@
       {
         \exp_not:c { @@_env_ #1 _end: }
 % needed if we don't have $$...$$        
-        \exp_not:n { \typeout{---> @kernel@math@registered@end }}
+%        \exp_not:n { \typeout{---> @kernel@math@registered@end }}
         \exp_not:n { \@kernel@math@registered@end }
       }
   }
@@ -638,9 +638,9 @@
 
   
 \def\@kernel@math@begin {
-  \typeout{==>~math~begin}
-%  \special{!begin!}
-  \tl_set:Nx\tmpmathcontent
+%  \typeout{==>~math~begin}
+% needs different handling if we support nesting
+  \tl_gset:Nx\tmpmathcontent
      {\exp_not:N\begin{\g__math_grabbed_env_tl}
        \space
        \exp_not:V\g__math_grabbed_math_tl
@@ -648,12 +648,21 @@
        \exp_not:N\end{\g__math_grabbed_env_tl} 
     }
   \tagstructbegin{tag=Formula,AFinline-o=\tmpmathcontent,alt=\tmpmathcontent}   %whatsits!
-  \tagmcbegin{}  %whatsits in pdftex
+% inner formula if multiple parts (not really implemented yet)
+  \grabaformulapartandstart
+% the above does:  
+%    \tagstructbegin{tag=Formula}\tagmcbegin{}
+%  or just
+% \tagmcbegin{}
 }
 \def\@kernel@math@end {
-  \typeout{==>~math~end}
-%  \ShowTagging{struct-stack} 
-  \tagmcend %whatsits in pdftex
+%  \typeout{==>~math~end}
+%  \ShowTagging{struct-stack}
+  \tagmcend
+  \if@subformulas
+    \tagstructend
+  \else
+  \fi
   \tagstructend
 %  \ShowTagging{struct-stack} 
 }
@@ -672,7 +681,7 @@
     \tex_the:D \tex_everydisplay:D
     \iftrue  % this may have to be a settable flag!
 %      {
-\typeout{==>~ in~ everydisplay}
+%        \typeout{==>~ in~ everydisplay}
         \skip_set:Nn \belowdisplayskip      {-\belowdisplayskip}
         \skip_set:Nn \belowdisplayshortskip {-\belowdisplayshortskip}
         \int_set:Nn \postdisplaypenalty {10000}
@@ -823,7 +832,7 @@
 %    \end{macrocode}
 %    Also for "false?"
 %    \begin{macrocode}
-%\def\measuring@true{\let\ifmeasuring@\iftrue\tag_stop:}
+\def\measuring@true{\let\ifmeasuring@\iftrue\tag_stop:}
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -851,31 +860,250 @@
       \tagmcend \tagstructend \tagmcbegin{}%
     \fi
   }
-%  
-  \def\intertext@{%
-    \def\intertext##1{%
-      \ifvmode\else\\\@empty\fi
-      \noalign{%
-        \penalty\postdisplaypenalty\vskip\belowdisplayskip
-        \vbox{\normalbaselines
-          \ifdim\linewidth=\columnwidth
-          \else \parshape\@ne \@totalleftmargin \linewidth
-          \fi
-% this isn't quite right!          
-          \ifmeasuring@ \tag_stop: \else \tag_start: \fi
-          \noindent\ignorespaces##1\par
-%          \ifmeasuring@\else\tagpdfparaOff\fi
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+    \def\intertext@{%
+      \def\intertext##1{%
+        \ifvmode\else\\\@empty\fi
+        \noalign{%
+% we have to flip the sign on the skip because we flipped it on the outside
+          \penalty\postdisplaypenalty\vskip-\belowdisplayskip
+          \vbox{
+%    \end{macrocode}
+% Stop tagging when measuring:
+%    \begin{macrocode}
+           \ifmeasuring@\tag_stop:\fi
+           \normalbaselines
+            \ifdim\linewidth=\columnwidth
+            \else \parshape\@ne \@totalleftmargin \linewidth
+            \fi
+%    \end{macrocode}
+% End the previous mc:\fmi{if we use2 levels of formulas this would
+%    need changing}
+%    \begin{macrocode}
+            \tag_mc_end_push:
+%    \end{macrocode}
+% We are already in a par so we change now to Span:\fmi{not true any longer}
+%    \begin{macrocode}
+            \tagpdfsetup{paratag=P}%
+            \tagpdfparaOn
+            \noindent\ignorespaces\ShowTagging{struct-stack}##1\par
+%    \end{macrocode}
+% Restart the MC
+%    \begin{macrocode}
+            \tag_mc_begin_pop:n{}}%
+          \penalty\predisplaypenalty\vskip\abovedisplayskip%
         }%
-        \penalty\predisplaypenalty\vskip\abovedisplayskip%
-      }%
-  }}
+      }
+    }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\@namedef{math@cr @ @ @ gather}{%
+    \ifst@rred\nonumber\fi
+   &\relax
+    \make@display@tag
+%
+    \maybestartnewformulatag
+%
+    \ifst@rred\else\global\@eqnswtrue\fi
+    \global\advance\row@\@ne
+    \cr
 }
-  
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\@namedef{math@cr @ @ @ align}{%
+  \ifst@rred\nonumber\fi
+  \if@eqnsw \global\tag@true \fi
+  \global\advance\row@\@ne
+  \add@amps\maxfields@
+  \omit
+  \kern-\alignsep@
+  \iftag@
+    \setboxz@h{\@lign\strut@{\make@display@tag}}%
+    \place@tag
+  \fi
+%
+    \maybestartnewformulatag
+%
+  \ifst@rred\else\global\@eqnswtrue\fi
+  \global\lineht@\z@
+  \cr
+}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\def\restore@math@cr{\@namedef{math@cr @ @ @}{
+%
+    \maybestartnewformulatag
+%
+    \cr}}
+\restore@math@cr
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+}
 %    \end{macrocode}
 % \end{macro}
 % \end{macro}
 % \end{macro}
 % \end{macro}
+%
+%
+%
+
+%  \begin{macro}{}
+%    
+%    \begin{macrocode}
+\cs_new:Npn \@@_split_at_nl_first:w #1 \\ #2 \\ #3 \s_stop
+  {
+    \quark_if_nil:nTF {#2}
+      { {#1} {  } }
+      {
+        \@@_split_chk_if_begin:ww #1 \begin \q_nil \s_mark
+          #2 \\ #3 \s_stop
+      }
+  }
+\cs_new:Npn \@@_split_chk_if_begin:ww #1 \begin #2 #3 \s_mark
+    #4 \\ \q_nil \\ \s_stop
+  {
+    \quark_if_nil:nTF {#2}
+      { {#1} {#4} }
+      {
+        \exp_after:wN \@@_split_collect_one_end:w
+          \@@_split_cleanup_begin_q_nil:w #1 \begin{#2} #3 \\ #4 \s_stop
+            { } { 1 }
+      }
+  }
+\cs_new:Npn \@@_split_cleanup_begin_q_nil:w #1 \begin \q_nil {#1}
+\cs_new:Npn \@@_split_collect_one_end:w #1 \end #2 #3 \s_stop #4 #5
+  {
+    \exp_args:Nf \@@_split_check_count_begins:nnnn
+      { \@@_split_count_begins:n { #4 #1 } } {#5}
+      { #4 #1 \end{#2} } {#3}
+  }
+\cs_new:Npn \@@_split_count_begins:n #1
+  { \int_eval:n { 0 \@@_split_count_begins:w #1 \begin \q_nil } }
+\cs_new:Npn \@@_split_count_begins:w #1 \begin #2
+  { \quark_if_nil:nF {#2} { +1 \@@_split_count_begins:w } }
+\cs_new:Npn \@@_split_check_count_begins:nnnn #1 #2 #3 #4
+  {
+    \int_compare:nNnTF {#1} = {#2}
+      {
+        \exp_last_unbraced:Nf \@@_split_final_cleanup:nn
+          { \split:n { \@@_split_guard:n {#3} #4 } }
+      }
+      {
+        \exp_args:No \use_ii_i:nn
+          { \exp_after:wN { \int_value:w \int_eval:n { #2 + 1 } } }
+          { \@@_split_collect_one_end:w #4 \s_stop {#3} }
+      }
+  }
+\cs_new:Npn \@@_split_final_cleanup:nn #1 #2
+  {
+      \exp:w \@@_split_final_cleanup:w #1
+        \@@_split_guard:n \q_nil \s_mark { }
+      {#2}
+  }
+\cs_new:Npn \@@_split_final_cleanup:w #1 \@@_split_guard:n #2 #3 \s_mark #4
+  {
+    \quark_if_nil:nTF {#2}
+      { \exp_end: { #4 #1 } }
+      { \@@_split_final_cleanup:w #3 \s_mark { #4 #1 #2 } }
+  }
+\NewDocumentCommand \splitnl { mm +m }
+  {
+    \tl_set:Nf \l_tmpa_tl { \split:n {#3} }
+    \show \l_tmpa_tl
+    \exp_after:wN \__splitnl_aux:nnNN \l_tmpa_tl #1 #2
+  }
+
+
+\cs_new:Npn \split:n #1 {
+    \@@_split_at_nl_first:w #1 \\ \q_nil \\ \s_stop }
+
+\cs_new:Npn \@@_split_at_nl:NN #1#2 {
+  \tl_set:Nf \l_tmpa_tl {
+      \exp_after:wN \@@_split_at_nl_first:w #1 \\ \q_nil \\ \s_stop }
+  \exp_after:wN \@@_split_at_nl_aux:nnNN \l_tmpa_tl #1 #2
+}
+
+\cs_new_protected:Npn \@@_split_at_nl_aux:nnNN #1 #2 #3 #4
+  {
+    \tl_gset:Nn #4 {#1}
+    \tl_gset:Nn #3 {#2}
+}
+
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\maybestartnewformulatag}
+%    
+%    \begin{macrocode}
+
+\newif\if@subformulas
+\tl_new:N \result  
+  
+\cs_new_protected:Npn\grabaformulapartandstart {
+  \@@_split_at_nl:NN  \g__math_grabbed_math_tl \result
+  \typeout{====>first-result=\meaning\result}
+  \typeout{====>first-tmpmathcontent=\meaning\g__math_grabbed_math_tl}
+  \tl_if_empty:NTF \g__math_grabbed_math_tl
+     {
+       \typeout{====>formula~ has~ no~ subparts}
+       \global\@subformulasfalse
+     }
+     {
+       \typeout{====>formula~ has~ subparts}
+       \global\@subformulastrue
+       \edef\resulttitle{\g__math_grabbed_env_tl\space (part)}
+       \tagstructbegin{tag=Formula,alt=\result,
+         title-o=\resulttitle}
+    }
+    \tagmcbegin{}
+}
+
+\cs_new_protected:Npn\grabaformulapartandmayberestart {
+  \@@_split_at_nl:NN  \g__math_grabbed_math_tl \result
+  \typeout{====>result=\meaning\result}
+  \typeout{====>tmpmathcontent=\meaning\g__math_grabbed_math_tl}
+%  \tl_if_empty:NTF \g__math_grabbed_math_tl
+%     {
+%       \typeout{====>tmpmathcontent=empty}
+%     }
+%     {
+%       \typeout{====>tmpmathcontent=not-empty}
+       \edef\resulttitle{\g__math_grabbed_env_tl\space (part)}
+       \tagstructbegin{tag=Formula,alt=\result,
+         title-o=\resulttitle}
+%    }
+    \tagmcbegin{}
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%    \begin{macrocode}
+\def\maybestartnewformulatag {
+\if@subformulas
+ \ifmeasuring@\else
+%
+  \tl_if_empty:NF \g__math_grabbed_math_tl
+     {
+       \tagmcend 
+       \tagstructend
+       \grabaformulapartandmayberestart
+     }
+ \fi
+\fi
+}
+%    \end{macrocode}
+%  \end{macro}
 %
 %    The breqn packages changes catcodes and that isn't yet covered
 %    by our mechanism.

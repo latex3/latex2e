@@ -3,7 +3,7 @@
 stdengine    = "pdftex"
 checkengines = {"pdftex"}
 checksearch  = true
-testfiledir  = "testfiles-mathcapture"
+testfiledir  = "testfiles-mathtagging"
 
 checkruns     = 3
 
