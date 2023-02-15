@@ -1,0 +1,3223 @@
+%%
+%% This is file `tagpdf.sty',
+%% generated with the docstrip utility.
+%%
+%% The original source files were:
+%%
+%% tagpdf.dtx  (with options: `package')
+%% tagpdf-checks.dtx  (with options: `package')
+%% tagpdf-mc-shared.dtx  (with options: `shared')
+%% tagpdf.dtx  (with options: `mcloading')
+%% tagpdf-tree.dtx  (with options: `package')
+%% tagpdf-data.dtx  (with options: `package')
+%% tagpdf-roles.dtx  (with options: `package')
+%% tagpdf-struct.dtx  (with options: `package')
+%% tagpdf-space.dtx  (with options: `package')
+%% tagpdf-user.dtx  (with options: `package')
+%% 
+%% Copyright (C) 2019-2022 Ulrike Fischer
+%% 
+%% It may be distributed and/or modified under the conditions of
+%% the LaTeX Project Public License (LPPL), either version 1.3c of
+%% this license or (at your option) any later version.  The latest
+%% version of this license is in the file:
+%% 
+%%    https://www.latex-project.org/lppl.txt
+%% 
+%% This file is part of the "tagpdf bundle" (The Work in LPPL)
+%% and all files in that bundle must be distributed together.
+%% 
+%% File: tagpdf.dtx
+\ProvidesExplPackage {tagpdf} {2023-01-30} {0.98c}
+  { A package to experiment with pdf tagging -- version for latex-lab}
+
+\bool_if:nF
+  {
+    \bool_lazy_and_p:nn
+      {\cs_if_exist_p:N \pdfmanagement_if_active_p:}
+      { \pdfmanagement_if_active_p: }
+  }
+  {  %error for now, perhaps warning later.
+    \PackageError{tagpdf}
+     {
+       PDF~resource~management~is~no~active!\MessageBreak
+       tagpdf~will~no~work.
+     }
+     {
+       Activate~it~with \MessageBreak
+       \string\RequirePackage{pdfmanagement-testphase}\MessageBreak
+       \string\DocumentMetadata{<options>}\MessageBreak
+       before~\string\documentclass
+     }
+  }
+\prop_gput:Nnn \g_msg_module_name_prop { tag }{ tagpdf }
+\bool_new:N\g__tag_mode_lua_bool
+\DeclareOption {luamode}    { \sys_if_engine_luatex:T { \bool_gset_true:N \g__tag_mode_lua_bool } }
+\DeclareOption {genericmode}{ \bool_gset_false:N\g__tag_mode_lua_bool }
+\ExecuteOptions{luamode}
+\ProcessOptions
+\RequirePackage{l3ref-tmp}
+\RequirePackage{tagpdf-base}
+
+ \cs_new_protected:Npn \__tag_lastpagelabel:
+   {
+     \legacy_if:nT { @filesw }
+       {
+         \exp_args:NNnx \exp_args:NNx\iow_now:Nn \@auxout
+            {
+              \token_to_str:N \newlabeldata
+                {__tag_LastPage}
+                {
+                  {abspage} { \int_use:N \g_shipout_readonly_int}
+                  {tagmcabs}{ \int_use:N \c@g__tag_MCID_abs_int }
+                  {tagstruct}{\int_use:N \c@g__tag_struct_abs_int }
+                }
+            }
+       }
+   }
+
+ \AddToHook{enddocument/afterlastpage}
+  {\__tag_lastpagelabel:}
+ \cs_if_exist:NF \ref_value:nnn
+   {
+     \cs_new:Npn \ref_value:nnn #1#2#3
+       {
+         \exp_args:Nee
+           \__ref_value:nnn
+            { \tl_to_str:n {#1} } { \tl_to_str:n {#2} } {#3}
+       }
+     \cs_new:Npn \__ref_value:nnn #1#2#3
+       {
+         \tl_if_exist:cTF { g__ref_label_ #1 _ #2 _tl }
+           { \tl_use:c { g__ref_label_ #1 _ #2 _tl } }
+           {
+             #3
+           }
+       }
+   }
+
+\tl_new:N    \l__tag_tmpa_tl
+\tl_new:N    \l__tag_tmpb_tl
+\tl_new:N    \l__tag_get_tmpc_tl
+\tl_new:N    \l__tag_get_parent_tmpa_tl
+\tl_new:N    \l__tag_get_parent_tmpb_tl
+\str_new:N   \l__tag_tmpa_str
+\prop_new:N  \l__tag_tmpa_prop
+\seq_new:N   \l__tag_tmpa_seq
+\seq_new:N   \l__tag_tmpb_seq
+\clist_new:N \l__tag_tmpa_clist
+\int_new:N   \l__tag_tmpa_int
+\box_new:N   \l__tag_tmpa_box
+\box_new:N   \l__tag_tmpb_box
+\clist_const:Nn \c__tag_refmc_clist     {tagabspage,tagmcabs,tagmcid}
+\clist_const:Nn \c__tag_refstruct_clist {tagstruct,tagstructobj}
+\int_new:N  \l__tag_loglevel_int
+\bool_new:N \g__tag_active_space_bool
+\bool_new:N \g__tag_active_mc_bool
+\bool_new:N \g__tag_active_tree_bool
+\bool_new:N \g__tag_active_struct_bool
+\bool_new:N \g__tag_active_struct_dest_bool
+\bool_gset_true:N \g__tag_active_struct_dest_bool
+
+\bool_new:N \l__tag_active_mc_bool
+\bool_set_true:N \l__tag_active_mc_bool
+\bool_new:N \l__tag_active_struct_bool
+\bool_set_true:N \l__tag_active_struct_bool
+\bool_new:N \g__tag_tagunmarked_bool
+\prg_generate_conditional_variant:Nnn \pdf_object_if_exist:n {e}{T,F}
+\cs_generate_variant:Nn \pdf_object_ref:n {e}
+\cs_generate_variant:Nn \pdfannot_dict_put:nnn {nnx}
+\cs_generate_variant:Nn \pdffile_embed_stream:nnn {nxx,oxx}
+\cs_generate_variant:Nn \prop_gput:Nnn {Nxx,Nen}
+\cs_generate_variant:Nn \prop_put:Nnn  {Nxx}
+\cs_generate_variant:Nn \prop_item:Nn {No,Ne}
+\cs_generate_variant:Nn \ref_label:nn { nv }
+\cs_generate_variant:Nn \seq_set_split:Nnn{Nne}
+\cs_generate_variant:Nn \str_set_convert:Nnnn {Nonn, Noon, Nnon }
+\cs_generate_variant:Nn \clist_map_inline:nn {on}
+
+\ref_attribute_gset:nnnn { tagstruct } {0} { now }
+  { \int_use:N \c@g__tag_struct_abs_int }
+\ref_attribute_gset:nnnn { tagstructobj } {} { now }
+  {
+    \pdf_object_if_exist:eT {__tag/struct/\int_use:N \c@g__tag_struct_abs_int}
+      {
+        \pdf_object_ref:e{__tag/struct/\int_use:N \c@g__tag_struct_abs_int}
+      }
+  }
+\ref_attribute_gset:nnnn { tagabspage } {0} { shipout }
+  { \int_use:N \g_shipout_readonly_int }
+\ref_attribute_gset:nnnn { tagmcabs } {0} { now }
+  { \int_use:N \c@g__tag_MCID_abs_int }
+\ref_attribute_gset:nnnn {tagmcid }  {0} { now }
+  { \int_use:N \g__tag_MCID_tmp_bypage_int }
+\cs_new_protected:Npn \__tag_ref_label:nn #1 #2 %#1 label, #2 name of list mc or struct
+  {
+    \@bsphack
+    \ref_label:nv {#1}{c__tag_ref#2_clist}
+    \@esphack
+  }
+\cs_generate_variant:Nn \__tag_ref_label:nn {en}
+\cs_new:Npn \__tag_ref_value:nnn #1 #2 #3 %#1 label, #2 attribute, #3 default
+  {
+    \ref_value:nnn {#1}{#2}{#3}
+  }
+\cs_generate_variant:Nn \__tag_ref_value:nnn {enn}
+\cs_new:Npn \__tag_ref_value_lastpage:nn #1 #2
+  {
+    \ref_value:nnn {__tag_LastPage}{#1}{#2}
+  }
+
+\cs_set_eq:NN \__tag_prop_new:N        \prop_new:N
+\cs_set_eq:NN \__tag_seq_new:N         \seq_new:N
+\cs_set_eq:NN \__tag_prop_gput:Nnn     \prop_gput:Nnn
+\cs_set_eq:NN \__tag_seq_gput_right:Nn \seq_gput_right:Nn
+\cs_set_eq:NN \__tag_seq_item:cn       \seq_item:cn
+\cs_set_eq:NN \__tag_prop_item:cn      \prop_item:cn
+\cs_set_eq:NN \__tag_seq_show:N        \seq_show:N
+\cs_set_eq:NN \__tag_prop_show:N       \prop_show:N
+
+\cs_generate_variant:Nn \__tag_prop_gput:Nnn      { Nxn , Nxx, Nnx , cnn, cxn, cnx, cno}
+\cs_generate_variant:Nn \__tag_seq_gput_right:Nn  { Nx  , No, cn, cx }
+\cs_generate_variant:Nn \__tag_prop_new:N   { c }
+\cs_generate_variant:Nn \__tag_seq_new:N    { c }
+\cs_generate_variant:Nn \__tag_seq_show:N   { c }
+\cs_generate_variant:Nn \__tag_prop_show:N  { c }
+\cs_new_protected:Npn \tag_stop_group_begin:
+  {
+    \group_begin:
+    \bool_set_false:N \l__tag_active_struct_bool
+    \bool_set_false:N \l__tag_active_mc_bool
+  }
+\cs_set_eq:NN \tag_stop_group_end: \group_end:
+\cs_set_protected:Npn \tag_stop:
+  {
+    \bool_set_false:N \l__tag_active_struct_bool
+    \bool_set_false:N \l__tag_active_mc_bool
+  }
+\cs_set_protected:Npn \tag_start:
+  {
+    \bool_set_true:N \l__tag_active_struct_bool
+    \bool_set_true:N \l__tag_active_mc_bool
+  }
+\prop_new:N\g__tag_state_prop
+\cs_set_protected:Npn \tag_stop:n #1
+  {
+    \tag_if_active:TF
+      {
+        \bool_set_false:N \l__tag_active_struct_bool
+        \bool_set_false:N \l__tag_active_mc_bool
+        \prop_gput:Nnn \g__tag_state_prop { #1 }{ 1 }
+      }
+      {
+        \prop_gremove:Nn \g__tag_state_prop { #1 }
+      }
+  }
+\cs_set_protected:Npn \tag_start:n #1
+  {
+    \prop_gpop:NnN \g__tag_state_prop {#1}\l__tag_tmpa_tl
+     \quark_if_no_value:NF \l__tag_tmpa_tl
+      {
+        \bool_set_true:N \l__tag_active_struct_bool
+        \bool_set_true:N \l__tag_active_mc_bool
+      }
+  }
+
+\keys_define:nn { __tag / setup }
+  {
+    activate-space  .bool_gset:N = \g__tag_active_space_bool,
+    activate-mc     .bool_gset:N = \g__tag_active_mc_bool,
+    activate-tree   .bool_gset:N = \g__tag_active_tree_bool,
+    activate-struct .bool_gset:N = \g__tag_active_struct_bool,
+    activate-all    .meta:n =
+      {activate-mc={#1},activate-tree={#1},activate-struct={#1}},
+    activate-all  .default:n = true,
+    no-struct-dest .bool_gset_inverse:N = \g__tag_active_struct_dest_bool,
+ %    \end{macrocode}
+    log             .choice:,
+    log / none      .code:n = {\int_set:Nn \l__tag_loglevel_int { 0 }},
+    log / v         .code:n =
+      {
+        \int_set:Nn \l__tag_loglevel_int { 1 }
+        \cs_set_protected:Nn \__tag_check_typeout_v:n { \iow_term:x {##1} }
+      },
+    log / vv        .code:n = {\int_set:Nn \l__tag_loglevel_int { 2 }},
+    log / vvv       .code:n = {\int_set:Nn \l__tag_loglevel_int { 3 }},
+    log / all       .code:n = {\int_set:Nn \l__tag_loglevel_int { 10 }},
+    tagunmarked     .bool_gset:N = \g__tag_tagunmarked_bool,
+    tagunmarked     .initial:n  = true,
+    tabsorder       .choice:,
+    tabsorder / row       .code:n =
+      \pdfmanagement_add:nnn { Page } {Tabs}{/R},
+    tabsorder / column    .code:n =
+      \pdfmanagement_add:nnn { Page } {Tabs}{/C},
+    tabsorder / structure .code:n =
+      \pdfmanagement_add:nnn { Page } {Tabs}{/S},
+    tabsorder / none      .code:n =
+      \pdfmanagement_remove:nn {Page} {Tabs},
+    tabsorder       .initial:n = structure,
+    uncompress      .code:n = { \pdf_uncompress:  },
+  }
+\sys_if_engine_luatex:T
+  {
+    \file_input:n {tagpdf-luatex.def}
+  }
+%% File: tagpdf-checks.dtx
+\msg_new:nnn { tag } {mc-nested} { nested~marked~content~found~-~mcid~#1 }
+\msg_new:nnn { tag } {mc-tag-missing} { required~tag~missing~-~mcid~#1 }
+\msg_new:nnn { tag } {mc-label-unknown}
+  { label~#1~unknown~or~has~been~already~used.\\
+    Either~rerun~or~remove~one~of~the~uses. }
+\msg_new:nnn { tag } {mc-used-twice} { mc~#1~has~been~already~used }
+\msg_new:nnn { tag } {mc-not-open} { there~is~no~mc~to~end~at~#1 }
+\msg_new:nnn { tag } {mc-pushed} { #1~has~been~pushed~to~the~mc~stack}
+\msg_new:nnn { tag } {mc-popped} { #1~has~been~removed~from~the~mc~stack }
+\msg_new:nnn { tag } {mc-current}
+  { current~MC:~
+    \bool_if:NTF\g__tag_in_mc_bool
+      {abscnt=\__tag_get_mc_abs_cnt:,~tag=\g__tag_mc_key_tag_tl}
+      {no~MC~open,~current~abscnt=\__tag_get_mc_abs_cnt:"}
+  }
+\msg_new:nnn { tag } {struct-unknown}
+   { structure~with~number~#1~doesn't~exist\\ #2 }
+\msg_new:nnn { tag } {struct-no-objnum} { objnum~missing~for~structure~#1 }
+\msg_new:nnn { tag }
+  {struct-faulty-nesting}
+  { there~is~no~open~structure~on~the~stack }
+\msg_new:nnn { tag } {struct-missing-tag} { a~structure~must~have~a~tag! }
+\msg_new:nnn { tag } {struct-used-twice}
+  { structure~with~label~#1~has~already~been~used}
+\msg_new:nnn { tag } {struct-label-unknown}
+  { structure~with~label~#1~is~unknown~rerun}
+\msg_new:nnn { tag } {struct-show-closing}
+  { closing~structure~#1~tagged~\use:e{\prop_item:cn{g__tag_struct_#1_prop}{S}} }
+\msg_new:nnn { tag } {tree-struct-still-open}
+  {
+    There~are~still~open~structures~on~the~stack!\\
+    The~stack~contains~\seq_use:Nn\g__tag_struct_tag_stack_seq{,}.\\
+    The~structures~are~automatically~closed,\\
+    but~their~nesting~can~be~wrong.
+  }
+\msg_new:nnn { tag } {attr-unknown}  { attribute~#1~is~unknown}
+\msg_new:nnn { tag } {role-missing}     { tag~#1~has~no~role~assigned  }
+\msg_new:nnn { tag } {role-unknown}     { role~#1~is~not~known  }
+\msg_new:nnn { tag } {role-unknown-tag} { tag~#1~is~not~known  }
+\msg_new:nnn { tag } {role-parent-child}
+  { The~rule~between~parent~'#1'~\\and~child~'#2'~is~#3}
+\msg_new:nnn { tag } {role-remapping}
+  { remapping~tag~to~#1 }
+\msg_new:nnn { tag } {role-tag}         { mapping~tag~#1~to~role~#2  }
+\msg_new:nnn { tag } {new-tag}          { adding~new~tag~#1 }
+\msg_new:nnn { tag } {read-namespace}   { reading~namespace~definitions~tagpdf-ns-#1.def }
+\msg_new:nnn { tag } {namespace-missing}{ namespace~definitions~tagpdf-ns-#1.def~not~found }
+\msg_new:nnn { tag } {namespace-unknown}{ namespace~#1~is~not~declared }
+\msg_new:nnn { tag } {tree-mcid-index-wrong}
+  {something~is~wrong~with~the~mcid--rerun}
+\msg_new:nnn { tag } {sys-no-interwordspace}
+  {engine/output~mode~#1~doesn't~support~the~interword~spaces}
+\cs_set_eq:NN \__tag_check_typeout_v:n \use_none:n
+\msg_new:nnnn { tag } {para-hook-count-wrong}
+  {The~number~of~automatic~begin~(#1)~and~end~(#2)~para~hooks~differ!}
+  {This~quite~probably~a~coding~error~and~the~structure~will~be~wrong!}
+\prg_set_conditional:Npnn \tag_if_active: { p , T , TF, F }
+  {
+     \bool_lazy_all:nTF
+       {
+         {\g__tag_active_struct_bool}
+         {\g__tag_active_mc_bool}
+         {\g__tag_active_tree_bool}
+         {\l__tag_active_struct_bool}
+         {\l__tag_active_mc_bool}
+       }
+       {
+         \prg_return_true:
+       }
+       {
+         \prg_return_false:
+       }
+  }
+\prg_new_conditional:Npnn \__tag_check_if_active_mc: {T,F,TF}
+  {
+    \bool_lazy_and:nnTF { \g__tag_active_mc_bool } { \l__tag_active_mc_bool }
+      {
+         \prg_return_true:
+      }
+      {
+         \prg_return_false:
+      }
+  }
+\prg_new_conditional:Npnn \__tag_check_if_active_struct: {T,F,TF}
+  {
+    \bool_lazy_and:nnTF { \g__tag_active_struct_bool } { \l__tag_active_struct_bool }
+      {
+         \prg_return_true:
+      }
+      {
+         \prg_return_false:
+      }
+  }
+\cs_new_protected:Npn \__tag_check_structure_has_tag:n #1 %#1 struct num
+  {
+    \prop_if_in:cnF { g__tag_struct_#1_prop }
+      {S}
+      {
+        \msg_error:nn { tag } {struct-missing-tag}
+      }
+  }
+\cs_new_protected:Npn \__tag_check_structure_tag:N #1
+  {
+    \prop_if_in:NoF \g__tag_role_tags_NS_prop {#1}
+      {
+        \msg_warning:nnx { tag } {role-unknown-tag} {#1}
+      }
+  }
+\cs_new_protected:Npn \__tag_check_info_closing_struct:n #1 %#1 struct num
+  {
+    \int_compare:nNnT {\l__tag_loglevel_int} > { 0 }
+      {
+        \msg_info:nnn { tag } {struct-show-closing} {#1}
+      }
+  }
+
+\cs_generate_variant:Nn \__tag_check_info_closing_struct:n {o,x}
+\cs_new_protected:Npn \__tag_check_no_open_struct:
+  {
+    \msg_error:nn { tag } {struct-faulty-nesting}
+  }
+\cs_new_protected:Npn \__tag_check_struct_used:n #1 %#1 label
+  {
+    \prop_get:cnNT
+      {g__tag_struct_\__tag_ref_value:enn{tagpdfstruct-#1}{tagstruct}{unknown}_prop}
+      {P}
+      \l_tmpa_tl
+      {
+        \msg_warning:nnn { tag } {struct-used-twice} {#1}
+      }
+  }
+\cs_new_protected:Npn \__tag_check_add_tag_role:nn #1 #2 %#1 tag, #2 role
+  {
+    \tl_if_empty:nTF {#2}
+      {
+        \msg_error:nnn { tag } {role-missing} {#1}
+      }
+      {
+        \prop_get:NnNTF \g__tag_role_tags_NS_prop {#2} \l_tmpa_tl
+          {
+            \int_compare:nNnT {\l__tag_loglevel_int} > { 0 }
+              {
+                \msg_info:nnnn { tag } {role-tag} {#1} {#2}
+              }
+          }
+          {
+            \msg_error:nnn { tag } {role-unknown} {#2}
+          }
+      }
+  }
+\cs_new_protected:Npn \__tag_check_add_tag_role:nnn #1 #2 #3 %#1 tag/NS, #2 role #3 namespace
+  {
+    \tl_if_empty:nTF {#2}
+      {
+        \msg_error:nnn { tag } {role-missing} {#1}
+      }
+      {
+        \prop_get:cnNTF { g__tag_role_NS_#3_prop } {#2} \l_tmpa_tl
+          {
+            \int_compare:nNnT {\l__tag_loglevel_int} > { 0 }
+              {
+                \msg_info:nnnn { tag } {role-tag} {#1} {#2/#3}
+              }
+          }
+          {
+            \msg_error:nnn { tag } {role-unknown} {#2/#3}
+          }
+      }
+  }
+
+\cs_new_protected:Npn \__tag_check_mc_if_nested:
+  {
+    \__tag_mc_if_in:T
+      {
+        \msg_warning:nnx { tag } {mc-nested} { \__tag_get_mc_abs_cnt: }
+      }
+  }
+
+\cs_new_protected:Npn \__tag_check_mc_if_open:
+  {
+    \__tag_mc_if_in:F
+      {
+        \msg_warning:nnx { tag } {mc-not-open} { \__tag_get_mc_abs_cnt: }
+      }
+  }
+\cs_new_protected:Npn \__tag_check_mc_pushed_popped:nn #1 #2
+  {
+    \int_compare:nNnT
+      { \l__tag_loglevel_int } ={ 2 }
+      { \msg_info:nnx {tag}{mc-#1}{#2} }
+    \int_compare:nNnT
+      { \l__tag_loglevel_int } > { 2 }
+      {
+        \msg_info:nnx {tag}{mc-#1}{#2}
+        \seq_log:N \g__tag_mc_stack_seq
+      }
+  }
+\cs_new_protected:Npn \__tag_check_mc_tag:N #1  %#1 is var with a tag name in it
+  {
+    \tl_if_empty:NT #1
+      {
+        \msg_error:nnx { tag } {mc-tag-missing} { \__tag_get_mc_abs_cnt: }
+      }
+   \prop_if_in:NoF \g__tag_role_tags_NS_prop {#1}
+     {
+       \msg_warning:nnx { tag } {role-unknown-tag} {#1}
+     }
+  }
+\cs_new_protected:Npn \__tag_check_init_mc_used:
+  {
+    \intarray_new:Nn \g__tag_check_mc_used_intarray { 65536 }
+    \cs_gset_eq:NN \__tag_check_init_mc_used: \prg_do_nothing:
+  }
+\cs_new_protected:Npn \__tag_check_mc_used:n #1 %#1 mcid abscnt
+  {
+    \int_compare:nNnT {\l__tag_loglevel_int} > { 2 }
+      {
+        \__tag_check_init_mc_used:
+        \intarray_gset:Nnn \g__tag_check_mc_used_intarray
+          {#1}
+          { \intarray_item:Nn \g__tag_check_mc_used_intarray {#1} + 1 }
+        \int_compare:nNnT
+          {
+            \intarray_item:Nn \g__tag_check_mc_used_intarray {#1}
+          }
+          >
+          { 1 }
+          {
+            \msg_warning:nnn { tag } {mc-used-twice} {#1}
+          }
+      }
+  }
+\cs_new_protected:Npn \__tag_check_show_MCID_by_page:
+  {
+    \tl_set:Nx \l__tag_tmpa_tl
+      {
+        \__tag_ref_value_lastpage:nn
+          {abspage}
+          {-1}
+      }
+    \int_step_inline:nnnn {1}{1}
+      {
+        \l__tag_tmpa_tl
+      }
+      {
+        \seq_clear:N \l_tmpa_seq
+        \int_step_inline:nnnn
+          {1}
+          {1}
+          {
+            \__tag_ref_value_lastpage:nn
+              {tagmcabs}
+              {-1}
+          }
+          {
+            \int_compare:nT
+              {
+                \__tag_ref_value:enn
+                  {mcid-####1}
+                  {tagabspage}
+                  {-1}
+                =
+                ##1
+             }
+             {
+               \seq_gput_right:Nx \l_tmpa_seq
+                 {
+                   Page##1-####1-
+                   \__tag_ref_value:enn
+                     {mcid-####1}
+                     {tagmcid}
+                     {-1}
+                 }
+             }
+          }
+          \seq_show:N \l_tmpa_seq
+      }
+  }
+\prg_new_conditional:Npnn \__tag_check_if_mc_in_galley: { T,F,TF }
+ {
+   \tl_if_eq:NNTF \l__tag_mc_firstmarks_seq \l__tag_mc_botmarks_seq
+    { \prg_return_false: }
+    { \prg_return_true: }
+ }
+
+\prg_new_conditional:Npnn \__tag_check_if_mc_tmb_missing: { T,F,TF }
+ {
+  \bool_if:nTF
+    {
+      \str_if_eq_p:ee {\seq_item:Nn \l__tag_mc_firstmarks_seq {1}}{e-}
+      ||
+      \str_if_eq_p:ee {\seq_item:Nn \l__tag_mc_firstmarks_seq {1}}{b+}
+    }
+    { \prg_return_true: }
+    { \prg_return_false: }
+ }
+
+\prg_new_conditional:Npnn \__tag_check_if_mc_tme_missing: { T,F,TF }
+ {
+   \str_if_eq:eeTF {\seq_item:Nn \l__tag_mc_botmarks_seq {1}}{b+}
+    { \prg_return_true: }
+    { \prg_return_false: }
+ }
+%% File: tagpdf-mc-shared.dtx
+
+\newcounter { g__tag_MCID_abs_int }
+\cs_new:Npn \__tag_get_mc_abs_cnt: { \int_use:N \c@g__tag_MCID_abs_int }
+\int_new:N \g__tag_MCID_tmp_bypage_int
+\bool_new:N \g__tag_in_mc_bool
+\__tag_prop_new:N \g__tag_mc_parenttree_prop
+\seq_new:N \g__tag_mc_stack_seq
+\tl_new:N \l__tag_mc_artifact_type_tl
+\bool_new:N \l__tag_mc_key_stash_bool
+\bool_new:N \l__tag_mc_artifact_bool
+\tl_new:N \l__tag_mc_key_tag_tl
+\tl_new:N \g__tag_mc_key_tag_tl
+\tl_new:N \l__tag_mc_key_label_tl
+\tl_new:N \l__tag_mc_key_properties_tl
+\cs_new:Nn \__tag_mc_handle_mc_label:n
+  {
+    \__tag_ref_label:en{tagpdf-#1}{mc}
+  }
+\cs_new_protected:Npn \__tag_mc_set_label_used:n #1 %#1 labelname
+  {
+    \tl_new:c { g__tag_mc_label_\tl_to_str:n{#1}_used_tl }
+  }
+\cs_set_protected:Npn \tag_mc_use:n #1 %#1: label name
+  {
+    \__tag_check_if_active_struct:T
+      {
+        \tl_set:Nx  \l__tag_tmpa_tl { \__tag_ref_value:nnn{tagpdf-#1}{tagmcabs}{} }
+        \tl_if_empty:NTF\l__tag_tmpa_tl
+          {
+            \msg_warning:nnn {tag} {mc-label-unknown} {#1}
+          }
+          {
+            \cs_if_free:cTF { g__tag_mc_label_\tl_to_str:n{#1}_used_tl }
+              {
+                \__tag_mc_handle_stash:x { \l__tag_tmpa_tl }
+                \__tag_mc_set_label_used:n {#1}
+              }
+              {
+                 \msg_warning:nnn {tag}{mc-used-twice}{#1}
+              }
+          }
+       }
+  }
+\cs_set_protected:Npn \tag_mc_artifact_group_begin:n #1
+ {
+  \tag_mc_end_push:
+  \tag_mc_begin:n {artifact=#1}
+  \tag_stop_group_begin:
+ }
+
+\cs_set_protected:Npn \tag_mc_artifact_group_end:
+ {
+  \tag_stop_group_end:
+  \tag_mc_end:
+  \tag_mc_begin_pop:n{}
+ }
+\cs_set_protected:Npn \tag_mc_end_push:
+  {
+    \__tag_check_if_active_mc:T
+      {
+        \__tag_mc_if_in:TF
+          {
+            \seq_gpush:Nx \g__tag_mc_stack_seq { \tag_get:n {mc_tag} }
+            \__tag_check_mc_pushed_popped:nn
+              { pushed }
+              { \tag_get:n {mc_tag} }
+            \tag_mc_end:
+          }
+          {
+            \seq_gpush:Nn \g__tag_mc_stack_seq {-1}
+            \__tag_check_mc_pushed_popped:nn { pushed }{-1}
+          }
+      }
+  }
+
+\cs_set_protected:Npn \tag_mc_begin_pop:n #1
+  {
+    \__tag_check_if_active_mc:T
+      {
+        \seq_gpop:NNTF \g__tag_mc_stack_seq \l__tag_tmpa_tl
+          {
+            \tl_if_eq:NnTF \l__tag_tmpa_tl {-1}
+              {
+                \__tag_check_mc_pushed_popped:nn {popped}{-1}
+              }
+              {
+                \__tag_check_mc_pushed_popped:nn {popped}{\l__tag_tmpa_tl}
+                \tag_mc_begin:n {tag=\l__tag_tmpa_tl,#1}
+              }
+          }
+          {
+            \__tag_check_mc_pushed_popped:nn {popped}{empty~stack,~nothing}
+          }
+      }
+  }
+\keys_define:nn { __tag / mc }
+  {
+    stash                    .bool_set:N    = \l__tag_mc_key_stash_bool,
+    __artifact-bool          .bool_set:N    = \l__tag_mc_artifact_bool,
+    __artifact-type          .choice:,
+    __artifact-type / pagination .code:n    =
+      {
+        \tl_set:Nn \l__tag_mc_artifact_type_tl { Pagination }
+      },
+    __artifact-type / pagination/header .code:n    =
+      {
+        \tl_set:Nn \l__tag_mc_artifact_type_tl { Pagination/Subtype/Header }
+      },
+    __artifact-type / pagination/footer .code:n    =
+      {
+        \tl_set:Nn \l__tag_mc_artifact_type_tl { Pagination/Subtype/Footer }
+      },
+    __artifact-type / layout     .code:n    =
+      {
+        \tl_set:Nn \l__tag_mc_artifact_type_tl { Layout }
+      },
+    __artifact-type / page       .code:n    =
+      {
+        \tl_set:Nn \l__tag_mc_artifact_type_tl { Page }
+      },
+    __artifact-type / background .code:n    =
+      {
+        \tl_set:Nn \l__tag_mc_artifact_type_tl { Background }
+      },
+    __artifact-type / notype     .code:n    =
+      {
+        \tl_set:Nn \l__tag_mc_artifact_type_tl {}
+      },
+    __artifact-type /      .code:n    =
+      {
+        \tl_set:Nn \l__tag_mc_artifact_type_tl {}
+      },
+  }
+%% File: tagpdf.dtx
+
+
+\bool_if:NTF \g__tag_mode_lua_bool
+  {
+   \RequirePackage {tagpdf-mc-code-lua}
+  }
+  {
+   \RequirePackage {tagpdf-mc-code-generic} %
+  }
+%% File: tagpdf-tree.dtx
+\hook_gput_code:nnn{begindocument}{tagpdf}
+  {
+    \bool_if:NT \g__tag_active_tree_bool
+      {
+        \sys_if_output_pdf:TF
+          {
+            \AddToHook{enddocument/end} { \__tag_finish_structure: }
+          }
+          {
+            \AddToHook{shipout/lastpage} { \__tag_finish_structure: }
+          }
+      }
+  }
+\cs_new_protected:Npn \__tag_tree_final_checks:
+ {
+   \int_compare:nNnF {\seq_count:N\g__tag_struct_stack_seq}={1}
+    {
+      \msg_warning:nn {tag}{tree-struct-still-open}
+      \int_step_inline:nnn{2}{\seq_count:N\g__tag_struct_stack_seq}
+       {\tag_struct_end:}
+    }
+ }
+\pdf_object_new:n { __tag/struct/0 }
+\hook_gput_code:nnn{shipout/lastpage}{tagpdf}
+  {
+    \bool_if:NT \g__tag_active_tree_bool
+      {
+        \pdfmanagement_add:nnn { Catalog / MarkInfo } { Marked } { true }
+        \pdfmanagement_add:nnx
+          { Catalog }
+          { StructTreeRoot }
+          { \pdf_object_ref:n { __tag/struct/0 } }
+      }
+  }
+\int_new:N\g__tag_tree_id_pad_int
+\cs_generate_variant:Nn \tl_count:n {e}
+\hook_gput_code:nnn{begindocument}{tagpdf}
+ {
+   \int_gset:Nn\g__tag_tree_id_pad_int
+    {\tl_count:e { \__tag_ref_value_lastpage:nn{tagstruct}{1000}}+1}
+ }
+
+\cs_new_protected:Npn \__tag_tree_write_idtree:
+  {
+    \tl_clear:N \l__tag_tmpa_tl
+    \tl_clear:N \l__tag_tmpb_tl
+    \int_zero:N \l__tag_tmpa_int
+    \int_step_inline:nn {\c@g__tag_struct_abs_int}
+      {
+        \int_incr:N\l__tag_tmpa_int
+        \tl_put_right:Nx \l__tag_tmpa_tl
+          {
+            \__tag_struct_get_id:n{##1}~\pdf_object_ref:n{__tag/struct/##1}~
+          }
+        \int_compare:nNnF {\l__tag_tmpa_int}<{50} %
+          {
+            \pdf_object_unnamed_write:nx {dict}
+              { /Limits~[\__tag_struct_get_id:n{##1-\l__tag_tmpa_int+1}~\__tag_struct_get_id:n{##1}]
+                /Names~[\l__tag_tmpa_tl]
+              }
+            \tl_put_right:Nx\l__tag_tmpb_tl {\pdf_object_ref_last:\c_space_tl}
+            \int_zero:N \l__tag_tmpa_int
+            \tl_clear:N \l__tag_tmpa_tl
+          }
+      }
+     \tl_if_empty:NF \l__tag_tmpa_tl
+      {
+        \pdf_object_unnamed_write:nx {dict}
+          {
+           /Limits~
+             [\__tag_struct_get_id:n{\c@g__tag_struct_abs_int-\l__tag_tmpa_int+1}~
+              \__tag_struct_get_id:n{\c@g__tag_struct_abs_int}]
+           /Names~[\l__tag_tmpa_tl]
+          }
+        \tl_put_right:Nx\l__tag_tmpb_tl {\pdf_object_ref_last:}
+      }
+      \pdf_object_unnamed_write:nx {dict}{/Kids~[\l__tag_tmpb_tl]}
+      \__tag_prop_gput:cnx
+          { g__tag_struct_0_prop }
+          { IDTree }
+          { \pdf_object_ref_last: }
+   }
+\pdf_version_compare:NnTF < {2.0}
+ {
+   \cs_new_protected:Npn \__tag_tree_write_structtreeroot:
+     {
+        \__tag_prop_gput:cnx
+          { g__tag_struct_0_prop }
+          { ParentTree }
+          { \pdf_object_ref:n { __tag/tree/parenttree } }
+        \__tag_prop_gput:cnx
+          { g__tag_struct_0_prop }
+          { RoleMap }
+          { \pdf_object_ref:n { __tag/tree/rolemap } }
+        \__tag_struct_fill_kid_key:n { 0 }
+        \__tag_struct_get_dict_content:nN { 0 } \l__tag_tmpa_tl
+        \pdf_object_write:nnx
+            { __tag/struct/0 }
+            {dict}
+            {
+             \l__tag_tmpa_tl
+            }
+     }
+ }
+ {
+   \cs_new_protected:Npn \__tag_tree_write_structtreeroot:
+     {
+        \__tag_prop_gput:cnx
+          { g__tag_struct_0_prop }
+          { ParentTree }
+          { \pdf_object_ref:n { __tag/tree/parenttree } }
+        \__tag_struct_fill_kid_key:n { 0 }
+        \__tag_struct_get_dict_content:nN { 0 } \l__tag_tmpa_tl
+        \pdf_object_write:nnx
+            { __tag/struct/0 }
+            {dict}
+            {
+             \l__tag_tmpa_tl
+            }
+     }
+ }
+\cs_new_protected:Npn \__tag_tree_write_structelements:
+  {
+    \int_step_inline:nnnn {1}{1}{\c@g__tag_struct_abs_int}
+      {
+        \__tag_struct_write_obj:n { ##1 }
+      }
+  }
+\pdf_object_new:n { __tag/tree/parenttree }
+\newcounter  { g__tag_parenttree_obj_int }
+\hook_gput_code:nnn{begindocument}{tagpdf}
+  {
+    \int_gset:Nn
+      \c@g__tag_parenttree_obj_int
+      { \__tag_ref_value_lastpage:nn{abspage}{100}  }
+  }
+\tl_new:N \g__tag_parenttree_objr_tl
+\cs_new_protected:Npn \__tag_parenttree_add_objr:nn #1 #2 %#1 StructParent number, #2 objref
+  {
+    \tl_gput_right:Nx \g__tag_parenttree_objr_tl
+      {
+        #1 \c_space_tl #2 ^^J
+      }
+  }
+\tl_new:N \l__tag_parenttree_content_tl
+
+\cs_new_protected:Npn \__tag_tree_fill_parenttree:
+  {
+    \int_step_inline:nnnn{1}{1}{\__tag_ref_value_lastpage:nn{abspage}{-1}} %not quite clear if labels are needed. See lua code
+      { %page ##1
+        \prop_clear:N \l__tag_tmpa_prop
+        \int_step_inline:nnnn{1}{1}{\__tag_ref_value_lastpage:nn{tagmcabs}{-1}}
+          {
+            %mcid####1
+            \int_compare:nT
+              {\__tag_ref_value:enn{mcid-####1}{tagabspage}{-1}=##1} %mcid is on current page
+              {% yes
+                \prop_put:Nxx
+                  \l__tag_tmpa_prop
+                  {\__tag_ref_value:enn{mcid-####1}{tagmcid}{-1}}
+                  {\prop_item:Nn \g__tag_mc_parenttree_prop {####1}}
+              }
+          }
+        \tl_put_right:Nx\l__tag_parenttree_content_tl
+          {
+            \int_eval:n {##1-1}\c_space_tl
+            [\c_space_tl %]
+          }
+        \int_step_inline:nnnn
+          {0}
+          {1}
+          { \prop_count:N \l__tag_tmpa_prop -1 }
+          {
+            \prop_get:NnNTF \l__tag_tmpa_prop {####1} \l__tag_tmpa_tl
+              {% page#1:mcid##1:\l__tag_tmpa_tl :content
+                \tl_put_right:Nx \l__tag_parenttree_content_tl
+                  {
+                    \pdf_object_if_exist:eT { __tag/struct/\l__tag_tmpa_tl }
+                     {
+                       \pdf_object_ref:e { __tag/struct/\l__tag_tmpa_tl }
+                     }
+                    \c_space_tl
+                  }
+              }
+              {
+                \msg_warning:nn { tag } {tree-mcid-index-wrong}
+              }
+          }
+        \tl_put_right:Nn
+          \l__tag_parenttree_content_tl
+          {%[
+            ]^^J
+          }
+      }
+  }
+\cs_new_protected:Npn \__tag_tree_lua_fill_parenttree:
+  {
+    \tl_set:Nn \l__tag_parenttree_content_tl
+      {
+        \lua_now:e
+          {
+            ltx.__tag.func.output_parenttree
+              (
+                \int_use:N\g_shipout_readonly_int
+              )
+          }
+      }
+  }
+\cs_new_protected:Npn \__tag_tree_write_parenttree:
+  {
+    \bool_if:NTF \g__tag_mode_lua_bool
+      {
+        \__tag_tree_lua_fill_parenttree:
+      }
+      {
+        \__tag_tree_fill_parenttree:
+      }
+    \tl_put_right:NV \l__tag_parenttree_content_tl\g__tag_parenttree_objr_tl
+    \pdf_object_write:nnx  { __tag/tree/parenttree }{dict}
+      {
+        /Nums\c_space_tl [\l__tag_parenttree_content_tl]
+      }
+  }
+\pdf_version_compare:NnT < {2.0}
+  {
+    \pdf_object_new:n { __tag/tree/rolemap }
+  }
+\pdf_version_compare:NnTF < {2.0}
+  {
+   \cs_new_protected:Npn \__tag_tree_write_rolemap:
+    {
+      \prop_map_inline:Nn\g__tag_role_rolemap_prop
+        {
+          \tl_if_eq:nnF {##1}{##2}
+           {
+             \pdfdict_gput:nnx {g__tag_role/RoleMap_dict}
+              {##1}
+              {\pdf_name_from_unicode_e:n{##2}}
+           }
+        }
+      \pdf_object_write:nnx  { __tag/tree/rolemap }{dict}
+       {
+        \pdfdict_use:n{g__tag_role/RoleMap_dict}
+       }
+    }
+  }
+  {
+    \cs_new_protected:Npn \__tag_tree_write_rolemap:{}
+  }
+
+\cs_new_protected:Npn \__tag_tree_write_classmap:
+  {
+    \tl_clear:N \l__tag_tmpa_tl
+    \seq_gremove_duplicates:N \g__tag_attr_class_used_seq
+    \seq_set_map:NNn \l__tag_tmpa_seq \g__tag_attr_class_used_seq
+      {
+        ##1\c_space_tl
+        <<
+          \prop_item:Nn
+            \g__tag_attr_entries_prop
+            {##1}
+        >>
+      }
+    \tl_set:Nx \l__tag_tmpa_tl
+      {
+        \seq_use:Nn
+          \l__tag_tmpa_seq
+          { \iow_newline: }
+      }
+    \tl_if_empty:NF
+      \l__tag_tmpa_tl
+      {
+        \pdf_object_new:n { __tag/tree/classmap }
+        \pdf_object_write:nnx
+          { __tag/tree/classmap }
+          {dict}
+          { \l__tag_tmpa_tl }
+        \__tag_prop_gput:cnx
+          { g__tag_struct_0_prop }
+          { ClassMap }
+          { \pdf_object_ref:n { __tag/tree/classmap }  }
+      }
+  }
+\pdf_object_new:n { __tag/tree/namespaces }
+\cs_new_protected:Npn \__tag_tree_write_namespaces:
+  {
+   \pdf_version_compare:NnF < {2.0}
+    {
+      \prop_map_inline:Nn \g__tag_role_NS_prop
+        {
+          \pdfdict_if_empty:nF {g__tag_role/RoleMapNS_##1_dict}
+            {
+              \pdf_object_write:nnx {__tag/RoleMapNS/##1}{dict}
+                {
+                  \pdfdict_use:n {g__tag_role/RoleMapNS_##1_dict}
+                }
+              \pdfdict_gput:nnx{g__tag_role/Namespace_##1_dict}
+                {RoleMapNS}{\pdf_object_ref:n {__tag/RoleMapNS/##1}}
+            }
+          \pdf_object_write:nnx{tag/NS/##1}{dict}
+            {
+               \pdfdict_use:n {g__tag_role/Namespace_##1_dict}
+            }
+        }
+      \pdf_object_write:nnx {__tag/tree/namespaces}{array}
+        {
+          \prop_map_tokens:Nn \g__tag_role_NS_prop{\use_ii:nn}
+        }
+    }
+  }
+\hook_new:n {tagpdf/finish/before}
+\cs_new_protected:Npn \__tag_finish_structure:
+  {
+    \bool_if:NT\g__tag_active_tree_bool
+      {
+        \hook_use:n {tagpdf/finish/before}
+        \__tag_tree_final_checks:
+        \__tag_tree_write_parenttree:
+        \__tag_tree_write_idtree:
+        \__tag_tree_write_rolemap:
+        \__tag_tree_write_classmap:
+        \__tag_tree_write_namespaces:
+        \__tag_tree_write_structelements: %this is rather slow!!
+        \__tag_tree_write_structtreeroot:
+      }
+  }
+\hook_gput_code:nnn{begindocument}{tagpdf}
+  {
+    \bool_if:NT\g__tag_active_tree_bool
+      {
+       \hook_gput_code:nnn{shipout/before} { tagpdf/structparents }
+         {
+           \pdfmanagement_add:nnx
+             { Page }
+             { StructParents }
+             { \int_eval:n { \g_shipout_readonly_int} }
+         }
+      }
+  }
+%% File: tagpdf-data.dtx
+\prop_const_from_keyval:Nn \c__tag_role_rules_prop
+ {
+    0..n = 1,
+    0..1 = 2,
+    1    = 3, %StructTreeRoot, not really needed
+    [a]  = 4, %ruby
+    [b]  = 5, %warichu
+    c    = 6, % WP ??
+    ‡    = 7, % Part,Div,NonStruct -> "check parent"
+    ∅*   = 8, % or negative by default?
+    ∅    = -1,
+ }
+\prop_const_from_keyval:Nn \c__tag_role_rules_num_prop
+ {
+   1 = 0..n,
+   2 = 0..1,
+   3 = 1   , %StructTreeRoot, not really needed
+   4 = [a] , %ruby
+   5 = [b] , %warichu
+   6 = c   , % WP ??
+   7 = ‡   , % Part,Div,NonStruct -> "check parent"
+   8 = ∅*  , % or negative by default?
+  -1 = ∅ ,
+ }
+%% File: tagpdf-roles.dtx
+\prop_new:N    \g__tag_role_tags_NS_prop
+\prop_new:N    \g__tag_role_tags_class_prop
+\prop_new:N \g__tag_role_NS_prop
+\prop_new:N \g__tag_role_index_prop
+\prop_new:N \l__tag_role_debug_prop
+\tl_new:N \l__tag_role_tag_tmpa_tl
+\tl_new:N \l__tag_role_tag_namespace_tmpa_tl
+\tl_new:N \l__tag_role_role_tmpa_tl
+\tl_new:N \l__tag_role_role_namespace_tmpa_tl
+\seq_new:N\l__tag_role_tmpa_seq
+\pdfdict_new:n {g__tag_role/RoleMap_dict}
+\prop_new:N \g__tag_role_rolemap_prop
+\pdf_version_compare:NnTF < {2.0}
+ {
+   \cs_new_protected:Npn \__tag_role_NS_new:nnn #1 #2 #3
+    {
+      \prop_new:c { g__tag_role_NS_#1_prop }
+      \prop_new:c { g__tag_role_NS_#1_class_prop }
+      \prop_gput:Nnx \g__tag_role_NS_prop {#1}{}
+    }
+ }
+ {
+  \cs_new_protected:Npn \__tag_role_NS_new:nnn #1 #2 #3
+    {
+      \prop_new:c { g__tag_role_NS_#1_prop }
+      \prop_new:c { g__tag_role_NS_#1_class_prop }
+      \pdf_object_new:n {tag/NS/#1}
+      \pdfdict_new:n     {g__tag_role/Namespace_#1_dict}
+      \pdf_object_new:n {__tag/RoleMapNS/#1}
+      \pdfdict_new:n     {g__tag_role/RoleMapNS_#1_dict}
+      \pdfdict_gput:nnn
+        {g__tag_role/Namespace_#1_dict}
+        {Type}
+        {/Namespace}
+      \pdf_string_from_unicode:nnN{utf8/string}{#2}\l__tag_tmpa_str
+      \tl_if_empty:NF \l__tag_tmpa_str
+        {
+          \pdfdict_gput:nnx
+            {g__tag_role/Namespace_#1_dict}
+            {NS}
+            {\l__tag_tmpa_str}
+        }
+      %RoleMapNS is added in tree
+      \tl_if_empty:nF  {#3}
+       {
+         \pdfdict_gput:nnx{g__tag_role/Namespace_#1_dict}
+          {Schema}{#3}
+       }
+      \prop_gput:Nnx \g__tag_role_NS_prop {#1}{\pdf_object_ref:n{tag/NS/#1}~}
+    }
+ }
+\str_const:Nx \c__tag_role_userNS_id_str
+  { data:,
+    \int_to_Hex:n{\int_rand:n {65535}}
+    \int_to_Hex:n{\int_rand:n {65535}}
+    -
+    \int_to_Hex:n{\int_rand:n {65535}}
+    -
+    \int_to_Hex:n{\int_rand:n {65535}}
+    -
+    \int_to_Hex:n{\int_rand:n {65535}}
+    -
+    \int_to_Hex:n{\int_rand:n {16777215}}
+    \int_to_Hex:n{\int_rand:n {16777215}}
+  }
+\__tag_role_NS_new:nnn {pdf}   {http://iso.org/pdf/ssn}{}
+\__tag_role_NS_new:nnn {pdf2}  {http://iso.org/pdf2/ssn}{}
+\pdf_version_compare:NnF < {2.0}
+  {
+    \__tag_role_NS_new:nnn {mathml}{http://www.w3.org/1998/Math/MathML}{}
+  }
+\__tag_role_NS_new:nnn {latex} {https://www.latex-project.org/ns/dflt/2022}{}
+\__tag_role_NS_new:nnn {latex-book} {https://www.latex-project.org/ns/book/2022}{}
+\__tag_role_NS_new:nnn {latex-inline} {https://www.latex-project.org/ns/inline/2022}{}
+\exp_args:Nnx
+  \__tag_role_NS_new:nnn {user}{\c__tag_role_userNS_id_str}{}
+\pdf_version_compare:NnTF < {2.0}
+  {
+   \sys_if_engine_luatex:TF
+    {
+      \cs_new_protected:Npn \__tag_role_alloctag:nnn #1 #2 #3 %#1 tagname, ns, type
+       {
+         \lua_now:e { ltx.__tag.func.alloctag ('#1') }
+         \prop_gput:Nnn \g__tag_role_tags_NS_prop   {#1}{#2}
+         \prop_gput:cnn {g__tag_role_NS_#2_prop}  {#1}{{}{}}
+         \prop_gput:Nnn \g__tag_role_tags_class_prop {#1}{#3}
+         \prop_gput:cnn {g__tag_role_NS_#2_class_prop}  {#1}{--UNUSED--}
+       }
+    }
+    {
+      \cs_new_protected:Npn \__tag_role_alloctag:nnn #1 #2 #3
+       {
+         \prop_gput:Nnn \g__tag_role_tags_NS_prop   {#1}{#2}
+         \prop_gput:cnn {g__tag_role_NS_#2_prop}  {#1}{{}{}}
+         \prop_gput:Nnn \g__tag_role_tags_class_prop {#1}{#3}
+         \prop_gput:cnn {g__tag_role_NS_#2_class_prop}  {#1}{--UNUSED--}
+       }
+    }
+  }
+  {
+   \sys_if_engine_luatex:TF
+    {
+      \cs_new_protected:Npn \__tag_role_alloctag:nnn #1 #2 #3 %#1 tagname, ns, type
+       {
+         \lua_now:e { ltx.__tag.func.alloctag ('#1') }
+         \prop_gput:Nnn \g__tag_role_tags_NS_prop   {#1}{#2}
+         \prop_gput:cnn {g__tag_role_NS_#2_prop}  {#1}{{}{}}
+         \prop_gput:Nnn \g__tag_role_tags_class_prop {#1}{--UNUSED--}
+         \prop_gput:cnn {g__tag_role_NS_#2_class_prop}  {#1}{#3}
+       }
+    }
+    {
+      \cs_new_protected:Npn \__tag_role_alloctag:nnn #1 #2 #3
+       {
+         \prop_gput:Nnn \g__tag_role_tags_NS_prop   {#1}{#2}
+         \prop_gput:cnn {g__tag_role_NS_#2_prop}  {#1}{{}{}}
+         \prop_gput:Nnn \g__tag_role_tags_class_prop {#1}{--UNUSED--}
+         \prop_gput:cnn {g__tag_role_NS_#2_class_prop}  {#1}{#3}
+       }
+    }
+  }
+\cs_generate_variant:Nn  \__tag_role_alloctag:nnn {nnV}
+\cs_new_protected:Nn \__tag_role_add_tag:nn % (new) name, reference to old
+  {
+    \__tag_check_add_tag_role:nn {#1}{#2}
+    \prop_if_in:NnF \g__tag_role_tags_NS_prop {#1}
+      {
+        \int_compare:nNnT {\l__tag_loglevel_int} > { 0 }
+          {
+            \msg_info:nnn { tag }{new-tag}{#1}
+          }
+      }
+    \prop_get:NnN \g__tag_role_tags_class_prop {#2}\l__tag_tmpa_tl
+    \quark_if_no_value:NT \l__tag_tmpa_tl
+      {
+        \tl_set:Nn\l__tag_tmpa_tl{--UNKNOWN--}
+      }
+    \__tag_role_alloctag:nnV {#1}{user}\l__tag_tmpa_tl
+    \tl_if_empty:nF { #2 }
+      {
+        \prop_get:NnN \g__tag_role_rolemap_prop {#2}\l__tag_tmpa_tl
+        \quark_if_no_value:NTF \l__tag_tmpa_tl
+          {
+            \prop_gput:Nnx \g__tag_role_rolemap_prop {#1}{\tl_to_str:n{#2}}
+          }
+          {
+            \prop_gput:NnV \g__tag_role_rolemap_prop {#1}\l__tag_tmpa_tl
+          }
+      }
+  }
+\cs_generate_variant:Nn \__tag_role_add_tag:nn {VV,ne}
+\pdf_version_compare:NnT < {2.0}
+ {
+   \cs_new:Npn \__tag_role_get:nnN #1#2#3
+    {
+      \prop_get:NnNF \g__tag_role_rolemap_prop {#1}#3
+        {
+          \tl_set:Nn #3 {#1}
+        }
+    }
+   \cs_generate_variant:Nn \__tag_role_get:nnN {VVN}
+ }
+
+\cs_new_protected:Nn \__tag_role_add_tag:nnnn %tag/namespace/role/namespace
+  {
+    \__tag_check_add_tag_role:nnn {#1/#2}{#3}{#4}
+    \int_compare:nNnT {\l__tag_loglevel_int} > { 0 }
+      {
+        \msg_info:nnn { tag }{new-tag}{#1}
+      }
+    \prop_get:cnN { g__tag_role_NS_#4_class_prop } {#3}\l__tag_tmpa_tl
+    \quark_if_no_value:NT \l__tag_tmpa_tl
+      {
+        \tl_set:Nn\l__tag_tmpa_tl{--UNKNOWN--}
+      }
+    \__tag_role_alloctag:nnV {#1}{#2}\l__tag_tmpa_tl
+    \tl_if_in:nnF {-pdf-pdf2-mathml-}{-#2-}
+     {
+       \pdfdict_gput:nnx {g__tag_role/RoleMapNS_#2_dict}{#1}
+          {
+            [
+              \pdf_name_from_unicode_e:n{#3}
+              \c_space_tl
+              \pdf_object_ref:n {tag/NS/#4}
+            ]
+          }
+     }
+    \tl_if_empty:nF { #2 }
+      {
+        \prop_get:cnN { g__tag_role_NS_#4_prop } {#3}\l__tag_tmpa_tl
+        \quark_if_no_value:NTF \l__tag_tmpa_tl
+          {
+            \prop_gput:cnx { g__tag_role_NS_#2_prop } {#1}
+              {{\tl_to_str:n{#3}}{\tl_to_str:n{#4}}}
+          }
+          {
+            \prop_gput:cno { g__tag_role_NS_#2_prop } {#1}{\l__tag_tmpa_tl}
+          }
+      }
+   }
+\cs_generate_variant:Nn \__tag_role_add_tag:nnnn {VVVV}
+\pdf_version_compare:NnF < {2.0}
+ {
+   \cs_new:Npn \__tag_role_get:nnN #1#2#3
+    {
+      \prop_get:cnNTF {g__tag_role_NS_#2_prop} {#1}\l__tag_get_tmpc_tl
+        {
+         \tl_set:Nx #3 {\exp_last_unbraced:NV\use_i:nn  \l__tag_get_tmpc_tl}
+        }
+        {
+         \tl_set:Nn #3 {#1}
+        }
+    }
+   \cs_generate_variant:Nn \__tag_role_get:nnN {VVN}
+ }
+
+\bool_new:N\l__tag_role_update_bool
+\bool_set_true:N \l__tag_role_update_bool
+\pdf_version_compare:NnTF < {2.0}
+ {
+  \cs_new_protected:Npn \__tag_role_read_namespace_line:nw #1#2,#3,#4,#5,#6\q_stop %
+   % #1 NS, #2 tag, #3 rolemap, #4 NS rolemap #5 type
+    {
+      \tl_if_empty:nF { #2 }
+       {
+        \bool_if:NTF \l__tag_role_update_bool
+         {
+          \tl_if_empty:nTF {#5}
+            {
+              \prop_get:NnN \g__tag_role_tags_class_prop  {#3}\l__tag_tmpa_tl
+              \quark_if_no_value:NT \l__tag_tmpa_tl
+                {
+                  \tl_set:Nn\l__tag_tmpa_tl{--UNKNOWN--}
+                }
+            }
+            {
+              \tl_set:Nn \l__tag_tmpa_tl {#5}
+            }
+          \__tag_role_alloctag:nnV {#2}{#1}\l__tag_tmpa_tl
+          \tl_if_eq:nnF {#2}{#3}
+           {
+            \__tag_role_add_tag:nn {#2}{#3}
+           }
+          \prop_gput:cnn {g__tag_role_NS_#1_prop}  {#2}{{#3}{}}
+         }
+         {
+           \prop_gput:cnn {g__tag_role_NS_#1_prop}  {#2}{{#3}{}}
+           \prop_gput:cnn {g__tag_role_NS_#1_class_prop}  {#2}{--UNUSED--}
+         }
+       }
+    }
+ }
+ {
+   \cs_new_protected:Npn \__tag_role_read_namespace_line:nw #1#2,#3,#4,#5,#6\q_stop %
+    % #1 NS, #2 tag, #3 rolemap, #4 NS rolemap #5 type
+    {
+      \tl_if_empty:nF {#2}
+       {
+        \tl_if_empty:nTF {#5}
+         {
+           \prop_get:cnN { g__tag_role_NS_#4_class_prop } {#3}\l__tag_tmpa_tl
+           \quark_if_no_value:NT \l__tag_tmpa_tl
+             {
+               \tl_set:Nn\l__tag_tmpa_tl{--UNKNOWN--}
+             }
+         }
+         {
+           \tl_set:Nn \l__tag_tmpa_tl {#5}
+         }
+        \__tag_role_alloctag:nnV {#2}{#1}\l__tag_tmpa_tl
+        \bool_lazy_and:nnT
+           { ! \tl_if_empty_p:n {#3} }{! \str_if_eq_p:nn {#1}{pdf2}}
+           {
+            \__tag_role_add_tag:nnnn {#2}{#1}{#3}{#4}
+           }
+        \prop_gput:cnn {g__tag_role_NS_#1_prop}  {#2}{{#3}{#4}}
+       }
+    }
+ }
+\cs_new_protected:Npn \__tag_role_read_namespace:n #1 %name of namespace
+  {
+    \prop_if_exist:cF {g__tag_role_NS_#1_prop}
+      { \msg_warning:nnn {tag}{namespace-unknown}{#1} }
+    \file_if_exist:nTF { tagpdf-ns-#1.def}
+     {
+       \ior_open:Nn \g_tmpa_ior {tagpdf-ns-#1.def}
+       \msg_info:nnn {tag}{read-namespace}{#1}
+       \ior_map_inline:Nn \g_tmpa_ior
+         {
+           \__tag_role_read_namespace_line:nw {#1} ##1,,,,\q_stop
+         }
+       \ior_close:N\g_tmpa_ior
+     }
+     {
+      \msg_warning:nnn{tag}{namespace-missing}{#1}
+     }
+  }
+
+
+\__tag_role_read_namespace:n {pdf}
+\__tag_role_read_namespace:n {pdf2}
+\pdf_version_compare:NnF < {2.0}
+  {\__tag_role_read_namespace:n {mathml}}
+\bool_set_false:N\l__tag_role_update_bool
+\__tag_role_read_namespace:n {latex-inline}
+\__tag_role_read_namespace:n {latex-book}
+\bool_set_true:N\l__tag_role_update_bool
+\__tag_role_read_namespace:n {latex}
+\__tag_role_read_namespace:n {pdf}
+\__tag_role_read_namespace:n {pdf2}
+\pdf_version_compare:NnTF < {2.0}
+  {
+    \hook_gput_code:nnn {begindocument}{tagpdf}
+      {
+        \cs_if_exist:NT \chapter
+           {
+             \prop_map_inline:cn{g__tag_role_NS_latex-book_prop}
+               {
+                 \__tag_role_add_tag:ne {#1}{\use_i:nn #2\c_empty_tl\c_empty_tl}
+               }
+           }
+      }
+  }
+  {
+    \hook_gput_code:nnn {begindocument}{tagpdf}
+      {
+        \cs_if_exist:NT \chapter
+         {
+           \prop_map_inline:cn{g__tag_role_NS_latex-book_prop}
+             {
+               \prop_gput:Nnn \g__tag_role_tags_NS_prop    { #1 }{ latex-book }
+             }
+         }
+      }
+  }
+\intarray_new:Nn \g__tag_role_parent_child_intarray {6000}
+\cs_new_protected:Npn \__tag_store_parent_child_rule:nnn #1 #2 #3 % num parent, num child, #3 string
+  {
+    \intarray_gset:Nnn \g__tag_role_parent_child_intarray
+      { #1#2 }{0\prop_item:Nn\c__tag_role_rules_prop{#3}}
+  }
+\int_zero:N  \l__tag_tmpa_int
+\pdf_version_compare:NnTF < {2.0}
+  {
+    \ior_open:Nn \g_tmpa_ior {tagpdf-parent-child.csv}
+  }
+  {
+    \ior_open:Nn \g_tmpa_ior {tagpdf-parent-child-2.csv}
+  }
+
+\ior_map_inline:Nn \g_tmpa_ior
+  {
+    \tl_if_empty:nF{#1}
+      {
+        \int_incr:N\l__tag_tmpa_int
+        \seq_set_from_clist:Nn\l__tag_tmpa_seq { #1 }
+        \int_compare:nNnTF {\l__tag_tmpa_int}=1
+          {
+            \seq_map_indexed_inline:Nn \l__tag_tmpa_seq
+              {
+                \prop_gput:Nnx\g__tag_role_index_prop
+                  {##2}
+                  {\int_compare:nNnT{##1}<{10}{0}##1}
+              }
+          }
+         {
+           \seq_set_from_clist:Nn\l__tag_tmpa_seq { #1 }
+           \seq_pop_left:NN\l__tag_tmpa_seq\l__tag_tmpa_tl
+           \prop_get:NVN \g__tag_role_index_prop \l__tag_tmpa_tl \l__tag_tmpb_tl
+           \seq_pop_left:NN\l__tag_tmpa_seq\l__tag_tmpa_tl
+           \seq_pop_left:NN\l__tag_tmpa_seq\l__tag_tmpa_tl
+           \seq_map_indexed_inline:Nn \l__tag_tmpa_seq
+             {
+               \exp_args:Nnx
+               \__tag_store_parent_child_rule:nnn {##1}{\l__tag_tmpb_tl}{ ##2 }
+             }
+         }
+      }
+  }
+\ior_close:N\g_tmpa_ior
+\prop_get:NnN\g__tag_role_index_prop{StructTreeRoot}\l__tag_tmpa_tl
+\prop_gput:Nnx\g__tag_role_index_prop{Root}{\l__tag_tmpa_tl}
+\prop_get:NnN\g__tag_role_index_prop{Hn}\l__tag_tmpa_tl
+\pdf_version_compare:NnTF < {2.0}
+  {
+    \int_step_inline:nn{6}
+      {
+        \prop_gput:Nnx\g__tag_role_index_prop{H#1}{\l__tag_tmpa_tl}
+      }
+  }
+  {
+    \int_step_inline:nn{10}
+      {
+        \prop_gput:Nnx\g__tag_role_index_prop{H#1}{\l__tag_tmpa_tl}
+      }
+    \prop_get:NnN\g__tag_role_index_prop {mathml}\l__tag_tmpa_tl
+    \prop_get:NnN\g__tag_role_index_prop {math}\l__tag_tmpb_tl
+    \prop_map_inline:Nn \g__tag_role_NS_mathml_prop
+      {
+        \prop_gput:NnV\g__tag_role_index_prop{#1}\l__tag_tmpa_tl
+      }
+    \prop_gput:NnV\g__tag_role_index_prop{math}\l__tag_tmpb_tl
+  }
+\tl_new:N \l__tag_role_real_parent_tl
+\tl_new:N \l__tag_parent_child_check_tl
+\cs_new_protected:Npn \__tag_role_get_parent_child_rule:nnN #1 #2 #3
+  % #1 parent (string) #2 child (string) #3 tl for state
+  {
+     \tl_set:Nn \l__tag_role_real_parent_tl {#1}
+     \prop_get:NnN \g__tag_role_index_prop{#1}\l__tag_tmpa_tl
+     \prop_get:NnN \g__tag_role_index_prop{#2}\l__tag_tmpb_tl
+     \bool_lazy_and:nnTF
+       { ! \quark_if_no_value_p:N \l__tag_tmpa_tl }
+       { ! \quark_if_no_value_p:N \l__tag_tmpb_tl }
+       {
+         \tl_set:Nx#3
+           {
+             \intarray_item:Nn
+              \g__tag_role_parent_child_intarray
+              {\l__tag_tmpa_tl\l__tag_tmpb_tl}
+           }
+         \int_compare:nNnT
+           {#3} = {\prop_item:Nn\c__tag_role_rules_prop{‡}}
+           {
+             \seq_set_eq:NN   \l__tag_role_tmpa_seq \g__tag_struct_tag_stack_seq
+             \seq_pop_left:NN \l__tag_role_tmpa_seq\l__tag_get_tmpc_tl
+             \seq_map_inline:Nn\l__tag_role_tmpa_seq
+               {
+                 \tl_set:Nx\l__tag_tmpa_tl { \use_ii:nn ##1 }
+                 \exp_args:Nne
+                  \str_if_in:nnF {-Part-Div-NonStruct-}{-\l__tag_tmpa_tl-}
+                   {
+                     \tl_set:Nn\l__tag_role_real_parent_tl {##1}
+                     \int_zero:N\l__tag_tmpa_int
+                     \exp_args:NV
+                     \__tag_role_get_parent_child_rule:nnN \l__tag_tmpa_tl{#2}#3
+                     \int_set:Nn\l__tag_tmpa_int{1}
+                     \seq_map_break:
+                   }
+               }
+           }
+         \group_begin:
+         \int_compare:nNnT {\l__tag_tmpa_int*\l__tag_loglevel_int} > { 0 }
+           {
+             \prop_get:NVNF\c__tag_role_rules_num_prop #3 \l__tag_tmpa_tl
+               {
+                 \tl_set:Nn \l__tag_tmpa_tl {unknown}
+               }
+             \tl_set:Nn \l__tag_tmpb_tl {#1}
+             \msg_note:nnxxx
+               { tag }
+               { role-parent-child }
+               { #1
+                 \tl_if_eq:NNTF\l__tag_tmpb_tl\l__tag_role_real_parent_tl
+                   {
+                     \bool_lazy_and:nnT
+                      {
+                        \prop_if_in_p:Nn \l__tag_role_debug_prop {parent}
+                      }
+                      {
+                        !\str_if_eq_p:ee {#1}{\prop_item:Nn\l__tag_role_debug_prop {parent}}
+                      }
+                      {
+                        \c_space_tl (from~\prop_item:Nn\l__tag_role_debug_prop {parent})
+                      }
+                   }
+                   {
+                     \c_space_tl(inherited~from~\l__tag_role_real_parent_tl)
+                   }
+               }
+               {
+                 #2
+                 \bool_lazy_and:nnT
+                   {
+                     \prop_if_in_p:Nn \l__tag_role_debug_prop {child}
+                   }
+                   {
+                     !\str_if_eq_p:ee {#2}{\prop_item:Nn\l__tag_role_debug_prop {child}}
+                   }
+                   {
+                     \c_space_tl (from~\prop_item:Nn\l__tag_role_debug_prop {child})
+                   }
+               }
+               { '#3~(\l__tag_tmpa_tl)' }
+           }
+           \group_end:
+       }
+       {
+         \tl_set:Nn#3 {0}
+         \msg_warning:nnxxx
+           { tag }
+           {role-parent-child}
+           { #1 }
+           { #2 }
+           { unknown! }
+       }
+  }
+\cs_generate_variant:Nn\__tag_role_get_parent_child_rule:nnN {VVN}
+\pdf_version_compare:NnTF < {2.0}
+  {
+   \cs_new_protected:Npn \__tag_check_parent_child:nnnnN #1 #2 #3 #4 #5
+     {
+       \prop_put:Nnn \l__tag_role_debug_prop {parent} {#1}
+       \prop_put:Nnn \l__tag_role_debug_prop {child}  {#3}
+       \prop_get:NnNTF \g__tag_role_index_prop {#1}\l__tag_tmpa_tl
+         {
+           \tl_set:Nn \l__tag_tmpa_tl {#1}
+         }
+         {
+           \prop_get:NnNF \g__tag_role_rolemap_prop {#1}\l__tag_tmpa_tl
+             {
+               \tl_set:Nn \l__tag_tmpa_tl {\q_no_value}
+             }
+         }
+       \prop_get:NnNTF \g__tag_role_index_prop {#3}\l__tag_tmpb_tl
+         {
+           \tl_set:Nn \l__tag_tmpb_tl {#3}
+         }
+         {
+           \prop_get:NnNF \g__tag_role_rolemap_prop {#3}\l__tag_tmpb_tl
+             {
+               \tl_set:Nn \l__tag_tmpb_tl {\q_no_value}
+             }
+         }
+       \bool_lazy_and:nnTF
+         { ! \quark_if_no_value_p:N \l__tag_tmpa_tl }
+         { ! \quark_if_no_value_p:N \l__tag_tmpb_tl }
+         {
+           \__tag_role_get_parent_child_rule:VVN \l__tag_tmpa_tl \l__tag_tmpb_tl #5
+         }
+         {
+           \tl_set:Nn #5 {0}
+           \msg_warning:nnxxx
+            { tag }
+            {role-parent-child}
+            { #1 }
+            { #3 }
+            { unknown! }
+         }
+     }
+   \cs_new_protected:Npn \__tag_check_parent_child:nnN #1#2#3
+     {
+       \__tag_check_parent_child:nnnnN {#1}{}{#2}{}#3
+     }
+  }
+  {
+   \cs_new_protected:Npn \__tag_check_parent_child:nnN #1 #2 #3
+     {
+       \prop_get:NnN\g__tag_role_tags_NS_prop {#1}\l__tag_role_tag_namespace_tmpa_tl
+       \prop_get:NnN\g__tag_role_tags_NS_prop {#2}\l__tag_role_tag_namespace_tmpb_tl
+       \str_if_eq:nnT{#2}{MC}{\tl_clear:N \l__tag_role_tag_namespace_tmpb_tl}
+       \bool_lazy_and:nnTF
+         { ! \quark_if_no_value_p:N \l__tag_role_tag_namespace_tmpa_tl }
+         { ! \quark_if_no_value_p:N \l__tag_role_tag_namespace_tmpb_tl }
+         {
+           \__tag_check_parent_child:nVnVN
+             {#1}\l__tag_role_tag_namespace_tmpa_tl
+             {#2}\l__tag_role_tag_namespace_tmpb_tl
+             #3
+         }
+         {
+           \tl_set:Nn #3 {0}
+           \msg_warning:nnxxx
+            { tag }
+            {role-parent-child}
+            { #1 }
+            { #2 }
+            { unknown! }
+         }
+     }
+   \cs_new_protected:Npn \__tag_check_parent_child:nnnnN #1 #2 #3 #4 #5 %tag,NS,tag,NS, tl var
+      {
+        \prop_put:Nnn \l__tag_role_debug_prop {parent} {#1/#2}
+        \prop_put:Nnn \l__tag_role_debug_prop {child}  {#3/#4}
+        \tl_if_empty:nTF  {#2}
+          {
+            \tl_set:Nn \l__tag_tmpa_tl {#1}
+          }
+          {
+            \prop_get:cnNTF
+               { g__tag_role_NS_#2_prop }
+               {#1}
+               \l__tag_tmpa_tl
+               {
+                 \tl_set:Nx \l__tag_tmpa_tl {\tl_head:N\l__tag_tmpa_tl}
+                 \tl_if_empty:NT\l__tag_tmpa_tl
+                   {
+                     \tl_set:Nn \l__tag_tmpa_tl {#1}
+                   }
+               }
+               {
+                 \tl_set:Nn \l__tag_tmpa_tl {\q_no_value}
+               }
+          }
+        \tl_if_empty:nTF  {#4}
+          {
+            \tl_set:Nn \l__tag_tmpb_tl {#3}
+          }
+          {
+            \prop_get:cnNTF
+              { g__tag_role_NS_#4_prop }
+              {#3}
+              \l__tag_tmpb_tl
+              {
+                \tl_set:Nx \l__tag_tmpb_tl { \tl_head:N\l__tag_tmpb_tl }
+                \tl_if_empty:NT\l__tag_tmpb_tl
+                  {
+                    \tl_set:Nn \l__tag_tmpb_tl {#3}
+                  }
+              }
+              {
+                \tl_set:Nn \l__tag_tmpb_tl {\q_no_value}
+              }
+          }
+       \bool_lazy_and:nnTF
+         { ! \quark_if_no_value_p:N \l__tag_tmpa_tl }
+         { ! \quark_if_no_value_p:N \l__tag_tmpb_tl }
+         {
+           \__tag_role_get_parent_child_rule:VVN \l__tag_tmpa_tl \l__tag_tmpb_tl #5
+         }
+         {
+           \tl_set:Nn #5 {0}
+           \msg_warning:nnxxx
+            { tag }
+            {role-parent-child}
+            { #1 }
+            { #3 }
+            { unknown! }
+         }
+     }
+  }
+\cs_generate_variant:Nn\__tag_check_parent_child:nnN {VVN}
+\cs_generate_variant:Nn\__tag_check_parent_child:nnnnN {VVVVN,nVnVN,VVnnN}
+\prg_set_protected_conditional:Npnn \tag_check_child:nn #1 #2 {T,F,TF}
+ {
+   \seq_get:NN\g__tag_struct_stack_seq\l__tag_tmpa_tl
+   \__tag_struct_get_tag_info:eNN
+      {\l__tag_tmpa_tl}
+      \l__tag_get_parent_tmpa_tl
+      \l__tag_get_parent_tmpb_tl
+   \__tag_check_parent_child:VVnnN
+     \l__tag_get_parent_tmpa_tl
+     \l__tag_get_parent_tmpb_tl
+      {#1}{#2}
+      \l__tag_parent_child_check_tl
+   \int_compare:nNnTF {  \l__tag_parent_child_check_tl } < {0}
+      {\prg_return_false:}
+      {\prg_return_true:}
+ }
+\tl_new:N \l__tag_role_remap_tag_tl
+\tl_new:N \l__tag_role_remap_NS_tl
+\cs_new_protected:Npn \__tag_role_remap: {  }
+\cs_set_eq:NN \__tag_role_remap_id: \__tag_role_remap:
+\pdf_version_compare:NnTF < {2.0}
+  {
+    \cs_new_protected:Npn \__tag_role_remap_inline:
+      {
+        \prop_get:cVNT { g__tag_role_NS_latex-inline_prop }\l__tag_role_remap_tag_tl\l__tag_tmpa_tl
+          {
+            \tl_set:Nx\l__tag_role_remap_tag_tl
+              {
+                \exp_last_unbraced:NV\use_i:nn \l__tag_tmpa_tl
+              }
+            \tl_set:Nx\l__tag_role_remap_NS_tl
+              {
+                \exp_last_unbraced:NV\use_ii:nn \l__tag_tmpa_tl
+              }
+          }
+        \int_compare:nNnT {\l__tag_loglevel_int} > { 0 }
+          {
+            \msg_note:nnx { tag } { role-remapping }{ \l__tag_role_remap_tag_tl }
+          }
+      }
+  }
+  {
+    \cs_new_protected:Npn \__tag_role_remap_inline:
+      {
+        \prop_get:cVNT { g__tag_role_NS_latex-inline_prop }\l__tag_role_remap_tag_tl\l__tag_tmpa_tl
+          {
+            \tl_set:Nn\l__tag_role_remap_NS_tl {latex-inline}
+          }
+        \int_compare:nNnT {\l__tag_loglevel_int} > { 0 }
+          {
+            \msg_note:nnx { tag } { role-remapping }{ \l__tag_role_remap_tag_tl/latex-inline }
+          }
+      }
+  }
+\keys_define:nn { __tag / tag-role }
+  {
+    ,tag .tl_set:N = \l__tag_role_tag_tmpa_tl
+    ,tag-namespace  .tl_set:N = \l__tag_role_tag_namespace_tmpa_tl
+    ,role .tl_set:N = \l__tag_role_role_tmpa_tl
+    ,role-namespace .tl_set:N = \l__tag_role_role_namespace_tmpa_tl
+  }
+
+\keys_define:nn { __tag / setup }
+  {
+    add-new-tag .code:n =
+     {
+       \keys_set_known:nnnN
+         {__tag/tag-role}
+         {
+           tag-namespace=user,
+           role-namespace=, %so that we can test for it.
+          #1
+         }{__tag/tag-role}\l_tmpa_tl
+       \tl_if_empty:NF \l_tmpa_tl
+         {
+           \exp_args:NNno \seq_set_split:Nnn \l_tmpa_seq { / } {\l_tmpa_tl/}
+           \tl_set:Nx \l__tag_role_tag_tmpa_tl  { \seq_item:Nn \l_tmpa_seq {1} }
+           \tl_set:Nx \l__tag_role_role_tmpa_tl { \seq_item:Nn \l_tmpa_seq {2} }
+         }
+      \tl_if_empty:NT \l__tag_role_role_namespace_tmpa_tl
+         {
+           \prop_get:NVNTF
+             \g__tag_role_tags_NS_prop
+             \l__tag_role_role_tmpa_tl
+             \l__tag_role_role_namespace_tmpa_tl
+             {
+                \prop_if_in:NVF\g__tag_role_NS_prop \l__tag_role_role_namespace_tmpa_tl
+                 {
+                   \tl_set:Nn \l__tag_role_role_namespace_tmpa_tl {user}
+                 }
+             }
+             {
+               \tl_set:Nn \l__tag_role_role_namespace_tmpa_tl {user}
+             }
+         }
+      \pdf_version_compare:NnTF < {2.0}
+       {
+        %TODO add check for emptyness?
+          \__tag_role_add_tag:VV
+              \l__tag_role_tag_tmpa_tl
+              \l__tag_role_role_tmpa_tl
+       }
+       {
+         \__tag_role_add_tag:VVVV
+           \l__tag_role_tag_tmpa_tl
+           \l__tag_role_tag_namespace_tmpa_tl
+           \l__tag_role_role_tmpa_tl
+           \l__tag_role_role_namespace_tmpa_tl
+       }
+    }
+  }
+%% File: tagpdf-struct.dtx
+\__tag_seq_new:N  \g__tag_struct_objR_seq
+
+\__tag_prop_new:N  \g__tag_struct_cont_mc_prop
+\seq_new:N    \g__tag_struct_stack_seq
+\seq_gpush:Nn \g__tag_struct_stack_seq {0}
+\seq_new:N    \g__tag_struct_tag_stack_seq
+\seq_gpush:Nn \g__tag_struct_tag_stack_seq {{Root}{StructTreeRoot}}
+\prop_new:N\g__tag_struct_tag_NS_prop
+\tl_new:N     \l__tag_struct_stack_parent_tmpa_tl
+
+\seq_const_from_clist:Nn \c__tag_struct_StructTreeRoot_entries_seq
+  {%p. 857/858
+    Type,              % always /StructTreeRoot
+    K,                 % kid, dictionary or array of dictionaries
+    IDTree,            % currently unused
+    ParentTree,        % required,obj ref to the parent tree
+    ParentTreeNextKey, % optional
+    RoleMap,
+    ClassMap,
+    Namespaces,
+    AF                 %pdf 2.0
+  }
+
+\seq_const_from_clist:Nn \c__tag_struct_StructElem_entries_seq
+  {%p 858 f
+    Type,              %always /StructElem
+    S,                 %tag/type
+    P,                 %parent
+    ID,                %optional
+    Ref,               %optional, pdf 2.0 Use?
+    Pg,                %obj num of starting page, optional
+    K,                 %kids
+    A,                 %attributes, probably unused
+    C,                 %class ""
+    %R,                %attribute revision number, irrelevant for us as we
+                       % don't update/change existing PDF and (probably)
+                       % deprecated in PDF 2.0
+    T,                 %title, value in () or <>
+    Lang,              %language
+    Alt,               % value in () or <>
+    E,                 % abreviation
+    ActualText,
+    AF,                 %pdf 2.0, array of dict, associated files
+    NS,                 %pdf 2.0, dict, namespace
+    PhoneticAlphabet,   %pdf 2.0
+    Phoneme             %pdf 2.0
+  }
+\tl_new:N \g__tag_struct_tag_tl
+\tl_new:N \g__tag_struct_tag_NS_tl
+\tl_new:N \l__tag_struct_key_label_tl
+\bool_new:N \l__tag_struct_elem_stash_bool
+\prop_new:N \g__tag_struct_dest_num_prop
+\prop_new:N \g__tag_struct_ref_by_dest_prop
+\cs_new:Npn \__tag_struct_output_prop_aux:nn #1 #2 %#1 num, #2 key
+  {
+    \prop_if_in:cnT
+      { g__tag_struct_#1_prop }
+      { #2 }
+      {
+        \c_space_tl/#2~ \prop_item:cn{ g__tag_struct_#1_prop } { #2 }
+      }
+  }
+
+\cs_new_protected:Npn \__tag_new_output_prop_handler:n #1
+  {
+    \cs_new:cn { __tag_struct_output_prop_#1:n }
+      {
+        \__tag_struct_output_prop_aux:nn {#1}{##1}
+      }
+  }
+\tl_gset:Nn \g__tag_struct_stack_current_tl {0}
+\cs_new:Npn \__tag_pdf_name_e:n #1{\pdf_name_from_unicode_e:n{#1}}
+\__tag_prop_new:c { g__tag_struct_0_prop }
+\__tag_new_output_prop_handler:n {0}
+\__tag_seq_new:c  { g__tag_struct_kids_0_seq }
+
+\__tag_prop_gput:cnx
+  { g__tag_struct_0_prop }
+  { Type }
+  { \pdf_name_from_unicode_e:n {StructTreeRoot} }
+
+\__tag_prop_gput:cnx
+  { g__tag_struct_0_prop }
+  { S }
+  { \pdf_name_from_unicode_e:n {StructTreeRoot} }
+
+\prop_gput:Nnn \g__tag_struct_tag_NS_prop {0}{{StructTreeRoot}{pdf}}
+\__tag_prop_gput:cnx
+  { g__tag_struct_0_prop }
+  { Namespaces }
+  { \pdf_object_ref:n { __tag/tree/namespaces } }
+\cs_new:Npn \__tag_struct_get_id:n #1 %#1=struct num
+  {
+    (
+     ID.
+     \prg_replicate:nn
+      { \int_abs:n{\g__tag_tree_id_pad_int - \tl_count:e { \int_to_arabic:n { #1 } }} }
+      { 0 }
+     \int_to_arabic:n { #1 }
+    )
+  }
+
+\pdf_version_compare:NnTF < {2.0}
+ {
+   \cs_new_protected:Npn \__tag_struct_set_tag_info:nnn #1 #2 #3
+     %#1 structure number, #2 tag, #3 NS
+     {
+       \__tag_prop_gput:cnx
+         { g__tag_struct_#1_prop }
+         { S }
+         { \pdf_name_from_unicode_e:n {#2}  } %
+       \prop_gput:Nnn \g__tag_struct_tag_NS_prop {#1}{{#2}{#3}}
+     }
+ }
+ {
+   \cs_new_protected:Npn \__tag_struct_set_tag_info:nnn #1 #2 #3
+     {
+       \__tag_prop_gput:cnx
+         { g__tag_struct_#1_prop }
+         { S }
+         { \pdf_name_from_unicode_e:n {#2} } %
+       \prop_get:NnNT \g__tag_role_NS_prop {#3} \l__tag_get_tmpc_tl
+         {
+           \__tag_prop_gput:cnx
+             { g__tag_struct_#1_prop }
+             { NS }
+             { \l__tag_get_tmpc_tl } %
+         }
+       \prop_gput:Nnn \g__tag_struct_tag_NS_prop {#1}{{#2}{#3}}
+     }
+ }
+\cs_generate_variant:Nn \__tag_struct_set_tag_info:nnn {eVV}
+\cs_new_protected:Npn \__tag_struct_get_tag_info:nNN #1 #2 #3
+   %#1 struct num, #2 tlvar for tag , #3 tlvar for NS
+    {
+       \prop_get:NnNTF \g__tag_struct_tag_NS_prop {#1}\l__tag_get_tmpc_tl
+         {
+           \tl_set:Nx #2{\exp_last_unbraced:NV\use_i:nn  \l__tag_get_tmpc_tl}
+           \tl_set:Nx #3{\exp_last_unbraced:NV\use_ii:nn \l__tag_get_tmpc_tl}
+         }
+         {
+           \tl_clear:N#2
+           \tl_clear:N#3
+         }
+    }
+\cs_generate_variant:Nn\__tag_struct_get_tag_info:nNN {eNN}
+\cs_new:Npn \__tag_struct_mcid_dict:n #1 %#1 MCID absnum
+  {
+     <<
+      /Type \c_space_tl /MCR \c_space_tl
+      /Pg
+        \c_space_tl
+      \pdf_pageobject_ref:n { \__tag_ref_value:enn{mcid-#1}{tagabspage}{1} }
+       /MCID \c_space_tl \__tag_ref_value:enn{mcid-#1}{tagmcid}{1}
+     >>
+  }
+\cs_new_protected:Npn \__tag_struct_kid_mc_gput_right:nn #1 #2 %#1 structure num, #2 MCID absnum%
+  {
+    \__tag_seq_gput_right:cx
+      { g__tag_struct_kids_#1_seq }
+      {
+        \__tag_struct_mcid_dict:n {#2}
+      }
+    \__tag_seq_gput_right:cn
+      { g__tag_struct_kids_#1_seq }
+      {
+        \prop_item:Nn \g__tag_struct_cont_mc_prop {#2}
+      }
+  }
+\cs_generate_variant:Nn \__tag_struct_kid_mc_gput_right:nn {nx}
+
+\cs_new_protected:Npn\__tag_struct_kid_struct_gput_right:nn #1 #2 %#1 num of parent struct, #2 kid struct
+  {
+    \__tag_seq_gput_right:cx
+      { g__tag_struct_kids_#1_seq }
+      {
+        \pdf_object_ref:n { __tag/struct/#2 }
+      }
+ }
+
+\cs_generate_variant:Nn \__tag_struct_kid_struct_gput_right:nn {xx}
+\cs_new_protected:Npn\__tag_struct_kid_OBJR_gput_right:nnn #1 #2 #3 %#1 num of parent struct,
+                                                             %#2 obj reference
+                                                             %#3 page object reference
+  {
+    \pdf_object_unnamed_write:nn
+      { dict }
+      {
+        /Type/OBJR/Obj~#2/Pg~#3
+      }
+    \__tag_seq_gput_right:cx
+      { g__tag_struct_kids_#1_seq }
+      {
+        \pdf_object_ref_last:
+      }
+  }
+
+\cs_generate_variant:Nn\__tag_struct_kid_OBJR_gput_right:nnn { xxx }
+
+\cs_new_protected:Npn\__tag_struct_exchange_kid_command:N #1 %#1 = seq var
+  {
+    \seq_gpop_left:NN #1 \l__tag_tmpa_tl
+    \regex_replace_once:nnN
+      { \c{\__tag_mc_insert_mcid_kids:n} }
+      { \c{\__tag_mc_insert_mcid_single_kids:n} }
+      \l__tag_tmpa_tl
+    \seq_gput_left:NV #1 \l__tag_tmpa_tl
+  }
+
+\cs_generate_variant:Nn\__tag_struct_exchange_kid_command:N { c }
+\cs_new_protected:Npn \__tag_struct_fill_kid_key:n #1 %#1 is the struct num
+  {
+    \bool_if:NF\g__tag_mode_lua_bool
+     {
+        \seq_clear:N \l__tag_tmpa_seq
+        \seq_map_inline:cn { g__tag_struct_kids_#1_seq }
+         { \seq_put_right:Nx \l__tag_tmpa_seq { ##1 } }
+        %\seq_show:c { g__tag_struct_kids_#1_seq }
+        %\seq_show:N \l__tag_tmpa_seq
+        \seq_remove_all:Nn \l__tag_tmpa_seq {}
+        %\seq_show:N \l__tag_tmpa_seq
+        \seq_gset_eq:cN { g__tag_struct_kids_#1_seq } \l__tag_tmpa_seq
+     }
+
+    \int_case:nnF
+      {
+        \seq_count:c
+          {
+            g__tag_struct_kids_#1_seq
+          }
+      }
+      {
+        { 0 }
+         { } %no kids, do nothing
+        { 1 } % 1 kid, insert
+         {
+           % in this case we need a special command in
+           % luamode to get the array right. See issue #13
+           \bool_if:NT\g__tag_mode_lua_bool
+             {
+               \__tag_struct_exchange_kid_command:c
+                {g__tag_struct_kids_#1_seq}
+             }
+           \__tag_prop_gput:cnx { g__tag_struct_#1_prop } {K}
+             {
+               \seq_item:cn
+                 {
+                   g__tag_struct_kids_#1_seq
+                 }
+                 {1}
+             }
+         } %
+      }
+      { %many kids, use an array
+        \__tag_prop_gput:cnx { g__tag_struct_#1_prop } {K}
+          {
+            [
+              \seq_use:cn
+                {
+                  g__tag_struct_kids_#1_seq
+                }
+                {
+                  \c_space_tl
+                }
+            ]
+          }
+      }
+  }
+
+\cs_new_protected:Npn \__tag_struct_get_dict_content:nN #1 #2 %#1: stucture num
+  {
+    \tl_clear:N #2
+    \seq_map_inline:cn
+      {
+        c__tag_struct_
+         \int_compare:nNnTF{#1}={0}{StructTreeRoot}{StructElem}
+         _entries_seq
+      }
+      {
+        \tl_put_right:Nx
+          #2
+          {
+             \prop_if_in:cnT
+               { g__tag_struct_#1_prop }
+               { ##1 }
+               {
+                 \c_space_tl/##1~
+                 \cs_if_exist_use:cTF {__tag_struct_format_##1:e}
+                   {
+                     { \prop_item:cn{ g__tag_struct_#1_prop } { ##1 } }
+                   }
+                   {
+                     \prop_item:cn{ g__tag_struct_#1_prop } { ##1 }
+                   }
+               }
+          }
+      }
+  }
+\cs_new:Nn\__tag_struct_format_Ref:n{[#1]}
+\cs_generate_variant:Nn\__tag_struct_format_Ref:n{e}
+\cs_new_protected:Npn \__tag_struct_write_obj:n #1 % #1 is the struct num
+  {
+    \pdf_object_if_exist:nTF { __tag/struct/#1 }
+      {
+        \__tag_struct_fill_kid_key:n { #1 }
+        \__tag_struct_get_dict_content:nN { #1 } \l__tag_tmpa_tl
+        \exp_args:Nx
+          \pdf_object_write:nnx
+            { __tag/struct/#1 }
+            {dict}
+            {
+              \l__tag_tmpa_tl\c_space_tl
+              /ID~\__tag_struct_get_id:n{#1}
+            }
+      }
+      {
+        \msg_error:nnn { tag } { struct-no-objnum } { #1}
+      }
+  }
+\cs_new_protected:Npn \__tag_struct_insert_annot:nn #1 #2 %#1 object reference to the annotation/xform
+                                                       %#2 structparent number
+  {
+    \bool_if:NT \g__tag_active_struct_bool
+      {
+        %get the number of the parent structure:
+        \seq_get:NNF
+          \g__tag_struct_stack_seq
+          \l__tag_struct_stack_parent_tmpa_tl
+          {
+            \msg_error:nn { tag } { struct-faulty-nesting }
+          }
+        %put the obj number of the annot in the kid entry, this also creates
+        %the OBJR object
+        \ref_label:nn {__tag_objr_page_#2 }{ tagabspage }
+        \__tag_struct_kid_OBJR_gput_right:xxx
+          {
+            \l__tag_struct_stack_parent_tmpa_tl
+          }
+          {
+            #1 %
+          }
+          {
+            \pdf_pageobject_ref:n { \__tag_ref_value:nnn {__tag_objr_page_#2 }{ tagabspage }{1} }
+          }
+        % add the parent obj number to the parent tree:
+        \exp_args:Nnx
+        \__tag_parenttree_add_objr:nn
+          {
+            #2
+          }
+          {
+            \pdf_object_ref:e { __tag/struct/\l__tag_struct_stack_parent_tmpa_tl }
+          }
+        % increase the int:
+        \stepcounter{ g__tag_parenttree_obj_int }
+      }
+  }
+\cs_new:Npn \__tag_get_data_struct_tag:
+  {
+    \exp_args:Ne
+    \tl_tail:n
+     {
+       \prop_item:cn {g__tag_struct_\g__tag_struct_stack_current_tl _prop}{S}
+     }
+  }
+\cs_new:Npn \__tag_get_data_struct_id:
+  {
+    \__tag_struct_get_id:n {\g__tag_struct_stack_current_tl}
+  }
+\keys_define:nn { __tag / struct }
+  {
+    label .tl_set:N      = \l__tag_struct_key_label_tl,
+    stash .bool_set:N    = \l__tag_struct_elem_stash_bool,
+    parent .code:n       =
+      {
+        \bool_lazy_and:nnTF
+          {
+            \prop_if_exist_p:c { g__tag_struct_\int_eval:n {#1}_prop }
+          }
+          {
+            \int_compare_p:nNn {#1}<{\c@g__tag_struct_abs_int}
+          }
+          { \tl_set:Nx \l__tag_struct_stack_parent_tmpa_tl { \int_eval:n {#1} } }
+          {
+            \msg_warning:nnxx { tag } { struct-unknown }
+              { \int_eval:n {#1} }
+              { parent~key~ignored }
+          }
+      },
+    parent .default:n    = {-1},
+    tag   .code:n        = % S property
+      {
+        \seq_set_split:Nne \l__tag_tmpa_seq { / } {#1/\prop_item:Ne\g__tag_role_tags_NS_prop{#1}}
+        \tl_gset:Nx \g__tag_struct_tag_tl   { \seq_item:Nn\l__tag_tmpa_seq {1} }
+        \tl_gset:Nx \g__tag_struct_tag_NS_tl{ \seq_item:Nn\l__tag_tmpa_seq {2} }
+        \__tag_check_structure_tag:N \g__tag_struct_tag_tl
+      },
+    title .code:n        = % T property
+      {
+        \str_set_convert:Nnnn
+          \l__tag_tmpa_str
+          { #1 }
+          { default }
+          { utf16/hex }
+        \__tag_prop_gput:cnx
+          { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
+          { T }
+          { <\l__tag_tmpa_str> }
+      },
+    title-o .code:n        = % T property
+      {
+        \str_set_convert:Nonn
+          \l__tag_tmpa_str
+          { #1 }
+          { default }
+          { utf16/hex }
+        \__tag_prop_gput:cnx
+          { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
+          { T }
+          { <\l__tag_tmpa_str> }
+      },
+    alt .code:n      = % Alt property
+      {
+        \str_set_convert:Noon
+          \l__tag_tmpa_str
+          { #1 }
+          { default }
+          { utf16/hex }
+        \__tag_prop_gput:cnx
+          { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
+          { Alt }
+          { <\l__tag_tmpa_str> }
+      },
+    alttext .meta:n = {alt=#1},
+    actualtext .code:n  = % ActualText property
+      {
+        \str_set_convert:Noon
+          \l__tag_tmpa_str
+          { #1 }
+          { default }
+          { utf16/hex }
+        \__tag_prop_gput:cnx
+          { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
+          { ActualText }
+          { <\l__tag_tmpa_str>}
+      },
+    lang .code:n        = % Lang property
+      {
+        \__tag_prop_gput:cnx
+          { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
+          { Lang }
+          { (#1) }
+      },
+    ref .code:n        = % ref property
+      {
+        \tl_clear:N\l__tag_tmpa_tl
+        \clist_map_inline:on {#1}
+          {
+            \tl_put_right:Nx \l__tag_tmpa_tl
+              {~\ref_value:nn{tagpdfstruct-##1}{tagstructobj} }
+          }
+        \__tag_struct_gput_data_ref:ee { \int_eval:n {\c@g__tag_struct_abs_int} } {\l__tag_tmpa_tl}
+      },
+    E .code:n        = % E property
+      {
+        \str_set_convert:Nnon
+          \l__tag_tmpa_str
+          { #1 }
+          { default }
+          { utf16/hex }
+        \__tag_prop_gput:cnx
+          { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
+          { E }
+          { <\l__tag_tmpa_str> }
+      },
+  }
+\int_new:N\g__tag_struct_AFobj_int
+\cs_new_protected:Npn \__tag_struct_add_inline_AF:nn #1 #2
+  % #1 content, #2 extention
+  {
+     \group_begin:
+     \int_gincr:N \g__tag_struct_AFobj_int
+     \pdf_object_if_exist:eF {__tag/fileobj\int_use:N\g__tag_struct_AFobj_int}
+       {
+         \pdffile_embed_stream:nxx
+           {#1}
+           {tag-AFfile\int_use:N\g__tag_struct_AFobj_int.#2}
+           {__tag/fileobj\int_use:N\g__tag_struct_AFobj_int}
+         \__tag_struct_add_AF:ee
+           { \int_eval:n {\c@g__tag_struct_abs_int} }
+           { __tag/fileobj\int_use:N\g__tag_struct_AFobj_int }
+         \__tag_prop_gput:cnx
+           { g__tag_struct_\int_use:N\c@g__tag_struct_abs_int _prop }
+           { AF }
+           {
+             [
+               \tl_use:c
+                { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_AF_tl }
+             ]
+           }
+       }
+     \group_end:
+   }
+\cs_generate_variant:Nn \__tag_struct_add_inline_AF:nn {on}
+\cs_new_protected:Npn \__tag_struct_add_AF:nn #1 #2 % #1 struct num #2 object name
+  {
+     \tl_if_exist:cTF
+       {
+         g__tag_struct_#1_AF_tl
+       }
+       {
+         \tl_gput_right:cx
+           { g__tag_struct_#1_AF_tl }
+           {  ~ \pdf_object_ref:n {#2} }
+       }
+       {
+          \tl_new:c
+            { g__tag_struct_#1_AF_tl }
+          \tl_gset:cx
+            { g__tag_struct_#1_AF_tl }
+            { \pdf_object_ref:n {#2} }
+       }
+  }
+\cs_generate_variant:Nn \__tag_struct_add_AF:nn {en,ee}
+\keys_define:nn { __tag / struct }
+ {
+    AF .code:n        = % AF property
+      {
+        \pdf_object_if_exist:nTF {#1}
+          {
+            \__tag_struct_add_AF:en { \int_eval:n {\c@g__tag_struct_abs_int} }{#1}
+            \__tag_prop_gput:cnx
+             { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
+             { AF }
+             {
+               [
+                 \tl_use:c
+                   { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_AF_tl }
+               ]
+             }
+          }
+          {
+
+          }
+      },
+   ,AFinline .code:n =
+     {
+       \__tag_struct_add_inline_AF:nn {#1}{txt}
+     }
+   ,AFinline-o .code:n =
+     {
+       \__tag_struct_add_inline_AF:on {#1}{txt}
+     }
+   ,texsource .code:n =
+    {
+      \group_begin:
+      \pdfdict_put:nnn { l_pdffile/Filespec }{AFRelationship} { /Source }
+      \pdfdict_put:nnx
+        { l_pdffile }{Subtype}
+        { \pdf_name_from_unicode_e:n{application/x-tex} }
+      \__tag_struct_add_inline_AF:on {#1}{tex}
+      \group_end:
+    }
+ }
+\keys_define:nn { __tag / setup }
+  {
+    root-AF .code:n =
+     {
+        \pdf_object_if_exist:nTF {#1}
+          {
+            \__tag_struct_add_AF:en { 0 }{#1}
+            \__tag_prop_gput:cnx
+             { g__tag_struct_0_prop }
+             { AF }
+             {
+               [
+                 \tl_use:c
+                   { g__tag_struct_0_AF_tl }
+               ]
+             }
+          }
+          {
+
+          }
+      },
+  }
+\cs_set_protected:Npn \tag_struct_begin:n #1 %#1 key-val
+  {
+\__tag_check_if_active_struct:T
+      {
+        \group_begin:
+        \int_gincr:N \c@g__tag_struct_abs_int
+        \__tag_prop_new:c  { g__tag_struct_\int_eval:n { \c@g__tag_struct_abs_int }_prop }
+        \__tag_new_output_prop_handler:n {\int_eval:n { \c@g__tag_struct_abs_int }}
+        \__tag_seq_new:c  { g__tag_struct_kids_\int_eval:n { \c@g__tag_struct_abs_int }_seq}
+        \exp_args:Ne
+          \pdf_object_new:n
+            { __tag/struct/\int_eval:n { \c@g__tag_struct_abs_int } }
+        \__tag_prop_gput:cno
+          { g__tag_struct_\int_eval:n { \c@g__tag_struct_abs_int }_prop }
+          { Type }
+          { /StructElem }
+        \tl_set:Nn \l__tag_struct_stack_parent_tmpa_tl {-1}
+        \keys_set:nn { __tag / struct} { #1 }
+        \__tag_struct_set_tag_info:eVV
+          { \int_eval:n {\c@g__tag_struct_abs_int} }
+           \g__tag_struct_tag_tl
+           \g__tag_struct_tag_NS_tl
+        \__tag_check_structure_has_tag:n { \int_eval:n {\c@g__tag_struct_abs_int} }
+        \tl_if_empty:NF
+          \l__tag_struct_key_label_tl
+          {
+            \__tag_ref_label:en{tagpdfstruct-\l__tag_struct_key_label_tl}{struct}
+          }
+        \int_compare:nNnT { \l__tag_struct_stack_parent_tmpa_tl } = { -1 }
+          {
+            \seq_get:NNF
+              \g__tag_struct_stack_seq
+              \l__tag_struct_stack_parent_tmpa_tl
+              {
+                \msg_error:nn { tag } { struct-faulty-nesting }
+              }
+           }
+        \seq_gpush:NV \g__tag_struct_stack_seq        \c@g__tag_struct_abs_int
+        \__tag_role_get:VVN
+          \g__tag_struct_tag_tl
+          \g__tag_struct_tag_NS_tl
+          \l__tag_get_tmpc_tl
+        \seq_gpush:Nx \g__tag_struct_tag_stack_seq
+          {{\g__tag_struct_tag_tl}{\l__tag_get_tmpc_tl}}
+        \tl_gset:NV   \g__tag_struct_stack_current_tl \c@g__tag_struct_abs_int
+        %\seq_show:N   \g__tag_struct_stack_seq
+        \bool_if:NF
+          \l__tag_struct_elem_stash_bool
+          {
+            \__tag_struct_get_tag_info:eNN
+              {\l__tag_struct_stack_parent_tmpa_tl}
+              \l__tag_get_parent_tmpa_tl
+              \l__tag_get_parent_tmpb_tl
+            \__tag_check_parent_child:VVVVN
+              \l__tag_get_parent_tmpa_tl
+              \l__tag_get_parent_tmpb_tl
+              \g__tag_struct_tag_tl
+              \g__tag_struct_tag_NS_tl
+              \l__tag_parent_child_check_tl
+            \int_compare:nNnT {\l__tag_parent_child_check_tl}<0
+              {
+                \msg_warning:nnxxx
+                 { tag }
+                 {role-parent-child}
+                 { \l__tag_get_parent_tmpa_tl/\l__tag_get_parent_tmpb_tl }
+                 { \g__tag_struct_tag_tl/\g__tag_struct_tag_NS_tl  }
+                 { not~allowed~(struct~\g__tag_struct_stack_current_tl) }
+                \cs_set_eq:NN \l__tag_role_remap_tag_tl \g__tag_struct_tag_tl
+                \cs_set_eq:NN \l__tag_role_remap_NS_tl \g__tag_struct_tag_NS_tl
+                \__tag_role_remap:
+                \cs_gset_eq:NN \g__tag_struct_tag_tl \l__tag_role_remap_tag_tl
+                \cs_gset_eq:NN  \g__tag_struct_tag_NS_tl \l__tag_role_remap_NS_tl
+                \__tag_struct_set_tag_info:eVV
+                  { \int_eval:n {\c@g__tag_struct_abs_int} }
+                    \g__tag_struct_tag_tl
+                    \g__tag_struct_tag_NS_tl
+              }
+            \__tag_prop_gput:cnx
+              { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
+              { P }
+              {
+                \pdf_object_ref:e { __tag/struct/\l__tag_struct_stack_parent_tmpa_tl }
+              }
+            %record this structure as kid:
+            %\tl_show:N \g__tag_struct_stack_current_tl
+            %\tl_show:N \l__tag_struct_stack_parent_tmpa_tl
+            \__tag_struct_kid_struct_gput_right:xx
+               { \l__tag_struct_stack_parent_tmpa_tl }
+               { \g__tag_struct_stack_current_tl }
+            %\prop_show:c { g__tag_struct_\g__tag_struct_stack_current_tl _prop }
+            %\seq_show:c {g__tag_struct_kids_\l__tag_struct_stack_parent_tmpa_tl _seq}
+          }
+        %\prop_show:c { g__tag_struct_\g__tag_struct_stack_current_tl _prop }
+        %\seq_show:c {g__tag_struct_kids_\l__tag_struct_stack_parent_tmpa_tl _seq}
+        \group_end:
+     }
+  }
+\cs_set_protected:Nn \tag_struct_end:
+  { %take the current structure num from the stack:
+    %the objects are written later, lua mode hasn't all needed info yet
+    %\seq_show:N \g__tag_struct_stack_seq
+\__tag_check_if_active_struct:T
+      {
+        \seq_gpop:NN   \g__tag_struct_tag_stack_seq \l__tag_tmpa_tl
+        \seq_gpop:NNTF \g__tag_struct_stack_seq \l__tag_tmpa_tl
+          {
+            \__tag_check_info_closing_struct:o { \g__tag_struct_stack_current_tl }
+          }
+          { \__tag_check_no_open_struct: }
+        % get the previous one, shouldn't be empty as the root should be there
+        \seq_get:NNTF \g__tag_struct_stack_seq \l__tag_tmpa_tl
+          {
+            \tl_gset:NV   \g__tag_struct_stack_current_tl \l__tag_tmpa_tl
+          }
+          {
+            \__tag_check_no_open_struct:
+          }
+       \seq_get:NNT \g__tag_struct_tag_stack_seq \l__tag_tmpa_tl
+          {
+            \tl_gset:Nx \g__tag_struct_tag_tl
+              { \exp_last_unbraced:NV\use_i:nn \l__tag_tmpa_tl }
+          }
+      }
+  }
+\cs_set_protected:Npn \tag_struct_use:n #1 %#1 is the label
+  {
+    \__tag_check_if_active_struct:T
+      {
+        \prop_if_exist:cTF
+          { g__tag_struct_\__tag_ref_value:enn{tagpdfstruct-#1}{tagstruct}{unknown}_prop } %
+          {
+            \__tag_check_struct_used:n {#1}
+            %add the label structure as kid to the current structure (can be the root)
+            \__tag_struct_kid_struct_gput_right:xx
+              { \g__tag_struct_stack_current_tl }
+              { \__tag_ref_value:enn{tagpdfstruct-#1}{tagstruct}{0} }
+            %add the current structure to the labeled one as parents
+            \__tag_prop_gput:cnx
+              { g__tag_struct_\__tag_ref_value:enn{tagpdfstruct-#1}{tagstruct}{0}_prop }
+              { P }
+              {
+                \pdf_object_ref:e { __tag/struct/\g__tag_struct_stack_current_tl }
+              }
+             \__tag_struct_get_tag_info:eNN
+              {\__tag_ref_value:enn{tagpdfstruct-#1}{tagstruct}{0}}
+              \l__tag_tmpa_tl
+              \l__tag_tmpb_tl
+            \__tag_check_parent_child:VVVVN
+              \g__tag_struct_tag_tl
+              \g__tag_struct_tag_NS_tl
+              \l__tag_tmpa_tl
+              \l__tag_tmpb_tl
+              \l__tag_parent_child_check_tl
+            \int_compare:nNnT {\l__tag_parent_child_check_tl}<0
+              {
+                \cs_set_eq:NN \l__tag_role_remap_tag_tl \g__tag_struct_tag_tl
+                \cs_set_eq:NN \l__tag_role_remap_NS_tl \g__tag_struct_tag_NS_tl
+                \__tag_role_remap:
+                \cs_gset_eq:NN \g__tag_struct_tag_tl \l__tag_role_remap_tag_tl
+                \cs_gset_eq:NN  \g__tag_struct_tag_NS_tl \l__tag_role_remap_NS_tl
+                \__tag_struct_set_tag_info:eVV
+                  { \int_eval:n {\c@g__tag_struct_abs_int} }
+                    \g__tag_struct_tag_tl
+                    \g__tag_struct_tag_NS_tl
+              }
+          }
+          {
+            \msg_warning:nnn{ tag }{struct-label-unknown}{#1}
+          }
+      }
+  }
+\cs_new:Npn \tag_struct_object_ref:n #1
+ {
+   \pdf_object_ref:n {__tag/struct/#1}
+ }
+\cs_generate_variant:Nn \tag_struct_object_ref:n {e}
+\cs_new_protected:Npn \tag_struct_gput:nnn #1 #2 #3
+ {
+   \cs_if_exist_use:cF {__tag_struct_gput_data_#2:nn}
+    { %warning??
+      \use_none:nn
+    }
+    {#1}{#3}
+ }
+\cs_generate_variant:Nn \tag_struct_gput:nnn {ene,nne}
+\cs_new_protected:Npn \__tag_struct_gput_data_ref:nn #1 #2
+   % #1 receiving struct num, #2 list of object ref
+   {
+     \prop_get:cnN
+        { g__tag_struct_#1_prop }
+        {Ref}
+        \l__tag_get_tmpc_tl
+     \__tag_prop_gput:cnx
+        { g__tag_struct_#1_prop }
+        { Ref }
+        { \quark_if_no_value:NF\l__tag_get_tmpc_tl { \l__tag_get_tmpc_tl\c_space_tl }#2 }
+    }
+\cs_generate_variant:Nn \__tag_struct_gput_data_ref:nn {ee}
+
+\cs_new_protected:Npn \tag_struct_insert_annot:nn #1 #2 %#1 should be an object reference
+                                                        %#2 struct parent num
+  {
+    \__tag_check_if_active_struct:T
+      {
+        \__tag_struct_insert_annot:nn {#1}{#2}
+      }
+  }
+
+\cs_generate_variant:Nn \tag_struct_insert_annot:nn {xx}
+\cs_new:Npn \tag_struct_parent_int: {\int_use:c { c@g__tag_parenttree_obj_int }}
+
+
+\prop_new:N \g__tag_attr_entries_prop
+\seq_new:N  \g__tag_attr_class_used_seq
+\tl_new:N   \l__tag_attr_value_tl
+\prop_new:N \g__tag_attr_objref_prop %will contain obj num of used attributes
+\cs_new_protected:Npn \__tag_attr_new_entry:nn #1 #2 %#1:name, #2: content
+  {
+    \prop_gput:Nen \g__tag_attr_entries_prop
+      {\pdf_name_from_unicode_e:n{#1}}{#2}
+  }
+
+\keys_define:nn { __tag / setup }
+  {
+    newattribute .code:n =
+      {
+        \__tag_attr_new_entry:nn #1
+      }
+  }
+\keys_define:nn { __tag / struct }
+  {
+    attribute-class .code:n =
+     {
+       \clist_set:Nx \l__tag_tmpa_clist { #1 }
+       \seq_set_from_clist:NN \l__tag_tmpb_seq \l__tag_tmpa_clist
+       \seq_set_map_x:NNn \l__tag_tmpa_seq \l__tag_tmpb_seq
+         {
+           \pdf_name_from_unicode_e:n {##1}
+         }
+       \seq_map_inline:Nn \l__tag_tmpa_seq
+         {
+           \prop_if_in:NnF \g__tag_attr_entries_prop {##1}
+             {
+               \msg_error:nnn { tag } { attr-unknown } { ##1 }
+             }
+           \seq_gput_left:Nn\g__tag_attr_class_used_seq { ##1}
+         }
+       \tl_set:Nx \l__tag_tmpa_tl
+         {
+           \int_compare:nT { \seq_count:N \l__tag_tmpa_seq > 1 }{[}
+           \seq_use:Nn \l__tag_tmpa_seq  { \c_space_tl  }
+           \int_compare:nT { \seq_count:N \l__tag_tmpa_seq > 1 }{]}
+         }
+       \int_compare:nT { \seq_count:N \l__tag_tmpa_seq > 0 }
+         {
+           \__tag_prop_gput:cnx
+             { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
+             { C }
+             { \l__tag_tmpa_tl }
+          %\prop_show:c  { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
+         }
+     }
+  }
+\keys_define:nn { __tag / struct }
+  {
+    attribute .code:n  = % A property (attribute, value currently a dictionary)
+      {
+        \clist_set:Nx          \l__tag_tmpa_clist { #1 }
+        \clist_if_empty:NF \l__tag_tmpa_clist
+         {
+            \seq_set_from_clist:NN \l__tag_tmpb_seq \l__tag_tmpa_clist
+           \seq_set_map_x:NNn \l__tag_tmpa_seq \l__tag_tmpb_seq
+             {
+               \pdf_name_from_unicode_e:n {##1}
+             }
+            \tl_set:Nx \l__tag_attr_value_tl
+              {
+                \int_compare:nT { \seq_count:N \l__tag_tmpa_seq > 1 }{[}%]
+              }
+            \seq_map_inline:Nn \l__tag_tmpa_seq
+              {
+                \prop_if_in:NnF \g__tag_attr_entries_prop {##1}
+                  {
+                    \msg_error:nnn { tag } { attr-unknown } { ##1 }
+                  }
+                \prop_if_in:NnF \g__tag_attr_objref_prop {##1}
+                  {%\prop_show:N \g__tag_attr_entries_prop
+                    \pdf_object_unnamed_write:nx
+                      { dict }
+                      {
+                        \prop_item:Nn\g__tag_attr_entries_prop {##1}
+                      }
+                    \prop_gput:Nnx \g__tag_attr_objref_prop {##1} {\pdf_object_ref_last:}
+                  }
+                \tl_put_right:Nx \l__tag_attr_value_tl
+                  {
+                    \c_space_tl
+                    \prop_item:Nn \g__tag_attr_objref_prop {##1}
+                  }
+     %     \tl_show:N \l__tag_attr_value_tl
+              }
+            \tl_put_right:Nx \l__tag_attr_value_tl
+              { %[
+                \int_compare:nT { \seq_count:N \l__tag_tmpa_seq > 1 }{]}%
+              }
+     %     \tl_show:N \l__tag_attr_value_tl
+            \__tag_prop_gput:cnx
+              { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
+              { A }
+              { \l__tag_attr_value_tl }
+         }
+    },
+  }
+%% File: tagpdf-space.dtx
+\keys_define:nn { __tag / setup }
+  {
+    interwordspace .choices:nn = { true, on }
+      { \msg_warning:nnx {tag}{sys-no-interwordspace}{\c_sys_engine_str}  },
+    interwordspace .choices:nn = { false, off }
+      { \msg_warning:nnx {tag}{sys-no-interwordspace}{\c_sys_engine_str}  },
+    interwordspace .default:n = true,
+    show-spaces .bool_set:N = \l__tag_showspaces_bool
+  }
+\sys_if_engine_pdftex:T
+  {
+    \sys_if_output_pdf:TF
+      {
+        \pdfglyphtounicode{space}{0020}
+        \keys_define:nn { __tag / setup }
+          {
+            interwordspace .choices:nn = { true, on }  { \pdfinterwordspaceon },
+            interwordspace .choices:nn = { false, off }{ \pdfinterwordspaceon },
+            interwordspace .default:n = true,
+            show-spaces .bool_set:N = \l__tag_showspaces_bool
+          }
+      }
+      {
+        \keys_define:nn { __tag / setup }
+          {
+            interwordspace .choices:nn = { true, on, false, off }
+              { \msg_warning:nnn {tag}{sys-no-interwordspace}{dvi}  },
+            interwordspace .default:n = true,
+            show-spaces .bool_set:N = \l__tag_showspaces_bool
+          }
+      }
+  }
+
+\sys_if_engine_luatex:T
+  {
+    \keys_define:nn { __tag / setup }
+      {
+        interwordspace .choices:nn =
+                                 { true, on }
+                                 {
+                                   \bool_gset_true:N \g__tag_active_space_bool
+                                   \lua_now:e{ltx.__tag.func.markspaceon()}
+                                 },
+        interwordspace .choices:nn =
+                                 { false, off }
+                                 {
+                                  \bool_gset_false:N \g__tag_active_space_bool
+                                  \lua_now:e{ltx.__tag.func.markspaceoff()}
+                                 },
+        interwordspace .default:n = true,
+        show-spaces      .choice:,
+        show-spaces  / true  .code:n =
+                                 {\lua_now:e{ltx.__tag.trace.showspaces=true}},
+        show-spaces  / false .code:n =
+                                 {\lua_now:e{ltx.__tag.trace.showspaces=nil}},
+        show-spaces .default:n = true
+      }
+  }
+\sys_if_engine_luatex:T
+  {
+    \cs_new_protected:Nn \__tag_fakespace:
+      {
+        \group_begin:
+        \lua_now:e{ltx.__tag.func.fakespace()}
+        \skip_horizontal:n{\c_zero_skip}
+        \group_end:
+      }
+  }
+%% File: tagpdf-user.dtx
+
+
+\RenewDocumentCommand \tagpdfsetup { m }
+  {
+    \keys_set:nn { __tag / setup } { #1 }
+  }
+
+
+\NewDocumentCommand \tagmcifinTF { m m }
+  {
+    \tag_mc_if_in:TF { #1 } { #2 }
+  }
+\NewDocumentCommand\ShowTagging { m }
+  {
+    \keys_set:nn { __tag / show }{ #1}
+
+  }
+\keys_define:nn { __tag / show }
+  {
+    mc-data .code:n =
+      {
+        \sys_if_engine_luatex:T
+          {
+            \lua_now:e{ltx.__tag.trace.show_all_mc_data(#1,\__tag_get_mc_abs_cnt:,0)}
+          }
+      }
+    ,mc-data .default:n = 1
+  }
+
+\keys_define:nn { __tag / show }
+  { mc-current .code:n =
+     {
+       \bool_if:NTF \g__tag_mode_lua_bool
+         {
+           \sys_if_engine_luatex:T
+             {
+               \int_compare:nNnTF
+                 { -2147483647 }
+                  =
+                 {
+                   \lua_now:e
+                     {
+                        tex.print
+                         (tex.getattribute
+                           (luatexbase.attributes.g__tag_mc_cnt_attr))
+                     }
+                 }
+                 {
+                   \lua_now:e
+                     {
+                       ltx.__tag.trace.log
+                        (
+                          "mc-current:~no~MC~open,~current~abscnt
+                           =\__tag_get_mc_abs_cnt:"
+                          ,0
+                        )
+                       texio.write_nl("")
+                     }
+                 }
+                 {
+                   \lua_now:e
+                     {
+                       ltx.__tag.trace.log
+                        (
+                          "mc-current:~abscnt=\__tag_get_mc_abs_cnt:=="
+                           ..
+                           tex.getattribute(luatexbase.attributes.g__tag_mc_cnt_attr)
+                           ..
+                           "~=>tag="
+                           ..
+                           tostring
+                             (ltx.__tag.func.get_tag_from
+                               (tex.getattribute
+                                 (luatexbase.attributes.g__tag_mc_type_attr)))
+                           ..
+                           "="
+                           ..
+                           tex.getattribute
+                            (luatexbase.attributes.g__tag_mc_type_attr)
+                           ,0
+                        )
+                       texio.write_nl("")
+                     }
+                 }
+             }
+         }
+         {
+          \msg_note:nn{ tag }{ mc-current }
+         }
+     }
+  }
+\keys_define:nn { __tag / show }
+  {
+    mc-marks .choice: ,
+    mc-marks / show .code:n =
+      {
+        \__tag_mc_get_marks:
+        \__tag_check_if_mc_in_galley:TF
+         {
+          \iow_term:n {Marks~from~this~page:~}
+         }
+         {
+           \iow_term:n {Marks~from~a~previous~page:~}
+         }
+        \seq_show:N \l__tag_mc_firstmarks_seq
+        \seq_show:N \l__tag_mc_botmarks_seq
+        \__tag_check_if_mc_tmb_missing:T
+         {
+           \iow_term:n {BDC~missing~on~this~page!}
+         }
+        \__tag_check_if_mc_tme_missing:T
+         {
+           \iow_term:n {EMC~missing~on~this~page!}
+         }
+      },
+    mc-marks / use .code:n =
+      {
+        \__tag_mc_get_marks:
+        \__tag_check_if_mc_in_galley:TF
+         { Marks~from~this~page:~}
+         { Marks~from~a~previous~page:~}
+        \seq_use:Nn \l__tag_mc_firstmarks_seq {,~}\quad
+        \seq_use:Nn \l__tag_mc_botmarks_seq {,~}\quad
+        \__tag_check_if_mc_tmb_missing:T
+         {
+           BDC~missing~
+         }
+        \__tag_check_if_mc_tme_missing:T
+         {
+           EMC~missing
+         }
+      },
+   mc-marks .default:n = show
+  }
+\keys_define:nn { __tag / show }
+  {
+     struct-stack .choice:
+    ,struct-stack / log .code:n = \seq_log:N \g__tag_struct_tag_stack_seq
+    ,struct-stack / show .code:n = \seq_show:N \g__tag_struct_tag_stack_seq
+    ,struct-stack .default:n = show
+  }
+\cs_new_protected:Npn \__tag_add_document_structure:n #1
+ {
+   \hook_gput_code:nnn{begindocument}{tagpdf}{\tagstructbegin{tag=#1}}
+   \hook_gput_code:nnn{tagpdf/finish/before}{tagpdf}{\tagstructend}
+ }
+\keys_define:nn { __tag / setup}
+ {
+   activate   .code:n =
+    {
+      \keys_set:nn { __tag / setup }
+        { activate-mc,activate-tree,activate-struct }
+      \__tag_add_document_structure:n {#1}
+    },
+  activate .default:n = Document
+ }
+\AddToHook{begindocument/before}
+  {
+    \bool_lazy_all:nT
+      {
+        { \g__tag_active_struct_dest_bool }
+        { \g__tag_active_struct_bool }
+        { \cs_if_exist_p:N \pdf_activate_structure_destination: }
+      }
+      {
+        \tl_set:Nn \l_pdf_current_structure_destination_tl { __tag/struct/\g__tag_struct_stack_current_tl }
+        \pdf_activate_structure_destination:
+      }
+   }
+
+\sys_if_engine_luatex:T
+  {
+    \NewDocumentCommand\pdffakespace { }
+     {
+       \__tag_fakespace:
+     }
+  }
+\bool_new:N \l__tag_para_bool
+\bool_new:N \l__tag_para_show_bool
+\int_new:N  \g__tag_para_begin_int
+\int_new:N  \g__tag_para_end_int
+\tl_new:N   \l__tag_para_tag_default_tl
+\tl_set:Nn  \l__tag_para_tag_default_tl { P }
+\tl_new:N   \l__tag_para_tag_tl
+\tl_set:Nn  \l__tag_para_tag_tl { \l__tag_para_tag_default_tl }
+\keys_define:nn { __tag / setup }
+  {
+    paratagging      .bool_set:N = \l__tag_para_bool,
+    paratagging-show .bool_set:N = \l__tag_para_show_bool,
+    paratag          .tl_set:N   = \l__tag_para_tag_tl
+  }
+
+\cs_new_protected:Npn \__tag_check_para_begin_show:nn #1 #2
+ %#1 color, #2 prefix
+  {
+    \bool_if:NT \l__tag_para_show_bool
+      {
+        \tag_mc_begin:n{artifact}
+        \llap{\color_select:n{#1}\tiny#2\int_use:N\g__tag_para_begin_int\ }
+        \tag_mc_end:
+      }
+  }
+
+\cs_new_protected:Npn \__tag_check_para_end_show:nn #1 #2
+ %#1  color, #2 prefix
+  {
+    \bool_if:NT \l__tag_para_show_bool
+      {
+        \tag_mc_begin:n{artifact}
+        \rlap{\color_select:n{#1}\tiny\ #2\int_use:N\g__tag_para_end_int}
+        \tag_mc_end:
+      }
+  }
+
+\AddToHook{para/begin}
+  {
+   \bool_if:NT \l__tag_para_bool
+     {
+       \int_gincr:N \g__tag_para_begin_int
+       \tag_struct_begin:n {tag=\l__tag_para_tag_tl}
+       \__tag_check_para_begin_show:nn {green}{}
+       \tag_mc_begin:n {}
+     }
+  }
+\AddToHook{para/end}
+  {
+    \bool_if:NT \l__tag_para_bool
+      {
+        \int_gincr:N \g__tag_para_end_int
+        \tag_mc_end:
+        \__tag_check_para_end_show:nn {red}{}
+        \tag_struct_end:
+      }
+  }
+\AddToHook{enddocument/info}
+  {
+    \int_compare:nNnF {\g__tag_para_begin_int}={\g__tag_para_end_int}
+      {
+        \msg_error:nnxx
+          {tag}
+          {para-hook-count-wrong}
+          {\int_use:N\g__tag_para_begin_int}
+          {\int_use:N\g__tag_para_end_int}
+      }
+  }
+\AddToHook{begindocument/before}
+ {
+   \@ifundefined{@mult@ptagging@hook}{\RequirePackage{output-patches-tmp-ltx}}{} %
+   \bool_if:NF \g__tag_mode_lua_bool
+     {
+        \cs_if_exist:NT \@kernel@before@footins
+         {
+           \tl_put_right:Nn \@kernel@before@footins
+             { \__tag_add_missing_mcs_to_stream:Nn \footins {footnote} }
+           \tl_put_right:Nn \@kernel@before@cclv
+             {
+               \__tag_check_typeout_v:n {====>~In~\token_to_str:N \@makecol\c_space_tl\the\c@page}
+               \__tag_add_missing_mcs_to_stream:Nn \@cclv {main}
+             }
+           \tl_put_right:Nn \@mult@ptagging@hook
+             {
+               \__tag_check_typeout_v:n {====>~In~\string\page@sofar}
+               \process@cols\mult@firstbox
+                {
+                  \__tag_add_missing_mcs_to_stream:Nn \count@ {multicol}
+                }
+               \__tag_add_missing_mcs_to_stream:Nn \mult@rightbox {multicol}
+             }
+         }
+     }
+  }
+\renewcommand\tagpdfparaOn {\bool_set_true:N \l__tag_para_bool}
+\renewcommand\tagpdfparaOff{\bool_set_false:N \l__tag_para_bool}
+\NewDocumentCommand\tagpdfsuppressmarks{m}
+  {{\use:c{__tag_mc_disable_marks:} #1}}
+\cs_new_protected:Npn\__tag_hook_kernel_before_head:{}
+\cs_new_protected:Npn\__tag_hook_kernel_after_head:{}
+\cs_new_protected:Npn\__tag_hook_kernel_before_foot:{}
+\cs_new_protected:Npn\__tag_hook_kernel_after_foot:{}
+
+\AddToHook{begindocument}
+ {
+  \cs_if_exist:NT \@kernel@before@head
+   {
+     \tl_put_right:Nn \@kernel@before@head {\__tag_hook_kernel_before_head:}
+     \tl_put_left:Nn  \@kernel@after@head  {\__tag_hook_kernel_after_head:}
+     \tl_put_right:Nn \@kernel@before@foot {\__tag_hook_kernel_before_foot:}
+     \tl_put_left:Nn  \@kernel@after@foot  {\__tag_hook_kernel_after_foot:}
+   }
+ }
+
+\bool_new:N \g__tag_saved_in_mc_bool
+\cs_new_protected:Npn \__tag_exclude_headfoot_begin:
+ {
+    \bool_set_false:N  \l__tag_para_bool
+    \bool_if:NTF \g__tag_mode_lua_bool
+     {
+      \tag_mc_end_push:
+     }
+     {
+       \bool_gset_eq:NN   \g__tag_saved_in_mc_bool \g__tag_in_mc_bool
+       \bool_gset_false:N \g__tag_in_mc_bool
+     }
+    \tag_mc_begin:n {artifact}
+ }
+\cs_new_protected:Npn \__tag_exclude_headfoot_end:
+ {
+    \tag_mc_end:
+    \bool_if:NTF \g__tag_mode_lua_bool
+     {
+      \tag_mc_begin_pop:n{}
+     }
+     {
+       \bool_gset_eq:NN \g__tag_in_mc_bool\g__tag_saved_in_mc_bool
+     }
+ }
+\__tag_attr_new_entry:nn {__tag/attr/pagination}{/O/Artifact/Type/Pagination}
+\cs_new_protected:Npn \__tag_exclude_struct_headfoot_begin:n #1
+ {
+    \bool_set_false:N  \l__tag_para_bool
+    \bool_if:NTF \g__tag_mode_lua_bool
+     {
+      \tag_mc_end_push:
+     }
+     {
+       \bool_gset_eq:NN   \g__tag_saved_in_mc_bool \g__tag_in_mc_bool
+       \bool_gset_false:N \g__tag_in_mc_bool
+     }
+    \tag_struct_begin:n{tag=Artifact,attribute-class=__tag/attr/#1}
+    \tag_mc_begin:n {artifact=#1}
+ }
+
+\cs_new_protected:Npn \__tag_exclude_struct_headfoot_end:
+ {
+    \tag_mc_end:
+    \tag_struct_end:
+    \bool_if:NTF \g__tag_mode_lua_bool
+     {
+      \tag_mc_begin_pop:n{}
+     }
+     {
+       \bool_gset_eq:NN \g__tag_in_mc_bool\g__tag_saved_in_mc_bool
+     }
+ }
+\keys_define:nn { __tag / setup }
+  {
+    exclude-header-footer .choice:,
+    exclude-header-footer / true .code:n =
+     {
+       \cs_set_eq:NN \__tag_hook_kernel_before_head: \__tag_exclude_headfoot_begin:
+       \cs_set_eq:NN \__tag_hook_kernel_before_foot: \__tag_exclude_headfoot_begin:
+       \cs_set_eq:NN \__tag_hook_kernel_after_head:  \__tag_exclude_headfoot_end:
+       \cs_set_eq:NN \__tag_hook_kernel_after_foot:  \__tag_exclude_headfoot_end:
+     },
+    exclude-header-footer / pagination .code:n =
+     {
+       \cs_set:Nn \__tag_hook_kernel_before_head: { \__tag_exclude_struct_headfoot_begin:n {pagination} }
+       \cs_set:Nn \__tag_hook_kernel_before_foot: { \__tag_exclude_struct_headfoot_begin:n {pagination} }
+       \cs_set_eq:NN \__tag_hook_kernel_after_head:  \__tag_exclude_struct_headfoot_end:
+       \cs_set_eq:NN \__tag_hook_kernel_after_foot:  \__tag_exclude_struct_headfoot_end:
+     },
+    exclude-header-footer / false .code:n =
+     {
+       \cs_set_eq:NN \__tag_hook_kernel_before_head: \prg_do_nothing:
+       \cs_set_eq:NN \__tag_hook_kernel_before_foot: \prg_do_nothing:
+       \cs_set_eq:NN \__tag_hook_kernel_after_head:  \prg_do_nothing:
+       \cs_set_eq:NN \__tag_hook_kernel_after_foot:  \prg_do_nothing:
+     },
+   exclude-header-footer .default:n = true,
+   exclude-header-footer .initial:n = true
+  }
+\hook_gput_code:nnn
+  {pdfannot/link/URI/before}
+  {tagpdf}
+  {
+    \tag_mc_end_push:
+    \tag_struct_begin:n { tag=Link }
+    \tag_mc_begin:n { tag=Link }
+    \pdfannot_dict_put:nnx
+      { link/URI }
+      { StructParent }
+      { \tag_struct_parent_int: }
+  }
+
+\hook_gput_code:nnn
+  {pdfannot/link/URI/after}
+  {tagpdf}
+  {
+     \tag_struct_insert_annot:xx {\pdfannot_link_ref_last:}{\tag_struct_parent_int:}
+     \tag_mc_end:
+     \tag_struct_end:
+     \tag_mc_begin_pop:n{}
+  }
+
+\hook_gput_code:nnn
+  {pdfannot/link/GoTo/before}
+  {tagpdf}
+  {
+     \tag_mc_end_push:
+     \tag_struct_begin:n{tag=Link}
+     \tag_mc_begin:n{tag=Link}
+     \pdfannot_dict_put:nnx
+       { link/GoTo }
+       { StructParent }
+       { \tag_struct_parent_int: }
+  }
+
+\hook_gput_code:nnn
+  {pdfannot/link/GoTo/after}
+  {tagpdf}
+  {
+    \tag_struct_insert_annot:xx {\pdfannot_link_ref_last:}{\tag_struct_parent_int:}
+    \tag_mc_end:
+    \tag_struct_end:
+    \tag_mc_begin_pop:n{}
+
+  }
+
+\pdfannot_dict_put:nnn
+ { link/URI }
+ { Contents }
+ { (url) }
+
+\pdfannot_dict_put:nnn
+ { link/GoTo }
+ { Contents }
+ { (ref) }
+
+%% 
+%%
+%% End of file `tagpdf.sty'.
