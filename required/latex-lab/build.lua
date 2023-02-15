@@ -23,6 +23,7 @@ unpackfiles  = {"*.ins"}
 --sourcefiles  = {"*.dtx", "*.ins", "*-????-??-??.sty"}
 sourcefiles  = {"*.dtx", "*.ins", "*-????-??-??.sty",
     "xtemplate.sty",      -- tmp while broken
+    "tagpdf.sty",         -- tmp while broken
     "l3lists2.sty",       -- tmp while not yet installed
 }
 

@@ -34,8 +34,8 @@
 %% 
 %% File: l3lists2.dtx (C) Copyright 2021-2023 LaTeX Project
 
-\def\ltlistsversion{v0.9a}
-\def\ltlistsdate{2023/02/08}
+\def\ltlistsversion{v0.9c}
+\def\ltlistsdate{2023/02/12}
 
 \ProvidesPackage {l3lists2}[2022-08-07 v0.01 beta list refactoring]
 \RequirePackage{xtemplate}
@@ -49,18 +49,15 @@
       \everypar{}
       \par
       \@endpefalse
-      \@endpeflattenedfalse
     }
   \everypar{{\setbox\z@\lastbox}
             \everypar{}
-            \@endpefalse\@endpeflattenedfalse}
+            \@endpefalse
+  }
 }
 \cs_new_eq:NN \__kernel_displayblock_doendpe: \prg_do_nothing:
 \def\@endpetrue {\global\let\if@endpe\iftrue}
 \def\@endpefalse{\global\let\if@endpe\iffalse}
-\newif\if@endpeflattened
-\def\@endpeflattenedtrue {\global\let\if@endpeflattened\iftrue}
-\def\@endpeflattenedfalse{\global\let\if@endpeflattened\iffalse}
 \DeclareObjectType{blockenv}{1}
 \DeclareObjectType{block}{1}
 \DeclareObjectType{list}{1}
@@ -76,7 +73,8 @@
   max-levels     : tokenlist = 3,
   setup-code     : tokenlist ,
   block-instance : tokenlist = displayblock ,
-  list-instance  : tokenlist ,
+  para-flattened : boolean = false ,
+  inner-instance : tokenlist ,
 }
 \DeclareTemplateInterface{block}{display}{1}
 {
@@ -280,7 +278,8 @@
   max-levels     = \l__block_max_levels_tl ,
   setup-code     = \l__block_setup_code_tl ,
   block-instance = \l__block_block_instance_tl ,
-  list-instance  = \l__block_list_instance_tl ,
+  para-flattened = \l__block_flattened_bool ,
+  inner-instance = \l__block_inner_instance_tl ,
 }
 {
   \__block_debug_typeout:n{\l__block_env_name_tl -env-start}
@@ -308,13 +307,13 @@
               { \l__block_block_instance_tl - \int_use:N
                 \g_block_nesting_depth_int }
               {#1}
-  \tl_if_empty:NF \l__block_list_instance_tl
+  \tl_if_empty:NF \l__block_inner_instance_tl
     {
-      \__block_debug_typeout:n{use~ instance:~ \l__block_list_instance_tl
+      \__block_debug_typeout:n{use~ instance:~ \l__block_inner_instance_tl
                \tl_if_empty:NF \l__block_level_counter_tl
                        { - \int_use:N \l__block_level_counter_tl }}
       \UseInstance{list}
-                  { \l__block_list_instance_tl
+                  { \l__block_inner_instance_tl
                     \tl_if_empty:NF \l__block_level_counter_tl
                        { - \int_use:N \l__block_level_counter_tl }  % not clean
                                                                 % use "o"?
@@ -329,9 +328,12 @@
   \__block_debug_typeout:n{blockenv~ common~ ending}
   \bool_if:NT \l__block_level_incr_bool
     { \int_gdecr:N \g_block_nesting_depth_int }
-  \str_if_eq:VnTF \l__block_tagging_recipe_tl {flattened}
-    \@endpeflattenedtrue   % bad name
-    \@endpeflattenedfalse  % bad name
+   \bool_if:NT \l__block_flattened_bool
+   {
+     \cs_gset:Npn \__block_maybe_finish_flattened: {
+       \bool_set_false:N \l__block_flattened_bool
+       \cs_gset_eq:NN \__block_maybe_finish_flattened: \prg_do_nothing: }
+   }
   \legacy_if:nT { @inlabel }
     {
       \mode_leave_vertical:
@@ -679,43 +681,33 @@
 }
 \cs_new_eq:NN \__kernel_list_item_begin: \prg_do_nothing:
 \cs_new_eq:NN \__kernel_list_item_end:   \prg_do_nothing:
-\cs_new:Npn \__block_recipe_flattened: {
-  \let \__kernel_displayblock_beginpar_hmode:w \prg_do_nothing:
-  \let \__kernel_displayblock_beginpar_vmode:  \prg_do_nothing:
-  \let \__kernel_displayblock_begin:           \prg_do_nothing:
-  \let \__kernel_displayblock_end:             \prg_do_nothing:
+\cs_new:Npn \__block_recipe_basic: {
+  \cs_set_eq:NN \__kernel_displayblock_beginpar_hmode:w
+                                              \__block_beginpar_hmode:N
+  \cs_set_eq:NN \__kernel_displayblock_beginpar_vmode:
+                                              \__block_beginpar_vmode:
+  \let \__kernel_displayblock_begin:          \prg_do_nothing:
+  \let \__kernel_displayblock_end:            \prg_do_nothing:
 }
-
-\cs_new:Npn \__block_recipe_figure:
+\cs_new:Npn \__block_recipe_standard:
 {
   \cs_set_eq:NN \__kernel_displayblock_beginpar_hmode:w
-                                              \__block_list_beginpar_hmode:N
+                                              \__block_beginpar_hmode:N
   \cs_set_eq:NN \__kernel_displayblock_beginpar_vmode:
-                                              \__block_list_beginpar_vmode:
-  \cs_set_eq:NN \__kernel_displayblock_begin: \__block_figure_begin:
-  \cs_set_eq:NN \__kernel_displayblock_end:   \__block_figure_end:
+                                              \__block_beginpar_vmode:
+  \cs_set_eq:NN \__kernel_displayblock_begin: \__block_inner_begin:
+  \cs_set_eq:NN \__kernel_displayblock_end:   \__block_inner_end:
   \tl_if_empty:NTF \l__block_tag_name_tl
-     { \tl_set:Nn    \l__tag_Figure_tag_tl {Figure}          }
-     { \tl_set_eq:NN \l__tag_Figure_tag_tl \l__block_tag_name_tl }
+     { \tl_set:Nn    \l__block_tag_inner_tag_tl {Figure}          }
+     { \tl_set_eq:NN \l__block_tag_inner_tag_tl \l__block_tag_name_tl }
 }
-\cs_new:Npn \__block_recipe_blockquote:
-{
-  \cs_set_eq:NN \__kernel_displayblock_beginpar_hmode:w
-                                              \__block_list_beginpar_hmode:N
-  \cs_set_eq:NN \__kernel_displayblock_beginpar_vmode:
-                                              \__block_list_beginpar_vmode:
-  \cs_set_eq:NN \__kernel_displayblock_begin: \__block_blockquote_begin:
-  \cs_set_eq:NN \__kernel_displayblock_end:   \__block_blockquote_end:
-  \tl_if_empty:NTF \l__block_tag_name_tl
-     { \tl_set:Nn    \l__tag_Figure_tag_tl {Figure}          }
-     { \tl_set_eq:NN \l__tag_Figure_tag_tl \l__block_tag_name_tl }
-}
+\tl_new:N \l__block_tag_inner_tag_tl
 \cs_new:Npn \__block_recipe_list:
 {
   \cs_set_eq:NN \__kernel_displayblock_beginpar_hmode:w
-                                              \__block_list_beginpar_hmode:N
+                                              \__block_beginpar_hmode:N
   \cs_set_eq:NN \__kernel_displayblock_beginpar_vmode:
-                                              \__block_list_beginpar_vmode:
+                                              \__block_beginpar_vmode:
   \cs_set_eq:NN \__kernel_displayblock_begin: \__block_list_begin:
   \cs_set_eq:NN \__kernel_displayblock_end:   \__block_list_end:
   \cs_set_eq:NN \__kernel_list_item_begin:    \__block_list_item_begin:
@@ -733,67 +725,68 @@
   env-name       = displayblock,
   tag-name       = ,
   tag-class      = ,
-  tagging-recipe = figure,
+  tagging-recipe = standard,
   level-counter  = ,
   level-increase = false,
   setup-code     = ,
   block-instance = displayblock ,
-  list-instance  = ,
+  inner-instance = ,
 }
 \DeclareInstance{blockenv}{displayblockflattened}{display}
 {
   env-name       = displayblockflattened,
   tag-name       = ,
   tag-class      = ,
-  tagging-recipe = flattened,
+  tagging-recipe = basic,
   level-counter  = ,
   level-increase = false,
   setup-code     = ,
   block-instance = displayblock ,
-  list-instance  = ,
+  para-flattened = true ,
+  inner-instance = ,
 }
 \tag_if_active:T {
-  \tagpdfsetup{add-new-tag={tag=quote,role=Figure}}
-  \tagpdfsetup{add-new-tag={tag=quotation,role=Figure}}
+  \tagpdfsetup{add-new-tag={tag=quote,role=BlockQuote}}
+  \tagpdfsetup{add-new-tag={tag=quotation,role=BlockQuote}}
 }
 \DeclareInstance{blockenv}{quotation}{display}
 {
   env-name       = quotation,
   tag-name       = quotation,
   tag-class      = ,
-  tagging-recipe = blockquote,
+  tagging-recipe = standard,
   level-counter  = ,
   level-increase = true,
   setup-code     = ,
   block-instance = quotationblock ,
-  list-instance  =  ,
+  inner-instance =  ,
 }
 \DeclareInstance{blockenv}{quote}{display}
 {
   env-name       = quote,
   tag-name       = quote,
   tag-class      = ,
-  tagging-recipe = blockquote,
+  tagging-recipe = standard,
   level-counter  = ,
   level-increase = true,
   setup-code     = ,
   block-instance = quoteblock ,
-  list-instance  =  ,
+  inner-instance =  ,
 }
 \tag_if_active:T {
-  \tagpdfsetup{add-new-tag={tag=verbatim,role=Figure}}
+  \tagpdfsetup{add-new-tag={tag=verbatim,role=Div}}
 }
 \DeclareInstance{blockenv}{verbatim}{display}
 {
   env-name       = verbatim,
   tag-name       = verbatim,
   tag-class      = ,
-  tagging-recipe = figure,
+  tagging-recipe = standard,
   level-counter  = ,
   level-increase = false,
   setup-code     = ,
   block-instance = displayblock ,
-  list-instance  = ,
+  inner-instance = ,
 }
 \DeclareInstance{blockenv}{itemize}{display}
 {
@@ -806,7 +799,7 @@
   max-levels     = 3,
   setup-code     = ,
   block-instance = list ,
-  list-instance  = itemize ,
+  inner-instance = itemize ,
 }
 \DeclareInstance{blockenv}{enumerate}{display}
 {
@@ -819,7 +812,7 @@
   max-levels     = 3,
   setup-code     = ,
   block-instance = list ,
-  list-instance  = enum ,
+  inner-instance = enum ,
 }
 
 \DeclareInstance{blockenv}{description}{display}
@@ -832,7 +825,7 @@
   level-increase = true,
   setup-code     = ,
   block-instance = list ,
-  list-instance  = description ,
+  inner-instance = description ,
 }
 \DeclareInstance{blockenv}{list}{display}
 {
@@ -844,7 +837,7 @@
   level-increase = true,
   setup-code     = \legacylistsetupcode ,
   block-instance = list ,
-  list-instance  = legacy ,
+  inner-instance = legacy ,
 }
 \setcounter{maxblocklevels}{6}
 \DeclareInstance{block}{displayblock-0}{display}
@@ -942,51 +935,43 @@
   }
 
 \tag_if_active:T {
-\cs_set:Npn \__block_list_beginpar_vmode: {
-  \int_gincr:N \g__tag_para_begin_int
-  \tag_struct_begin:n {tag=P}
-  \bool_if:NT \l__tag_para_show_bool
-      {
-       \tag_mc_begin:n {artifact}
-       \llap {\color_select:n {green}\tiny \PARALABEL\int_use:N \g__tag_para_begin_int \ }
-       \tag_mc_end:
+  \cs_set:Npn \__block_beginpar_vmode: { \tagstructbegin{tag=\tpara} }
+  \cs_set:Npn \__block_beginpar_hmode:N #1
+     {
+        \tag_mc_end:
+        \int_gincr:N \g__tag_para_end_int
+        \bool_if:NT \l__tag_para_show_bool
+          { \tag_mc_begin:n{artifact}
+            \rlap{\color_select:n{red}\tiny\ \int_use:N\g__tag_para_end_int}
+            \tag_mc_end:
+          }
+        \tag_struct_end:
+        \tagpdfparaOff \par \tagpdfparaOn
      }
-}
-\cs_set:Npn \__block_list_beginpar_hmode:N #1 {
-   \tag_mc_end: \tagpdfparaOff \par \tagpdfparaOn
- }
-\cs_set:Npn \__kernel_displayblock_beginpar_vmode: {}
-\cs_set:Npn \__kernel_displayblock_beginpar_hmode:w {}
 \cs_set:Npn \__kernel_displayblock_doendpe: {
      \bool_if:NT \l__tag_para_bool
        {
          \legacy_if:nT { @endpe }
            {
-             \__block_debug_typeout:n{flattened=\legacy_if:nTF { @endpeflattened }{true}{false} }
-             \legacy_if:nF { @endpeflattened }
+             \__block_debug_typeout:n{flattened= \bool_if:NTF
+                                              \l__block_flattened_bool {true}{false} }
+             \bool_if:NTF \l__block_flattened_bool
+               \__block_maybe_finish_flattened:
                {
-                 \__block_debug_typeout:n{Structure-end~ P~ after~ list \on@line }
-                 \int_gincr:N \g__tag_para_end_int
-                 \bool_if:NT \l__tag_para_show_bool
-                      { \tag_mc_begin:n{artifact}
-                        \rlap{\color_select:n{red}\tiny\ endpe-\int_use:N\g__tag_para_end_int}
-                        \tag_mc_end:
-                      }
+                 \__block_debug_typeout:n{Structure-end~ \tpara\space after~ list \on@line }
                  \tag_struct_end:
                }
            }
       }
 }
+\cs_gset_eq:NN \__block_maybe_finish_flattened: \prg_do_nothing:
 \RemoveFromHook{para/begin}[tagpdf]
 \AddToHook{para/begin}[tagpdf]{
   \bool_if:NT \l__tag_para_bool {
-       %\ShowTagging{struct-stack}
        \legacy_if:nF { @inlabel }
          {
           \__block_debug_typeout:n{@endpe = \legacy_if:nTF { @endpe }{true}{false}}
-          \legacy_if:nTF { @endpeflattened }
-              \@kernel@tag@para@endpe
-              { \legacy_if:nF { @endpe } \@kernel@tag@para@endpe }
+          \@kernel@tag@para@endpe
           \tag_mc_begin:n {}
          }
      }
@@ -994,6 +979,13 @@
 
 \cs_set:Npn \@kernel@tag@para@endpe
              {
+               \legacy_if:nF { @endpe }
+                 {
+                     \bool_if:NF \l__block_flattened_bool
+                      {
+                        \tag_struct_begin:n{tag=\tpara}
+                      }
+                  }
                \int_gincr:N \g__tag_para_begin_int
                \tag_struct_begin:n
                    {
@@ -1008,11 +1000,37 @@
                     \tag_mc_end:
                   }
             }
-
+\newcommand\tpara{tpara}
+\tag_if_active:T {
+  \tagpdfsetup{add-new-tag={tag=tpara,role=Part}}
+}
+\RemoveFromHook{para/end}[tagpdf]
+\AddToHook{para/end}
+  {
+    \bool_if:NT \l__tag_para_bool
+      {
+        \int_gincr:N \g__tag_para_end_int
+        \tag_mc_end:
+        \bool_if:NT \l__tag_para_show_bool
+          { \tag_mc_begin:n{artifact}
+            \rlap{\color_select:n{red}\tiny\ \int_use:N\g__tag_para_end_int}
+            \tag_mc_end:
+          }
+        \tag_struct_end:
+        \bool_if:NF \l__block_flattened_bool
+         {
+           \tag_struct_end:       % for the tpara
+         }
+      }
+  }
 \def\PARALABEL{NP-}
 \cs_set:Npn \__kernel_list_label_after: {
    \bool_if:NT \l__tag_para_bool
      {
+       \bool_if:NF \l__block_flattened_bool
+            {
+              \tag_struct_begin:n{tag=\tpara}
+            }
        \int_gincr:N \g__tag_para_begin_int
        \tag_struct_begin:n {
           tag=\l__tag_para_tag_tl
@@ -1027,32 +1045,17 @@
        \tag_mc_begin:n {tag=P}
      }
 }
-\cs_new:Npn \__block_figure_begin: { \tagstructbegin{tag=\l__tag_Figure_tag_tl} \ShowTagging{struct-stack}  }
-\cs_new:Npn \__block_figure_end: {
+\cs_new:Npn \__block_inner_begin: {
+  \tagstructbegin{tag=\l__block_tag_inner_tag_tl}
+}
+\cs_new:Npn \__block_inner_end: {
   \__block_debug_typeout:n{block-end}
-  \ShowTagging{struct-stack}
   \legacy_if:nT { @endpe }
     {
       \int_gincr:N \g__tag_para_end_int
       \tagstructend
     }
-  \tagstructend               % end Figure
-  \ShowTagging{struct-stack}
-}
-\cs_new:Npn \__block_blockquote_begin: {
-  \tagstructbegin{tag=\l__tag_Figure_tag_tl} \tagstructbegin{tag=BlockQuote}
-}
-\cs_new:Npn \__block_blockquote_end: {
-  \__block_debug_typeout:n{block-end}
-  \ShowTagging{struct-stack}
-  \legacy_if:nT { @endpe }
-         {
-           \int_gincr:N \g__tag_para_end_int
-           \tagstructend
-         }
-         \tagstructend               % end BlockQuote
-         \tagstructend               % end Figure
-         \ShowTagging{struct-stack}
+  \tagstructend        % end inner structure
 }
 \tl_new:N  \l__tag_L_tag_tl
 \tl_set:Nn \l__tag_L_tag_tl {L}
@@ -1092,17 +1095,15 @@
 \cs_set:Npn \__block_list_item_end: {
   \legacy_if:nT { @endpe }
     {
-      \int_gincr:N \g__tag_para_end_int
-      \tagstructend
+      \tagstructend                           % tpara
     }
   \tagstructend \tagstructend   % end LBody, LI
 }
 \cs_set:Npn \__block_list_end: {
-  \ShowTagging{struct-stack}
   \legacy_if:nT { @endpe }
     {
-      \int_gincr:N \g__tag_para_end_int
-      \tagstructend
+      \tagstructend                       % tpara
+      \__block_debug_typeout:n{Structure-end~ P~ at~ list-end \on@line }
     }
   \tagstructend\tagstructend  % end LBody, LI
   \tagstructend               % end L
