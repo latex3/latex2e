@@ -34,10 +34,10 @@
 %% 
 %% File: l3lists2.dtx (C) Copyright 2021-2023 LaTeX Project
 
-\def\ltlistsversion{v0.9c}
-\def\ltlistsdate{2023/02/12}
+\def\ltlistsversion{v0.9d}
+\def\ltlistsdate{2023/02/17}
 
-\ProvidesPackage {l3lists2}[2022-08-07 v0.01 beta list refactoring]
+\ProvidesPackage {l3lists2}[\ltlistsdate\space \ltlistsversion\space beta list refactoring]
 \RequirePackage{xtemplate}
 \ExplSyntaxOn
 \def\@doendpe{\@endpetrue
@@ -60,6 +60,7 @@
 \def\@endpefalse{\global\let\if@endpe\iffalse}
 \DeclareObjectType{blockenv}{1}
 \DeclareObjectType{block}{1}
+\DeclareObjectType{para}{1}
 \DeclareObjectType{list}{1}
 \DeclareObjectType{item}{1}
 \DeclareTemplateInterface{blockenv}{display}{1}
@@ -73,8 +74,10 @@
   max-levels     : tokenlist = 3,
   setup-code     : tokenlist ,
   block-instance : tokenlist = displayblock ,
-  para-flattened : boolean = false ,
+  para-instance  : tokenlist ,
   inner-instance : tokenlist ,
+  para-flattened : boolean = false ,
+  final-code     : tokenlist = \ignorespaces ,
 }
 \DeclareTemplateInterface{block}{display}{1}
 {
@@ -82,13 +85,25 @@
   beginsep        : skip = \topsep ,
   begin-par-skip  : skip = \partopsep ,
   par-skip        : skip = \parsep ,
-  end-skip        : skip = \KeyValue{beginsep} ,
+  end-skip        : skip = \KeyValue{beginsep} ,                % conflict with name below
   end-par-skip    : skip = \KeyValue{begin-par-skip} ,
   beginpenalty    : integer = \UseName{@beginparpenalty} ,
   endpenalty      : integer = \UseName{@endparpenalty} ,
   leftmargin      : length = \leftmargin ,
   rightmargin     : length = \rightmargin ,
   parindent       : length = \listparindent ,
+}
+\DeclareTemplateInterface{para}{std}{1}
+{
+  indent-width          : length = \parindent ,
+  start-skip            : skip = 0pt  ,
+  left-skip             : skip = 0pt ,
+  right-skip            : skip = 0pt ,
+  end-skip              : skip = \fill ,
+  fixed-word-spaces     : boolean = false ,
+  final-hyphen-demerits : integer = 5000 ,
+  cr-cmd                : tokenlist = \@normalcr ,
+  para-class            : tokenlist = justify ,
 }
 \DeclareTemplateInterface{list}{std}{1}     % optional
 {
@@ -155,43 +170,29 @@
   { \UseInstance{blockenv}{displayblockflattened} {#1} }
   { \endblockenv }
 \RenewDocumentEnvironment{center} { !O{} }
-{
-  \displayblockflattened [#1]
-  \centering
-  \tl_set:Nn \l_tag_para_attr_class_tl {center}
-}
-{ \enddisplayblockflattened }
+{ \UseInstance{blockenv}{center}{#1} }
+{ \endblockenv }
 \RenewDocumentEnvironment{flushright} { !O{} }
-{
-  \displayblockflattened [#1]
-  \raggedleft
-  \tl_set:Nn \l_tag_para_attr_class_tl {raggedleft}
-}
-{ \enddisplayblockflattened }
+{ \UseInstance{blockenv}{flushright}{#1} }
+{ \endblockenv }
 \RenewDocumentEnvironment{flushleft} { !O{} }
-{
-  \displayblockflattened [#1]
-  \raggedright
-  \tl_set:Nn \l_tag_para_attr_class_tl {raggedright}
-}
-{ \enddisplayblockflattened }
-\tl_new:N\l_tag_para_attr_class_tl
-\tl_set:Nn \l_tag_para_attr_class_tl {justify}
-\tag_if_active:T
-{
-  \tagpdfsetup
-      {
-        newattribute = {justify}    {/O /Layout /TextAlign/Justify},
-        newattribute = {center}     {/O /Layout /TextAlign/Center},
-        newattribute = {raggedright}{/O /Layout /TextAlign/Start},
-        newattribute = {raggedleft} {/O /Layout /TextAlign/End},
-      }
-}
+{ \UseInstance{blockenv}{flushleft}{#1} }
+{ \endblockenv }
 \RenewDocumentEnvironment{quote}{ !O{} }
   { \UseInstance{blockenv}{quote} {#1} }
   { \endblockenv }
 \RenewDocumentEnvironment{quotation}{ !O{} }
   { \UseInstance{blockenv}{quotation} {#1} }
+  { \endblockenv }
+\RenewDocumentEnvironment{verbatim}{ !O{} }
+  { \UseInstance{blockenv}{verbatim} {#1}
+    \@xverbatim
+  }
+  { \endblockenv }
+\RenewDocumentEnvironment{verbatim*}{ !O{} }
+  { \UseInstance{blockenv}{verbatim} {#1}
+    \@sxverbatim
+  }
   { \endblockenv }
 \newcommand\@setupverbinvisiblespace{}
 \tag_if_active:T {
@@ -200,19 +201,6 @@
      \renewcommand\@setupverbinvisiblespace{\def\@xobeysp{\nobreakspace\pdffakespace}}
    }
 }
-\RenewDocumentEnvironment{verbatim}{ !O{} }
-  { \UseInstance{blockenv}{verbatim} {#1}
-    \tagpdfsetup{paratag=Code}% oder schneller: \tl_set:Nn\l__tag_para_tag_tl{Code}
-    \@newverbatim\@setupverbinvisiblespace \frenchspacing \@vobeyspaces \@xverbatim
-  }
-  { \endblockenv }
-\RenewDocumentEnvironment{verbatim*}{ !O{} }
-  { \UseInstance{blockenv}{verbatim} {#1}
-    \tagpdfsetup{paratag=Code}% oder schneller: \tl_set:Nn\l__tag_para_tag_tl{Code}
-    \@newverbatim\@setupverbvisiblespace
-    \frenchspacing\@vobeyspaces\@sxverbatim
-  }
-  { \endblockenv }
 \def\@newverbatim{%
   \language\l@nohyphenation
   \@tempswafalse
@@ -226,6 +214,9 @@
   \let\do\@makeother \dospecials
   \obeylines \verbatim@font \@noligs
   \everypar \expandafter{\the\everypar \unpenalty}%
+  \tagpdfsetup{paratag=Code}%   oder faster: \tl_set:Nn\l__tag_para_tag_tl{Code}
+  \@setupverbinvisiblespace
+  \frenchspacing \@vobeyspaces
 }
 \RenewDocumentEnvironment{itemize}{!O{}}
   { \UseInstance{blockenv}{itemize} {#1} }
@@ -267,6 +258,22 @@
   { \endblockenv }
 \cs_new:Npn \g_block_nesting_depth_int { \@listdepth }  % a fake int
                                                         % for now
+\DeclareTemplateCode{para}{std}{1}
+{
+  indent-width      = \parindent ,
+  start-skip        = \l__par_start_skip ,              % name??
+  left-skip         = \leftskip  ,
+  right-skip        = \rightskip  ,
+  end-skip          = \parfillskip ,
+  fixed-word-spaces = \l__par_fixed_word_spaces_bool ,  % name??
+  final-hyphen-demerits = \finalhyphendemerits ,
+  cr-cmd                = \\ ,
+  para-class            = \l_tag_para_attr_class_tl ,
+}
+{
+  \tl_if_empty:nF {#1} { \SetTemplateKeys{para}{std}{#1} }
+  \skip_set:Nn \@rightskip \rightskip
+}
 \DeclareTemplateCode{blockenv}{display}{1}
 {
   env-name       = \l__block_env_name_tl ,
@@ -278,8 +285,10 @@
   max-levels     = \l__block_max_levels_tl ,
   setup-code     = \l__block_setup_code_tl ,
   block-instance = \l__block_block_instance_tl ,
-  para-flattened = \l__block_flattened_bool ,
+  para-instance  = \l__block_para_instance_tl ,
   inner-instance = \l__block_inner_instance_tl ,
+  para-flattened = \l__block_flattened_bool ,
+  final-code     = \l__block_final_code_tl ,
 }
 {
   \__block_debug_typeout:n{\l__block_env_name_tl -env-start}
@@ -307,6 +316,11 @@
               { \l__block_block_instance_tl - \int_use:N
                 \g_block_nesting_depth_int }
               {#1}
+  \tl_if_empty:NF \l__block_para_instance_tl
+    {
+      \__block_debug_typeout:n{use~ para~ instance:~ \l__block_para_instance_tl }
+      \UseInstance{para}{ \l__block_para_instance_tl } {}
+    }
   \tl_if_empty:NF \l__block_inner_instance_tl
     {
       \__block_debug_typeout:n{use~ instance:~ \l__block_inner_instance_tl
@@ -320,7 +334,7 @@
                   }
                   {#1}
     }
-  \ignorespaces
+  \l__block_final_code_tl
 }
 \newcounter{maxblocklevels}
 \setcounter{maxblocklevels}{6}
@@ -745,6 +759,48 @@
   para-flattened = true ,
   inner-instance = ,
 }
+\DeclareInstance{blockenv}{center}{display}
+{
+  env-name       = center,
+  tag-name       = ,
+  tag-class      = ,
+  tagging-recipe = basic,
+  level-counter  = ,
+  level-increase = false,
+  setup-code     = ,
+  block-instance = displayblock ,
+  para-flattened = true ,
+  para-instance  = center ,
+  inner-instance = ,
+}
+\DeclareInstance{blockenv}{flushleft}{display}
+{
+  env-name       = flushleft,
+  tag-name       = ,
+  tag-class      = ,
+  tagging-recipe = basic,
+  level-counter  = ,
+  level-increase = false,
+  setup-code     = ,
+  block-instance = displayblock ,
+  para-flattened = true ,
+  para-instance  = raggedright ,
+  inner-instance = ,
+}
+\DeclareInstance{blockenv}{flushright}{display}
+{
+  env-name       = flushleft,
+  tag-name       = ,
+  tag-class      = ,
+  tagging-recipe = basic,
+  level-counter  = ,
+  level-increase = false,
+  setup-code     = ,
+  block-instance = displayblock ,
+  para-flattened = true ,
+  para-instance  = raggedleft ,
+  inner-instance = ,
+}
 \tag_if_active:T {
   \tagpdfsetup{add-new-tag={tag=quote,role=BlockQuote}}
   \tagpdfsetup{add-new-tag={tag=quotation,role=BlockQuote}}
@@ -787,6 +843,7 @@
   setup-code     = ,
   block-instance = displayblock ,
   inner-instance = ,
+  final-code     = \@newverbatim ,
 }
 \DeclareInstance{blockenv}{itemize}{display}
 {
@@ -923,8 +980,6 @@
 \DeclareInstance{list}{description}{std} {
   item-instance = description ,
 }
-  %
-
 \DeclareInstance{item}{basic}{std}
   {
     label-align = right ,
@@ -933,6 +988,65 @@
   {
     label-format = \normalfont\bfseries #1 ,
   }
+\tag_if_active:T
+{
+  \tagpdfsetup
+      {
+        newattribute = {justify}    {/O /Layout /TextAlign/Justify},
+        newattribute = {center}     {/O /Layout /TextAlign/Center},
+        newattribute = {raggedright}{/O /Layout /TextAlign/Start},
+        newattribute = {raggedleft} {/O /Layout /TextAlign/End},
+      }
+}
+\DeclareInstance{para}{center}{std}
+{
+  indent-width          = 0pt ,
+  start-skip            = 0pt ,
+  left-skip             = \@flushglue ,
+  right-skip            = \@flushglue ,
+  end-skip              = \z@skip ,
+  final-hyphen-demerits = 0 ,
+  cr-cmd                = \@centercr ,
+  para-class            = center ,
+}
+\DeclareInstance{para}{raggedright}{std}
+{
+  indent-width          = 0pt ,
+  start-skip            = 0pt ,
+  left-skip             = \z@skip ,
+  right-skip            = \@flushglue ,
+  end-skip              = \z@skip ,
+  final-hyphen-demerits = 0 ,
+  cr-cmd                = \@centercr ,
+  para-class            = raggedright ,
+}
+\DeclareInstance{para}{raggedleft}{std}
+{
+  indent-width          = 0pt ,
+  start-skip            = 0pt ,
+  left-skip             = \@flushglue ,
+  right-skip            = \z@skip ,
+  end-skip              = \z@skip ,
+  final-hyphen-demerits = 0 ,
+  cr-cmd                = \@centercr ,
+  para-class            = raggedleft ,
+}
+\DeclareInstance{para}{justify}{std}
+{
+  start-skip            = 0pt ,
+  left-skip             = \z@skip ,
+  right-skip            = \z@skip ,
+  end-skip              = \@flushglue ,
+  final-hyphen-demerits =  5000 ,
+  cr-cmd                = \@normalcr ,
+  para-class            = justify ,
+}
+\DeclareRobustCommand\centering  {\UseInstance{para}{center}{}}
+\DeclareRobustCommand\raggedleft {\UseInstance{para}{raggedleft}{}}
+\DeclareRobustCommand\raggedright{\UseInstance{para}{raggedright}{}}
+\DeclareRobustCommand\justifying {\UseInstance{para}{justify}{}}
+
+\justifying
 
 \tag_if_active:T {
   \cs_set:Npn \__block_beginpar_vmode: { \tagstructbegin{tag=\tpara} }
