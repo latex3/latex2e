@@ -13,6 +13,23 @@ on:
 # requests get tested even if their branch comes from a fork.
 
 jobs:
+  # Update the TeX Live tree if necessary
+  texlive-cache:
+    runs-on: ubuntu-20.04
+    name: Update TeX Live
+    outputs:
+      cache_key: ${{ steps.texlive.outputs.cache_key }}
+    steps:
+      # Boilerplate
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Install TeX Live
+        id: texlive
+        uses: zauguin/install-texlive@v3
+        with:
+          # List the required TeX Live packages in a separate file to allow reuse in
+          # different workflows.
+          package_file: .github/tl_packages
   # The l3build job contains the actual work. We misuse the matrix mechanism to
   # create three jobs which only differ in minimal elements.
   # For tags we do not run this since we run the release job instead.
@@ -72,18 +89,20 @@ jobs:
             l3build_cmd: cd required && l3build doc -q -H --show-log-on-error
             artifact_name: Documentation
     name: ${{ matrix.name }}
+    needs: texlive-cache
     steps:
       # Boilerplate
       - name: Checkout repository
         uses: actions/checkout@v3
       # We need Ghostscript for dvips and XeTeX tests.
       - run: sudo apt-get update && sudo apt-get install ghostscript
-      - name: Install TeX Live
-        uses: zauguin/install-texlive@v2
+      - name: Restore TeX Live from cache
+        uses: actions/cache/restore@v3
         with:
-          # List the required TeX Live packages in a separate file to allow reuse in
-          # different workflows.
-          package_file: .github/tl_packages
+          path: ~/texlive
+          key: ${{ needs.texlive-cache.outputs.cache_key }}
+          fail-on-cache-miss: true
+      - run: echo $HOME/texlive/bin/x86_64-linux >> $GITHUB_PATH
       - name: Run l3build
         run: ${{ matrix.l3build_cmd }}
       # Now we create the artifacts: There are two cases where this happens.
