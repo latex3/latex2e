@@ -20,7 +20,11 @@ typesetfiles = {
 
 unpackfiles  = {"*.ins"}
 
-sourcefiles  = {"*.dtx", "*.ins", "*-????-??-??.sty"}
+sourcefiles  = {
+                 "xtemplate.sty",       -- while not distributed in latest version
+                 "*.dtx", "*.ins",
+                 "*-????-??-??.sty"
+		}
 
 -- not testing xetex in the lab, we may want to switch to pdftex instead of etex though
 
