@@ -22,12 +22,15 @@ l3build save -cconfig-block-tagging -epdftex,luatex \
 	blocks-description-02b \
 	problem-blocks-hyperref-01 \
         blocks-quote-01 \
+        blocks-quote-02 \
         blocks-trivlist-00 \
 	blocks-trivlist-01 \
 	blocks-trivlist-02 \
 	blocks-verbatim-01 \
         ptag-001 \
-        gallery-III
+        ptag-002 \
+        gallery-III \
+        gallery-III-with-sec
 
 
 exit
