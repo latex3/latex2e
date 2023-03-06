@@ -52,7 +52,10 @@ checksearch  = true
 
 -- Allow for TU and other test configurations
 
-checkconfigs = {"build","config-TU","config-OR","config-mathcapture","config-OR-luatex","config-sec-tagging","config-toc-tagging",}
+checkconfigs = 
+ {"build","config-TU","config-OR",
+  "config-mathcapture","config-OR-luatex",
+  "config-sec-tagging","config-toc-tagging","config-block-tagging"}
 
 
 
