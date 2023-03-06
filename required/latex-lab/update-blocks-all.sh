@@ -20,6 +20,9 @@ l3build save -cconfig-block-tagging -epdftex,luatex \
 	blocks-description-01 \
 	blocks-description-01b \
 	blocks-description-02b \
+	blocks-description-03 \
+	blocks-theorem-01 \
+	blocks-theorem-02 \
 	problem-blocks-hyperref-01 \
         blocks-quote-01 \
         blocks-quote-02 \

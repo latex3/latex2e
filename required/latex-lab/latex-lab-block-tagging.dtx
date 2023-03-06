@@ -26,8 +26,8 @@
 % \fi
 %
 
-\def\ltblocksversion{v0.9f}
-\def\ltblocksdate{2023/03/20}
+\def\ltblocksversion{v0.9g}
+\def\ltblocksdate{2023/03/06}
 
 %
 % \title{Prototype reimplementation of \LaTeXe{}'s block environments using templates}
@@ -3082,19 +3082,32 @@
 %    a paragraph, we have to start a paragraph
 %    structure. However, this is not the case if we are already
 %    flattening paragraphs, thus in this case we do nothing.
+%    We also do nothing if \textt{@endpe} is currently true, because
+%    that means we are right now just after the end of a
+%    \texttt{blockenv} and in the process of looking if we have to end
+%    the current \textt{tpara}, i.e., it is alreay open.  
 %    \begin{macrocode}
   \cs_set:Npn \@@_beginpar_vmode: {
+           \@@_debug_typeout:n
+              { @endpe = \legacy_if:nTF { @endpe }{true}{false}
+                \on@line }
+   \legacy_if:nTF { @endpe }
+      {
+        \legacy_if_gset_false:n { @endpe }
+      }
 %    \end{macrocode}
 %    We test for \texttt{<2} because  the first flattened environment
 %    has to surround itself with a \texttt{tpara}. Only any inner ones
 %    then have to avoid adding another \texttt{tpara}.
 %    \begin{macrocode}
+      {
 %    \typeout{-->G1~ (\int_use:N \l_@@_flattened_level_int)}
-    \int_compare:nNnT \l_@@_flattened_level_int < 2
-        {
-          \int_gincr:N \g__tag_para_main_begin_int
-          \tagstructbegin{tag=\l__tag_para_main_tag_tl}
-        }
+        \int_compare:nNnT \l_@@_flattened_level_int < 2
+            {
+              \int_gincr:N \g__tag_para_main_begin_int
+              \tagstructbegin{tag=\l__tag_para_main_tag_tl}
+            }
+      }
   }
 %    \end{macrocode}
 %  \end{macro}
@@ -3186,7 +3199,7 @@
   \bool_if:NT \l__tag_para_bool {
 %    \end{macrocode}
 %    if we are still waiting to typeset the list label we do nothing
-%    (the paragraph taggen then happens when the list is finally
+%    (the paragraph tagging then happens when the list is finally
 %    typeset).
 %    \begin{macrocode}
        \legacy_if:nF { @inlabel }
@@ -3203,7 +3216,7 @@
                 \on@line }
            \legacy_if:nF { @endpe }
              {
-                 \bool_if:NF \l__tag_para_flattened_bool
+               \bool_if:NF \l__tag_para_flattened_bool
                   {
                     \int_gincr:N \g__tag_para_main_begin_int
                     \tag_struct_begin:n{tag=\l__tag_para_main_tag_tl}
@@ -3290,6 +3303,33 @@
 %    \end{macrocode}
 %
 %    \begin{macrocode}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\begin}
+%    We need to do a little more than canceling \texttt{@endpe} now.
+%    \begin{macrocode}
+\DeclareRobustCommand*\begin[1]{%
+  \UseHook{env/#1/before}%
+  \@ifundefined{#1}%
+    {\def\reserved@a{\@latex@error{Environment #1 undefined}\@eha}}%
+    {\def\reserved@a{\def\@currenvir{#1}%
+        \edef\@currenvline{\on@line}%
+        \@execute@begin@hook{#1}%
+        \csname #1\endcsname}}%
+  \@ignorefalse
+  \begingroup
+    \__kernel_endpe_vmode:
+    \reserved@a}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\__kernel_endpe_vmode:}
+%    Close an open \texttt{tpara} if \texttt{@endpe} is true and we
+%    are in vmode. Used in \cs{para_end:} and \cs{begin}.
+%    \begin{macrocode}
 \cs_new:Npn \__kernel_endpe_vmode: {
     \if@endpe \ifvmode
       \bool_if:NT \l__tag_para_bool
@@ -3305,6 +3345,7 @@
 }
 %    \end{macrocode}
 %  \end{macro}
+%
 %
 %  \begin{macro}{\__kernel_list_label_after:}
 %    If starting the tpara/P tags got delayed because of a pending label we
