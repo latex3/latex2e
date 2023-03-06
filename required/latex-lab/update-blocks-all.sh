@@ -12,6 +12,7 @@ l3build save -cconfig-block-tagging -epdftex,luatex \
 	blocks-enumerate-05 \
 	blocks-itemize-01 \
 	blocks-itemize-01b \
+	blocks-itemize-02 \
 	blocks-list-01 \
 	blocks-list-01b \
 	blocks-list-02 \
