@@ -1,3 +1,22 @@
+l3build save -cconfig-OR-luatex \
+	memoir-001 \
+	scrartcl-001 \
+	test-minipage \
+	test-tnote-setup \
+	test1 \
+	test10 \
+	test11-series \
+	test2 \
+	test3 \
+	test4 \
+	test5 \
+	test6 \
+	test7 \
+	test8 \
+	test9 
+
+
+
 l3build save -cconfig-OR \
 	footmisc-floats-latex \
 	footmisc-floats-bottom \
@@ -48,6 +67,7 @@ l3build save -cconfig-OR \
 	footmisc-twocol-floats-latex
 
 
+exit
 
 # those can only be tested locally
 
