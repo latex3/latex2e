@@ -11,7 +11,11 @@ ctanpkg = "latex-lab"
 maindir = "../.."
 
 -- Minor modifications to file types
-installfiles = {"*.ltx", "*.sty"}
+installfiles = {
+                 "*.ltx",
+                 "*.sty",
+		 "glyphtounicode-cmex.tex",
+		}
 typesetfiles = {
                  "latex-lab-*.dtx",
                  "*-doc.tex",
@@ -20,7 +24,11 @@ typesetfiles = {
 
 unpackfiles  = {"*.ins"}
 
-sourcefiles  = {"*.dtx", "*.ins", "*-????-??-??.sty"}
+sourcefiles  = {
+                 "*.dtx", "*.ins",
+                 "*-????-??-??.sty",
+  		 "glyphtounicode-cmex.tex",
+		}
 
 -- not testing xetex in the lab, we may want to switch to pdftex instead of etex though
 
@@ -48,7 +56,10 @@ checksearch  = true
 
 -- Allow for TU and other test configurations
 
-checkconfigs = {"build","config-TU","config-OR","config-mathcapture","config-OR-luatex","config-sec-tagging","config-toc-tagging",}
+checkconfigs = 
+ {"build","config-TU","config-OR",
+  "config-mathcapture","config-OR-luatex",
+  "config-sec-tagging","config-toc-tagging","config-block-tagging"}
 
 
 

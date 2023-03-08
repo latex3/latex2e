@@ -1,3 +1,7 @@
+# Packages that alter \@makefntext ...
+
+
+```
 
 % ./footmisc/footmisc.sty
 
@@ -1556,3 +1560,5 @@
 \renewcommand{\thefigure}{\@arabic\c@figure}%
 ...
 ---------------------------------------------------------
+
+```
