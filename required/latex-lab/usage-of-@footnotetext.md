@@ -1,3 +1,7 @@
+# Packages that alter \@footnotetext ...
+
+
+```
 
 % ./bibarts/bibarts.sty
 
@@ -840,3 +844,4 @@ not checked what this does
 
  this needs some further analysis
 
+```

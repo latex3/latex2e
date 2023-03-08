@@ -1,3 +1,9 @@
+# Packages that use double \kern's
+
+(contains bogus entries right now)
+
+
+```
 
       \ifdim\lastkern>\z@\ifdim\lastkern<5sp\relax
 ./bxjscls/bxjsja-minimal.def
@@ -78,3 +84,4 @@
 \NewDocumentCommand \@sidenotes@multisign { } {3sp}
 ./sidenotes/sidenotes.sty
 
+```

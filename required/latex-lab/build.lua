@@ -11,7 +11,11 @@ ctanpkg = "latex-lab"
 maindir = "../.."
 
 -- Minor modifications to file types
-installfiles = {"*.ltx", "*.sty"}
+installfiles = {
+                 "*.ltx",
+                 "*.sty",
+		 "glyphtounicode-cmex.tex",
+		}
 typesetfiles = {
                  "latex-lab-*.dtx",
                  "*-doc.tex",
@@ -21,9 +25,9 @@ typesetfiles = {
 unpackfiles  = {"*.ins"}
 
 sourcefiles  = {
-                 "xtemplate.sty",       -- while not distributed in latest version
                  "*.dtx", "*.ins",
-                 "*-????-??-??.sty"
+                 "*-????-??-??.sty",
+  		 "glyphtounicode-cmex.tex",
 		}
 
 -- not testing xetex in the lab, we may want to switch to pdftex instead of etex though

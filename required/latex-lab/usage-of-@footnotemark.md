@@ -1,6 +1,6 @@
-% packages that alter \@footnotemark ...
+# Packages that alter \@footnotemark ...
 
-
+```
 % bibarts
 
 \let\ba@footnmark=\@footnotemark
@@ -184,3 +184,4 @@
   }
  
 
+```
