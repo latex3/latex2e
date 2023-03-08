@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.98a",       --TAGVERSION
-    date          = "2022-12-22", --TAGDATE
+    version       = "0.98e",       --TAGVERSION
+    date          = "2023-03-07", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -432,6 +432,7 @@ local function __tag_space_chars_shipout (box)
         end
       end
     end
+    box.head = head
   end
 end
 

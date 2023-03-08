@@ -27,7 +27,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: pdfmanagement-testphase.dtx
-\ProvidesExplFile{pdfmanagement-testphase.ltx}{2022-11-03}{0.95t}
+\ProvidesExplFile{pdfmanagement-testphase.ltx}{2023-02-14}{0.95v}
   {PDF~management~code~(testphase)}
 %% File: l3pdfdict.dtx
 \cs_new:Npn \__pdfdict_get_type:n #1
@@ -2321,11 +2321,11 @@
      {xmp}{BaseURL}{}
      { \GetDocumentProperties{hyperref/baseurl} }
     \__pdfmeta_xmp_date_get:nNN
-      {document/pdfcreationdate}\l__pdfmeta_tmpa_tl\l__pdfmeta_tmpa_seq
+      {document/creationdate}\l__pdfmeta_tmpa_tl\l__pdfmeta_tmpa_seq
     \__pdfmeta_xmp_add_packet_line:nne{xmp}{CreateDate}{\__pdfmeta_xmp_print_date:N\l__pdfmeta_tmpa_seq}
     \pdfmanagement_add:nnx{Info}{CreationDate}{(\l__pdfmeta_tmpa_tl)}
     \__pdfmeta_xmp_date_get:nNN
-      {document/pdfmoddate}\l__pdfmeta_tmpa_tl\l__pdfmeta_tmpa_seq
+      {document/moddate}\l__pdfmeta_tmpa_tl\l__pdfmeta_tmpa_seq
     \__pdfmeta_xmp_add_packet_line:nne{xmp}{ModifyDate}{\__pdfmeta_xmp_print_date:N\l__pdfmeta_tmpa_seq}
     \pdfmanagement_add:nnx{Info}{ModDate}{(\l__pdfmeta_tmpa_tl)}
     \__pdfmeta_xmp_date_get:nNN
@@ -2337,7 +2337,9 @@
     \__pdfmeta_xmp_add_packet_line:nne {pdfaid}{part}{\pdfmeta_standard_item:n{level}}
     \__pdfmeta_xmp_add_packet_line:nne
       {pdfaid}{conformance}{\pdfmeta_standard_item:n{conformance}}
-    \__pdfmeta_xmp_add_packet_line:nne {pdfaid}{year} {\pdfmeta_standard_item:n{year}}
+    \int_compare:nNnTF {0\pdfmeta_standard_item:n{level}}<{4}
+     {\__pdfmeta_xmp_add_packet_line:nne {pdfaid}{year} {\pdfmeta_standard_item:n{year}}}
+     {\__pdfmeta_xmp_add_packet_line:nne {pdfaid}{rev}  {\pdfmeta_standard_item:n{year}}}
     \__pdfmeta_xmp_add_packet_line:nne
       {pdfxid}{GTS_PDFXVersion}{\GetDocumentProperties{document/pdfstandard-X}}
     \__pdfmeta_xmp_add_packet_line:nne
@@ -2722,6 +2724,7 @@
   }
 \tl_new:N  \l__pdffile_tmpa_tl
 \tl_new:N  \l__pdffile_tmpb_tl
+\tl_new:N  \g__pdffile_tmpa_tl
 \str_new:N \l__pdffile_tmpa_str
 \str_new:N \l__pdffile_tmpb_str
 \str_new:N \l__pdffile_ext_str
@@ -2739,7 +2742,7 @@
     ,.mp4 = video/mp4
     ,.pdf = application/pdf
     ,.png = image/png
-    ,.tex = text/plain %or application/x-tex, not in iana.org list
+    ,.tex = application/x-tex %not in iana.org list but probably better
     ,.txt = text/plain
     ,.sty = text/plain
     ,.xml = text/xml
@@ -2854,7 +2857,7 @@
 
 \cs_new_protected:Npn \__pdffile_filespec_write:nnn #1 #2 #3
   {
-    \tl_if_blank:nT { #2 }
+    \tl_if_blank:nTF { #2 }
       {
         \msg_error:nn {pdffile}{target-name-missing}
       }
@@ -2872,6 +2875,31 @@
                 }
             }
         \group_end:
+      }
+  }
+
+\cs_new_protected:Npn \__pdffile_filespec_write:nnN #1 #2 #3
+  {
+    \tl_if_blank:nTF { #1 }
+      {
+        \msg_error:nn {pdffile}{target-name-missing}
+      }
+      {
+        \group_begin:
+          \__pdffile_filename_convert_to_print:nN  { #1 } \l__pdffile_tmpa_str
+          \pdfdict_put:nnx {l_pdffile/Filespec}{F} { \l__pdffile_tmpa_str }
+          \pdfdict_put:nnx {l_pdffile/Filespec}{UF}{ \l__pdffile_tmpa_str }
+          \pdf_object_unnamed_write:nx {dict}
+            {
+              \pdfdict_use:n { l_pdffile/Filespec}
+              \tl_if_empty:nF { #2 }
+                {
+                  /EF <</F~#2 /UF~#2>>
+                }
+            }
+        \tl_gset:Nx\g__pdffile_tmpa_tl{\pdf_object_ref_last:}
+        \group_end:
+        \tl_set_eq:NN#3\g__pdffile_tmpa_tl
       }
   }
 
@@ -2966,6 +2994,27 @@
              { \tl_if_blank:nTF {#2}{stream.txt}{\exp_not:n{#2}} }
              {\l__pdffile_embed_ref_tl}
      }
+  }
+
+\cs_new_protected:Npn \pdffile_embed_stream:nnN #1 #2 #3
+  {
+     \tl_if_blank:nTF {#2}
+      { \__pdffile_mimetype_set:nN {stream.txt}\l__pdffile_automimetype_tl}
+      { \__pdffile_mimetype_set:nN { #2 } \l__pdffile_automimetype_tl }
+     \__pdffile_stream_write:nN
+       { #1 }
+       \l__pdffile_automimetype_tl
+     \tl_set:Nx \l__pdffile_embed_ref_tl { \pdf_object_ref_last: }
+     \exp_args:Nxx
+       \__pdffile_filespec_write:nnN
+         %#1 target file name, #2 object ref of stream, #3 object ref of filespec
+         { \tl_if_blank:nTF {#2}{stream.txt}{\exp_not:n{#2}} }
+         {\l__pdffile_embed_ref_tl}
+         #3
+     \prop_gput:Nxx
+        \g_pdffile_embed_prop
+        { #3 }
+        {{stream}{}{\tl_if_blank:nTF {#2}{stream.txt}{\exp_not:n{#2}}}}
   }
 
 %% 
