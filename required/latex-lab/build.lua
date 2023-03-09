@@ -36,8 +36,12 @@ checkengines = { "pdftex", "luatex" }
 
 checkdeps =
   {
-    maindir .. "/base"
+    maindir .. "/base",
+    maindir .. "/required/amsmath",
+    maindir .. "/required/graphics",
+    maindir .. "/required/tools"
   }
+
 
 checkruns     = 4
 typesetruns   = 2
@@ -58,8 +62,12 @@ checksearch  = true
 
 checkconfigs = 
  {"build","config-TU","config-OR",
-  "config-mathcapture","config-OR-luatex",
-  "config-sec-tagging","config-toc-tagging","config-block-tagging"}
+  "config-mathtagging",
+  "config-OR-luatex",
+  "config-sec-tagging",
+  "config-toc-tagging",
+  "config-block-tagging",
+ }
 
 
 

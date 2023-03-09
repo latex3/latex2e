@@ -31,7 +31,7 @@ l3build save -cconfig-block-tagging -epdftex,luatex \
 	blocks-trivlist-01 \
 	blocks-trivlist-02 \
 	blocks-verbatim-01 \
-	hyperref-target-01 \
+	hyperref-target \
         ptag-001 \
         gallery-III \
         gallery-III-with-sec
