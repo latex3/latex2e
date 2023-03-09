@@ -5,6 +5,12 @@ checkengines = {"pdftex"}
 checksearch  = true
 testfiledir  = "testfiles-mathtagging"
 
+checkdeps =
+  {
+    maindir .. "/base",
+    maindir .. "/required/amsmath"
+  }
+
 checkruns     = 3
 
 
