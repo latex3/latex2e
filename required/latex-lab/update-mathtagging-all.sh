@@ -15,7 +15,8 @@ l3build save -cconfig-mathtagging \
 	mtag-002 \
 	mtag-tlc3 \
         mathcapture-tag-001 \
-	mtag-003
+	mtag-003 \
+	mtag-004
 
 exit
 
