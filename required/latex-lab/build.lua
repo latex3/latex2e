@@ -36,8 +36,10 @@ checkengines = { "pdftex", "luatex" }
 
 checkdeps =
   {
-    maindir .. "/base"
+    maindir .. "/base",
+    maindir .. "/required/amsmath"
   }
+
 
 checkruns     = 4
 typesetruns   = 2
