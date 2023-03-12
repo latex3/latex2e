@@ -1,6 +1,7 @@
 # Packages that use double \kern's
 
-(contains bogus entries right now)
+Scan of TeXlive 2022  for checking ... may not be longer accurate and may contain a few false positives
+(definitely contains bogus entries right now)
 
 
 ```
