@@ -46,49 +46,87 @@ jobs:
         # generate the artifact from PDF files and not the build directory and
         # to generate the artifact when the run is successful, not when it fails.
         include:
-          - name: "Tests: base - build - pdftex"
-            l3build_cmd: cd base && l3build check -q --show-log-on-error -c build -e pdftex
-            artifact_name: testfiles
-          - name: "Tests: base - build - xetex"
-            l3build_cmd: cd base && l3build check -q --show-log-on-error -c build -e xetex
-            artifact_name: testfiles
-          - name: "Tests: base - build - luatex"
-            l3build_cmd: cd base && kpsewhich -mktex=tfm -must-exist ecssdc10.tfm && l3build check -q --show-log-on-error -c build -e luatex
-            artifact_name: testfiles
-          - name: "Tests: base - 1run"
-            l3build_cmd: cd base && l3build check -q --show-log-on-error -c config-1run
-            artifact_name: testfiles
-          - name: "Tests: base - TU"
-            l3build_cmd: cd base && l3build check -q --show-log-on-error -c config-TU
-            artifact_name: testfiles
-          - name: "Tests: base - legacy"
-            l3build_cmd: cd base && l3build check -q --show-log-on-error -c config-legacy
-            artifact_name: testfiles
-          - name: "Tests: base - lthooks"
-            l3build_cmd: cd base && l3build check -q --show-log-on-error -c config-lthooks
-            artifact_name: testfiles
-          - name: "Tests: base - lthooks2"
-            l3build_cmd: cd base && l3build check -q --show-log-on-error -c config-lthooks2
-            artifact_name: testfiles
-          - name: "Tests: base - ltcmd"
-            l3build_cmd: cd base && l3build check -q --show-log-on-error -c config-ltcmd
-            artifact_name: testfiles
-          - name: "Tests: base - doc"
-            l3build_cmd: cd base && l3build check -q --show-log-on-error -c config-doc
-            artifact_name: testfiles
-          - name: "Tests: base - ltmarks"
-            l3build_cmd: cd base && l3build check -q --show-log-on-error -c config-ltmarks
-            artifact_name: testfiles
-          - name: "Tests: required"
-            l3build_cmd: cd required && l3build check -q --show-log-on-error
-            artifact_name: testfiles
-          - name: "Documentation: base"
-            l3build_cmd: cd base && l3build doc -q -H --show-log-on-error
-            artifact_name: Documentation
-          - name: "Documentation: required"
-            l3build_cmd: cd required && l3build doc -q -H --show-log-on-error
-            artifact_name: Documentation
-    name: ${{ matrix.name }}
+          - module: base
+            config: build
+            engine: pdftex
+          - module: base
+            config: build
+            engine: xetex
+          - module: base
+            config: build
+            engine: luatex
+            extra_command: kpsewhich -mktex=tfm -must-exist ecssdc10.tfm
+          - module: base
+            config: config-1run
+          - module: base
+            config: config-TU
+          - module: base
+            config: config-legacy
+          - module: base
+            config: config-lthooks
+          - module: base
+            config: config-lthooks2
+          - module: base
+            config: config-ltcmd
+          - module: base
+            config: config-doc
+          - module: base
+            config: config-ltmarks
+          - module: required/amsmath
+          - module: required/cyrillic
+          - module: required/firstaid
+          - module: required/graphics
+          - module: required/latex-lab
+            config: build
+          - module: required/latex-lab
+            config: config-OR
+          - module: required/latex-lab
+            config: config-mathtagging
+          - module: required/latex-lab
+            config: config-OR-luatex
+          - module: required/latex-lab
+            config: config-sec-tagging
+          - module: required/latex-lab
+            config: config-toc-tagging
+          - module: required/latex-lab
+            config: config-block-tagging
+          - module: required/tools
+    name: "Tests: ${{ matrix.module }}${{ matrix.config && format(' - {0}', matrix.config) || ''}}${{ matrix.engine && format(' - {0}', matrix.engine) || ''}}"
+    needs: texlive-cache
+    steps:
+      # Boilerplate
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      # We need Ghostscript for dvips and XeTeX tests.
+      - run: sudo apt-get update && sudo apt-get install ghostscript
+      - name: Restore TeX Live from cache
+        uses: actions/cache/restore@v3
+        with:
+          path: ~/texlive
+          key: ${{ needs.texlive-cache.outputs.cache_key }}
+          fail-on-cache-miss: true
+      - run: echo $HOME/texlive/bin/x86_64-linux >> $GITHUB_PATH
+      - if: ${{ matrix.extra_command }}
+        run: ${{ matrix.extra_command }}
+      - name: Run l3build
+        working-directory: ${{ matrix.module }}
+        run: "l3build check -q --show-log-on-error${{ matrix.config && format(' -c {0}', matrix.config) || ''}}${{ matrix.engine && format(' -e {0}', matrix.engine) || ''}}"
+      # Now we create the artifacts for the logs of failed tests
+      - name: Archive failed test output
+        if: ${{ always() }}
+        uses: zauguin/l3build-failure-artifacts@v1
+        with:
+          name: testfiles
+          # Decide how long to keep the test output artifact:
+          retention-days: 3
+  docs:
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        module:
+          - base
+          - required
+    name: "Documentation: ${{ matrix.module }}"
     needs: texlive-cache
     steps:
       # Boilerplate
@@ -104,22 +142,13 @@ jobs:
           fail-on-cache-miss: true
       - run: echo $HOME/texlive/bin/x86_64-linux >> $GITHUB_PATH
       - name: Run l3build
-        run: ${{ matrix.l3build_cmd }}
-      # Now we create the artifacts: There are two cases where this happens.
-      # 1. If we failed running tests
-      - name: Archive failed test output
-        if: ${{ always() }}
-        uses: zauguin/l3build-failure-artifacts@v1
-        with:
-          name: ${{ matrix.artifact_name }}
-          # Decide how long to keep the test output artifact:
-          retention-days: 3
-      # 2. If we succeed building documentation
+        working-directory: ${{ matrix.module }}
+        run: l3build doc -q -H --show-log-on-error
+      # Now we create the artifacts for the generated documentation
       - name: Archive documentation
-        if: ${{ matrix.artifact_name == 'Documentation' && success() }}
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ matrix.artifact_name }}
+          name: Documentation
           path: "**/*.pdf"
           # Decide how long to keep the test output artifact:
           retention-days: 21
@@ -130,7 +159,9 @@ jobs:
     name: Send notifications
     runs-on: ubuntu-20.04
     # Run after the `l3build` job in order to be able to react to it's output.
-    needs: l3build
+    needs: 
+      - l3build
+      - docs
     # Only run if the tests failed, we don't want to get notifications for every run.
     # We don't want information for pull requests since for pull requests from local
     # branches we already send notifications when the branch test fails and pull requests
