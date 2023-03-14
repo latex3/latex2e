@@ -33,6 +33,7 @@ l3build save -cconfig-block-tagging -epdftex,luatex \
 	blocks-verbatim-01 \
 	hyperref-target \
         ptag-001 \
+        problem-blocks-tabbing \
         gallery-III \
         gallery-III-with-sec
 
