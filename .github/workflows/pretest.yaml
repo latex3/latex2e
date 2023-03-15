@@ -1,16 +1,8 @@
-name: Automated testing
+name: Automated testing with TeX Live pretest
 
 # Currently we run in two situations:
 on:
-  # Whenever someone pushes to a branch in our repo
-  push:
-    branches:
-      - "*"
-  # Whenever a pull request is opened, reopened or gets new commits.
-  pull_request:
-# This implies that for every push to a local branch in our repo for which a
-# pull request is open this runs twice. But it's important to ensure that pull
-# requests get tested even if their branch comes from a fork.
+  workflow_dispatch:
 
 jobs:
   # Update the TeX Live tree if necessary
@@ -30,6 +22,8 @@ jobs:
           # List the required TeX Live packages in a separate file to allow reuse in
           # different workflows.
           package_file: .github/tl_packages
+          repository: https://pretest.math.hamburg/
+          cache_version: 0-2023
   # The l3build job contains the actual work. We misuse the matrix mechanism to
   # create three jobs which only differ in minimal elements.
   # For tags we do not run this since we run the release job instead.
@@ -90,11 +84,10 @@ jobs:
             config: config-toc-tagging
           - module: required/latex-lab
             config: config-block-tagging
-          - module: required/latex-lab
-            config: config-LM-tagging
           - module: required/tools
     name: "Tests: ${{ matrix.module }}${{ matrix.config && format(' - {0}', matrix.config) || ''}}${{ matrix.engine && format(' - {0}', matrix.engine) || ''}}"
     needs: texlive-cache
+    continue-on-error: true
     steps:
       # Boilerplate
       - name: Checkout repository
@@ -112,7 +105,7 @@ jobs:
         run: ${{ matrix.extra_command }}
       - name: Run l3build
         working-directory: ${{ matrix.module }}
-        run: "l3build check -q --show-log-on-error${{ matrix.config && format(' -c {0}', matrix.config) || ''}}${{ matrix.engine && format(' -e {0}', matrix.engine) || ''}}"
+        run: "l3build check -q${{ matrix.config && format(' -c {0}', matrix.config) || ''}}${{ matrix.engine && format(' -e {0}', matrix.engine) || ''}}"
       # Now we create the artifacts for the logs of failed tests
       - name: Archive failed test output
         if: ${{ always() }}
@@ -135,6 +128,7 @@ jobs:
           - module: required
     name: "Documentation: ${{ matrix.module }}"
     needs: texlive-cache
+    continue-on-error: true
     steps:
       # Boilerplate
       - name: Checkout repository
@@ -161,48 +155,3 @@ jobs:
           path: "**/*.pdf"
           # Decide how long to keep the test output artifact:
           retention-days: 21
-  # GitHub automatically informs the initiator of any action about the result, but
-  # we additionally want to keep the latex-commits mailing list informed about
-  # test failures.
-  notifiy:
-    name: Send notifications
-    runs-on: ubuntu-20.04
-    # Run after the `l3build` job in order to be able to react to it's output.
-    needs: 
-      - l3build
-      - docs
-    # Only run if the tests failed, we don't want to get notifications for every run.
-    # We don't want information for pull requests since for pull requests from local
-    # branches we already send notifications when the branch test fails and pull requests
-    # from forks can't access the username and password secrets required to send mails.
-    if: ${{ failure() && github.event_name != 'pull_request' }}
-    steps:
-      - name: Send mail
-        # The explicit commit hash ensures that this can't be used by dawidd6 as a
-        # backdoor to execute arbitrary code during our runs.
-        uses: dawidd6/action-send-mail@6063705cefe50cb915fc53bb06d4049cae2953b2
-        with:
-          # Currently using my (Marcel's) mail server for sending mails.
-          server_address: typesetting.eu
-          server_port: 587
-          # These values can be changed in the repository settings.
-          username: ${{secrets.MAIL_USERNAME}}
-          password: ${{secrets.MAIL_PASSWORD}}
-          # If we want to send notifications to additional addresses, at them here as
-          # a comma separated list.
-          to: latex3-commits@tug.org
-          # The name is arbitrary, but if you want to change the address you need to
-          # coordinate it with the administrator of the mail server to allow the account
-          # to send from the mail address.
-          from: LaTeX CI <github@latex-project.org>
-          priority: high
-          # Determine the subject and body of the mail.
-          subject: "Test failed: ${{github.repository}} (${{github.ref}})"
-          body: |
-            Test failure for ${{github.repository}}
-            -------------------------------------------------------------
-
-            On branch:        ${{github.ref}} (${{github.sha}})
-            Initiated by:     ${{github.actor}}
-            Commit URL:       https://github.com/${{github.repository}}/commit/${{github.sha}}
-            More information: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
