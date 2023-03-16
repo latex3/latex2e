@@ -1,5 +1,6 @@
 # Packages that alter \@makefntext ...
 
+Scan of TeXlive 2022  for checking ... may not be longer accurate and may contain a few false positives
 
 ```
 

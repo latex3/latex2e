@@ -68,9 +68,10 @@ textfiles =
     "lppl-1-1.txt",
     "lppl-1-2.txt",
   }
-typesetfiles   =
+typesetfiles_list = {
   {
     "source2e.tex", -- Has to be first: source2e.ist creation!
+  }, {
     "alltt.dtx",
     "classes.dtx",
     "cmfonts.dtx",
@@ -102,6 +103,7 @@ typesetfiles   =
     "cyrguide.tex",
     "encguide.tex",
     "fntguide.tex",
+  }, {
     "ltnews.tex",
     "ltnews??.tex",
     "ltx3info.tex",
@@ -112,6 +114,16 @@ typesetfiles   =
     "*-doc.tex",
     "*-code.tex",
   }
+}
+local doc_component_setting = os.getenv'LTX_DOC_COMPONENT'
+if doc_component_setting then
+  typesetfiles = typesetfiles_list[math.tointeger(doc_component_setting)]
+else
+  typesetfiles = {}
+  for _, files in ipairs(typesetfiles_list) do
+    table.move(files, 1, #files, #typesetfiles + 1, typesetfiles)
+  end
+end
 
 -- Files that should be removed after running a test
 dynamicfiles = {"*.tst"}
