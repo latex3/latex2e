@@ -163,6 +163,7 @@ indexstyle = "source2e.ist"
 checkconfigs = {"build","config-1run","config-TU","config-legacy","config-lthooks",
                 "config-lthooks2","config-ltcmd","config-doc","config-ltmarks"}
 
+tagfiles = tagfiles or {"*.cls","*.dtx","*.fdd","*.ins","*.tex","README.md"}
 update_tag = update_tag_base
 
 -- Custom bundleunpack which does not search the localdir
