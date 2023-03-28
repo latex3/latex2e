@@ -2376,7 +2376,12 @@
 % \end{macro}
 % \end{macro}
 %
-% \begin{macro}[int]{\tl_gremove_once:Nx,\tl_show:x,\tl_log:x}
+% \begin{macro}[int]{
+%     \tl_gremove_once:Nx,
+%     \tl_show:x,
+%     \tl_log:x,
+%     \cs_replacement_spec:c
+%   }
 %   Some variants of \pkg{expl3} functions.
 %   \fmiinline{should probably be moved to expl3}
 %    \begin{macrocode}
@@ -3425,8 +3430,13 @@
 %
 % \subsection{Adding or removing hook code}
 %
-% \begin{macro}{\hook_gput_code:nnn}
-% \begin{macro}{\@@_gput_code:nnn,\@@_hook_gput_code_do:nnn}
+% \begin{macro}{\hook_gput_code:nnn,\hook_gput_code_with_args:nnn}
+% \begin{macro}{
+%     \@@_gput_code:nnn,
+%     \@@_gput_code_store:nnn,
+%     \@@_hook_gput_code_do:nnn,
+%     \@@_prop_gput_labeled_do:Nnn
+%    }
 %
 %    With \cs{hook_gput_code:nnn}\Arg{hook}\Arg{label}\Arg{code} a
 %    chunk of \meta{code} is added to an existing \meta{hook} labeled
@@ -3449,8 +3459,11 @@
   }
 %    \end{macrocode}
 %
+%   If \cs{AddToHookWithArguments} was used, do some sanity checking,
+%   and if it's not possible to use arguments at this point, fall back
+%   to regular \cs{AddToHook} by using \cs{@@_replacing_args_false:}.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_gput_code:nnn #1 #2
+\cs_new_protected:Npn \@@_gput_code:nnn #1 #2 #3
   {
     \@@_if_replacing_args:TF
       {
@@ -3466,12 +3479,16 @@
       }
       { }
 %    \end{macrocode}
-%   First check if the code should be executed immediately, rather than
+%   Then check if the code should be executed immediately, rather than
 %   stored:
 % \changes{v1.0r}{2021/09/06}{Use dedicated conditional (gh/606)}
 %    \begin{macrocode}
     \@@_if_execute_immediately:nTF {#1}
       {
+%    \end{macrocode}
+%   \cs{AddToHookWithArguments} can't be used on one-time hook (that
+%   were already used).
+%    \begin{macrocode}
         \@@_if_replacing_args:TF
           {
             \msg_error:nnnn { hooks } { one-time-args }
@@ -3481,6 +3498,7 @@
         \use:n
       }
       { \@@_gput_code_store:nnn {#1} {#2} }
+          {#3}
   }
 \cs_new_protected:Npn \@@_gput_code_store:nnn #1 #2 #3
   {
@@ -3541,15 +3559,24 @@
         \str_if_eq:eeTF { top-level } { \@@_currname_or_default: }
           {
 %    \end{macrocode}
-%    If the hook's basic structure does not exist, we need to declare it
-%    with \cs{@@_init_structure:n}.
+%   If the hook's basic structure does not exist, we need to declare it
+%   with \cs{@@_init_structure:n}.
 %    \begin{macrocode}
             \@@_init_structure:n {#1}
+%    \end{macrocode}
+%   Then append to the \verb|_toplevel| container for the hook.
+%    \begin{macrocode}
             \@@_cs_gput_right:nnn { _toplevel } {#1} {#3}
           }
           { \msg_error:nnn { hooks } { misused-top-level } {#1} }
       }
       {
+%    \end{macrocode}
+%   When adding to the code pool, we have to double hashes if
+%   \cs{AddToHook} was used (\verb|replacing_args| is false), so that
+%   later it is turned into a single parameter token, rather than a
+%   parameter to the hook macro.
+%    \begin{macrocode}
         \exp_args:Ncx \@@_prop_gput_labeled_do:Nnn
           { g_@@_#1_code_prop }
           {
@@ -3770,8 +3797,9 @@
 %    Declare the hook always even if it can't really be used (error
 %    message generated elsewhere).
 %
-%    Here we use \cs{@@_make_usable:nn}, so that a \cs{hook_new:n} is still
-%    possible later.
+%    Here we use \cs{@@_make_usable:nn}, so that a \cs{hook_new:n} is
+%    still possible later.  Generic hooks take no arguments, so use zero
+%    as the second argument.
 %    \begin{macrocode}
             \@@_make_usable:nn {#5} { 0 }
           }
@@ -4734,7 +4762,10 @@
     \cs_gset_eq:NN \@@_update_hook_code:n \@@_initialize_hook_code:n
 %    \end{macrocode}
 %    Now we loop over all hooks that have been defined and update each
-%    of them.
+%    of them.  Here we have to determine if the hook has arguments so
+%    that auxiliaries know what to do with hashes.  We look at
+%    \cs[no-index]{c_@@_\meta{hook}_parameter_tl}, if it has any
+%    parameters, and set \verb|replacing_args| accordingly.
 %    \begin{macrocode}
     \@@_debug:n { \prop_gclear:N \g_@@_used_prop }
     \seq_map_inline:Nn \g_@@_all_seq
@@ -4807,6 +4838,11 @@
           {
             \@@_code_gset:ne {#1}
               {
+%    \end{macrocode}
+%   The hook may take arguments, so we add a run of braced parameters
+%   after the \verb|_next| and \verb|_toplevel| macros, so that the
+%   arguments passed to the hook are forwarded to them.
+%    \begin{macrocode}
                 \exp_not:c { @@_toplevel~#1 } \@@_braced_parameter:n {#1}
                 \exp_not:c { @@_next~#1 } \@@_braced_parameter:n {#1}
               }
@@ -5109,7 +5145,10 @@
 %    time execution (\verb=#3=).  These should normally be empty.  The
 %    |top-level| code is added with \cs{@@_tl_gput:Nn} as that might
 %    change for a reversed hook (then |top-level| is the very first code
-%    chunk added).  The |next| code is always added last.
+%    chunk added).  The |next| code is always added last (to the right).
+%   The hook may take arguments, so we add a run of braced parameters
+%   after the \verb|_next| and \verb|_toplevel| macros, so that the
+%   arguments passed to the hook are forwarded to them.
 %    \begin{macrocode}
     \exp_args:NNe \@@_tl_gput:Nn #1
       { \exp_not:c { @@_toplevel~#3 } \@@_braced_parameter:n {#3} }
