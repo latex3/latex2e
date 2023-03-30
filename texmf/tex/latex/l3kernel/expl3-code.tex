@@ -71,7 +71,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: expl3.dtx
-\def\ExplFileDate{2023-02-22}%
+\def\ExplFileDate{2023-03-30}%
 \begingroup
   \def\next{\endgroup}%
   \expandafter\ifx\csname PackageError\endcsname\relax
@@ -957,6 +957,7 @@ Type  H <return>  for immediate help}\def~{\errmessage{%
   \__kernel_primitive:NN \dvivariable           \tex_dvivariable:D
   \__kernel_primitive:NN \eTeXglueshrinkorder   \tex_eTeXglueshrinkorder:D
   \__kernel_primitive:NN \eTeXgluestretchorder  \tex_eTeXgluestretchorder:D
+  \__kernel_primitive:NN \endlocalcontrol       \tex_endlocalcontrol:D
   \__kernel_primitive:NN \etoksapp              \tex_etoksapp:D
   \__kernel_primitive:NN \etokspre              \tex_etokspre:D
   \__kernel_primitive:NN \exceptionpenalty      \tex_exceptionpenalty:D
@@ -28485,6 +28486,7 @@ Type  H <return>  for immediate help}\def~{\errmessage{%
 \int_new:N \l__color_internal_int
 \tl_new:N \l__color_internal_tl
 \scan_new:N \s__color_mark
+\bool_new:N \l__color_ignore_error_bool
 \prg_new_conditional:Npnn \color_if_exist:n #1 { p , T, F, TF }
   {
     \prop_if_exist:cTF { l__color_named_ #1 _prop }
@@ -28651,17 +28653,11 @@ Type  H <return>  for immediate help}\def~{\errmessage{%
   }
 \cs_new_protected:Npn \__color_parse_loop:w #1 ! #2 ! #3 ! #4 ! #5 \s__color_stop
   {
-    \bool_lazy_or:nnF
-      { \tl_if_blank_p:n {#1} }
-      { \int_compare_p:nNn {#1} = { 100 } }
+    \tl_if_blank:nF {#1}
       {
-        \int_compare:nNnTF {#1} = { 0 }
-          {
-            \tl_if_blank:nTF {#2}
-              { \__color_extract:nNN { white } }
-              { \__color_extract:nNN {#2} }
-                \l__color_model_tl \l__color_value_tl
-          }
+        \bool_lazy_and:nnTF
+          { \fp_compare_p:nNn {#1} > { 0 } }
+          { \fp_compare_p:nNn {#1} < { 100 } }
           {
             \use:x
               {
@@ -28669,10 +28665,28 @@ Type  H <return>  for immediate help}\def~{\errmessage{%
                   { \tl_if_blank:nTF {#2} { white } {#2} }
               }
           }
+          { \__color_parse_loop_check:nn {#1} {#2} }
       }
     \tl_if_blank:nF {#3}
       { \__color_parse_loop:w #3 ! #4 ! #5 \s__color_stop }
     \__color_parse_end:
+  }
+\cs_new_protected:Npn \__color_parse_loop_check:nn #1#2
+  {
+    \bool_if:NF \l__color_ignore_error_bool
+      {
+        \bool_lazy_or:nnT
+          { \fp_compare_p:nNn {#1} < { 0 } }
+          { \fp_compare_p:nNn {#1} > { 100 } }
+          { \msg_error:nnnnn { color } { out-of-range } {#1} { 0 } { 100 } }
+      }
+    \fp_compare:nNnF {#1} > \c_zero_fp
+      {
+        \tl_if_blank:nTF {#2}
+          { \__color_extract:nNN { white } }
+          { \__color_extract:nNN {#2} }
+            \l__color_model_tl \l__color_value_tl
+      }
   }
 \cs_new_protected:Npn \__color_parse_loop:nn #1#2
   {
@@ -29184,6 +29198,7 @@ Type  H <return>  for immediate help}\def~{\errmessage{%
             \prop_if_in:cnF { l__color_named_ #1 _prop } {##1}
               {
                 \group_begin:
+                  \bool_set_true:N \l__color_ignore_error_bool
                   \tl_set:cn { l__color_named_ #3 _tl } {##1}
                   \__color_parse:nN {#2} \l__color_internal_tl
                 \exp_args:NNNV \group_end:
@@ -30108,6 +30123,13 @@ Type  H <return>  for immediate help}\def~{\errmessage{%
   {
     LaTeX~was~asked~to~define~a~new~color~model~called~'#1',~but~
     this~color~model~already~exists.
+  }
+\msg_new:nnnn { color } { out-of-range }
+  { Input~value~#1~out~of~range~[#2,~#3]. }
+  {
+    LaTeX~was~expecting~a~value~in~the~range~[#2,~#3]~as~part~of~a~color,~
+    but~you~gave~#1.~LaTeX~will~assume~you~meant~the~limit~of~the~range~
+    and~continue.
   }
 \msg_new:nnnn { color } { separation-alternative-model }
   { Separation~color~space~'#1'~require~an~alternative~model. }
@@ -33503,11 +33525,23 @@ Type  H <return>  for immediate help}\def~{\errmessage{%
   {
     \bool_lazy_and:nnTF
       { \__text_change_case_if_greek_p:n {#4} }
-      { ! \__text_codepoint_compare_p:nNn {#4} = { "0374 } }
       {
-        \exp_args:Ne \__text_change_case_upper_el:nnn
+        ! \bool_lazy_or_p:nn
+          { \__text_codepoint_compare_p:nNn {#4} = { "0374 } }
+          { \__text_codepoint_compare_p:nNn {#4} = { "037E } }
+      }
+      {
+        \__text_change_case_if_greek_spacing_diacritic:nTF {#4}
           {
-            \codepoint_to_nfd:n { \__text_codepoint_from_chars:Nw #4 }
+            \__text_change_case_store:n {#4}
+            \__text_change_case_loop:nnw
+          }
+          {
+            \exp_args:Ne \__text_change_case_upper_el:nnn
+              {
+                \codepoint_to_nfd:n
+                  { \__text_codepoint_from_chars:Nw #4 }
+              }
           }
             {#2} {#3}
       }
@@ -33805,6 +33839,84 @@ Type  H <return>  for immediate help}\def~{\errmessage{%
       \fi:
     \fi:
   }
+\prg_new_conditional:Npnn \__text_change_case_if_greek_spacing_diacritic:n
+  #1 { TF }
+  {
+    \exp_args:Nf \__text_change_case_if_greek_spacing_diacritic:n
+      { \int_eval:n { \__text_codepoint_from_chars:Nw #1 } }
+  }
+\cs_new:Npn \__text_change_case_if_greek_spacing_diacritic:n #1
+  {
+    \if_int_compare:w #1 < "1FBD \exp_stop_f:
+      \if_int_compare:w #1 = "037A \exp_stop_f:
+        \prg_return_true:
+      \else:
+        \prg_return_false:
+      \fi:
+    \else:
+      \if_int_compare:w #1 = "1FBD \exp_stop_f:
+        \prg_return_true:
+      \else:
+        \if_int_compare:w #1 = "1FBF \exp_stop_f:
+          \prg_return_true:
+        \else:
+          \if_int_compare:w #1 = "1FC0 \exp_stop_f:
+            \prg_return_true:
+          \else:
+            \if_int_compare:w #1 = "1FC1 \exp_stop_f:
+              \prg_return_true:
+            \else:
+              \if_int_compare:w #1 = "1FCD \exp_stop_f:
+                \prg_return_true:
+              \else:
+                \if_int_compare:w #1 = "1FCE \exp_stop_f:
+                  \prg_return_true:
+                \else:
+                  \if_int_compare:w #1 = "1FCF \exp_stop_f:
+                    \prg_return_true:
+                   \else:
+                    \if_int_compare:w #1 = "1FDD \exp_stop_f:
+                      \prg_return_true:
+                    \else:
+                      \if_int_compare:w #1 = "1FDE \exp_stop_f:
+                        \prg_return_true:
+                      \else:
+                        \if_int_compare:w #1 = "1FDF \exp_stop_f:
+                          \prg_return_true:
+                        \else:
+                          \if_int_compare:w #1 = "1FED \exp_stop_f:
+                            \prg_return_true:
+                          \else:
+                            \if_int_compare:w #1 = "1FEE \exp_stop_f:
+                              \prg_return_true:
+                            \else:
+                              \if_int_compare:w #1 = "1FEF \exp_stop_f:
+                                \prg_return_true:
+                              \else:
+                                \if_int_compare:w #1 = "1FFD \exp_stop_f:
+                                  \prg_return_true:
+                                \else:
+                                  \if_int_compare:w #1 = "1FFE \exp_stop_f:
+                                    \prg_return_true:
+                                  \else:
+                                    \prg_return_false:
+                                  \fi:
+                                \fi:
+                              \fi:
+                            \fi:
+                          \fi:
+                        \fi:
+                      \fi:
+                    \fi:
+                  \fi:
+                \fi:
+              \fi:
+            \fi:
+          \fi:
+        \fi:
+      \fi:
+    \fi:
+  }
 \prg_new_conditional:Npnn \__text_change_case_if_greek_diacritic:n
   #1 { TF , p }
   {
@@ -33825,11 +33937,7 @@ Type  H <return>  for immediate help}\def~{\errmessage{%
           \if_int_compare:w #1 = "0314 \exp_stop_f:
             \prg_return_true:
           \else:
-            \if_int_compare:w #1 = "0343 \exp_stop_f:
-              \prg_return_true:
-            \else:
-              \prg_return_false:
-            \fi:
+            \prg_return_false:
           \fi:
         \fi:
       \fi:
@@ -33903,9 +34011,13 @@ Type  H <return>  for immediate help}\def~{\errmessage{%
   }
 \cs_new:Npn \__text_change_case_boundary_upper_el:nnn #1#2#3
   {
-    \bool_lazy_or:nnTF
-      { \__text_codepoint_compare_p:nNn {#3} = { "03AE } }
-      { \__text_codepoint_compare_p:nNn {#3} = { "1F22 } }
+    \bool_lazy_any:nTF
+      {
+        { \__text_codepoint_compare_p:nNn {#3} = { "0389 } }
+        { \__text_codepoint_compare_p:nNn {#3} = { "03AE } }
+        { \__text_codepoint_compare_p:nNn {#3} = { "1F22 } }
+        { \__text_codepoint_compare_p:nNn {#3} = { "1F2A } }
+      }
       { \__text_change_case_boundary_upper_el:nnnw {#1} {#2} {#3} }
       { \__text_change_case_loop:nnw {#1} {#2} #3 }
   }
@@ -35605,7 +35717,9 @@ Type  H <return>  for immediate help}\def~{\errmessage{%
       {
         { pdftex }
           {
-            \fp_eval:n { round(\int_use:N \tex_pdftexversion:D / 100 , 2) }
+            \int_div_truncate:nn { \tex_pdftexversion:D } { 100 }
+            .
+            \int_mod:nn { \tex_pdftexversion:D } { 100 }
             .
             \tex_pdftexrevision:D
           }
@@ -35624,7 +35738,9 @@ Type  H <return>  for immediate help}\def~{\errmessage{%
           }
         { luatex }
           {
-            \fp_eval:n { round(\int_use:N \tex_luatexversion:D / 100, 2) }
+            \int_div_truncate:nn { \tex_luatexversion:D } { 100 }
+            .
+            \int_mod:nn { \tex_luatexversion:D } { 100 }
             .
             \tex_luatexrevision:D
           }
