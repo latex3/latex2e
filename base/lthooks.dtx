@@ -2762,7 +2762,7 @@
 %   allocate the necessary data structures for the new hook,
 %   otherwise just do nothing.
 %    \begin{macrocode}
-    \cs_if_exist:cF { @@~#1 }
+    \@@_if_usable:nF {#1}
       {
         \seq_gput_right:Nn \g_@@_all_seq {#1}
 %    \end{macrocode}
@@ -4477,6 +4477,7 @@
 % \end{macro}
 %
 % \begin{macro}{\@@_normalise_code_pool:n}
+% \begin{macro}{\@@_set_normalise_fn:nn}
 %   This one's a bit of a hack.  It takes a hook, and iterates over its
 %   code pool (\cs[no-index]{g_@@_\meta{hook}_code_prop}), redefining
 %   each code label to use only valid arguments.  This is used when, for
@@ -4484,7 +4485,8 @@
 %   \verb|#2|, but the hook has only \verb|#1|.  In this example, every
 %   reference to \verb|#2| is changed to \verb|##2|.  This is done
 %   because otherwise \TeX{} will throw a low-level error every time
-%   some change happens to the hook (code is added, a rule is set, etc).
+%   some change happens to the hook (code is added, a rule is set, etc),
+%   which can get quite repetitive for no good reason.
 % \changes{v1.1a}{2023/04/06}
 %         {Macro added (hook-args).}
 %    \begin{macrocode}
@@ -4493,8 +4495,26 @@
 \cs_new_protected:Npn \@@_normalise_code_pool:n #1
   {
 %    \end{macrocode}
-%   This macro does everything in a group to avoid leaking weird
-%   definitions.  To start, we define two auxiliary token lists.
+%   First, call \cs{@@_set_normalise_fn:nn} with the hook name to set
+%   everything up, then we'll loop over the
+%   hook's code pool applying the normalisation above.  After that's
+%   done, copy the temporary property list back to the hook's.
+%    \begin{macrocode}
+    \@@_set_normalise_fn:nn {#1} { Offending~label:~'##1' }
+    \prop_clear:N \l_@@_work_prop
+    \prop_map_function:cN { g_@@_#1_code_prop } \@@_normalise_fn:nn
+    \prop_gset_eq:cN { g_@@_#1_code_prop } \l_@@_work_prop
+  }
+%    \end{macrocode}
+%
+%   The sole purpose of this function is to define
+%   \cs{@@_normalise_fn:nn}, which will then do the correcting of the
+%   code being added to the hook.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_set_normalise_fn:nn #1 #2
+  {
+%    \end{macrocode}
+%   To start, we define two auxiliary token lists.
 %   \cs[no-index]{l_@@_tmpb_tl} contains:
 %\begin{verbatim}
 %   {\c__hook_hashes_tl 1}
@@ -4503,17 +4523,16 @@
 %   {\c__hook_hashes_tl 9}
 %\end{verbatim}
 %    \begin{macrocode}
+    \cs_set:Npn \@@_tmp:w ##1##2##3##4##5##6##7##8##9 { }
+    \tl_set:Ne \l_@@_tmpb_tl
+      { \@@_braced_cs_parameter:n { @@_tmp:w } }
     \group_begin:
-      \cs_set:Npn \@@_tmp:w ##1##2##3##4##5##6##7##8##9 { }
-      \tl_set:Ne \l_@@_tmpb_tl
-        { \@@_braced_cs_parameter:n { @@_tmp:w } }
-      \group_begin:
-        \@@_tl_set:cn { c_@@_hash_tl } { \exp_not:N \c_@@_hashes_tl }
-        \use:e
-          {
-      \group_end:
-      \tl_set:Nn \exp_not:N \l_@@_tmpb_tl { \l_@@_tmpb_tl }
-          }
+      \@@_tl_set:cn { c_@@_hash_tl } { \exp_not:N \c_@@_hashes_tl }
+      \use:e
+        {
+    \group_end:
+    \tl_set:Nn \exp_not:N \l_@@_tmpb_tl { \l_@@_tmpb_tl }
+        }
 %    \end{macrocode}
 %   And \cs[no-index]{l_@@_tmpa_tl} contains:
 %\begin{verbatim}
@@ -4524,16 +4543,16 @@
 %\end{verbatim}
 %   with \meta{n} being the number of arguments declared for the hook.
 %    \begin{macrocode}
-      \exp_last_unbraced:NNf
-      \cs_set:Npn \@@_tmp:w { \@@_parameter:n {#1} } { }
-      \tl_set:Ne \l_@@_tmpa_tl { \@@_braced_cs_parameter:n { @@_tmp:w } }
+    \exp_last_unbraced:NNf
+    \cs_set:Npn \@@_tmp:w { \@@_parameter:n {#1} } { }
+    \tl_set:Ne \l_@@_tmpa_tl { \@@_braced_cs_parameter:n { @@_tmp:w } }
 %    \end{macrocode}
 %   Now this function does the fun part.  It is meant to be used with
 %   \cs{prop_map_function:NN}, taking a label name in \verb|##1| and the
 %   code stored in that label in \verb|##2|.
 %    \begin{macrocode}
-      \cs_set_protected:Npx \@@_normalise_fn:nn ##1 ##2
-        {
+    \cs_gset_protected:Npx \@@_normalise_fn:nn ##1 ##2
+      {
 %    \end{macrocode}
 %   Here we'll define two auxiliary macros:  the first one throws an
 %   error when it detects an invalid argument reference.  It piggybacks
@@ -4551,16 +4570,21 @@
 %   At the point of this definition, the error is raised if the code
 %   happens to reference an invalid argument.  If it was possible to
 %   detect that this definition raised no error, the next step would be
-%   unnecessary.
+%   unnecessary.  We'll do all this in a group so this weird definition
+%   doesn't leak out, and set \cs{tex_escapechar:D} to $-1$ so this hack
+%   shows up extra nice in the case of an error.
 %    \begin{macrocode}
+        \group_begin:
+          \int_set:Nn \tex_escapechar:D { -1 }
           \cs_set:cpn
               {
                 hook~'#1'. ^^J
                 (hooks) \prg_replicate:nn { 13 } { ~ }
-                Offending~label:~'##1'
+                #2 % more message text
               }
               \exp_not:v { c_@@_#1_parameter_tl }
             {##2}
+        \group_end:
 %    \end{macrocode}
 %   This next macro, with a much less fabulous name, takes always nine
 %   arguments, and it just transfers the code \verb|##2| under the label
@@ -4572,12 +4596,12 @@
 %   expand the \cs{c_@@_hash_tl} and \cs{c_@@_hashes_tl} to the actual
 %   parameter tokens.
 %    \begin{macrocode}
-          \cs_set:Npn \exp_not:N \@@_tmp:w
-              \exp_not:V \c_@@_nine_parameters_tl
-            {
-              \prop_put:Nne \exp_not:N \l_@@_work_prop
-                {##1} { \exp_not:N \@@_double_hashes:n {##2} }
-            }
+        \cs_set:Npn \exp_not:N \@@_tmp:w
+            \exp_not:V \c_@@_nine_parameters_tl
+          {
+            \prop_put:Nne \exp_not:N \l_@@_work_prop
+              {##1} { \exp_not:N \@@_double_hashes:n {##2} }
+          }
 %    \end{macrocode}
 %   This next macro, with a much less fabulous name, takes always nine
 %   arguments, and it just transfers the code \verb|##2| under the label
@@ -4589,22 +4613,11 @@
 %   expand the \cs{c_@@_hash_tl} and \cs{c_@@_hashes_tl} to the actual
 %   parameter tokens.
 %    \begin{macrocode}
-          \exp_not:N \@@_tmp:w
-            \exp_not:V \l_@@_tmpa_tl
-            \exp_args:No \exp_not:o
-              { \exp_after:wN \@@_tmp:w \l_@@_tmpb_tl }
-        }
-%    \end{macrocode}
-%   Now we'll set \cs{tex_escapechar:D} to $-1$ so the hack above shows
-%   up extra nice in the case of an error, then we'll loop over the
-%   hook's code pool applying the normalisation above.  After that's
-%   done, copy the temporary property list back to the hook's.
-%    \begin{macrocode}
-      \int_set:Nn \tex_escapechar:D { -1 }
-      \prop_clear:N \l_@@_work_prop
-      \prop_map_function:cN { g_@@_#1_code_prop } \@@_normalise_fn:nn
-      \prop_gset_eq:cN { g_@@_#1_code_prop } \l_@@_work_prop
-    \group_end:
+        \exp_not:N \@@_tmp:w
+          \exp_not:V \l_@@_tmpa_tl
+          \exp_args:No \exp_not:o
+            { \exp_after:wN \@@_tmp:w \l_@@_tmpb_tl }
+      }
   }
 \cs_new_eq:NN \@@_normalise_fn:nn ?
 %<latexrelease>\EndIncludeInRelease
@@ -4648,6 +4661,7 @@
 %<latexrelease>\cs_undefine:N \@@_cs_if_empty:c
 %<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 %
 % \begin{macro}{\@@_braced_cs_parameter:n}
