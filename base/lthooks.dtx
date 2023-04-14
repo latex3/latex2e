@@ -2382,6 +2382,8 @@
 %     \tl_gremove_once:Nx,
 %     \tl_show:x,
 %     \tl_log:x,
+%     \tl_set:Ne,
+%     \prop_put:Nne,
 %     \cs_replacement_spec:c
 %   }
 %   Some variants of \pkg{expl3} functions.
@@ -2390,7 +2392,9 @@
 \cs_generate_variant:Nn \tl_gremove_once:Nn { Nx }
 \cs_generate_variant:Nn \tl_show:n { x }
 \cs_generate_variant:Nn \tl_log:n { x }
+\cs_generate_variant:Nn \tl_set:Nn { Ne }
 \cs_generate_variant:Nn \cs_replacement_spec:N { c }
+\cs_generate_variant:Nn \prop_put:Nnn { Nne }
 %    \end{macrocode}
 % \end{macro}
 %
@@ -2796,6 +2800,14 @@
 %    Now ensure that the base data structure for the hook exists:
 %    \begin{macrocode}
         \@@_init_structure:n {#1}
+%    \end{macrocode}
+%    The call to \cs{@@_normalise_code_pool:n} will correct any improper
+%    reference to arguments that don't exist in the hook, raising a
+%    low-level \TeX{} error and doubling the offending parameter tokens.
+%    It has to be done after \cs{@@_init_structure:n} because it
+%    operates on \cs[no-index]{g_@@_\meta{hook}_code_prop}.
+%    \begin{macrocode}
+        \@@_normalise_code_pool:n {#1}
 %    \end{macrocode}
 %    The \cs{g_@@_\meta{hook}_labels_clist} holds the sorted list of
 %    labels (once it got sorted). This is used only for debugging.
@@ -4322,6 +4334,8 @@
 %   \cs[no-index]{c_@@_\meta{hook}_parameter_tl} exists, if the hook is
 %   declared, and if it's a generic hook.
 %    \begin{macrocode}
+    \cs_if_exist:cF { @@#1~#2 }
+      { \@@_code_gset_aux:nnn {#1} {#2} { } }
     \@@_code_gset_auxi:veen
       {
         c_@@_
@@ -4458,6 +4472,148 @@
 %<latexrelease>\IncludeInRelease{2020/10/01}{\@@_normalise_cs_args:nn}
 %<latexrelease>                 {Hooks~with~args}
 %<latexrelease>\cs_undefine:N \@@_normalise_cs_args:nn
+%<latexrelease>\EndIncludeInRelease
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_normalise_code_pool:n}
+%   This one's a bit of a hack.  It takes a hook, and iterates over its
+%   code pool (\cs[no-index]{g_@@_\meta{hook}_code_prop}), redefining
+%   each code label to use only valid arguments.  This is used when, for
+%   example, a code is added referencing arguments \verb|#1| and
+%   \verb|#2|, but the hook has only \verb|#1|.  In this example, every
+%   reference to \verb|#2| is changed to \verb|##2|.  This is done
+%   because otherwise \TeX{} will throw a low-level error every time
+%   some change happens to the hook (code is added, a rule is set, etc).
+% \changes{v1.1a}{2023/04/06}
+%         {Macro added (hook-args).}
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2023/06/01}{\@@_normalise_code_pool:n}
+%<latexrelease>                 {Hooks~with~args}
+\cs_new_protected:Npn \@@_normalise_code_pool:n #1
+  {
+%    \end{macrocode}
+%   This macro does everything in a group to avoid leaking weird
+%   definitions.  To start, we define two auxiliary token lists.
+%   \cs[no-index]{l_@@_tmpb_tl} contains:
+%\begin{verbatim}
+%   {\c__hook_hashes_tl 1}
+%   {\c__hook_hashes_tl 2}
+%   ...
+%   {\c__hook_hashes_tl 9}
+%\end{verbatim}
+%    \begin{macrocode}
+    \group_begin:
+      \cs_set:Npn \@@_tmp:w ##1##2##3##4##5##6##7##8##9 { }
+      \tl_set:Ne \l_@@_tmpb_tl
+        { \@@_braced_cs_parameter:n { @@_tmp:w } }
+      \group_begin:
+        \@@_tl_set:cn { c_@@_hash_tl } { \exp_not:N \c_@@_hashes_tl }
+        \use:e
+          {
+      \group_end:
+      \tl_set:Nn \exp_not:N \l_@@_tmpb_tl { \l_@@_tmpb_tl }
+          }
+%    \end{macrocode}
+%   And \cs[no-index]{l_@@_tmpa_tl} contains:
+%\begin{verbatim}
+%   {\c__hook_hash_tl 1}
+%   {\c__hook_hash_tl 2}
+%   ...
+%   {\c__hook_hash_tl <n>}
+%\end{verbatim}
+%   with \meta{n} being the number of arguments declared for the hook.
+%    \begin{macrocode}
+      \exp_last_unbraced:NNf
+      \cs_set:Npn \@@_tmp:w { \@@_parameter:n {#1} } { }
+      \tl_set:Ne \l_@@_tmpa_tl { \@@_braced_cs_parameter:n { @@_tmp:w } }
+%    \end{macrocode}
+%   Now this function does the fun part.  It is meant to be used with
+%   \cs{prop_map_function:NN}, taking a label name in \verb|##1| and the
+%   code stored in that label in \verb|##2|.
+%    \begin{macrocode}
+      \cs_set_protected:Npx \@@_normalise_fn:nn ##1 ##2
+        {
+%    \end{macrocode}
+%   Here we'll define two auxiliary macros:  the first one throws an
+%   error when it detects an invalid argument reference.  It piggybacks
+%   on \TeX's low-level \enquote{Illegal parameter number} error, but it
+%   defines a weirdly-named control sequence so that the error comes out
+%   nicely formatted.  For example, if the label \enquote{badpkg} adds
+%   some code that references argument \verb|#3| in the hook
+%   \enquote{foo}, which takes only two arguments, the error will be:
+%\begin{verbatim}
+%   ! Illegal parameter number in definition of hook 'foo'.
+%   (hooks)             Offending label: 'badpkg'.
+%   <to be read again> 
+%                      3
+%\end{verbatim}
+%   At the point of this definition, the error is raised if the code
+%   happens to reference an invalid argument.  If it was possible to
+%   detect that this definition raised no error, the next step would be
+%   unnecessary.
+%    \begin{macrocode}
+          \cs_set:cpn
+              {
+                hook~'#1'. ^^J
+                (hooks) \prg_replicate:nn { 13 } { ~ }
+                Offending~label:~'##1'
+              }
+              \exp_not:v { c_@@_#1_parameter_tl }
+            {##2}
+%    \end{macrocode}
+%   This next macro, with a much less fabulous name, takes always nine
+%   arguments, and it just transfers the code \verb|##2| under the label
+%   \verb|##1| to the temporary property list.  The first \meta{n}
+%   arguments are taken from \cs[no-index]{l_@@_tmpa_tl}, and the other
+%   $9-\meta{n}$ taken from \cs[no-index]{l_@@_tmpb_tl} (which contains
+%   twice as many \verb|#| tokens as the former).  Then,
+%   \cs{@@_double_hashes:n} is used to double non-argument hashes, and
+%   expand the \cs{c_@@_hash_tl} and \cs{c_@@_hashes_tl} to the actual
+%   parameter tokens.
+%    \begin{macrocode}
+          \cs_set:Npn \exp_not:N \@@_tmp:w
+              \exp_not:V \c_@@_nine_parameters_tl
+            {
+              \prop_put:Nne \exp_not:N \l_@@_work_prop
+                {##1} { \exp_not:N \@@_double_hashes:n {##2} }
+            }
+%    \end{macrocode}
+%   This next macro, with a much less fabulous name, takes always nine
+%   arguments, and it just transfers the code \verb|##2| under the label
+%   \verb|##1| to the temporary property list.  The first \meta{n}
+%   arguments are taken from \cs[no-index]{l_@@_tmpa_tl}, and the other
+%   $9-\meta{n}$ taken from \cs[no-index]{l_@@_tmpb_tl} (which contains
+%   twice as many \verb|#| tokens as the former).  Then,
+%   \cs{@@_double_hashes:n} is used to double non-argument hashes, and
+%   expand the \cs{c_@@_hash_tl} and \cs{c_@@_hashes_tl} to the actual
+%   parameter tokens.
+%    \begin{macrocode}
+          \exp_not:N \@@_tmp:w
+            \exp_not:V \l_@@_tmpa_tl
+            \exp_args:No \exp_not:o
+              { \exp_after:wN \@@_tmp:w \l_@@_tmpb_tl }
+        }
+%    \end{macrocode}
+%   Now we'll set \cs{tex_escapechar:D} to $-1$ so the hack above shows
+%   up extra nice in the case of an error, then we'll loop over the
+%   hook's code pool applying the normalisation above.  After that's
+%   done, copy the temporary property list back to the hook's.
+%    \begin{macrocode}
+      \int_set:Nn \tex_escapechar:D { -1 }
+      \prop_clear:N \l_@@_work_prop
+      \prop_map_function:cN { g_@@_#1_code_prop } \@@_normalise_fn:nn
+      \prop_gset_eq:cN { g_@@_#1_code_prop } \l_@@_work_prop
+    \group_end:
+  }
+\cs_new_eq:NN \@@_normalise_fn:nn ?
+%<latexrelease>\EndIncludeInRelease
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2020/10/01}{\@@_normalise_code_pool:n}
+%<latexrelease>                 {Hooks~with~args}
+%<latexrelease>\cs_undefine:N \@@_normalise_code_pool:n
 %<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 % \end{macro}
