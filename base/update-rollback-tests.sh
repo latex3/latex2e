@@ -12,6 +12,9 @@ l3build save -epdftex,xetex,luatex \
 l3build save  \
 	tlb-latexrelease-rollback-2023-06-01
 
+l3build save -c config-lthooks \
+	lthooks-rollback-args
+
 
 exit
 
