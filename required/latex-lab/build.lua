@@ -11,28 +11,37 @@ ctanpkg = "latex-lab"
 maindir = "../.."
 
 -- Minor modifications to file types
-installfiles = {"*.ltx", "*.sty"}
+installfiles = {
+                 "*.ltx",
+                 "*.sty",
+		 "glyphtounicode-cmex.tex",
+		}
 typesetfiles = {
-                 "latex-lab-testphase.dtx",
-                 "latex-lab-new-or.dtx",
-                 "latex-lab-footnotes.dtx",
+                 "latex-lab-*.dtx",
                  "*-doc.tex",
 		 "*-code.tex",
 	       }
 
 unpackfiles  = {"*.ins"}
 
-sourcefiles  = {"*.dtx", "*.ins", "*-????-??-??.sty"}
+sourcefiles  = {
+                 "*.dtx", "*.ins",
+                 "*-????-??-??.sty",
+  		 "glyphtounicode-cmex.tex",
+		}
 
 -- not testing xetex in the lab, we may want to switch to pdftex instead of etex though
 
-checkengines = { "etex", "luatex" }
-
+checkengines = { "pdftex", "luatex" }
 
 checkdeps =
   {
-    maindir .. "/base"
+    maindir .. "/base",
+    maindir .. "/required/amsmath",
+    maindir .. "/required/graphics",
+    maindir .. "/required/tools"
   }
+
 
 checkruns     = 4
 typesetruns   = 2
@@ -50,7 +59,15 @@ typesetdeps =
 checksearch  = true
 
 -- Allow for TU and other test configurations
-checkconfigs = {"build","config-TU","config-OR"}
+
+checkconfigs = 
+ {"build","config-TU","config-OR",
+  "config-mathtagging",
+  "config-OR-luatex",
+  "config-sec-tagging",
+  "config-toc-tagging",
+  "config-block-tagging",
+ }
 
 
 
@@ -68,7 +85,6 @@ uploadconfig = {
  uploader = "LaTeX Project team",
  email = "latex-team@latex-project.org",
  update = true ,
- note = [[Uploaded automatically by l3build...]],
 }
 
 

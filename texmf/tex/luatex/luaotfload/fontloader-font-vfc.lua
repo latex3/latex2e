@@ -13,7 +13,7 @@ local fonts             = fonts
 local helpers           = fonts.helpers
 
 local setmetatableindex = table.setmetatableindex
-local makeweak          = table.makeweak
+----- makeweak          = table.makeweak
 
 -- Helpers dealing with virtual fonts: beware, these are final values so
 -- don't change the content of tables gotten this way!

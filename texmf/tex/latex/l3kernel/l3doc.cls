@@ -6,7 +6,7 @@
 %%
 %% l3doc.dtx  (with options: `class')
 %% 
-%% Copyright (C) 1990-2022 The LaTeX Project
+%% Copyright (C) 1990-2023 The LaTeX Project
 %% 
 %% It may be distributed and/or modified under the conditions of
 %% the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -1637,43 +1637,7 @@
       }
     \seq_gclear:N \g__codedoc_nested_names_seq
   }
-\newcommand*{\DescribeOption}
-  {
-    \leavevmode
-    \@bsphack
-    \begingroup
-      \MakePrivateLetters
-      \Describe@Option
-  }
-\newcommand*{\Describe@Option}[1]
-  {
-    \endgroup
-    \marginpar{
-      \raggedleft
-      \PrintDescribeEnv{#1}
-    }
-    \SpecialOptionIndex{#1}
-    \@esphack
-    \ignorespaces
-  }
-\newcommand*{\SpecialOptionIndex}[1]
-  {
-    \@bsphack
-    \begingroup
-      \__codedoc_target:
-      \index
-        {
-          #1\actualchar{\protect\ttfamily#1}~(option)
-          \encapchar hdclindex{\the\c@HD@hypercount}{usage}
-        }
-      \index
-        {
-          options:\levelchar#1\actualchar{\protect\ttfamily#1}
-          \encapchar hdclindex{\the\c@HD@hypercount}{usage}
-        }
-    \endgroup
-    \@esphack
-  }
+\NewDocElement[idxtype = option, idxgroup = options]{Option}{optionenv}
 \font \manual = manfnt \scan_stop:
 \cs_gset:Npn \dbend { {\manual\char127} }
 \newenvironment {danger}

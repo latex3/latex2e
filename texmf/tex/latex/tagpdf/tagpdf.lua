@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.97",       --TAGVERSION
-    date          = "2022-08-24", --TAGDATE
+    version       = "0.98e",       --TAGVERSION
+    date          = "2023-03-07", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -123,6 +123,7 @@ ltx.__tag.struct   = ltx.__tag.struct or  { } -- struct data
 ltx.__tag.tables   = ltx.__tag.tables or  { } -- tables created with new prop and new seq.
                                         -- wasn't a so great idea ...
                                         -- g__tag_role_tags_seq used by tag<-> is in this tables!
+                                        -- used for pure lua tables too now!
 ltx.__tag.page     = ltx.__tag.page   or  { } -- page data, currently only i->{0->mcnum,1->mcnum,...}
 ltx.__tag.trace    = ltx.__tag.trace  or  { } -- show commands
 ltx.__tag.func     = ltx.__tag.func   or  { } -- functions
@@ -214,11 +215,21 @@ local function __tag_get_mathsubtype  (mathnode)
  end
  return subtype
 end
-
+ltx.__tag.tables.role_tag_attribute = {}
+ltx.__tag.tables.role_attribute_tag = {}
+local __tag_alloctag =
+ function (tag)
+   if not ltx.__tag.tables.role_tag_attribute[tag] then
+    table.insert(ltx.__tag.tables.role_attribute_tag,tag)
+    ltx.__tag.tables.role_tag_attribute[tag]=#ltx.__tag.tables.role_attribute_tag
+    __tag_log  ("Add "..tag.." "..ltx.__tag.tables.role_tag_attribute[tag],3)
+   end
+ end
+ltx.__tag.func.alloctag = __tag_alloctag
 local __tag_get_num_from =
  function (tag)
-  if ltx.__tag.tables["g__tag_role_tags_prop"][tag] then
-    a= ltx.__tag.tables["g__tag_role_tags_prop"][tag]
+  if ltx.__tag.tables.role_tag_attribute[tag] then
+    a= ltx.__tag.tables.role_tag_attribute[tag]
   else
     a= -1
   end
@@ -236,8 +247,8 @@ function ltx.__tag.func.output_num_from (tag)
 end
 local __tag_get_tag_from =
  function  (num)
-  if ltx.__tag.tables["g__tag_role_tags_seq"][num] then
-   a = ltx.__tag.tables["g__tag_role_tags_seq"][num]
+  if ltx.__tag.tables.role_attribute_tag[num] then
+   a = ltx.__tag.tables.role_attribute_tag[num]
   else
    a= "UNKNOWN"
   end
@@ -421,6 +432,7 @@ local function __tag_space_chars_shipout (box)
         end
       end
     end
+    box.head = head
   end
 end
 
@@ -534,7 +546,7 @@ function ltx.__tag.func.mark_page_elements (box,mcpagecnt,mccntprev,mcopen,name,
     elseif n.id == VLIST then -- enter the vlist
      mcopen,mcpagecnt,mccntprev,mctypeprev=
       ltx.__tag.func.mark_page_elements (n,mcpagecnt,mccntprev,mcopen,"INTERNAL VLIST",mctypeprev)
-    elseif n.id == GLUE then       -- at glue real space chars are inserted, but this has
+    elseif n.id == GLUE and not n.leader then -- at glue real space chars are inserted, but this has
                                    -- been done if the previous shipout wandering, so here it is ignored
     elseif n.id == LOCAL_PAR then  -- local_par is ignored
     elseif n.id == PENALTY then    -- penalty is ignored

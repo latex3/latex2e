@@ -68,9 +68,10 @@ textfiles =
     "lppl-1-1.txt",
     "lppl-1-2.txt",
   }
-typesetfiles   =
+typesetfiles_list = {
   {
     "source2e.tex", -- Has to be first: source2e.ist creation!
+  }, {
     "alltt.dtx",
     "classes.dtx",
     "cmfonts.dtx",
@@ -99,9 +100,11 @@ typesetfiles   =
     "lppl.tex",
     "cfgguide.tex",
     "clsguide.tex",
+    "clsguide-historic.tex",
     "cyrguide.tex",
     "encguide.tex",
     "fntguide.tex",
+  }, {
     "ltnews.tex",
     "ltnews??.tex",
     "ltx3info.tex",
@@ -112,6 +115,16 @@ typesetfiles   =
     "*-doc.tex",
     "*-code.tex",
   }
+}
+local doc_component_setting = os.getenv'LTX_DOC_COMPONENT'
+if doc_component_setting then
+  typesetfiles = typesetfiles_list[math.tointeger(doc_component_setting)]
+else
+  typesetfiles = {}
+  for _, files in ipairs(typesetfiles_list) do
+    table.move(files, 1, #files, #typesetfiles + 1, typesetfiles)
+  end
+end
 
 -- Files that should be removed after running a test
 dynamicfiles = {"*.tst"}
@@ -128,8 +141,6 @@ unpacksuppfiles =
     "t1lmss.fd",
     "t1lmtt.fd",
     "ts1lmr.fd",
-    "pdflatex.ini",
-    "pdftexconfig.tex"
   }
 
 -- Custom settings for the check system
@@ -153,6 +164,7 @@ indexstyle = "source2e.ist"
 checkconfigs = {"build","config-1run","config-TU","config-legacy","config-lthooks",
                 "config-lthooks2","config-ltcmd","config-doc","config-ltmarks"}
 
+tagfiles = tagfiles or {"*.cls","*.dtx","*.fdd","*.ins","*.tex","README.md"}
 update_tag = update_tag_base
 
 -- Custom bundleunpack which does not search the localdir

@@ -18,18 +18,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
       # We need Ghostscript for dvips and XeTeX tests.
-      - run: sudo apt-get update && sudo apt-get install ghostscript
-      # Determine the name of the tag we are working on. Sadly GH Actions only provides
-      # github.ref which has the name prefixed with github.ref and no way to remove a prefix
-      # in normal expressions, so we need an action for that.
-      - name: Get name
-        uses: frabert/replace-string-action@9b62dfe3ae936b1cc380f2421c8ac9e63a4a3e85
-        id: name
-        if: ${{ always() }}
-        with:
-          pattern: "^refs/(?:heads|tags)/"
-          string: ${{ github.ref }}
-          replace-with: ""
+      - name: Install Ghostscript
+        run: sudo apt-get update && sudo apt-get install ghostscript
       - name: Install TeX Live
         uses: zauguin/install-texlive@v2
         with:
@@ -38,15 +28,15 @@ jobs:
           package_file: .github/tl_packages
       # For tags starting with dev- or release- we do full builds of all components
       - name: Run l3build
-        if: ${{ startsWith(github.ref, 'refs/tags/dev-') || startsWith(github.ref, 'refs/tags/release-') }}
+        if: ${{ startsWith(github.ref_name, 'dev-') || startsWith(github.ref_name, 'release-') }}
         run: l3build ctan -q -H --show-log-on-error
       # Otherwise we assume that the part before the first -2 is the name of the `required` package we want to
       # build. Therefore we switch to the right directors first. Afterwards we have to move the generated artifacts
       # back to the main directory so that they are found in the next step.
       - name: Run l3build
-        if: ${{ !(startsWith(github.ref, 'refs/tags/dev-') || startsWith(github.ref, 'refs/tags/release-')) }}
+        if: ${{ !(startsWith(github.ref_name, 'dev-') || startsWith(github.ref_name, 'release-')) }}
         env:
-          tagname: ${{steps.name.outputs.replaced}}
+          tagname: ${{github.ref_name}}
         run: cd "required/${tagname%%-2*}" && l3build ctan -q -H --show-log-on-error && mv *.zip ../../
       - name: Archive failed test output
         if: ${{ always() }}
@@ -83,9 +73,9 @@ jobs:
           # to send from the mail address.
           from: LaTeX CI <github@latex-project.org>
           # Determine the subject and body of the mail.
-          subject: "Version ${{steps.name.outputs.replaced}} of ${{github.repository}} has been released"
+          subject: "Version ${{github.ref_name}} of ${{github.repository}} has been released"
           body: |
-            The release ${{steps.name.outputs.replaced}} has been created for ${{github.repository}}.
+            The release ${{github.ref_name}} has been created for ${{github.repository}}.
 
             More information can be found at
             ${{steps.release.outputs.html_url}}
@@ -101,12 +91,12 @@ jobs:
           from: LaTeX CI <github@latex-project.org>
           priority: high
           # Determine the subject and body of the mail.
-          subject: "Test failure while trying to build release ${{steps.name.outputs.replaced}} in ${{github.repository}}"
+          subject: "Test failure while trying to build release ${{github.ref_name}} in ${{github.repository}}"
           body: |
             Test failure for ${{github.repository}}
             -------------------------------------------------------------
 
-            On tag:           ${{steps.name.outputs.replaced}} (${{github.sha}})
+            On tag:           ${{github.ref_name}} (${{github.sha}})
             Initiated by:     ${{github.actor}}
             Commit URL:       https://github.com/${{github.repository}}/commit/${{github.sha}}
             More information: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
