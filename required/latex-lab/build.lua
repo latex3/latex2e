@@ -67,6 +67,7 @@ checkconfigs =
   "config-sec-tagging",
   "config-toc-tagging",
   "config-block-tagging",
+  "config-graphic-tagging"
  }
 
 
