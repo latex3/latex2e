@@ -881,21 +881,39 @@
       { \exp_not:N \@@_make_prefixes:w \cs_prefix_spec:N #2 / / }
         }
 %    \end{macrocode}
-%   Finally, call \cs{@@_redefine_with_hooks:Nnnn} with the macro being
+%   Here we redefine the hook to have the right number of arguments.
+%   Disabling the hook, undefining the \verb|parameter| token list then
+%   calling \cs{@@_make_usable:nn} are enough to redefine the hook to
+%   the extent we want.  Code stored in the hook and other metadata
+%   about it are not lost in the process.
+%    \begin{macrocode}
+    \@@_disable:n { cmd / #3 / #4 }
+    \cs_undefine:c { c_@@_cmd / #3 / #4_parameter_tl }
+    \@@_make_usable:nn { cmd / #3 / #4 } { \l_@@_patch_num_args_int }
+%    \end{macrocode}
+%   Now call \cs{@@_redefine_with_hooks:Nnnn} with the macro being
 %   redefined in |#1|, then \cs{UseHook}|{cmd/<name>/before}| in |#2| or
 %   \cs{UseHook}|{cmd/<name>/after}| in |#3| (one is always empty), and
 %   in |#4| the \meta{replacement text} of the macro.
 %    \begin{macrocode}
-    \use:x
+    \use:e
       {
         \@@_redefine_with_hooks:Nnnn \exp_not:N #2
         \str_if_eq:nnTF {#4} { after }
           { \use_ii_i:nn }
           { \use:nn }
-            { { \@@_exp_not:NN \exp_not:N \UseHook { cmd / #3 / #4 } } }
+            { {
+                \@@_exp_not:NN \exp_not:N \UseHookWithArguments
+                  { cmd / #3 / #4 } { \int_use:N \l_@@_patch_num_args_int }
+                  \@@_braced_parameter:n { cmd / #3 / #4 }
+            } }
             { { } }
             { \@@_exp_not:NN \exp_not:V \l_@@_replace_text_tl }
       }
+%    \end{macrocode}
+%   Finally, update the hook code.
+%    \begin{macrocode}
+    \@@_update_hook_code:n { cmd / #3 / #4 }
   }
 %    \end{macrocode}
 %
@@ -1164,7 +1182,7 @@
       {
         \@@_patch_debug:x { ++~macro~can~be~retokenized~cleanly }
         \@@_patch_debug:x { ==~retokenizing~macro~now }
-        \@@_patch_retokenize:Nnnn #1 {#2} {#3} {#4}
+        \@@_patch_retokenize:Nnnn #1 { cmd / #2 / #3 } {#3} {#4}
         \use_i_delimit_by_q_recursion_stop:nw \use_none:n
       }
       {
@@ -1279,6 +1297,40 @@
 % \end{macro}
 %
 %
+% \begin{macro}{\@@_guess_arg_count:NN}
+% \begin{macro}{\@@_guess_arg_count:wN}
+% \begin{macro}{\@@_guess_arg_count:nw}
+%   Looks at the parameter text of a macro, and counts the parameters
+%   by looking at the number after a \verb|#|, and checking if they are
+%   sequential.  This macro assumes that all parameters are marked with
+%   hashes, and not other characters, and that there is no
+%   \enquote{trick parameter}.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_guess_arg_count:NN #1
+  {
+    \exp_after:wN \@@_guess_arg_count:wN
+      \token_to_meaning:N #1 \s_@@_mark
+  }
+\exp_last_unbraced:NNNNo
+\cs_new_protected:Npx \@@_guess_arg_count:wN
+    #1 { \tl_to_str:n { macro: } } #2 \s_@@_mark #3
+  {
+    \int_set:Nn #3
+      {
+        \exp_not:N \@@_guess_arg_count:nw { 0 } #2
+          \c_hash_str 0 \s_@@_mark
+      }
+  }
+\use:e
+  { \cs_new:Npn \exp_not:N \@@_guess_arg_count:nw #1 #2 \c_hash_str #3 }
+  {
+    \int_compare:nNnTF { #1 + 1 } = {#3}
+      { \@@_guess_arg_count:nw {#3} }
+      { #1 \@@_use_none_delimit_by_s_mark:w }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
 %
 % \begin{macro}{\@@_patch_retokenize:Nnnn}
 %   Then, if \cs{@@_cmd_if_scanable:NnTF} returned true, we can go on
@@ -1286,8 +1338,30 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_patch_retokenize:Nnnn #1 #2 #3 #4
   {
+%   Here, when patching by retokenization, we can only guess the number
+%   of arguments of the macro.
+%    \begin{macrocode}
+    \@@_guess_arg_count:NN #1 \l_@@_patch_num_args_int
 %    \end{macrocode}
-%   Start off by making some things \tn{relax} to avoid lots of
+%
+%   Then we redefine the hook to have the right number of arguments.
+%   Disabling the hook, undefining the \verb|parameter| token list then
+%   calling \cs{@@_make_usable:nn} are enough to redefine the hook to
+%   the extent we want.  Code stored in the hook and other metadata
+%   about it are not lost in the process.
+%    \begin{macrocode}
+    \@@_disable:n {#2}
+    \cs_undefine:c { c_@@_#2_parameter_tl }
+    \@@_make_usable:nn {#2} { \l_@@_patch_num_args_int }
+    \tl_set:Ne \l_@@_tmpa_tl
+      { \exp_args:Ne \tl_to_str:n { \@@_braced_parameter:n {#2} } }
+    \use:x
+      {
+        \str_replace_all:Nnn \exp_not:N \l_@@_tmpa_tl
+          { #### } { \c_hash_str }
+      }
+%    \end{macrocode}
+%   Then, make make some things \tn{relax} to avoid lots of
 %   \tn{noexpand} below.
 %    \begin{macrocode}
     \cs_set_eq:NN \kerneltmpDoNotUse \scan_stop:
@@ -1313,10 +1387,18 @@
             ####1 \def \kerneltmpDoNotUse ####2
               {
                 \str_if_eq:nnT {#3} { before }
-                  { \token_to_str:N \UseHook { cmd / #2 / #3 } }
+                  {
+                    \token_to_str:N \UseHookWithArguments {#2}
+                      { \int_use:N \l_@@_patch_num_args_int }
+                      \l_@@_tmpa_tl
+                  }
                 ####3
                 \str_if_eq:nnT {#3} { after }
-                  { \token_to_str:N \UseHook { cmd / #2 / #3 } }
+                  {
+                    \token_to_str:N \UseHookWithArguments {#2}
+                      { \int_use:N \l_@@_patch_num_args_int }
+                      \l_@@_tmpa_tl
+                  }
               }
           }
 %    \end{macrocode}
@@ -1340,6 +1422,10 @@
 %                {Make patching of commands a global operation (gh/674)}
 %    \begin{macrocode}
     \cs_gset_eq:NN #1 \kerneltmpDoNotUse
+%    \end{macrocode}
+%   Finally, update the hook code.
+%    \begin{macrocode}
+    \@@_update_hook_code:n {#2}
   }
 %    \end{macrocode}
 % \end{macro}
