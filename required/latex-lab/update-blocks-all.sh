@@ -31,6 +31,7 @@ l3build save -cconfig-block-tagging -epdftex,luatex \
 	blocks-trivlist-01 \
 	blocks-trivlist-02 \
 	blocks-verbatim-01 \
+	blocks-verbatim-02 \
 	hyperref-target \
         ptag-001 \
         problem-blocks-tabbing \
