@@ -28,7 +28,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: tagpdf.dtx
-\ProvidesExplPackage {tagpdf} {2023-04-24} {0.98f}
+\ProvidesExplPackage {tagpdf} {2023-05-16} {0.98g}
   { A package to experiment with pdf tagging }
 
 \bool_if:nF
@@ -303,7 +303,7 @@
 \msg_new:nnn { tag } {role-unknown}     { role~#1~is~not~known  }
 \msg_new:nnn { tag } {role-unknown-tag} { tag~#1~is~not~known  }
 \msg_new:nnn { tag } {role-parent-child}
-  { Rule~'#1'~-->~'#2'~is~#3}
+  { Rule~'#1'~-->~'#2'~is~#3~\msg_line_context:}
 \msg_new:nnn { tag } {role-remapping}
   { remapping~tag~to~#1 }
 \msg_new:nnn { tag } {role-tag}         { mapping~tag~#1~to~role~#2  }
@@ -389,7 +389,7 @@
     \prop_get:cnNT
       {g__tag_struct_\__tag_ref_value:enn{tagpdfstruct-#1}{tagstruct}{unknown}_prop}
       {P}
-      \l_tmpa_tl
+      \l__tag_tmpa_tl
       {
         \msg_warning:nnn { tag } {struct-used-twice} {#1}
       }
@@ -856,7 +856,7 @@
       }
   }
 \tl_new:N \l__tag_parenttree_content_tl
-
+\cs_new_protected:Npn \__tag_tree_parenttree_rerun_msg: {}
 \cs_new_protected:Npn \__tag_tree_fill_parenttree:
   {
     \int_step_inline:nnnn{1}{1}{\__tag_ref_value_lastpage:nn{abspage}{-1}} %not quite clear if labels are needed. See lua code
@@ -896,7 +896,10 @@
                   }
               }
               {
-                \msg_warning:nn { tag } {tree-mcid-index-wrong}
+                \cs_set_protected:Npn \__tag_tree_parenttree_rerun_msg:
+                 {
+                   \msg_warning:nn { tag } {tree-mcid-index-wrong}
+                 }
               }
           }
         \tl_put_right:Nn
@@ -928,6 +931,7 @@
       {
         \__tag_tree_fill_parenttree:
       }
+    \__tag_tree_parenttree_rerun_msg:
     \tl_put_right:NV \l__tag_parenttree_content_tl\g__tag_parenttree_objr_tl
     \pdf_object_write:nnx  { __tag/tree/parenttree }{dict}
       {
@@ -1800,7 +1804,6 @@
 \seq_gpush:Nn \g__tag_struct_stack_seq {0}
 \seq_new:N    \g__tag_struct_tag_stack_seq
 \seq_gpush:Nn \g__tag_struct_tag_stack_seq {{Root}{StructTreeRoot}}
-\prop_new:N\g__tag_struct_tag_NS_prop
 \tl_new:N     \l__tag_struct_stack_parent_tmpa_tl
 
 \seq_const_from_clist:Nn \c__tag_struct_StructTreeRoot_entries_seq
@@ -1890,11 +1893,13 @@
   { parentrole }
   { {StructTreeRoot}{pdf} }
 
-\prop_gput:Nnn \g__tag_struct_tag_NS_prop {0}{{StructTreeRoot}{pdf}}
-\__tag_prop_gput:cnx
-  { g__tag_struct_0_prop }
-  { Namespaces }
-  { \pdf_object_ref:n { __tag/tree/namespaces } }
+\pdf_version_compare:NnF < {2.0}
+ {
+   \__tag_prop_gput:cnx
+    { g__tag_struct_0_prop }
+    { Namespaces }
+    { \pdf_object_ref:n { __tag/tree/namespaces } }
+ }
 \cs_new:Npn \__tag_struct_get_id:n #1 %#1=struct num
   {
     (
@@ -1915,7 +1920,6 @@
          { g__tag_struct_#1_prop }
          { S }
          { \pdf_name_from_unicode_e:n {#2}  } %
-       \prop_gput:Nnn \g__tag_struct_tag_NS_prop {#1}{{#2}{#3}}
      }
  }
  {
@@ -1932,7 +1936,6 @@
              { NS }
              { \l__tag_get_tmpc_tl } %
          }
-       \prop_gput:Nnn \g__tag_struct_tag_NS_prop {#1}{{#2}{#3}}
      }
  }
 \cs_generate_variant:Nn \__tag_struct_set_tag_info:nnn {eVV}
@@ -2646,6 +2649,59 @@
           }
       }
   }
+\cs_set_protected:Npn \tag_struct_use_num:n #1 %#1 is structure number
+  {
+    \__tag_check_if_active_struct:T
+      {
+        \prop_if_exist:cTF
+          { g__tag_struct_#1_prop } %
+          {
+            \prop_get:cnNT
+              {g__tag_struct_#1_prop}
+              {P}
+              \l__tag_tmpa_tl
+              {
+                \msg_warning:nnn { tag } {struct-used-twice} {#1}
+              }
+            %add the label structure as kid to the current structure (can be the root)
+            \__tag_struct_kid_struct_gput_right:xx
+              { \g__tag_struct_stack_current_tl }
+              { #1 }
+            %add the current structure to the labeled one as parents
+            \__tag_prop_gput:cnx
+              { g__tag_struct_#1_prop }
+              { P }
+              {
+                \pdf_object_ref:e { __tag/struct/\g__tag_struct_stack_current_tl }
+              }
+             \__tag_struct_get_parentrole:eNN
+              {#1}
+              \l__tag_tmpa_tl
+              \l__tag_tmpb_tl
+            \__tag_check_parent_child:VVVVN
+              \g__tag_struct_tag_tl
+              \g__tag_struct_tag_NS_tl
+              \l__tag_tmpa_tl
+              \l__tag_tmpb_tl
+              \l__tag_parent_child_check_tl
+            \int_compare:nNnT {\l__tag_parent_child_check_tl}<0
+              {
+                \cs_set_eq:NN \l__tag_role_remap_tag_tl \g__tag_struct_tag_tl
+                \cs_set_eq:NN \l__tag_role_remap_NS_tl \g__tag_struct_tag_NS_tl
+                \__tag_role_remap:
+                \cs_gset_eq:NN \g__tag_struct_tag_tl \l__tag_role_remap_tag_tl
+                \cs_gset_eq:NN  \g__tag_struct_tag_NS_tl \l__tag_role_remap_NS_tl
+                \__tag_struct_set_tag_info:eVV
+                  { \int_eval:n {\c@g__tag_struct_abs_int} }
+                    \g__tag_struct_tag_tl
+                    \g__tag_struct_tag_NS_tl
+              }
+          }
+          {
+            \msg_warning:nnn{ tag }{struct-label-unknown}{#1}
+          }
+      }
+  }
 \cs_new:Npn \tag_struct_object_ref:n #1
  {
    \pdf_object_ref:n {__tag/struct/#1}
@@ -3004,21 +3060,23 @@
     ,struct-stack / show .code:n = \seq_show:N \g__tag_struct_tag_stack_seq
     ,struct-stack .default:n = show
   }
-\cs_new_protected:Npn \__tag_add_document_structure:n #1
- {
-   \hook_gput_code:nnn{begindocument}{tagpdf}{\tagstructbegin{tag=#1}}
-   \hook_gput_code:nnn{tagpdf/finish/before}{tagpdf}{\tagstructend}
- }
+\tl_new:N\g__tag_root_default_tl
+\tl_gset:Nn\g__tag_root_default_tl {Document}
+
+\hook_gput_code:nnn{begindocument}{tagpdf}{\tagstructbegin{tag=\g__tag_root_default_tl}}
+\hook_gput_code:nnn{tagpdf/finish/before}{tagpdf}{\tagstructend}
+
 \keys_define:nn { __tag / setup}
  {
-   activate   .code:n =
+   activate  .code:n =
     {
       \keys_set:nn { __tag / setup }
         { activate-mc,activate-tree,activate-struct }
-      \__tag_add_document_structure:n {#1}
+      \tl_gset:Nn\g__tag_root_default_tl {#1}
     },
-  activate .default:n = Document
+   activate .default:n = Document
  }
+
 \AddToHook{begindocument/before}
   {
     \bool_lazy_all:nT
@@ -3040,6 +3098,7 @@
        \__tag_fakespace:
      }
   }
+\providecommand\pdffakespace{}
 \bool_new:N \l__tag_para_bool
 \bool_new:N \l__tag_para_show_bool
 \int_new:N  \g__tag_para_begin_int
@@ -3121,24 +3180,28 @@
   }
 \AddToHook{enddocument/info}
   {
+    \tag_if_active:F
+      {
+        \msg_redirect_name:nnn { tag } { para-hook-count-wrong } { warning }
+      }
     \int_compare:nNnF {\g__tag_para_main_begin_int}={\g__tag_para_main_end_int}
-      {
-        \msg_error:nnxxx
-          {tag}
-          {para-hook-count-wrong}
-          {\int_use:N\g__tag_para_main_begin_int}
-          {\int_use:N\g__tag_para_main_end_int}
-          {text-unit}
-      }
+         {
+           \msg_error:nnxxx
+             {tag}
+             {para-hook-count-wrong}
+             {\int_use:N\g__tag_para_main_begin_int}
+             {\int_use:N\g__tag_para_main_end_int}
+             {text-unit}
+         }
     \int_compare:nNnF {\g__tag_para_begin_int}={\g__tag_para_end_int}
-      {
-        \msg_error:nnxxx
-          {tag}
-          {para-hook-count-wrong}
-          {\int_use:N\g__tag_para_begin_int}
-          {\int_use:N\g__tag_para_end_int}
-          {text}
-      }
+         {
+           \msg_error:nnxxx
+             {tag}
+             {para-hook-count-wrong}
+             {\int_use:N\g__tag_para_begin_int}
+             {\int_use:N\g__tag_para_end_int}
+             {text}
+         }
   }
 \AddToHook{begindocument/before}
  {
