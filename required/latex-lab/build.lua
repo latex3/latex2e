@@ -68,7 +68,8 @@ checkconfigs =
   "config-toc-tagging",
   "config-block-tagging",
   "config-graphic-tagging",
-  "config-minipage-tagging"
+  "config-minipage-tagging",
+  "config-float-tagging"
  }
 
 
