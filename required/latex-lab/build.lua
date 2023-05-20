@@ -69,7 +69,8 @@ checkconfigs =
   "config-block-tagging",
   "config-graphic-tagging",
   "config-minipage-tagging",
-  "config-float-tagging"
+  "config-float-tagging",
+  "config-bib-tagging"
  }
 
 

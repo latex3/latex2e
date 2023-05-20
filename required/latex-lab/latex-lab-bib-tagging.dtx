@@ -1,0 +1,325 @@
+% \iffalse meta-comment
+%
+%% File: bib-kernel-functions.dtx (C) Copyright 2022-2023 LaTeX Project
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+%
+% The development version of the bundle can be found below
+%
+%    https://github.com/latex3/latex2e/required/latex-lab
+%
+% for those people who are interested or want to report an issue.
+%
+%<*driver>
+\documentclass{l3doc}
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{latex-lab-bib-tagging.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+% \title{The \textsf{bib-kernel-changes} package\\
+% Changes and additions to the kernel related to tagging and links in citations and 
+% bibliography entries}
+% \author{\LaTeX{} Project\thanks{Initial implementation done by Ulrike Fischer}}
+% \date{Version 0.80 2023-05-10}
+%
+% \maketitle
+%
+% \newcommand{\xt}[1]{\textsl{\textsf{#1}}}
+% \newcommand{\TODO}[1]{\textbf{[TODO:} #1\textbf{]}}
+% \newcommand{\docclass}{document class \marginpar{\raggedright document class
+% customizations}}
+%
+% \providecommand\hook[1]{\texttt{#1}}
+%
+% \begin{abstract}
+% \end{abstract}
+%
+% \section{Introduction}
+%
+% The followings contains small changes to improve tagging of
+% bibliography entries and citations. 
+% 
+% The tagging of the bibliography is actually quite straightforward:
+% A bibliography is typically a list with a heading and the sec and block tagging
+% code handles that. 
+% 
+% There are here only two problems: 
+% 
+% \begin{itemize}
+% \item The structure number of the \texttt{LI} element
+% create by a \cs{bibitem} must be recorded somehow to allow to reference it in 
+% a \cs{cite}. 
+% \item \pkg{hyperref} redefines the item command and so breaks the list structure
+% see \url{https://github.com/latex3/latex2e/discussions/1010#discussioncomment-5565418}
+% \end{itemize}
+% 
+% Both problems are rather easy to resolve, but it must be checked if other packages 
+% interfere again by redefining the commands.
+% 
+% More difficult is the tagging of citation commands. Citations should be inside 
+% a Reference structure and contain a /Ref entry pointing to the relevant 
+% item in the bibliography. For simple citations like 
+% \enquote{[1]} or \enquote{Doody (2023)} this is easy, but it is not obvious how
+% to handle combined citations like \enquote{Doody (2003,2018)} (or even compressed citations
+% like \enquote{[1-3]}). The implementation follows here the links: whatever hyperref would
+% link is set as the reference.
+% 
+% An additional problem are the various packages trying to improve citation commands
+% which all should be check. Currently only natbib has been tried. 
+% 
+% The biblatex package isn't handled yet.  
+% 
+% 
+% \section{Implementation}
+%    \begin{macrocode}
+%<*package>
+%<@@=tag>
+%    \end{macrocode}
+%    \begin{macrocode}
+\ProvidesExplPackage {latex-lab-testphase-bib} {2023-05-18} {0.8}
+  {Code related to the tagging of bibliography and cite command}
+%    \end{macrocode}
+% We need at least the block tagging code.
+%    \begin{macrocode}
+\RequirePackage{latex-lab-testphase-block-tagging}  
+%    \end{macrocode}
+%
+% At first we suppress the patches from hyperref. This will only work with the next
+% hyperref!
+%    \begin{macrocode}
+\def\hyper@nopatch@bib{}
+%    \end{macrocode}
+
+% \begin{macro}{\@extra@binfo,\@extra@b@citeb}
+% These are taken from hyperref, they are for chapterbib compability (and also
+% signal to chapterbib not to change the citation commands)
+%    \begin{macrocode}
+\providecommand*\@extra@binfo{}%
+\providecommand\@extra@b@citeb{}
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{variable}{\l_@@_bib_target_tl}
+% Items should add a target, to avoid that user code
+% interferes we don't rely on \cs{@currentHref}
+%    \begin{macrocode}
+\tl_new:N\l_@@_bib_target_tl
+%    \end{macrocode}
+% \end{variable}
+
+%\subsection{Handling the bibliography}
+% \begin{macro}{\lbibitem}
+% The item command if an optional argument is use. 
+% 
+% We only prepend some code. 
+% If we had already generic hooks with arguments 
+% we could probably use them \ldots
+%    \begin{macrocode}
+\def\@lbibitem[#1]#2{%
+%    \end{macrocode}
+% we store the target name for the following code.
+%    \begin{macrocode}
+  \tl_set:Nx\l_@@_bib_target_tl{cite.#2\@extra@b@citeb}
+%    \end{macrocode}
+% The target is added at the begin of the paragraph.
+%    \begin{macrocode}
+  \AddToHookNext{para/begin}{\makebox[0pt][r]{\MakeLinkTarget*{\l_@@_bib_target_tl}\hspace{\leftmargin}}}
+  \item[\@biblabel{#1}\hfill]\if@filesw
+      {\let\protect\noexpand
+       \immediate
+       \write\@auxout{\string\bibcite{#2}{#1}}}\fi\ignorespaces}
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\@bibitem}
+% Similar for bibitem. 
+% TODO: If hyperref is loaded we will get a second target from the refstepcounter,
+% but this is ignored for now. 
+%    \begin{macrocode}
+\def\@bibitem#1{
+  \tl_set:Nx\l_@@_bib_target_tl{cite.#1\@extra@b@citeb}%
+  \AddToHookNext{para/begin}{\makebox[0pt][r]{\MakeLinkTarget*{\l_@@_bib_target_tl}\hspace{\leftmargin}}}
+  \item\if@filesw \immediate\write\@auxout
+       {\string\bibcite{#1}{\the\value{\@listctr}}}\fi\ignorespaces}
+%    \end{macrocode}
+% \end{macro}
+% 
+% TODO The LI-structure should set a label, we redefine the internal command locally for 
+% now, but perhaps this need a receipe? 
+% 
+%    \begin{macrocode}
+\AddToHook{env/thebibliography/begin}
+  {\cs_set:Npn \__block_list_item_begin:
+    { \tagstructbegin{tag=\LItag,label=\l_@@_bib_target_tl}}
+  }
+%    \end{macrocode}
+%
+% \subsection{Handling citation commands}
+% We redefine similar to hyperref the \cs{bibcite} command to inject link and
+% structure. Even if it looks a bit odd it is now used for many years and so 
+% hopefully compatible with various packages. But differently to hyperref we use
+% the new hooks with arguments.
+% TODO: consider name. Perhaps use the generic names?
+%    \begin{macrocode}
+\NewMirroredHookPairWithArguments{bibcite/before}{bibcite/after}{2}  
+\def\bibcite#1#2{%
+   \@newl@bel{b}{#1\@extra@binfo}{%
+      \UseHookWithArguments{bibcite/before}{2}{#1}{#2}
+       #2
+      \UseHookWithArguments{bibcite/after}{2}{#1}{#2} 
+       }%
+     }% 
+%    \end{macrocode}
+% Now we add the tagging structure.
+% TODO: the ref key should expand its argument directly!
+%    \begin{macrocode}
+\AddToHookWithArguments{bibcite/before}
+  {
+    \tag_mc_end_push:
+    \exp_args:Nx\tagstructbegin{tag=Reference,ref=cite.#1\@extra@b@citeb}
+    \tagmcbegin{}
+  }
+\AddToHookWithArguments{bibcite/after}[tag]
+  {
+    \tag_mc_end:
+    \tagstructend
+    \tag_mc_begin_pop:n{}
+  }
+%    \end{macrocode}
+% At last the code for hyperref, the link will be inside the reference, but
+% this can be changed with a rule.
+%    \begin{macrocode}
+\AddToHook{package/hyperref/after}
+ {
+  \AddToHookWithArguments{bibcite/before}{\hyper@linkstart{cite}{cite.#1\@extra@b@citeb}}
+  \AddToHookWithArguments{bibcite/after}{\hyper@linkend}
+ }
+%    \end{macrocode}
+%
+% \subsection{Natbib support}
+%  natbib offers various hooks that can be used. The main problem is
+%  to coordinate with the hyperref use of the same hooks.
+%  We also have to add something at the begin of \cs{@lbibitem}. 
+%  As generic hooks with arguments aren't available yet, we have to copy the definition
+%  
+%    \begin{macrocode}
+\AddToHook{package/natbib/after}
+  {
+    \def\hyper@natanchorstart#1{\MakeLinkTarget*{#1}}
+    \def\@lbibitem[#1]#2{%
+      \tl_set:Nx\l__tag_bib_target_tl{cite.#2\@extra@b@citeb}
+      \if\relax\@extra@b@citeb\relax\else
+        \@ifundefined{br@#2\@extra@b@citeb}{}{%
+         \@namedef{br@#2}{\@nameuse{br@#2\@extra@b@citeb}}%
+        }%
+      \fi
+      \@ifundefined{b@#2\@extra@b@citeb}{%
+       \def\NAT@num{}%
+      }{%
+       \NAT@parse{#2}%
+      }%
+      \def\NAT@tmp{#1}%
+      \expandafter\let\expandafter\bibitemOpen\csname NAT@b@open@#2\endcsname
+      \expandafter\let\expandafter\bibitemShut\csname NAT@b@shut@#2\endcsname
+      \@ifnum{\NAT@merge>\@ne}{%
+       \NAT@bibitem@first@sw{%
+        \@firstoftwo
+       }{%
+        \@ifundefined{NAT@b*@#2}{%
+         \@firstoftwo
+        }{%
+         \expandafter\def\expandafter\NAT@num\expandafter{\the\c@NAT@ctr}%
+         \@secondoftwo
+        }%
+       }%
+      }{%
+       \@firstoftwo
+      }%
+      {%
+       \global\advance\c@NAT@ctr\@ne
+       \@ifx{\NAT@tmp\@empty}{\@firstoftwo}{%
+        \@secondoftwo
+       }%
+       {%
+        \expandafter\def\expandafter\NAT@num\expandafter{\the\c@NAT@ctr}%
+        \global\NAT@stdbsttrue
+       }{}%
+       \bibitem@fin
+       \item[\hfil\NAT@anchor{#2}{\NAT@num}]%
+       \global\let\NAT@bibitem@first@sw\@secondoftwo
+       \NAT@bibitem@init
+      }%
+      {%
+       \NAT@anchor{#2}{}%
+       \NAT@bibitem@cont
+       \bibitem@fin
+      }%
+      \@ifx{\NAT@tmp\@empty}{%
+        \NAT@wrout{\the\c@NAT@ctr}{}{}{}{#2}%
+      }{%
+        \expandafter\NAT@ifcmd\NAT@tmp(@)(@)\@nil{#2}%
+      }%
+    }%
+%    \end{macrocode}
+% we redefine the hook to use latex hooks.
+%    \begin{macrocode}
+    \NewMirroredHookPairWithArguments{natbib/linkstart}{natbib/linkend}{1}  
+    \renewcommand\hyper@natlinkstart[1]{\UseHookWithArguments{natbib/linkstart}{1}{#1}}
+    \renewcommand\hyper@natlinkend{\UseHookWithArguments{natbib/linkend}{1}{}}
+    \AddToHookWithArguments{natbib/linkstart}
+      {
+         \leavevmode
+         \tag_mc_end_push:
+         \exp_args:Nx\tagstructbegin{tag=Reference,ref=cite.#1\@extra@b@citeb}
+         \tagmcbegin{}
+      } 
+    \AddToHook{natbib/linkend}
+      {  
+       \tag_mc_end:
+       \tagstructend
+       \tag_mc_begin_pop:n{}
+      }
+  }     
+%    \end{macrocode}
+% if hyperref is loaded we have to repeat the definition
+% 
+%    \begin{macrocode}
+\AddToHook{package/hyperref/after}
+ {
+    \renewcommand\hyper@natlinkstart[1]{\UseHookWithArguments{natbib/linkstart}{1}{#1}}
+    \renewcommand\hyper@natlinkend{\UseHookWithArguments{natbib/linkend}{1}{}}
+    \AddToHookWithArguments{natbib/linkstart}
+      {
+         \Hy@backout{#1}%
+         \hyper@linkstart{cite}{cite.#1}%
+         \def\hyper@nat@current{#1}
+      } 
+    \AddToHook{natbib/linkend}
+      {  
+       \hyper@linkend
+      }
+ }
+%    \end{macrocode}
+%    \begin{macrocode}
+%</package>
+%    \end{macrocode}
+%    \begin{macrocode}
+%<*latex-lab>
+\ProvidesFile{bib-latex-lab-testphase.ltx}
+        [2023-05-18 v0.8 code related to the tagging of bib and citations]
+
+\RequirePackage{latex-lab-testphase-bib}
+
+%</latex-lab>
+%    \end{macrocode}
