@@ -3,7 +3,7 @@
 stdengine    = "pdftex"
 checkengines = {"pdftex","luatex"}
 checksearch  = true
-testfiledir  = "testfiles-sec-tagging"
+testfiledir  = "testfiles-sec"
 
 checkruns     = 3
 

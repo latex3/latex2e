@@ -5,7 +5,7 @@
 
 checkengines = {"luatex","pdftex"}
 checksearch  = true
-testfiledir  = "testfiles-graphic-tagging"
+testfiledir  = "testfiles-graphic"
 
 checkruns     = 3
 

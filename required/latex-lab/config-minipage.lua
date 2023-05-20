@@ -1,9 +1,9 @@
--- Tests for sec tagging stuff
+-- Tests for minipage tagging stuff
 
 stdengine    = "pdftex"
 checkengines = {"pdftex","luatex"}
 checksearch  = true
-testfiledir  = "testfiles-toc-tagging"
+testfiledir  = "testfiles-minipage"
 
 checkruns     = 4
 forcecheckruns = true  --- for tagged stuff

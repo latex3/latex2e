@@ -64,13 +64,14 @@ checkconfigs =
  {"build","config-TU","config-OR",
   "config-mathtagging",
   "config-OR-luatex",
-  "config-sec-tagging",
-  "config-toc-tagging",
+  "config-sec",
+  "config-toc",
   "config-block-tagging",
-  "config-graphic-tagging",
-  "config-minipage-tagging",
-  "config-float-tagging",
-  "config-bib-tagging"
+  "config-graphic",
+  "config-minipage",
+  "config-float",
+  "config-bib",
+  "config-LM-tagging",
  }
 
 
