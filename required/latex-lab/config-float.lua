@@ -5,7 +5,7 @@
 
 checkengines = {"pdftex","luatex"}
 checksearch  = true
-testfiledir  = "testfiles-floats"
+testfiledir  = "testfiles-float"
 
 checkruns     = 3
 
