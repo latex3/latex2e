@@ -1,4 +1,4 @@
-l3build save -epdftex,luatex -cconfig-sec-tagging \
+l3build save -epdftex,luatex -cconfig-sec \
      test-article-1 \
      test-book-1 \
      test-book-2 \
