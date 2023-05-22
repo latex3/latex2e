@@ -52,20 +52,32 @@
 %
 %    This file implements generic hooks for (arbitrary) commands.
 %    In theory every command \tn[no-index]{\meta{name}} offers now two
-%    associated hooks to which code can be added using \tn{AddToHook}
-%    or \tn{AddToHookNext}.\footnote{In practice this is not supported
+%    associated hooks to which code can be added using
+%    \tn{AddToHook},\!\footnote{In this documentation, when something is
+%      being said about \tn{AddToHook}, the same will be valid for
+%      \tn{AddToHookWithArguments}, unless that particular paragraph is
+%      highlighting the differences between both.  The same is true for
+%      the other hook-related functions and their
+%      \texttt{\ldots WithArguments} counterparts.}
+%    \tn{AddToHookNext}, \tn{AddToHookWithArguments}, and
+%    \tn{AddToHookNextWithArguments}.\footnote{In practice this is not
+%    supported
 %    for all types of commands, see section~\ref{sec:look-ahead} for
 %    the restrictions that apply and what happens if one tries to use
-%    this with commands for which this is not supported.}  These are
+%    this with commands for which this is not supported.}  These are:
 %    \begin{description}
 %    \item[\hook{cmd/\meta{name}/before}]
 %
-%       This hook is executed at the very start of the command
-%       execution after its arguments (if any) are parsed.  The hook
-%       \meta{code} is wrapped in the command inside a call to
-%       \cs{UseHook}|{cmd/|\meta{name}|/before}|, so the arguments
-%       passed to the command are \emph{not} available in the hook
-%       \meta{code}.
+%       This hook is executed at the very start of the command, right
+%       after its arguments (if any) are parsed.  The hook \meta{code}
+%       runs in the command inside a call to \cs{UseHookWithArguments}.
+%       Any code added to this hook using \tn{AddToHookWithArguments}
+%       or \tn{AddToHookNextWithArguments} can access the command's
+%       arguments using |#1|, |#2|, etc., up to the number of arguments
+%       of the command.  If \tn{AddToHook} or \tn{AddToHookNext} are
+%       used, the arguments cannot be accessed (see the \pkg{lthooks}
+%       documentation\footnote{\texttt{texdoc lthooks-doc}} on hooks
+%       with arguments).
 %
 %    \item[\hook{cmd/\meta{name}/after}]
 %
@@ -76,8 +88,8 @@
 %
 %    The hooks are not physically present before
 %    \verb=\begin{document}= (i.e., using a command in the preamble
-%    will never execute them) and if nobody has declared any code for
-%    them, then they are not added to the command code ever.  For
+%    will never execute the hook) and if nobody has declared any code
+%    for them, then they are not added to the command code ever.  For
 %    example, if we have the following definition
 %\begin{verbatim}
 %    \newcommand\foo[2]{Code #1 for #2!}
@@ -91,23 +103,27 @@
 %\end{verbatim}
 %    then, after |\begin{document}| the definition of \cs[no-index]{foo} will be:
 %\begin{verbatim}
-%    \renewcommand\foo[2]{\UseHook{cmd/foo/before}Code #1 for #2!}
+%    \renewcommand\foo[2]{%
+%      \UseHookWithArguments{cmd/foo/before}{2}{#1}{#2}%
+%      Code #1 for #2!}
 %\end{verbatim}
 %    and similarly \verb=\AddToHook{cmd/foo/after}{<after code>}=
 %    alters the definition to
 %\begin{verbatim}
-%    \renewcommand\foo[2]{Code #1 for #2!\UseHook{cmd/foo/after}}
+%    \renewcommand\foo[2]{%
+%      Code #1 for #2!%
+%      \UseHookWithArguments{cmd/foo/after}{2}{#1}{#2}}
 %\end{verbatim}
 %
 %    In other words, the mechanism is similar to what \pkg{etoolbox}
 %    offers with \tn{pretocmd} and \tn{apptocmd} with the important
-%    differences 
+%    differences
 %    \begin{itemize}
 %    \item
 %
 %      that code can be prepended or appended (i.e., added to the
 %      hooks) even if the command itself is not defined, because the
-%      defining package has not yet been loaded
+%      defining package has not yet been loaded;
 %
 %    \item
 %
@@ -198,6 +214,7 @@
 %
 %
 % \section{Package Author Interface}
+% \label{sec:pkg-author}
 %
 % The \hook{cmd} hooks are, by default, available for all commands
 % that can be patched to add the hooks.  For some commands, however,
@@ -207,9 +224,10 @@
 %
 % If you are a package author and you want to add the hooks to your
 % own commands in the proper position you can define the command and
-% manually add the \cs{UseHook} calls inside the command in the proper
-% positions, and manually define the hooks with \cs{NewHook} or
-% \cs{NewReversedHook}.  When the hooks are explicitly defined,
+% manually add the \cs{UseHookWithArguments} calls inside the command in
+% the proper positions, and manually define the hooks with
+% \cs{NewHookWithArguments} or \cs{NewReversedHookWithArguments}.
+% When the hooks are explicitly defined,
 % patching is not attempted so you can make sure your command works
 % properly.  For example, an (admittedly not really useful) command
 % that typesets its contents in a framed box with width optionally
@@ -231,26 +249,27 @@
 % \begin{verbatim}
 %   \newcommand\fancybox{\@ifnextchar({\@fancybox}{\@fancybox(5cm)}}
 %   \def\@fancybox(#1)#2{\fbox{%
-%                        \UseHook{cmd/fancybox/before}%
-%                        \parbox{#1}{#2}%
-%                        \UseHook{cmd/fancybox/after}}}
-%   \NewHook{cmd/fancybox/before}
-%   \NewReversedHook{cmd/fancybox/after}
+%                 \UseHookWithArguments{cmd/fancybox/before}{2}{#1}{#2}%
+%                 \parbox{#1}{#2}%
+%                 \UseHookWithArguments{cmd/fancybox/after}{2}{#1}{#2}}}
+%   \NewHookWithArguments{cmd/fancybox/before}{2}
+%   \NewReversedHookWithArguments{cmd/fancybox/after}{2}
 % \end{verbatim}
 % then the hooks will be executed where they should and no patching
 % will be attempted.  It is important that the hooks are declared with
-% \cs{NewHook} or \cs{NewReversedHook}, otherwise the command hook
+% \cs{NewHookWithArguments} or \cs{NewReversedHookWithArguments},
+% otherwise the command hook
 % code will try to patch the command.  Note also that the call to
-% |\UseHook{cmd/fancybox/before}| does not need to be in the
-% definition of \cs[no-index]{fancybox}, but anywhere it makes sense
+% |\UseHookWithArguments{cmd/fancybox/before}| does not need to be in
+% the definition of \cs[no-index]{fancybox}, but anywhere it makes sense
 % to insert it (in this case in the internal
 % \cs[no-index]{@fancybox}).
 %
 % Alternatively, if for whatever reason your command does not support
 % the generic hooks provided here, you can disable a hook with
-% \cs{DisableHook}\footnote{Please use \cs{DisableHook} if at all, only
-% on hooks that you \enquote{own}, i.e., for commands that your
-% package or class defines and not second guess
+% \cs{DisableGenericHook}\footnote{Please use \cs{DisableGenericHook} if
+% at all, only on hooks that you \enquote{own}, i.e., for commands
+% your package or class defines and not second guess
 % whether or not hooks of other packages should get disabled!}, so
 % that when someone tries to add code to it they will get an error.
 % Or if you don't want the error, you can simply declare the hook with
@@ -270,6 +289,55 @@
 % \end{verbatim}
 % If you do that then both hooks automatically work and are patched
 % into the right places.
+%
+% \subsection{Arguments and redefining commands}
+% \label{sec:redef-warn}
+%
+% The code in \pkg{ltcmdhooks} does its best to find out how many
+% arguments a given command has, an to insert the appropriate call to
+% \cs{UseHookWithArguments}, so that the arguments seen by the hook are
+% exactly those grabbed by the command (the hook, after all, is a macro
+% call, so the arguments have to be placed in the right order, or they
+% won't match).
+%
+% When using the package writer interface, as dicussed in
+% section~\ref{sec:pkg-author}, to change the position of the hooks in
+% your commands, you are also free to change how the hook code in your
+% command sees its arguments.  When a \hook{cmd} hook is declared with
+% \cs{NewHook} (or \cs{NewHookWithArguments} or other variations of
+% that), it loses its \enquote{generic} nature and works as a regular
+% hook.  This means that if you may choose to declare it without
+% arguments regardless if the command takes arguments or not, or
+% declare it with arguments, even if the command takes none.
+%
+% However, this flexibility should not be abused.  When using a
+% nonstandard configuration for the hook arguments, think reasonably:
+% a user will expect that the argument \verb|#1| in the hook corresponds
+% to the argument's first argument, and so on.  Any other configuration
+% is likely to cause confusion and, if used, will have to be well
+% documented.
+%
+% This flexibility, however, allows you to \enquote{correct} the
+% arguments for the hooks.  For example, \LaTeX's \cs{refstepcounter}
+% has a single argument, the name of the counter.  The \pkg{cleveref}
+% package adds an optional argument to \cs{refstepcounter}, making the
+% name of the counter argument \verb|#2|.  If the author of
+% \pkg{cleveref} wanted, for whatever reason, to add hooks to
+% \cs{refstepcounter}, to preserve compatibility he could write
+% something along the lines of:
+% \begin{verbatim}
+%   \NewHookWithArguments{cmd/refstepcounter/before}{1}
+%   \renewcommand\refstepcounter[2][<default>]{%
+%     \UseHookWithArguments{cmd/refstepcounter/before}{1}{#2}%
+%     <code for \refstepcounter>}
+% \end{verbatim}
+% so that the mandatory argument, which is arg \verb|#2| in the
+% definition, would still be seen as \verb|#1| in the hook code.
+%
+% Another possibility would be to place the optional argument as the
+% second argument for the hook, so that people looking for it would be
+% able to use it.  In either case, it would have to be well documented
+% to cause as little confusion as possible.
 %
 % \MaybeStop{\setlength\IndexMin{200pt}  \PrintIndex  }
 %
