@@ -1,4 +1,4 @@
-l3build save -epdftex,luatex -cconfig-toc-tagging \
+l3build save -epdftex,luatex -cconfig-toc \
     toc-ex-article-hyperref-1 \
     toc-ex-article-hyperref-2 \
     toc-ex-article-hyperref-2 \
