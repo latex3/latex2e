@@ -14,8 +14,8 @@
 %
 %%% From File: ltcmdhooks.dtx
 %
-\def\ltcmdhooksversion{v1.0g}
-\def\ltcmdhooksdate{2023/04/06}
+\def\ltcmdhooksversion{v1.0h}
+\def\ltcmdhooksdate{2023/05/21}
 %
 %
 %
@@ -52,20 +52,32 @@
 %
 %    This file implements generic hooks for (arbitrary) commands.
 %    In theory every command \tn[no-index]{\meta{name}} offers now two
-%    associated hooks to which code can be added using \tn{AddToHook}
-%    or \tn{AddToHookNext}.\footnote{In practice this is not supported
+%    associated hooks to which code can be added using
+%    \tn{AddToHook},\!\footnote{In this documentation, when something is
+%      being said about \tn{AddToHook}, the same will be valid for
+%      \tn{AddToHookWithArguments}, unless that particular paragraph is
+%      highlighting the differences between both.  The same is true for
+%      the other hook-related functions and their
+%      \texttt{\ldots WithArguments} counterparts.}
+%    \tn{AddToHookNext}, \tn{AddToHookWithArguments}, and
+%    \tn{AddToHookNextWithArguments}.\footnote{In practice this is not
+%    supported
 %    for all types of commands, see section~\ref{sec:look-ahead} for
 %    the restrictions that apply and what happens if one tries to use
-%    this with commands for which this is not supported.}  These are
+%    this with commands for which this is not supported.}  These are:
 %    \begin{description}
 %    \item[\hook{cmd/\meta{name}/before}]
 %
-%       This hook is executed at the very start of the command
-%       execution after its arguments (if any) are parsed.  The hook
-%       \meta{code} is wrapped in the command inside a call to
-%       \cs{UseHook}|{cmd/|\meta{name}|/before}|, so the arguments
-%       passed to the command are \emph{not} available in the hook
-%       \meta{code}.
+%       This hook is executed at the very start of the command, right
+%       after its arguments (if any) are parsed.  The hook \meta{code}
+%       runs in the command inside a call to \cs{UseHookWithArguments}.
+%       Any code added to this hook using \tn{AddToHookWithArguments}
+%       or \tn{AddToHookNextWithArguments} can access the command's
+%       arguments using |#1|, |#2|, etc., up to the number of arguments
+%       of the command.  If \tn{AddToHook} or \tn{AddToHookNext} are
+%       used, the arguments cannot be accessed (see the \pkg{lthooks}
+%       documentation\footnote{\texttt{texdoc lthooks-doc}} on hooks
+%       with arguments).
 %
 %    \item[\hook{cmd/\meta{name}/after}]
 %
@@ -75,9 +87,12 @@
 %    \end{description}
 %
 %    The hooks are not physically present before
-%    \verb=\begin{document}= (i.e., using a command in the preamble
-%    will never execute them) and if nobody has declared any code for
-%    them, then they are not added to the command code ever.  For
+%    \verb=\begin{document}=\footnote{More specifically, they are
+%    inserted in the commands after the \hook{begindocument} hook, so
+%    they are also not present while \LaTeX{} is reading the
+%    \texttt{.aux} file.} (i.e., using a command in the preamble
+%    will never execute the hook) and if nobody has declared any code
+%    for them, then they are not added to the command code ever.  For
 %    example, if we have the following definition
 %\begin{verbatim}
 %    \newcommand\foo[2]{Code #1 for #2!}
@@ -91,23 +106,27 @@
 %\end{verbatim}
 %    then, after |\begin{document}| the definition of \cs[no-index]{foo} will be:
 %\begin{verbatim}
-%    \renewcommand\foo[2]{\UseHook{cmd/foo/before}Code #1 for #2!}
+%    \renewcommand\foo[2]{%
+%      \UseHookWithArguments{cmd/foo/before}{2}{#1}{#2}%
+%      Code #1 for #2!}
 %\end{verbatim}
 %    and similarly \verb=\AddToHook{cmd/foo/after}{<after code>}=
 %    alters the definition to
 %\begin{verbatim}
-%    \renewcommand\foo[2]{Code #1 for #2!\UseHook{cmd/foo/after}}
+%    \renewcommand\foo[2]{%
+%      Code #1 for #2!%
+%      \UseHookWithArguments{cmd/foo/after}{2}{#1}{#2}}
 %\end{verbatim}
 %
 %    In other words, the mechanism is similar to what \pkg{etoolbox}
 %    offers with \tn{pretocmd} and \tn{apptocmd} with the important
-%    differences 
+%    differences
 %    \begin{itemize}
 %    \item
 %
 %      that code can be prepended or appended (i.e., added to the
 %      hooks) even if the command itself is not defined, because the
-%      defining package has not yet been loaded
+%      defining package has not yet been loaded;
 %
 %    \item
 %
@@ -198,6 +217,7 @@
 %
 %
 % \section{Package Author Interface}
+% \label{sec:pkg-author}
 %
 % The \hook{cmd} hooks are, by default, available for all commands
 % that can be patched to add the hooks.  For some commands, however,
@@ -207,9 +227,10 @@
 %
 % If you are a package author and you want to add the hooks to your
 % own commands in the proper position you can define the command and
-% manually add the \cs{UseHook} calls inside the command in the proper
-% positions, and manually define the hooks with \cs{NewHook} or
-% \cs{NewReversedHook}.  When the hooks are explicitly defined,
+% manually add the \cs{UseHookWithArguments} calls inside the command in
+% the proper positions, and manually define the hooks with
+% \cs{NewHookWithArguments} or \cs{NewReversedHookWithArguments}.
+% When the hooks are explicitly defined,
 % patching is not attempted so you can make sure your command works
 % properly.  For example, an (admittedly not really useful) command
 % that typesets its contents in a framed box with width optionally
@@ -231,26 +252,27 @@
 % \begin{verbatim}
 %   \newcommand\fancybox{\@ifnextchar({\@fancybox}{\@fancybox(5cm)}}
 %   \def\@fancybox(#1)#2{\fbox{%
-%                        \UseHook{cmd/fancybox/before}%
-%                        \parbox{#1}{#2}%
-%                        \UseHook{cmd/fancybox/after}}}
-%   \NewHook{cmd/fancybox/before}
-%   \NewReversedHook{cmd/fancybox/after}
+%                 \UseHookWithArguments{cmd/fancybox/before}{2}{#1}{#2}%
+%                 \parbox{#1}{#2}%
+%                 \UseHookWithArguments{cmd/fancybox/after}{2}{#1}{#2}}}
+%   \NewHookWithArguments{cmd/fancybox/before}{2}
+%   \NewReversedHookWithArguments{cmd/fancybox/after}{2}
 % \end{verbatim}
 % then the hooks will be executed where they should and no patching
 % will be attempted.  It is important that the hooks are declared with
-% \cs{NewHook} or \cs{NewReversedHook}, otherwise the command hook
+% \cs{NewHookWithArguments} or \cs{NewReversedHookWithArguments},
+% otherwise the command hook
 % code will try to patch the command.  Note also that the call to
-% |\UseHook{cmd/fancybox/before}| does not need to be in the
-% definition of \cs[no-index]{fancybox}, but anywhere it makes sense
+% |\UseHookWithArguments{cmd/fancybox/before}| does not need to be in
+% the definition of \cs[no-index]{fancybox}, but anywhere it makes sense
 % to insert it (in this case in the internal
 % \cs[no-index]{@fancybox}).
 %
 % Alternatively, if for whatever reason your command does not support
 % the generic hooks provided here, you can disable a hook with
-% \cs{DisableHook}\footnote{Please use \cs{DisableHook} if at all, only
-% on hooks that you \enquote{own}, i.e., for commands that your
-% package or class defines and not second guess
+% \cs{DisableGenericHook}\footnote{Please use \cs{DisableGenericHook} if
+% at all, only on hooks that you \enquote{own}, i.e., for commands
+% your package or class defines and not second guess
 % whether or not hooks of other packages should get disabled!}, so
 % that when someone tries to add code to it they will get an error.
 % Or if you don't want the error, you can simply declare the hook with
@@ -270,6 +292,55 @@
 % \end{verbatim}
 % If you do that then both hooks automatically work and are patched
 % into the right places.
+%
+% \subsection{Arguments and redefining commands}
+% \label{sec:redef-warn}
+%
+% The code in \pkg{ltcmdhooks} does its best to find out how many
+% arguments a given command has, and to insert the appropriate call to
+% \cs{UseHookWithArguments}, so that the arguments seen by the hook are
+% exactly those grabbed by the command (the hook, after all, is a macro
+% call, so the arguments have to be placed in the right order, or they
+% won't match).
+%
+% When using the package writer interface, as discussed in
+% section~\ref{sec:pkg-author}, to change the position of the hooks in
+% your commands, you are also free to change how the hook code in your
+% command sees its arguments.  When a \hook{cmd} hook is declared with
+% \cs{NewHook} (or \cs{NewHookWithArguments} or other variations of
+% that), it loses its \enquote{generic} nature and works as a regular
+% hook.  This means that you may choose to declare it without
+% arguments regardless if the command takes arguments or not, or
+% declare it with arguments, even if the command takes none.
+%
+% However, this flexibility should not be abused.  When using a
+% nonstandard configuration for the hook arguments, think reasonably:
+% a user will expect that the argument \verb|#1| in the hook corresponds
+% to the argument's first argument, and so on.  Any other configuration
+% is likely to cause confusion and, if used, will have to be well
+% documented.
+%
+% This flexibility, however, allows you to \enquote{correct} the
+% arguments for the hooks.  For example, \LaTeX's \cs{refstepcounter}
+% has a single argument, the name of the counter.  The \pkg{cleveref}
+% package adds an optional argument to \cs{refstepcounter}, making the
+% name of the counter argument \verb|#2|.  If the author of
+% \pkg{cleveref} wanted, for whatever reason, to add hooks to
+% \cs{refstepcounter}, to preserve compatibility he could write
+% something along the lines of:
+% \begin{verbatim}
+%   \NewHookWithArguments{cmd/refstepcounter/before}{1}
+%   \renewcommand\refstepcounter[2][<default>]{%
+%     \UseHookWithArguments{cmd/refstepcounter/before}{1}{#2}%
+%     <code for \refstepcounter>}
+% \end{verbatim}
+% so that the mandatory argument, which is arg \verb|#2| in the
+% definition, would still be seen as \verb|#1| in the hook code.
+%
+% Another possibility would be to place the optional argument as the
+% second argument for the hook, so that people looking for it would be
+% able to use it.  In either case, it would have to be well documented
+% to cause as little confusion as possible.
 %
 % \MaybeStop{\setlength\IndexMin{200pt}  \PrintIndex  }
 %
@@ -706,7 +777,7 @@
 %
 % \changes{v1.0f}{2021/10/20}
 %         {Correct patching by expansion+redefinition when the macro
-%          contains a parameter tokens (gh/697).}
+%          contains a parameter token (gh/697).}
 %   Patching with expansion+redefinition is trickier than it looks like
 %   at first glance.  Suppose the simple definition:
 % \begin{verbatim}
@@ -760,6 +831,8 @@
 %   parameter token, so that this case can be handled like the previous
 %   one.
 %    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2023/06/01}{\@@_patch_expand_redefine:NNnn}
+%<latexrelease>                 {cmd~hooks~with~args}
 \cs_new_protected:Npn \@@_patch_expand_redefine:NNnn #1 #2 #3 #4
   {
     \@@_patch_debug:x { ++~command~can~be~patched~without~rescanning }
@@ -881,22 +954,110 @@
       { \exp_not:N \@@_make_prefixes:w \cs_prefix_spec:N #2 / / }
         }
 %    \end{macrocode}
-%   Finally, call \cs{@@_redefine_with_hooks:Nnnn} with the macro being
+%   Here we redefine the hook to have the right number of arguments.
+%   Disabling the hook, undefining the \verb|parameter| token list then
+%   calling \cs{@@_make_usable:nn} are enough to redefine the hook to
+%   the extent we want.  Code stored in the hook and other metadata
+%   about it are not lost in the process.
+% \changes{v1.0h}{2023/05/21}
+%         {Changes to allow support arguments in cmd hooks (cmd-args).}
+%    \begin{macrocode}
+    \@@_disable:n { cmd / #3 / #4 }
+    \cs_undefine:c { c_@@_cmd / #3 / #4_parameter_tl }
+    \@@_make_usable:nn { cmd / #3 / #4 } { \l_@@_patch_num_args_int }
+%    \end{macrocode}
+%   Now call \cs{@@_redefine_with_hooks:Nnnn} with the macro being
 %   redefined in |#1|, then \cs{UseHook}|{cmd/<name>/before}| in |#2| or
 %   \cs{UseHook}|{cmd/<name>/after}| in |#3| (one is always empty), and
 %   in |#4| the \meta{replacement text} of the macro.
 %    \begin{macrocode}
-    \use:x
+    \use:e
       {
         \@@_redefine_with_hooks:Nnnn \exp_not:N #2
         \str_if_eq:nnTF {#4} { after }
           { \use_ii_i:nn }
           { \use:nn }
-            { { \@@_exp_not:NN \exp_not:N \UseHook { cmd / #3 / #4 } } }
+            { {
+                \@@_exp_not:NN \exp_not:N \UseHookWithArguments
+                  { cmd / #3 / #4 } { \int_use:N \l_@@_patch_num_args_int }
+                  \@@_braced_parameter:n { cmd / #3 / #4 }
+            } }
             { { } }
             { \@@_exp_not:NN \exp_not:V \l_@@_replace_text_tl }
       }
+%    \end{macrocode}
+%   Finally, update the hook code.
+%    \begin{macrocode}
+    \@@_update_hook_code:n { cmd / #3 / #4 }
   }
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{2021/06/01}{\@@_patch_expand_redefine:NNnn}
+%<latexrelease>                 {cmd~hooks~with~args}
+%<latexrelease>\cs_gset_protected:Npn \@@_patch_expand_redefine:NNnn #1 #2 #3 #4
+%<latexrelease>  {
+%<latexrelease>    \@@_patch_debug:x { ++~command~can~be~patched~without~rescanning }
+%<latexrelease>    \int_set:Nn \l_@@_patch_num_args_int
+%<latexrelease>      {
+%<latexrelease>        \exp_args:Nf \str_count:n { \cs_argument_spec:N #2 } / 2
+%<latexrelease>        \bool_if:NT #1 { -1 }
+%<latexrelease>      }
+%<latexrelease>    \int_compare:nNnTF { \l_@@_patch_num_args_int } > { \c_zero_int }
+%<latexrelease>      {
+%<latexrelease>        \tl_set:Nx \l_@@_tmpa_tl { \bool_if:NTF #1 { [ ] } { { } } }
+%<latexrelease>        \int_step_inline:nnn { 2 } { \l_@@_patch_num_args_int }
+%<latexrelease>          { \tl_put_right:Nn \l_@@_tmpa_tl { { } } }
+%<latexrelease>        \exp_args:NNo \exp_args:No \@@_if_has_hash:nTF
+%<latexrelease>            { \exp_after:wN #2 \l_@@_tmpa_tl }
+%<latexrelease>          { \cs_set_eq:NN \@@_exp_not:n \exp_not:n }
+%<latexrelease>          { \cs_set_eq:NN \@@_exp_not:n \use:n }
+%<latexrelease>        \cs_set_protected:Npn \@@_tmp:w ##1 ##2
+%<latexrelease>          {
+%<latexrelease>            ##1 \l_@@_param_text_tl   { \use:n ##2 }
+%<latexrelease>            ##1 \l_@@_replace_text_tl { \@@_exp_not:n {##2} }
+%<latexrelease>          }
+%<latexrelease>        \bool_if:NTF #1
+%<latexrelease>          { \@@_tmp:w \tl_set:Nx { [ \c_@@_hash_tl 1 ] } }
+%<latexrelease>          { \@@_tmp:w \tl_set:Nx { { \c_@@_hash_tl 1 } } }
+%<latexrelease>        \int_step_inline:nnn { 2 } { \l_@@_patch_num_args_int }
+%<latexrelease>          { \@@_tmp:w \tl_put_right:Nx { { \c_@@_hash_tl ##1 } } }
+%<latexrelease>        \tl_set:Nx \l_@@_replace_text_tl
+%<latexrelease>          { \exp_not:N #2 \exp_not:V \l_@@_replace_text_tl }
+%<latexrelease>        \tl_set:Nx \l_@@_replace_text_tl
+%<latexrelease>          {
+%<latexrelease>            \token_if_eq_meaning:NNTF \@@_exp_not:n \exp_not:n
+%<latexrelease>              { \exp_args:NNV \exp_args:No \@@_double_hashes:n }
+%<latexrelease>              { \exp_args:NV \exp_not:o }
+%<latexrelease>                  \l_@@_replace_text_tl
+%<latexrelease>          }
+%<latexrelease>        \cs_set_eq:NN \@@_def_cmd:w \tex_gdef:D
+%<latexrelease>        \cs_set_eq:NN \@@_exp_not:NN \prg_do_nothing:
+%<latexrelease>      }
+%<latexrelease>      {
+%<latexrelease>        \tl_clear:N \l_@@_param_text_tl
+%<latexrelease>        \tl_set_eq:NN \l_@@_replace_text_tl #2
+%<latexrelease>        \cs_set_eq:NN \@@_def_cmd:w \tex_xdef:D
+%<latexrelease>        \cs_set:Npn \@@_exp_not:NN ##1 { \exp_not:N ##1 \exp_not:N }
+%<latexrelease>      }
+%<latexrelease>    \group_begin:
+%<latexrelease>      \int_set:Nn \tex_escapechar:D { `\/ }
+%<latexrelease>      \use:x
+%<latexrelease>        {
+%<latexrelease>    \group_end:
+%<latexrelease>    \tl_set:Nx \exp_not:N \l_@@_patch_prefixes_tl
+%<latexrelease>      { \exp_not:N \@@_make_prefixes:w \cs_prefix_spec:N #2 / / }
+%<latexrelease>        }
+%<latexrelease>    \use:x
+%<latexrelease>      {
+%<latexrelease>        \@@_redefine_with_hooks:Nnnn \exp_not:N #2
+%<latexrelease>        \str_if_eq:nnTF {#4} { after }
+%<latexrelease>          { \use_ii_i:nn }
+%<latexrelease>          { \use:nn }
+%<latexrelease>            { { \@@_exp_not:NN \exp_not:N \UseHook { cmd / #3 / #4 } } }
+%<latexrelease>            { { } }
+%<latexrelease>            { \@@_exp_not:NN \exp_not:V \l_@@_replace_text_tl }
+%<latexrelease>      }
+%<latexrelease>  }
+%<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 %
 %   Now that all the needed tools are ready, without further ado we'll
@@ -1092,10 +1253,10 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_retokenize_patch:Nnn #1 #2 #3
   {
-    \@@_patch_debug:x { ..~command~can~only~be~patched~by~rescanning }
     \str_if_eq:eeTF { \cs_argument_spec:N #1 } { }
       { \@@_patch_expand_redefine:NNnn \c_false_bool #1 {#2} {#3} }
       {
+        \@@_patch_debug:x { ..~command~can~only~be~patched~by~rescanning }
 %    \end{macrocode}
 %
 %   Otherwise, we start the actual patching by retokenization job.  The
@@ -1156,6 +1317,8 @@
 %   \cs{@@_cmd_if_scanable:NnTF} and \cs{@@_patch_retokenize:Nnnn} if
 %   the former returns \meta{true}, plus some debug messages.
 %    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2023/06/01}{\@@_try_patch_with_catcodes:Nnnnw}
+%<latexrelease>                 {cmd~hooks~with~args}
 \cs_new_protected:Npn \@@_try_patch_with_catcodes:Nnnnw #1 #2 #3 #4
   {
     \quark_if_recursion_tail_stop_do:nn {#4} { \use:n }
@@ -1164,7 +1327,7 @@
       {
         \@@_patch_debug:x { ++~macro~can~be~retokenized~cleanly }
         \@@_patch_debug:x { ==~retokenizing~macro~now }
-        \@@_patch_retokenize:Nnnn #1 {#2} {#3} {#4}
+        \@@_patch_retokenize:Nnnn #1 { cmd / #2 / #3 } {#3} {#4}
         \use_i_delimit_by_q_recursion_stop:nw \use_none:n
       }
       {
@@ -1172,6 +1335,26 @@
         \@@_try_patch_with_catcodes:Nnnnw #1 {#2} {#3}
       }
   }
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{2021/06/01}{\@@_try_patch_with_catcodes:Nnnnw}
+%<latexrelease>                 {cmd~hooks~with~args}
+%<latexrelease>\cs_gset_protected:Npn \@@_try_patch_with_catcodes:Nnnnw #1 #2 #3 #4
+%<latexrelease>  {
+%<latexrelease>    \quark_if_recursion_tail_stop_do:nn {#4} { \use:n }
+%<latexrelease>    \@@_patch_debug:x { ++~trying~to~patch~by~retokenization }
+%<latexrelease>    \@@_cmd_if_scanable:NnTF {#1} {#4}
+%<latexrelease>      {
+%<latexrelease>        \@@_patch_debug:x { ++~macro~can~be~retokenized~cleanly }
+%<latexrelease>        \@@_patch_debug:x { ==~retokenizing~macro~now }
+%<latexrelease>        \@@_patch_retokenize:Nnnn #1 {#2} {#3} {#4}
+%<latexrelease>        \use_i_delimit_by_q_recursion_stop:nw \use_none:n
+%<latexrelease>      }
+%<latexrelease>      {
+%<latexrelease>        \@@_patch_debug:x { --~macro~cannot~be~retokenized~cleanly }
+%<latexrelease>        \@@_try_patch_with_catcodes:Nnnnw #1 {#2} {#3}
+%<latexrelease>      }
+%<latexrelease>  }
+%<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 % \end{macro}
 %
@@ -1279,15 +1462,86 @@
 % \end{macro}
 %
 %
+% \begin{macro}{\@@_guess_arg_count:NN}
+% \begin{macro}{\@@_guess_arg_count:wN}
+% \begin{macro}{\@@_guess_arg_count:nw}
+%   Looks at the parameter text of a macro, and counts the parameters
+%   by looking at the number after a \verb|#|, and checking if they are
+%   sequential.  This macro assumes that all parameters are marked with
+%   hashes, and not other characters, and that there is no
+%   \enquote{trick parameter}.
+% \changes{v1.0h}{2023/05/21}
+%         {Macro added (cmd-args).}
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2023/06/01}{\@@_guess_arg_count:NN}
+%<latexrelease>                 {cmd~hooks~with~args}
+\cs_new_protected:Npn \@@_guess_arg_count:NN #1
+  {
+    \exp_after:wN \@@_guess_arg_count:wN
+      \token_to_meaning:N #1 \s_@@_mark
+  }
+\exp_last_unbraced:NNNNo
+\cs_new_protected:Npx \@@_guess_arg_count:wN
+    #1 { \tl_to_str:n { macro: } } #2 \s_@@_mark #3
+  {
+    \int_set:Nn #3
+      {
+        \exp_not:N \@@_guess_arg_count:nw { 0 } #2
+          \c_hash_str 0 \s_@@_mark
+      }
+  }
+\use:e
+  { \cs_new:Npn \exp_not:N \@@_guess_arg_count:nw #1 #2 \c_hash_str #3 }
+  {
+    \int_compare:nNnTF { #1 + 1 } = {#3}
+      { \@@_guess_arg_count:nw {#3} }
+      { #1 \@@_use_none_delimit_by_s_mark:w }
+  }
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{2021/06/01}{\@@_guess_arg_count:NN}
+%<latexrelease>                 {cmd~hooks~with~args}
+%<latexrelease>\cs_undefine:N \@@_guess_arg_count:NN
+%<latexrelease>\EndIncludeInRelease
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
 %
 % \begin{macro}{\@@_patch_retokenize:Nnnn}
 %   Then, if \cs{@@_cmd_if_scanable:NnTF} returned true, we can go on
 %   and patch the command.
 %    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2023/06/01}{\@@_patch_retokenize:Nnnn}
+%<latexrelease>                 {cmd~hooks~with~args}
 \cs_new_protected:Npn \@@_patch_retokenize:Nnnn #1 #2 #3 #4
   {
+%   Here, when patching by retokenization, we can only guess the number
+%   of arguments of the macro.
+% \changes{v1.0h}{2023/05/21}
+%         {Changes to allow support arguments in cmd hooks (cmd-args).}
+%    \begin{macrocode}
+    \@@_guess_arg_count:NN #1 \l_@@_patch_num_args_int
 %    \end{macrocode}
-%   Start off by making some things \tn{relax} to avoid lots of
+%
+%   Then we redefine the hook to have the right number of arguments.
+%   Disabling the hook, undefining the \verb|parameter| token list then
+%   calling \cs{@@_make_usable:nn} are enough to redefine the hook to
+%   the extent we want.  Code stored in the hook and other metadata
+%   about it are not lost in the process.
+%    \begin{macrocode}
+    \@@_disable:n {#2}
+    \cs_undefine:c { c_@@_#2_parameter_tl }
+    \@@_make_usable:nn {#2} { \l_@@_patch_num_args_int }
+    \tl_set:Ne \l_@@_tmpa_tl
+      { \exp_args:Ne \tl_to_str:n { \@@_braced_parameter:n {#2} } }
+    \use:x
+      {
+        \str_replace_all:Nnn \exp_not:N \l_@@_tmpa_tl
+          { #### } { \c_hash_str }
+      }
+%    \end{macrocode}
+%   Then, make make some things \tn{relax} to avoid lots of
 %   \tn{noexpand} below.
 %    \begin{macrocode}
     \cs_set_eq:NN \kerneltmpDoNotUse \scan_stop:
@@ -1313,10 +1567,18 @@
             ####1 \def \kerneltmpDoNotUse ####2
               {
                 \str_if_eq:nnT {#3} { before }
-                  { \token_to_str:N \UseHook { cmd / #2 / #3 } }
+                  {
+                    \token_to_str:N \UseHookWithArguments {#2}
+                      { \int_use:N \l_@@_patch_num_args_int }
+                      \l_@@_tmpa_tl
+                  }
                 ####3
                 \str_if_eq:nnT {#3} { after }
-                  { \token_to_str:N \UseHook { cmd / #2 / #3 } }
+                  {
+                    \token_to_str:N \UseHookWithArguments {#2}
+                      { \int_use:N \l_@@_patch_num_args_int }
+                      \l_@@_tmpa_tl
+                  }
               }
           }
 %    \end{macrocode}
@@ -1340,7 +1602,39 @@
 %                {Make patching of commands a global operation (gh/674)}
 %    \begin{macrocode}
     \cs_gset_eq:NN #1 \kerneltmpDoNotUse
+%    \end{macrocode}
+%   Finally, update the hook code.
+%    \begin{macrocode}
+    \@@_update_hook_code:n {#2}
   }
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{2021/06/01}{\@@_patch_retokenize:Nnnn}
+%<latexrelease>                 {cmd~hooks~with~args}
+%<latexrelease>\cs_gset_protected:Npn \@@_patch_retokenize:Nnnn #1 #2 #3 #4
+%<latexrelease>  {
+%<latexrelease>    \cs_set_eq:NN \kerneltmpDoNotUse \scan_stop:
+%<latexrelease>    \cs_set_eq:NN \@@_tmp:w \scan_stop:
+%<latexrelease>    \use:x
+%<latexrelease>      {
+%<latexrelease>        \cs_set:Npn \@@_tmp:w
+%<latexrelease>            ####1 \tl_to_str:n { macro: } ####2 -> ####3 \s_@@_mark
+%<latexrelease>          {
+%<latexrelease>            ####1 \def \kerneltmpDoNotUse ####2
+%<latexrelease>              {
+%<latexrelease>                \str_if_eq:nnT {#3} { before }
+%<latexrelease>                  { \token_to_str:N \UseHook { cmd / #2 / #3 } }
+%<latexrelease>                ####3
+%<latexrelease>                \str_if_eq:nnT {#3} { after }
+%<latexrelease>                  { \token_to_str:N \UseHook { cmd / #2 / #3 } }
+%<latexrelease>              }
+%<latexrelease>          }
+%<latexrelease>        \tl_set:Nx \exp_not:N \l_@@_tmpa_tl
+%<latexrelease>          { \exp_not:N \@@_tmp:w \token_to_meaning:N #1 \s_@@_mark }
+%<latexrelease>      }
+%<latexrelease>    \tl_rescan:nV { #4 \@@_patch_required_catcodes: } \l_@@_tmpa_tl
+%<latexrelease>    \cs_gset_eq:NN #1 \kerneltmpDoNotUse
+%<latexrelease>  }
+%<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 % \end{macro}
 %
