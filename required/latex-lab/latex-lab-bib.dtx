@@ -119,27 +119,26 @@
 % \end{variable}
 
 %\subsection{Handling the bibliography}
-% \begin{macro}{\lbibitem}
+% \begin{macro}{\@lbibitem}
 % The item command if an optional argument is use. 
 % 
 % We only prepend some code. 
-% If we had already generic hooks with arguments 
-% we could probably use them \ldots
 %    \begin{macrocode}
-\def\@lbibitem[#1]#2{%
+\AddToHookWithArguments{cmd/@lbibitem/before}
+ {
 %    \end{macrocode}
 % we store the target name for the following code.
-%    \begin{macrocode}
-  \tl_set:Nx\l_@@_bib_target_tl{cite.#2\@extra@b@citeb}
+%    \begin{macrocode} 
+   \tl_set:Nx\l_@@_bib_target_tl{cite.#2\@extra@b@citeb}
 %    \end{macrocode}
 % The target is added at the begin of the paragraph.
-%    \begin{macrocode}
-  \AddToHookNext{para/begin}{\makebox[0pt][r]{\MakeLinkTarget*{\l_@@_bib_target_tl}\hspace{\leftmargin}}}
-  \item[\@biblabel{#1}\hfill]\if@filesw
-      {\let\protect\noexpand
-       \immediate
-       \write\@auxout{\string\bibcite{#2}{#1}}}\fi\ignorespaces}
-%    \end{macrocode}
+%    \begin{macrocode}   
+   \AddToHookNext{para/begin}
+     {
+       \makebox[0pt][r]{\MakeLinkTarget*{\l_@@_bib_target_tl}\hspace{\leftmargin}}
+     }
+ }
+%    \end{macrocode} 
 % we make a copy to be able to reinstate the definition. This is e.g.
 % currently needed with hyperref.
 %    \begin{macrocode}
@@ -148,15 +147,26 @@
 % \end{macro}
 % 
 % \begin{macro}{\@bibitem}
-% Similar for bibitem. 
+% Similar for \cs{@bibitem}. 
 % TODO: If hyperref is loaded we will get a second target from the refstepcounter,
 % but this is ignored for now. 
 %    \begin{macrocode}
-\def\@bibitem#1{
-  \tl_set:Nx\l_@@_bib_target_tl{cite.#1\@extra@b@citeb}%
-  \AddToHookNext{para/begin}{\makebox[0pt][r]{\MakeLinkTarget*{\l_@@_bib_target_tl}\hspace{\leftmargin}}}
-  \item\if@filesw \immediate\write\@auxout
-       {\string\bibcite{#1}{\the\value{\@listctr}}}\fi\ignorespaces}
+\AddToHookWithArguments{cmd/@bibitem/before}
+ {
+%    \end{macrocode}
+% we store the target name for the following code.
+%    \begin{macrocode} 
+   \tl_set:Nx\l_@@_bib_target_tl{cite.#1\@extra@b@citeb}
+%    \end{macrocode}
+% The target is added at the begin of the paragraph.
+%    \begin{macrocode}   
+   \AddToHookNext{para/begin}
+     {
+       \makebox[0pt][r]{\MakeLinkTarget*{\l_@@_bib_target_tl}\hspace{\leftmargin}}
+     }
+ }
+%    \end{macrocode}  
+%    \begin{macrocode}
 \let\@kernel@copy@bibitem\@bibitem           
 %    \end{macrocode}
 % \end{macro}
@@ -176,7 +186,7 @@
 % structure. Even if it looks a bit odd it is now used for many years and so 
 % hopefully compatible with various packages. But differently to hyperref we use
 % the new hooks with arguments.
-% TODO: consider name. Perhaps use the generic names?
+% TODO: consider hook name. Perhaps use the generic names?
 %    \begin{macrocode}
 \NewMirroredHookPairWithArguments{bibcite/before}{bibcite/after}{2}  
 \def\bibcite#1#2{%
@@ -189,7 +199,8 @@
 \let\@kernel@copy@bibcite\bibcite         
 %    \end{macrocode}
 % Now we add the tagging structure.
-% TODO: the ref key should expand its argument directly!
+% TODO: with the next tagpdf version it should no longer be 
+% needed to exand the ref key.
 %    \begin{macrocode}
 \AddToHookWithArguments{bibcite/before}
   {
@@ -211,7 +222,7 @@
  {
 %    \end{macrocode}
 % the next hyperref will allow to suppress the bib patches, but with older
-% versions we muss reinstated them. 
+% versions we reinstate them. 
 %    \begin{macrocode}
    \@ifpackagelater{hyperref}{2023-05-01}{}
     {
@@ -225,105 +236,45 @@
  }
 %    \end{macrocode}
 %
-% \subsection{Natbib support}
-%  natbib offers various hooks that can be used. The main problem is
-%  to coordinate with the hyperref use of the same hooks.
-%  We also have to add something at the begin of \cs{@lbibitem}. 
-%  As generic hooks with arguments aren't available yet, we have to copy the definition
+% \subsection{Natbib and biblatex support}
+%  When hyperref is loaded, both natbib and biblatex use \cs{hyper@natlinkstart}
+%  and \cs{hyper@natlinkend} to handle the links. We can use the generic hooks to 
+%  add the tagging code (and the link code from hyperref). 
+%  If hyperref is not loaded we need to ensure that a target is created nevertheless
+%  and we need to activate in biblatex the tagging code. 
 %  
 %    \begin{macrocode}
-\AddToHook{package/natbib/after}
-  {
-    \def\hyper@natanchorstart#1{\MakeLinkTarget*{#1}}
-    \def\@lbibitem[#1]#2{%
-      \tl_set:Nx\l__tag_bib_target_tl{cite.#2\@extra@b@citeb}
-      \if\relax\@extra@b@citeb\relax\else
-        \@ifundefined{br@#2\@extra@b@citeb}{}{%
-         \@namedef{br@#2}{\@nameuse{br@#2\@extra@b@citeb}}%
-        }%
-      \fi
-      \@ifundefined{b@#2\@extra@b@citeb}{%
-       \def\NAT@num{}%
-      }{%
-       \NAT@parse{#2}%
-      }%
-      \def\NAT@tmp{#1}%
-      \expandafter\let\expandafter\bibitemOpen\csname NAT@b@open@#2\endcsname
-      \expandafter\let\expandafter\bibitemShut\csname NAT@b@shut@#2\endcsname
-      \@ifnum{\NAT@merge>\@ne}{%
-       \NAT@bibitem@first@sw{%
-        \@firstoftwo
-       }{%
-        \@ifundefined{NAT@b*@#2}{%
-         \@firstoftwo
-        }{%
-         \expandafter\def\expandafter\NAT@num\expandafter{\the\c@NAT@ctr}%
-         \@secondoftwo
-        }%
-       }%
-      }{%
-       \@firstoftwo
-      }%
-      {%
-       \global\advance\c@NAT@ctr\@ne
-       \@ifx{\NAT@tmp\@empty}{\@firstoftwo}{%
-        \@secondoftwo
-       }%
-       {%
-        \expandafter\def\expandafter\NAT@num\expandafter{\the\c@NAT@ctr}%
-        \global\NAT@stdbsttrue
-       }{}%
-       \bibitem@fin
-       \item[\hfil\NAT@anchor{#2}{\NAT@num}]%
-       \global\let\NAT@bibitem@first@sw\@secondoftwo
-       \NAT@bibitem@init
-      }%
-      {%
-       \NAT@anchor{#2}{}%
-       \NAT@bibitem@cont
-       \bibitem@fin
-      }%
-      \@ifx{\NAT@tmp\@empty}{%
-        \NAT@wrout{\the\c@NAT@ctr}{}{}{}{#2}%
-      }{%
-        \expandafter\NAT@ifcmd\NAT@tmp(@)(@)\@nil{#2}%
-      }%
-    }%
+\newcommand\hyper@natlinkstart[1]{}
+\newcommand\hyper@natlinkend{}
+\AddToHookWithArguments{cmd/hyper@natlinkstart/before}
+ {
+   \leavevmode
+   \tag_mc_end_push:
+   \exp_args:Nx\tagstructbegin{tag=Reference,ref=cite.#1\@extra@b@citeb}
+   \tagmcbegin{}
+ }
+\AddToHook{cmd/hyper@natlinkend/after}
+ {
+   \tag_mc_end:
+   \tagstructend
+   \tag_mc_begin_pop:n{}
+ } 
 %    \end{macrocode}
-% we redefine the hook to use latex hooks.
-%    \begin{macrocode}
-    \NewMirroredHookPairWithArguments{natbib/linkstart}{natbib/linkend}{1}  
-    \renewcommand\hyper@natlinkstart[1]{\UseHookWithArguments{natbib/linkstart}{1}{#1}}
-    \renewcommand\hyper@natlinkend{\UseHookWithArguments{natbib/linkend}{1}{}}
-    \AddToHookWithArguments{natbib/linkstart}
-      {
-         \leavevmode
-         \tag_mc_end_push:
-         \exp_args:Nx\tagstructbegin{tag=Reference,ref=cite.#1\@extra@b@citeb}
-         \tagmcbegin{}
-      } 
-    \AddToHook{natbib/linkend}
-      {  
-       \tag_mc_end:
-       \tagstructend
-       \tag_mc_begin_pop:n{}
-      }
-  }     
-%    \end{macrocode}
-% if hyperref is loaded we have to repeat the definition
+% if hyperref is loaded we have to revert is definition of the natbib hooks
+% and add his code. TODO: allow to suppress the natbib code in hyperref. 
 % 
 %    \begin{macrocode}
 \AddToHook{package/hyperref/after}
  {
-    \renewcommand\hyper@natlinkstart[1]{\UseHookWithArguments{natbib/linkstart}{1}{#1}}
-    \renewcommand\hyper@natlinkend{\UseHookWithArguments{natbib/linkend}{1}{}}
-    \AddToHookWithArguments{natbib/linkstart}
+    \renewcommand\hyper@natlinkstart[1]{}
+    \renewcommand\hyper@natlinkend{}
+    \AddToHookWithArguments{cmd/hyper@natlinkstart/before}
       {
          \Hy@backout{#1}%
          \hyper@linkstart{cite}{cite.#1}%
          \def\hyper@nat@current{#1}
       } 
-    \AddToHook{natbib/linkend}
+    \AddToHook{cmd/hyper@natlinkend/after}
       {  
        \hyper@linkend
       }
