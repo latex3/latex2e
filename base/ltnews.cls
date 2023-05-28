@@ -41,7 +41,7 @@
 
 \NeedsTeXFormat{LaTeX2e}
 
-\ProvidesClass{ltnews}[2017/12/13 v1.06  Standard LaTeX class]
+\ProvidesClass{ltnews}[2023/05/28 v1.08  Standard LaTeX class]
 
 % The configuration file, used for passing options.
 
@@ -474,7 +474,7 @@
       \parbox[t][7\baselineskip]{\textwidth}{%
          \@titlefont\@title\\[\medskipamount]
          \normalfont\normalsize\issuename~\@issue,
-         \@month~\@year~(\publicationdate)%
+         \@month~\@year~(\LaTeX\ release \publicationdate)%
       }%
    }]%
    \thispagestyle{titlepage}
@@ -517,6 +517,17 @@
    \@startsection
       {subsubsection}{2}{\leftmargini}{-1.5ex \@plus -1ex \@minus -.2ex}%
       {1sp}{\@subheadingfont}%
+}
+
+
+% suggestion by Karl Berry (not integrated (yet))
+
+\newcommand{\ltnewssectformat}{%
+  \@headingfont
+  \frenchspacing
+  \raggedright
+  \hyphenpenalty=10000
+  \exhyphenpenalty=10000
 }
 
 % No section numbers.
