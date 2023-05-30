@@ -103,28 +103,24 @@
 % \cs{@extra@b@citeb} in the relevant places too.
 % 
 % \item[biblatex] biblatex supports multiple bibliographies out-of-the-box. 
-% As name for the link target it uses \verb+\the\c@refsection @+\meta{key},
-% so it numbers them by refsection.
+% It numbers the link target by refsection and uses then the name
+% \verb+\the\c@refsection @+\meta{key}.
 % 
-% Printing a bibliography is not required, in this case you get a warning
+% Printing a bibliography is not required, in this case you get an engine warning
 % and links jump to the begin of the document:
 % \begin{verbatim}
 % name{cite.0@doody} has been referenced but does not exist
 % \end{verbatim}
 % 
 % Bibliographies can be printed more than once by refsection. To avoid duplicated
-% target, biblatex stores the names of the targets in a list. If a name has already
-% been used in refsection no target is created for this item. This means a citation
+% target, biblatex stores the names of the targets in a list and if later
+% it detects that a target name has already been used in a
+% bibliography no new target is created for this item. This means a citation
 % will normally jump to the first bibliography which shows the entry.
 % 
-% 
+% The tagging code has to mimic this code. This means that it can't label every item,
+% but has to test if this anchor is already known.
 % \end{description}
-% 
-% Packages  have 
-% An additional problem are the various packages trying to improve citation commands
-% which all should be checked. Currently only natbib has been tried. 
-% 
-% The biblatex package isn't handled yet.  
 % 
 % 
 % \section{Implementation}
@@ -156,14 +152,17 @@
 %    \end{macrocode}
 % \end{macro}
 % 
-% \begin{variable}{\l_@@_bib_target_tl}
-% Items should add a target, to avoid that user code
-% interferes we don't rely on \cs{@currentHref}
+% \begin{variable}{\l_@@_bib_citekey_tl}
+%  We can't pass the cite key every where as argument so we store it:
 %    \begin{macrocode}
-\tl_new:N\l_@@_bib_target_tl
+\tl_new:N\l_@@_bib_citekey_tl
 %    \end{macrocode}
 % \end{variable}
-
+% The default format for the link target.
+% \begin{macro}{\@@_bib_format_target:n}
+\cs_new:Npn\@@_bib_format_target:n #1 {cite.#1\@extra@b@citeb}
+\cs_generate_variant:Nn \@@_bib_format_target:n {V}
+% \end{macro}
 %\subsection{Handling the bibliography}
 % \begin{macro}{\@lbibitem}
 % The item command if an optional argument is use. 
@@ -172,16 +171,16 @@
 %    \begin{macrocode}
 \AddToHookWithArguments{cmd/@lbibitem/before}
  {
-%    \end{macrocode}
-% we store the target name for the following variable.
+%    \end{macrocode} 
+% we store the target name for the label.
 %    \begin{macrocode} 
-   \tl_set:Nx\l_@@_bib_target_tl{cite.#2\@extra@b@citeb}
+   \tl_set:Nn\l_@@_bib_citekey_tl{#2}
 %    \end{macrocode}
 % The target is added at the begin of the paragraph.
 %    \begin{macrocode}   
    \AddToHookNext{para/begin}
      {
-       \makebox[0pt][r]{\MakeLinkTarget*{\l_@@_bib_target_tl}\hspace{\leftmargin}}
+       \makebox[0pt][r]{\MakeLinkTarget*{\@@_bib_format_target:n{#2}}\hspace{\leftmargin}}
      }
  }
 %    \end{macrocode} 
@@ -200,15 +199,15 @@
 \AddToHookWithArguments{cmd/@bibitem/before}
  {
 %    \end{macrocode}
-% we store the target name for the following code.
+% we store the target name for the label.
 %    \begin{macrocode} 
-   \tl_set:Nx\l_@@_bib_target_tl{cite.#1\@extra@b@citeb}
+   \tl_set:Nn\l_@@_bib_citekey_tl{#1}
 %    \end{macrocode}
 % The target is added at the begin of the paragraph.
 %    \begin{macrocode}   
    \AddToHookNext{para/begin}
      {
-       \makebox[0pt][r]{\MakeLinkTarget*{\l_@@_bib_target_tl}\hspace{\leftmargin}}
+       \makebox[0pt][r]{\MakeLinkTarget*{\@@_bib_format_target:n{#1}}\hspace{\leftmargin}}
      }
  }
 %    \end{macrocode}  
@@ -223,7 +222,7 @@
 %    \begin{macrocode}
 \AddToHook{env/thebibliography/begin}
   {\cs_set:Npn \__block_list_item_begin:
-    { \tagstructbegin{tag=\LItag,label=\l_@@_bib_target_tl}}
+    { \tagstructbegin{tag=\LItag,label=\@@_bib_format_target:V\l_@@_bib_citekey_tl}}
   }
 %    \end{macrocode}
 %
@@ -251,7 +250,7 @@
 \AddToHookWithArguments{bibcite/before}
   {
     \tag_mc_end_push:
-    \exp_args:Nx\tagstructbegin{tag=Reference,ref=cite.#1\@extra@b@citeb}
+    \exp_args:Nx\tagstructbegin{tag=Reference,ref=\@@_bib_format_target:n{#1}}
     \tagmcbegin{}
   }
 \AddToHookWithArguments{bibcite/after}[tag]
@@ -277,7 +276,7 @@
         \let\@bibitem\@kernel@copy@bibitem
         \let\bibcite\@kernel@copy@bibcite}
     }
-   \AddToHookWithArguments{bibcite/before}{\hyper@linkstart{cite}{cite.#1\@extra@b@citeb}}
+   \AddToHookWithArguments{bibcite/before}{\hyper@linkstart{cite}{\@@_bib_format_target:n{#1}}}
    \AddToHookWithArguments{bibcite/after}{\hyper@linkend}
  }
 %    \end{macrocode}
@@ -292,11 +291,13 @@
 %    \begin{macrocode}
 \newcommand\hyper@natlinkstart[1]{}
 \newcommand\hyper@natlinkend{}
+
+\AddToHook{package/natbib/after}
 \AddToHookWithArguments{cmd/hyper@natlinkstart/before}
  {
    \leavevmode
    \tag_mc_end_push:
-   \exp_args:Nx\tagstructbegin{tag=Reference,ref=cite.#1\@extra@b@citeb}
+   \exp_args:Nx\tagstructbegin{tag=Reference,ref=\@@_bib_format_target:n{#1}}
    \tagmcbegin{}
  }
 \AddToHook{cmd/hyper@natlinkend/after}
