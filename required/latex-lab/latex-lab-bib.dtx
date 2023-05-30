@@ -50,15 +50,15 @@
 % The followings contains small changes to improve tagging of
 % bibliography entries and citations. 
 % 
-% The tagging of the bibliography is actually quite straightforward:
-% A bibliography is typically a list with a heading and the sec and block tagging
-% code handles that. 
+% The tagging of the standard bibliography is actually quite straightforward:
+% A bibliography is typically a list with a heading and the code which tags sectioning
+% commands and lists handles that. 
 % 
 % There are here only two problems: 
 % 
 % \begin{itemize}
 % \item The structure number of the \texttt{LI} element
-% create by a \cs{bibitem} must be recorded somehow to allow to reference it in 
+% created by a \cs{bibitem} must be recorded somehow to allow to reference it in 
 % a \cs{cite}. 
 % \item \pkg{hyperref} redefines the item command and so breaks the list structure
 % see \url{https://github.com/latex3/latex2e/discussions/1010#discussioncomment-5565418}
@@ -72,9 +72,55 @@
 % item in the bibliography. For simple citations like 
 % \enquote{[1]} or \enquote{Doody (2023)} this is easy, but it is not obvious how
 % to handle combined citations like \enquote{Doody (2003,2018)} (or even compressed citations
-% like \enquote{[1-3]}). The implementation follows here the links: whatever hyperref would
+% like \enquote{[1-3]}). The current implementation follows the links: whatever hyperref would
 % link is set as the reference.
 % 
+% There exist various packages which over the years tried to improve and extend
+% the bibliography commands. We discuss here three: natbib, chapterbib and biblatex.
+% 
+% \begin{description}
+% \item[natbib] It is rather easy to support natbib: it has hooks for links and the tagging code
+% can follow. Only a bit coordination with hyperref is needed to avoid that hyperref
+% remove the tagging code again.
+% 
+% \item[chapterbib] In standard LaTeX every bib entry has an unique label which points to the 
+% (mandatory and unique) bibliography and the target created by hyperref 
+% has the simple form \texttt{cite.}\meta{key}.
+% If a package that support multiple bibliographies is used (e.g. chapterbib)
+% this is no longer works: a bib entry \texttt{doody} 
+% can in one chapter get the label \enquote{[1]}
+% and in the other \enquote{[5]} or even \enquote{Doo19} and naturally links
+% should jump to the relevant chapter bibliography. chapterbib solves this
+% by creating bib keys with a suffix: when reading the \texttt{.aux} files it will
+% create the keys \texttt{doody@-1} and \texttt{doody@-2} where the number is related
+% to the chapter/include, and in the document and in the document \verb+\cite{doody}+
+% will look for \texttt{doody@-1} and \texttt{doody@-2} depending on the number of the
+% current include. For some unknown reason chapterbib uses two commands
+% to handle the suffix: the command \cs{@extra@binfo} is written to the aux-files 
+% and used when processing the \cs{bibcite} commands, 
+% but in the document \cs{@extra@b@citeb} is used. Supporting this is 
+% straightforward: one only has to take care that the tagging code uses
+% \cs{@extra@b@citeb} in the relevant places too.
+% 
+% \item[biblatex] biblatex supports multiple bibliographies out-of-the-box. 
+% As name for the link target it uses \verb+\the\c@refsection @+\meta{key},
+% so it numbers them by refsection.
+% 
+% Printing a bibliography is not required, in this case you get a warning
+% and links jump to the begin of the document:
+% \begin{verbatim}
+% name{cite.0@doody} has been referenced but does not exist
+% \end{verbatim}
+% 
+% Bibliographies can be printed more than once by refsection. To avoid duplicated
+% target, biblatex stores the names of the targets in a list. If a name has already
+% been used in refsection no target is created for this item. This means a citation
+% will normally jump to the first bibliography which shows the entry.
+% 
+% 
+% \end{description}
+% 
+% Packages  have 
 % An additional problem are the various packages trying to improve citation commands
 % which all should be checked. Currently only natbib has been tried. 
 % 
@@ -127,7 +173,7 @@
 \AddToHookWithArguments{cmd/@lbibitem/before}
  {
 %    \end{macrocode}
-% we store the target name for the following code.
+% we store the target name for the following variable.
 %    \begin{macrocode} 
    \tl_set:Nx\l_@@_bib_target_tl{cite.#2\@extra@b@citeb}
 %    \end{macrocode}
@@ -260,8 +306,9 @@
    \tag_mc_begin_pop:n{}
  } 
 %    \end{macrocode}
-% if hyperref is loaded we have to revert is definition of the natbib hooks
-% and add his code. TODO: allow to suppress the natbib code in hyperref. 
+% if hyperref is loaded we have to revert its definition of the natbib hooks
+% and add its code through the generic hooks. 
+% TODO: allow to suppress the natbib code in hyperref. 
 % 
 %    \begin{macrocode}
 \AddToHook{package/hyperref/after}
