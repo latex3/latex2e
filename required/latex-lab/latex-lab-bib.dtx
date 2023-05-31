@@ -153,16 +153,12 @@
 % \end{macro}
 % 
 % \begin{variable}{\l_@@_bib_citekey_tl}
-%  We can't pass the cite key every where as argument so we store it:
+%  We can't pass the cite key everywhere as argument so we store it:
 %    \begin{macrocode}
 \tl_new:N\l_@@_bib_citekey_tl
 %    \end{macrocode}
 % \end{variable}
-% The default format for the link target.
-% \begin{macro}{\@@_bib_format_target:n}
-\cs_new:Npn\@@_bib_format_target:n #1 {cite.#1\@extra@b@citeb}
-\cs_generate_variant:Nn \@@_bib_format_target:n {V}
-% \end{macro}
+% 
 %\subsection{Handling the bibliography}
 % \begin{macro}{\@lbibitem}
 % The item command if an optional argument is use. 
@@ -180,7 +176,7 @@
 %    \begin{macrocode}   
    \AddToHookNext{para/begin}
      {
-       \makebox[0pt][r]{\MakeLinkTarget*{\@@_bib_format_target:n{#2}}\hspace{\leftmargin}}
+       \makebox[0pt][r]{\MakeLinkTarget*{cite.#2\@extra@b@citeb}\hspace{\leftmargin}}
      }
  }
 %    \end{macrocode} 
@@ -207,7 +203,7 @@
 %    \begin{macrocode}   
    \AddToHookNext{para/begin}
      {
-       \makebox[0pt][r]{\MakeLinkTarget*{\@@_bib_format_target:n{#1}}\hspace{\leftmargin}}
+       \makebox[0pt][r]{\MakeLinkTarget*{cite.#1\@extra@b@citeb}\hspace{\leftmargin}}
      }
  }
 %    \end{macrocode}  
@@ -221,8 +217,15 @@
 % 
 %    \begin{macrocode}
 \AddToHook{env/thebibliography/begin}
-  {\cs_set:Npn \__block_list_item_begin:
-    { \tagstructbegin{tag=\LItag,label=\@@_bib_format_target:V\l_@@_bib_citekey_tl}}
+  {
+    \cs_set:Npn \__block_list_item_begin:
+     { 
+       \tag_struct_begin:n
+         {
+          tag=\LItag,
+          label= cite.\l_@@_bib_citekey_tl\@extra@b@citeb
+         }
+     }
   }
 %    \end{macrocode}
 %
@@ -250,7 +253,7 @@
 \AddToHookWithArguments{bibcite/before}
   {
     \tag_mc_end_push:
-    \exp_args:Nx\tagstructbegin{tag=Reference,ref=\@@_bib_format_target:n{#1}}
+    \exp_args:Nx\tagstructbegin{tag=Reference,ref=cite.#1\@extra@b@citeb}
     \tagmcbegin{}
   }
 \AddToHookWithArguments{bibcite/after}[tag]
@@ -264,47 +267,46 @@
 % this can be changed with a rule.
 %    \begin{macrocode}
 \AddToHook{package/hyperref/after}
- {
-%    \end{macrocode}
-% the next hyperref will allow to suppress the bib patches, but with older
-% versions we reinstate them. 
-%    \begin{macrocode}
-   \@ifpackagelater{hyperref}{2023-05-01}{}
-    {
-      \@ifpackageloaded{natbib}{}
-       {\let\@lbibitem\@kernel@copy@lbibitem
-        \let\@bibitem\@kernel@copy@bibitem
-        \let\bibcite\@kernel@copy@bibcite}
-    }
-   \AddToHookWithArguments{bibcite/before}{\hyper@linkstart{cite}{\@@_bib_format_target:n{#1}}}
-   \AddToHookWithArguments{bibcite/after}{\hyper@linkend}
- }
+  {
+    \AddToHookWithArguments{bibcite/before}
+     {
+       \hyper@linkstart{cite}{cite.#1\@extra@b@citeb}
+     }
+    \AddToHookWithArguments{bibcite/after}{\hyper@linkend}
+  }
 %    \end{macrocode}
 %
 % \subsection{Natbib and biblatex support}
 %  When hyperref is loaded, both natbib and biblatex use \cs{hyper@natlinkstart}
 %  and \cs{hyper@natlinkend} to handle the links. We can use the generic hooks to 
-%  add the tagging code (and the link code from hyperref). 
-%  If hyperref is not loaded we need to ensure that a target is created nevertheless
-%  and we need to activate in biblatex the tagging code. 
-%  
+%  add the tagging code (and the link code from hyperref).
+%  We need in part different code for both systems: 
+%  with biblatex we have to take care that only the first
+%  structure sets a label, and if 
+%  hyperref is not loaded (or deactived) we will need additional code
+%  but this currently doesn't exist.
+%  We assume that no document loads both package -- that will probably break.
 %    \begin{macrocode}
 \newcommand\hyper@natlinkstart[1]{}
 \newcommand\hyper@natlinkend{}
-
+%    \end{macrocode}
+% This can be shared by both packages: it will work with natbib with and without hyperref.
+% With biblatex it will work without hyperref as long as \cs{@extra@b@citeb} is empty
+%    \begin{macrocode}
 \AddToHookWithArguments{cmd/hyper@natlinkstart/before}
  {
    \leavevmode
    \tag_mc_end_push:
-   \exp_args:Nx\tagstructbegin{tag=Reference,ref=\@@_bib_format_target:n{#1}}
-   \tagmcbegin{}
+   \exp_args:Nx\tag_struct_begin:n{tag=Reference,ref=cite.#1\@extra@b@citeb}
+   \tag_mc_begin:n{}
  }
 \AddToHook{cmd/hyper@natlinkend/after}
  {
-   \tag_mc_end:
-   \tagstructend
-   \tag_mc_begin_pop:n{}
- } 
+  \tag_mc_end:
+  \tag_struct_end:
+  \tag_mc_begin_pop:n{}
+ }
+      
 %    \end{macrocode}
 % if hyperref is loaded we have to revert its definition of the natbib hooks
 % and add its code through the generic hooks. 
@@ -312,20 +314,64 @@
 % 
 %    \begin{macrocode}
 \AddToHook{package/hyperref/after}
- {
+  {
     \renewcommand\hyper@natlinkstart[1]{}
     \renewcommand\hyper@natlinkend{}
     \AddToHookWithArguments{cmd/hyper@natlinkstart/before}
       {
-         \Hy@backout{#1}%
-         \hyper@linkstart{cite}{cite.#1}%
-         \def\hyper@nat@current{#1}
+        \Hy@backout{#1}%
+%    \end{macrocode}
+%  natbib passes the \cs{@extra@b@citeb} in the argument, and biblatex
+%  the refsection, so we only need to add the prefix \texttt{cite.}.
+%    \begin{macrocode}
+          \hyper@linkstart{cite}{cite.#1}%
+          \def\hyper@nat@current{#1}
       } 
     \AddToHook{cmd/hyper@natlinkend/after}
       {  
-       \hyper@linkend
+        \hyper@linkend
       }
- }
+  }
+    
+%    \end{macrocode}
+% and now special biblatex code. The list item code has to test if the 
+% anchor is already known:
+%    \begin{macrocode}
+\AddToHook{cmd/blx@bibinit/after}
+  {
+    \cs_set:Npn \__block_list_item_begin:
+     { 
+       \xifinlist{\the\c@refsection @\abx@field@entrykey}{\blx@anchors}
+        {
+          \tag_struct_begin:n
+           {
+            tag=\LItag,
+           }
+        }   
+        {
+          \tag_struct_begin:n
+           {
+            tag=\LItag,
+            label= cite.\the\c@refsection @\abx@field@entrykey
+           }
+        }   
+     }
+  }
+%    \end{macrocode}
+% biblatex without hyperref is currently not supported but we at least avoid that it
+% errors:
+%    \begin{macrocode}
+\AddToHook{package/biblatex/after}
+ {
+  \appto\blx@mknohyperref
+   {
+    \let\blx@anchors\@empty
+    \protected\def\blx@anchor{%
+       \xifinlist{\the\c@refsection @\abx@field@entrykey}{\blx@anchors}
+         {}
+         {\listxadd\blx@anchors{\the\c@refsection @\abx@field@entrykey}}}%
+   }
+ }  
 %    \end{macrocode}
 %    \begin{macrocode}
 %</package>
