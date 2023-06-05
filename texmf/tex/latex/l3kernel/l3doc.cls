@@ -1607,7 +1607,7 @@
     \seq_set_map:NNn \l__codedoc_tmpa_seq
       \g__codedoc_nested_names_seq
       { \__codedoc_macro_end_wrap_item:n {##1} }
-    End~ definition~ for~
+    End~ of~ definition~ for~
     \int_compare:nTF { \seq_count:N \l__codedoc_tmpa_seq <= 3 }
       {
         \seq_use:Nnnn \l__codedoc_tmpa_seq
