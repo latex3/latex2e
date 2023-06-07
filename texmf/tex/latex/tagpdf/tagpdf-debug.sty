@@ -26,7 +26,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: tagpdf.dtx
-\ProvidesExplPackage {tagpdf-debug} {2022-08-24} {0.97}
+\ProvidesExplPackage {tagpdf-debug} {2023-06-06} {0.98h}
   { debug code for tagpdf }
 \@ifpackageloaded{tagpdf}{}{\PackageWarning{tagpdf-debug}{tagpdf~not~loaded,~quitting}\endinput}
 \prop_gput:Nnn \g_msg_module_type_prop { tag / debug} {}
@@ -80,6 +80,10 @@
   {
     Struct~end~#1~[\msg_line_context:]
   }
+\msg_new:nnn { tag / debug } {struct-end-wrong}
+  {
+    Struct~end~'#1'~doesn't~fit~start~'#2'~[\msg_line_context:]
+  }
 
 \cs_new_protected:Npn \__tag_debug_struct_begin_insert:n #1
  {
@@ -111,6 +115,24 @@
         \msg_note:nnn { tag / debug } {struct-end } {ignored}
      }
  }
+\cs_new_protected:Npn \__tag_debug_struct_end_check:n #1
+ {
+   \int_compare:nNnT { \l__tag_loglevel_int } > {0}
+    {
+      \seq_get:NNT \g__tag_struct_tag_stack_seq \l__tag_tmpa_tl
+        {
+          \str_if_eq:eeF
+           {#1}
+           {\exp_last_unbraced:NV\use_i:nn \l__tag_tmpa_tl}
+           {
+             \msg_warning:nnxx { tag/debug }{ struct-end-wrong }
+              {#1}
+              {\exp_last_unbraced:NV\use_i:nn \l__tag_tmpa_tl}
+           }
+        }
+     }
+ }
+
 %% File: tagpdf-user.dtx
 
 
@@ -139,6 +161,10 @@
           { /StructElem }
         \tl_set:Nn \l__tag_struct_stack_parent_tmpa_tl {-1}
         \keys_set:nn { __tag / struct} { #1 }
+        \__tag_struct_set_tag_info:eVV
+          { \int_eval:n {\c@g__tag_struct_abs_int} }
+           \g__tag_struct_tag_tl
+           \g__tag_struct_tag_NS_tl
         \__tag_check_structure_has_tag:n { \int_eval:n {\c@g__tag_struct_abs_int} }
         \tl_if_empty:NF
           \l__tag_struct_key_label_tl
@@ -155,12 +181,87 @@
               }
            }
         \seq_gpush:NV \g__tag_struct_stack_seq        \c@g__tag_struct_abs_int
-        \seq_gpush:NV \g__tag_struct_tag_stack_seq    \g__tag_struct_tag_tl
+        \__tag_role_get:VVNN
+          \g__tag_struct_tag_tl
+          \g__tag_struct_tag_NS_tl
+          \l__tag_struct_roletag_tl
+          \l__tag_struct_roletag_NS_tl
+        \__tag_prop_gput:cnx
+              { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
+              { rolemap }
+              {
+                {\l__tag_struct_roletag_tl}{\l__tag_struct_roletag_NS_tl}
+              }
+        \str_case:VnTF \l__tag_struct_roletag_tl
+         {
+           {Part} {}
+           {Div}  {}
+           {NonStruct} {}
+         }
+         {
+           \prop_get:cnNT
+            { g__tag_struct_ \l__tag_struct_stack_parent_tmpa_tl _prop }
+            { parentrole }
+            \l__tag_get_tmpc_tl
+            {
+              \__tag_prop_gput:cno
+                { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
+                { parentrole }
+                {
+                  \l__tag_get_tmpc_tl
+                }
+            }
+         }
+         {
+           \__tag_prop_gput:cnx
+              { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
+              { parentrole }
+              {
+                {\l__tag_struct_roletag_tl}{\l__tag_struct_roletag_NS_tl}
+              }
+         }
+        \seq_gpush:Nx \g__tag_struct_tag_stack_seq
+          {{\g__tag_struct_tag_tl}{\l__tag_struct_roletag_tl}}
         \tl_gset:NV   \g__tag_struct_stack_current_tl \c@g__tag_struct_abs_int
         %\seq_show:N   \g__tag_struct_stack_seq
         \bool_if:NF
           \l__tag_struct_elem_stash_bool
-          {%set the  parent
+          {
+            \__tag_struct_get_parentrole:eNN
+              {\l__tag_struct_stack_parent_tmpa_tl}
+              \l__tag_get_parent_tmpa_tl
+              \l__tag_get_parent_tmpb_tl
+            \__tag_check_parent_child:VVVVN
+              \l__tag_get_parent_tmpa_tl
+              \l__tag_get_parent_tmpb_tl
+              \g__tag_struct_tag_tl
+              \g__tag_struct_tag_NS_tl
+              \l__tag_parent_child_check_tl
+            \int_compare:nNnT {\l__tag_parent_child_check_tl}<0
+              {
+                \prop_get:cnN
+                  { g__tag_struct_ \l__tag_struct_stack_parent_tmpa_tl _prop}
+                  {S}
+                  \l__tag_tmpa_tl
+                \msg_warning:nnxxx
+                 { tag }
+                 {role-parent-child}
+                 { \l__tag_get_parent_tmpa_tl/\l__tag_get_parent_tmpb_tl }
+                 { \g__tag_struct_tag_tl/\g__tag_struct_tag_NS_tl  }
+                 { not~allowed~
+                   (struct~\l__tag_struct_stack_parent_tmpa_tl,~\l__tag_tmpa_tl
+                    \c_space_tl-->~struct~\int_eval:n {\c@g__tag_struct_abs_int})
+                 }
+                \cs_set_eq:NN \l__tag_role_remap_tag_tl \g__tag_struct_tag_tl
+                \cs_set_eq:NN \l__tag_role_remap_NS_tl \g__tag_struct_tag_NS_tl
+                \__tag_role_remap:
+                \cs_gset_eq:NN \g__tag_struct_tag_tl \l__tag_role_remap_tag_tl
+                \cs_gset_eq:NN  \g__tag_struct_tag_NS_tl \l__tag_role_remap_NS_tl
+                \__tag_struct_set_tag_info:eVV
+                  { \int_eval:n {\c@g__tag_struct_abs_int} }
+                    \g__tag_struct_tag_tl
+                    \g__tag_struct_tag_NS_tl
+              }
             \__tag_prop_gput:cnx
               { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
               { P }
@@ -205,12 +306,23 @@
           }
        \seq_get:NNT \g__tag_struct_tag_stack_seq \l__tag_tmpa_tl
           {
-            \tl_gset:NV \g__tag_struct_tag_tl \l__tag_tmpa_tl
+            \tl_gset:Nx \g__tag_struct_tag_tl
+              { \exp_last_unbraced:NV\use_i:nn \l__tag_tmpa_tl }
+            \prop_get:NVNT\g__tag_role_tags_NS_prop \g__tag_struct_tag_tl\l__tag_tmpa_tl
+             {
+               \tl_gset:Nx \g__tag_struct_tag_NS_tl { \l__tag_tmpa_tl }
+             }
           }
 \__tag_debug_struct_end_insert:
       }
 {\__tag_debug_struct_end_ignore:}
   }
+
+\cs_set_protected:Npn \tag_struct_end:n #1
+ {
+\__tag_debug_struct_end_check:n{#1}
+   \tag_struct_end:
+ }
 
 %% File: tagpdf-space.dtx
 %% 

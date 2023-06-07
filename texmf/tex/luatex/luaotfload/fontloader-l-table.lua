@@ -6,7 +6,7 @@ if not modules then modules = { } end modules ['l-table'] = {
     license   = "see context related readme files"
 }
 
-local type, next, tostring, tonumber, select = type, next, tostring, tonumber, select
+local type, next, tostring, tonumber, select, rawget = type, next, tostring, tonumber, select, rawget
 local table, string = table, string
 local concat, sort = table.concat, table.sort
 local format, lower, dump = string.format, string.lower, string.dump
@@ -287,6 +287,37 @@ local function sortedhash(t,cmp)
     return nothing
 end
 
+-- local function iterate(t,i)
+--     local i = i + 1
+--     if i <= t.n then
+--         local k = t[i]
+--         return i, k, t.t[k]
+--     end
+-- end
+--
+-- local function indexedhash(t,cmp)
+--     if t then
+--         local s
+--         if cmp then
+--             -- it would be nice if the sort function would accept a third argument (or nicer, an optional first)
+--             s = sortedhashkeys(t,function(a,b) return cmp(t,a,b) end)
+--         else
+--             s = sortedkeys(t) -- the robust one
+--         end
+--         local m = #s
+--         if m == 1 then
+--             return next, t
+--         elseif m > 0 then
+--             s.n = m
+--             s.t = t
+--             return iterate, s, 0
+--         end
+--     end
+--     return nothing
+-- end
+--
+-- -- for i, k, v in indexedhash(t) do print(k,v,s) end
+
 table.sortedhash  = sortedhash
 table.sortedpairs = sortedhash -- obsolete
 
@@ -494,84 +525,15 @@ function table.fromhash(t)
     return hsh
 end
 
-local noquotes, hexify, handle, compact, inline, functions, metacheck
+local noquotes, hexify, handle, compact, inline, functions, metacheck, accurate
 
 local reserved = table.tohash { -- intercept a language inconvenience: no reserved words as key
     'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function', 'if',
     'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then', 'true', 'until', 'while',
-    'NaN', 'goto',
+    'NaN', 'goto', 'const',
 }
 
--- local function is_simple_table(t)
---     if #t > 0 then
---         local n = 0
---         for _,v in next, t do
---             n = n + 1
---         end
---         if n == #t then
---             local tt, nt = { }, 0
---             for i=1,#t do
---                 local v = t[i]
---                 local tv = type(v)
---                 if tv == "number" then
---                     nt = nt + 1
---                     if hexify then
---                         tt[nt] = format("0x%X",v)
---                     else
---                         tt[nt] = tostring(v) -- tostring not needed
---                     end
---                 elseif tv == "string" then
---                     nt = nt + 1
---                     tt[nt] = format("%q",v)
---                 elseif tv == "boolean" then
---                     nt = nt + 1
---                     tt[nt] = v and "true" or "false"
---                 else
---                     return nil
---                 end
---             end
---             return tt
---         end
---     end
---     return nil
--- end
-
--- local function is_simple_table(t)
---     local nt = #t
---     if nt > 0 then
---         local n = 0
---         for _,v in next, t do
---             n = n + 1
---          -- if type(v) == "table" then
---          --     return nil
---          -- end
---         end
---         if n == nt then
---             local tt = { }
---             for i=1,nt do
---                 local v = t[i]
---                 local tv = type(v)
---                 if tv == "number" then
---                     if hexify then
---                         tt[i] = format("0x%X",v)
---                     else
---                         tt[i] = tostring(v) -- tostring not needed
---                     end
---                 elseif tv == "string" then
---                     tt[i] = format("%q",v)
---                 elseif tv == "boolean" then
---                     tt[i] = v and "true" or "false"
---                 else
---                     return nil
---                 end
---             end
---             return tt
---         end
---     end
---     return nil
--- end
-
-local function is_simple_table(t,hexify) -- also used in util-tab so maybe public
+local function is_simple_table(t,hexify,accurate) -- also used in util-tab so maybe public
     local nt = #t
     if nt > 0 then
         local n = 0
@@ -592,6 +554,8 @@ local function is_simple_table(t,hexify) -- also used in util-tab so maybe publi
                  -- tt[i] = v -- not needed tostring(v)
                     if hexify then
                         tt[i] = format("0x%X",v)
+                    elseif accurate then
+                        tt[i] = format("%q",v)
                     else
                         tt[i] = v -- not needed tostring(v)
                     end
@@ -613,6 +577,8 @@ local function is_simple_table(t,hexify) -- also used in util-tab so maybe publi
                  -- tt[i+1] = v -- not needed tostring(v)
                     if hexify then
                         tt[i+1] = format("0x%X",v)
+                    elseif accurate then
+                        tt[i+1] = format("%q",v)
                     else
                         tt[i+1] = v -- not needed tostring(v)
                     end
@@ -707,6 +673,8 @@ local function do_serialize(root,name,depth,level,indexed)
                 if tv == "number" then
                     if hexify then
                         handle(format("%s 0x%X,",depth,v))
+                    elseif accurate then
+                        handle(format("%s %q,",depth,v))
                     else
                         handle(format("%s %s,",depth,v)) -- %.99g
                     end
@@ -716,7 +684,7 @@ local function do_serialize(root,name,depth,level,indexed)
                     if next(v) == nil then
                         handle(format("%s {},",depth))
                     elseif inline then -- and #t > 0
-                        local st = is_simple_table(v,hexify)
+                        local st = is_simple_table(v,hexify,accurate)
                         if st then
                             handle(format("%s { %s },",depth,concat(st,", ")))
                         else
@@ -744,12 +712,16 @@ local function do_serialize(root,name,depth,level,indexed)
                 if tk == "number" then
                     if hexify then
                         handle(format("%s [0x%X]=0x%X,",depth,k,v))
+                    elseif accurate then
+                        handle(format("%s [%s]=%q,",depth,k,v))
                     else
                         handle(format("%s [%s]=%s,",depth,k,v)) -- %.99g
                     end
                 elseif tk == "boolean" then
                     if hexify then
                         handle(format("%s [%s]=0x%X,",depth,k and "true" or "false",v))
+                    elseif accurate then
+                        handle(format("%s [%s]=%q,",depth,k and "true" or "false",v))
                     else
                         handle(format("%s [%s]=%s,",depth,k and "true" or "false",v)) -- %.99g
                     end
@@ -758,12 +730,16 @@ local function do_serialize(root,name,depth,level,indexed)
                 elseif noquotes and not reserved[k] and lpegmatch(propername,k) then
                     if hexify then
                         handle(format("%s %s=0x%X,",depth,k,v))
+                    elseif accurate then
+                        handle(format("%s %s=%q,",depth,k,v))
                     else
                         handle(format("%s %s=%s,",depth,k,v)) -- %.99g
                     end
                 else
                     if hexify then
                         handle(format("%s [%q]=0x%X,",depth,k,v))
+                    elseif accurate then
+                        handle(format("%s [%q]=%q,",depth,k,v))
                     else
                         handle(format("%s [%q]=%s,",depth,k,v)) -- %.99g
                     end
@@ -772,6 +748,8 @@ local function do_serialize(root,name,depth,level,indexed)
                 if tk == "number" then
                     if hexify then
                         handle(format("%s [0x%X]=%q,",depth,k,v))
+                    elseif accurate then
+                        handle(format("%s [%q]=%q,",depth,k,v))
                     else
                         handle(format("%s [%s]=%q,",depth,k,v))
                     end
@@ -789,6 +767,8 @@ local function do_serialize(root,name,depth,level,indexed)
                     if tk == "number" then
                         if hexify then
                             handle(format("%s [0x%X]={},",depth,k))
+                        elseif accurate then
+                            handle(format("%s [%q]={},",depth,k))
                         else
                             handle(format("%s [%s]={},",depth,k))
                         end
@@ -802,11 +782,13 @@ local function do_serialize(root,name,depth,level,indexed)
                         handle(format("%s [%q]={},",depth,k))
                     end
                 elseif inline then
-                    local st = is_simple_table(v,hexify)
+                    local st = is_simple_table(v,hexify,accurate)
                     if st then
                         if tk == "number" then
                             if hexify then
                                 handle(format("%s [0x%X]={ %s },",depth,k,concat(st,", ")))
+                            elseif accurate then
+                                handle(format("%s [%q]={ %s },",depth,k,concat(st,", ")))
                             else
                                 handle(format("%s [%s]={ %s },",depth,k,concat(st,", ")))
                             end
@@ -829,6 +811,8 @@ local function do_serialize(root,name,depth,level,indexed)
                 if tk == "number" then
                     if hexify then
                         handle(format("%s [0x%X]=%s,",depth,k,v and "true" or "false"))
+                    elseif accurate then
+                        handle(format("%s [%q]=%s,",depth,k,v and "true" or "false"))
                     else
                         handle(format("%s [%s]=%s,",depth,k,v and "true" or "false"))
                     end
@@ -850,6 +834,8 @@ local function do_serialize(root,name,depth,level,indexed)
                         if tk == "number" then
                             if hexify then
                                 handle(format("%s [0x%X]=load(%q),",depth,k,f))
+                            elseif accurate then
+                                handle(format("%s [%q]=load(%q),",depth,k,f))
                             else
                                 handle(format("%s [%s]=load(%q),",depth,k,f))
                             end
@@ -868,6 +854,8 @@ local function do_serialize(root,name,depth,level,indexed)
                 if tk == "number" then
                     if hexify then
                         handle(format("%s [0x%X]=%q,",depth,k,tostring(v)))
+                    elseif accurate then
+                        handle(format("%s [%q]=%q,",depth,k,tostring(v)))
                     else
                         handle(format("%s [%s]=%q,",depth,k,tostring(v)))
                     end
@@ -896,6 +884,7 @@ local function serialize(_handle,root,name,specification) -- handle wins
     if type(specification) == "table" then
         noquotes  = specification.noquotes
         hexify    = specification.hexify
+        accurate  = specification.accurate
         handle    = _handle or specification.handle or print
         functions = specification.functions
         compact   = specification.compact

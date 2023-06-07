@@ -17,9 +17,8 @@ maxprintline = 9999
 
 -- Set up the check system to work in 'stand-alone' mode
 -- This relies on a format being built by the 'base' dependency
-asciiengines   = asciiengines       or {"etex"}
-checkformat    = checkformat        or "latex"
-checkengines   = checkengines       or {"etex", "xetex", "luatex"}
+asciiengines   = asciiengines       or {"etex", "pdftex"}
+checkengines   = checkengines       or {"pdftex", "xetex", "luatex"}
 checkruns      = checkruns          or  2
 checksuppfiles = checksuppfiles     or
   {
@@ -39,7 +38,6 @@ checksuppfiles = checksuppfiles     or
     "luaotfload*.lua",
     "fixup_mathaxis.lua",
   }
-stdengine      = stdengine          or "etex"
 tagfiles       = tagfiles or {"*.dtx","*.ins","*.tex","README.md"}
 typesetsuppfiles = typesetsuppfiles or
   {"color.cfg", "graphics.cfg", "ltxdoc.cfg", "ltxguide.cfg"}
@@ -192,10 +190,9 @@ local function fmt(engines,dest)
 
   local function mkfmt(engine)
     -- Use .ini files if available
-    local src = "latex.ltx"
-    local ini = string.gsub(engine,"tex","") .. "latex.ini"
-    if fileexists(supportdir .. "/" .. ini) then
-      src = ini
+    local ini = string.gsub(engine,"tex","") .. "latex"
+    if ini == "elatex" then
+        ini = "latex"
     end
     local cmd = engine
     if engine == "luatex" then cmd = "luahbtex" end
@@ -207,17 +204,11 @@ local function fmt(engines,dest)
       os_setenv .. " LUAINPUTS=" .. unpackdir .. os_pathsep .. localdir
       .. os_pathsep .. texmfdir .. "//" .. (fmtsearch and os_pathsep or "")
       .. os_concat .. cmd .. " -etex -ini -output-directory=" .. unpackdir
-      .. " " .. src 
+      .. " " .. ini .. ".ini"
       .. (hide and (" > " .. os_null) or ""))
     if errorlevel ~= 0 then return errorlevel end
 
-    local engname = string.match(src,"^[^.]*") .. ".fmt"
-    local fmtname = string.gsub(engine,"tex$","") .. "latex.fmt"
-    if engine == "etex" then fmtname = "latex.fmt" end
-    if engname ~= fmtname then
-      ren(unpackdir,engname,fmtname)
-    end
-    cp(fmtname,unpackdir,dest)
+    cp(ini .. ".fmt",unpackdir,dest)
 
     return 0
   end

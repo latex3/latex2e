@@ -87,11 +87,14 @@ l3build save -cconfig-lthooks \
    lthooks-030 \
    lthooks-031 \
    lthooks-032 \
+   lthooks-033 \
+   lthooks-034 \
    lthooks-errors \
    lthooks-errors-deprecated \
    lthooks-etoolbox \
    lthooks-legacy \
    lthooks-doc-examples \
+   lthooks-rollback-args \
    shipout-000 \
    shipout-002 \
    shipout-004 \

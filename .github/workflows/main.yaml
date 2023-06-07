@@ -13,6 +13,23 @@ on:
 # requests get tested even if their branch comes from a fork.
 
 jobs:
+  # Update the TeX Live tree if necessary
+  texlive-cache:
+    runs-on: ubuntu-20.04
+    name: Update TeX Live
+    outputs:
+      cache_key: ${{ steps.texlive.outputs.cache_key }}
+    steps:
+      # Boilerplate
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Install TeX Live
+        id: texlive
+        uses: zauguin/install-texlive@v3
+        with:
+          # List the required TeX Live packages in a separate file to allow reuse in
+          # different workflows.
+          package_file: .github/tl_packages
   # The l3build job contains the actual work. We misuse the matrix mechanism to
   # create three jobs which only differ in minimal elements.
   # For tags we do not run this since we run the release job instead.
@@ -29,65 +46,126 @@ jobs:
         # generate the artifact from PDF files and not the build directory and
         # to generate the artifact when the run is successful, not when it fails.
         include:
-          - name: "Tests: base"
-            l3build_cmd: cd base && l3build check -q --show-log-on-error
-            artifact_name: testfiles
-          - name: "Tests: required"
-            l3build_cmd: cd required && l3build check -q --show-log-on-error
-            artifact_name: testfiles
-          - name: "Documentation"
-            l3build_cmd: l3build doc -q -H --show-log-on-error
-            artifact_name: Documentation
-    name: ${{ matrix.name }}
+          - module: base
+            config: build
+            engine: pdftex
+          - module: base
+            config: build
+            engine: xetex
+          - module: base
+            config: build
+            engine: luatex
+            extra_command: kpsewhich -mktex=tfm -must-exist ecssdc10.tfm
+          - module: base
+            config: config-1run
+          - module: base
+            config: config-TU
+          - module: base
+            config: config-legacy
+          - module: base
+            config: config-lthooks
+          - module: base
+            config: config-lthooks2
+          - module: base
+            config: config-ltcmd
+          - module: base
+            config: config-doc
+          - module: base
+            config: config-ltmarks
+          - module: required/amsmath
+          - module: required/cyrillic
+          - module: required/firstaid
+          - module: required/graphics
+          - module: required/latex-lab
+            config: build
+          - module: required/latex-lab
+            config: config-OR
+          - module: required/latex-lab
+            config: config-mathtagging
+          - module: required/latex-lab
+            config: config-OR-luatex
+          - module: required/latex-lab
+            config: config-sec
+          - module: required/latex-lab
+            config: config-toc
+          - module: required/latex-lab
+            config: config-block-tagging
+          - module: required/latex-lab
+            config: config-LM-tagging
+          - module: required/latex-lab
+            config: config-graphic
+          - module: required/latex-lab
+            config: config-minipage  
+          - module: required/latex-lab
+            config: config-float
+          - module: required/latex-lab
+            config: config-bib              
+          - module: required/tools
+    name: "Tests: ${{ matrix.module }}${{ matrix.config && format(' - {0}', matrix.config) || ''}}${{ matrix.engine && format(' - {0}', matrix.engine) || ''}}"
+    needs: texlive-cache
     steps:
       # Boilerplate
       - name: Checkout repository
-        uses: actions/checkout@v2
-      # GitHub Actions don't regenerate the test if the key doesn't change, so
-      # we integrate a random UUID into the key to keep them different.
-      # DO NOT CHANGE THIS
-      - name: Generate unique ID
-        id: get-id
-        run: |
-          echo -n ::set-output name=id::
-          cat /proc/sys/kernel/random/uuid
-      # Actually load the cache. Since we never reuse the key, we need restore-keys
-      # to indicate the prefix of our caches. This loads the newest cache with this
-      # prefix in the key.
-      #
-      # If we want to force regeneration of the cache, increase the number after
-      # *both* instances of "texlive-v"
-      - name: Load cache
-        uses: actions/cache@v2
-        with:
-          path: ~/texlive
-          key: texlive2022-v0-${{ steps.get-id.outputs.id }}
-          restore-keys: texlive2022-v0-
+        uses: actions/checkout@v3
       # We need Ghostscript for dvips and XeTeX tests.
       - run: sudo apt-get update && sudo apt-get install ghostscript
-      - name: Install TeX Live
-        uses: zauguin/install-texlive@v1
+      - name: Restore TeX Live from cache
+        uses: actions/cache/restore@v3
         with:
-          # List the required TeX Live packages in a separate file to allow reuse in
-          # different workflows.
-          package_file: .github/tl_packages
+          path: ~/texlive
+          key: ${{ needs.texlive-cache.outputs.cache_key }}
+          fail-on-cache-miss: true
+      - run: echo $HOME/texlive/bin/x86_64-linux >> $GITHUB_PATH
+      - if: ${{ matrix.extra_command }}
+        run: ${{ matrix.extra_command }}
       - name: Run l3build
-        run: ${{ matrix.l3build_cmd }}
-      # Now we create the artifacts: There are two cases where this happens.
-      # 1. If we failed running tests
+        working-directory: ${{ matrix.module }}
+        run: "l3build check -q --show-log-on-error${{ matrix.config && format(' -c {0}', matrix.config) || ''}}${{ matrix.engine && format(' -e {0}', matrix.engine) || ''}}"
+      # Now we create the artifacts for the logs of failed tests
       - name: Archive failed test output
         if: ${{ always() }}
         uses: zauguin/l3build-failure-artifacts@v1
         with:
-          name: ${{ matrix.artifact_name }}
+          name: testfiles
           # Decide how long to keep the test output artifact:
           retention-days: 3
-      # 2. If we succeed building documentation
-      - name: Archive documentation
-        if: ${{ matrix.artifact_name == 'Documentation' && success() }}
-        uses: actions/upload-artifact@v2
+  docs:
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        include:
+          - module: base
+            environment: LTX_DOC_COMPONENT=1
+          - module: base
+            environment: LTX_DOC_COMPONENT=2
+          - module: base
+            environment: LTX_DOC_COMPONENT=3
+          - module: required
+    name: "Documentation: ${{ matrix.module }}"
+    needs: texlive-cache
+    steps:
+      # Boilerplate
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      # We need Ghostscript for dvips and XeTeX tests.
+      - run: sudo apt-get update && sudo apt-get install ghostscript
+      - name: Restore TeX Live from cache
+        uses: actions/cache/restore@v3
         with:
-          name: ${{ matrix.artifact_name }}
+          path: ~/texlive
+          key: ${{ needs.texlive-cache.outputs.cache_key }}
+          fail-on-cache-miss: true
+      - run: echo $HOME/texlive/bin/x86_64-linux >> $GITHUB_PATH
+      - if: ${{ matrix.environment }}
+        run: echo "${{ matrix.environment }}" >> $GITHUB_ENV
+      - name: Run l3build
+        working-directory: ${{ matrix.module }}
+        run: l3build doc -q -H --show-log-on-error
+      # Now we create the artifacts for the generated documentation
+      - name: Archive documentation
+        uses: actions/upload-artifact@v3
+        with:
+          name: Documentation
           path: "**/*.pdf"
           # Decide how long to keep the test output artifact:
           retention-days: 21
@@ -98,7 +176,9 @@ jobs:
     name: Send notifications
     runs-on: ubuntu-20.04
     # Run after the `l3build` job in order to be able to react to it's output.
-    needs: l3build
+    needs: 
+      - l3build
+      - docs
     # Only run if the tests failed, we don't want to get notifications for every run.
     # We don't want information for pull requests since for pull requests from local
     # branches we already send notifications when the branch test fails and pull requests
@@ -108,7 +188,7 @@ jobs:
       - name: Send mail
         # The explicit commit hash ensures that this can't be used by dawidd6 as a
         # backdoor to execute arbitrary code during our runs.
-        uses: dawidd6/action-send-mail@ceb614a2c5737d913f2d2729e2bcc70ad933382b
+        uses: dawidd6/action-send-mail@6063705cefe50cb915fc53bb06d4049cae2953b2
         with:
           # Currently using my (Marcel's) mail server for sending mails.
           server_address: typesetting.eu

@@ -1,5 +1,6 @@
 if not modules then modules = { } end modules ['font-one'] = {
     version   = 1.001,
+    optimize  = true,
     comment   = "companion to font-ini.mkiv",
     author    = "Hans Hagen, PRAGMA-ADE, Hasselt NL",
     copyright = "PRAGMA ADE / ConTeXt Development Team",
@@ -591,15 +592,18 @@ local function copytotfm(data)
         parameters.descender  = abs(metadata.descender or 0)
         parameters.units      = 1000
         --
-        properties.spacer        = spacer
+        properties.spacer   = spacer
+        properties.format   = fonts.formats[filename] or "type1"
+        properties.filename = filename
+        properties.fontname = fontname
+        properties.fullname = fullname
+        properties.psname   = fullname
+        properties.name     = filename or fullname or fontname
+        properties.private  = properties.private or data.private or privateoffset
+        --
+if not CONTEXTLMTXMODE or CONTEXTLMTXMODE == 0 then
         properties.encodingbytes = 2
-        properties.format        = fonts.formats[filename] or "type1"
-        properties.filename      = filename
-        properties.fontname      = fontname
-        properties.fullname      = fullname
-        properties.psname        = fullname
-        properties.name          = filename or fullname or fontname
-        properties.private       = properties.private or data.private or privateoffset
+end
         --
         if next(characters) then
             return {
@@ -723,6 +727,7 @@ local function read_from_afm(specification)
     local tfmdata = afmtotfm(specification)
     if tfmdata then
         tfmdata.properties.name = specification.name
+        tfmdata.properties.id   = specification.id
         tfmdata = constructors.scale(tfmdata, specification)
         local allfeatures = tfmdata.shared.features or specification.features.normal
         constructors.applymanipulators("afm",tfmdata,allfeatures,trace_features,report_afm)

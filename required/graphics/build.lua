@@ -17,6 +17,8 @@ installfiles = {"*.def", "*.sty", "mathcolor.ltx"}
 typesetfiles = {"*.dtx", "*.tex"}
 docfiles     = {"cat.eps"}
 
+checkengines = {"etex","xetex"}
+
 checkdeps =
   {
     maindir .. "/base",

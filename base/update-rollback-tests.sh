@@ -1,4 +1,4 @@
-l3build save -eetex,xetex,luatex \
+l3build save -epdftex,xetex,luatex \
 	tlb-latexrelease-rollback-2020-10-01 \
 	tlb-latexrelease-rollback-2021-06-01 \
 	tlb-latexrelease-rollback-2021-11-15 \
@@ -9,6 +9,11 @@ l3build save -eetex,xetex,luatex \
 	tlb-rollback-005 \
 	github-0479-often
 
+l3build save  \
+	tlb-latexrelease-rollback-2023-06-01
+
+l3build save -c config-lthooks \
+	lthooks-rollback-args
 
 
 exit

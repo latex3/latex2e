@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-%% File: latex2e-first-aid-for-external-files.dtx (C) Copyright 2020-2022
+%% File: latex2e-first-aid-for-external-files.dtx (C) Copyright 2020-2023
 %%
 %% The LaTeX Project and any individual authors listed elsewhere
 %% in this file.
@@ -65,7 +65,7 @@
 %
 %    For that reason, it is put into a separate bundle so that we can
 %    update it easily without requiring the CTAN maintainers to
-%    install a new full LaTeX system just because we take out (or add)
+%    install a new full \LaTeX{} system just because we take out (or add)
 %    a fix for a package here.
 %
 %    In the best case scenario the file documented here should be
@@ -111,8 +111,8 @@
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-\def\LaTeXFirstAidDate{2022/10/29}
-\def\LaTeXFirstAidVersion{v1.0u}
+\def\LaTeXFirstAidDate{2023/05/20}
+\def\LaTeXFirstAidVersion{v1.0z}
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -353,6 +353,20 @@
 %    \end{macrocode}
 %
 %
+% \subsection{The \pkg{unicode-math} package first aid}
+%
+%    If \pkg{unicode-math} is used together with \pkg{doc} there is a
+%    problem because it changes the mathcodes without adjusting the
+%    use in \pkg{doc} that assume standard settings. Could be fixed on
+%    either side, but as \pkg{unicode-math} is derivating from the
+%    standard, the right place is probably a fix in this package. For
+%    now we do it here. See github/820.
+%    \begin{macrocode}
+\AddToHook{package/unicode-math/after}{%
+  \AddToHook{cmd/mod@math@codes/after}{\mathcode`\|=28796 }}
+%    \end{macrocode}
+%
+%
 %
 %
 % \subsection{The \pkg{pgfpages} and \pkg{pgfmorepages} first aid}
@@ -411,13 +425,62 @@
 \AddToHook{file/babel.sty/before}[firstaid]{\def\BabelCaseHack{}}
 %    \end{macrocode}
 %
+%
+% \subsection{The \pkg{songs} package first aid}
+%
+%    The songs package uses \cs{obeylines} and redefines \cs{par} for special effect.
+%    this no longer works in \LaTeX{} 2022-06-01 (gh issue 367). The following
+%    fixes at least one failure.
+%    \begin{macrocode}
+\AddToHook{file/songs.sty/after}[firstaid]{%
+  \FirstAidNeededT{songs}{sty}{2018/09/12 v3.1 Songs package}%
+                  {%
+     \renewcommand\SB@obeylines{%
+         \let\obeyedline\SB@par%
+         \obeylines%
+         \let\@par\SB@@par%
+       }}%
+}
+%    \end{macrocode}
+%
+% \subsection{The \pkg{crop} package first aid}
+%
+%    The crop packages fails currently due to two \LaTeX{} changes:
+%    It doesn't know that \cs{stockheight} and \cs{stockwidth} 
+%    are now defined, and doesn't take into account that \cs{rlap}
+%    is robust (https://github.com/rrthomas/crop/issues/2).
+%    The first is addressed by setting the dimension if they are zero or
+%    negative. For the second we locally change the meaning of \cs{protect}
+%    
+%    \begin{macrocode}
+\AddToHook{file/crop.sty/after}[firstaid]{%
+  \FirstAidNeededT{crop}{sty}{2017/11/19 1.10 crop marks (mf)}%
+                  {%
+  \ifdim\stockwidth  > 0pt \else \stockwidth\paperwidth \fi  
+  \ifdim\stockheight > 0pt \else \stockheight\paperheight \fi 
+  \renewcommand*\CROP@genreflect[1]{%
+    \leavevmode
+    \dimen0\CROP@horigin
+    \kern2\dimen0
+    \begingroup 
+    \set@typeset@protect %change protect
+    \reflectbox{%
+        \hb@xt@\paperwidth{%
+            \vbox to\paperheight{%
+                #1%
+                \vss
+            }%
+            \hss
+        }%
+    }%
+   \endgroup
+   }
+  }%
+}
+%    \end{macrocode}
 %    \begin{macrocode}
 %</kernel>
 %    \end{macrocode}
-%
-%
-%
-%
 %
 % \subsection{The \pkg{everysel} package first aid}
 %     
@@ -612,63 +675,6 @@
 %    \end{macrocode}
 %
 %
-% \subsection[Temporary fixes for the kernel (until the next
-%             patch-level release)]
-%    {Temporary fixes for the kernel \\
-%     (until the next patch-level release)}
-%
-% This fixes GitHub issue 591. It is only needed in Lua\TeX\ and replaces just one
-% instance of \cs{tex\_par:D} with the following version which removes
-% other nodes in the current list first.
-%    \begin{macrocode}
-\ExplSyntaxOn
-\sys_if_engine_luatex:T
-  {
-    \newluafunction \g__para_end_empty_par_id_int
-    \exp_args:Nx \everyjob {
-      \exp_not:V \everyjob
-      \exp_not:N \lua_now:n {
-        local~texnest, flush_list, par_token = tex.nest, node.flush_list, token.create'tex_par:D'~
-        lua.get_functions_table()[\int_use:N \g__para_end_empty_par_id_int] = function()
-          local~nest_level = texnest.top~
-          local~cur_head = nest_level.head~
-          flush_list(cur_head.next)
-          nest_level.tail, cur_head.next = cur_head, nil~
-          token.put_next(par_token)
-        end
-      }
-    }
-    \protected \luadef \__para_end_empty_par: \g__para_end_empty_par_id_int
-    \group_begin:
-    \cs_set:Npn \__para_extract_everypar:w #1 \the \toks #2 \s_stop
-      {
-        \tl_gset:Nn \g__para_standard_everypar_tl {
-          \box_gset_to_last:N \g_para_indent_box
-          \group_begin:
-            \__para_end_empty_par:
-          \group_end:
-          \tex_everypar:D { \msg_error:nnnn { hooks }{ para-mode }{before}{vertical} }
-          \@kernel@before@para@before
-          \hook_use:n {para/before}
-          \group_begin:
-            \tex_everypar:D {}
-            \skip_zero:N \tex_parskip:D
-            \tex_noindent:D
-          \group_end:
-          \tex_everypar:D{\g__para_standard_everypar_tl}
-          \@kernel@before@para@begin
-          \hook_use:n {para/begin}
-          \if_mode_horizontal: \else:
-            \msg_error:nnnn { hooks }{ para-mode }{begin}{vertical} \fi:
-          \__para_handle_indent:
-          \the \toks #2
-        }
-      }
-    \exp_last_unbraced:No \__para_extract_everypar:w \g__para_standard_everypar_tl \s_stop
-    \group_end:
-  }
-\ExplSyntaxOff
-%    \end{macrocode}
 %
 %
 %    \begin{macrocode}

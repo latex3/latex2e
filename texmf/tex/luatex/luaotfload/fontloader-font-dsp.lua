@@ -1,5 +1,6 @@
 if not modules then modules = { } end modules ['font-dsp'] = {
     version   = 1.001,
+    optimize  = true,
     comment   = "companion to font-ini.mkiv",
     author    = "Hans Hagen, PRAGMA-ADE, Hasselt NL",
     copyright = "PRAGMA ADE / ConTeXt Development Team",
@@ -302,7 +303,7 @@ end)
 -- values can be anything the min/max permits so we can either think of
 -- real values of a fraction along the axis (probably easier)
 
--- wght:400,wdth:100,ital:1
+-- wght=400,wdth=100,ital=1
 
 local function axistofactors(str)
     local t = settings_to_hash(str)
@@ -502,7 +503,7 @@ local function readvariationdata(f,storeoffset,factors) -- store
         regions[i] = t
     end
     -- deltas
-    if factors then
+ -- if factors then
         for i=1,nofdeltadata do
             setposition(f,storeoffset+deltadata[i])
             local nofdeltasets = readushort(f)
@@ -527,7 +528,7 @@ local function readvariationdata(f,storeoffset,factors) -- store
                 scales  = factors and getscales(usedregions,factors) or nil,
             }
         end
-    end
+ -- end
     setposition(f,position)
     return regions, deltadata
 end
@@ -822,7 +823,7 @@ end
 
 -- quite often 0, 1, 2
 
-function readarray(f,offset)
+local function readarray(f,offset)
     if offset then
         setposition(f,offset)
     end
@@ -2514,7 +2515,9 @@ do
             local scriptoffset     = tableoffset + readushort(f)
             local featureoffset    = tableoffset + readushort(f)
             local lookupoffset     = tableoffset + readushort(f)
-            local variationsoffset = version > 0x00010000 and (tableoffset + readulong(f)) or 0
+            -- MFK : Rubik-Regular.ttf : we need to delay adding the offset
+         -- local variationsoffset = version > 0x00010000 and (tableoffset + readulong(f)) or 0
+            local variationsoffset = version > 0x00010000 and readulong(f) or 0
             if not scriptoffset then
                 return
             end
@@ -2540,7 +2543,8 @@ do
             end
             --
             if variationsoffset > 0 then
-                loadvariations(f,fontdata,variationsoffset,lookuptypes,featurehash,featureorder)
+             -- loadvariations(f,fontdata,variationsoffset,lookuptypes,featurehash,featureorder)
+                loadvariations(f,fontdata,tableoffset + variationsoffset,lookuptypes,featurehash,featureorder)
             end
         end
     end
@@ -3159,6 +3163,14 @@ function readers.cpal(f,fontdata,specification)
     end
 end
 
+local compress   = gzip and gzip.compress
+local compressed = compress and gzip.compressed
+
+-- At some point I will delay loading and only store the offsets (in context lmtx
+-- only).
+
+-- compressed = false
+
 function readers.svg(f,fontdata,specification)
     local tableoffset = gotodatatable(f,fontdata,"svg",specification.glyphs)
     if tableoffset then
@@ -3184,10 +3196,14 @@ function readers.svg(f,fontdata,specification)
         for i=1,nofentries do
             local entry = entries[i]
             setposition(f,entry.offset)
+            local data = readstring(f,entry.length)
+            if compressed and not compressed(data) then
+                data = compress(data)
+            end
             entries[i] = {
                 first = entry.first,
                 last  = entry.last,
-                data  = readstring(f,entry.length)
+                data  = data
             }
         end
         fontdata.svgshapes = entries
@@ -3225,7 +3241,8 @@ function readers.sbix(f,fontdata,specification)
                 return b.ppem < a.ppem
             end
         end)
-        local glyphs = { }
+        local glyphs  = { }
+        local delayed = CONTEXTLMTXMODE and CONTEXTLMTXMODE > 0 or fonts.handlers.typethree
         for i=1,nofstrikes do
             local strike       = strikes[i]
             local strikeppem   = strike.ppem
@@ -3242,13 +3259,28 @@ function readers.sbix(f,fontdata,specification)
                     local datasize = nextoffset - glyphoffset
                     if datasize > 0 then
                         setposition(f,strikeoffset + glyphoffset)
+                        local x      = readshort(f)
+                        local y      = readshort(f)
+                        local tag    = readtag(f) -- or just skip, we never needed it till now
+                        local size   = datasize - 8
+                        local data   = nil
+                        local offset = nil
+                        if delayed then
+                            offset = getposition(f)
+                            data   = nil
+                        else
+                            data   = readstring(f,size)
+                            size   = nil
+                        end
                         shapes[i] = {
-                            x    = readshort(f),
-                            y    = readshort(f),
-                            tag  = readtag(f), -- maybe for tracing
-                            data = readstring(f,datasize-8),
-                            ppem = strikeppem, -- not used, for tracing
-                            ppi  = strikeppi,  -- not used, for tracing
+                            x    = x,
+                            y    = y,
+                            o    = offset,
+                            s    = size,
+                            data = data,
+                         -- tag  = tag, -- maybe for tracing
+                         -- ppem = strikeppem, -- not used, for tracing
+                         -- ppi  = strikeppi,  -- not used, for tracing
                         }
                         done = done + 1
                         if done == nofglyphs then
@@ -3450,32 +3482,48 @@ do
 
             local default = { width = 0, height = 0 }
             local glyphs  = fontdata.glyphs
+            local delayed = CONTEXTLMTXMODE and CONTEXTLMTXMODE > 0 or fonts.handlers.typethree
 
             for index, subtable in sortedhash(shapes) do
                 if type(subtable) == "table" then
                     local data    = nil
+                    local size    = nil
                     local metrics = default
                     local format  = subtable.format
                     local offset  = subtable.offsets[index]
                     setposition(f,offset)
                     if format == 17 then
                         metrics = getsmallmetrics(f)
-                        data    = readstring(f,readulong(f))
+                        size    = true
                     elseif format == 18 then
                         metrics = getbigmetrics(f)
-                        data    = readstring(f,readulong(f))
+                        size    = true
                     elseif format == 19 then
                         metrics = subtable.metrics
-                        data    = readstring(f,readulong(f))
+                        size    = true
                     else
                         -- forget about it
+                    end
+                    if size then
+                        size = readulong(f)
+                        if delayed then
+                            offset = getposition(f)
+                            data   = nil
+                        else
+                            offset = nil
+                            data   = readstring(f,size)
+                            size   = nil
+                        end
+                    else
+                        offset = nil
                     end
                     local x = metrics.width
                     local y = metrics.height
                     shapes[index] = {
-                        -- maybe some metrics
                         x    = x,
                         y    = y,
+                        o    = offset,
+                        s    = size,
                         data = data,
                     }
                     -- I'll look into this in more details when needed
@@ -3486,12 +3534,11 @@ do
                         local height = width * y/x
                         glyph.boundingbox = { 0, 0, width, height }
                     end
-
                 else
                     shapes[index] = {
                         x    = 0,
                         y    = 0,
-                        data = "",
+                        data = "", -- or just nil
                     }
                 end
             end
@@ -3762,6 +3809,7 @@ function readers.hvar(f,fontdata,specification)
     end
     local tableoffset = gotodatatable(f,fontdata,"hvar",specification.variable)
     if not tableoffset then
+        report("no hvar table, expect problems due to messy widths")
         return
     end
 
@@ -3775,11 +3823,11 @@ function readers.hvar(f,fontdata,specification)
     local variations = { }
     local innerindex = { } -- size is mapcount
     local outerindex = { } -- size is mapcount
+    local deltas     = { }
 
     if variationoffset > 0 then
         regions, deltas = readvariationdata(f,variationoffset,factors)
     end
-
     if not regions then
         -- for now .. what to do ?
         return

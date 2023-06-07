@@ -20,6 +20,8 @@ end
 
 local md5, file = md5, file
 local gsub = string.gsub
+local modification, isfile, touch = lfs.modification, lfs.isfile, lfs.touch
+local loaddata, savedata = io.loaddata, io.savedata
 
 -- local gsub, format, byte = string.gsub, string.format, string.byte
 --
@@ -55,10 +57,12 @@ do
 
 end
 
+local md5HEX = md5.HEX
+
 function file.needsupdating(oldname,newname,threshold) -- size modification access change
-    local oldtime = lfs.attributes(oldname,"modification")
+    local oldtime = modification(oldname)
     if oldtime then
-        local newtime = lfs.attributes(newname,"modification")
+        local newtime = modification(newname)
         if not newtime then
             return true -- no new file, so no updating needed
         elseif newtime >= oldtime then
@@ -76,34 +80,36 @@ end
 file.needs_updating = file.needsupdating
 
 function file.syncmtimes(oldname,newname)
-    local oldtime = lfs.attributes(oldname,"modification")
-    if oldtime and lfs.isfile(newname) then
-        lfs.touch(newname,oldtime,oldtime)
+    local oldtime = modification(oldname)
+    if oldtime and isfile(newname) then
+        touch(newname,oldtime,oldtime)
     end
 end
 
-function file.checksum(name)
+local function checksum(name)
     if md5 then
-        local data = io.loaddata(name)
+        local data = loaddata(name)
         if data then
-            return md5.HEX(data)
+            return md5HEX(data)
         end
     end
     return nil
 end
 
+file.checksum = checksum
+
 function file.loadchecksum(name)
     if md5 then
-        local data = io.loaddata(name .. ".md5")
+        local data = loaddata(name .. ".md5")
         return data and (gsub(data,"%s",""))
     end
     return nil
 end
 
 function file.savechecksum(name,checksum)
-    if not checksum then checksum = file.checksum(name) end
+    if not checksum then checksum = checksum(name) end
     if checksum then
-        io.savedata(name .. ".md5",checksum)
+        savedata(name .. ".md5",checksum)
         return checksum
     end
     return nil
