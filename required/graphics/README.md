@@ -61,4 +61,4 @@ of the package.
 
 -----
 
-<p>Copyright (C) 1993-2022 The LaTeX Project <br />
+<p>Copyright (C) 1993-2023 The LaTeX Project <br />
