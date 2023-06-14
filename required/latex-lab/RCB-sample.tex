@@ -1,0 +1,473 @@
+\documentclass{article}
+
+
+\ExplSyntaxOn
+
+% Declaring a RCB creates a str to hold the name (a pointer) to the code
+% that should be used when the RCB is used, and an integer to hold the
+% number of arguments of that RCB.  Initially, an "unassigned" code
+% chunk is created and assigned so the RCB cannot be used without a
+% proper code block being assigned.
+
+\cs_new_protected:Npn \RCB_new:nn #1 #2 {
+  \str_if_exist:cTF { g__RCB_#1_code_str }
+      {
+        \errmessage { RCB~ '#1'~ already~ declared! }
+      }
+      {
+        \str_new:c { g__RCB_#1_code_str }
+        \int_const:cn { c__RCB_#1_args_int } {#2}
+        \DeclareRCBCode {#1} { __RCB_unassigned:w }
+                        { \errmessage { No~RCB~code~for~'#1'~assigned! } }
+        \AssignRCBcode {#1} { __RCB_unassigned:w }
+      }
+}
+
+% Declaring a code for an RCB is just doing a definition, taking the
+% number of arguments from the saved int.
+
+\cs_new_protected:Npn \RCB_new_code:nnn #1 #2 #3 {
+  \str_if_exist:cTF { g__RCB_#1_code_str }
+      {
+        \cs_generate_from_arg_count:cNnn
+           { __RCB_#1_code_#2:w }
+           \cs_new_protected:Npn
+           { \int_use:c { c__RCB_#1_args_int } }
+           {#3}
+      }
+      {
+        \errmessage { RCB~ '#1'~ not~ declared! }
+      }
+}
+
+
+
+% Assigning a RCB just changes the name in the RCB string.
+
+\cs_new_protected:Npn \RCB_assign_code:nn #1 #2 {
+  \str_if_exist:cTF { g__RCB_#1_code_str }
+      {
+        \cs_if_exist:cTF { __RCB_#1_code_#2:w }
+          {
+            \str_gset:cn { g__RCB_#1_code_str } {#2}
+          }
+          {
+            \errmessage { RCB~ instance~ '#2'~ for~ RCB~ '#1'~ not~ declared! }
+          }
+      }
+      {
+        \errmessage { RCB~ '#1'~ not~ declared! }
+      }
+}
+        
+
+% And using it is just a \csname...\endcsname. We do not add a runtime
+% check for speed reasons!
+
+\cs_new_protected:Npn \RCB_use:n #1 {
+  \use:c { __RCB_#1_code_ \str_use:c { g__RCB_#1_code_str } :w }
+}
+
+
+\cs_new_eq:NN \NewRCB         \RCB_new:nn 
+
+\cs_new_eq:NN \DeclareRCBCode \RCB_new_code:nnn
+
+\cs_new_eq:NN \AssignRCBcode  \RCB_assign_code:nn
+
+\cs_new_eq:NN \UseRCB         \RCB_use:n
+
+\ExplSyntaxOff
+
+\usepackage[T1]{fontenc}
+\usepackage{csquotes}
+
+\newcommand\pkg[1]{\texttt{#1}}
+\newcommand\cs[1]{\texttt{\textbackslash #1}}
+\newcommand\meta[1]{\textlangle\textit{#1}\textrangle}
+\newcommand\marg[1]{\texttt\{\meta{#1}\texttt\}}
+
+
+\begin{document}
+
+
+\title{Replaceable Code Blocks (RCBs)}
+\author{Frank Mittelbach}
+\date{2023-06-12}
+
+\maketitle
+
+\tableofcontents
+
+\section{Introduction}
+
+A \LaTeX{} source file is transformed into a typeset document by
+executing code for each command or environment in the document
+source. Through various steps this code transforms the input and
+eventually generates typeset output appearing in a \enquote{galley}
+from which individual pages are cut off in an asyncronous way. This
+page generating process is normally not directly associated with
+commands in the input\footnote{Excepts for directives such as
+  \cs{newpage}.} but is triggered whenever the galley has received
+enough material to form another page (giving current settings).
+
+As part of this transformation input data may get stored in some form
+and later reused, for example, as part of the output routine
+processing.
+
+\section{Configuration of the transformation process}
+
+There are three different major methods offered by \LaTeX to configure
+the transformation process:
+\begin{itemize}
+\item through the template mechanism,
+\item through the hook mechanism, or
+\item through replaceable code blocks.
+\end{itemize}
+They offer different possibilities (with different features and
+limitations) and are intended for specific use cases, though it is
+possible to combine them.
+
+\subsection{The template mechanism}
+
+The template mechanism is intended for more complex document-level
+elements (e.g., headings such as \verb=\section= or environments like
+\texttt{itemize}). The template code implements the overall processing
+logic for such an element and offers a set of parameters to influence
+the final result.
+
+The document element is then implemented by a) selecting a suitable
+template (there may be more than one available for the kind of
+document element) and b) by setting its parameters to desired
+values. This then forms a so-called instance which is executed when
+the document element is found in the source.
+
+By altering the parameter values (in a document class or in the
+document preamble) or, if more drastic layout changes are desired, by
+selecting a different template and then adjusting its parameters, a
+wide variety of layouts can be realized through simple configuration
+setups without the need to develop new code.
+
+The target audience of this method are therefore document class
+developers or users who wish to alter an existing layout (implemented
+by a document class) in certain (minor) ways.
+
+The template mechanism is currently documented as part of the
+\pkg{xtemplate} package and one more elaborate implementation can be
+found as part of the \texttt{latex-lab} code for lists (to be
+documented further).
+
+\subsection{The hook mechanism}
+
+Hooks are places in the kernel  code (or in packages) that offer
+packages to inject additional code at specific points in the
+processing in a controlled way without the need to replace the
+existing code block (and thereby overwriting modifications/extensions
+made by other packages). The target audience is therefore mainly
+package developers, even though some hooks can be useful for document
+authors.
+
+Obviously, what can reasonably be added into a hook depends on the
+individual hook (hopefully documented as part of the hook
+documentation) but in general the idea behind hooks is that more than
+one package could add code into the hook at the same time. Perhaps the
+most famous hook (that \LaTeX{} had for a very long time) is
+\texttt{begindocument} into which many packages add code to through
+\cs{AtBeginDocument}\marg{code} (which is nowadays implemented as a
+shorthand for \cs{AddToHook}\texttt{\{begindocument\}}\marg{code}). To
+resolve possible conflicts between injections by different packages
+there is a rule mechanism by which code chunks in a hook can be
+ordered in a certain way and by which incompatible packages can be
+detected if a resolution is impossible.
+
+In contrast to template code, there is no standard configuration method
+through parameters for hooks, i.e., the code added to a hook \enquote{is} the
+configuration. If it provides for configuration through parameters it
+has to also provide its own method to set such parameters in some way.
+
+In most cases, hooks do not take any arguments as input. Instead, the data
+that they can (and are allowed to) access depends on the surrounding
+context.
+
+For example, the various hooks available during the page shipout
+process in \LaTeX's output routine can (and have to) access the
+accumulated page material stored in a box named
+\verb=\ShipoutBox=. This way, code added to, say, the
+\texttt{shipout/before} hook could access the page content, alter it,
+and then write it back into \verb=\ShipoutBox= and any other code
+added to this hook could then operate on the modified content.  Of
+course, for such a scheme to work the code prior to executing the hook
+would need to setup up data in appropriate places and the hook
+documentation would need to document what kind of storage can be
+accessed (and possibly altered) by the hook.
+
+There are also hooks that take arguments (typically portions of
+document data) and in that case the hook code can access these
+arguments through \verb=#1=, \verb=#2=, etc.
+
+The hook mechanism is documented in \texttt{lthooks-doc.pdf}.
+
+\subsection{The replaceable code blocks}
+
+In some cases there is code that implements a certain programming
+logic (for example, combining footnotes, floats, and the text for the
+current page to be shipped out) and if this logic should change (e.g.,
+footnotes to be placed above bottom floats instead of below) then this
+whole code (block) needs to be replaced with different code.
+
+In theory, this could be implemented with templates, i.e., the code
+simply calls some instance that implements the logic and that instance
+is altered by selecting a different templates and/or adjusting their
+parameters. However, in many cases customization through parameters is
+overkill in such a case (or otherwise awkward, because paramerization
+is better done on a higher level instead of individually for small
+blocks of code) and using the template mechanism just to replace one
+block of code with a different one results in a fairly high
+performance hit. It is therefore usually not a good choice.
+
+In theory, it would also be possible to use a hook, but again that is
+basically a misuse of the concept, because in this case there should
+never be more that one block of code inside the hook, so that to alter
+the processing logic one would need to set up rules that replace code
+rather than (as intended) execute all code added to the hook.
+
+
+
+For this reason \LaTeX{} now offers a third mechanism:
+\enquote{replaceable code blocks} (or RCBs for short).
+%
+In a nutshell: instead of having a fixed code block somewhere as part
+of the code, implementing a certain programming logic there is a
+reference to a named RCB in this place.
+
+This is done by first declaring the named RCS with:
+\begin{quote}
+\cs{NewRCB}\marg{RCB-name}\marg{number-of-arguments}
+\end{quote}
+This is then referenced at the point where the replaceable code block
+should be executed with:
+\begin{quote}
+ \cs{UseRCB}\marg{RCB-name}
+\end{quote}
+or, if the RCB should take a number of arguments with
+\begin{quote}
+  \cs{UseRCB}\marg{RCB-name}\marg{arg\textsubscript{1}}\ldots
+  \marg{arg\textsubscript{number-of-arguments}}
+\end{quote}
+
+In addition, several code blocks implementing different logic for this
+RCB are set up (each with a declaration of the form:
+\begin{quote}
+  \cs{DeclareRCBCode}\marg{RCB-name}\marg{instance-name}\marg{code})
+\end{quote}
+Finally,
+one of them is assigned to the RCB:
+\begin{quote}
+\cs{AssignRCBcode}\marg{RCB-name}\marg{instance-name}
+\end{quote}
+If the programming logic should change, then all that is necessary is
+to make a new assignment with \cs{AssignRCBcode} to a different
+\marg{instance-name}.
+
+If the RCB takes arguments, then those need to be provided to
+\cs{UseRCB} and in that case they can be referenced in the \meta{code}
+argument of \cs{DeclareRCBCode} with \verb=#1=, \verb=#2=, etc.
+
+In most cases a named RCB is used only in a single place, but there
+is, of course, nothing wrong wth using it in several places, as long
+as the code in all places is supposed to change in the same way.
+
+
+
+
+
+
+\section{Example and testing}
+
+From here on we scroll through errors because the example expliitly generate a few:
+\begin{verbatim}
+  \scrollmode
+\end{verbatim}
+\scrollmode
+
+We declare a new RCB named \texttt{foo} expecting 2 arguments:
+\begin{verbatim}
+  \NewRCB{foo}{2}
+\end{verbatim}
+\NewRCB{foo}{2}
+
+Such a declaration has do be unique across the whole \LaTeX{} run so
+if another package attempts to use the same name (regardless of the
+number of arguments) it will generate an error:
+\begin{verbatim}
+  \NewRCB{foo}{2}    % Error (already declared)
+  \NewRCB{foo}{1}    % Error (already declared)
+\end{verbatim}
+\NewRCB{foo}{2}
+\NewRCB{foo}{1}
+
+You also get an error if you attempt to declare some RCB code and the
+RCB name is not yet defined, e.g.,
+\begin{verbatim}
+  \DeclareRCBCode{baz}{undeclared}{} % Error (RCB not declared)
+\end{verbatim}
+\DeclareRCBCode{baz}{undeclared}{}
+
+
+Setting up replaceable code for the RCB is done like this:
+\begin{verbatim}
+  \DeclareRCBCode{foo}{code-A}
+     {\begin{quote}\itshape foo-A: #1|#2\end{quote}}
+  \DeclareRCBCode{foo}{code-B}
+     {\begin{quote}\sffamily foo-B: #2\textsuperscript{2}\end{quote}}
+\end{verbatim}
+which will set up instances \texttt{code-A} and \texttt{code-B} for
+this RCB.
+
+\DeclareRCBCode{foo}{code-A}{\begin{quote}\itshape foo-A: #1|#2\end{quote}}
+\DeclareRCBCode{foo}{code-B}{\begin{quote}\sffamily foo-B: #2\textsuperscript{2}\end{quote}}
+
+We still have to assign one or the other so without it
+\begin{verbatim}
+  \UseRCB{foo}{hello}{world}   % Error (nothing assigned)
+\end{verbatim}
+will give us an error.
+
+\UseRCB{foo}{hello}{world}     % Error (nothing assigned)
+
+So let's do the assignment and then
+\begin{verbatim}
+  \AssignRCBcode{foo}{code-A}
+  \UseRCB{foo}{hello}{world}
+\end{verbatim}
+will properly typeset
+  \AssignRCBcode{foo}{code-A}\UseRCB{foo}{hello}{world}
+and after
+\begin{verbatim}
+  \AssignRCBcode{foo}{code-B}
+\end{verbatim}
+and another call to
+\begin{verbatim}
+  \UseRCB{foo}{hello}{world}
+\end{verbatim}
+we get
+  \AssignRCBcode{foo}{code-B}\UseRCB{foo}{hello}{world}
+
+If we attempt to assign an instance that was not defined, e.g.,
+\begin{verbatim}
+  \AssignRCBcode{foo}{code-C}
+\end{verbatim}
+then we get some error during the assignment and the previous assignment remains in place.
+
+\AssignRCBcode{foo}{code-C}
+
+\subsection{Rationale for error handling}
+
+The errors during the declarations are produced to help
+with typos --- after all, such declarations might be part of a document
+preamble (not that likely, but possible). However, \cs{UseRCB} is not doing much checking, e.g.,
+\begin{verbatim}
+  \UseRCB{fou}{hello}{world}
+\end{verbatim}
+will generate a rather low-level error and then typesets
+%
+``\UseRCB{fou}{hello}{world}''
+%
+because there is no dedicated runtime check that \texttt{fou} is a known RCB.
+
+The reason is that if the misspelling is in the code, then this is a
+programming error in the package and for speed reasons \LaTeX{} does
+not repeately make runtime checks for coding errors unless they can or
+are likely to be user introduced.
+
+\subsection{Performance}
+
+A call to \cs{UseRCB}\marg{name} is just a fancy way to write something like
+\begin{quote}
+  \verb=\csname __RCB_=\meta{name}\verb=_code_=\meta{assigned-instance-name}\verb=:w\endcsname=
+\end{quote}
+and is thus very light-weight.
+
+\section{Prototype implementation}
+
+\begin{verbatim}
+\ExplSyntaxOn
+
+% Declaring a RCB creates a str to hold the name (a pointer) to the code
+% that should be used when the RCB is used, and an integer to hold the
+% number of arguments of that RCB.  Initially, an "unassigned" code
+% chunk is created and assigned so the RCB cannot be used without a
+% proper code block being assigned.
+
+\cs_new_protected:Npn \RCB_new:nn #1 #2 {
+  \str_if_exist:cTF { g__RCB_#1_code_str }
+      {
+        \errmessage { RCB~ '#1'~ already~ declared! }
+      }
+      {
+        \str_new:c { g__RCB_#1_code_str }
+        \int_const:cn { c__RCB_#1_args_int } {#2}
+        \DeclareRCBCode {#1} { __RCB_unassigned:w }
+                        { \errmessage { No~RCB~code~for~'#1'~assigned! } }
+        \AssignRCBcode {#1} { __RCB_unassigned:w }
+      }
+}
+
+% Declaring a code for an RCB is just doing a definition, taking the
+% number of arguments from the saved int.
+
+\cs_new_protected:Npn \RCB_new_code:nnn #1 #2 #3 {
+  \str_if_exist:cTF { g__RCB_#1_code_str }
+      {
+        \cs_generate_from_arg_count:cNnn
+           { __RCB_#1_code_#2:w }
+           \cs_new_protected:Npn
+           { \int_use:c { c__RCB_#1_args_int } }
+           {#3}
+      }
+      {
+        \errmessage { RCB~ '#1'~ not~ declared! }
+      }
+}
+
+
+
+% Assigning a RCB just changes the name in the RCB string.
+
+\cs_new_protected:Npn \RCB_assign_code:nn #1 #2 {
+  \str_if_exist:cTF { g__RCB_#1_code_str }
+      {
+        \cs_if_exist:cTF { __RCB_#1_code_#2:w }
+          {
+            \str_gset:cn { g__RCB_#1_code_str } {#2}
+          }
+          {
+            \errmessage { RCB~ instance~ '#2'~ for~ RCB~ '#1'~ not~ declared! }
+          }
+      }
+      {
+        \errmessage { RCB~ '#1'~ not~ declared! }
+      }
+}
+        
+
+% And using it is just a \csname...\endcsname. We do not add a runtime
+% check for speed reasons!
+
+\cs_new_protected:Npn \RCB_use:n #1 {
+  \use:c { __RCB_#1_code_ \str_use:c { g__RCB_#1_code_str } :w }
+}
+
+
+\cs_new_eq:NN \NewRCB         \RCB_new:nn 
+
+\cs_new_eq:NN \DeclareRCBCode \RCB_new_code:nnn
+
+\cs_new_eq:NN \AssignRCBcode  \RCB_assign_code:nn
+
+\cs_new_eq:NN \UseRCB         \RCB_use:n
+
+\ExplSyntaxOff
+\end{verbatim}
+
+\end{document}
