@@ -66,7 +66,7 @@ checkconfigs =
   "config-OR-luatex",
   "config-sec",
   "config-toc",
-  "config-block-tagging",
+  "config-block",
   "config-graphic",
   "config-minipage",
   "config-float",
