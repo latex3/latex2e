@@ -1,5 +1,5 @@
 
-l3build save -cconfig-mathtagging \
+l3build save -cconfig-math \
 	mathcapture-001 \
 	mathcapture-002 \
 	mathcapture-003 \
@@ -22,7 +22,7 @@ exit
 
 	# with problems:
 	
-l3build save -cconfig-mathtagging \
+l3build save -cconfig-math \
 
 exit
 
