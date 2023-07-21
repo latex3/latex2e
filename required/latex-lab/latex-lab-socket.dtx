@@ -252,11 +252,16 @@
 %   Declares a new socket with name \meta{socket-name} having
 %   \meta{number-of-arguments} arguments. By default it does nothing
 %   other than gobbling the arguments,
-%   i.e., executes the plug \plug{do-nothing}, which is automatically
+%   i.e., executes the plug \plug{noop}, which is automatically
 %   defined for the new socket as part of the declaration.
+%   \fmi{For some sockets a noop hook is useless so perhaps we
+%   should not make that default declaration. On the other hand for
+%   many sockets it is useful -- decide }
 %
 %   Its documentation should describe its purpose, its inputs and the
 %   expected results as discussed above.
+%
+%   The declaration is only allowed at top-level, i.e., not inside a group.
 % \end{function}
 %
 % 
@@ -273,6 +278,8 @@
 %   The form \cs{socket_set_plug:nnn} changes an existing plug. As
 %   this should normally not be necessary we currently have only an L3
 %   layer name for that.
+%
+%   The declarations can be made inside a group and obey scope.
 % \end{function}
 %
 % 
@@ -284,6 +291,8 @@
 %   Assigns the plug \meta{socket-plug-name} to the socket
 %   \meta{socket-name}. It errors if either socket or plug is not
 %   defined.
+%
+%   The assignment is local, i.e., it obeys scope.
 % \end{function}
 %
 % 
@@ -298,7 +307,7 @@
 % \end{function}
 %
 % 
-% \begin{function}{\ShowSocket,\socket_show:n}
+% \begin{function}{\ShowSocket,\socket_show:n,\LogSocket,\socket_log:n}
 % \begin{syntax}
 % \cs{ShowSocket}   \Arg{socket-name}
 % \cs{socket_show:n}\Arg{socket-name}
@@ -333,7 +342,7 @@
 % \item
 %   A socket is \enquote{named} and the name consists of ASCII letters
 %   \texttt{[a-z]},
-%   \texttt{[A-Z]}, \texttt{[0-9]}, \texttt{[-/]} only
+%   \texttt{[A-Z]}, \texttt{[0-9]}, \texttt{[-/@]} only
 % 
 % \item
 %  Best practice naming conventions are \ldots\ \emph{to be documented}
@@ -390,7 +399,7 @@
 % \item
 %
 %   The name of a plug consists of ASCII letters \texttt{[a-z]},
-%   \texttt{[A-Z]}, \texttt{[0-9]}, \texttt{[-/]} only.
+%   \texttt{[A-Z]}, \texttt{[0-9]}, \texttt{[-/@]} only.
 %
 % \item
 %
@@ -471,41 +480,50 @@
 %    does nothing by default other than swallowing its arguments (if any).
 %    \begin{macrocode}
 \cs_new_protected:Npn \socket_new:nn #1 #2 {
-  \str_if_exist:cTF { g_@@_#1_code_str }
+  \str_if_exist:cTF { l_@@_#1_plug_str }
       {
         \errmessage { Socket~ '#1'~ already~ declared! }
       }
       {
-        \str_new:c { g_@@_#1_code_str }
-        \int_const:cn { c_@@_#1_args_int } {#2}
-        \socket_new_plug:nnn {#1} { do-nothing } { }
-        \socket_assign_plug:nn {#1} { do-nothing }
+        \int_compare:nNnTF  \tex_currentgrouplevel:D  = 0
+          {
+            \str_new:c { l_@@_#1_plug_str }
+            \seq_new:c { l_@@_#1_plugs_seq }
+            \int_const:cn { c_@@_#1_args_int } {#2}
+            \socket_new_plug:nnn {#1} { noop } { }
+            \socket_assign_plug:nn {#1} { noop }
+          }
+          {
+            \errmessage { Sockets~ can~ only~ be~ declared~ at~ top-level! }
+          }
       }
 }
 %    \end{macrocode}
 %  \end{macro}
 %  
 %  
-%  \begin{macro}{\socket_show:n}
+%  \begin{macro}{\socket_show:n,\socket_log:n}
 %    Show the current state of the socket --- for now this is just a
 %    quick draft and should be redone and extended.
 %    \begin{macrocode}
 \cs_new_protected:Npn \socket_show:n #1 {
-  \str_if_exist:cTF { g_@@_#1_code_str }
+  \str_if_exist:cTF { l_@@_#1_plug_str }
       {
         \typeout{ Socket~ #1:}
         \typeout{ \@spaces number~ of~ arguments~ =~ \int_use:c { c_@@_#1_args_int } }
-        \typeout{ \@spaces available~plugs~ =~ "not~ tracked~ yet" }
-        \typeout{ \@spaces current~ plug~ =~ \str_use:c { g_@@_#1_code_str } }
+        \typeout{ \@spaces available~plugs~ =~
+                     \seq_use:cnnn { l_@@_#1_plugs_seq }{,~}{,~}{,~} }
+        \typeout{ \@spaces current~ plug~ =~ \str_use:c { l_@@_#1_plug_str } }
         \typeout{ \@spaces definition~ =~
           \exp_args:Nc \cs_meaning:N 
-                       { _@@_#1_code_ \str_use:c { g_@@_#1_code_str } :w } }
+                       { _@@_#1_code_ \str_use:c { l_@@_#1_plug_str } :w } }
         \typeout{}
       }
       {
         \errmessage { Socket~ '#1'~ not~ declared! }
       }
 }
+\cs_new_eq:NN \socket_log:n \socket_show:n
 %    \end{macrocode}
 %  \end{macro}
 %  
@@ -519,23 +537,24 @@
 % the number of arguments from the saved int.
 %    \begin{macrocode}
 \cs_new_protected:Npn \socket_new_plug:nnn {
-  \@@_define_code:Nnnn \cs_new_protected:Npn
+  \@@_define_code:Nnnnn \cs_new_protected:Npn \seq_put_right:cn 
 }
 \cs_new_protected:Npn \socket_set_code:nnn {
-  \@@_define_code:Nnnn \cs_set_protected:Npn
+  \@@_define_code:Nnnnn \cs_set_protected:Npn  \use_none:nn 
 }
 
-\cs_new_protected:Npn \@@_define_code:Nnnn #1 #2 #3 #4 {
-  \str_if_exist:cTF { g_@@_#2_code_str }
+\cs_new_protected:Npn \@@_define_code:Nnnnn #1 #2 #3 #4 #5 {
+  \str_if_exist:cTF { l_@@_#3_plug_str }
       {
         \cs_generate_from_arg_count:cNnn
-           { @@_#2_code_#3:w }
+           { @@_#3_code_#4:w }
            #1
-           { \int_use:c { c_@@_#2_args_int } }
-           {#4}
+           { \int_use:c { c_@@_#3_args_int } }
+           {#5}
+        #2 { l_@@_#3_plugs_seq } {#4}
       }
       {
-        \errmessage { Socket~ '#2'~ not~ declared! }
+        \errmessage { Socket~ '#3'~ not~ declared! }
       }
 }
 %    \end{macrocode}
@@ -546,14 +565,14 @@
 %  \begin{macro}{\socket_assign_plug:nn}
 %    
 %    Assigning stored code to a socket just changes the name in
-%    the socket string.
+%    the socket string. The assignment is local to the current group.
 %    \begin{macrocode}
 \cs_new_protected:Npn \socket_assign_plug:nn #1 #2 {
-  \str_if_exist:cTF { g_@@_#1_code_str }
+  \str_if_exist:cTF { l_@@_#1_plug_str }
       {
         \cs_if_exist:cTF { @@_#1_code_#2:w }
           {
-            \str_gset:cn { g_@@_#1_code_str } {#2}
+            \str_set:cn { l_@@_#1_plug_str } {#2}
           }
           {
             \errmessage { Socket~ instance~ '#2'~ for~ the~ socket~ '#1'~ not~ declared! }
@@ -573,7 +592,7 @@
 %    runtime check for speed reasons!
 %    \begin{macrocode}
 \cs_new_protected:Npn \socket_use:n #1 {
-  \use:c { _@@_#1_code_ \str_use:c { g_@@_#1_code_str } :w }
+  \use:c { _@@_#1_code_ \str_use:c { l_@@_#1_plug_str } :w }
 }
 %    \end{macrocode}
 %  \end{macro}
@@ -581,6 +600,7 @@
 % \subsection{The \LaTeXe{} interface commands}
 %
 %  \begin{macro}{\NewSocket,\NewSocketPlug,
+%                \ShowSocket,\LogSocket,
 %                \AssignSocketPlug,\UseSocket,
 %                \DebugSocketsOn,\DebugSocketsOff}
 %    As we expect that there are existing \LaTeXe{} packages that may
@@ -588,6 +608,11 @@
 %   most of the commands.
 %    \begin{macrocode}
 \cs_new_eq:NN \NewSocket         \socket_new:nn 
+\cs_new_eq:NN \ShowSocket        \socket_show:n 
+\cs_new_eq:NN \LogSocket         \socket_log:n 
+%    \end{macrocode}
+%
+%    \begin{macrocode}
 \cs_new_eq:NN \NewSocketPlug     \socket_new_plug:nnn
 \cs_new_eq:NN \AssignSocketPlug  \socket_assign_plug:nn
 \cs_new_eq:NN \UseSocket         \socket_use:n

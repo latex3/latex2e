@@ -1,6 +1,8 @@
 
 
 l3build save -cconfig-OR \
+	check-declarations \
+	footnote-par \
 	footmisc-000 \
 	footmisc-001 \
 	footmisc-002 \
@@ -16,6 +18,7 @@ l3build save -cconfig-OR \
 	footmisc-010-setspace-tagging \
 	footmisc-011-para \
 	footmisc-012-side \
+	footmisc-012-side-hyperref \
 	footmisc-013-scrartcl \
 	footmisc-floats-abovefloats \
 	footmisc-floats-abovefloats-flushbottom \

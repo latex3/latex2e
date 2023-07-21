@@ -40,6 +40,7 @@
 % \providecommand\pkg[1]{\texttt{#1}}
 % \providecommand\hook[1]{\texttt{#1}}
 % \providecommand\socket[1]{\texttt{#1}}
+% \providecommand\plug[1]{\texttt{#1}}
 %
 % \begin{abstract}
 %   \emph{to be written}
@@ -104,7 +105,12 @@
 %
 %
 %
-% \section{Hooks and sockets}
+% \section{Sockets and hooks}
+%
+%    We use sockets for those parts that can be controlled only by one
+%    package or by the kernel and hooks for places where it may be
+%    possible that several packages or the document class adds code
+%    (typically declarations such as font changes, etc.).
 %
 %    Note that sockets are of interest only to very
 %    few specialized packages, mainly \pkg{footmisc}, and packages
@@ -123,7 +129,7 @@
 %    in the same place, etc.
 %
 %
-% \subsubsection{Configuration points}
+% \subsubsection{Sockets}
 %
 %    None: everything is implemented through a single definition for
 %    \cs{@footnotemark} that offers a number of hooks that can be used
@@ -155,7 +161,7 @@
 %      generated in math --- maybe that means the multiple handling
 %      should happen later?
 %
-%      After the hook \cs{nobreak} is executed, so any
+%      After the hook a \cs{nobreak} is executed, so any
 %      ``material'' added in the hook is tied to the following mark
 %      unless it contains its own permissible penalty.
 %
@@ -200,55 +206,64 @@
 %    appears at the bottom of the page (default case), or possibly
 %    elsewhere, e.g. in the margin.
 %
-% \subsubsection{Configuration points}
+% \subsubsection{Sockets}
 %
 %    To cater for different layout configurations there are four
-%    configuration points which can be set only by one package or
-%    class, if two packages/classes set them they are mutually
-%    incompatible.
+%    sockets that can be set by only one package or
+%    class, i.e., if two packages/classes set them they are mutually
+%    incompatible (or rather the last one wins most likely).
 %    These are:
 %    \begin{description}
-%    \item[\cs{@footnotetext@cfgpoint} (1 argument)]
+%    \item[\socket{@footnotetext/process} (1 argument)]
 %
-%      This receives all material that is to be processed (or stored)
-%      including color protection code and what have you.  The default
-%      definition is to run \cs{insert}\cs{footins}.
+%      This socket receives all material that is to be processed (or
+%      stored) including color protection code and what have you.
 %
-%    \item[\cs{@footnotetext@cfgpointii}  (1 argument)]
+%      Available plugs are \plug{default}, \plug{side}, and \plug{mp}.
 %
-%      The default definition runs \cs{@makefntext} which contains
+%      The \plug{default} executes \cs{insert}\cs{footins}.
+%
+%    \item[\socket{@footnotetext/make}  (1 argument)]
+%
+%      The \plug{default} plug runs \cs{@makefntext} which contains
 %      various hooks for customization. For most scenarios this is
 %      sufficient. However, when running all footnotes as a single
 %      paragraph at the bottom, then each footnote needs to be
-%      prepared prior to storing in the insert and this configuration
-%      point allows running extra code to do that.
+%      prepared prior to storing it with \cs{insert} and this socket
+%      allows running extra code to do that.
 %
-%    \item[\cs{@footnotetext@cfgpointiii} (no argument)]
+%      Available plugs are \plug{default} and \plug{para}.
 %
-%      By default this configuration point adds a strut to the
+%    \item[\socket{@footnotetext/begin} (no argument)]
+%
+%      By \plug{default} this configuration point adds a strut to the
 %      footnote material so that consecutive footnotes are properly
 %      spaced vertically. In some use cases this is not appropriate
 %      (e.g., when running all footnotes as a single paragraph) and so
 %      this configuration point can cancel the action or do something
 %      else instead.
 %
-%      The configuration point is executed near the start of the
-%      argument for the configuration point
-%      \cs{@footnotetext@cfgpointii}.
+%      Available plugs are \plug{default} and \plug{noop}.
 %
-%    \item[\cs{@footnotetext@cfgpointiv} (no argument)]
+%      The socket is executed near the start of the
+%      argument for the \socket{@footnotetext/make} socket.
 %
-%      This configuration point is executed at the very end of the
-%      argument passed to  \cs{@footnotetext@cfgpointii}.
-%      By default it adds a final strut as long as we are still in
+%    \item[\socket{@footnotetext/end} (no argument)]
+%
+%      This socket is executed at the very end of the
+%      argument passed to  socket \socket{@footnotetext/make}.
+%      By \plug{default} it adds a final strut as long as we are still in
 %      horizontal mode (i.e., processing the footnote text paragraph.
 %      When running several footnotes in one paragraph some additional
 %      material (some horizontal glue) needs adding at this point.
 %
+%      Available plugs are \plug{default}, \plug{para}, and \plug{noop}.
 %    \end{description}
-%    The configuration point \cs{@footnotetext@cfgpointii} runs
+%
+%
+%    By default the socket \socket{@footnotetext/make} runs
 %    \cs{@makefntext} and this command contains two further
-%    configuration points (and a few hooks):
+%    sockets and a few hooks:
 %    \begin{description}
 %    \item[\cs{@makefntext@cfgpoint} (1 argument)]
 %
@@ -315,7 +330,7 @@
 %      other parameters too, e.g., \cs{parindent}, which can be done
 %      here.
 %
-%      The configuration point \cs{@footnotetext@cfgpointii} normally
+%      The socket \socket{@footnotetext/make} normally
 %      runs the command \cs{@makefntext} or some code that eventually
 %      runs this command, and this then produces the footnote mark (in
 %      front of the footnote text) and the formatted footnote text. In
@@ -573,14 +588,17 @@
 %
 % \subsection{Handling the footnotetext}
 %
-% The main part is done by redefining \cs{@kernel@process@footnotetext}. This configuration point takes two arguments, \cs{@footnotetext@cfgpoint} (by default \verb+\insert\footins+) and as second argument lots of code related to typesetting the notemark and the footnote text with the actual content of the footnote text somewhere in the middle.
+% The main part is done by redefining
+% \cs{@kernel@process@footnotetext@begin} and
+% \cs{@kernel@process@footnotetext@end} surrounding the footnote text.
+% These kernel hooks are used to start and end the structure and
+% attempt to detect to which mark the note is related.
 %
-% The redefinition of \cs{@kernel@process@footnotetext} surrounds the content with the structure command
-% and tries to detect to which mark the note is related.
-%
-% The actual typesetting of the note text is done
-% by \cs{@makefntext}/\cs{fnote_makefntext:n}. In the new implementation this contains two configuration
-% points, \cs{@makefntext@cfgpoint} and \cs{@makefntext@cfgpointii}. These are redefined to add the tagging commands around note mark and note text.
+% The actual typesetting of the note text is done by
+% \cs{@makefntext}/\cs{fnote_makefntext:n}. In the new implementation
+% this contains two configuration points, \cs{@makefntext@cfgpoint}
+% and \cs{@makefntext@cfgpointii}. These are redefined to add the
+% tagging commands around note mark and note text.
 %
 % \subsection{Footnotes in minipages}
 %
@@ -896,12 +914,18 @@
   {
     \bool_if:NT \g_fnote_debug_bool
        {
-         \cs_log:N\@footnotetext@cfgpoint
-         \cs_log:N\@footnotetext@cfgpointii
-         \cs_log:N\@footnotetext@cfgpointiii
-         \cs_log:N\@footnotetext@cfgpointiv
+         \LogSocket{@footnotetext/process}
+         \LogSocket{@footnotetext/make}
+         \LogSocket{@footnotetext/begin}
+         \LogSocket{@footnotetext/end}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
          \cs_log:N\@makefntext@cfgpoint
          \cs_log:N\@makefntext@cfgpointii
+%    \end{macrocode}
+%
+%    \begin{macrocode}
          \LogHook{fntext/before}
          \LogHook{fntext}
          \LogHook{fntext/para}
@@ -1008,8 +1032,8 @@
 % ./linguex/linguex.sty
   \UseHook{fntext/before}
 %-------
-  \@kernel@process@footnotetext
-  \@footnotetext@cfgpoint {  % config point
+  \@kernel@process@footnotetext@begin
+  \UseSocket{@footnotetext/process} {  % config point
 %-------
 % resetting baselinestretch ... (could be done further down)
 % ./uafthesis/uafthesis.cls
@@ -1050,14 +1074,14 @@
     \color@begingroup
 %-------
 % fnpara wants to replace \@makefntext{...} and para and side option of footmisc etc too ...
-% so we make this a config point
+% so we make this a socket:
 %-------
-      \@footnotetext@cfgpointii       % config point
+      \UseSocket{@footnotetext/make}
         {
 %-------
 % ./resphilosophica/resphilosophica.cls
 %-------
-          \@footnotetext@cfgpointiii  % config point
+          \UseSocket{@footnotetext/begin}%
 %-------
 % bibarts
 % fnbreak.sty
@@ -1070,11 +1094,17 @@
 % fnbreak.sty
           \UseHook{fntext/end}
 %-------
-          \@footnotetext@cfgpointiv   % config point
+%    \end{macrocode}
+%    The socket code (by default adding a strut) has to come
+%    \emph{after} anythign added into the hook above.
+%    \begin{macrocode}
+          \UseSocket{@footnotetext/end}%
         }
       \par
     \color@endgroup
   }
+%-------
+  \@kernel@process@footnotetext@end
 %-------
 % ./linguex/linguex.sty
   \UseHook{fntext/after}
@@ -1086,7 +1116,11 @@
 % \begin{macro}{\@footnotetext@cfgpoint}
 % default for config point (1 arg)
 %    \begin{macrocode}
-\cs_new_protected:Npn \@footnotetext@cfgpoint    { \insert\footins }
+\NewSocket    {@footnotetext/process}{1}
+\NewSocketPlug{@footnotetext/process}{default}{ \insert\footins {#1} }
+\NewSocketPlug{@footnotetext/process}{side}   { \marginpar {#1} }
+
+\AssignSocketPlug{@footnotetext/process}{default}
 %    \end{macrocode}
 % \end{macro}
 %
@@ -1094,28 +1128,55 @@
 % \begin{macro}{\@footnotetext@cfgpointii}
 % default for config point (1 arg)
 %    \begin{macrocode}
-\cs_new_protected:Npn \@footnotetext@cfgpointii  { \@makefntext }
+\NewSocket    {@footnotetext/make}{1}
+\NewSocketPlug{@footnotetext/make}{default}{ \@makefntext {#1} }
+\NewSocketPlug{@footnotetext/make}{para}
+{
+  \setbox\FN@tempboxa\hbox{\@makefntext{#1}}%
+  \dp\FN@tempboxa\z@
+  \ht\FN@tempboxa
+  \dimexpr\wd\FN@tempboxa *%
+             \footnotebaselineskip /\columnwidth\relax
+  \box\FN@tempboxa
+}
+
+\AssignSocketPlug{@footnotetext/make}{default}
 %    \end{macrocode}
 % \end{macro}
 %
 % \begin{macro}{\@footnotetext@cfgpointiii}
 % default for config point (0 args)
 %    \begin{macrocode}
-\cs_new_protected:Npn \@footnotetext@cfgpointiii { \rule\z@\footnotesep }
+\NewSocket    {@footnotetext/begin}{0}
+\NewSocketPlug{@footnotetext/begin}{default}{ \rule\z@\footnotesep }
+
+\AssignSocketPlug{@footnotetext/begin}{default}
 %    \end{macrocode}
 % \end{macro}
 %
 % \begin{macro}{\@footnotetext@cfgpointiv}
 % default for config point (0 args)
 %    \begin{macrocode}
-\cs_new_protected:Npn \@footnotetext@cfgpointiv  { \@finalstrut\strutbox }
+\NewSocket    {@footnotetext/end}{0}
+\NewSocketPlug{@footnotetext/end}{default}{ \@finalstrut\strutbox }
+
+\NewSocketPlug{@footnotetext/end}{para}
+  {%
+           \strut
+           \penalty-10\relax
+           \hskip\footglue
+  }
+
+\AssignSocketPlug{@footnotetext/end}{default}
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{\@kernel@process@footnotetext}
-% kernel hook for tagging (2 args)
+% \begin{macro}{\@kernel@process@footnotetext@begin,
+%               \@kernel@process@footnotetext@end}
+% kernel hooks for tagging
 %    \begin{macrocode}
-\cs_new_protected:Npn \@kernel@process@footnotetext {}
+\cs_new_protected:Npn \@kernel@process@footnotetext@begin {}
+\cs_new_protected:Npn \@kernel@process@footnotetext@end {}
 %    \end{macrocode}
 % \end{macro}
 %
@@ -1389,7 +1450,7 @@
 %
 % TODO remove the dependency to etoolbox, and need for the patch.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@mpfootnotetext@cfgpoint #1
+\NewSocketPlug{@footnotetext/process}{mp}
  {
    \global\setbox\@mpfootins\vbox{%
     \unvbox\@mpfootins
@@ -1397,13 +1458,13 @@
     }
  }
 %    \end{macrocode}
-% Then we patch \cs{@iiiminipage}
+% Then we patch \cs{@iiiminipage}\fmi{this should move to the minipage redef}
 %   \begin{macrocode}
 \RequirePackage{etoolbox}
 \ExplSyntaxOff
 \patchcmd\@iiiminipage
  {\let\@footnotetext\@mpfootnotetext}
- {\let\@footnotetext@cfgpoint\@mpfootnotetext@cfgpoint}
+ {\AssignSocketPlug{@footnotetext/process}{mp}}
  {}{\ERROR}
 \ExplSyntaxOn 
 %    \end{macrocode}
@@ -1687,11 +1748,11 @@
 \tl_new:N \l_@@_dflt_struct_tl
 \tl_set:Nn \l_@@_dflt_struct_tl {1}
 %    \end{macrocode}
-% kernel hook for tagging (2 args)
+% kernel hooks for taggin
 % this sets the structure around the whole text
 %
 %    \begin{macrocode}
-\cs_new_protected:Npn \tag@FENote #1#2 % #1 config point, \insert\footins  #2 content
+\cs_new_protected:Npn \tag@FENote@begin
   {
     \tag_mc_end_push:
 %    \end{macrocode}
@@ -1743,19 +1804,22 @@
       {%no auto
 
       }
+  }
 %    \end{macrocode}
 % This finish the setup of the tagging structure.
 % Now we process the text. The destinations for the links are set with the label
 % so that we can be sure that we are in hmode.
 %    \begin{macrocode}
-      #1 {#2}
+\cs_new_protected:Npn \tag@FENote@end
+  {
     \tag_struct_end:
     \tag_mc_begin_pop:n{}
   }
 %    \end{macrocode}
-% At last set the kernel command to this one
+% At last set the kernel commands
 %    \begin{macrocode}
-\cs_set_eq:NN \@kernel@process@footnotetext \tag@FENote
+\cs_set_eq:NN \@kernel@process@footnotetext@begin \tag@FENote@begin
+\cs_set_eq:NN \@kernel@process@footnotetext@end \tag@FENote@end
 %    \end{macrocode}
 %
 % \cs{@makefntext@cfgpoint} is the configuration point responsible for
@@ -1915,14 +1979,14 @@
                             option "para"}%
                  {I shall ignore "\CurrentOption"}%
   \else
-    \def\@footnotetext@cfgpoint {\marginpar}
     \AddToHook{fntext/para}{%
       \hsize\marginparwidth     % correct the default \hsize
       \footnotesep\z@           % don't add a default separation
     }
-    \def\@footnotetext@cfgpointii  {\@makefntext}
-    \def\@footnotetext@cfgpointiii {}
-    \def\@footnotetext@cfgpointiv  {}
+    \AssignSocketPlug{@footnotetext/process}{side}
+%   \AssignSocketPlug{@footnotetext/make}{default}
+    \AssignSocketPlug{@footnotetext/begin}{noop}
+    \AssignSocketPlug{@footnotetext/end}{noop}
   \fi
 }
 \let\footnotelayout\@empty
@@ -2085,24 +2149,12 @@
 
 
 \ifFN@para
-  \def\@footnotetext@cfgpoint {\insert\footins}
 
-  \long\def\@footnotetext@cfgpointii #1{%
-    \setbox\FN@tempboxa\hbox{\@makefntext{#1}}%
-    \dp\FN@tempboxa\z@
-    \ht\FN@tempboxa
-      \dimexpr\wd\FN@tempboxa *%
-              \footnotebaselineskip /\columnwidth\relax
-    \box\FN@tempboxa
-  }
-
-
-  \def\@footnotetext@cfgpointiii {}
-  \def\@footnotetext@cfgpointiv {% config point
-           \strut
-           \penalty-10\relax
-           \hskip\footglue
-  }
+% \AssignSocketPlug{@footnotetext/process}{default}
+  \AssignSocketPlug{@footnotetext/make}{para}
+  \AssignSocketPlug{@footnotetext/begin}{noop}
+  \AssignSocketPlug{@footnotetext/end}{para}
+  
 \fi
 
 
