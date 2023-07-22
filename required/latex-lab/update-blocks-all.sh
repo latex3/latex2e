@@ -1,8 +1,8 @@
-#l3build save -cconfig-block-tagging -epdftex,luatex \
-#l3build save -cconfig-block-tagging -epdftex \
+#l3build save -cconfig-block -epdftex,luatex \
+#l3build save -cconfig-block -epdftex \
 
 
-l3build save -cconfig-block-tagging -epdftex,luatex \
+l3build save -cconfig-block -epdftex,luatex \
 	blocks-item-01 \
 	blocks-000 \
 	blocks-enumerate-01 \
