@@ -372,15 +372,24 @@
 % \cs{socket_new:nn}\Arg{socket-name}\Arg{number-of-arguments}
 % \end{syntax}
 %   Declares a new socket with name \meta{socket-name} having
-%   \meta{number-of-arguments} arguments. By default it does nothing
-%   other than gobbling the arguments,
-%   i.e., executes the plug \plug{noop}, which is automatically
-%   defined for the new socket as part of the declaration.
-%   \fmi{For some sockets a noop hook is useless so perhaps we
-%   should not make that default declaration. On the other hand for
-%   many sockets it is useful -- decide }
+%   \meta{number-of-arguments} arguments. There is automatically a
+%   plug {noop} declared for it, which does nothing, i.e., it gobbles
+%   the socket argument. This is made the default plug except for
+%   sockets with one argument which use \plug{identity} as their default.
 %
-%   Its documentation should describe its purpose, its inputs and the
+%   This \plug{identity} plug simply returns the socket argument without
+%   its outer braces.
+%   The use case for this are situations like this:
+%   \begin{quote}
+%      \cs{UseSocket}\verb={tagsupport/footnote}=\Arg{code}
+%   \end{quote}
+%   If tagging is not active and the socket contains the plug \plug{identity}
+%   then this returns \meta{code} without the outer braces and to
+%   activate tagging all that is necessary is to change the plug to
+%   say \plug{tagpdf} so
+%   that it surrounds \meta{code} by some tagging magic.
+%
+%   The socket documentation should describe its purpose, its inputs and the
 %   expected results as discussed above.
 %
 %   The declaration is only allowed at top-level, i.e., not inside a group.
@@ -501,8 +510,13 @@
             \str_new:c { l_@@_#1_plug_str }
             \seq_new:c { l_@@_#1_plugs_seq }
             \int_const:cn { c_@@_#1_args_int } {#2}
-            \socket_new_plug:nnn {#1} { noop } { }
-            \socket_assign_plug:nn {#1} { noop }
+            \socket_new_plug:nnn {#1} { noop } {}
+            \int_compare:nNnTF #2 = 1
+                {
+                  \socket_new_plug:nnn {#1} { identity } {##1}
+                  \socket_assign_plug:nn {#1} { identity }
+                }
+               { \socket_assign_plug:nn {#1} { noop } }
           }
           {
             \errmessage { Sockets~ can~ only~ be~ declared~ at~ top-level! }
@@ -527,7 +541,7 @@
         \typeout{ \@spaces current~ plug~ =~ \str_use:c { l_@@_#1_plug_str } }
         \typeout{ \@spaces definition~ =~
           \exp_args:Nc \cs_meaning:N 
-                       { _@@_#1_code_ \str_use:c { l_@@_#1_plug_str } :w } }
+                       { _@@_#1_plug_ \str_use:c { l_@@_#1_plug_str } :w } }
         \typeout{}
       }
       {
@@ -542,36 +556,55 @@
 %  
 %  
 %  
-%  \begin{macro}{\socket_new_plug:nnn,\socket_set_plug:nnn,\@@_define_code:Nnnnnn}
+%  \begin{macro}{\socket_new_plug:nnn,\socket_set_plug:nnn}
 %    
 %    Declaring a code for a socket is just making a definition, taking
 %    the number of arguments from the saved int.
 %    \begin{macrocode}
-\cs_new_protected:Npn \socket_new_plug:nnn {
-  \@@_define_code:Nnnnn \cs_new_protected:Npn \seq_put_right:cn 
-}
-\cs_new_protected:Npn \socket_set_code:nnn {
-  \@@_define_code:Nnnnn \cs_set_protected:Npn  \use_none:nn 
-}
-%    \end{macrocode}
-%    \fmi{probably nicer to read if two defs are made instead}
-%    \begin{macrocode}
-\cs_new_protected:Npn \@@_define_code:Nnnnn #1 #2 #3 #4 #5 {
-  \str_if_exist:cTF { l_@@_#3_plug_str }
+\cs_new_protected:Npn \socket_new_plug:nnn #1#2#3 {
+  \str_if_exist:cTF { l_@@_#1_plug_str }
       {
-        \cs_generate_from_arg_count:cNnn
-           { @@_#3_code_#4:w }
-           #1
-           { \int_use:c { c_@@_#3_args_int } }
-           {#5}
+        \str_if_exist:cTF { @@_#1_plug_#2:w }
+           {
+             \errmessage { Plug~ '#2'~ for~ socket~ '#1'~ already~ declared! }
+           }
+           {
+             \cs_generate_from_arg_count:cNnn
+                { @@_#1_plug_#2:w }
+                \cs_new_protected:Npn
+                { \int_use:c { c_@@_#1_args_int } }
+                {#3}
 %    \end{macrocode}
 %    If this is a new declaration we add the name to a seq for
 %    debugging info.
 %    \begin{macrocode}
-        #2 { l_@@_#3_plugs_seq } {#4}
+             \seq_put_right:cn { l_@@_#1_plugs_seq } {#2}
+           }
       }
       {
-        \errmessage { Socket~ '#3'~ not~ declared! }
+        \errmessage { Socket~ '#1'~ undeclared! }
+      }
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \socket_set_plug:nnn #1#2#3 {
+  \str_if_exist:cTF { l_@@_#1_plug_str }
+      {
+        \str_if_exist:cTF { @@_#1_plug_#2:w }
+           {
+             \cs_generate_from_arg_count:cNnn
+                { @@_#1_plug_#2:w }
+                \cs_set_protected:Npn
+                { \int_use:c { c_@@_#1_args_int } }
+                {#3}
+           }
+           {
+             \errmessage { Plug~ '#2'~ for~ socket~ '#1'~ undeclared! }
+           }
+      }
+      {
+        \errmessage { Socket~ '#1'~ undeclared! }
       }
 }
 %    \end{macrocode}
@@ -587,16 +620,16 @@
 \cs_new_protected:Npn \socket_assign_plug:nn #1 #2 {
   \str_if_exist:cTF { l_@@_#1_plug_str }
       {
-        \cs_if_exist:cTF { @@_#1_code_#2:w }
+        \cs_if_exist:cTF { @@_#1_plug_#2:w }
           {
             \str_set:cn { l_@@_#1_plug_str } {#2}
           }
           {
-            \errmessage { Socket~ instance~ '#2'~ for~ the~ socket~ '#1'~ not~ declared! }
+            \errmessage { Plug~ '#2'~ for~ the~ socket~ '#1'~ undeclared! }
           }
       }
       {
-        \errmessage { Socket~ '#1'~ not~ declared! }
+        \errmessage { Socket~ '#1'~ undeclared! }
       }
 }
 %    \end{macrocode}
@@ -607,9 +640,16 @@
 %    
 %    And using it is more or less a \cs{use:c} so very lightweight. We do not add a
 %    runtime check for speed reasons!
+%
+%    \fmi{maybe this command should be correctly named
+%    \cs{socket_use:nw} since we don't know how many arguments the
+%    socket has, or we could offer aliases \cs{socket_use:nn},
+%    etc.\ so that one can indicate the correct number of arguments in
+%    L3 layer code.}
+%
 %    \begin{macrocode}
 \cs_new_protected:Npn \socket_use:n #1 {
-  \use:c { _@@_#1_code_ \str_use:c { l_@@_#1_plug_str } :w }
+  \use:c { _@@_#1_plug_ \str_use:c { l_@@_#1_plug_str } :w }
 }
 %    \end{macrocode}
 %  \end{macro}
