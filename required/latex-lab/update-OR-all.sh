@@ -59,7 +59,19 @@ l3build save -cconfig-OR \
 	tagging-001
 
 l3build save -cconfig-OR-luatex \
+	footmisc-003 \
+	footmisc-004 \
+	footmisc-005 \
+	footmisc-009-multiple \
+	footmisc-009-multiple-tagging \
+	footmisc-010-setspace \
+	footmisc-010-setspace-tagging \
+	footmisc-011-para \
+	footmisc-012-side \
+	footmisc-013-scrartcl \
+	tagging-001 \
 	memoir-001 \
+	tagging-001 \
 	scrartcl-001 \
 	test-minipage \
 	test-tnote-setup \
