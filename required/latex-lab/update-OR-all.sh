@@ -59,7 +59,7 @@ l3build save -cconfig-OR \
 	tagging-001
 
 l3build save -cconfig-OR-luatex \
-	footmisc-003 \
+	Footmisc-003 \
 	footmisc-004 \
 	footmisc-005 \
 	footmisc-009-multiple \
@@ -68,6 +68,7 @@ l3build save -cconfig-OR-luatex \
 	footmisc-010-setspace-tagging \
 	footmisc-011-para \
 	footmisc-012-side \
+	footmisc-012-side-hyperref \
 	footmisc-013-scrartcl \
 	tagging-001 \
 	memoir-001 \
