@@ -59,7 +59,7 @@ l3build save -cconfig-OR \
 	tagging-001
 
 l3build save -cconfig-OR-luatex \
-	Footmisc-003 \
+	footmisc-003 \
 	footmisc-004 \
 	footmisc-005 \
 	footmisc-009-multiple \
