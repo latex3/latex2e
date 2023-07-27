@@ -21,9 +21,17 @@
 \def\ltlabsocketversion{0.8c}
 
 %<*driver>
+%\DocumentMetadata{testphase=phase-III}  % not yet working for l3doc
+
 \documentclass{l3doc}
 \EnableCrossrefs
 \CodelineIndex
+%\OnlyDescription
+
+% use sockets in doc --- means it can only be processed with l3build
+% as long as that package is not yet in distribution
+\usepackage{latex-lab-testphase-socket}
+
 \begin{document}
   \DocInput{latex-lab-socket.dtx}
 \end{document}
@@ -203,7 +211,6 @@
 % In a nutshell: instead of having a fixed code block somewhere as part
 % of the code, implementing a certain programming logic there is a
 % reference to a named socket at this point.
-% 
 % This is done by first declaring the named socket with:
 % \begin{quote}
 % \cs{NewSocket}\marg{socket-name}\marg{number-of-arguments}
@@ -216,7 +223,7 @@
 % or, if the socket should take a number of arguments with
 % \begin{quote}
 %   \cs{UseSocket}\marg{socket-name}\marg{arg\textsubscript{1}}\ldots
-%   \marg{arg\textsubscript{number-of-arguments}}
+%   \marg{arg\textsubscript{\meta{number-of-arguments}}}
 % \end{quote}
 % 
 % In addition, several code blocks (a.k.a.\ plugs) implementing different logic for this
@@ -244,6 +251,111 @@
 % as the code in all places is supposed to change in the same way.
 % 
 % 
+% 
+% 
+% 
+% \subsubsection{Examples}
+% 
+% 
+% We start by declaring a new socket named \socket{foo} that expects
+% two arguments:
+%\begin{verbatim}
+%      \NewSocket{foo}{2}
+%\end{verbatim}
+% \NewSocket{foo}{2}
+% 
+% Such a declaration has do be unique across the whole \LaTeX{}
+% run. Thus, if another package attempts to use the same name
+% (regardless of the number of arguments) it will generate an error:
+%\begin{verbatim}
+%      \NewSocket{foo}{2}
+%      \NewSocket{foo}{1}
+% \end{verbatim}
+% Both declarations would therefore produce:
+% \begin{verbatim}
+%      ! LaTeX socket Error: Socket 'foo' already declared!
+%\end{verbatim}
+% 
+% You also get an error if you attempt to declare some socket plug and
+% the socket name is not yet declared, e.g.,
+%\begin{verbatim}
+%      \NewSocketPlug{baz}{undeclared}{some code}
+%\end{verbatim}
+% generates
+%\begin{verbatim}
+%      ! LaTeX socket Error: Socket 'baz' undeclared!
+%\end{verbatim}
+% 
+% 
+% Setting up plugs for the socket is done like this:
+%\begin{verbatim}
+%      \NewSocketPlug{foo}{plug-A}
+%         {\begin{quote}\itshape foo-A: #1!#2\end{quote}}
+%      \NewSocketPlug{foo}{plug-B}
+%         {\begin{quote}\sffamily foo-B: #2\textsuperscript{2}\end{quote}}
+%\end{verbatim}
+% This will set up the plugs \texttt{plug-A} and \texttt{plug-B} for
+% this socket.
+% 
+%\NewSocketPlug{foo}{plug-A}{\begin{quote}\itshape foo-A: #1!#2\end{quote}}
+%\NewSocketPlug{foo}{plug-B}{\begin{quote}\sffamily foo-B: #2\textsuperscript{2}\end{quote}}
+% 
+% We still have to assign one or the other to the socket, thus without
+% doing that the line
+% \begin{verbatim}
+%      \UseSocket{foo}{hello}{world}
+% \end{verbatim}
+% produces nothing because the default plug for sockets with 2 arguments
+% is \plug{noop} (which grabs the arguments and thows them
+%   away).\footnote{If socket \socket{foo} would have been a socket with one
+%   argument, then the default plug would be \plug{identity}, in which case
+%   the argument would remain without braces and gets typeset!}
+% 
+% \UseSocket{foo}{hello}{world}     ^^A nothing happens
+% 
+% So let's do the assignment
+% \begin{verbatim}
+%      \AssignSocketPlug{foo}{plug-A}
+% \end{verbatim}
+% and then
+% \begin{verbatim}
+%      \UseSocket{foo}{hello}{world}
+% \end{verbatim}
+% will properly typeset
+% \AssignSocketPlug{foo}{plug-A}\UseSocket{foo}{hello}{world}
+% and after
+% \begin{verbatim}
+%      \AssignSocketPlug{foo}{plug-B}
+% \end{verbatim}
+% and another call to
+% \begin{verbatim}
+%      \UseSocket{foo}{hello}{world}
+% \end{verbatim}
+% we get
+% \AssignSocketPlug{foo}{plug-B}\UseSocket{foo}{hello}{world}
+% 
+% If we attempt to assign a plug that was not defined, e.g.,
+% \begin{verbatim}
+%      \AssignSocketPlug{foo}{plug-C}
+% \end{verbatim}
+% then we get an error during the assignment
+% \begin{verbatim}
+%      ! LaTeX socket Error: Plug 'plug-C' for socket 'foo' undeclared!
+% \end{verbatim}
+% and the previous assignment remains in place.
+% 
+% To see what is known about a socket and its plugs you can use
+% \cs{ShowSocket} or \cs{LogSocket} which displays information similar
+%   to this on the terminal or in the transcript file:
+% \begin{verbatim}
+%     Socket foo:
+%         number of arguments = 2
+%         available plugs = noop, plug-A, plug-B
+%         current plug = plug-B
+%         definition = \protected\long macro:#1#2->\begin {quote}\sffamily
+%     foo-B: #2\textsuperscript {2}\end {quote}
+% \end{verbatim}
+% \LogSocket{foo}
 % 
 %
 % \subsubsection{Details and semantics}
@@ -472,10 +584,14 @@
 %   was declared!
 %
 %   The different L3 programming layer commands are really doing the
-%    same: they  grab as many arguments as defined for
-%    the socket and then pass them to the plug. The  different names are only there to make the code
-%    more readable, i.e., to indicate how many arguments are grabbed
-%    (not no runtime check is made to verify that this is actually true).
+%   same thing: they grab as many arguments as defined for the socket
+%   and then pass them to the plug. The different names are only there
+%   to make the code more readable, i.e., to indicate how many
+%   arguments are grabbed (note that no runtime check is made to
+%   verify that this is actually true).  We only provide them for
+%   sockets with up to 3 arguments (most likely one argument would
+%   have been sufficient. If you happen to have a socket with more
+%   arguments, use \cs{socket_use:nw}.
 % \end{function}
 %
 % 
@@ -499,6 +615,23 @@
 %   Turns debugging of sockets on or off.\fmi{implement}
 % \end{function}
 %
+% \subsubsection{Rationale for error handling}
+% 
+% The errors during the declarations are produced to help with
+% typos---after all, such declarations might be part of a document
+% preamble (not that likely, but possible). However, \cs{UseSocket} is
+% not doing much checking, e.g.,
+% \begin{verbatim}
+%   \UseSocket{mispelled-socket}{hello}{world}
+% \end{verbatim}
+% will generate a rather low-level error and then typesets
+% ``{hello}{world}'' because there is no dedicated runtime check if
+% \texttt{mispelled-socket} is a known socket.
+% 
+% The reason is that if the misspelling is in the code, then this is a
+% programming error in the package and for speed reasons \LaTeX{} does
+% not repeately make runtime checks for coding errors unless they can or
+% are likely to be user introduced.
 % 
 %
 %
@@ -623,11 +756,11 @@
            }
       }
       {
-        \msg_error:nnn { socket } { already-declared } {#1}
+        \msg_error:nnn { socket } { undeclared } {#1}
       }
 }
 %    \end{macrocode}
-%    Chnging the plug of an existing socket is rather similar, except
+%    Changing the plug of an existing socket is rather similar, except
 %    that we don't have to deal with adding it to the debugging
 %    sequence.
 %    \begin{macrocode}
