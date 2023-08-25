@@ -62,11 +62,11 @@ checksearch  = true
 
 checkconfigs = 
  {"build","config-TU","config-OR",
-  "config-mathtagging",
+  "config-math",
   "config-OR-luatex",
   "config-sec",
   "config-toc",
-  "config-block-tagging",
+  "config-block",
   "config-graphic",
   "config-minipage",
   "config-float",
