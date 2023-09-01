@@ -828,7 +828,7 @@
       {
         \tl_remove_all:Nx \l__codedoc_tmpa_tl
           { \iow_char:N \^^M \c_percent_str }
-        \tl_remove_all:Nx \l__codedoc_tmpa_tl { \token_to_str:N \par \c_space_tl \c_percent_str }
+        \tl_remove_all:Nx \l__codedoc_tmpa_tl { \token_to_str:N \obeyedline \c_space_tl \c_percent_str }
         \tl_remove_all:Nx \l__codedoc_tmpa_tl { \tl_to_str:n { ^ ^ A } }
         \tl_remove_all:Nx \l__codedoc_tmpa_tl { \iow_char:N \^^I }
         \tl_remove_all:Nx \l__codedoc_tmpa_tl { \iow_char:N \^^M }
