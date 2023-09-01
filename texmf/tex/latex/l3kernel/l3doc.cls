@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{expl3,calc}
-\ProvidesExplClass{l3doc}{2022-01-12}{}
+\ProvidesExplClass{l3doc}{2023-08-09}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -1188,11 +1188,25 @@
     \int_compare:nTF { \seq_count:N \g__codedoc_variants_seq == 1 }
       { \seq_use:Nn \g__codedoc_variants_seq { } }
       {
+        \hbox_set:Nn \l_tmpa_box
+          { \seq_use:Nn \g__codedoc_variants_seq { \textrm| \nolinebreak[2] } }
         \textrm(
-          \seq_use:Nn \g__codedoc_variants_seq { \textrm| }
-        \textrm)
+        \dim_compare:nNnTF { \box_wd:N \l_tmpa_box } > { .4\columnwidth }
+          {
+            \parbox[t]{.4\columnwidth}
+              {
+                \raggedright
+                \hbox_unpack_drop:N \l_tmpa_box
+                \textrm)
+                \bool_if:NT #2 { \__codedoc_typeset_TF: }
+              }
+          }
+          {
+            \hbox_unpack_drop:N \l_tmpa_box
+            \textrm)
+            \bool_if:NT #2 { \__codedoc_typeset_TF: }
+          }
       }
-    \bool_if:NT #2 { \__codedoc_typeset_TF: }
     \__codedoc_typeset_expandability:
   }
 \cs_new_protected:Npn \__codedoc_function_extra_labels:

@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.98h",       --TAGVERSION
-    date          = "2023-06-06", --TAGDATE
+    version       = "0.98j",       --TAGVERSION
+    date          = "2023-07-08", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -491,6 +491,17 @@ function ltx.__tag.func.store_mc_in_page (mcnum,mcpagecnt,page)
  ltx.__tag.trace.log("INFO TAG-MC-INTO-PAGE: page " .. page ..
                    ": inserting MCID " .. mcpagecnt .. " => " .. mcnum,3)
 end
+local function __tag_update_mc_attributes (head,mcnum,type)
+ for n in node.traverse(head) do
+   node.set_attribute(n,mccntattributeid,mcnum)
+   node.set_attribute(n,mctypeattributeid,type)
+   if n.id == HLIST or n.id == VLIST then
+     __tag_update_mc_attributes (n.list,mcnum,type)
+   end
+ end
+ return head
+end
+ltx.__tag.func.update_mc_attributes = __tag_update_mc_attributes
 --[[
     Now follows the core function
     It wades through the shipout box and checks the attributes
