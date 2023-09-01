@@ -11,6 +11,6 @@ checkdeps =
     maindir .. "/required/amsmath"
   }
 
-checkruns     = 3
+checkruns     = 2
 
 

@@ -5,6 +5,6 @@ checkengines = {"pdftex","luatex"}
 checksearch  = true
 testfiledir  = "testfiles-sec"
 
-checkruns     = 3
+checkruns     = 2
 
 

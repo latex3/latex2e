@@ -5,7 +5,7 @@ checkengines = {"pdftex"}
 checksearch  = true
 testfiledir  = "testfiles-LM"
 
-checkruns     = 4
+checkruns     = 3
 forcecheckruns = true  --- for tagged stuff
 
 
