@@ -15,6 +15,7 @@ installfiles = {
                  "*.ltx",
                  "*.sty",
 		 "glyphtounicode-cmex.tex",
+         "tagpdf-ns-latex-lab.def"  
 		}
 typesetfiles = {
                  "latex-lab-*.dtx",
