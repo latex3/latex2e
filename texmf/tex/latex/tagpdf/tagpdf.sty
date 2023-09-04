@@ -28,7 +28,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: tagpdf.dtx
-\ProvidesExplPackage {tagpdf} {2023-07-08} {0.98j}
+\ProvidesExplPackage {tagpdf} {2023-08-30} {0.98l}
   { A package to experiment with pdf tagging }
 
 \bool_if:nF
@@ -52,8 +52,16 @@
   }
 \prop_gput:Nnn \g_msg_module_name_prop { tag }{ tagpdf }
 \bool_new:N\g__tag_mode_lua_bool
-\DeclareOption {luamode}    { \sys_if_engine_luatex:T { \bool_gset_true:N \g__tag_mode_lua_bool } }
+\bool_new:N\g__tag_delayed_shipout_bool
+\bool_lazy_and:nnT
+  { \bool_if_exist_p:N \l__pdfmanagement_delayed_shipout_bool }
+  { \l__pdfmanagement_delayed_shipout_bool }
+  {
+    \bool_gset_true:N\g__tag_delayed_shipout_bool
+  }
+\DeclareOption {luamode}  { \sys_if_engine_luatex:T { \bool_gset_true:N \g__tag_mode_lua_bool } }
 \DeclareOption {genericmode}{ \bool_gset_false:N\g__tag_mode_lua_bool }
+\DeclareOption {disabledelayedshipout}{ \bool_gset_false:N\g__tag_delayed_shipout_bool }
 \ExecuteOptions{luamode}
 \ProcessOptions
 \RequirePackage{l3ref-tmp}
@@ -124,7 +132,7 @@
 \bool_new:N \l__tag_active_struct_bool
 \bool_set_true:N \l__tag_active_struct_bool
 \bool_new:N \g__tag_tagunmarked_bool
-\prg_generate_conditional_variant:Nnn \pdf_object_if_exist:n {e}{T,F}
+\prg_generate_conditional_variant:Nnn \pdf_object_if_exist:n {e}{T,F,TF}
 \cs_generate_variant:Nn \pdf_object_ref:n {e}
 \cs_generate_variant:Nn \pdfannot_dict_put:nnn {nnx}
 \cs_generate_variant:Nn \pdffile_embed_stream:nnn {nxx,oxx}
@@ -149,8 +157,11 @@
   { \int_use:N \g_shipout_readonly_int }
 \ref_attribute_gset:nnnn { tagmcabs } {0} { now }
   { \int_use:N \c@g__tag_MCID_abs_int }
-\ref_attribute_gset:nnnn {tagmcid }  {0} { now }
-  { \int_use:N \g__tag_MCID_tmp_bypage_int }
+
+\flag_new:n { __tag/mcid }
+\ref_attribute_gset:nnnn {tagmcid }  {0} { shipout }
+  { \flag_height:n { __tag/mcid } }
+
 \cs_new_protected:Npn \__tag_ref_label:nn #1 #2 %#1 label, #2 name of list mc or struct
   {
     \@bsphack
@@ -200,6 +211,8 @@
     \bool_set_true:N \l__tag_active_struct_bool
     \bool_set_true:N \l__tag_active_mc_bool
   }
+\cs_set_eq:NN\tagstop\tag_stop:
+\cs_set_eq:NN\tagstart\tag_start:
 \prop_new:N\g__tag_state_prop
 \cs_set_protected:Npn \tag_stop:n #1
   {
@@ -576,7 +589,6 @@
 %% File: tagpdf-mc-shared.dtx
 
 \cs_new:Npn \__tag_get_mc_abs_cnt: { \int_use:N \c@g__tag_MCID_abs_int }
-\int_new:N \g__tag_MCID_tmp_bypage_int
 \bool_new:N \g__tag_in_mc_bool
 \__tag_prop_new:N \g__tag_mc_parenttree_prop
 \seq_new:N \g__tag_mc_stack_seq
@@ -587,9 +599,9 @@
 \tl_new:N \g__tag_mc_key_tag_tl
 \tl_new:N \l__tag_mc_key_label_tl
 \tl_new:N \l__tag_mc_key_properties_tl
-\cs_new:Nn \__tag_mc_handle_mc_label:n
+\cs_new:Npn \__tag_mc_handle_mc_label:e #1
   {
-    \__tag_ref_label:en{tagpdf-#1}{mc}
+    \ref_label:en{tagpdf-#1}{tagabspage,tagmcabs}
   }
 \cs_new_protected:Npn \__tag_mc_set_label_used:n #1 %#1 labelname
   {
@@ -894,9 +906,12 @@
               {% page#1:mcid##1:\l__tag_tmpa_tl :content
                 \tl_put_right:Nx \l__tag_parenttree_content_tl
                   {
-                    \pdf_object_if_exist:eT { __tag/struct/\l__tag_tmpa_tl }
+                    \pdf_object_if_exist:eTF { __tag/struct/\l__tag_tmpa_tl }
                      {
                        \pdf_object_ref:e { __tag/struct/\l__tag_tmpa_tl }
+                     }
+                     {
+                       null
                      }
                     \c_space_tl
                   }
@@ -1371,14 +1386,14 @@
        }
     }
  }
-\cs_new_protected:Npn \__tag_role_read_namespace:n #1 %name of namespace
+\cs_new_protected:Npn \__tag_role_read_namespace:nn #1 #2 %name of namespace #2 name of file
   {
     \prop_if_exist:cF {g__tag_role_NS_#1_prop}
       { \msg_warning:nnn {tag}{namespace-unknown}{#1} }
-    \file_if_exist:nTF { tagpdf-ns-#1.def}
+    \file_if_exist:nTF { tagpdf-ns-#2.def }
      {
-       \ior_open:Nn \g_tmpa_ior {tagpdf-ns-#1.def}
-       \msg_info:nnn {tag}{read-namespace}{#1}
+       \ior_open:Nn \g_tmpa_ior {tagpdf-ns-#2.def}
+       \msg_info:nnn {tag}{read-namespace}{#2}
        \ior_map_inline:Nn \g_tmpa_ior
          {
            \__tag_role_read_namespace_line:nw {#1} ##1,,,,\q_stop
@@ -1386,11 +1401,14 @@
        \ior_close:N\g_tmpa_ior
      }
      {
-      \msg_warning:nnn{tag}{namespace-missing}{#1}
+      \msg_info:nnn{tag}{namespace-missing}{#2}
      }
   }
 
-
+\cs_new_protected:Npn \__tag_role_read_namespace:n #1 %name of namespace
+  {
+    \__tag_role_read_namespace:nn {#1}{#1}
+  }
 \__tag_role_read_namespace:n {pdf}
 \__tag_role_read_namespace:n {pdf2}
 \pdf_version_compare:NnF < {2.0}
@@ -1400,6 +1418,7 @@
 \__tag_role_read_namespace:n {latex-book}
 \bool_set_true:N\l__tag_role_update_bool
 \__tag_role_read_namespace:n {latex}
+\__tag_role_read_namespace:nn {latex} {latex-lab}
 \__tag_role_read_namespace:n {pdf}
 \__tag_role_read_namespace:n {pdf2}
 \pdf_version_compare:NnTF < {2.0}
@@ -1898,7 +1917,6 @@
   { g__tag_struct_0_prop }
   { parentrole }
   { {StructTreeRoot}{pdf} }
-
 \pdf_version_compare:NnF < {2.0}
  {
    \__tag_prop_gput:cnx
@@ -1986,7 +2004,6 @@
       }
   }
 \cs_generate_variant:Nn \__tag_struct_kid_mc_gput_right:nn {nx}
-
 \cs_new_protected:Npn\__tag_struct_kid_struct_gput_right:nn #1 #2 %#1 num of parent struct, #2 kid struct
   {
     \__tag_seq_gput_right:cx
@@ -1994,7 +2011,7 @@
       {
         \pdf_object_ref:n { __tag/struct/#2 }
       }
- }
+  }
 
 \cs_generate_variant:Nn \__tag_struct_kid_struct_gput_right:nn {xx}
 \cs_new_protected:Npn\__tag_struct_kid_OBJR_gput_right:nnn #1 #2 #3 %#1 num of parent struct,
@@ -2012,9 +2029,7 @@
         \pdf_object_ref_last:
       }
   }
-
 \cs_generate_variant:Nn\__tag_struct_kid_OBJR_gput_right:nnn { xxx }
-
 \cs_new_protected:Npn\__tag_struct_exchange_kid_command:N #1 %#1 = seq var
   {
     \seq_gpop_left:NN #1 \l__tag_tmpa_tl
@@ -3227,9 +3242,14 @@
              {text}
          }
   }
+\@ifpackageloaded{footmisc}
+  {\PackageWarning{tagpdf}{tagpdf~has~been~loaded~too~late!}} %
+  {\RequirePackage{latex-lab-testphase-new-or-1}}
+
 \AddToHook{begindocument/before}
  {
-   \@ifundefined{@mult@ptagging@hook}{\RequirePackage{output-patches-tmp-ltx}}{} %
+   \providecommand\@kernel@tagsupport@@makecol{}
+   \providecommand\@kernel@before@cclv{}
    \bool_if:NF \g__tag_mode_lua_bool
      {
         \cs_if_exist:NT \@kernel@before@footins
@@ -3240,6 +3260,11 @@
              {
                \__tag_check_typeout_v:n {====>~In~\token_to_str:N \@makecol\c_space_tl\the\c@page}
                \__tag_add_missing_mcs_to_stream:Nn \@cclv {main}
+             }
+           \tl_put_right:Nn \@kernel@tagsupport@@makecol
+             {
+               \__tag_check_typeout_v:n {====>~In~\token_to_str:N \@makecol\c_space_tl\the\c@page}
+               \__tag_add_missing_mcs_to_stream:Nn \@outputbox {main}
              }
            \tl_put_right:Nn \@mult@ptagging@hook
              {
