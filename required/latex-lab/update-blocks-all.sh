@@ -25,6 +25,7 @@ l3build save -cconfig-block -epdftex,luatex \
 	blocks-hyperref-01 \
 	blocks-theorem-01 \
 	blocks-theorem-02 \
+	blocks-theorem-03 \
         blocks-quote-01 \
         blocks-quote-02 \
         blocks-trivlist-00 \

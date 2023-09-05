@@ -5,7 +5,7 @@ checkengines = {"pdftex","luatex"}
 checksearch  = true
 testfiledir  = "testfiles-minipage"
 
-checkruns     = 4
+checkruns     = 2
 forcecheckruns = true  --- for tagged stuff
 
 

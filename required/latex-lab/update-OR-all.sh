@@ -1,6 +1,8 @@
 
 
 l3build save -cconfig-OR \
+	check-declarations \
+	footnote-par \
 	footmisc-000 \
 	footmisc-001 \
 	footmisc-002 \
@@ -16,6 +18,7 @@ l3build save -cconfig-OR \
 	footmisc-010-setspace-tagging \
 	footmisc-011-para \
 	footmisc-012-side \
+	footmisc-012-side-hyperref \
 	footmisc-013-scrartcl \
 	footmisc-floats-abovefloats \
 	footmisc-floats-abovefloats-flushbottom \
@@ -49,13 +52,27 @@ l3build save -cconfig-OR \
 	footmisc-twocol-floats-latex \
 	footmisc-twocol-floats-latex-flushbottom \
 	footnote-float-above \
+	footnote-hyperref-001 \
 	github-001 \
 	memoir-001 \
 	scrartcl-001 \
 	tagging-001
 
 l3build save -cconfig-OR-luatex \
+	footmisc-003 \
+	footmisc-004 \
+	footmisc-005 \
+	footmisc-009-multiple \
+	footmisc-009-multiple-tagging \
+	footmisc-010-setspace \
+	footmisc-010-setspace-tagging \
+	footmisc-011-para \
+	footmisc-012-side \
+	footmisc-012-side-hyperref \
+	footmisc-013-scrartcl \
+	tagging-001 \
 	memoir-001 \
+	tagging-001 \
 	scrartcl-001 \
 	test-minipage \
 	test-tnote-setup \
