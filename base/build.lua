@@ -127,7 +127,7 @@ else
 end
 
 -- Files that should be removed after running a test
-dynamicfiles = {"*.tst"}
+dynamicfiles = {"*.tst", "properties-003-rerun.aux"}
 
 -- A few special file for unpacking
 unpackfiles     = {"unpack.ins"}
