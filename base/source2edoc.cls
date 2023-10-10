@@ -30,7 +30,7 @@
     \seq_if_empty:NF \g__codedoc_nested_names_seq
       {
 % This is a crude change: we grab the first name
-        \__codedoc_get_hyper_target:xN
+        \__codedoc_get_hyper_target:eN
           { \seq_item:Nn \g__codedoc_nested_names_seq { 1 } }
           \l__codedoc_tmpa_tl
 % ... and check if it has a reference
