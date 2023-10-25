@@ -19,8 +19,8 @@
 % for those people who are interested or want to report an issue.
 %
 %
-\def\ltlabmathdate{2023-07-20}
-\def\ltlabmathversion{0.5b}
+\def\ltlabmathdate{2023-09-11}
+\def\ltlabmathversion{0.5c}
 %
 %<*driver>
 \documentclass{l3doc}
@@ -310,11 +310,25 @@
       {
         \@@_process:nn { math } {#1} % $
 % fairly simple this one
-        \tagmcend %end P-chunk, in code: \tag_mc_end_push:
-        \@kernel@math@begin
-        #1 $
-        \@kernel@math@end
-        \tagmcbegin{}  % restart P-chunk (whatsits in pdftex)
+%    \end{macrocode}
+% We do not want math tagging in fakemath or when measuring, 
+% so we imitate the test inside
+% \cs{@@_process:nn} for now, see https://github.com/latex3/tagging-project/issues/5
+%    \begin{macrocode}
+        \legacy_if:nTF { measuring@ }
+          { #1 $ }
+          {
+            \tl_if_in:nnTF {#1} { \m@th }
+              { #1 $ }
+              { 
+                \tagmcend %end P-chunk, in code: \tag_mc_end_push:
+                \@kernel@math@begin
+                #1 $
+                \@kernel@math@end
+                \tagmcbegin{}  % restart P-chunk (whatsits in pdftex)
+              }
+          }
+        
       }
   }
 %    \end{macrocode}
@@ -335,9 +349,14 @@
         $$
       }
   }
-
+%    \end{macrocode}
+% To allow to use the code without tagging we guard. But probably tagpdf should
+% provide some tools for such manual para-ends.
+%    \begin{macrocode}
 \cs_new_protected:Npn \@kernel@close@P {
-  \tagmcend %end P-chunk, in code: \tag_mc_end_push:
+   \tag_if_active:T
+    {
+     \tagmcend %end P-chunk, should perhaps be \tag_mc_end_push: ...
         \int_gincr:N \g__tag_para_end_int
         \bool_if:NT \l__tag_para_show_bool
           { \tag_mc_begin:n{artifact}
@@ -345,6 +364,7 @@
             \tag_mc_end:
           }
         \tag_struct_end:
+    }    
 }
   
 
@@ -369,11 +389,14 @@
   \l_@@_tmpa_skip \lastskip  
   \@kernel@math@end
   \penalty \postdisplaypenalty
-  \skip_vertical:n { -\l_@@_tmpa_skip }
+%    \end{macrocode}
+% This reinserts the below display skips. It must be doubled to
+% get the right amount:
+%    \begin{macrocode}
+  \skip_vertical:n { -\l_@@_tmpa_skip * 2 }  
 %
   \@doendpe             % this has no \end{...} to take care of it
 }
-
 
 %    \end{macrocode}
 % \end{macro}
@@ -814,12 +837,23 @@
         \@@_grab_dollar:w
       }
   }
+
 \exp_args:No \tex_everydisplay:D
   {
     \tex_the:D \tex_everydisplay:D
     \iftrue  % this may have to be a settable flag!
 %      {
 %        \typeout{==>~ in~ everydisplay}
+%    \end{macrocode}
+% flipping the \cs{belowdisplay} values is done so that we get (assumption) 
+% a negative skip and not make the page bigger then we take that out, 
+% then we add the tagging code (in \cs{@@_tag_dollardollar_display_end} ) and 
+% then we put a real \cs{postdisplaypenalty} in and 
+% the right skip (of which we don't know if it is short or a 
+% normal \cs{belowdisplayskip}). This might need some refinement if that skip 
+% is actually negative from the start 
+% (not sure it ever is and is worth bothering about)
+%    \begin{macrocode}
         \skip_set:Nn \belowdisplayskip      {-\belowdisplayskip}
         \skip_set:Nn \belowdisplayshortskip {-\belowdisplayshortskip}
         \int_set:Nn \postdisplaypenalty {10000}

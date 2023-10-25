@@ -9,8 +9,8 @@
 %
 %    https://www.latex-project.org/lppl.txt
 %
-\def\ltlabblockdate{2023-07-20}
-\def\ltlabblockversion{0.8g}
+\def\ltlabblockdate{2023-09-01}
+\def\ltlabblockversion{0.8h}
 %<*driver>
 \documentclass{l3doc}
 \usepackage{amstext}
@@ -25,6 +25,14 @@
 %</driver>
 %
 % \fi
+%
+% \providecommand\hook[1]{\texttt{#1\DescribeHook[noprint]{#1}}}
+% \providecommand\socket[1]{\texttt{#1\DescribeSocket[noprint]{#1}}}
+% \providecommand\plug[1]{\texttt{#1\DescribePlug[noprint]{#1}}}
+%
+% \NewDocElement[printtype=\textit{socket},idxtype=socket,idxgroup=Sockets]{Socket}{socketdecl}
+% \NewDocElement[printtype=\textit{hook},idxtype=hook,idxgroup=Hooks]{Hook}{hookdecl}
+% \NewDocElement[printtype=\textit{plug},idxtype=plug,idxgroup=Plugs]{Plug}{plugdecl}
 %
 %
 % \title{Prototype reimplementation of \LaTeXe{}'s block environments using templates}
@@ -250,7 +258,7 @@
 %  \TemplateKey{max-inner-levels}{tokenlist}{Maximum number of nested
 %               environments of this kind. Only relevant if there is a
 %               \key{inner-level-counter} specified}{4}
-%  \TemplateKey{inner-instance-type}{tokenlist}{Opject type of the
+%  \TemplateKey{inner-instance-type}{tokenlist}{Object type of the
 %    inner instance}{list}
 %  \TemplateKey{inner-instance}{tokenlist}{Name of the inner instance
 %               (if any).}{}
@@ -541,6 +549,30 @@
 % \key{tagging-recipe} of the \xt{blockenv} template. Currently the
 % following values are implemented:
 % \begin{description}
+% \item[\texttt{standalone}]
+%   This recipe does the following:
+%   \begin{itemize}
+%   \item
+%     Ensure that the \xt{blockenv} is not inside a \struct{text-unit}
+%     structure. If necessary, close the open one (and any open
+%     \struct{text} structure). 
+%
+%   \item
+%     Text inside the body of the environment start with
+%     \struct{text-unit}\struct{text} unless the key
+%     \key{para-flattened} is set to \texttt{true} 
+%     (which is most likely the wrong thing to do because we then get just
+%     \struct{text} as the structure).
+%
+%   \item
+%     At the end of the environment close \struct{/text} and possibly an
+%     inner \struct{/text-unit} if open.
+%
+%   \item
+%    Finally, ensure that after the environment a new
+%     \struct{text-unit} is started, if appropriate, e.g., if text is following.
+%   \end{itemize}
+%
 % \item[\texttt{basic}]
 %   This recipe does the following:
 %   \begin{itemize}
@@ -552,7 +584,7 @@
 %     leave the \struct{text-unit} open.
 %
 %   \item
-%     Text inside the body of the environment starts with
+%     Text inside the body of the environment start with
 %     \struct{text-unit}\struct{text} if \key{para-flattened} is set to \texttt{false},
 %     otherwise just with \struct{text}.
 %
@@ -567,7 +599,6 @@
 %     don't and following text restarts with a just a \struct{text} (and no
 %     paragraph indentation)
 %   \end{itemize}
-%
 %
 % \item[\texttt{standard}]
 %  This recipe is like the \texttt{basic} one as far as handling
@@ -883,17 +914,6 @@
 %    \end{macrocode}
 %  \end{macro}
 %    
-%    
-%  \begin{macro}{\tag_if_active:T}
-%    If tagging support is not loaded then we shouldn't try to execute
-%    any tagging related commands. Eventually this can go once the
-%    basic support is available in the kernel.
-%    \fmi{can vanish one day}   
-%    \begin{macrocode}
-\cs_if_exist:NF \tag_if_active:T
-   { \cs_new_eq:NN \tag_if_active:T \use_none:n }
-%    \end{macrocode}
-%  \end{macro}
 %
 % \subsubsection{Debugging}
 %
@@ -1220,12 +1240,6 @@
 }
 %    \end{macrocode}
 %
-%    Again something that should probably elsewhere: the rolemapping.
-%    \begin{macrocode}
-\tag_if_active:T {
-  \tagpdfsetup{add-new-tag={tag=list,role=L}}
-}
-%    \end{macrocode}
 % \end{environment}
 %
 %
@@ -1358,20 +1372,42 @@
 %    \end{macrocode}
 %  \end{macro}
 %
+%  \begin{macro}{\@thm}
+%  \cs{@thm} executes \cs{refstepcounter} too early for hyperref
+%  and structure destinations: the generated target is outside the structure
+%  and can be separated from the theorem by a page break. We therefore move
+%  the anchor setting into \cs{@begintheorem}. \cs{@begintheorem} doesn't
+%  currently get the name of the counter as argument, so we store it in variable
+%  for now, to be able to pass it along.
+%    \begin{macrocode}
+\tl_new:N \l_@@_thm_current_counter_tl
+\def\@thm#1#2{%
+  \@kernel@refstepcounter{#1}
+  \tl_set:Nn \l_@@_thm_current_counter_tl{#1}
+  \@ifnextchar[{\@ythm{#1}{#2}}{\@xthm{#1}{#2}}}
+%    \end{macrocode}
+%  To avoid that hyperref overwrites the definition again we must its patch:     
+%    \begin{macrocode}
+\def\hyper@nopatch@thm{}
+%    \end{macrocode}
+%  \end{macro}
+%  
 %  \begin{macro}{\@begintheorem,\@opargbegintheorem}
 %
 %    The \cs{@thm} command expands to either \cs{@beginthorem} or
 %    \cs{@opargbegintheorem}. For the moment we stick with this as it
-%    will help with the transion. But instead of using a
+%    will help with the transition. But instead of using a
 %    \env{trivlist} we use a blockenv and some tagging for the title
 %    (as a Caption).
 %    We do not want potential tagging from \cs{textbf} here,
-%    so we use \cs{bfseries} to set the font.
+%    so we use \cs{bfseries} to set the font. The commands set also the link targets
+%    which should be inside the main structure.
 %    \begin{macrocode}
 \def\@begintheorem#1#2{
   \UseInstance{blockenv}{theorem}{}
   \tagpdfparaOff
-  \mode_leave_vertical:  
+  \mode_leave_vertical: 
+  \MakeLinkTarget{\l_@@_thm_current_counter_tl} 
   \tag_struct_begin:n{tag=Caption}
    \group_begin:
    \bfseries
@@ -1401,6 +1437,7 @@
   \UseInstance{blockenv}{theorem}{}
   \tagpdfparaOff
   \mode_leave_vertical:  
+  \MakeLinkTarget{\l_@@_thm_current_counter_tl}
   \tag_struct_begin:n{tag=Caption}
    \group_begin:
    \bfseries 
@@ -1489,7 +1526,7 @@
   \tl_if_empty:nF {#1} { \SetTemplateKeys{blockenv}{display}{#1} }
 %
 %    \end{macrocode}
-%    We need to know later if we haved nested blockenvs inside
+%    We need to know later if we have nested blockenvs inside
 %    a flattened environment. Whenever we  start a new blockenv we
 %    increment \cs{\l_@@_flattened_level_int} if it is already
 %    different from zero. If it is zero we increment it if flattening
@@ -1575,7 +1612,7 @@
       \UseInstance{para}{ \l_@@_para_instance_tl } {}
     }
 %    \end{macrocode}
-%    In the inner instance may have its own levels or none depending
+%    The inner instance may have its own levels or none depending
 %    on which the instance name differs. Again we pass it the optional
 %    key/value list.
 %    \begin{macrocode}
@@ -1613,7 +1650,7 @@
 %
 %  \begin{macro}{\c@maxblocklevels}
 %    A counter to increase or decrease the number of supported
-%    level. If increased, one needs to suply additional level instances.
+%    level. If increased, one needs to supply additional level instances.
 %    \begin{macrocode}
 \newcounter{maxblocklevels}
 \setcounter{maxblocklevels}{6}
@@ -1687,7 +1724,7 @@
 %    point here, i.e., only if the list didn't start a paragraph. One
 %    can make a case for that, but it can be somewhat surprising to
 %    the user and there is a good argument that even such a list could
-%    be followed expanatory text that is part of the same paragraph
+%    be followed explanatory text that is part of the same paragraph
 %    and doesn't start a new one.\fmi{decide which logic we want to
 %    use! If the old logic is used we need to close the text-unit
 %    ourselves in the true branch}
@@ -1698,18 +1735,13 @@
 %    So this is for now always done. Probably \cs{l_@@_topsepadd_skip} above
 %    should be added only if the paragraph ends here and not if it
 %    continues, so this need some further cleanup.\fmi{decide}
-    %    \begin{macrocode}
-  \bool_if:NTF \l_@@_standalone_bool  
-%    \end{macrocode}
-%    It is possible that \texttt{@endpe} is true because a
-%    displayblock has just ended before we end the standalone
-%    displayblock and in that casevthere is no outer
-%    \struct{text-unit} so we have to explicitly set \texttt{@endpe}
-%    back to false to prevent it from closing a structure later that
-%    isn't there.
+%    
+%    Finally, we have a socket that handles the \cs{par} handling
+%    after the block. Normally, we use it with the \plug{on} plug (check for a
+%    following \cs{par}) but in the case of standalone environments we
+%    assign it the \plug{off} plug.
 %    \begin{macrocode}
-    { \legacy_if_gset_false:n { @endpe } }
-    { \legacy_if_gset_true:n  { @endpe } }
+  \socket_use:n {tagsupport/block-endpe}
 }
 %    \end{macrocode}
 %
@@ -1727,13 +1759,29 @@
 %
 %
 %
-%  \begin{macro}{\l_@@_standalone_bool}
-%    
+% \begin{socketdecl}{tagsupport/block-endpe}
+%    This socket is responsible for the end environment \cs{par}
+%    handling. We define two plugs for it (\plug{on} and \plug{off}).
 %    \begin{macrocode}
-\bool_new:N       \l_@@_standalone_bool
-\bool_set_false:N \l_@@_standalone_bool
+\socket_new:nn      {tagsupport/block-endpe}{0}
 %    \end{macrocode}
-%  \end{macro}
+% \end{socketdecl}
+%
+% \begin{plugdecl}{on,off}
+%    The plugs set the legacy \texttt{@endpe} switch. This must always
+%    happen because block environments with different settings can be nested
+%    and should not inherit the setting from the outer environment.
+%    \begin{macrocode}
+\socket_new_plug:nnn{tagsupport/block-endpe}{on}
+                    { \legacy_if_gset_true:n  { @endpe } }
+\socket_new_plug:nnn{tagsupport/block-endpe}{off}
+                    { \legacy_if_gset_false:n { @endpe } }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\socket_assign_plug:nn{tagsupport/block-endpe}{on}
+%    \end{macrocode}
+% \end{plugdecl}
 %
 %
 %
@@ -2535,6 +2583,10 @@
                                               \@@_beginpar_vmode:
   \let \__kernel_displayblock_begin:          \prg_do_nothing:
   \let \__kernel_displayblock_end:            \prg_do_nothing:
+%    \end{macrocode}
+%    End environment \cs{par} handling:
+%    \begin{macrocode}
+  \socket_assign_plug:nn{tagsupport/block-endpe}{on}
 }
 %    \end{macrocode}
 %  \end{macro}
@@ -2553,9 +2605,9 @@
   \cs_set_eq:NN \__kernel_displayblock_begin: \@@_inner_begin:
   \cs_set_eq:NN \__kernel_displayblock_end:   \@@_inner_end:
 %    \end{macrocode}
-%    
+%    End environment \cs{par} handling:
 %    \begin{macrocode}
-  \bool_set_true:N \l_@@_standalone_bool
+  \socket_assign_plug:nn{tagsupport/block-endpe}{off}
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
@@ -2593,6 +2645,10 @@
   \cs_set_eq:NN \__kernel_displayblock_begin: \@@_inner_begin:
   \cs_set_eq:NN \__kernel_displayblock_end:   \@@_inner_end:
 %    \end{macrocode}
+%    End environment \cs{par} handling:
+%    \begin{macrocode}
+  \socket_assign_plug:nn{tagsupport/block-endpe}{on}
+%    \end{macrocode}
 %    
 %    \begin{macrocode}
   \tl_if_empty:NTF \l_@@_tag_name_tl
@@ -2617,7 +2673,7 @@
 %    \begin{itemize}
 %    \item It opens a \struct{text-unit}-structure or keeps the current one open (only
 %      closing the MC).
-%    \item  It then starts a new structure rollmapped to  L-structure
+%    \item  It then starts a new structure rolemapped to  L-structure
 %      and arranges for handling list items, e.g., Li, Lbl and LBody
 %      structures.
 %    \item At the end it closes open list structures as needed but
@@ -2643,6 +2699,11 @@
   \cs_set_eq:NN \__kernel_list_item_begin:    \@@_list_item_begin:
   \cs_set_eq:NN \__kernel_list_item_end:      \@@_list_item_end:
 %    \end{macrocode}
+%    End environment \cs{par} handling:
+%    \begin{macrocode}
+  \socket_assign_plug:nn{tagsupport/block-endpe}{on}
+%    \end{macrocode}
+%
 %    Handle the tag name and attribute classess using the key values
 %    from the current list instance.
 %    \begin{macrocode}
@@ -2772,14 +2833,7 @@
 % \subsubsection{Blockquote instances}
 %
 %  \begin{instance}{blockenv quotation}
-%    
-%    \begin{macrocode}
-\tag_if_active:T {
-  \tagpdfsetup{add-new-tag={tag=quote,role=BlockQuote}}
-  \tagpdfsetup{add-new-tag={tag=quotation,role=BlockQuote}}
-}
-%    \end{macrocode}
-%
+   %
 %    \begin{macrocode}
 \DeclareInstance{blockenv}{quotation}{display}
 {
@@ -2870,32 +2924,15 @@
 }
 %    \end{macrocode}
 %
-% We use \struct{theorem-like} as the structure name and rollmap it
+% We use \struct{theorem-like} as the structure name and rolemap it
 % to a \struct{Sect} because that can hold a \struct{Caption}.
-%    \begin{macrocode}
-\tag_if_active:T {
-  \tagpdfsetup{add-new-tag={tag=theorem-like,role=Sect}}
-}
-%    \end{macrocode}
-%
-%
-%
 %
 % \subsubsection{Verbatim instances}
 %
 %  \begin{instance}{blockenv verbatim}
 %    
-%    \begin{macrocode}
-\tag_if_active:T {
-  \tagpdfsetup{add-new-tag={tag=verbatim,role=P}}
-  \tagpdfsetup{add-new-tag={tag=codeline,role=Sub}}
-%    \end{macrocode}
-%    Possible alternative for PDF 1.7:
-%    \begin{macrocode}
-%  \tagpdfsetup{add-new-tag={tag=verbatim,role=Div}}
-%  \tagpdfsetup{add-new-tag={tag=codeline,role=P}}
-}
-%    \end{macrocode}
+%  The rolemapping is current verbatim to P and codeline to Sub (which is role mapped 
+%  to Span in pdf 1.7. Alternatives for PDF 1.7: Div and P.  
 %
 %    \begin{macrocode}
 \DeclareInstance{blockenv}{verbatim}{display}
@@ -3137,7 +3174,7 @@
 %                   block list-5,
 %                   block list-6 }
 %    The block instances for the various list environments use the
-%    same underlying instance (well by default) and nothing nothing
+%    same underlying instance (well by default) and nothing 
 %    needs to be set up specifically (because that is already done in
 %    the legacy \cs{list\meta{romannumeral}} unless a
 %    different layout is wanted.
@@ -3168,7 +3205,7 @@
 % \subsection{List instances for the standard lists}
 %
 %    For all list instances we have to say what kind of label we want
-%    (\texttt{label-instance})  and how it should beformatted.
+%    (\texttt{label-instance})  and how it should be formatted.
 %
 %  \begin{instance}{list itemize-1,
 %                   list itemize-2,
@@ -3358,7 +3395,7 @@
 %    All of the following definitions should only be made if tagging
 %    is active!
 %    \begin{macrocode}
-\tag_if_active:T {
+\tag_if_active:TF {
 %    \end{macrocode}
 %
 %  \begin{macro}{\@@_beginpar_vmode:}
@@ -3436,7 +3473,7 @@
 %    e.g., \verb=...\end{itemize} \item ...\par= it can happen that
 %    \cs{__kernel_displayblock_doendpe:} is called while
 %    \texttt{@endpe} is already handled and then we should not attempt
-%    to close a \texttt{text-unit} structure. So we need to check for this.
+%    to close a \texttt{text-unit} structure). So we need to check for this.
 %    \begin{macrocode}
          \legacy_if:nT { @endpe }
            {
@@ -3444,7 +3481,7 @@
 %    If the display block currently ending was \enquote{flattened}
 %    (i.e., uses simplified paragraphs that are not tagged by a
 %    combination of \texttt{text-unit} followed by \struct{text}, but simply
-%    with a \struct{text},
+%    with a \struct{text}),
 %    then we don't have to do anything, because the \struct{text} is already closed.
 %    \begin{macrocode}
              \@@_debug_typeout:n
@@ -3469,7 +3506,7 @@
 %
 %    Paragraph tagging is mainly done using the paragraph hooks (will
 %    get moved eventually). The default hook setting is not good
-%    enough when lists get suppported: we need to delay starting the
+%    enough when lists get supported: we need to delay starting the
 %    paragraph tagging if we still have to place the list label.
 %    We therefore remove the existing hook data and replace it with an
 %    augmented version (this will get combined eventually).
@@ -3530,7 +3567,7 @@
 }
 %    \end{macrocode}
 %    The same code, but without testing \texttt{@endpe}. This is not
-%    needed in the standalong e case and wrong inside lists.
+%    needed in the standalone  case and wrong inside lists.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_start_para_structure_unconditionally:n #1 {
    \bool_if:NF \l__tag_para_flattened_bool
@@ -3551,14 +3588,6 @@
 %    \end{macrocode}
 %  \end{macro}
 %    
-%    
-%    
-%    \begin{macrocode}
-\tag_if_active:T {
-%  \tagpdfsetup{add-new-tag={tag=text-unit,role=Part}}
-}
-%    \end{macrocode}
-%
 %    \begin{macrocode}
 \RemoveFromHook{para/end}[tagpdf]
 \AddToHook{para/end}
@@ -3619,8 +3648,6 @@
 \cs_set_eq:NN \endgraf \para_end:
 %    \end{macrocode}
 %
-%    \begin{macrocode}
-%    \end{macrocode}
 %  \end{macro}
 %
 %
@@ -3836,14 +3863,14 @@
 }
 %    \end{macrocode}
 %  \end{macro}
-%
-%
-%
-%
-%
-%
 %    End of tagging related declarations.
 %    \begin{macrocode}
+}
+%    \end{macrocode}
+% These command should have a dummy declaration if tagging is not active
+%    \begin{macrocode}
+{
+  \cs_new:Npn \@@_start_para_structure_unconditionally:n #1 {}
 }
 %    \end{macrocode}
 %

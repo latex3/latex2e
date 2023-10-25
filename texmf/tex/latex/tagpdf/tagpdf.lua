@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.98j",       --TAGVERSION
-    date          = "2023-07-08", --TAGDATE
+    version       = "0.98l",       --TAGVERSION
+    date          = "2023-08-30", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -105,6 +105,10 @@ local nodetraverse     = node.traverse
 local nodeinsertafter  = node.insert_after
 local nodeinsertbefore = node.insert_before
 local pdfpageref       = pdf.pageref
+
+local fonthashes      = fonts.hashes
+local identifiers     = fonthashes.identifiers
+local fontid          = font.id
 
 local HLIST          = node.id("hlist")
 local VLIST          = node.id("vlist")
@@ -284,25 +288,92 @@ function ltx.__tag.func.mc_num_of_kids (mcnum)
  ltx.__tag.trace.log ("INFO MC-KID-NUMBERS: " .. mcnum .. "has " .. num .. "KIDS",4)
  return num
 end
+local __tag_backend_create_emc_node
+if tex.outputmode == 0 then
+ if token.get_macro("c_sys_backend_str") == "dvipdfmx" then
+  function __tag_backend_create_emc_node ()
+    local emcnode = nodenew("whatsit","special")
+      emcnode.data = "pdf:code EMC"
+    return emcnode
+  end
+ else -- assume a dvips variant
+  function __tag_backend_create_emc_node ()
+    local emcnode = nodenew("whatsit","special")
+      emcnode.data = "ps:SDict begin mark /EMC pdfmark end"
+    return emcnode
+  end
+ end
+else -- pdf mode
+  function __tag_backend_create_emc_node ()
+    local emcnode = nodenew("whatsit","pdf_literal")
+      emcnode.data = "EMC"
+      emcnode.mode=1
+    return emcnode
+  end
+end
+
 local function __tag_insert_emc_node (head,current)
- local emcnode = nodenew("whatsit","pdf_literal")
-       emcnode.data = "EMC"
-       emcnode.mode=1
-       head = node.insert_before(head,current,emcnode)
- return head
+  local emcnode= __tag_backend_create_emc_node()
+  head = node.insert_before(head,current,emcnode)
+  return head
 end
+local __tag_backend_create_bmc_node
+if tex.outputmode == 0 then
+ if token.get_macro("c_sys_backend_str") == "dvipdfmx" then
+  function __tag_backend_create_bmc_node (tag)
+    local bmcnode = nodenew("whatsit","special")
+    bmcnode.data = "pdf:code /"..tag.." BMC"
+    return bmcnode
+  end
+ else -- assume a dvips variant
+  function __tag_backend_create_bmc_node (tag)
+    local bmcnode = nodenew("whatsit","special")
+    bmcnode.data = "ps:SDict begin mark/"..tag.." BMC pdfmark end"
+    return bmcnode
+  end
+ end
+else -- pdf mode
+  function __tag_backend_create_bmc_node (tag)
+    local bmcnode = nodenew("whatsit","pdf_literal")
+    bmcnode.data = "/"..tag.." BMC"
+    bmcnode.mode=1
+    return bmcnode
+  end
+end
+
 local function __tag_insert_bmc_node (head,current,tag)
- local bmcnode = nodenew("whatsit","pdf_literal")
-       bmcnode.data = "/"..tag.." BMC"
-       bmcnode.mode=1
-       head = node.insert_before(head,current,bmcnode)
+ local bmcnode = __tag_backend_create_bmc_node (tag)
+ head = node.insert_before(head,current,bmcnode)
  return head
 end
+local __tag_backend_create_bdc_node
+
+if tex.outputmode == 0 then
+ if token.get_macro("c_sys_backend_str") == "dvipdfmx" then
+  function __tag_backend_create_bdc_node (tag,dict)
+    local bdcnode = nodenew("whatsit","special")
+    bdcnode.data = "pdf:code /"..tag.."<<"..dict..">> BDC"
+    return bdcnode
+  end
+ else -- assume a dvips variant
+  function __tag_backend_create_bdc_node (tag,dict)
+    local bdcnode = nodenew("whatsit","special")
+    bdcnode.data = "ps:SDict begin mark/"..tag.."<<"..dict..">> BDC pdfmark end"
+    return bdcnode
+  end
+ end
+else -- pdf mode
+  function __tag_backend_create_bdc_node (tag,dict)
+    local bdcnode = nodenew("whatsit","pdf_literal")
+    bdcnode.data = "/"..tag.."<<"..dict..">> BDC"
+    bdcnode.mode=1
+    return bdcnode
+  end
+end
+
 local function __tag_insert_bdc_node (head,current,tag,dict)
- local bdcnode = nodenew("whatsit","pdf_literal")
-       bdcnode.data = "/"..tag.."<<"..dict..">> BDC"
-       bdcnode.mode=1
-       head = node.insert_before(head,current,bdcnode)
+ bdcnode= __tag_backend_create_bdc_node (tag,dict)
+ head = node.insert_before(head,current,bdcnode)
  return head
 end
 local function __tag_pdf_object_ref (name)
@@ -314,11 +385,16 @@ ltx.__tag.func.pdf_object_ref=__tag_pdf_object_ref
 local function __tag_show_spacemark (head,current,color,height)
  local markcolor = color or "1 0 0"
  local markheight = height or 10
- local pdfstring = node.new("whatsit","pdf_literal")
+ local pdfstring
+ if tex.outputmode == 0 then
+  -- ignore dvi mode for now
+ else
+  pdfstring = node.new("whatsit","pdf_literal")
        pdfstring.data =
        string.format("q "..markcolor.." RG "..markcolor.." rg 0.4 w 0 %g m 0 %g l S Q",-3,markheight)
        head = node.insert_after(head,current,pdfstring)
- return head
+  return head
+ end
 end
 local function __tag_fakespace()
    tex.setattribute(iwspaceattributeid,1)
@@ -401,10 +477,20 @@ local function __tag_deactivate_mark_space ()
 end
 
 ltx.__tag.func.markspaceoff=__tag_deactivate_mark_space
-local default_space_char = node.new(GLYPH)
-local default_fontid     = font.id("TU/lmr/m/n/10")
+local default_space_char = nodenew(GLYPH)
+local default_fontid     = fontid("TU/lmr/m/n/10")
 default_space_char.char  = 32
 default_space_char.font  = default_fontid
+local function __tag_font_has_space (fontid)
+ t= fonts.hashes.identifiers[fontid]
+ if luaotfload.aux.slot_of_name(fontid,"space")
+    or t.characters and t.characters[32] and t.characters[32]["unicode"]==32
+ then
+    return true
+ else
+    return false
+ end
+end
 local function __tag_space_chars_shipout (box)
  local head = box.head
   if head then
@@ -423,7 +509,10 @@ local function __tag_space_chars_shipout (box)
           local space_char = node.copy(default_space_char)
           local curfont    = nodegetattribute(n,iwfontattributeid)
           ltx.__tag.trace.log ("INFO SPACE-FUNCTION-FONT: ".. tostring(curfont),3)
-          if curfont and luaotfload.aux.slot_of_name(curfont,"space") then
+          if curfont and
+            -- luaotfload.aux.slot_of_name(curfont,"space")
+            __tag_font_has_space (curfont)
+          then
             space_char.font=curfont
           end
           head, space = node.insert_before(head, n, space_char) --
@@ -657,10 +746,8 @@ end
 function ltx.__tag.func.mark_shipout (box)
  mcopen = ltx.__tag.func.mark_page_elements (box,-1,-100,0,"Shipout",-1)
  if mcopen~=0 then -- there is a chunk open, close it (hope there is only one ...
-  local emcnode = nodenew("whatsit","pdf_literal")
+  local emcnode = __tag_backend_create_emc_node ()
   local list = box.list
-  emcnode.data = "EMC"
-  emcnode.mode=1
   if list then
      list = node.insert_after (list,node.tail(list),emcnode)
      mcopen = mcopen - 1
