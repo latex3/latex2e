@@ -1,0 +1,403 @@
+% \iffalse meta-comment
+%
+%% File: latex-lab-toc.dtx (C) Copyright 2022-2023 LaTeX Project
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+%
+% The development version of the bundle can be found below
+%
+%    https://github.com/latex3/latex2e/required/latex-lab
+%
+% for those people who are interested or want to report an issue.
+%
+\def\ltlabtocdate{2023-10-16}
+\def\ltlabtocversion{0.85b}
+%<*driver>
+\documentclass{l3doc}
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{latex-lab-toc.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+%
+% \title{The \textsf{latex-lab-toc} package\\
+% Changes related to the tagging of toc and similar lists}
+% \author{\LaTeX{} Project\thanks{Initial implementation done by Ulrike Fischer}}
+% \date{v\ltlabtocdate\ \ltlabtocversion}
+%
+% \maketitle
+%
+% \newcommand{\xt}[1]{\textsl{\textsf{#1}}}
+% \newcommand{\TODO}[1]{\textbf{[TODO:} #1\textbf{]}}
+% \newcommand{\docclass}{document class \marginpar{\raggedright document class
+% customizations}}
+%
+% \providecommand\hook[1]{\texttt{#1}}
+%
+% \begin{abstract}
+% \end{abstract}
+% 
+% Header for the testphase package
+%    \begin{macrocode}
+%<*header>
+\ProvidesExplPackage {latex-lab-testphase-toc} {\ltlabtocdate} {\ltlabtocversion}
+  { Code related to the tagging of toc-like lists}
+%</header>  
+%    \end{macrocode}
+% \begin{documentation}
+% \section{Introduction}
+%
+% The followings contains various functions related to the tagging of the
+% table of contents and similar list. 
+% 
+% The structure of tocs consist of nested TOC and TOCI structures. 
+% The code uses the first argument of the \cs{contentsline} command to detect the
+% level and to decided if a structure should be closed. The structure that 
+% should be used in \texttt{/Ref} key to link to the heading is detected from the
+% target name in the fourth argument -- because of this with this code such a target 
+% name is created and stored also if hyperref is not loaded. 
+% 
+% \subsection{Manual toc additions}
+% As the \texttt{/Ref} key relies on the target name, 
+% manual \cs{addcontentsline} commands must ensure that they reference the right 
+% structure. If an unnumbered heading command is used before this is normally the case, 
+% so the following should work fine:
+% 
+%  \begin{verbatim}
+%  \chapter*{Unnumbered}
+%  \addcontentsline{toc}{chapter}{Unnumbered}
+%  \end{verbatim}
+%  
+%  If there is no heading command a target name must be created manually \emph{inside the
+%  right structure} with \cs{MakeLinkTarget}:
+%  
+%  \begin{verbatim}
+%  \noindent % start e.g. P-structure
+%  \MakeLinkTarget*{unnumbered}% target inside the P-structure
+%  Unnumbered
+%  \addcontentsline{toc}{chapter}{Unnumbered}
+%  \end{verbatim}   
+% 
+% \end{documentation}
+% \begin{implementation}
+%    \begin{macrocode}
+%<*package>
+%<@@=tag>
+%    \end{macrocode}
+% \section{Temporary variables}
+% \begin{macro}{\l_@@_toc_tmpa_tl}
+%    \begin{macrocode}
+\tl_new:N \l_@@_toc_tmpa_tl 
+%    \end{macrocode}
+% \end{macro}
+%
+% \section{General struct commands}
+% The following variables and commands are not restricted to toc, but
+% probably will be need in other places too.
+% \begin{variable}{\g_@@_struct_dest_num_prop}
+% This variable records for (some or all, not clear yet)
+% destination names the related structure number to allow
+% to reference them in a Ref. The key is the destination.
+% Defined by tagpdf.
+% \end{variable}
+%
+% \cs{refstepcounter} doesn't use \cs{MakeLinkTarget} (yet) so
+% we have to patch it too to store the relation between
+% destination names/\cs{@currentHref} and structure numbers
+%
+% The property is set up in tagpdf-test so that one
+% doesn't has to check if the prop exists or not.
+%    \begin{macrocode}
+\AddToHook{cmd/refstepcounter/after}
+ {
+   \tl_if_blank:VF \@currentHref
+    {
+      \prop_gput:Nee \g_@@_struct_dest_num_prop {\@currentHref}{\tag_get:n{struct_num}}      
+    }
+ }
+\AddToHook{cmd/H@refstepcounter/after}
+ {
+   \tl_if_blank:VF \@currentHref
+    {
+      \prop_gput:Nee \g_@@_struct_dest_num_prop {\@currentHref}{\tag_get:n{struct_num}}
+    }
+ }
+%    \end{macrocode}
+% \begin{variable}{\g_@@_struct_ref_by_dest_prop}
+% This variable contains structures whose Ref key should be updated
+% at the end to point to structured related with this destination.
+% As this is probably need in other places too, it is not only a toc-variable.
+% Moved into tagpdf!
+% \end{variable}
+%
+% \begin{macro}{\g_@@_struct_ref_by_dest:}
+%  This command is executed and update the Ref keys
+%  of the structures listed in |\g_@@_struct_ref_by_dest_prop|.
+%  It is currently only relevant for the |TOCI|. But other structures
+%  could need that later too.
+%  The command is executed in the |tagpdf/finish/before| hook.
+%    \begin{macrocode}
+\msg_new:nnn { tag } {struct-dest-unknown}
+ {
+   Destination~#1~has~no~related~structure.\\
+   /Ref~for~structure~#2~not~updated
+ }
+
+\cs_new_protected:Npn \g_@@_struct_ref_by_dest:
+  {
+    \prop_map_inline:Nn\g_@@_struct_ref_by_dest_prop
+      {
+        \prop_get:NnNTF \g_@@_struct_dest_num_prop {##2} \l_@@_tmpa_tl
+          {
+            \@@_struct_gput_data_ref:ee
+              { ##1 }
+              { \tag_struct_object_ref:e{ \l_@@_tmpa_tl }}
+          }
+          {
+            \msg_warning:nnnn {tag}{struct-dest-unknown}{##2}{ ##1}
+          }
+      }
+  }
+\hook_gput_code:nnn {tagpdf/finish/before}{tagpdf/struct/Ref}{\g_@@_struct_ref_by_dest:}
+%    \end{macrocode}
+% \end{macro}
+%
+% \section{Toc code}
+% \begin{variable}{\g_@@_toc_level_int,\g_@@_toc_stack_seq}
+% |\g_@@_toc_level_int| records in a toc the current absolute level.
+% We must close open structures at the end of the toc, for this
+% we maintain a stack |\g_@@_toc_stack_seq|.
+%    \begin{macrocode}
+\int_new:N \g_@@_toc_level_int
+\seq_new:N \g_@@_toc_stack_seq
+%    \end{macrocode}
+% \end{variable}
+
+% \begin{macro}{\_tag_toc_starttoc_init:n}
+% The init code clears the stack, and set the level to -100
+% and start to TOC structure. We also disable paratagging.
+% The |/Title| is currently simply the type, but this could be done nicer.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_toc_starttoc_init:n #1
+ {
+    \bool_set_false:N \l_@@_para_bool
+    \seq_gclear:N \g_@@_toc_stack_seq
+    \int_gset:Nn  \g_@@_toc_level_int {-100}
+    \tag_struct_begin:n{tag=TOC,title=#1}
+ }
+%    \end{macrocode}
+% Now map it into the config point:
+%    \begin{macrocode}
+\cs_set_protected:Npn\@starttoc@cfgpoint@before#1
+  {
+    \@@_toc_starttoc_init:n{#1}
+  }
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{\@@_toc_starttoc_finalize:}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_toc_starttoc_finalize:
+ {
+    \int_step_inline:nn
+      {\seq_count:N \g_@@_toc_stack_seq }
+      {\tag_struct_end:}
+    \tag_struct_end:
+    \seq_gclear:N \g_@@_toc_stack_seq
+ }
+%    \end{macrocode}
+% Now map it into the config point:
+%    \begin{macrocode}
+\cs_set_protected:Npn\@starttoc@cfgpoint@after#1
+  {
+    \@@_toc_starttoc_finalize:
+  }
+%    \end{macrocode}
+% \end{macro}
+
+% \begin{macro}{\@@_toc_end:n}
+% This commands ends all TOC on the stack with a level higher than the argument
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_toc_end:n #1 
+ {
+   \seq_get:NNT\g_@@_toc_stack_seq \l_@@_toc_tmpa_tl 
+     {
+       \bool_lazy_and:nnT
+         {
+           \str_if_eq_p:ee{\tl_head:N\l_@@_toc_tmpa_tl}{TOC}
+         }
+         {
+           \int_compare_p:nNn {#1}<{\tl_tail:N \l_@@_toc_tmpa_tl}
+         }
+         {
+           \seq_gpop:NN\g_@@_toc_stack_seq \l_@@_toc_tmpa_tl 
+           \tag_struct_end:
+           \@@_toc_end:n{#1}
+         }
+     }
+ }
+\cs_generate_variant:Nn \@@_toc_end:n {e} 
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_toc_contentsline_begin:nnn}
+% This is main command executed at the begin of a |\contentsline|.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_toc_contentsline_begin:nnn #1 #2 #3 %#1 level, #2 content, #3 destination
+  {
+   \tag_if_active:T
+     {
+%    \end{macrocode}
+% We detect the intended level by checking the value of |toclevel@...|
+% (currently only provided by hyperref, but should be there always).
+% To be on the safe side we set it to 1 if not defined.
+%    \begin{macrocode}
+       \ExpandArgs{c}\providecommand { toclevel@#1 }{ 1 } %  just in case ...
+       \int_compare:nNnF { \use:c{toclevel@#1} } > {\use:c{c@tocdepth}}
+        {
+%    \end{macrocode}
+% if level goes up, start new sub TOC unless we are at the begin
+%    \begin{macrocode}
+          \bool_lazy_and:nnT
+            { \int_compare_p:nNn { \g_@@_toc_level_int } > {-100} }
+            { \int_compare_p:nNn { \use:c{toclevel@#1} }   > { \g_@@_toc_level_int } }
+            {
+              \seq_gpush:Nx \g_@@_toc_stack_seq {{TOC}\use:c{toclevel@#1}}
+              \tag_struct_begin:n{tag=TOC}
+            }
+%    \end{macrocode}
+% if level goes down close all TOC's with a higher level
+%    \begin{macrocode}
+          \int_compare:nNnT
+            { \use:c{toclevel@#1} } < { \g_@@_toc_level_int }
+            {
+              \@@_toc_end:e { \use:c{toclevel@#1} }
+            }
+%    \end{macrocode}
+%if same level do nothing
+% update toclevel to the current level.
+%    \begin{macrocode}
+          \int_gset:Nn \g_@@_toc_level_int { \use:c{toclevel@#1} }
+%    \end{macrocode}
+% now open the TOCI, the tagging of the
+% inner structure is left to the |\l@xxx| commands.
+% setting the title is not strictly necessary but looks nicer
+% but we have to remove the |\numberline|
+% \begin{NOTE}{UF}
+% perhaps keep the number? How to insert a space then
+% \end{NOTE}
+%    \begin{macrocode}
+          \group_begin:
+           \text_declare_expand_equivalent:Nn \numberline \use_none:n
+           \exp_args:Nx \tag_struct_begin:n{tag=TOCI,title={\text_purify:n {#2}}}
+%    \end{macrocode}
+% The TOCI structure should get a /Ref, so we put a request with its destination
+% name into the prop.
+% \begin{NOTE}{UF}
+% This only works with hyperref currently. Without hyperref we
+% need to store fake names.
+% \end{NOTE}
+%    \begin{macrocode}
+           \prop_gput:Nxx \g_@@_struct_ref_by_dest_prop
+             { \tag_get:n {struct_num} }{#3}
+           \seq_gpush:Nx \g_@@_toc_stack_seq {{TOCI}\use:c{toclevel@#1}}
+          \group_end:
+       }
+    }
+  }
+%    \end{macrocode}
+% Now map it into the config point:
+%    \begin{macrocode}
+\cs_set_protected:Npn\@contentsline@cfgpoint@before#1#2#3#4
+  {
+    \@@_toc_contentsline_begin:nnn {#1}{#2}{#4}
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_toc_contentsline_end:n}
+% This is the closing code of a |\contentsline|.
+% If the contentsline was actually printed, the code has to
+% close the TOCI structure and to update the stack.
+%    \begin{macrocode}
+\msg_new:nnn {tag}{toc-no-TOCI}{Missing~TOCI~structure~on~toc~stack}
+
+\cs_new_protected:Npn \@@_toc_contentsline_end:n #1 %#1 level name
+  {
+    \int_compare:nNnF { \use:c{toclevel@#1} } > {\use:c{c@tocdepth}}
+      {
+        \seq_gpop:NNT \g_@@_toc_stack_seq\l_@@_tmpa_tl
+          {
+            \str_if_eq:eeTF{\tl_head:N\l_@@_tmpa_tl}{TOCI}
+             {
+               \tag_struct_end:
+             }
+             {
+               \msg_warning:nn{tag}{toc-no-TOCI}
+             }  
+          }
+      }
+  }
+%    \end{macrocode}
+% Now we map it to the config point
+%    \begin{macrocode}
+\cs_set_protected:Npn \@contentsline@cfgpoint@after #1#2#3#4
+ {
+   \@@_toc_contentsline_end:n {#1}
+ }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Tagging of the content}
+% This need discussion.
+%
+%    \begin{macrocode}
+\AddToHook{contentsline/text/before}[tagpdf]{%
+  \tag_struct_begin:n{tag=Reference}%
+  \tag_mc_begin:n{tag=Reference}}
+\AddToHook{contentsline/text/after}[tagpdf]{%
+  \tag_mc_end:}
+\AddToHook{contentsline/page/before}[tagpdf]{%
+  \tag_mc_begin:n{tag=Reference}}
+\AddToHook{contentsline/page/after}[tagpdf]{%
+  \tag_mc_end:
+  \tag_struct_end:} %Reference
+\AddToHook{contentsline/number/before}[tagpdf]{%
+  \tag_mc_end:
+  \tag_struct_begin:n{tag=Lbl}%
+  \tag_mc_begin:n{tag=Lbl}}
+\AddToHook{contentsline/number/after}[tagpdf]{%
+  \tag_mc_end:
+  \tag_struct_end:
+  \tag_mc_begin:n{tag=Reference}}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\def\@dottedtocline@cfgpoint@leaders#1{%
+ \tag_mc_begin:n{artifact}\tag_stop:n{leaders}\nobreak#1\nobreak\tag_start:n{leaders}\tag_mc_end:}
+%    \end{macrocode}
+
+%
+%    \begin{macrocode}
+%</package>
+%    \end{macrocode}
+% Wrapper for the testphase key.
+%    \begin{macrocode}
+%<*latex-lab>
+\ProvidesFile{toc-latex-lab-testphase.ltx}
+        [\ltlabtocdate\space v\ltlabtocversion latex-lab wrapper toc]
+
+\RequirePackage{latex-lab-testphase-toc}
+
+%</latex-lab>
+%    \end{macrocode}
+% \end{implementation}

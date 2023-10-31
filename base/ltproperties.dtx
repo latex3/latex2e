@@ -1,0 +1,966 @@
+% \iffalse meta-comment
+%
+%% File: ltproperties.dtx
+%
+% Copyright (C) 2021-2023 The LaTeX Project
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    http://www.latex-project.org/lppl.txt
+%
+% This file is part of the LaTeX base system. (The Work in LPPL)
+% and all files in that bundle must be distributed together.
+%
+% -----------------------------------------------------------------------
+%
+% The development version of the bundle can be found at
+%
+%    https://github.com/latex3/latex2e
+%
+% for those people who are interested.
+%    \begin{macrocode}
+\def\ltpropertiesversion{1.0c}
+\def\ltpropertiesdate{2023-10-15}
+%    \end{macrocode}
+
+%<*driver>
+\documentclass[full]{l3doc}
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{ltproperties.dtx}
+\end{document}
+%</driver>
+% \fi
+%
+% \title{^^A
+%   Recording and cross-referencing document properties^^A
+%  \thanks{This module has version
+%    \ltpropertiesversion\ dated \ltpropertiesdate, \copyright\ The \LaTeX\
+%    Project.}
+% }
+%
+% \author{^^A
+%  The \LaTeX\ Project\thanks
+%    {^^A
+%      E-mail:
+%        \href{mailto:latex-team@latex-project.org}
+%          {latex-team@latex-project.org}^^A
+%    }^^A
+% }
+%
+% \maketitle
+%
+% \begin{documentation}
+% \begin{abstract}
+% This code implements command to record and (expandably) reference 
+% document properties. It extends the standard \cs{label}/\cs{ref}/\cs{pageref}
+% commands.
+% \end{abstract}
+%  
+% \tableofcontents
+%  
+% \section{Introduction}
+% 
+% The module allows to record the \enquote{current state} of various 
+% document properties (typically the content of macros and values of counters)
+% and to access them in other places through a label.
+% The list of properties that can be recorded and retrieved
+% are not fix and can be extended by the user. The values of the properties 
+% are recorded in the \texttt{.aux} file and can be retrieved at the second compilation.
+% 
+%
+% The module uses the ideas of properties and labels. A label is
+% a document reference point: a name for the user. An property is something
+% that \LaTeX{} can track, such as a page number, section number or name.
+% The names of labels and properties may be arbitrary. Note that there is
+% a single namespace for each.
+%
+% \section{Design discussion}
+%
+% The design here largely follows ideas from \pkg{zref}. In particular, there
+% are two independent concepts: properties that can be recorded between runs,
+% and labels which consist of lists of these properties. The reason for the
+% split is that individual labels will want to record some but not all
+% properties. For examples, a label concerned with position would track
+% the $x$ and $y$ co-ordinates of the current point, but not for example
+% the page number.
+%
+% In the current implementation, properties share a single namespace. This
+% allows multiple lists to re-use the same properties, for example page number,
+% absolute page number, etc. This does mean that \emph{changing} a standard
+% property is an issue. However, some properties have complex definitions
+% (again, see \pkg{zref} at present): having them in a single shared space
+% avoids the need to copy code.
+%
+% Labels could be implemented as |prop| data. That is not done at present as
+% there is no obvious need to map to or copy the data. As such, faster
+% performance is available using a hash table approach as in a \enquote{classical}
+% set up. Data written to the |.aux| file uses simple paired \emph{balanced
+% text} not keyvals: this avoids any restrictions on names and again offers
+% increased performance.
+%
+% The \pkg{expl3} versions of the label command do not
+% use \cs{@bsphack}/\cs{@esphack} to avoid double spaces, 
+% but the \LaTeXe{} command does as it lives at the document command level.  
+% 
+% The reference commands are expandable.
+% 
+% Currently the code has nearly no impact on the main \cs{label} and \cs{ref} commands as
+% too many external packages rely on the concrete implementation.
+% There is one exception:
+% the label names share the same namespace. That means that if both |\label{ABC}| and
+% |\RecordProperties{ABC}{page}| are used there is a warning 
+% \texttt{Label `ABC' multiply defined}. 
+%
+% \section{Handling unknown labels and properties}
+% With the standard \cs{label}/\cs{ref} commands the requested label is 
+% either in the |.aux|-file (and so known) or not. 
+% In the first case the stored value can be used,
+% in the second case the reference commands print two question marks.
+% 
+% With flexible property lists a reference commands asks for the 
+% value of a specific property stored under a label name
+% and we have to consider more variants: 
+% \begin{itemize}
+% \item If the requested property is unknown (not declared) the system 
+% is not correctly set up and an error is issued. 
+% \item If the label is unknown, the default of the property is used. 
+% \item If the label is known, but doesn't provide a value for the 
+% property then again the default of the property is used.
+% \item The command |\property_ref:nnn| allows to give a local default
+% which is used instead of the property default in the two cases before.  
+% \end{itemize}
+% 
+% \section{Rerun messages}
+% 
+% As the reference commands are expandable they can neither issue a message that
+% the label or the label-property combination is unknown, nor can they trigger the
+% rerun message at the end of the \LaTeX{} run.
+% 
+% Where needed such messages must therefore be triggered manually. For this two commands
+% are provided: \cs{property_ref_undefined_warn:} and  \cs{property_ref_undefined_warn:nn}.
+% See below for a description.
+% 
+% \section{Open points}
+% 
+% \begin{itemize}
+%  \item The \texttt{xpos} and \texttt{ypos} properties require that the position is 
+% stored first but there is no (public) engine independent interface yet. Code must 
+% use \cs{tex_savepos:D}. 
+% \end{itemize}
+% 
+% \section{Code interfaces}
+%
+% \begin{function}{\property_new:nnnn,\property_gset:nnnn}
+%   \begin{syntax}
+%     \cs{property_new:nnnn} \Arg{property} \Arg{setpoint} \Arg{default}  \Arg{code}
+%     \cs{property_gset:nnnn} \Arg{property}\Arg{setpoint} \Arg{default}  \Arg{code}
+%   \end{syntax}
+%  \LaTeXe-interface: see \cs{NewProperty}, \cs{SetProperty}.\\ 
+%   Sets the \meta{property} to have the \meta{default} specified, and at the
+%   \meta{setpoint} (either |now| or |shipout|) to write the result of the
+%   \meta{code} as part of a label. The \meta{code} should be expandable. The expansion
+%   of \meta{code} (the value of the property) is written to the |.aux| file and read
+%   back from there at the next compilation. Values should assume that the 
+%   standard \LaTeX{} catcode régime with |@| a letter is active then. 
+%   
+%   If the property is declared within a package it is suggested
+%   that its name is build from letters, hyphens and slashes,
+%   and is always structured as follows:\\ 
+%   \meta{package-name}\texttt{/}\meta{property-name}. 
+% \end{function}
+%
+% \begin{function}
+%   {
+%     \property_record:nN,
+%     \property_record:nn, \property_record:nV, \property_record:ee
+%   }
+%   \begin{syntax}
+%      \cs{property_record:nN} \Arg{label} \Arg{clist var}
+%      \cs{property_record:nn} \Arg{label} \Arg{clist}
+%   \end{syntax}
+%   \LaTeXe{}-interface: see \cs{RecordProperties}.\\  
+%   Writes the list of properties given by the \meta{clist} to the |.aux|
+%   file with the \meta{label} specified.
+% \end{function}
+%
+% \begin{function}[EXP]{\property_ref:nn,\property_ref:ee}
+%   \begin{syntax}
+%      \cs{property_ref:nn} \Arg{label} \Arg{property}
+%   \end{syntax}
+%   \LaTeXe{}-interface: see \cs{RefProperty}.\\  
+%   Expands to the value of the \meta{property} for the \meta{label}, if
+%   available, and the default value of the property otherwise.
+%   If \meta{property} has not been declared with |\property_new:nnnn| 
+%   an error is issued. The command raises an internal, expandable, local flag 
+%   if the reference can not be resolved.
+% \end{function}
+% 
+% \begin{function}[EXP]{\property_ref:nnn,\property_ref:een}
+%   \begin{syntax}
+%     \cs{property_ref:nnn} \Arg{label} \Arg{property} \Arg{local default}
+%   \end{syntax}
+%  \LaTeXe{}-interface: see \cs{RefProperty}.\\
+%  Expands to the value of the \meta{property} for the \meta{label}, if
+%  available, and to \meta{local default} otherwise.
+%  If \meta{property} has not been declared with |\property_new:nnnn| 
+%  an error is issued. The command raises an internal, expandable local flag 
+%  if the reference can not be resolved.
+% \end{function}
+% 
+% \begin{function}{\property_ref_undefined_warn:}
+%   \begin{syntax}
+%     \cs{property_ref_undefined_warn:}
+%   \end{syntax}
+%  \LaTeXe{}-interface: not provided.\\ 
+%  The commands triggers the standard warning
+%  \\
+%  \hspace*{1em}\texttt{LaTeX Warning: There were undefined references.}
+%  \\ 
+%  at the end of the document if there was a recent
+%  \cs{property_ref:nn} or \cs{property_ref:nnn} which couldn't be resolved
+%  and so raised the flag. \enquote{Recent} means in the same group 
+%  or in some outer group!
+% \end{function}
+%
+% \begin{function}{\property_ref_undefined_warn:n,\property_ref_undefined_warn:e}
+%   \begin{syntax}
+%     \cs{property_ref_undefined_warn:n} \Arg{label}
+%   \end{syntax}
+% \LaTeXe{}-interface: not provided.\\
+%  The commands triggers the standard warning\\
+%  \hspace*{1em}\texttt{LaTeX Warning: There were undefined references.}
+%  \\ 
+%  at the end of the document if \meta{label} is not known.
+%  At the point where it is called it also issues the warning\\
+%  \hspace*{1em}%
+%  \texttt{Reference~`\meta{label}'~on~page~\meta{page}\space undefined}.
+% \end{function}
+% 
+% \begin{function}{\property_ref_undefined_warn:nn,\property_ref_undefined_warn:ee}
+%   \begin{syntax}
+%     \cs{property_ref_undefined_warn:nn} \Arg{label} \Arg{property}
+%   \end{syntax}
+%  \LaTeXe{}-interface: see \cs{RefUndefinedWarn}.\\
+%  The commands triggers the standard warning\\
+%  \hspace*{1em}%  
+%  \texttt{LaTeX Warning: There were undefined references.}\\ 
+%  at the end of the document if the reference can not be resolved.
+%  At the point where it is called it also issues the warning\\
+%  \hspace*{1em}%
+%  \texttt{Reference~`\meta{label}'~on~page~\meta{page}\space undefined}\\
+%   if the label
+%  is unknown, or the more specific\\
+%  \hspace*{1em}%
+%  \texttt{Property `\meta{property}' undefined for reference
+%    `\meta{label}' on page \meta{page}}\\
+%  if the label is known but doesn't provide a value for the requested property.   
+% \end{function}
+% 
+% \begin{function}[pTF]{\property_if_exist:n,\property_if_exist:e}
+%   \begin{syntax}
+%     \cs{property_if_exist_p:n} \Arg{property}
+%     \cs{property_if_exist:nTF} \Arg{property} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%  \LaTeXe{}-interface: \cs{IfPropertyExistTF}.\\   
+%   Tests if the \meta{property} has been declared.
+% \end{function}
+%
+% \begin{function}[pTF]{\property_if_recorded:n,\property_if_recorded:e}
+%   \begin{syntax}
+%     \cs{property_if_recorded_p:n} \Arg{label} 
+%     \cs{property_if_recorded:nTF} \Arg{label} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%  \LaTeXe{}-interface: \cs{IfLabelExistTF}\\
+%   Tests if the \meta{label} is known. This is also true if the label has been
+%   set with the standard \cs{label} command.
+% \end{function}
+%
+% \begin{function}[pTF]{\property_if_recorded:nn,\property_if_recorded:ee}
+%   \begin{syntax}
+%     \cs{property_if_recorded_p:nn} \Arg{label} \Arg{property}
+%     \cs{property_if_recorded:nnTF} \Arg{label} \Arg{property} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%   \LaTeXe{}-interface: \cs{IfPropertyRecordedTF}.\\  
+%   Tests if the label \meta{label} is known and if it provides a value of the \meta{property}.
+% \end{function}
+%
+% \section{Auxiliary file interfaces}
+%
+% \begin{function}{\new@label@record}
+%   \begin{syntax}
+%      \cs{new@label@record} \Arg{label} \Arg{data}
+%   \end{syntax}
+%   This is a command only for use in the |.aux| file. It loads the key--value
+%   list of \meta{data} to be available for the \meta{label}.
+% \end{function}
+%
+% \section{\LaTeXe{} interface}
+% 
+% The LaTeXe{} interfaces always expand label and property arguments. 
+% This means that one must be careful when using active chars or commands in the
+% names. UTF8-chars are protected and should be safe, similar most babel shorthands.
+% 
+% \begin{function}{\NewProperty,\SetProperty}
+%   \begin{syntax}
+%     \cs{NewProperty} \Arg{property} \Arg{setpoint} \Arg{default}  \Arg{code}
+%     \cs{SetProperty} \Arg{property} \Arg{setpoint} \Arg{default}  \Arg{code}
+%   \end{syntax}
+%   Sets the \meta{property} to have the \meta{default} specified, and at the
+%   \meta{setpoint} (either |now| or |shipout|) to write the result of the
+%   \meta{code} as part of a label. The \meta{code} should be expandable. The expansion
+%   of \meta{code} (the value of the property) is written to the |.aux| file and read
+%   back from there at the next compilation (at which point normally
+%   the standard \LaTeX{} catcode régime with |@| a letter is active).
+%   
+% \end{function}
+% 
+% \begin{function}{\RecordProperties}
+%   \begin{syntax}
+%      \cs{RecordProperties} \Arg{label} \Arg{clist}
+%   \end{syntax}
+%   Writes the list of properties given by the \meta{clist} to the |.aux|
+%   file with the \meta{label} specified. Similar to the standard \cs{label} command
+%   the arguments are expanded. So \meta{clist} can be a macro containing a list
+%   of properties. Also similar to the standard \cs{label} command, the command is surrounded
+%   by an \cs{@bsphack}/\cs{@esphack} pair to preserve spacing.
+% \end{function}
+
+% \begin{function}[EXP]{\RefProperty}
+%   \begin{syntax}
+%      \cs{RefProperty} \oarg{local default} \Arg{label} \Arg{property}
+%   \end{syntax}
+%   Expands to the value of the \meta{property} for the \meta{label}, if
+%   available, and the default value of the property or -- if given -- 
+%   to \meta{local default} otherwise.
+%   If \Arg{property} has not been declared an error is issued.
+% \end{function}
+% 
+% \begin{function}{\IfPropertyExistTF}
+%   \begin{syntax}
+%     \cs{IfPropertyExistTF}  \Arg{property} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%   Tests if the \meta{property} has been declared.
+% \end{function}
+%
+% \begin{function}{\IfLabelExistTF}
+%   \begin{syntax}
+%     \cs{IfLabelExistTF} \Arg{label} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%   Tests if the \meta{label} has been recorded. This is also true if a label
+%   has been set with the standard \cs{label} command.
+% \end{function}
+% 
+% \begin{function}{\IfPropertyRecordedTF}
+%   \begin{syntax}
+%     \cs{IfPropertyRecordedTF} \Arg{label} \Arg{property} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%   Tests if the label and a value of the \meta{property} for the \meta{label} are both known.
+% \end{function}
+
+% \begin{function}{\RefUndefinedWarn}
+%   \begin{syntax}
+%      \cs{RefUndefinedWarn} \Arg{label} \Arg{property}
+%   \end{syntax}
+%  This commands triggers the standard warning\\
+%  \hspace*{1em}%
+%  \texttt{LaTeX Warning: There were undefined references.}\\ 
+%  at the end of the document if the reference for \meta{label} and \meta{property}
+%  can not be resolved.
+%  At the point where it is called it also issues the warning\\
+%  \hspace*{1em}%
+%  \texttt{Reference `\meta{label}' on page \meta{page} undefined}\\
+%  if the label  is unknown, or the more specific\\
+%  \hspace*{1em}%
+%  \texttt{Property `\meta{property}' undefined for reference 
+%  `\meta{label}' on page \meta{page}}
+%  if the label is known but doesn't provide a value for the requested property.   
+% \end{function}
+%
+% \section{Pre-declared properties}
+%
+% \begin{variable}{abspage}
+%   (shipout) The absolute value of the current page: starts at $1$ and increases
+%   monotonically at each shipout.
+% \end{variable}
+%
+% \begin{variable}{page}
+%   (shipout) The current page as given by \cs{thepage}: this may or may not
+%   be a numerical value, depending on the current style. Contrast with
+%   \cs{abspage}. You get this value also  with the standard \cs{label}/\cs{pageref}.
+% \end{variable}
+%
+% \begin{variable}{pagenum}
+%   (shipout) The current page as arabic number. This is suitable for integer operations and
+%   comparisions.
+% \end{variable}
+% 
+% \begin{variable}{label}
+%   (now) The content of \cs{@currentlabel}. This is the value that
+%   you get also with the standard \cs{label}/\cs{ref}. 
+% \end{variable}
+% 
+% \begin{variable}{title}
+%    (now) The content of \cs{@currentlabelname}. 
+%   This command is filled beside others by the \pkg{nameref} package and some
+%   classes (e.g.~\pkg{memoir}).
+% \end{variable}
+% 
+% \begin{variable}{target}
+%   (now)  The content of \cs{@currentHref}. 
+%   This command is normally filled by for example 
+%   \pkg{hyperref} and gives the name of the last destination it created. 
+% \end{variable}
+% 
+% \begin{variable}{pagetarget}
+%   (shipout)  The content of \cs{@currentHpage}. 
+%   This command is filled for example by a recent version of 
+%   \pkg{hyperref} and then gives the name of the last page 
+%   destination it created. 
+% \end{variable}
+% 
+% \begin{variable}{counter}
+%   (now) The content of \cs{@currentcounter}. 
+%   This command contains after a \cs{refstepcounter} the name of the counter.
+% \end{variable}
+% 
+% \begin{variable}{xpos,ypos}
+%   (shipout)  This stores the $x$~and $y$ coordinates of a point previously 
+%   stored with \cs{pdfsavepos}/\cs{savepos}. 
+%   E.g.~(if bidi is used it can be necessary to save the position
+%   before and after the label):
+%   \begin{verbatim}
+%     \tex_savepos:D 
+%     \property_record:nn{myposition}{xpos,ypos}
+%     \tex_savepos:D 
+%   \end{verbatim}  
+% \end{variable}
+% \end{documentation}
+%
+% \begin{implementation}
+%
+% \section{The Implementation}
+%
+%    \begin{macrocode}
+%<*2ekernel|latexrelease>
+%    \end{macrocode}
+%    \begin{macrocode}
+\ExplSyntaxOn
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<@@=property>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<latexrelease>\NewModuleRelease{2023/11/01}{ltproperties}
+%<latexrelease>                 {Cross-referencing~properties}
+%    \end{macrocode}
+%
+% The approach here is based closely on that from \pkg{zref}; separate out
+% lists of properties and the properties themselves, so the latter can be
+% used multiple times and in varying combinations. 
+% However, not everything is a straight copy. Firstly,
+% we treat lists of properties as simple comma lists: that allows us to have
+% either saved or dynamic lists and to avoid another data structure. The cost
+% is that errors are detected at point-of-use, but in any real case that should
+% be true anyway (and is true for \tn{zref@labelbyprop} already). Secondly,
+% we allow properties to have
+% arbitrary names, as the code does not require them to tokenize as control
+% sequences.
+%
+% \begin{macro}{\property_new:nnnn, \property_gset:nnnn, \@@_gset:nnnn}
+%   As properties can be reset, they are not constants. But they also have
+%   various pieces of required data. So we use the same approach as color and
+%   make them declarations. Data-wise, we need the detail of the implementation,
+%   the default and a flag to show if the code works now or at shipout. This
+%   last entry is done using text so needs a check. We could use a set of
+%   |prop| here, but as we never need to map or copy the lists, we can gain
+%   performance using the hash table approach.
+%    \begin{macrocode}
+\cs_new_protected:Npn \property_new:nnnn #1#2#3#4
+  {
+    \cs_if_free:cTF { @@_code_ #1 : }
+      {
+        \exp_args:Nx \@@_gset:nnnn { \tl_to_str:n {#1} }
+         {#2} {#3} {#4}
+      }
+      {
+        \msg_error:nn { property }{ exists }{#1}
+      }   
+  }
+\cs_new_protected:Npn \property_gset:nnnn #1#2#3#4
+  {
+    \@@_gset:ennn { \tl_to_str:n {#1} }
+      {#2} {#3} {#4}
+  }
+\cs_new_protected:Npn \@@_gset:nnnn #1#2#3#4
+  {
+    \cs_gset:cpn { @@_code_ #1 : } {#4}
+    \tl_gclear_new:c { g_@@_default_ #1 _tl }
+    \tl_gset:cn { g_@@_default_ #1 _tl } {#3}
+    \bool_if_exist:cF { g_@@_shipout_ #1 _tl }
+      { \bool_new:c { g_@@_shipout_ #1 _tl } }
+    \str_case:nnF {#2}
+      {
+        { now } { { \bool_gset_false:c { g_@@_shipout_ #1 _tl } } }
+        { shipout }
+          { \bool_gset_true:c { g_@@_shipout_ #1 _tl } }
+      }
+      { \msg_error:nnnn { property } { unknown-setpoint } {#1} {#2} }
+  }
+\cs_generate_variant:Nn \@@_gset:nnnn {ennn}
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\NewProperty,\SetProperty}
+% For consistency we expand the property name, but this doesn't warant a 
+% variant of the L3-commands.
+% \changes{v1.0c}{2023-09-20}{use \cs{protected@edef}} 
+%    \begin{macrocode}
+\cs_new_protected:Npn \NewProperty #1#2#3#4
+  {
+    \protected@edef\reserved@a{#1}
+    \exp_args:No \property_new:nnnn {\reserved@a} {#2}{#3}{#4}
+  }  
+\cs_new_protected:Npn \SetProperty #1#2#3#4
+  {
+    \protected@edef\reserved@a{#1}
+    \exp_args:No \property_gset:nnnn {\reserved@a} {#2}{#3}{#4}
+  }    
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\property_record:nN}
+% \begin{macro}
+%   {
+%     \property_record:nn,
+%     \property_record:nV,
+%     \property_record:ee,
+%     \property_record:oo,
+%     \@@_record:nn,
+%     \@@_record:en
+%   }
+% \begin{macro}[EXP]
+%   {\@@_record_value:n, \@@_record_value_aux:n, \@@_record_value_aux:e}
+%   Writing data when it is labelled means expanding at this stage and possibly
+%   later too. That is all pretty easy using \pkg{expl3}: we accept a stray
+%   comma at the end of the list as that is easier to deal with than trying
+%   to tidy up, and there is no real downside.
+%    \begin{macrocode}
+\cs_new_protected:Npn \property_record:nN #1#2
+  { \property_record:nV {#1} #2 }
+\cs_new_protected:Npn \property_record:nn #1#2
+  { \@@_record:en { \tl_to_str:n {#1} } {#2} }
+\cs_generate_variant:Nn \property_record:nn { nV , ee, oo }
+\cs_new_protected:Npn \@@_record:nn #1#2
+  {
+    \legacy_if:nT { @filesw }
+      {
+        \iow_shipout_x:Nx \@auxout
+          {
+            \token_to_str:N \new@label@record 
+              {#1}
+              { \clist_map_function:nN {#2} \@@_record_value:n }
+          }
+      }
+  }
+\cs_generate_variant:Nn \@@_record:nn { e }
+\cs_new:Npn \@@_record_value:n #1
+  { \@@_record_value_aux:e { \tl_to_str:n {#1} } }
+\cs_new:Npn \@@_record_value_aux:n #1
+  {
+    \cs_if_exist:cTF { @@_code_ #1 : }
+      {
+        {#1}
+        {
+          \bool_if:cTF { g_@@_shipout_ #1 _tl }
+            { \exp_not:c }
+            { \use:c }
+              { @@_code_ #1 : }
+        }
+      }
+      { \msg_expandable_error:nnn { property } { not-declared } {#1} }
+  }
+\cs_generate_variant:Nn \@@_record_value_aux:n { e }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\RecordProperties}
+% \changes{v1.0c}{2023-09-20}{use \cs{protected@edef} for safer handling of active chars.} % 
+%    \begin{macrocode}
+\NewDocumentCommand\RecordProperties { m m }
+  {
+    \@bsphack
+    \protected@edef\reserved@a{#1}
+    \protected@edef\reserved@b{#2}
+    \property_record:oo {\reserved@a}{\reserved@b}
+    \@esphack
+  }  
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Reference commands}
+%
+% \begin{variable}{ l_@@_ref_flag }
+%   A flag that is set if a reference couldn't be resolved.
+%    \begin{macrocode}
+\flag_new:n { l_@@_ref_flag }
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{macro}[EXP]{\property_ref:nn,\property_ref:ee}
+%   Search for the label/property combination, and if not found fall back
+%   to the default of the property.
+%    \begin{macrocode}
+\cs_new:Npn \property_ref:nn #1#2
+  { 
+    \@@_ref:een 
+      { \tl_to_str:n {#1} } 
+      { \tl_to_str:n {#2} }
+      { \tl_use:c { g_@@_default_ #2 _tl } } 
+  }
+\cs_generate_variant:Nn \property_ref:nn {ee}  
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}[EXP]{\property_ref:nnn,\property_ref:een, \@@_ref:nnn, \@@_ref:een}
+%   This allows to set a local default value which overrides the default value
+%   of the property.
+%    \begin{macrocode}
+\cs_new:Npn \property_ref:nnn #1#2#3
+  {
+    \@@_ref:een
+      { \tl_to_str:n {#1} }
+      { \tl_to_str:n {#2} }
+      {#3}
+  }
+\cs_new:Npn \@@_ref:nnn #1#2#3
+  {
+    \tl_if_exist:cTF { g_@@_label_ #1 _ #2 _tl }
+      { \tl_use:c { g_@@_label_ #1 _ #2 _tl } }
+      {
+        \flag_if_raised:nF 
+          { l_@@_ref_flag } { \flag_raise:n { l_@@_ref_flag } }
+%    \end{macrocode}
+%   We test for the default of the property only to check if the property has
+%   been declared.
+%    \begin{macrocode}
+        \tl_if_exist:cTF { g_@@_default_ #2 _tl }
+          { #3 }
+          { \msg_expandable_error:nnn { property } { not-declared } {#2} }
+      }
+  }
+\cs_generate_variant:Nn \@@_ref:nnn { ee }
+\cs_generate_variant:Nn \property_ref:nnn {een} 
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}[EXP]{\RefProperty}
+%   Search for the label/property combination, and if not found fall back
+%   to the default of the property or the given default.
+%    \begin{macrocode}
+\NewExpandableDocumentCommand \RefProperty { o m m }
+  {
+    \IfNoValueTF {#1}
+      {
+        \property_ref:ee {#2}{#3}
+      }
+      {
+        \property_ref:een {#2}{#3}{#1}
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\new@label@record}
+% \begin{macro}{\@@_data:nnn}
+%   A standard recursion loop.
+%    \begin{macrocode}
+\cs_new_protected:Npn \new@label@record #1#2
+  {
+    \tl_if_exist:cTF { r@#1 }
+      {
+        \gdef \@multiplelabels
+          { \@latex@warning@no@line { There~were~multiply-defined~labels } }
+        \@latex@warning@no@line { Label~`#1'~multiply~defined }
+      }
+      {
+        \tl_new:c { r@#1 }
+        \tl_gset:cn { r@#1 }{#2}
+      }
+    \@@_data:nnn {#1} #2 { \q_recursion_tail } { ? } \q_recursion_stop
+  }
+\cs_new_protected:Npn \@@_data:nnn #1#2#3
+  {
+    \quark_if_recursion_tail_stop:n {#2}
+    \tl_gclear_new:c { g_@@_label_ \tl_to_str:n {#1} _ \tl_to_str:n {#2} _tl }
+    \tl_gset:cn { g_@@_label_ \tl_to_str:n {#1} _ \tl_to_str:n {#2} _tl } {#3}
+    \@@_data:nnn {#1}
+  }  
+%    \end{macrocode}
+%
+% This command is used in \cs{enddocument} to test if some label values have changed.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@kernel@new@label@record@testdef #1 #2
+  {
+    \tl_if_eq:cnF { r@#1 } {#2} 
+      { \@tempswatrue }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \subsection{Tests and warnings}
+%
+% \begin{macro}[pTF]{\property_if_exist:n}
+%   Tests if property has been declared.
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \property_if_exist:n #1 { p , T , F,  TF }  
+  % #1 property
+  {
+    \cs_if_exist:cTF { @@_code_ #1 : }
+      {
+        \prg_return_true:
+      }
+      {
+        \prg_return_false:
+      }
+  }
+\prg_generate_conditional_variant:Nnn \property_if_exist:n {e} {TF}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{IfPropertyExistTF}
+%    \begin{macrocode}
+\cs_new_eq:NN \IfPropertyExistTF \property_if_exist:eTF  
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}[pTF]{\property_if_recorded:n}
+%   Tests if the label has been set.
+%   This can then be used to setup e.g.~rerun messages.
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \property_if_recorded:n #1 { p , T , F,  TF }  
+  % #1 label 
+  {
+    \tl_if_exist:cTF { r@#1 }
+      {
+        \prg_return_true:
+      }
+      {
+        \prg_return_false:
+      }
+  }
+\prg_generate_conditional_variant:Nnn \property_if_recorded:n {e} {TF}  
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\IfLabelExistTF}
+%    \begin{macrocode}
+\cs_new_eq:NN \IfLabelExistTF \property_if_recorded:eTF  
+%    \end{macrocode}
+% \end{macro} 
+%
+% \begin{macro}[pTF]{\property_if_recorded:nn}
+% tests if the label/property combination has been set
+% This can then be used to setup e.g.~rerun messages.
+%    \begin{macrocode}
+\prg_new_conditional:Npnn \property_if_recorded:nn #1#2 { p , T , F,  TF }  
+  % #1 label #2 property
+  {
+    \tl_if_exist:cTF { g_@@_label_ \tl_to_str:n {#1} _ \tl_to_str:n {#2} _tl }
+      {
+        \prg_return_true:
+      }
+      {
+        \prg_return_false:
+      }
+  }
+\prg_generate_conditional_variant:Nnn \property_if_recorded:nn {ee} {TF}     
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\IfPropertyRecordedTF}
+%    \begin{macrocode}
+\cs_new_eq:NN \IfPropertyRecordedTF \property_if_recorded:eeTF  
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\property_ref_undefined_warn:}
+% \cs{G@refundefinedtrue} is defined in \texttt{ltxref} and redefines a warning message.
+%    \begin{macrocode}
+\cs_new_protected:Npn \property_ref_undefined_warn:
+ {
+   \flag_if_raised:nT { l_@@_ref_flag }
+    {
+      \G@refundefinedtrue
+    }
+ }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\property_ref_undefined_warn:n}
+%    \begin{macrocode}
+\cs_new_protected:Npn \property_ref_undefined_warn:n #1 %#1 label
+  {
+   \property_if_recorded:nF {#1}
+    {
+       \G@refundefinedtrue
+       \@latex@warning{Reference~`#1'~on~page~\thepage\space undefined}%
+    }         
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\property_ref_undefined_warn:nn,
+%               \property_ref_undefined_warn:ee,
+%               \RefUndefinedWarn}
+%    \begin{macrocode}
+\cs_new_protected:Npn \property_ref_undefined_warn:nn #1#2 %#1 label, #2 property
+ {
+   \property_if_recorded:nTF {#1}
+    {
+      \property_if_recorded:nnF {#1}{#2}
+        {
+          \G@refundefinedtrue
+          \@latex@warning
+           { Property~`#2'~undefined~for~reference~`#1'~on~page~\thepage }
+        }
+    }
+    {
+       \G@refundefinedtrue
+       \@latex@warning { Reference~`#1'~on~page~\thepage\space undefined }%
+    }         
+ }
+\cs_generate_variant:Nn \property_ref_undefined_warn:nn {ee}
+\cs_set_eq:NN \RefUndefinedWarn \property_ref_undefined_warn:ee
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Predeclared properties}
+%
+% \begin{variable}{abspage}
+%    \begin{macrocode}
+\property_new:nnnn { abspage } { shipout }
+  { 0 } { \int_use:N \g_shipout_readonly_int }
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{page}
+%    \begin{macrocode}
+\property_new:nnnn  { page } { shipout } { 0 } { \thepage }
+%    \end{macrocode}
+% \end{variable}
+% 
+% \begin{variable}{pagenum}
+%    \begin{macrocode}
+\property_new:nnnn  { pagenum } { shipout } { 0 } { \the \value { page } }
+%    \end{macrocode}
+% \end{variable}
+% 
+% \begin{variable}{label}
+%    \begin{macrocode}
+\property_new:nnnn  { label } { now } { ?? } { \@currentlabel }
+%    \end{macrocode}
+% \end{variable}
+% 
+% \begin{variable}{title}
+%    \begin{macrocode}
+\property_new:nnnn  { title } { now } 
+  { \exp_not:n { \textbf { ?? } } } { \@currentlabelname }
+%    \end{macrocode}
+% \end{variable}
+% 
+% \begin{variable}{target}
+%    \begin{macrocode}
+\property_new:nnnn  { target } { now } { } { \@currentHref }
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{target}
+%    \begin{macrocode}
+\newcommand\@currentHpage{}
+\property_new:nnnn  { pagetarget } { shipout } { } { \@currentHpage }
+%    \end{macrocode}
+% \end{variable}
+
+% \begin{variable}{counter}
+%    \begin{macrocode}
+\property_new:nnnn  { counter } { now }  { } { \@currentcounter }
+%    \end{macrocode}
+% \end{variable}
+% 
+% \begin{variable}{xpos,ypos}
+%    \begin{macrocode}
+\property_new:nnnn  { xpos } { shipout } { 0} { \int_use:N \tex_lastxpos:D }
+\property_new:nnnn  { ypos } { shipout } { 0} { \int_use:N \tex_lastypos:D } 
+%    \end{macrocode}
+% \end{variable}
+%  
+%  \subsection{Messages}
+%    \begin{macrocode}
+\msg_new:nnnn { property } { exists }
+    { Property~'#1'~ has~ already~ been~ declared. }
+    { There~ already~ exists~ a~ property~ declaration~ with~ this~
+      name.\\
+      Please~ use~ a~ different~ name~ for~ your~ property.}
+      
+\msg_new:nnnn { property } { not-declared }
+  { Property~'#1'~not~declared. }
+  {
+    LaTeX~has~been~asked~to~use~property~'#1',~but~this~
+    name~has~not~been~declared.
+  }
+\msg_new:nnnn { property } { unknown-setpoint }
+  { Unknown~keyword~'#2'~for~setting~property~'#1'. }
+  {
+    LaTeX~has~been~asked~to~set~the~property~'#1',~but~the~keyword~
+    '#2'~is~not~one~of~the~two~known~values:~'now'~or~'shipout'.
+  }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%
+%<latexrelease>\IncludeInRelease{0000/00/00}{ltproperties}
+%<latexrelease>                 {cross-referencing~properties~(undo)}%
+%<latexrelease>
+%<latexrelease>\let \NewProperty  \@undefined
+%<latexrelease>\let \SetProperty \@undefined
+%<latexrelease>
+%<latexrelease>\let \RecordProperties  \@undefined
+%<latexrelease>\let \RefProperty \@undefined
+%<latexrelease>\let \RefUndefinedWarn  \@undefined
+%<latexrelease>
+%<latexrelease>\let \IfPropertyExistTF \@undefined
+%<latexrelease>\let \IfLabelExistTF \@undefined
+%<latexrelease>\let \IfPropertyRecordedTF  \@undefined
+%<latexrelease>
+%<latexrelease>\let\new@label@record \@undefined
+%<latexrelease>\let\@kernel@new@label@record@testdef\@undefined
+%<latexrelease>\EndModuleRelease
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\ExplSyntaxOff
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%    \end{macrocode}
+%
+%    Reset module prefix:
+%    \begin{macrocode}
+%<@@=>
+%    \end{macrocode}
+%
+%
+% \end{implementation}
+%
+% \Finale

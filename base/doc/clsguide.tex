@@ -42,7 +42,7 @@
     \texttt{clsguide.tex} for full details.}%
 }
 
-\date{2023-01-12}
+\date{2023-10-24}
 
 \NewDocumentCommand\cs{m}{\texttt{\textbackslash\detokenize{#1}}}
 \NewDocumentCommand\marg{m}{\arg{#1}}
@@ -143,7 +143,7 @@ There are several reasons why we should not make such changes to these
 files.
 \begin{itemize}
 \item
-  However misguided, the current behaviour is clearly what was
+  However misguided, the current behavior is clearly what was
   intended when these classes were designed.
 \item
   It is not good practice to change such aspects of `standard classes'
@@ -188,7 +188,7 @@ command which should only be used in the \LaTeX{} kernel, whereas
 
 However, this rule of thumb is still useful: if a command has |@| in
 its name then it is not part of the supported \LaTeX{} language---and
-its behaviour may change in future releases!  If a command is
+its behavior may change in future releases!  If a command is
 mixed-case, or is described in \emph{\LaTeXbook}, then you can rely on
 future releases of \LaTeX{} supporting the command.
 
@@ -489,7 +489,7 @@ the |article| class to set the |\paperheight| and |\paperwidth| lengths:
 \end{verbatim}
 Sometimes a user will request an option which the class or package has not
 explicitly declared. By default this will produce a warning (for classes) or
-error (for packages); this behaviour can be altered as follows:
+error (for packages); this behavior can be altered as follows:
 \begin{verbatim}
    \DeclareOption*{<code>}
 \end{verbatim}
@@ -847,7 +847,7 @@ The basic properties provided here are
     has no limitation on scope (\texttt{general})
 \end{itemize}
 The part of the \meta{key} before the \m{property} is the \m{name}, with the
-\m{value} working with the \m{property} to define the behaviour of the option.
+\m{value} working with the \m{property} to define the behavior of the option.
 
 For example, with
 \begin{verbatim}
@@ -875,7 +875,15 @@ options.
 The command |\DeclareUnknownKeyHandler| may be used to define the behavior when
 an undefined key is encountered. The \m{code} will receive the unknown key name
 as |#1| and the value as |#2|. These can then be processed as appropriate,
-e.g.~by forwarding to another package.
+e.g.~by forwarding to another package. The entire option is available as
+\cs{CurrentOption}, should it be necessary to pass on options which may or
+may not contain an |=|~sign. For example, this may be used to pass an
+unknown option on to a non-keyval class such as \pkg{article}:
+\begin{verbatim}
+\DeclareUnknownKeyHandler{%
+  \PassOptionsToClass{\CurrentOption}{article}
+}
+\end{verbatim}
 
 \begin{decl}
   |\ProcessKeyOptions| \oarg{family}
@@ -883,6 +891,8 @@ e.g.~by forwarding to another package.
 The |\ProcessKeyOptions| function is used to check the current option list
 against the keys defined for \m{family}. Global (class) options and local
 (package) options are checked when this function is called in a package.
+The command will process \emph{all} options given the the current
+package or class: there is no need to also apply \cs{ProcessOptions}.
 
 \begin{decl}
   |\SetKeys| \oarg{family} \arg{keyvals}
@@ -1181,12 +1191,184 @@ defined as
 where |#1| is the user input and the first argument to
 \cs{MakeUppercaseAux} takes two arguments, the locale and input text.
 
+\subsection{Extended and expandable references of properties}
+
+A property is something that \LaTeX{} can track while processing
+the document, such as a page
+number, a heading number, other counter values, a heading title, 
+a position on the page, etc.
+The current value of such properties can be labeled and
+written to the \texttt{aux}-file. It can then be referenced in
+the next compilation, similar to the way the standard \cs{label}/\cs{ref}
+commands work (they record/reference a fixed set of properties: 
+label, page, title, and target).
+
+\begin{decl}
+  |\RecordProperties|\arg{label}\arg{list of properties} 
+\end{decl}
+This command writes the value(s) of the \meta{list of properties}
+\texttt{aux}-file labeled by \meta{label}.  Recorded are either the
+values current when \cs{RecordProperties} is called or the value
+current when the next shipout happens---which depends on the
+declaration for each property.
+%
+The arguments \meta{label} and \meta{list of properties} can contain
+commands that are expanded. \meta{label} can expand to an arbitrary
+string (as long as it can safely be written to the \texttt{aux}-file)
+but note that the label names of \cs{label} and \cs{RecordProperties}
+share a singe namespace. This means that you get a \texttt{Label `A'
+  multiply defined} warning with the following code:
+\begin{verbatim}
+\label{A}\RecordProperties{A}{abspage}
+\end{verbatim}
+
+
+\begin{decl}
+ |\RefProperty|\arg{label}\arg{property}
+\end{decl}
+This command allows to reference the value of the property
+\meta{property} recorded in the previous run and labeled by \meta{label}.
+Differently to the standard
+\cs{ref} command the command is expandable and the value can for
+example---if it is a number---be used in an assignment.\footnote{For
+this to work the default value for the property would need to be a number too,
+because recorded values aren't known in the first \LaTeX{} run.}
+
+\begin{verbatim}
+\section{A section}
+\RecordProperties{mylabel}{pagenum,counter}
+\RefProperty{mylabel}{counter} % outputs section
+\setcounter{mycounter}{\RefProperty{mylabel}{pagenum}} 
+\end{verbatim}
+
+
+
+As \cs{RefProperty} is expandable it can not issue a rerun warning if
+a label is not found. If needed such a warning can be forced by the
+following command:
+\begin{decl}
+ |\RefUndefinedWarn|\arg{label}\arg{property}
+\end{decl}
+
+\LaTeX{} predefines a set of properties, this set contains also the
+properties stored by the standard \cs{label} command. In the list
+below \enquote{default} indicates the value returned when the value is
+not yet known (i.e., if it wasn't recorded in the previous run and
+\enquote{at shipout} means that this property is not recorded
+immediately when \cs{RecordProperties} is used but during the next
+\cs{shipout}.
+
+\begin{description}
+ \item[\texttt{abspage} (default: \texttt{0}, at shipout)] The absolute value of the current page:
+   starts at $1$ and increases monotonically at each shipout.
+   
+ \item[\texttt{page} (default: \texttt{0}, at shipout)] The current page as given by \cs{thepage}: this may or
+   may not be a numerical value, depending on the current
+   style. Contrast with \texttt{abspage}. You get this value also with
+   the standard \cs{label}/\cs{pageref}.
+
+ \item[\texttt{pagenum} (default: \texttt{0}, at shipout)] The current page as arabic number. This is
+   suitable for integer operations and comparisions.
+
+ \item[\texttt{label} (default: \texttt{??})] The content of \cs{@currentlabel}. This is the value 
+     that you get also with the standard \cs{label}/\cs{ref}. 
+
+ \item[\texttt{title} (default: \texttt{\cs{textbf}\{??\}})] The content of \cs{@currentlabelname}.  This
+   command is filled beside others by the \pkg{nameref} package and
+   some classes (e.g.~\pkg{memoir}) and typically gives 
+   the title defined in the document by some sectioning command
+
+ \item[\texttt{target} (default: \meta{\mdseries empty})] The content of \cs{@currentHref}.  This
+   command is normally filled by \pkg{hyperref} and holds the name of
+   the last destination it created.
+
+\item[\texttt{pagetarget} (default: \meta{\mdseries empty}, at shipout)] 
+    The content of \cs{@currentHpage}.  This command is filled by 
+    \pkg{hyperref} (version v7.01c or newer) and holds the name of the last 
+    page anchor it created. 
+
+ \item[\texttt{counter} (default: \meta{\mdseries empty})] The content of \cs{@currentcounter}.  This
+   command contains after a \cs{refstepcounter} the name of the
+   counter.
+
+ \item[\texttt{xpos}, \texttt{ypos} (default: \texttt{0}, at shipout)] These properties records the
+   $x$~and $y$ coordinates of a point previously stored with
+   \cs{pdfsavepos}/\cs{savepos}.  E.g.~(if \pkg{bidi} is used it can
+   be necessary to save the position before and after the label):
+   \begin{verbatim}
+     \pdfsavepos 
+     \RecordProperties{myposition}{xpos,ypos}%
+     \pdfsavepos
+   \end{verbatim}  
+\end{description} 
+ 
+Class and package authors can define more properties to store other
+values they are interested in.
+\begin{decl}
+  |\NewProperty|\arg{name}\arg{setpoint}\arg{default}\arg{code}\\
+  |\SetProperty|\arg{name}\arg{setpoint}\arg{default}\arg{code}
+\end{decl}
+These commands declare or change a property \meta{name}\footnote{Only change 
+properties that you have declared. The declarations of standard properties of \LaTeX{} and 
+properties of other packages should never be altered!}. If a new property is 
+declared within a package it is suggested that its name is always structured 
+as follows: \meta{package-name}\texttt{/}\meta{property-name}. 
+\meta{setpoint} is either |now| or |shipout| and decides if the value is 
+written directly or at the next shipout. \meta{default} is used if the 
+property is referenced but not yet known, e.g., in the first run.  
+\meta{code} is the code executed when storing the value. For example, the 
+\texttt{pagenum} property is declared as 
+\begin{verbatim}
+\NewProperty{pagenum}{shipout}{0}{\the\value{page}}
+\end{verbatim}
+
+The commands related to properties are offered as a set of CamelCase
+commands for traditional \LaTeXe{} packages (and for use in the
+document preamble if needed) as well as \texttt{expl3} commands for
+modern packages, that use the L3 programming layer of \LaTeX{}. The
+\texttt{expl3} commands and more details can be found in
+\texttt{ltproperties-doc.pdf}.
+
+\subsection{Preparing link targets}
+
+Active links in a document need targets to which they can jump to. Such
+targets are often created automatically (if the package \pkg{hyperref}
+is loaded) by the \cs{refstepcounter} command but there are also cases
+where class or package authors need to add a target manually, for
+example, in unnumbered sectioning commands or in environments. For this
+\LaTeX{} provides the following commands. \emph{Without}
+\pkg{hyperref} they do nothing or insert only a whatsits 
+(to ensure that spacing doesn't change when hyperref is loaded), \emph{with}
+\pkg{hyperref} they add the necessary targets. Details about the
+behavior and the arguments of the following commands can by found in
+the \pkg{hyperref} package in \texttt{hyperref-linktarget.pdf}.
+
+\begin{decl}
+ |\MakeLinkTarget|\oarg{prefix}\arg{counter}\\
+ |\MakeLinkTarget|\oarg{prefix}\{\}\\
+ |\MakeLinkTarget|*\arg{target name}
+\end{decl}
+This command prepares the creations of targets. 
+
+\begin{decl}
+ |\LinkTargetOn|\\
+ |\LinkTargetOff|
+\end{decl}
+These commands allow to enable and disable locally the creation of
+targets. This can be useful to suppress targets otherwise created automatically
+by \cs{refstepcounter}.
+
+\begin{decl}
+ |\NextLinkTarget|\arg{target name}
+\end{decl}
+This changes the name of the next target that will be created.
+
 \section{Commands superseded for new material}
 
 A small number of commands were introduced as part of \LaTeXe{} in the
-mid-1990s, are widely used but have been superseded by more modern methods.
-These are covered here as they are likely to be encountered routinely in
-existing classes and packages.
+mid-1990s, are widely used but have been superseded by more modern
+methods.  These are covered here as they are likely to be encountered
+routinely in existing classes and packages.
 
 \subsection{Defining commands}
 

@@ -1,0 +1,1975 @@
+% \iffalse meta-comment
+%
+%% File: latex-lab-table.dtx (C) Copyright 2023 LaTeX Project
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+%
+% The development version of the bundle can be found below
+%
+%    https://github.com/latex3/latex2e/required/latex-lab
+%
+% for those people who are interested or want to report an issue.
+%
+\def\ltlabtbldate{2023-10-30}
+\def\ltlabtblversion{0.85d}
+%<*driver>
+\documentclass{l3doc}
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{latex-lab-table.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+% \providecommand\hook[1]{\texttt{#1\DescribeHook[noprint]{#1}}}
+% \providecommand\socket[1]{\texttt{#1\DescribeSocket[noprint]{#1}}}
+% \providecommand\plug[1]{\texttt{#1\DescribePlug[noprint]{#1}}}
+%
+% \NewDocElement[printtype=\textit{socket},idxtype=socket,idxgroup=Sockets]{Socket}{socketdecl}
+% \NewDocElement[printtype=\textit{hook},idxtype=hook,idxgroup=Hooks]{Hook}{hookdecl}
+% \NewDocElement[printtype=\textit{plug},idxtype=plug,idxgroup=Plugs]{Plug}{plugdecl}
+%
+%
+%
+%
+% \title{The \textsf{latex-lab-table} package\\
+%        Changes related to the tagging of tables}
+% \author{Frank \& Ulrike, \LaTeX{} Project\thanks{Initial implementation done by Frank Mittelbach}}
+% \date{v\ltlabtblversion\ \ltlabtbldate}
+%
+% \maketitle
+%
+% \newcommand{\xt}[1]{\textsl{\textsf{#1}}}
+% \newcommand{\TODO}[1]{\textbf{[TODO:} #1\textbf{]}}
+% \newcommand{\docclass}{document class \marginpar{\raggedright document class
+% customizations}}
+%
+%
+% \begin{abstract}
+%   The following code implements a first draft for the tagging of
+%   tables. It still has a large number of limitations and restrictions!
+% \end{abstract}
+%
+% \tableofcontents
+%
+% \section{Documentation}
+%
+% In \LaTeX{} the word \texttt{table} is used as the name of the float environment that can contain
+% a data table\footnote{But it does not really have to, you can put
+% other material into such environments.} along with a caption and some additional text. The environments for
+% actual data tables have various names like \texttt{tabular}, \texttt{tabular*},
+% \texttt{tabularx} and \texttt{longtable}---the last should not be used inside a float
+% and supports its own caption command.
+%
+% In this documentation \enquote{table} always means such data tables and not the float
+% environment.
+%
+% Tagging of tables is on one side doesn't look very difficult: one only has to
+% surround rows and cells by TR and TH or TD structures.
+% But there are difficulties:
+% \begin{itemize}
+% \item
+%   One is that over the years various packages related to tables have
+%   been written that all change some of the internals. Inserting the
+%   tagging commands and testing all the variants and various nestings
+%   is not trivial.
+%
+% \item
+%   The other difficulty is that most of the existing environments to
+%   create tables do not know the concept of headers as a semantic
+%   structures.
+%
+% \item
+%   Headers are only produced through visual formatting, e.g., by
+%   making them bold or by underlying some color. But accessible
+%   tables need headers (and the PDF/UA standards requires them) and
+%   this means that additional syntax to declare headers (when they
+%   can't be guessed) must be developed. This is still an area for
+%   research.
+% \end{itemize}
+%
+% Right now, this module therefore does implement only some basic
+% support for the tagging of tables. A list of the known limitations
+% is shown below.
+%
+% The module is not loaded automatically (i.e., not yet integrated
+% into any \texttt{phase-XX})  and by itself it doesn't activate
+% tagging. For experimenting with table tagging it is therefore best
+% to load it in combination
+% with phase-III in \cs{DocumentMetadata}, i.e.:
+%
+% \begin{verbatim}
+% \DocumentMetadata{testphase={phase-III,table}}
+% \end{verbatim}
+%
+% It will then automatically tag all table environments it already supports with
+% the exception of tables in the header and footer of the page (where tagging is disabled).
+% Such tables can be nested. 
+%
+% If a table should not be tagged as table, for example because it is merely used
+% to produce a layout or because it is a not yet (fully) supported table structure, 
+% the tagging can be disabled with
+%  \verb|\tagpdfsetup{table-tagging=false}|.
+%
+% Inside cells the automatic tagging of paragraphs is disabled with the exception of
+% p/m/b-type cells. 
+%
+% Rows do not need to contain a full number of \&, missing cells are automatically
+% added with an empty TD-structure.
+%
+% There is some basic support\footnote{This is not meant to be the
+% final interface, though.} for headers. With
+% \begin{quote}
+%   \verb|\tagpdfsetup{table-header-rows={|\meta{list of row numbers}\verb|}|
+% \end{quote}
+% you can
+% declare which (absolute) row numbers should be tagged as header rows.
+% It applies to all tables until it is changed to a different list of row numbers or undone by setting
+% the key to \meta{empty}.
+% A row number can be
+% negative, then the counting starts from the end of the table. There is no support
+% for header columns yet. In a \env{longtable} the code will currently use the \cs{endhead} or
+% \cs{endfirsthead} rows as header if one of these commands has been
+% used and in that case the code
+% ignores a \texttt{table-header-rows} setting.
+%
+% You should not insert meaningful text with \verb+!{...}+ or \verb+@{...}+ or \cs{noalign}
+% between the rows or columns of the table.
+% With pdflatex such text will be unmarked, with lualatex it will be marked as artifact.
+% Either case means that it will be currently ignored in the
+% structure.\footnote{While it is theoretically possible
+% to collect such text and move it into a structure it would require manual markup
+% from the author to clarify where this text belongs too.}
+% 
+% As mentioned below the \pkg{colortbl} doesn't yet work properly with the tagging,
+% but once it does, then colors inside the table will probably be
+% simply ignored (at least initially). If such a color
+% has a semantic meaning (like \enquote{important value}) this meaning will be lost.
+% 
+% Feedback and problems with the code can be reported at
+% \url{https://github.com/latex3/tagging-project} either in form of
+% explicit issues or as a \enquote{discussion topic}, whatever works best.
+%
+%
+% \section{Limitations}
+%
+% \begin{itemize}
+% \item The code loads the \pkg{array} package and so does not work without it (that is
+% not really a limitation, but can affect existing tables).
+%
+% \item It supports only a restricted number of tables types. Currently
+% \env{tabular}, \env{tabular*}, \env{tabularx}, and \env{longtable}.
+%
+% \item the \env{array} environment is assumed to be part of math and tagging as a table is disabled for
+% it.
+%
+% \item Row spans are not yet supported (and the \pkg{multirow} package is untested).
+%
+% \item The \pkg{colortbl} package breaks tagging if there are nested tables. It also breaks
+% the filling up of incomplete rows.
+% 
+% \item The \pkg{tabularray} package use a completed different
+% method to create tables and will not be supported by this code.
+% 
+% \item The \pkg{nicematrix} package is currently incompatible. 
+% 
+% \item Most other packages related to tables in \LaTeX{} are not yet tested,
+% that includes packages that change rules like \pkg{booktabs}, \pkg{hhline},
+% \pkg{arydshln}, \pkg{hvdashln}.
+%
+% \item \env{longtable} currently only works with lualatex.
+%  With other engines it breaks as its output
+%  routine clashes with the code which closes open MC-chunks at pagebreaks and
+%  if this is resolved there will probably be problems with the head and foot boxes
+%  (but this can't be tested currently).
+%
+% \item Not every table should be tagged as a Table structure, often they are
+% only used as layout help, e.g. to align authors in a title pages. In such uses
+% the tagging of the table must be deactivated with \verb|\tagpdfsetup{table-tagging=false}|.
+%
+% \item Only simple header rows are currently supported. Columns and complex headers with
+% subheaders will be handled later as that needs some syntax changes. Tables
+% with more than one header row are probably not pdf/UA as the headers array in
+% the cells is missing.
+%
+% \item A \pkg{longtable} \cs{caption} is currently simply formatted as a multicolumn and
+% not tagged as a \texttt{Caption} structure.
+%
+% \item The \pkg{caption} package will quite probably break the \pkg{longtable} caption.
+%
+% \item The setup for \pkg{longtable} requires lots of patches to internal \pkg{longtable}
+% commands and so can easily break if other packages try to patch \pkg{longtable} too.
+% 
+% \item The \env{longtable} environment supports footnotes in p-type columns, but it hasn't been
+% tested yet if this works also with the tagging code. 
+%
+% \item The code is quite noisy and fills the log with lots of
+%   messages.\footnote{Helpful for us at this stage.}
+% \end{itemize}
+%
+%
+%
+% \section{Introduction}
+%
+%
+% \section{Technical details and problems}
+%
+%  The implementation has to take care of various details.
+%
+%  \subsection{TODOs}
+%
+%  \begin{itemize}
+%  \item
+%     Test \texttt{array-006-longtable.lvt} and
+%     \texttt{array-007-longtable.lvt} have errors with pdftex (para
+%    tagging)
+%
+%  \item
+%     Instead of before/after hooks we should add sockets directly
+%     into the code.
+%
+%  \item Debugging code and messages must be improved.
+%
+%  \item Cells need an \texttt{Headers} array.
+%
+%  \item Row spans should be supported (but perhaps need syntax support)
+%
+%  \item Longtable captions should be properly supported.
+%
+%  \item Handle p-cells better. para-tagging should probably be enabled,
+%  but Part can't be a child of TD, so this should probably be changed to Div here.
+%  Also there is a stray MC somewhere.
+%
+%  \item More packages must be tested.
+%  \end{itemize}
+%
+%
+% \section{Implementation}
+%    \begin{macrocode}
+%<@@=tbl>
+%<*package>
+%    \end{macrocode}
+%    \begin{macrocode}
+\ProvidesExplPackage {latex-lab-testphase-table} {\ltlabtbldate} {\ltlabtblversion}
+  {Code related to the tagging of tables}
+%    \end{macrocode}
+% This builds on \pkg{array} so we load it by default:
+%    \begin{macrocode}
+\RequirePackage{array}
+%    \end{macrocode}
+%
+%
+% \subsection{Variables}
+% \begin{macro}
+%  {
+%    \l_@@_celltag_tl
+%   ,\l_@@_rowtag_tl
+%   ,\l_@@_cellattribute_tl
+%   ,\l_@@_rowattribute_tl
+%   ,\g_@@_missingcells_int
+%   ,\l_@@_tmpa_clist
+%   ,\l_@@_tmpa_seq
+%   ,\l_@@_tmpa_tl
+%  }
+%    This is for the celltag, e.g. TD or TH:
+%    \begin{macrocode}
+\tl_new:N  \l_@@_celltag_tl
+\tl_set:Nn \l_@@_celltag_tl {TD}
+%    \end{macrocode}
+%    For the rowtag, probably always TR:
+%    \begin{macrocode}
+\tl_new:N  \l_@@_rowtag_tl
+\tl_set:Nn \l_@@_rowtag_tl {TR}
+%    \end{macrocode}
+%    And here cell and row attributes:
+%    \begin{macrocode}
+\tl_new:N  \l_@@_cellattribute_tl
+\tl_set:Nn \l_@@_cellattribute_tl {}
+\tl_new:N  \l_@@_rowattribute_tl
+\tl_set:Nn \l_@@_rowattribute_tl {}
+%    \end{macrocode}
+% This will contain the number of missing cells used:
+%    \begin{macrocode}
+\int_new:N \g_@@_missing_cells_int
+%    \end{macrocode}
+% Temp variables
+%    \begin{macrocode}
+\clist_new:N \l_@@_tmpa_clist
+\seq_new:N \l_@@_tmpa_seq
+\tl_new:N \l_@@_tmpa_tl
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Sockets}
+%
+% The code uses a number of sockets to inject the tagging
+% commands. These can be easily set to a noop-plug in case the
+% automated tagging is not wanted At first sockets for the begin and
+% end of cells and rows
+%
+% \begin{socketdecl}{tagsupport/tblcell/begin,
+%                    tagsupport/tblcell/end,
+%                    tagsupport/tblrow/begin,
+%                    tagsupport/tblrow/end,
+%                   }
+%    \begin{macrocode}
+\NewSocket{tagsupport/tblcell/begin}{0}
+\NewSocket{tagsupport/tblcell/end}{0}
+\NewSocket{tagsupport/tblrow/begin}{0}
+\NewSocket{tagsupport/tblrow/end}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+%
+% \begin{socketdecl}{tagsupport/tbl/init}
+%    This socket should be at the begin of the table, inside a group.
+%    It is meant for settings like disabling paratagging.  This socket
+%    can perhaps be merged later into the begin-sockets when they are
+%    no longer added as hooks but in the environment definitions.
+%    \begin{macrocode}
+\NewSocket{tagsupport/tbl/init}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+%
+%
+% \begin{socketdecl}{tagsupport/tbl/finalize}
+%    To fine tune the structure (change cells to header cells, remove
+%    unwanted structures, move a foot to the end, etc.) we also need a
+%    socket that is executed at the end of the table but \emph{before}
+%    all the variables are restored to the outer or default values.
+%    The code in the socket can make assignments, but probably
+%    shouldn't do typesetting and not write whatsits.
+%    \begin{macrocode}
+\NewSocket{tagsupport/tbl/finalize}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+%
+% \begin{socketdecl}{tagsupport/tbl/finalize/longtable}
+%    \env{longtable} needs its own socket to fine tune the structure.
+%    Simply switching the plug in the previous socket interferes with
+%    enabling/disabling the tagging.
+%    \begin{macrocode}
+\NewSocket{tagsupport/tbl/finalize/longtable}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+%
+% \begin{socketdecl}{tagsupport/tblhmode/begin,
+%                    tagsupport/tblhmode/end,
+%                    tagsupport/tblvmode/begin,
+%                    tagsupport/tblvmode/end
+%                   }
+%
+%    These sockets are used in the begin and end code of environments,
+%    to allow a fast enabling and disabling of the tagging. We
+%    distinguish between tables that can be used inside paragraphs and
+%    standalone tables like longtable.
+%    \begin{macrocode}
+\NewSocket{tagsupport/tblhmode/begin}{0}
+\NewSocket{tagsupport/tblhmode/end}{0}
+\NewSocket{tagsupport/tblvmode/begin}{0}
+\NewSocket{tagsupport/tblvmode/end}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+%
+% This are the standard plugs for tagging of cells and rows.
+%
+% \begin{plugdecl}{TD}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tblcell/begin}{TD}
+  {
+    \tag_struct_begin:n
+      {
+        tag             =\l_@@_celltag_tl,
+        attribute-class =\l_@@_cellattribute_tl
+      }
+    \seq_gput_right:Ne \g_@@_struct_cur_seq { \tag_get:n {struct_num} }
+%    \end{macrocode}
+%   we store the cells of multicolumns as negative number. This allow to skip them
+%   or to use them as needed.
+%    \begin{macrocode}
+    \int_step_inline:nn { \g_@@_span_tl - 1 }
+      {
+        \seq_gput_right:Ne \g_@@_struct_cur_seq { -\tag_get:n {struct_num} }
+      }
+    \tag_mc_begin:n{}
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \begin{plugdecl}{TD}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tblcell/end}{TD}
+  {
+    \tag_mc_end:
+    \tag_struct_end:
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+% 
+%    In p-columns we need a slightly different plug which reactivates the
+%    paragraph tagging.
+% tagging
+% \begin{plugdecl}{TD}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tblcell/begin}{TDpbox}
+  {
+    \tag_struct_begin:n
+      {
+        tag             =\l__tbl_celltag_tl,
+        attribute-class =\l__tbl_cellattribute_tl
+      }
+    \seq_gput_right:Ne \g__tbl_struct_cur_seq { \tag_get:n {struct_num} }
+    \int_step_inline:nn { \g__tbl_span_tl - 1 }
+      {
+        \seq_gput_right:Ne \g__tbl_struct_cur_seq { -\tag_get:n {struct_num} }
+      }
+    \tagpdfparaOn
+    \tl_set:Nn \l__tag_para_main_tag_tl {Div}
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+% 
+% \begin{plugdecl}{TD}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tblcell/end}{TDpbox}
+  {
+    \tag_struct_end:
+  }  
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \begin{plugdecl}{TR}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tblrow/begin}{TR}
+  {
+    \seq_gclear:N \g_@@_struct_cur_seq
+    \tag_struct_begin:n
+     {
+       tag            =\l_@@_rowtag_tl,
+       attribute-class=\l_@@_rowattribute_tl
+     }
+   \seq_gput_right:Ne \g_@@_struct_rows_seq { \tag_get:n {struct_num} }
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \begin{plugdecl}{TR}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tblrow/end}{TR}
+  {
+    \__tag_tbl_add_missing_cells:n { \g_@@_missing_cells_int }
+    \seq_gput_right:Ne \g_@@_struct_cells_seq
+      {
+        \seq_use:Nn \g_@@_struct_cur_seq {,}
+      }
+    \int_compare:nNnTF { \g_@@_row_int } = { \seq_count:N\g_@@_struct_cells_seq }
+      {
+        \typeout
+          {==>~
+            stucture~stored~for~row~\int_use:N\g_@@_row_int :~
+            \seq_use:Nn \g_@@_struct_cur_seq {,}
+          }
+      }
+      { \ERROR } % should not happen ...
+    \tag_struct_end:
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% And the plugs for the table as whole. The code can be different for
+% normal tables which can also be used inline and nested and
+% \enquote{vmode} tables like longtable.
+%
+% \begin{plugdecl}{Table}
+%    Inside a table we currently only disable paratagging. We assume
+%    that these sockets are in an environment group, so there is no
+%    need to reenable paratagging.
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tbl/init}{Table}
+  {
+    \tag_if_active:T
+      {
+        \bool_set_false:N \l__tag_para_bool
+      }
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+%
+%
+% \begin{plugdecl}{Table}
+%  This plug will fine tune the structure.
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tbl/finalize}{Table}
+  {
+    \@@_set_header_rows:
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \begin{plugdecl}{Table}
+%  This plug will fine tune the structure of longtable.
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tbl/finalize/longtable}{Table}
+  {
+%    \end{macrocode}
+%    If neither \cs{endhead} nor \cs{endfirsthead} has been used
+%    we use the standard header command:
+%    \begin{macrocode}
+     \bool_lazy_and:nnTF
+       { \seq_if_empty_p:N \g_@@_LT@head_rows_seq  }
+       { \seq_if_empty_p:N \g_@@_LT@firsthead_rows_seq }
+       { \@@_set_header_rows: }
+%    \end{macrocode}
+%    Otherwise, if firsthead has not been used we use head. For this
+%    we simple retrieve the row numbers and then call the header
+%    command.
+%    \begin{macrocode}
+       {
+         \seq_if_empty:NTF \g_@@_LT@firsthead_rows_seq
+           {
+             \clist_set:Ne \l_@@_header_rows_clist
+               {\seq_use:Nn \g_@@_LT@head_rows_seq {,}}
+             \@@_set_header_rows:
+           }
+%    \end{macrocode}
+%    In the other case we use firsthead.
+%    \begin{macrocode}
+           {
+             \clist_set:Ne \l_@@_header_rows_clist
+               { \seq_use:Nn \g_@@_LT@firsthead_rows_seq {,} }
+             \@@_set_header_rows:
+%    \end{macrocode}
+%    Additionally we have to remove the head to avoid duplication. The
+%    one option here is to remove the rows from the kid sequence of
+%    the table (which will lead to orphaned structure elements), the
+%    other to make them artifact.  For now we use the first option for
+%    pdf 1.7 and the second for pdf 2.0.
+%    \begin{macrocode}
+             \pdf_version_compare:NnTF < {2.0}
+              {
+                \seq_map_inline:Nn \g_@@_LT@head_rows_seq
+                  {
+                    \seq_gset_item:cnn
+                      {g__tag_struct_kids_ \g_@@_struct_table_tl _seq}
+                      { ##1 }
+                      {}
+%    \end{macrocode}
+%    Not sure if needed, but if needed we can remove also the P tag.
+%    This is currently disabled as it produce warnings.  TODO: This
+%    needs also a tagpdf command which takes care of debug code.
+%    \begin{macrocode}
+                    \tl_set:Ne \l_@@_tmpa_tl
+                      { \seq_item:Nn\g_@@_struct_rows_seq {##1} }
+                    \prop_if_exist:cT
+                      { g__tag_struct_ \l_@@_tmpa_tl _prop }
+                      {
+                        %\prop_gremove:cn {g__tag_struct_ \l_@@_tmpa_tl _prop} {P}
+                      }
+                  }
+              }
+              {
+                \seq_map_inline:Nn \g_@@_LT@head_rows_seq
+                  {
+                    \tl_set:Ne \l_@@_tmpa_tl
+                      { \seq_item:Nn\g_@@_struct_rows_seq {##1} }
+                    \prop_if_exist:cT
+                      { g__tag_struct_ \l_@@_tmpa_tl _prop }
+                      {
+                        \@@_struct_prop_gput:Vnn \l_@@_tmpa_tl {S}{/Artifact}
+                      }
+                   }
+               }
+            }
+       }
+%    \end{macrocode}
+%    The foot is handled similar, the difference is
+%    that we have to move it to the end one of them
+%    is not empty, but do nothing if they aren't there.
+%    \begin{macrocode}
+     \bool_lazy_and:nnF
+       { \seq_if_empty_p:N \g_@@_LT@foot_rows_seq  }
+       { \seq_if_empty_p:N \g_@@_LT@lastfoot_rows_seq }
+       {
+%    \end{macrocode}
+%    If lastfoot is empty move foot to the end.
+%    \begin{macrocode}
+         \seq_if_empty:NTF \g_@@_LT@lastfoot_rows_seq
+           {
+             \seq_map_inline:Nn \g_@@_LT@foot_rows_seq
+               {
+                 \tl_set:Ne \l_@@_tmpa_tl
+                   {
+                     \seq_item:cn
+                       {g__tag_struct_kids_ \g_@@_struct_table_tl _seq}
+                       {##1}
+                   }
+                 \seq_gset_item:cnn
+                   {g__tag_struct_kids_ \g_@@_struct_table_tl _seq}
+                   { ##1 }
+                   {}
+                 \seq_gput_right:cV
+                   {g__tag_struct_kids_ \g_@@_struct_table_tl _seq}
+                   \l_@@_tmpa_tl
+               }
+           }
+%    \end{macrocode}
+%    If lastfoot is not empty we move that.
+%    \begin{macrocode}
+           {
+             \seq_map_inline:Nn \g_@@_LT@lastfoot_rows_seq
+               {
+                 \tl_set:Ne \l_@@_tmpa_tl
+                   {
+                     \seq_item:cn
+                       {g__tag_struct_kids_ \g_@@_struct_table_tl _seq}
+                       {##1}
+                   }
+                 \seq_gset_item:cnn
+                   {g__tag_struct_kids_ \g_@@_struct_table_tl _seq}
+                   { ##1 }
+                   {}
+                 \seq_gput_right:cV
+                   {g__tag_struct_kids_ \g_@@_struct_table_tl _seq}
+                   \l_@@_tmpa_tl
+               }
+%    \end{macrocode}
+%    and we hide foot
+%    \begin{macrocode}
+            \pdf_version_compare:NnTF < {2.0}
+              {
+                \seq_map_inline:Nn \g_@@_LT@foot_rows_seq
+                  {
+                    \seq_gset_item:cnn
+                      {g__tag_struct_kids_ \g_@@_struct_table_tl _seq}
+                      { ##1 }
+                      {}
+%    \end{macrocode}
+%    Not sure if needed, but if needed we can remove also the P tag.
+%    This is currently disabled as it produce warnings.
+%    TODO: This needs also
+%    a tagpdf command which takes care of debug code.
+%    \begin{macrocode}
+                    \tl_set:Ne \l_@@_tmpa_tl
+                      { \seq_item:Nn\g_@@_struct_rows_seq {##1} }
+                    \prop_if_exist:cT
+                      { g__tag_struct_ \l_@@_tmpa_tl _prop }
+                      {
+                        %\prop_gremove:cn {g__tag_struct_ \l_@@_tmpa_tl _prop} {P}
+                      }
+                  }
+              }
+              {
+                \seq_map_inline:Nn \g_@@_LT@foot_rows_seq
+                  {
+                    \tl_set:Ne \l_@@_tmpa_tl
+                      { \seq_item:Nn\g_@@_struct_rows_seq {##1} }
+                    \prop_if_exist:cT
+                      { g__tag_struct_ \l_@@_tmpa_tl _prop }
+                      {
+                        \@@_struct_prop_gput:Vnn \l_@@_tmpa_tl {S}{/Artifact}
+                      }
+                   }
+               }
+           }
+       }
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \begin{plugdecl}{Table}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tblhmode/begin}{Table}
+  {
+    \mode_leave_vertical:
+    \tag_mc_end_push:
+%    \end{macrocode}
+%    Close the P-chunk. This assumes that para-tagging is active.
+%    For nested tables that is not necessarly true, so we test for it.
+%    \begin{macrocode}
+     \bool_lazy_and:nnT
+      { \bool_if_exist_p:N \l__tag_para_bool } { \l__tag_para_bool }
+      { \tag_struct_end:n { text } }
+    \tag_struct_begin:n {tag=Table}
+    \tl_gset:Ne \g_@@_struct_table_tl { \tag_get:n {struct_num} }
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \begin{plugdecl}{Table}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tblhmode/end}{Table}
+  {
+    \tag_struct_end:
+%    \end{macrocode}
+% reopen the P-chunk. This assumes that para-tagging is active.
+% For nested tables that is not necessarly true, so we test for it.
+%    \begin{macrocode}
+    \bool_lazy_and:nnT
+      { \bool_if_exist_p:N \l__tag_para_bool } { \l__tag_para_bool }
+      { \tag_struct_begin:n { tag=\l__tag_para_tag_tl } }
+    \tag_mc_begin_pop:n{}
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \begin{plugdecl}{Table}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tblvmode/begin}{Table}
+  {
+    \tag_struct_begin:n {tag=Table}
+    \tl_gset:Ne \g_@@_struct_table_tl { \tag_get:n {struct_num} }
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \begin{plugdecl}{Table}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tblvmode/end}{Table}
+  {
+    \tag_struct_end:
+    \par
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+%
+%
+%
+%
+%
+%\subsection{Environments}
+%
+% Currently only tabular, tabular*, tabularx and longtable.
+% We must use the \texttt{before} and \texttt{after} hooks as the \texttt{end}
+% hook is executed before the end of the last row and then MC are messed up.
+% This means that this sockets should only contain code that doesn't needs to be
+% grouped!
+%    \begin{macrocode}
+\AddToHook{env/tabular/before}  {\UseSocket{tagsupport/tblhmode/begin}}
+\AddToHook{env/tabular/after}   {\UseSocket{tagsupport/tblhmode/end}}
+\AddToHook{env/tabular*/before} {\UseSocket{tagsupport/tblhmode/begin}}
+\AddToHook{env/tabular*/after}  {\UseSocket{tagsupport/tblhmode/end}}
+\AddToHook{env/tabularx/before} {\UseSocket{tagsupport/tblhmode/begin}}
+\AddToHook{env/tabularx/after}  {\UseSocket{tagsupport/tblhmode/end}}
+\AddToHook{env/longtable/before}{\UseSocket{tagsupport/tblvmode/begin}}
+\AddToHook{env/longtable/after} {\UseSocket{tagsupport/tblvmode/end}}
+%    \end{macrocode}
+%
+% The \env{array} environment is math. So we disable table tagging for now.
+%    \begin{macrocode}
+\AddToHook{env/array/begin} {\__tag_tbl_disable:}
+%    \end{macrocode}
+%
+%
+% \subsection{Interfaces to tagging}
+%
+% \subsubsection{Tagging helper commands}
+%
+% \begin{macro}{\@@_set_colspan:n}
+%    This commands takes a number, checks if is larger than one,
+%    checks if the colspan attribute exists (we can't predefine an
+%    arbitrary number), and updates \cs{l_@@_cellattribute_tl}.
+%    \begin{macrocode}
+\tag_if_active:T
+  { \cs_generate_variant:Nn \__tag_attr_new_entry:nn {ee} }
+\cs_new_protected:Npn \@@_set_colspan:n #1
+  {
+    \tag_if_active:T
+      {
+        \int_compare:nNnT {#1}>{1}
+         {
+           \prop_get:NeNF \g__tag_attr_entries_prop
+              {colspan-\int_eval:n{#1}}
+              \l_@@_tmpa_tl
+              {
+                \__tag_attr_new_entry:ee
+                  {colspan-\int_eval:n{#1}}
+                  {/O /Table /ColSpan~\int_eval:n{#1}}
+              }
+           \tl_set:Ne \l_@@_cellattribute_tl
+              {colspan-\int_eval:n{#1}}
+         }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsubsection{Disabling/enabling}
+%
+%  For now we have only the option true/false but this will probably be extended
+%  to allow different setups like first row header etc.
+
+%  \begin{macro}{\__tag_tbl_disable:}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \__tag_tbl_disable:
+ {
+   \AssignSocketPlug{tagsupport/tblcell/begin}{noop}
+   \AssignSocketPlug{tagsupport/tblcell/end}{noop}
+   \AssignSocketPlug{tagsupport/tblrow/begin}{noop}
+   \AssignSocketPlug{tagsupport/tblrow/end}{noop}
+   \AssignSocketPlug{tagsupport/tbl/init}{noop}
+   \AssignSocketPlug{tagsupport/tbl/finalize}{noop}
+   \AssignSocketPlug{tagsupport/tbl/finalize/longtable}{noop}
+   \AssignSocketPlug{tagsupport/tblhmode/begin}{noop}
+   \AssignSocketPlug{tagsupport/tblhmode/end}{noop}
+   \AssignSocketPlug{tagsupport/tblvmode/begin}{noop}
+   \AssignSocketPlug{tagsupport/tblvmode/end}{noop}
+ }
+%    \end{macrocode}
+%  \end{macro}
+
+
+%  \begin{macro}{\__tag_tbl_enable:}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \__tag_tbl_enable:
+ {
+   \AssignSocketPlug{tagsupport/tblcell/begin}{TD}
+   \AssignSocketPlug{tagsupport/tblcell/end}{TD}
+   \AssignSocketPlug{tagsupport/tblrow/begin}{TR}
+   \AssignSocketPlug{tagsupport/tblrow/end}{TR}
+   \AssignSocketPlug{tagsupport/tbl/init}{Table}
+   \AssignSocketPlug{tagsupport/tbl/finalize}{Table}
+   \AssignSocketPlug{tagsupport/tbl/finalize/longtable}{Table}
+   \AssignSocketPlug{tagsupport/tblhmode/begin}{Table}
+   \AssignSocketPlug{tagsupport/tblhmode/end}{Table}
+   \AssignSocketPlug{tagsupport/tblvmode/begin}{Table}
+   \AssignSocketPlug{tagsupport/tblvmode/end}{Table}
+ }
+%    \end{macrocode}
+%  \end{macro}
+
+%    \begin{macrocode}
+% TODO decide about key name
+\keys_define:nn { __tag / setup }
+  {
+    table-tagging .choices:nn = { true, on }
+      { \__tag_tbl_enable: },
+    table-tagging .choices:nn = { false, off }
+      { \__tag_tbl_disable: },
+    table-tagging .default:n = true,
+    table-tagging .initial:n = true
+  }
+%    \end{macrocode}
+%
+% Table tagging should be disabled in the head and foot.
+%    \begin{macrocode}
+\AddToHook{begindocument}
+ {
+  \cs_if_exist:NT \@kernel@before@head
+   {
+     \tl_put_right:Nn \@kernel@before@head {\__tag_tbl_disable:}
+     \tl_put_right:Nn \@kernel@before@foot {\__tag_tbl_disable:}
+   }
+ }
+%    \end{macrocode}
+%
+% \subsubsection{Header support}
+%
+% Accessible table must have header cells declaring the meaning of the
+% data in a row or column. To allow a data cell to find it header cell(s)
+% a number of things must be done:
+% \begin{itemize}
+% \item every cell meant as a header should use the tag \texttt{TH}.
+%
+% \item header cells should have a \texttt{Scope} attribute with the
+%   value \texttt{Column}, \texttt{Row} or \texttt{Both}.  This is not
+%   needed in the first row or column of a table.
+% 
+% \item For more complex cases both \texttt{TD} and \texttt{TH} cell
+%   can contain a \texttt{Headers} attribute, that is an array of
+%   \texttt{ID}s of \texttt{TH} cell.
+% \end{itemize}
+%
+% For now we support only header rows.
+%
+% At first we define attributes for the three standard cases:
+% We delay to begin document
+% as we can't know if tagpdf is already loaded.
+%    \begin{macrocode}
+\AddToHook{begindocument}
+  {
+   \tag_if_active:T
+     {
+       \tagpdfsetup
+         {
+           newattribute =
+            {TH-col}{/O /Table /Scope /Column},
+           newattribute =
+             {TH-row}{/O /Table /Scope /Row},
+           newattribute =
+             {TH-both}{/O /Table /Scope /Both},
+         }
+%    \end{macrocode}
+%
+% And we put all three into the class map (perhaps the next tagpdf
+% should do that directly with newattribute):
+%
+%    \begin{macrocode}
+         \seq_gput_left:Ne\g__tag_attr_class_used_seq
+           {\pdf_name_from_unicode_e:n{TH-col}}
+         \seq_gput_left:Ne\g__tag_attr_class_used_seq
+           {\pdf_name_from_unicode_e:n{TH-row}}
+         \seq_gput_left:Ne\g__tag_attr_class_used_seq
+           {\pdf_name_from_unicode_e:n{TH-both}}
+     }
+  }
+
+%    \end{macrocode}
+%
+% \begin{variable}{\l_@@_header_rows_clist}
+%    This holds the numbers of the header rows. Negative numbers are
+%    possible and count from the back.
+%    \begin{macrocode}
+\clist_new:N  \l_@@_header_rows_clist
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{macro}{\@@_set_header_rows:}
+%    TEMP: Next tagpdf will have the right command which also updates
+%    the debug info.
+%    For now a temporary command:
+%    \begin{macrocode}
+\cs_if_free:NTF \__tag_struct_prop_gput:nnn
+   {
+     \cs_new_protected:Npn \@@_struct_prop_gput:nnn #1#2#3
+       { \prop_gput:cnn { g__tag_struct_#1_prop }{#2}{#3} }
+   }
+   { \cs_new_protected:Npn  \@@_struct_prop_gput:nnn #1#2#3
+       { \__tag_struct_prop_gput:nnn {#1}{#2}{#3} }
+   }
+\cs_generate_variant:Nn \@@_struct_prop_gput:nnn {nne,Vnn}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_set_header_rows:
+  {
+    \clist_map_inline:Nn \l_@@_header_rows_clist
+      {
+        \clist_set:Ne\l_@@_tmpa_clist
+          {
+            \seq_item:Nn \g_@@_struct_cells_seq {##1}
+          }
+        \clist_map_inline:Nn \l_@@_tmpa_clist
+          {
+%    \end{macrocode}
+%    We can have negative numbers in the list from the multicolumn.
+%    \begin{macrocode}
+            \prop_if_exist:cT { g__tag_struct_####1_prop }
+              {
+                \@@_struct_prop_gput:nnn{ ####1 }{S}{/TH}
+%    \end{macrocode}
+%    This need refinement once row headers (and perhaps other attributes)
+%    are used too, but for now it should be ok.
+%    \begin{macrocode}
+                \prop_get:cnNTF
+                  { g__tag_struct_####1_prop }
+                  { C }
+                  \l_@@_tmpa_tl
+                  {\@@_struct_prop_gput:nne{ ####1 }{C}{[/TH-col~\l_@@_tmpa_tl]} }
+                  {\@@_struct_prop_gput:nnn{ ####1 }{C}{/TH-col}}
+             }
+          }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%  
+% And some key support:
+%    \begin{macrocode}
+% TODO decide about key name
+\keys_define:nn { __tag / setup }
+  {
+    table-header-rows .clist_set:N = \l_@@_header_rows_clist
+  }
+%    \end{macrocode}
+%
+% \subsection{Changes to \pkg{array} commands}
+%
+%
+%
+%  \begin{macro}{\@@_show_curr_cell_data:}
+%    Show the row/column index and span count for current table cell
+%    for debugging.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_show_curr_cell_data: {
+   \typeout { ==>~ current~cell~data:~
+              \int_use:N \g_@@_row_int ,
+              \int_use:N \g_@@_col_int ,
+              \g_@@_span_tl
+            }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+% \begin{macro}{\insert@column}
+%    \cs{insert@column} is defined in \pkg{array}, here only the two
+%    sockets are inserted.
+%    \begin{macrocode}
+\def\insert@column{%
+  \@@_show_curr_cell_data:
+  \UseSocket{tagsupport/tblcell/begin}%
+  \the@toks \the \@tempcnta
+  \ignorespaces \@sharp \unskip
+  \the@toks \the \count@ \relax
+  \UseSocket{tagsupport/tblcell/end}%
+}
+%    \end{macrocode}
+% \end{macro}
+%
+%
+% \begin{macro}{\@classz}
+%    \begin{macrocode}
+\def\@classz{\@classx
+   \@tempcnta \count@
+   \prepnext@tok
+   \@addtopreamble{\ifcase \@chnum
+      \hfil
+      \hskip1sp%
+      \d@llarbegin
+      \insert@column
+      \d@llarend \do@row@strut \hfil \or
+      \hskip1sp\d@llarbegin \insert@column \d@llarend \do@row@strut \hfil \or
+      \hfil\hskip1sp\d@llarbegin \insert@column \d@llarend \do@row@strut \or
+    \setbox\ar@mcellbox\vbox
+    \@startpbox{\@nextchar}
+    \AssignSocketPlug{tagsupport/tblcell/begin}{TDpbox}
+    \AssignSocketPlug{tagsupport/tblcell/end}{TDpbox}
+    \insert@column \@endpbox
+    \ar@align@mcell
+    \do@row@strut \or
+   \vtop \@startpbox{\@nextchar}
+    \AssignSocketPlug{tagsupport/tblcell/begin}{TDpbox}
+    \AssignSocketPlug{tagsupport/tblcell/end}{TDpbox}
+    \insert@column \@endpbox\do@row@strut \or
+   \vbox \@startpbox{\@nextchar}
+    \AssignSocketPlug{tagsupport/tblcell/begin}{TDpbox}
+    \AssignSocketPlug{tagsupport/tblcell/end}{TDpbox}
+    \insert@column \@endpbox\do@row@strut
+  \fi}\prepnext@tok}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@array,\@@@@array}
+%    We modificate the \cs{@array} from \pkg{array}.
+%    \begin{macrocode}
+\def\@array[#1]#2{%
+  \@tempdima \ht \strutbox
+  \advance \@tempdima by\extrarowheight
+  \setbox \@arstrutbox \hbox{\vrule
+             \@height \arraystretch \@tempdima
+             \@depth \arraystretch \dp \strutbox
+             \@width \z@}%
+%    \end{macrocode}
+%    The total number of table columns of the current table is
+%    determined in \cs{@@_determine_table_cols:} but this is called in
+%    a group, so local settings do not survive. Thus, to save away the
+%    outer value of \cs{g_@@_table_cols_tl} we do it before the group.
+%    \begin{macrocode}
+  \tl_set_eq:NN \l_@@_saved_table_cols_tl  \g_@@_table_cols_tl
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+  \begingroup
+  \@mkpream{#2}
+%    \end{macrocode}
+%    Next call has to happen immediately after \cs{@mkpream} because
+%    it uses implementation details from that.
+%    \begin{macrocode}
+  \@@_determine_table_cols:
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+  \xdef\@preamble{%
+    \noexpand
+%    \end{macrocode}
+%    \cs{ialign} in the original definition is replaced by
+%    \cs{ar@ialign} defined below.
+%    \begin{macrocode}
+     \ar@ialign
+     \@halignto
+     \bgroup \@arstrut
+%    \end{macrocode}
+%    A socket is inserted
+%    \begin{macrocode}
+      \UseSocket{tagsupport/tblrow/begin}%
+%    \end{macrocode}
+%    At the start of the preamble for the first column we set
+%    \cs{g_@@_col_int} to \texttt{1} as we are no longer "at" but "in"
+%    the first column. This is done in \cs{@@_init_cell_data:}. In
+%    later columns this data is updated via \cs{@@_update_cell_data:}.
+%    \begin{macrocode}
+      \@@_init_cell_data:
+      \@preamble
+      \tabskip \z@ \cr}%
+  \endgroup
+  \@arrayleft
+%    \end{macrocode}
+%    Another socket for tagging. TODO: what about \cs{arrayleft}?
+%    \begin{macrocode}
+  \UseSocket{tagsupport/tbl/init}
+  \if #1t\vtop \else \if#1b\vbox \else \vcenter \fi \fi
+  \bgroup
+  \let \@sharp ##\let \protect \relax
+  \lineskip \z@
+  \baselineskip \z@
+  \m@th
+  \let\\\@arraycr \let\tabularnewline\\\let\par\@empty
+%\show\@preamble
+  \@preamble}
+%    \end{macrocode}
+%    Finally, also set \cs{@@@@array} to the new definition:
+%    \begin{macrocode}
+\let\@@@@array\@array
+%    \end{macrocode}
+% \end{macro}
+%
+%
+%  \begin{macro}{\@@_init_cell_data:}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_init_cell_data: {
+        \int_gset:Nn \g_@@_col_int {1}
+        \tl_gset:Nn  \g_@@_span_tl {1}
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\@@_update_cell_data:}
+%    Updating cell data in columns after the first means we have to
+%    increment the \cs{g_@@_col_int} by the span count of the previous
+%    cell (in case it was a \cs{multicolumn} and then reset the
+%    \cs{g_@@_span_tl} to one (as the default).
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_update_cell_data: {
+        \int_gadd:Nn \g_@@_col_int { \g_@@_span_tl }
+        \tl_gset:Nn  \g_@@_span_tl {1}
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\@@_determine_table_cols:}
+%    Current implementation of \cs{@mkpream} uses the scratch counter
+%    \cs{count@} to keep track of the number of toks registers it needs
+%    (2 per column), but this can't be used as it counts also
+%    insertings made with \verb+!{}+ and \verb+@{}+.
+%    So similar as does longtable for \cs{LT@cols} we count the
+%    numbers of ambersands instead.
+%    \begin{macrocode}
+\cs_new:Npn \@@_determine_table_cols:  {
+  \seq_set_split:NnV\l_@@_tmpa_seq {&}\@preamble
+  \tl_gset:Ne \g_@@_table_cols_tl { \seq_count:N \l_@@_tmpa_seq }
+  \typeout{ ==>~ Table~ has~ \g_@@_table_cols_tl \space columns }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\@arraycr}
+%    Add code that figures out if the current table row is incomplete
+%    (not enough \verb=&=s). It can then do extra actions, such as
+%    inserting missing cell tags.
+%    \begin{macrocode}
+\protected\def\@arraycr{
+  \relax
+  \@@_store_missing_cells:n{@arraycr}
+  %
+  \iffalse{\fi\ifnum 0=`}\fi
+  \@ifstar \@xarraycr \@xarraycr}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\@@_store_missing_cells:n,
+%                \__tag_tbl_add_missing_cells:n}
+%    The storing and use of the number of missing cells
+%    must happen at different places  as the testing happens at
+%    the end of the last cell of a row, but
+%    still inside that cell, so we use two commands. The second is used in
+%    the endrow socket.
+%    \begin{macrocode}
+\cs_new:Npn \@@_store_missing_cells:n #1 {
+  \int_compare:nNnT \g_@@_col_int > 0
+      {
+        \int_gset:Nn \g_@@_missing_cells_int
+            {
+              \g_@@_table_cols_tl
+            - \g_@@_col_int
+            - \g_@@_span_tl
+            + 1
+            }
+        \int_compare:nNnT \g_@@_missing_cells_int < 0 \ERROR % should not happen
+        \typeout{==>~
+          (#1)~
+          This~ row~ needs~
+          \int_use:N \g_@@_missing_cells_int \space
+          additional~ cell(s)
+        }
+      }
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new:Npn \__tag_tbl_add_missing_cells:n #1
+  {
+%    \end{macrocode}
+% The TD-socket messages are issued after the message about the end-row socket,
+% but the structure is ok, so better issue a message for now to avoid confusion:
+%    \begin{macrocode}
+    \int_compare:nNnT {#1}>{0}
+      {
+       \typeout{==>~
+          ~Inserting~\int_eval:n{#1}~additional~cell(s)~into~previous~row:}
+      }
+    \int_step_inline:nn { #1 }
+      {
+        \UseSocket{tagsupport/tblcell/begin}
+        \UseSocket{tagsupport/tblcell/end}
+      }
+  }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+% \begin{macro}{\endarray}
+%    If tables are nested into another then  it is necessary to
+%    restore information about the cell the inner table started
+%    in. Otherwise, \cs{g_@@_row_int}, \cs{g_@@_col_int}, and
+%    \cs{g_@@_span_tl} reflect the status in the outer table as they
+%    are globally manipulated. We restore in all cases even if we are
+%    not in a nesting situation as that makes the code simpler (and
+%    probably faster).
+%
+%    \cs{endtabular} and \cs{endtabular*} inherit from \cs{endarray}
+%    so we only need to change that. \texttt{tabularx} is handled
+%    below.
+%    \begin{macrocode}
+\def\endarray{
+  \@@_store_missing_cells:n{endarray}
+  \crcr \egroup
+  \UseSocket{tagsupport/tbl/finalize}
+  \int_gset:Nn \g_@@_col_int { \l_@@_saved_col_tl }
+  \int_gset:Nn \g_@@_row_int { \l_@@_saved_row_tl }
+  \tl_gset_eq:NN \g_@@_span_tl \l_@@_saved_span_tl
+  \tl_gset_eq:NN \g_@@_table_cols_tl   \l_@@_saved_table_cols_tl
+  \tl_gset_eq:NN \g_@@_struct_table_tl  \l_@@_saved_struct_table_tl
+  \seq_gset_eq:NN \g_@@_struct_rows_seq \l_@@_saved_struct_rows_seq
+  \seq_gset_eq:NN \g_@@_struct_cells_seq\l_@@_saved_struct_cells_seq
+  \seq_gset_eq:NN \g_@@_struct_cur_seq  \l_@@_saved_struct_cur_seq
+  \typeout{==>~ restored~cell~data:~
+                \int_use:N \g_@@_row_int,
+                \int_use:N \g_@@_col_int,
+                \l_@@_saved_span_tl \space
+                (
+                \int_compare:nNnTF \g_@@_table_cols_tl = 0
+                    { outer~ level }
+                    { max:~ \g_@@_table_cols_tl }
+                )
+          }
+  \egroup
+  \@arrayright \gdef\@preamble{}%
+}
+%    \end{macrocode}
+% \end{macro}
+%
+%
+%  \begin{macro}{\@addamp}
+%    If we are after the first column we have to insert a \verb=&= and
+%    also update the cell data.
+%    \begin{macrocode}
+\def\@addamp {
+  \if@firstamp
+    \@firstampfalse
+  \else
+    \edef\@preamble{\@preamble &
+        \@@_update_cell_data:
+    }
+  \fi
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{
+%     \g_@@_col_int,
+%     \g_@@_row_int,
+%     \g_@@_span_tl,
+%     \g_@@_table_cols_tl}
+%    \cs{g_@@_row_int} holds the current row number in the table. The value
+%    \texttt{0} means we haven't yet processed the table preamble. It
+%    is incremented by every \cs{cr} including the one ending the
+%    table preamble.
+%
+%    \cs{g_@@_col_int} holds the current column number. The value
+%    \texttt{0} means we have not yet started the table or just finished a table row
+%    (with \verb=\\= typically); any other positive value means we
+%    are currently typesetting a cell in that column in some row
+%    (denoted by the \cs{g_@@_row_int}.
+%
+%    In a \cs{multicolumn} it holds the column number of the first
+%    spanned column and \cs{g_@@_span_tl} the info how many cells are
+%    spanned.
+%
+%    \cs{g_@@_span_tl} is normally \texttt{1} except in a
+%    \cs{multicolumn} cell.
+%    \begin{macrocode}
+\int_new:N \g_@@_col_int
+\int_new:N \g_@@_row_int
+\tl_new:N  \g_@@_span_tl
+\tl_new:N  \g_@@_table_cols_tl
+
+\tl_gset:Nn \g_@@_span_tl {1}
+\tl_gset:Nn \g_@@_table_cols_tl {0}  % indicates outer level
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\l_@@_saved_col_tl,\l_@@_saved_row_tl,
+%                \l_@@_saved_span_tl,\l_@@_saved_table_cols_tl}
+%
+%    Saving the outer values if we are nesting tables is necessary (as
+%    the above variables are globally altered. For this we use always
+%    token lists because they don't change and we do not need to blow
+%    additional integer registers.
+%    \begin{macrocode}
+\tl_new:N \l_@@_saved_col_tl
+\tl_new:N \l_@@_saved_row_tl
+\tl_new:N \l_@@_saved_span_tl
+\tl_new:N \l_@@_saved_table_cols_tl
+
+\tl_set:Nn \l_@@_saved_col_tl{0}
+\tl_set:Nn \l_@@_saved_row_tl{0}
+\tl_set:Nn \l_@@_saved_span_tl{1}
+\tl_set:Nn \l_@@_saved_table_cols_tl{0}  % indicates outer level
+%    \end{macrocode}
+%  \end{macro}
+%
+% \begin{macro}
+%   {
+%     \g_@@_struct_table_tl, \l_@@_saved_struct_table_tl,
+%     \g_@@_struct_rows_seq,\l_@@_saved_struct_rows_seq,
+%     \g_@@_struct_cells_seq,\l_@@_saved_struct_cells_seq,
+%     \g_@@_struct_cur_seq,\l_@@_saved_struct_cur_seq
+%   }
+%    We need to store the structure numbers for the fine tuning in the
+%    finalize socket.  For now we use a rather simple system: A
+%    sequence that hold the numbers for the row structures, and one
+%    that holds comma lists for the cells.
+%
+%    \cs{g_@@_struct_table_tl} will hold the structure number of the
+%    table, \cs{g_@@_struct_rows_seq} will hold at index i the
+%    structure number of row i, \cs{g_@@_struct_cells_seq} will hold
+%    at index i a comma list of the cell structure numbers of row i.
+%    \cs{g_@@_struct_cur_seq} is used as a temporary store for the
+%    cell structures of the current row.  We need also local version
+%    to store and restore the values.
+%
+%    \begin{macrocode}
+\tl_new:N  \g_@@_struct_table_tl
+\tl_new:N  \l_@@_saved_struct_table_tl
+\seq_new:N \g_@@_struct_rows_seq
+\seq_new:N \l_@@_saved_struct_rows_seq
+\seq_new:N \g_@@_struct_cells_seq
+\seq_new:N \l_@@_saved_struct_cells_seq
+\seq_new:N \g_@@_struct_cur_seq
+\seq_new:N \l_@@_saved_struct_cur_seq
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\ar@ialign}
+%    A new command that replaces \cs{ialign} above.  \cs{everycr} is
+%    also applied to the \cs{cr} ending the preamble so we have to
+%    program around that.
+%    \begin{macrocode}
+\def\ar@ialign{%
+%    \end{macrocode}
+%    Before starting a table we locally stored the information related
+%    to the current cell (if any) so that we can restore it once the
+%    table is finished.
+%    \begin{macrocode}
+  \tl_set:No \l_@@_saved_col_tl {\int_use:N \g_@@_col_int }
+  \tl_set:No \l_@@_saved_row_tl {\int_use:N \g_@@_row_int }
+  \tl_set_eq:NN \l_@@_saved_span_tl  \g_@@_span_tl
+  \tl_set_eq:NN  \l_@@_saved_struct_table_tl \g_@@_struct_table_tl
+  \seq_set_eq:NN \l_@@_saved_struct_rows_seq \g_@@_struct_rows_seq
+  \seq_set_eq:NN \l_@@_saved_struct_cells_seq \g_@@_struct_cells_seq
+  \seq_set_eq:NN \l_@@_saved_struct_cur_seq \g_@@_struct_cur_seq
+%
+  \typeout{==>~ saved~cell~data:~
+                \l_@@_saved_row_tl,
+                \l_@@_saved_col_tl,
+                \l_@@_saved_span_tl \space
+                (
+                \int_compare:nNnTF \l_@@_saved_table_cols_tl = 0
+                    { outer~ level }
+                    { max:~ \l_@@_saved_table_cols_tl }
+                )
+          }
+%    \end{macrocode}
+%    These are the initial values when starting a table:
+%    \begin{macrocode}
+  \int_gzero:N \g_@@_row_int
+  \int_gzero:N \g_@@_col_int
+  \tl_gset:Nn  \g_@@_span_tl {1}
+  \seq_gclear:N\g_@@_struct_rows_seq
+  \seq_gclear:N\g_@@_struct_cells_seq
+  \seq_gclear:N\g_@@_struct_cur_seq
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+  \everycr{%
+    \noalign{%
+%    \end{macrocode}
+%    We use \cs{g_@@_col_int} equal zero to indicate that we are just
+%    after a TR (or at the very beginning of the table). Using the row
+%    count is not so good as longtable may split the table in chunks.
+%    \begin{macrocode}
+      \int_compare:nNnT \g_@@_col_int > 0
+         { \UseSocket{tagsupport/tblrow/end} }
+      \int_gincr:N \g_@@_row_int          % this row about to start
+      \int_gzero:N \g_@@_col_int          % we are before first col
+    }%
+  }%
+  \tabskip\z@skip\halign}
+%    \end{macrocode}
+% \end{macro}
+%
+%
+% \begin{macro}{\multicolumn}
+%
+%    \cs{multicolumn} is also defined in \pkg{array}. The redefinition
+%    has to solve two problems: it must handle the row begin if it is
+%    used there, and it must save the numbers of cells it spans so
+%    that we can add a suitable ColSpan attribute.\footnote{FMi: This can
+%    now perhaps cleaned up somewhat}
+%    \begin{macrocode}
+\long\def\multicolumn#1#2#3{%
+  % alternative: determine first col with vmode test ...
+  %  \ifvmode
+  %    \multispan{#1}\typeout{A==> vmode}%
+  %  \else
+  %    \multispan{#1}\typeout{A==> not vmode}
+  %  \fi
+  % but this makes the \crcr handling really complicated which would
+  % then need to become something like
+  %    \ifvmode \expandafter \@gobble
+  %    \else \expandafter \@iden \fi {\cr\noalign{do something}}%
+  % so not used.
+  % Instead:
+   \multispan{#1}\begingroup
+%    \end{macrocode}
+%    Insert rowbegin socket only if this multicolumn
+%    replaces the preamble of the first column. In that case we have
+%    to set \cs{g_@@_col_int} to 1 since this is no longer done in the
+%    preamble for the cell.
+%    \begin{macrocode}
+   \int_compare:nNnTF \g_@@_col_int = 0
+       {
+         \UseSocket{tagsupport/tblrow/begin}
+         \int_gset:Nn \g_@@_col_int {1}
+       }
+%    \end{macrocode}
+%    If we are in a later column we use \cs{g_@@_span_tl} from the
+%    previous column to update.
+%    \begin{macrocode}
+       {
+         \int_gadd:Nn \g_@@_col_int { \g_@@_span_tl }
+       }
+%    \end{macrocode}
+%    Then we set the span value so that it can be use in the next column.
+%    \begin{macrocode}
+   \tl_gset:Nn \g_@@_span_tl {#1}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+  \def\@addamp{\if@firstamp\@firstampfalse \else
+                \@preamerr 5\fi}%
+   \@mkpream{#2}\@addtopreamble\@empty
+   \endgroup
+%    \end{macrocode}
+%    Now we update the colspan attribute.  This needs setting after
+%    the group as it is hidden inside the plug in \cs{insert@column}.
+%    \begin{macrocode}
+   \@@_set_colspan:n {#1}
+%    \end{macrocode}
+%    \begin{macrocode}
+   \def\@sharp{#3}%
+   \@arstrut \@preamble
+   \null
+   \ignorespaces}
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{longtable}
+%
+% Longtable is complicated. When at the begin the \cs{endhead},
+% \cs{endfirsthead}, \cs{endfoot} and \cs{endlastfoot} are used to
+% setup head and foot they create each a structure subtree with one or
+% more rows. From this structures we want to keep at most two (head
+% and foot) and move the foot to the end of the table. When the head
+% and foot boxes are (re)inserted on following pages we want to mark
+% them up as artifact with the exception of the head at the begin and
+% the foot box at the end.
+%
+% TODO: When a line is killed the structure subtree is there already
+% too and must be removed.
+% 
+% Hyperref patches longtable. This must be disabled and replace with
+% genuine code
+%    \begin{macrocode}
+\let\@kernel@refstepcounter\refstepcounter
+\def\hyper@nopatch@longtable{}
+%    \end{macrocode}
+%    \begin{macrocode}
+\def\@@_patch_LT@array[#1]#2{%
+%    \end{macrocode}
+% \cs{LT@array} is executed in a group, so we can disable para-tagging here.
+%    \begin{macrocode}
+  \UseSocket{tagsupport/tbl/init}%
+  \@kernel@refstepcounter{table}\stepcounter{LT@tables}%
+%    \end{macrocode}
+% The target is created rather late and a \cs{label} can come earlier, 
+% so we have to define \cs{@currentHref} explicitly. We can't currently
+% assume that \cs{theHtable} is defined always.   
+%    \begin{macrocode}
+  \tl_gset:Ne \@currentHref {table.\cs_if_exist_use:N\theHtable}
+  \int_gzero:N \g_@@_row_int
+  \seq_gclear:N\g_@@_struct_rows_seq
+  \seq_gclear:N\g_@@_struct_cells_seq
+  \seq_gclear:N\g_@@_struct_cur_seq
+  \seq_gclear:N\g_@@_LT@firsthead_rows_seq
+  \seq_gclear:N\g_@@_LT@head_rows_seq
+  \seq_gclear:N\g_@@_LT@lastfoot_rows_seq
+  \seq_gclear:N\g_@@_LT@foot_rows_seq
+  \if l#1%
+    \LTleft\z@ \LTright\fill
+  \else\if r#1%
+    \LTleft\fill \LTright\z@
+  \else\if c#1%
+    \LTleft\fill \LTright\fill
+  \fi\fi\fi
+  \let\LT@mcol\multicolumn
+  \let\LT@@@@tabarray\@tabarray
+  \let\LT@@@@hl\hline
+  \def\@tabarray{%
+    \let\hline\LT@@@@hl
+    \LT@@@@tabarray}%
+  \let\\\LT@tabularcr
+  \let\tabularnewline\\%
+  \def\newpage{\noalign{\break}}%
+  \def\pagebreak{\noalign{\ifnum`}=0\fi\@testopt{\LT@no@pgbk-}4}%
+  \def\nopagebreak{\noalign{\ifnum`}=0\fi\@testopt\LT@no@pgbk4}%
+  \let\hline\LT@hline \let\kill\LT@kill\let\caption\LT@caption
+  \@tempdima\ht\strutbox
+  \let\@endpbox\LT@endpbox
+  \ifx\extrarowheight\@undefined
+    \let\@acol\@tabacol
+    \let\@classz\@tabclassz \let\@classiv\@tabclassiv
+    \def\@startpbox{\vtop\LT@startpbox}%
+    \let\@@@@startpbox\@startpbox
+    \let\@@@@endpbox\@endpbox
+    \let\LT@LL@FM@cr\@tabularcr
+  \else
+    \advance\@tempdima\extrarowheight
+    \col@sep\tabcolsep
+    \let\@startpbox\LT@startpbox\let\LT@LL@FM@cr\@arraycr
+  \fi
+  \setbox\@arstrutbox\hbox{\vrule
+    \@height \arraystretch \@tempdima
+    \@depth \arraystretch \dp \strutbox
+    \@width \z@}%
+  \let\@sharp##\let\protect\relax
+   \begingroup
+    \@mkpream{#2}%
+    \@@_determine_table_cols:
+    \xdef\LT@bchunk{%
+%    \end{macrocode}
+%    At the start of a chunk we set \cs{g_@@_col_int} to zero to make
+%    sure that we aren't generating /TR with the \cs{cr} ending the
+%    chunk preamble.
+%    \begin{macrocode}
+       \int_gzero:N \g_@@_col_int
+       \global\advance\c@LT@chunks\@ne
+       \global\LT@rows\z@\setbox\z@\vbox\bgroup
+       \LT@setprevdepth
+       \tabskip\LTleft \noexpand\halign to\hsize\bgroup
+       \tabskip\z@ \@arstrut
+%    \end{macrocode}
+% Insert the socket and the setting of the conditional
+%    \begin{macrocode}
+       \UseSocket{tagsupport/tblrow/begin}%
+       \@@_init_cell_data:
+%    \end{macrocode}
+%    \begin{macrocode}
+       \@preamble \tabskip\LTright \cr}%
+  \endgroup
+  \expandafter\LT@nofcols\LT@bchunk&\LT@nofcols
+  \LT@make@row
+  \m@th\let\par\@empty
+%    \end{macrocode}
+% Socket and conditional
+%    \begin{macrocode}
+  \everycr{%
+    \noalign{%
+%    \end{macrocode}
+%    In \pkg{longtable} we have a bunch of extra \cs{cr}s that are
+%    executed whenever a chunk ends. In that case they should not
+%    increment the main row counter, sigh.
+%    \begin{macrocode}
+      \typeout{--longtable-->~chunk~row:~ \the\LT@rows \space
+               row:~ \the\g_@@_row_int   \space
+               column:~ \the\g_@@_col_int
+      }
+      \int_compare:nNnT \g_@@_col_int > 0
+          {
+            \UseSocket{tagsupport/tblrow/end}
+          }
+%    \end{macrocode}
+%    This prevents any of the additional \cs{cr}s at the end of the
+%    chunk to add another /TR. Then once we really start a new chunk
+%    it gets incremented so\ldots
+%    \begin{macrocode}
+      \int_gzero:N \g_@@_col_int           % before first col
+%    \end{macrocode}
+%    And for the same reason such \cs{cr}s should not increment the
+%    main row counter (but it has to be incremented after the preamble
+%    of a chunk), so here we test against \cs{LT@rows} which is
+%    \cs{LTchunksize} at the end of a chunk.
+%    \begin{macrocode}
+      \int_compare:nNnT \LT@rows < \LTchunksize
+         { \int_gincr:N \g_@@_row_int  }   % this row about to start
+    }%
+  }%
+%    \end{macrocode}
+%    \begin{macrocode}
+  \lineskip\z@\baselineskip\z@
+  \LT@bchunk}
+%    \end{macrocode}
+% The end code most stop to insert the endrow too.
+%    \begin{macrocode}
+\def\@@_patch_endlongtable{%
+  \@@_store_missing_cells:n{endlongtable}
+  \crcr
+  \noalign{%
+    \UseSocket{tagsupport/tbl/finalize/longtable}
+    \int_gzero:N \g_@@_row_int      % this prevents considering the next
+                                    % \crcr as another row end.
+    \let\LT@entry\LT@entry@chop
+    \xdef\LT@save@row{\LT@save@row}}%
+  \LT@echunk
+  \LT@start
+  \unvbox\z@
+  \LT@get@widths
+  \if@filesw
+    {\let\LT@entry\LT@entry@write\immediate\write\@auxout{%
+      \gdef\expandafter\noexpand
+        \csname LT@\romannumeral\c@LT@tables\endcsname
+          {\LT@save@row}}}%
+  \fi
+  \ifx\LT@save@row\LT@@@@save@row
+  \else
+    \LT@warn{Column~\@width s~have~changed\MessageBreak
+             in~table~\thetable}%
+    \LT@final@warn
+  \fi
+  \endgraf\penalty -\LT@end@pen
+  \ifvoid\LT@foot\else
+    \global\advance\vsize\ht\LT@foot
+    \global\advance\@colroom\ht\LT@foot
+    \dimen@\pagegoal\advance\dimen@\ht\LT@foot\pagegoal\dimen@
+  \fi
+  \endgroup
+  \global\@mparbottom\z@
+  \endgraf\penalty\z@\addvspace\LTpost
+  \ifvoid\footins\else\insert\footins{}\fi}
+%    \end{macrocode}
+%
+%
+%
+%  \begin{macro}{\@@_patch_LT@t@bularcr}
+%
+%    \begin{macrocode}
+\def\@@_patch_LT@t@bularcr{%
+  \global\advance\LT@rows\@ne
+  \ifnum\LT@rows=\LTchunksize
+%    \end{macrocode}
+%    At the end of the chunk \verb=\\= is doing something special and
+%    so we loose \cs{@@_store_missing_cells:n}. Below is about the
+%    right place to add it do this code branch.
+%    \begin{macrocode}
+    \@@_store_missing_cells:n{echunk}
+    \gdef\LT@setprevdepth{%
+      \prevdepth\z@
+      \global\let\LT@setprevdepth\relax}%
+    \expandafter\LT@xtabularcr
+  \else
+    \ifnum0=`{}\fi
+    \expandafter\LT@LL@FM@cr
+  \fi}
+
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\@@_patch_LT@end@hd@ft}
+%    This command is used to store the head and foot boxes.
+%    We need to retrieve and store the row so that we can clean
+%    up the structure in the finalize code.
+%    \begin{macrocode}
+\def\@@_patch_LT@end@hd@ft#1{%
+%    \end{macrocode}
+%    To handle missing columns in the header we need this:
+%    \begin{macrocode}
+  \__tbl_store_missing_cells:n{head/foot}
+  \int_step_inline:nn
+   { \LT@rows + 1 }
+   {
+     \seq_gput_left:ce
+       {g_@@_\cs_to_str:N #1 _rows_seq }
+       { \int_eval:n {\g_@@_row_int + 1 - ##1 } }
+   }
+%    \end{macrocode}
+%    We also have to set the chunk rows to its max value before
+%    calling \cs{LTechunk} so that we don't get extra increments of
+%    the main row counter due to \cs{everycr}.
+%    \begin{macrocode}
+  \int_gset:Nn \LT@rows { \LTchunksize }
+  \LT@echunk
+  \ifx\LT@start\endgraf
+    \LT@err
+     {Longtable head or foot not at start of table}%
+     {Increase LTchunksize}%
+  \fi
+  \setbox#1\box\z@
+  \LT@get@widths
+  \LT@bchunk}
+%    \end{macrocode}
+%  \end{macro}
+
+% \begin{macro}{\@@_patch_LT@start}
+%    \begin{macrocode}
+\def\@@_patch_LT@start{%
+  \let\LT@start\endgraf
+  \endgraf\penalty\z@\vskip\LTpre\endgraf
+   \ifdim \pagetotal<\pagegoal \else
+      \dimen@=\pageshrink
+      \advance \dimen@ 1sp %
+      \kern\dimen@\penalty 9999\endgraf \kern-\dimen@
+   \fi
+  \dimen@\pagetotal
+  \advance\dimen@ \ht\ifvoid\LT@firsthead\LT@head\else\LT@firsthead\fi
+  \advance\dimen@ \dp\ifvoid\LT@firsthead\LT@head\else\LT@firsthead\fi
+  \advance\dimen@ \ht\LT@foot
+  \edef\LT@reset@vfuzz{\vfuzz\the\vfuzz\vbadness\the\vbadness\relax}%
+  \vfuzz\maxdimen
+  \vbadness\@M
+  \setbox\tw@\copy\z@
+  \setbox\tw@\vsplit\tw@ to \ht\@arstrutbox
+  \setbox\tw@\vbox{\unvbox\tw@}%
+  \LT@reset@vfuzz
+  \advance\dimen@ \ht
+        \ifdim\ht\@arstrutbox>\ht\tw@\@arstrutbox\else\tw@\fi
+  \advance\dimen@\dp
+        \ifdim\dp\@arstrutbox>\dp\tw@\@arstrutbox\else\tw@\fi
+  \advance\dimen@ -\pagegoal
+  \ifdim \dimen@>\z@
+    \vfil\break
+  \else
+    \ifdim\pageshrink>\z@\pageshrink\z@\fi
+  \fi
+      \global\@colroom\@colht
+  \ifvoid\LT@foot\else
+    \global\advance\vsize-\ht\LT@foot
+    \global\advance\@colroom-\ht\LT@foot
+    \dimen@\pagegoal\advance\dimen@-\ht\LT@foot\pagegoal\dimen@
+    \maxdepth\z@
+  \fi
+  \MakeLinkTarget{table}
+  \ifvoid\LT@firsthead\copy\LT@head\else\box\LT@firsthead\fi\nobreak
+%    \end{macrocode}
+% Avoid that following uses of the box add content:
+%    \begin{macrocode}
+  \tagmcbegin{artifact}
+   \tag_mc_reset_box:N\LT@head
+  \tagmcend
+  \output{\LT@output}}
+%    \end{macrocode}
+% \end{macro}
+%
+%
+% \begin{macro}{\@@_patch_LT@output}
+%    We must also avoid that the reuse of the foot box leads to
+%    duplicated content:
+%    \begin{macrocode}
+\def\@@_patch_LT@output{%
+  \ifnum\outputpenalty <-\@Mi
+    \ifnum\outputpenalty > -\LT@end@pen
+      \LT@err{floats and marginpars not allowed in a longtable}\@ehc
+    \else
+      \setbox\z@\vbox{\unvbox\@cclv}%
+      \ifdim \ht\LT@lastfoot>\ht\LT@foot
+        \dimen@\pagegoal
+        \advance\dimen@\ht\LT@foot
+        \advance\dimen@-\ht\LT@lastfoot
+        \ifdim\dimen@<\ht\z@
+          \setbox\@cclv\vbox{\unvbox\z@\copy\LT@foot\vss}%
+          \@makecol
+          \@outputpage
+          \global\vsize\@colroom
+          \setbox\z@\vbox{\box\LT@head}%
+        \fi
+      \fi
+        \unvbox\z@\box\ifvoid\LT@lastfoot\LT@foot\else\LT@lastfoot\fi
+%    \end{macrocode}
+%    Reset attribute of foot box:
+%    \begin{macrocode}
+        \tagmcbegin{artifact}
+        \tag_mc_reset_box:N \LT@foot
+        \tagmcend
+    \fi
+  \else
+    \setbox\@cclv\vbox{\unvbox\@cclv\copy\LT@foot\vss}%
+%    \end{macrocode}
+%    Reset attribute of foot box:
+%    \begin{macrocode}
+    \tagmcbegin{artifact}
+    \tag_mc_reset_box:N \LT@foot
+    \tagmcend
+    \@makecol
+    \@outputpage
+      \global\vsize\@colroom
+    \copy\LT@head\nobreak
+  \fi}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_patch_\LT@makecaption}
+%     This patch is quite similar to the one for LaTeX's \cs{@makecaption}
+%     we also have to change the parbox sockets.
+%    \begin{macrocode}
+\def\@@_patch_LT@makecaption#1#2#3{%
+  \LT@mcol\LT@cols c{%
+  % test can go after merge
+    \str_if_exist:cT { l__socket_tagsupport/parbox/before_plug_str }
+      {
+        \AssignSocketPlug{tagsupport/parbox/before}{noop}
+        \AssignSocketPlug{tagsupport/parbox/after}{noop}
+      }
+    \hbox to\z@{\hss\parbox[t]\LTcapwidth{%
+    \reset@font
+    \tag_stop:n{caption}
+    \sbox\@tempboxa{#1{#2:~}#3}%
+    \tag_start:n{caption}
+    \ifdim\wd\@tempboxa>\hsize
+      #1{#2:~}#3%
+    \else
+      \hbox to\hsize{\hfil#1{#2:~}#3\hfil}%
+    \fi
+    \endgraf\vskip\baselineskip}%
+  \hss}}}
+%    \end{macrocode}
+% \end{macro}
+%
+%
+%
+% Overwrite the longtable definition. That will probably break somewhere as
+% they are various package which patch too.
+%    \begin{macrocode}
+\AddToHook{package/longtable/after}
+  {
+   \seq_new:N \g_@@_LT@firsthead_rows_seq
+   \seq_new:N \g_@@_LT@head_rows_seq
+   \seq_new:N \g_@@_LT@lastfoot_rows_seq
+   \seq_new:N \g_@@_LT@foot_rows_seq
+   \cs_set_eq:NN \LT@array\@@_patch_LT@array
+   \cs_set_eq:NN \endlongtable\@@_patch_endlongtable
+   \cs_set_eq:NN \LT@start\@@_patch_LT@start
+   \cs_set_eq:NN \LT@output\@@_patch_LT@output
+   \cs_set_eq:NN \LT@t@bularcr\@@_patch_LT@t@bularcr
+   \cs_set_eq:NN \LT@end@hd@ft\@@_patch_LT@end@hd@ft
+   \cs_set_eq:NN \LT@makecaption\@@_patch_LT@makecaption
+  }
+%    \end{macrocode}
+
+
+
+
+
+% \subsection{tabularx}
+%
+% In tabularx we mainly need to ensure that no tagging is done during
+% the trial.
+%
+%    \begin{macrocode}
+\def\@@_patch_TX@endtabularx{%
+   \expandafter\expandafter\expandafter
+     \TX@find@endtabularxa\csname end\TX@\endcsname
+     \endtabularx\TX@\endtabularx\TX@find@endtabularxa
+  \expandafter\TX@newcol\expandafter{\tabularxcolumn{\TX@col@width}}%
+  \let\verb\TX@verb
+  \def\@elt##1{\global\value{##1}\the\value{##1}\relax}%
+  \edef\TX@ckpt{\cl@@@@ckpt}%
+  \let\@elt\relax
+  \TX@old@table\maxdimen
+  \TX@col@width\TX@target
+  \global\TX@cols\@ne
+  \TX@typeout@
+    {\@spaces Table Width\@spaces Column Width\@spaces X Columns}%
+%    \end{macrocode}
+%    Here we stop tagging:
+%    \begin{macrocode}
+  \tag_stop:n{tabularx}
+  \TX@trial{\def\NC@rewrite@X{%
+          \global\advance\TX@cols\@ne\NC@find p{\TX@col@width}}}%
+  \loop
+    \TX@arith
+    \ifTX@
+    \TX@trial{}%
+  \repeat
+%    \end{macrocode}
+%    And now we restart it again.
+%    \begin{macrocode}
+  \tag_start:n{tabularx}
+  {\let\@footnotetext\TX@ftntext\let\@xfootnotenext\TX@xftntext
+    \csname tabular*\expandafter\endcsname\expandafter\TX@target
+      \the\toks@
+    \csname endtabular*\endcsname}%
+  \global\TX@ftn\expandafter{\expandafter}\the\TX@ftn
+  \ifnum0=`{\fi}%
+   \expandafter\expandafter\expandafter
+   \TX@find@endtabularxbb
+    \expandafter\end\expandafter{\TX@}%
+    \endtabularx\TX@\endtabularx\TX@find@endtabularxb
+}
+
+\AddToHook{package/tabularx/after}
+  {\cs_set_eq:NN \TX@endtabularx\@@_patch_TX@endtabularx }
+%    \end{macrocode}
+%    \begin{macrocode}
+%</package>
+%    \end{macrocode}
+%
+%
+%    \begin{macrocode}
+%<*latex-lab>
+\ProvidesFile{table-latex-lab-testphase.ltx}
+        [\ltlabtbldate\space v\ltlabtblversion\space latex-lab wrapper table]
+\RequirePackage{latex-lab-testphase-table}
+%</latex-lab>
+%    \end{macrocode}

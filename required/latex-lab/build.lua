@@ -15,6 +15,7 @@ installfiles = {
                  "*.ltx",
                  "*.sty",
 		 "glyphtounicode-cmex.tex",
+         "tagpdf-ns-latex-lab.def"  
 		}
 typesetfiles = {
                  "latex-lab-*.dtx",
@@ -62,16 +63,18 @@ checksearch  = true
 
 checkconfigs = 
  {"build","config-TU","config-OR",
-  "config-mathtagging",
+  "config-math",
   "config-OR-luatex",
   "config-sec",
   "config-toc",
-  "config-block-tagging",
+  "config-block",
   "config-graphic",
   "config-minipage",
   "config-float",
   "config-bib",
   "config-LM-tagging",
+  "config-table-pdftex",
+  "config-table-luatex"
  }
 
 

@@ -5,7 +5,7 @@ checkengines = {"pdftex","luatex"}
 checksearch  = true
 testfiledir  = "testfiles-toc"
 
-checkruns     = 4
+checkruns     = 3
 forcecheckruns = true  --- for tagged stuff
 
 

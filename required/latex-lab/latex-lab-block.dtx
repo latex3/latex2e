@@ -1,0 +1,4101 @@
+% \iffalse meta-comment
+%
+%% File: latex-lab-block.dtx (C) Copyright 2021-2023 LaTeX Project
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+\def\ltlabblockdate{2023-09-01}
+\def\ltlabblockversion{0.8h}
+%<*driver>
+\documentclass{l3doc}
+\usepackage{amstext}
+\EnableCrossrefs
+\CodelineIndex
+
+\usepackage{todonotes}
+
+\begin{document}
+  \DocInput{latex-lab-block.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+% \providecommand\hook[1]{\texttt{#1\DescribeHook[noprint]{#1}}}
+% \providecommand\socket[1]{\texttt{#1\DescribeSocket[noprint]{#1}}}
+% \providecommand\plug[1]{\texttt{#1\DescribePlug[noprint]{#1}}}
+%
+% \NewDocElement[printtype=\textit{socket},idxtype=socket,idxgroup=Sockets]{Socket}{socketdecl}
+% \NewDocElement[printtype=\textit{hook},idxtype=hook,idxgroup=Hooks]{Hook}{hookdecl}
+% \NewDocElement[printtype=\textit{plug},idxtype=plug,idxgroup=Plugs]{Plug}{plugdecl}
+%
+%
+% \title{Prototype reimplementation of \LaTeXe{}'s block environments using templates}
+% \author{\LaTeX{} Project\thanks{Initial reimplementation of lists done by Bruno
+%    Le Floch, generalized second version with tagging support by Frank Mittelbach.}}
+% \date{v\ltlabblockversion\ \ltlabblockdate}
+%
+% \maketitle
+%
+%
+% \newcommand{\xt}[1]{\textsl{\textsf{#1}}}
+% \newcommand{\TODO}[1]{\textbf{[TODO:} #1\textbf{]}}
+% \newcommand{\docclass}{document class \marginpar{\raggedright document class
+% customizations}}
+%
+% \providecommand\hook[1]{\texttt{#1}}
+% \providecommand\struct[1]{\texttt{<#1>}}
+%
+% \NewDocElement[envlike, idxtype=objecttype, idxgroup=object types,
+%    printtype=\textit{objecttype}] {ObjectType}{objecttype}
+%
+% \NewDocElement[envlike, idxtype=template, idxgroup=templates,
+%    printtype=\textit{templ.}] {Template}{template}
+%
+% \NewDocElement[envlike, idxtype=instance, idxgroup=instances,
+%    printtype=\textit{inst.}] {Instance}{instance}
+%
+% 
+% \newcommand\valuefrom[1]{\textrm{value from }\texttt{#1}}
+% \newcommand\key[1]{\texttt{#1}}
+% 
+% 
+% \NewDocumentCommand\fmi{sO{}m}
+%   {\IfBooleanTF{#1}{\todo[inline,#2]{#3}}^^A
+%                    {\todo[#2]{#3}}}
+%                    
+% \NewDocumentCommand\ufi{sO{}m}
+%   {\IfBooleanTF{#1}{\todo[inline,#2]{UFi:#3}}^^A
+%                    {\todo[#2]{UFi:#3}}}
+% \makeatletter
+% \renewenvironment{TemplateInterfaceDescription}[1]
+%   {
+%     \subsubsection{The~object~type~`#1'}
+%     \begingroup
+%     \@beginparpenalty\@M
+%     \description
+%     \def\TemplateArgument##1##2{\item[Arg:~##1]##2\par}
+%     \def\TemplateSemantics
+%       {
+%         \enddescription\endgroup
+%         \subsubsection*{Semantics:}
+%       }
+%   }
+%   {
+%     \par\bigskip
+%   }
+% \renewenvironment{TemplateDescription}[2]
+%   {\subsubsection{The \texttt{#1} template `#2'}^^A
+%     \paragraph*{Attributes:}^^A
+%     \begingroup
+%     \@beginparpenalty\@M
+%     \description
+%     \def\TemplateKey##1##2##3##4{^^A
+%         \item[\texttt{##1}~(\textit{\mdseries##2})]##3^^A
+%         \ifx\TemplateKey##4\TemplateKey\else
+%           \hfill\penalty500\hbox{}\hfill Default:~\texttt{##4}^^A
+%           \nobreak\hskip-\parfillskip\hskip0pt\relax
+%         \fi
+%         \par
+%       }^^A
+%     \def\TemplateSemantics{^^A
+%         \enddescription\endgroup
+%         \paragraph*{Semantics~\&~Comments:}^^A
+%       }^^A
+%   }
+%   { \par \bigskip }
+% \makeatother
+%
+% 
+% \begin{abstract}
+% \end{abstract}
+%
+%
+% \tableofcontents
+% \medskip
+%
+%
+% \begin{documentation}
+%
+%
+%
+% \section{Introduction}
+%
+% The list implementation in \LaTeXe{} serves a dual purpose: it
+% implements real lists such as \env{itemize} or \env{enumerate},
+% but it is also used as the basis for vertical blocks, i.e., to specify
+% the vertical spacing and paragraph handling after such block, e.g.,
+% in environments like \env{center}, \env{quote}, \env{verbatim}, or in
+% the theorem environments. They are all implemented as
+% \enquote{trivial} lists with a single (hidden) item.
+%
+% While this was convenient to get a consistent layout using a single
+% implementation it is not adequate if it comes to interpreting the
+% structure of a document, because environments based on \env{trivlist}
+% should not advertise themselves as being a \enquote{list} --- after all,
+% from a semantic point of view they aren't lists.
+%
+% The approach taking here is therefore to offer separate object
+% types: \xt{block} (horizontally or vertically oriented data that
+% needs some handling at the start and the end), \xt{para} (that deals
+% with different paragraph layouts), \xt{list} (that handles list
+% related parameters, and \xt{item} (for item layouts and handling), to address
+% the independent aspects and also offer the object type \xt{blockenv}
+% that ties them together as necessary.
+%
+% For example, a \env{quote} environment would make use of a (display)
+% \xt{block} and some \xt{para} handling while an standard
+% \env{enumerate} would make use of a display \xt{block}, a \xt{list},
+% and  an \xt{item} and \xt{para} instance.
+% An inline list (like \env{enumerate*} from the \pkg{enumitem}
+% package) would be using the same \xt{list} instance but a different
+% (horizontally oriented) \xt{block}.
+%
+% 
+% \section{Object types and templates for blocks and lists}
+%
+% \subsection{Object types}
+% 
+% \begin{TemplateInterfaceDescription}{block}
+%    \TemplateArgument{1}{key/value list to alter the default block parameters}
+%    \TemplateSemantics
+%    Handle the layout aspects of a block of data. In case of a
+%    \enquote{display} block (i.e., vertically oriented) the spacing
+%    and page breaking as well as the handling if the block starts a
+%    paragraph or ends one, that is, if text is immediately following
+%    the block without being separated by an empty line, then this
+%    text is considered to be in the same paragraph as the block.
+%
+%    In case of a horizontally oriented block it covers any special
+%    handling at the start and end of the block, e.g, extra spacing,
+%    prohibitying or encuraging line breaks, and so forth.
+% \end{TemplateInterfaceDescription}
+% 
+% \begin{TemplateInterfaceDescription}{para}
+%    \TemplateArgument{1}{key/value list to alter the default item parameters}
+%    \TemplateSemantics
+%    Sets up paragraph-specific parameters for H\&J, e.g., to
+%    implement justification variations, the behavior of \verb=\\=
+%    etc. The instances are used in higher-level templates, e.g., in a
+%    \xt{block}.
+% \end{TemplateInterfaceDescription}
+% 
+% \begin{TemplateInterfaceDescription}{list}
+%    \TemplateArgument{1}{key/value list to alter the default item parameters}
+%    \TemplateSemantics
+%    Handle the aspects related to list design, e.g., the use and
+%    formatting of counters, etc.
+%
+%    Note that this does not cover block-related aspects, i.e., a list
+%    instance could be used both for a display list or for an inline line.
+% \end{TemplateInterfaceDescription}
+% 
+% \begin{TemplateInterfaceDescription}{item}
+%    \TemplateArgument{1}{key/value list to alter the default item parameters}
+%    \TemplateSemantics
+%    A sub-type used as part of \xt{list} to easily cover alternative layout
+%    for list items.
+% \end{TemplateInterfaceDescription}
+%
+%
+% \begin{TemplateInterfaceDescription}{blockenv}
+%    \TemplateArgument{1}{key/value list to alter the default item parameters}
+%    \TemplateSemantics
+%    This object type is used to implement document-level
+%    environments. It defines a \xt{block} instance to handle the
+%    layout at the \enquote{edge} of the environment data, possibly
+%    some paragraph setup through a \xt{para} instance, potentially an
+%    \enquote{inner} instance for more complicated environments (such
+%    as lists), and possibly some additional setup code for certain
+%    environments.
+%
+%    It also defines how the \xt{blockenv} behaves with respect to
+%    nesting, e.g., does it change when nested and if so how many
+%    levels of nesting are supported, etc.
+%
+%    Finally, the object type defines how it appears in a tagged PDF
+%    document, what tag names are used, how they are rolemapped and
+%    whether it adds additional attributes, etc. 
+% \end{TemplateInterfaceDescription}
+%
+%
+%
+% \subsection{Templates}
+% 
+% 
+% \begin{TemplateDescription}{blockenv}{display}
+%
+%  \TemplateKey{env-name}{tokenlist}
+%              {Name of the environment used only in tracing}{}
+%  \TemplateKey{tag-name}{tokenlist}
+%              {Name of the tag in the PDF. If not explicitly given
+%               the name is defined by the \key{tagging-recipe}}{}
+%  \TemplateKey{tag-class}{tokenlist}
+%              {An explicit tag class attribute}{}
+%  \TemplateKey{tagging-recipe}{tokenlist}
+%              {Defines the way tagging is done. Currently the values
+%               \texttt{basic}, \texttt{standard}, and \texttt{list}
+%               are supported}{standard}
+%  \TemplateKey{level-increase}{boolean}{Does this \xt{blockenv}
+%               increase the block level if it is nested in an outer block?}{true}
+%  \TemplateKey{setup-code}{tokenlist}
+%              {Initial setup code. This is
+%               executed after legacy defaults (from \cs{@listi},
+%               \cs{@listii}, etc.) are used but before the block instance is called}{}
+%  \TemplateKey{block-instance}{tokenlist}{Part of the name of the
+%               \xt{block} instance that is called. The full name has
+%               a \texttt{-}\meta{level} appended}{displayblock}
+%  \TemplateKey{para-instance}{tokenlist}{}{}
+%  \TemplateKey{inner-level-counter}{tokenlist}{Name of an existing (!) counter
+%               that is incremented and used to determine final name
+%               of the \key{inner-instance} or empty if always the
+%               same inner instance should be used}{}
+%  \TemplateKey{max-inner-levels}{tokenlist}{Maximum number of nested
+%               environments of this kind. Only relevant if there is a
+%               \key{inner-level-counter} specified}{4}
+%  \TemplateKey{inner-instance-type}{tokenlist}{Object type of the
+%    inner instance}{list}
+%  \TemplateKey{inner-instance}{tokenlist}{Name of the inner instance
+%               (if any).}{}
+%  \TemplateKey{para-flattened}{boolean}{\emph{describe}}{false}
+%  \TemplateKey{final-code}{tokenlist}{Final setup code}{\cs{ignorespaces}}
+%
+%    \TemplateSemantics
+%
+%    This \xt{blockenv} template supports the legacy list setting that
+%    are found in many document classes in the macros \cs{@listi},
+%    \cs{@listii}, up to \cs{@listvi}. It also uses the counter
+%    \cs{@listdepth} to track nesting of block, again mainly to
+%    support legacy setups (internally it gives it a more appropriate
+%    name but it remains accessible through the \LaTeXe{} name).
+%
+%
+%    It first checks that nothing is too deeply nested.
+%    If the level should increase then the increments the
+%    \cs{@listdepth} counter and
+%    calls the corresponding \cs{@list...} macro to update the legacy
+%    defaults. If \key{level-increase} is set to false this is bypassed.
+%
+%    It then sets up the
+%    tagging via the \key{tagging-recipe} setting and executes any
+%    code in \key{setup-code}.
+%
+%    Afterwards it calls the appropriate \xt{block} instance based on
+%    \key{block-instance} and current level, e.g.,
+%    \texttt{displayblock-1}.  Then it sets up paragraph parameters if
+%    a \key{para-instance} was specified (otherwise they stay as
+%    they are).
+%
+%    If a \key{inner-instance} was specified this is called next,
+%    or more precisely: if no \key{inner-level-counter} was
+%    specified the instance \key{inner-instance} is
+%    called.
+%
+%    Otherwise, the \key{inner-level-counter} is incremented and the
+%    instance with the name
+%    \key{inner-instance}\texttt{-}\key{inner-level-counter} is
+%    called.
+%
+%    Finally, the \key{final-code} is executed (by default
+%    \cs{ignorespaces}).
+%
+%
+% \end{TemplateDescription}
+%
+% The maximum number of \xt{blockenv}s that can be nested into each
+% other is is restricted by the \LaTeX{} counter
+% \texttt{maxblocklevels} with a default value of \texttt{6}. If this
+% value is increased then it is necessary to provide additional
+% instances, e.g., \texttt{displayblock-7}, etc. Decreasing is, of
+% course, always possible, then some of the instances defined are not
+% used and instead the user gets an error that there is too much
+% nesting going on.
+%
+% If the key \key{level-increase} is set to \texttt{false} then such
+% an environment doesn't alter the nesting level and therefore you can
+% nest those environments as often as you like (a typical example
+% would be \env{flushleft} anywhere in the nesting hierarchy, that
+% would have no effect on hitting the boundary).
+%  
+% 
+% \begin{TemplateDescription}{block}{display}
+%
+%  \TemplateKey{heading}{tokenlist}{\emph{not really used yet}}{}
+%  \TemplateKey{beginsep}{skip}{}{\cs{topsep}}
+%  \TemplateKey{begin-par-skip}{skip}{}{\cs{partopsep}}
+%  \TemplateKey{par-skip}{skip}{}{\cs{parsep}}
+%  \TemplateKey{end-skip}{skip}{}{\valuefrom{beginsep}}
+%  \TemplateKey{end-par-skip}{skip}{}{\valuefrom{begin-par-skip}}
+%  \TemplateKey{beginpenalty}{integer}{}{\cs{@beginparpenalty}}
+%  \TemplateKey{endpenalty}{integer}{}{\cs{@endparpenalty}}
+%  \TemplateKey{leftmargin}{length}{}{\cs{leftmargin}}
+%  \TemplateKey{rightmargin}{length}{}{\cs{rightmargin}}
+%  \TemplateKey{parindent}{length}{}{\cs{listparindent}}
+%
+%    \TemplateSemantics
+%
+%    The idea of a \key{heading} key needs some further
+%    thoughts. Maybe instead the object type should accept a second
+%    argument and receive input for such a headding from the document
+%    level instead.
+%
+%    The names of the keys need further thoughts and some
+%    decision. Right now it is a mixture of those with hyphens and
+%    those that match legacy register names (the way \pkg{enumitem}
+%    did its keys).
+%
+%    Also \key{parindent} conflicts with \key{indent-width}!
+% 
+% \end{TemplateDescription}
+%
+%  
+% \begin{TemplateDescription}{para}{std}
+%
+%  \TemplateKey{indent-width}{length}{}{\cs{parindent}}
+%  \TemplateKey{start-skip}{skip}{}{0pt}
+%  \TemplateKey{left-skip}{skip}{}{0pt}
+%  \TemplateKey{right-skip}{skip}{}{0pt}
+%  \TemplateKey{end-skip}{skip}{}{\cs{@flushglue}}
+%  \TemplateKey{fixed-word-spaces}{boolean}{}{false}
+%  \TemplateKey{final-hyphen-demerits}{integer}{}{5000}
+%  \TemplateKey{cr-cmd}{tokenlist}{}{\cs{@normalcr}}
+%  \TemplateKey{para-class}{tokenlist}{}{justify}
+%
+%    \TemplateSemantics
+% 
+% 
+% \end{TemplateDescription}
+%
+%  
+% 
+% \begin{TemplateDescription}{list}{std}
+%
+%  \TemplateKey{counter}{tokenlist}
+%              {Counter name to be used in a numbered list or empty,
+%               if the list is unnumbered}{}
+%  \TemplateKey{item-label}{tokenlist}
+%              {Label \enquote{string} for a fixed label or as
+%               generated from the current \key{counter} value}{}
+%  \TemplateKey{start}{integer}
+%              {Start value for the counter if the list is numbered,
+%               otherwise irrelevant}{1}
+%  \TemplateKey{resume}{boolean}
+%              {Should a numbered list be resumed from the last instance?}{false}
+%  \TemplateKey{item-instance}{instance}
+%              {Instance of type \texttt{item} to be used to format
+%               the label string}{basic}
+%  \TemplateKey{item-skip}{skip}{The space in front of an item in the
+%               list.\fmi{May need to be on a different template level}}{\cs{itemsep}}
+%  \TemplateKey{item-indent}{length}{Horizontal displacement of the item.}{0pt}
+%  \TemplateKey{item-penalty}{integer}
+%              {Penalty for breaking before an
+%               item (except the first)}{\cs{@itempenalty}}
+%  \TemplateKey{label-width}{length}
+%              {Width reserved for the formatted item label}{\cs{labelwidth}}
+%  \TemplateKey{label-sep}{length}
+%              {Horizontal separation between label and following text}{\cs{labelsep}}
+%  \TemplateKey{legacy-support}{boolean}
+%              {Is formatting the label via \cs{makelabel} supported?}{false}
+%
+%    \TemplateSemantics
+% 
+% 
+% \end{TemplateDescription}
+%
+%  
+% \begin{TemplateDescription}{item}{std}
+%
+%  \TemplateKey{counter-label}{function{1}}{\emph{unused}}{\cs{arabic}\{\#1\}}
+%  \TemplateKey{counter-ref}{function{1}}{\emph{unused}}{\valuefrom{counter-label}}
+%  \TemplateKey{label-ref}{function{1}}{\emph{unused}}{\#1}
+%  \TemplateKey{label-autoref}{function{1}}{\emph{unused}}{item~\#1}
+%  \TemplateKey{label-format}{function{1}}
+%       {Formatting of the label, questionable the way it is used}{\#1}
+%  \TemplateKey{label-strut}{boolean}{Add a \cs{strut} to the label?}{false}
+%  \TemplateKey{label-align}{choice}
+%              {Supported values \texttt{left},\texttt{center},
+%               \texttt{right}, and \texttt{parleft}. \emph{Only partly implemented}}{right}
+%  \TemplateKey{label-boxed}{boolean}
+%              {Should the label be boxed?}{true}
+%  \TemplateKey{next-line}{boolean}{}{false}
+%  \TemplateKey{text-font}{tokenlist}{\emph{unused}}{}
+%  \TemplateKey{compatibility}{boolean}{}{true}
+%
+%    \TemplateSemantics
+%
+%    This template is only rudimentary implemented at the moment. It
+%    probably needs other keys and the existing ones need a proper
+%    implementation.
+% 
+% \end{TemplateDescription}
+%
+%
+% \section{Tagging support}
+%
+% \subsection{Paragraph tags}
+%
+%  Paragraphs in \LaTeX{} can be nested, e.g., you can have a paragraph
+%  containing a display quote, which in turn consists of more than one
+%  (sub)paragraph, followed by some more text which all belongs to the
+%  same outer paragraph.
+%
+%  In the PDF model and in the HTML model that is not supported --- a
+%  limitation that conflicts with real live, given that such
+%  constructs are quite normal in spoken and written language.
+%
+%  The approach we take to resolve this is to model such \enquote{big}
+%  paragraphs with a structure named \struct{text-unit} and use \struct{text} (rollmapped to \struct{P})
+%  only for (portions of) the actual paragraph text in a way that the
+%  \struct{text}s are not nested. As a result we have for a simple
+%  paragraph the structures
+% \begin{tabbing}
+% \hspace*{1em}\=\hspace*{1em}\=\hspace*{1em}\=\hspace*{1em}\= \kill
+%    \>    \struct{text-unit}\\
+%    \>\>  \struct{text}\\
+%    \>\>\> The paragraph text \ldots\\
+%    \>\>  \struct{/text}\\
+%    \>    \struct{/text-unit}
+% \end{tabbing}
+% The \struct{text-unit} structure is rollmapped to \struct{Part} or possibly to
+% \struct{Div} so we get a valid PDF, but processors who care can identify
+% the complete paragraphs by looking for \struct{text-unit} tags.
+%
+% In the case of an element, such as a display quote or a display list
+%  inside the paragraph, we then have
+% \begin{tabbing}
+% \hspace*{1em}\=\hspace*{1em}\=\hspace*{1em}\=\hspace*{1em}\= \kill
+%    \>     \struct{text-unit}\\
+%    \>\>   \struct{text}\\
+%    \>\>\> The paragraph text before the display element \ldots\\
+%    \>\>   \struct{/text}\\
+%    \>\>   \struct{display element structure}\\
+%    \>\>\>  Content of the display structure possiblly involving inner \struct{text-unit} tags\\
+%    \>\>   \struct{/display element structure}\\
+%    \>\>   \struct{text}\\
+%    \>\>\> \ldots{} continuing the outer paragraph text\\
+%    \>\>   \struct{/text}\\
+%    \>     \struct{/text-unit}
+% \end{tabbing}
+% In other words such a display block is always embedded in a
+% \struct{text-unit} structure, possibly preceded by a \struct{text}\ldots\struct{/text} block
+% and possibly followed by one, though both such blocks are optional.
+%
+% Thus an \env{itemize} environment that has some introductory text
+% but no text immediately following the list
+% would be tagged as follows:
+% \begin{tabbing}
+% \hspace*{1em}\=\hspace*{1em}\=\hspace*{1em}\=\hspace*{1em}\=\hspace*{1em}\= \kill
+%    \>          \struct{text-unit}\\
+%    \>\>        \struct{text}\\
+%    \>\>\>      The intro text for the \env{itemize} environment \ldots\\
+%    \>\>        \struct{/text}\\
+%    \>\>        \struct{itemize}\\
+%    \>\>\>      \struct{LI}\\
+%    \>\>\>\>    \struct{Lbl} label \struct{/Lbl}\\
+%    \>\>\>\>    \struct{LBody}\\
+%    \>\>\>\>\>  The text of the first item involving \struct{text-unit} as necessary \ldots\\
+%    \>\>\>\>    \struct{/LBody}\\
+%    \>\>\>      \struct{/LI}\\
+%    \>\>\>      \struct{LI}\\
+%    \>\>\>\>    The second item \ldots{}\\
+%    \>\>\>      \struct{/LI}\\
+%    \>\>\>      \ldots{} further items \ldots\\
+%    \>\>        \struct{/itemize}\\
+%    \>          \struct{/text-unit}
+% \end{tabbing}
+% The \struct{itemize} is rollmapped to \struct{L}.
+%
+% For some display blocks, such as centered text, we use a simpler
+% strategy. Such blocks still ensure that they are inside a \struct{text-unit}
+% structure but their body  uses simple \struct{text} blocks and not
+% \struct{text-unit}\struct{text} inside, e.g., the input
+% \begin{verbatim}
+% This is a paragraph with some
+% \begin{center}
+%    centered lines
+%
+%    with a paragraph break between them
+% \end{center}
+% followed by some more text.
+% \end{verbatim}
+%  will be tagged as follows:
+% \begin{tabbing}
+% \hspace*{1em}\=\hspace*{1em}\=\hspace*{1em}\=\hspace*{1em}\=\hspace*{1em}\= \kill
+%    \>          \struct{text-unit}\\
+%    \>\>        \struct{text}\\
+%    \>\>\>      This is a paragraph with some\\
+%    \>\>        \struct{/text}\\
+%    \>\>        \struct{text /O /Layout /TextAlign/Center}\\
+%    \>\>\>      centered lines\\
+%    \>\>        \struct{/text}\\
+%    \>\>        \struct{text /O /Layout /TextAlign/Center}\\
+%    \>\>\>      with a paragraph break between them\\
+%    \>\>        \struct{/text}\\
+%    \>\>        \struct{text}\\
+%    \>\>\>      followed by some more text.\\
+%    \>          \struct{/text-unit}
+% \end{tabbing}
+% 
+%
+% \subsection{Tagging recipes}
+%
+% There are a number of different tagging recipes that implement
+% different tagging approaches. They are selected through the
+% \key{tagging-recipe} of the \xt{blockenv} template. Currently the
+% following values are implemented:
+% \begin{description}
+% \item[\texttt{standalone}]
+%   This recipe does the following:
+%   \begin{itemize}
+%   \item
+%     Ensure that the \xt{blockenv} is not inside a \struct{text-unit}
+%     structure. If necessary, close the open one (and any open
+%     \struct{text} structure). 
+%
+%   \item
+%     Text inside the body of the environment start with
+%     \struct{text-unit}\struct{text} unless the key
+%     \key{para-flattened} is set to \texttt{true} 
+%     (which is most likely the wrong thing to do because we then get just
+%     \struct{text} as the structure).
+%
+%   \item
+%     At the end of the environment close \struct{/text} and possibly an
+%     inner \struct{/text-unit} if open.
+%
+%   \item
+%    Finally, ensure that after the environment a new
+%     \struct{text-unit} is started, if appropriate, e.g., if text is following.
+%   \end{itemize}
+%
+% \item[\texttt{basic}]
+%   This recipe does the following:
+%   \begin{itemize}
+%   \item
+%     Ensure that the \xt{blockenv} is inside a \struct{text-unit}
+%     structure, if necessary, start one. 
+%   \item
+%     If inside a \struct{text-unit}\struct{text}, then close the \struct{/text} but
+%     leave the \struct{text-unit} open.
+%
+%   \item
+%     Text inside the body of the environment start with
+%     \struct{text-unit}\struct{text} if \key{para-flattened} is set to \texttt{false},
+%     otherwise just with \struct{text}.
+%
+%   \item
+%     At the end of the environment close \struct{/text} and possibly an
+%     inner \struct{/text-unit} if open.
+%
+%   \item
+%     Then look if the environment is followed by an empty line
+%     (\cs{par}). If so, close the outer \struct{/text-unit} and start any
+%     following text with \struct{text-unit}\struct{text}. Otherwise,
+%     don't and following text restarts with a just a \struct{text} (and no
+%     paragraph indentation)
+%   \end{itemize}
+%
+% \item[\texttt{standard}]
+%  This recipe is like the \texttt{basic} one as far as handling
+%  \struct{text-unit} and \struct{text} is concerned. In addition
+%   \begin{itemize}
+%   \item
+%     it starts an inner tagging structure (i.e., which is therefore a
+%     child of the outer \struct{text-unit}).
+%   \item
+%     By default this structure is a \struct{Figure} unless overwritten
+%     by the key \key{tag-name}. If that key is used, a suitable
+%     rollmap needs to be provided for the name given.
+%   \item
+%     At the end of the environment that inner structure is closed
+%     again so that we are back on the \struct{text-unit} level from the outside.
+%   \item
+%     Then the lookahead for an empty line is done as described previously.
+%   \end{itemize}
+%
+%
+%
+% \item[\texttt{list}]
+%  This recipe is like the \texttt{standard} one except that
+%   \begin{itemize}
+%   \item
+%     the inner structure is a list (\struct{L}).
+%   \item
+%     Furthermore everything is set up so that we have list items
+%     (\struct{LI}) with suitable substructures (\struct{Lbl} for the item
+%     labels and \struct{LBody} for the item bodies).
+%   \item
+%     If the key \key{tag-name} is specified, this is used as the tag
+%     name for the whole list instead of \struct{L}. Of course, it
+%     should then have a suitable rollmap.
+%   \item
+%     If the key \key{tag-class} is specified then this is used as the
+%     class attribute. Again, this requires a suitable setup on the outside.
+%   \item
+%     At the end of the environment the \struct{/LBody}, \struct{/LI}, and
+%     \struct{/L} (or the tag name used) are closed.
+%   \item
+%     Then the lookahead for an empty line is done as described previously.
+%   \end{itemize}
+%
+%
+% \end{description}
+%
+%
+%
+%
+%
+%
+% \end{documentation}
+%
+% \StopEventually{\setlength\IndexMin{200pt}  \PrintIndex  }
+%
+%
+%
+% \begin{implementation}
+%
+% \section{The Implementation}
+%
+%
+%    \begin{macrocode}
+%<*package>
+%<@@=block>
+%    \end{macrocode}
+%
+%
+%    \begin{macrocode}
+\ProvidesPackage {latex-lab-testphase-block}
+                 [\ltlabblockdate\space v\ltlabblockversion\space
+                            blockenv implementation]
+%    \end{macrocode}
+%
+%    We make use of templates:
+%    \begin{macrocode}
+\RequirePackage{xtemplate}
+%    \end{macrocode}
+%   Generell kernel changes, also loaded by the sec and toc code.
+%    \begin{macrocode}
+\RequirePackage{latex-lab-kernel-changes}
+%    \end{macrocode}
+%    \begin{macrocode}
+\ExplSyntaxOn
+%    \end{macrocode}
+%
+% \ufi{this variable(s) must be declared:}
+%    \begin{macrocode}
+\tl_new:N \l_@@_item_align_tl
+\tl_new:N\l_@@_legacy_env_params_tl
+%    \end{macrocode}
+
+% \subsection{Handling \cs{par} after the end of the list}
+%
+% An empty line (or a \cs{par}) after a list has semantic meaning as
+% it defines whether then following text is logically within the same
+% paragraph as the list (no empty line) or whether it starts a new
+% paragraph and the paragraph containing the list ends at the end of
+% the list (empty line after the list).
+% This is handled by \LaTeX{} using a legacy flag called
+% \texttt{@endpe} and set of commands inside the
+% generic \cs{end} (calling \cs{@doendpe}) and as part of the list
+% environments identifying themselves as \enquote{paragraph ending
+% environments} (by setting this flag).
+%
+% For the reimplementation of the list environments including support
+% of tagging we need to augment that mechanism slightly and add some
+% kernel hook(s) to add the tagging code if needed.
+%
+%
+%
+%
+%  \begin{macro}{\@doendpe}
+%    The original \LaTeXe{} command is augmented to allow for tagging.
+%    \begin{macrocode}
+\def\@doendpe{\@endpetrue
+  \def\par
+    {
+      \@restorepar
+      \clubpenalty\@clubpenalty
+%    \end{macrocode}
+%    At this point we add the tagging code that closes an open
+%    \struct{text-unit}, \struct{text} tag combination,
+%    if necessary:
+%    \begin{macrocode}
+      \__kernel_displayblock_doendpe:
+%    \end{macrocode}
+%
+%    The standard \cs{par} command (\cs{par_end:}) acts on
+%    \texttt{@endpe} and attempts to close a still open \texttt{text-unit}
+%    and this would be wrong if it was already closed above. So we
+%    have to reset the switch to false first.      
+%    \begin{macrocode}
+      \@endpefalse
+      \everypar{}
+      \par
+    }
+  \everypar{{\setbox\z@\lastbox}
+            \everypar{}
+            \@endpefalse
+  }
+}
+%    \end{macrocode}
+%
+%    By default we don't do any tagging:
+%    \begin{macrocode}
+\cs_new_eq:NN \__kernel_displayblock_doendpe: \prg_do_nothing:
+%    \end{macrocode}
+%    The flag itself should be set globally not locally.\fmi{verify
+%    that this claim is actually correct!}
+%    \begin{macrocode}
+\def\@endpetrue {\global\let\if@endpe\iftrue}
+\def\@endpefalse{\global\let\if@endpe\iffalse}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+% \subsection{Object and template interfaces}
+%
+%
+% \begin{objecttype}{blockenv, block, para, list, item}
+%   All object types expect a single
+%   key--value argument used to tweak template parameters specific to a
+%   given use in the document.  This section is devoted to template
+%   interfaces, and the template code is covered later.
+%    \begin{macrocode}
+\DeclareObjectType{blockenv}{1}
+\DeclareObjectType{block}{1}
+\DeclareObjectType{para}{1}
+\DeclareObjectType{list}{1}
+\DeclareObjectType{item}{1}
+%    \end{macrocode}
+% \end{objecttype}
+%
+%
+%
+%  \begin{template}{blockenv display}
+%    
+%    \begin{macrocode}
+\DeclareTemplateInterface{blockenv}{display}{1}
+{
+  env-name       : tokenlist ,
+  tag-name       : tokenlist ,
+  tag-class      : tokenlist ,
+  tagging-recipe : tokenlist = standard,
+  level-increase : boolean = true ,
+  setup-code     : tokenlist , 
+  block-instance : tokenlist = displayblock ,
+  para-instance  : tokenlist ,
+  inner-level-counter : tokenlist,
+  max-inner-levels    : tokenlist = 4,
+  inner-instance-type : tokenlist = list ,
+  inner-instance      : tokenlist ,
+  para-flattened : boolean = false ,
+  final-code     : tokenlist = \ignorespaces ,
+}
+%    \end{macrocode}
+%  \end{template}
+%
+%
+%  \begin{template}{block display}
+%    
+%    \begin{macrocode}
+\DeclareTemplateInterface{block}{display}{1}    
+{
+  heading        : tokenlist = ,                               %??
+  beginsep       : skip = \topsep ,
+  begin-par-skip : skip = \partopsep ,
+  par-skip       : skip = \parsep ,
+  end-skip       : skip = \KeyValue{beginsep} ,                % conflict with name below
+  end-par-skip   : skip = \KeyValue{begin-par-skip} ,
+  beginpenalty   : integer = \UseName{@beginparpenalty} ,
+  endpenalty     : integer = \UseName{@endparpenalty} ,
+  leftmargin     : length = \leftmargin ,
+  rightmargin    : length = \rightmargin ,
+  parindent      : length = \listparindent ,
+%  font            : tokenlist          % maybe add? (or more general for fonts and color)
+}
+%    \end{macrocode}
+%  \end{template}
+%
+%
+%  \begin{template}{para std}
+%    
+%    \begin{macrocode}
+\DeclareTemplateInterface{para}{std}{1}    
+{
+  indent-width          : length = \parindent ,
+  start-skip            : skip = 0pt  ,
+  left-skip             : skip = 0pt ,
+  right-skip            : skip = 0pt ,
+  end-skip              : skip = \@flushglue ,
+  fixed-word-spaces     : boolean = false ,
+  final-hyphen-demerits : integer = 5000 ,
+  cr-cmd                : tokenlist = \@normalcr ,
+  para-class            : tokenlist = justify ,                          
+}
+%    \end{macrocode}
+%  \end{template}
+%
+%
+%  \begin{template}{list std}
+%    
+%    \begin{macrocode}
+\DeclareTemplateInterface{list}{std}{1}     % optional
+{
+  counter         : tokenlist = ,
+  item-label      : tokenlist = ,
+  start           : integer = 1 ,
+  resume          : boolean = false ,
+  item-instance   : instance{item} = basic ,
+  item-skip       : skip = \itemsep ,
+  item-penalty    : integer = \UseName{@itempenalty} ,
+  item-indent     : length = 0pt ,         % was \itemindent 
+  label-width     : length = \labelwidth ,
+  label-sep       : length = \labelsep ,
+  legacy-support   : boolean = false ,
+}
+%    \end{macrocode}
+%  \end{template}
+%
+%
+% \begin{template}{item std}
+%
+%    \begin{macrocode}
+\DeclareTemplateInterface{item}{std}{1}
+  {
+    counter-label : function{1} = \arabic{#1} ,
+    counter-ref   : function{1} = \KeyValue{counter-label} ,
+    label-ref     : function{1} = #1 ,
+    label-autoref : function{1} = item~#1 ,
+    label-format  : function{1} = #1 ,
+    label-strut   : boolean = false ,
+    label-align   : choice {left,center,right,parleft} = right ,
+    label-boxed   : boolean = true ,
+    next-line     : boolean = false ,
+    text-font     : tokenlist ,
+    compatibility : boolean = true ,
+  }
+%    \end{macrocode}
+% \end{template}
+%
+%
+%
+%
+%
+%
+% \subsection{Useful helper commands}
+%
+% This section collects \pkg{expl3} commands that will be useful.
+%
+%  \begin{macro}{\@@_skip_set_to_last:N,\@@_skip_remove_last:}
+%    Set a skiip register to  the value of an immediately preceding
+%    skip or zero if there was none
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_skip_set_to_last:N #1 {
+  \skip_set:Nn #1 { \tex_lastskip:D }
+}
+%    \end{macrocode}
+%    Remove a skip previous skip if it is directly in front (not
+%    allowed in unrestricted vertical mode).
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_skip_remove_last: \tex_unskip:D
+%    \end{macrocode}
+%  \end{macro}
+%    
+%  \begin{macro}{\tl_if_novalue:nTF}
+%    
+%    \begin{macrocode}
+\cs_generate_variant:Nn \tl_if_novalue:nTF { o }
+%    \end{macrocode}
+%  \end{macro}
+%    
+%
+% \subsubsection{Debugging}
+%
+%    
+%  \begin{variable}{\g_@@_debug_bool}
+%    
+%    \begin{macrocode}
+\bool_new:N \g_@@_debug_bool
+%    \end{macrocode}
+%  \end{variable}
+%
+%
+%  \begin{macro}{\@@_debug:n,\@@_debug_typeout:n}
+%    
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_debug:n \use_none:n
+\cs_new_eq:NN \@@_debug_typeout:n \use_none:n
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\block_debug_on:,\block_debug_off:,
+%                \@@_debug_gset:}
+%    \begin{macrocode}
+\cs_new_protected:Npn \block_debug_on:
+  {
+    \bool_gset_true:N \g_@@_debug_bool
+    \@@_debug_gset:
+  }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \block_debug_off:
+  {
+    \bool_gset_false:N \g_@@_debug_bool
+    \@@_debug_gset:
+  }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_debug_gset:
+  {
+    \cs_gset_protected:Npx \@@_debug:n ##1
+      { \bool_if:NT \g_@@_debug_bool {##1} }
+    \cs_gset_protected:Npx \@@_debug_typeout:n ##1
+      { \bool_if:NT \g_@@_debug_bool { \typeout{==>~ ##1} } }
+  }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\DebugBlocksOn,\DebugBlocksOff}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \DebugBlocksOn  { \block_debug_on:  }
+\cs_new_protected:Npn \DebugBlocksOff { \block_debug_off: }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\DebugBlocksOff
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+% \subsection{Implementation of the document-level block environments}
+%
+%    Most such environments are pretty simple: they take an option
+%    argument and call a \texttt{blockenv} instance to do the work. At
+%    the end of environment we call \cs{endblockenv} to finish.
+%
+%
+% \subsubsection{Displayblock environments}
+%
+%
+%    There are two basic block environment which are similar to
+%    \LaTeXe{}'s \env{trivlist} except that there aren't degenerated
+%    lists and thus have no hidden \cs{item} inside.
+%
+%
+%  \begin{environment}{displayblock}
+%    
+%    \begin{macrocode}
+\NewDocumentEnvironment{displayblock}{ !O{} }
+  { \UseInstance{blockenv}{displayblock} {#1} }
+  { \endblockenv }
+%    \end{macrocode}
+% \end{environment}
+%
+%
+%
+%
+%  \begin{environment}{displayblockflattened}
+%    
+%    \begin{macrocode}
+\NewDocumentEnvironment{displayblockflattened}{ !O{} }
+  { \UseInstance{blockenv}{displayblockflattened} {#1} }
+  { \endblockenv }
+%    \end{macrocode}
+%  \end{environment}
+%
+%
+%
+%
+%
+%
+%
+%
+%  \begin{environment}{center,flushleft,flushright}
+%    
+%    \begin{macrocode}
+\AddToHook{begindocument/before}{
+  \RenewDocumentEnvironment{center} { !O{} }
+  { \UseInstance{blockenv}{center}{#1} }
+  { \endblockenv }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+  \RenewDocumentEnvironment{flushright} { !O{} }
+  { \UseInstance{blockenv}{flushright}{#1} }
+  { \endblockenv }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+  \RenewDocumentEnvironment{flushleft} { !O{} }
+  { \UseInstance{blockenv}{flushleft}{#1} }
+  { \endblockenv }
+}
+%    \end{macrocode}
+%
+%    
+%  \end{environment}
+%
+%
+%
+%
+% \subsubsection{Display quote environments}
+%
+%
+%  \begin{environment}{quote,quotation}
+%    
+%    \begin{macrocode}
+\AddToHook{begindocument/before}{
+  \RenewDocumentEnvironment{quote}{ !O{} }
+    { \UseInstance{blockenv}{quote} {#1} }
+    { \endblockenv }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \RenewDocumentEnvironment{quotation}{ !O{} }
+    { \UseInstance{blockenv}{quotation} {#1} }
+    { \endblockenv }
+}
+%    \end{macrocode}
+% \end{environment}
+%
+%
+%
+%
+%
+%
+% \subsubsection{Verbatim environments}
+%
+%
+%  \begin{environment}{verbatim,verbatim*}
+%    
+%    \begin{macrocode}
+\AddToHook{begindocument/before}{
+  \RenewDocumentEnvironment{verbatim}{ !O{} }
+    { \UseInstance{blockenv}{verbatim} {#1}
+%    \end{macrocode}
+%    This is the part of the code where \env{verbatim}
+%    and\env{verbatim*} differ.
+%    \begin{macrocode}
+      \@setupverbinvisiblespace\frenchspacing\@vobeyspaces
+      \@xverbatim
+    }
+    { \endblockenv }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \RenewDocumentEnvironment{verbatim*}{ !O{} }
+    { \UseInstance{blockenv}{verbatim} {#1}
+      \@setupverbvisiblespace\frenchspacing\@vobeyspaces
+      \@sxverbatim
+    }
+    { \endblockenv }
+}
+%    \end{macrocode}
+% \end{environment}
+%
+%
+%
+% \paragraph{Helper commands for verbatim}
+%
+%
+%  \begin{macro}{\legacyverbatimsetup}
+%
+%    This code resembles the \LaTeXe{} verbatim implementation with a
+%    slight twist: in \LaTeXe{} each code line was a paragraph using
+%    \cs{leftskip}=\cs{@totalleftmargin}. This was possible because
+%    the whole environment was implemented as a trivlist. As this is
+%    no longer the case setting \cs{leftskip} would alter the layout
+%    of a surrounding list. So instead we need to make sure that the
+%    paragraph end is executed in a group so that any parshape setup
+%    is preserved.
+%    \begin{macrocode}
+%<@@=>  
+\def\legacyverbatimsetup{%
+  \language\l@nohyphenation
+  \@tempswafalse
+  \def\par{%
+    \if@tempswa
+      \leavevmode \null {\@@par}\penalty\interlinepenalty
+    \else
+      \@tempswatrue
+      \ifhmode{\@@par}\penalty\interlinepenalty\fi
+    \fi}%
+  \let\do\@makeother \dospecials
+  \obeylines \verbatim@font \@noligs
+  \everypar \expandafter{\the\everypar \unpenalty}%
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \tl_set:Nn \l__tag_para_main_tag_tl {codeline}
+  \tagtool{paratag=Code}%   oder faster: \tl_set:Nn\l__tag_para_tag_tl{Code}      
+}
+%<@@=block>  
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\@setupverbinvisiblespace}
+%    In the \pdfTeX{} engine we need to use \cs{pdffakespace} chars
+%    for the invisible spaces.
+%    \begin{macrocode}
+\newcommand\@setupverbinvisiblespace{}
+\tag_if_active:T {
+  \bool_if:NF\g__tag_mode_lua_bool
+   {
+     \renewcommand\@setupverbinvisiblespace{\def\@xobeysp{\nobreakspace\pdffakespace}}
+   }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+% \subsubsection{Standard list environments}
+%
+%
+% \begin{environment}{itemize,enumerate,description}
+%
+%    For the standard lists everything is managed by the blockenv instance.
+%    \begin{macrocode}
+\AddToHook{begindocument/before}{
+  \RenewDocumentEnvironment{itemize}{!O{}}
+    { \UseInstance{blockenv}{itemize} {#1} }
+    { \endblockenv }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+  \RenewDocumentEnvironment{enumerate}{!O{}}
+    { \UseInstance{blockenv}{enumerate} {#1} }
+    { \endblockenv }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+  \RenewDocumentEnvironment{description}{!O{}}
+    { \UseInstance{blockenv}{description} {#1} }
+    { \endblockenv }
+}
+%    \end{macrocode}
+% \end{environment}
+%
+%
+% \subsubsection{verse environment}
+%
+%  \begin{environment}{verse}
+%  The verse environment has not special tagging currently. It is
+%  defined as a simple standard list and takes the tagging from there.
+%  But it must be redefined so that \cs{itemindent} is correctly set.
+%    \begin{macrocode}
+\AddToHook{begindocument/before}{
+  \RenewDocumentEnvironment{verse}{ !O{} }
+    { 
+      \let\\\@centercr
+      \UseInstance{blockenv}{list} 
+        {
+          item-indent=-1.5em,
+          parindent=-1.5em,
+          item-skip=0pt,
+          rightmargin=\leftmargin,
+          leftmargin=\leftmargin+1.5em,
+          #1
+         }
+      \item\relax    
+    }
+    { \endblockenv }
+  }   
+%    \end{macrocode}
+% \end{environment}
+%
+%
+% \begin{environment}{list}
+%
+%    The legacy 2e list environment is more complicated as we have to get the
+%    extra arguments accounted for.
+%    \begin{macrocode}
+\AddToHook{begindocument/before}{
+  \RenewDocumentEnvironment{list}{O{} m m }
+    {
+%    \end{macrocode}
+%    We do this by storing them away and then call the list
+%    instance. Inside this instance the \texttt{setup-code} key
+%    contains \cs{legacylistsetupcode}, which makes use of the stored values.
+%    \begin{macrocode}
+      \tl_set:Nn \@itemlabel {#2}
+      \tl_set:Nn \l_@@_legacy_env_params_tl {#3}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+      \UseInstance{blockenv}{list} {#1}
+    }
+    { \endblockenv }
+}
+%    \end{macrocode}
+%
+% \end{environment}
+%
+%
+%
+% \begin{variable}{\l_@@_env_params_tl}
+%    Declare the variable for the parameter argument; \cs{@itemlabel}
+%    is already declared in \LaTeXe{}.
+%    \begin{macrocode}
+\tl_new:N \l_@@_env_params_tl
+%    \end{macrocode}
+% \end{variable}
+%
+%
+%  \begin{macro}{\legacylistsetupcode}
+%    
+%    And here is the extra code for use in the list instance setup
+%    inside the key \texttt{setup-code}.
+%    \begin{macrocode}
+\cs_new:Npn \legacylistsetupcode {
+%    \end{macrocode}
+%    Reset values to defaults:
+%    \begin{macrocode}
+    \dim_zero:N \listparindent
+    \dim_zero:N \rightmargin
+    \dim_zero:N \itemindent
+%    \end{macrocode}
+%    
+%    By default a \env{list} environment is not numbered:
+%    \begin{macrocode}
+    \tl_set:Nn \@listctr {}
+    \legacy_if_set_false:n { @nmbrlist } % needed if lists are nested
+%    \end{macrocode}
+%    By default there is a simple definition for \cs{makelabel}. It can be
+%    overwritten in the second mandatory argument to the list
+%    environment (stored in \cs{l_@@_legacy_env_params_tl}) and 
+%    is used if the instance sets the compatibility key to true.
+%    \begin{macrocode}
+   \let\makelabel\@mklab % TODO: customize
+%    \end{macrocode}
+%    Now we use the argument with parameter settings to update some or
+%    all of the above defaults:
+%    \begin{macrocode}
+   \l_@@_legacy_env_params_tl
+%    \end{macrocode}
+%    As we don't know much about this list we can only make a guess about
+%    the nature of the list and the setting of the tag name (default
+%    \texttt{list} rolemapped to \texttt{L}) and any tag attributes
+%    may have to be overwritten in the optional key/value argument. But we do have some hints to play with.
+%    \begin{macrocode}
+    \legacy_if:nTF { @nmbrlist }
+      { \tl_set:Nn \l__tag_L_attr_class_tl {enumerate} }   % numbered list
+      { \tl_if_empty:NTF \@itemlabel
+          { \tl_set:Nn \l__tag_L_attr_class_tl {list}    } % no label
+          { \tl_set:Nn \l__tag_L_attr_class_tl {itemize} } % unnumbered, unordered
+      }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%  \begin{environment}{trivlist}
+%    
+%    \begin{macrocode}
+\AddToHook{begindocument/before}{
+  \RenewDocumentEnvironment{trivlist}{ !O{} }
+                           { \list[#1]{}
+                             {
+                               \dim_zero:N \leftmargin
+                               \dim_zero:N \labelwidth
+                               \cs_set_eq:NN \makelabel \use:n
+                             }
+                           }
+    { \endblockenv }
+}
+%    \end{macrocode}
+%  \end{environment}
+%
+%
+% \subsubsection{Theorem-like environments}
+%
+% Theorem-like environments are defined in \LaTeX{} with the help of
+% \cs{newtheorem} declarations. Internally they used a list with a
+% single item. Using lists was convenient back then, but in a tagged
+% document you end up with a strange structure. We therefore alter the
+% mechanism.
+%
+%
+%  \begin{macro}{\newtheorem}
+%    This is a slightly streamlined version of \cs{newtheorem}, but it
+%    still uses a lot of the 2e code for now. Eventually this will change.
+%    \begin{macrocode}
+\RenewDocumentCommand \newtheorem { m O{#1} m o }
+{
+  \expandafter\@ifdefinable\csname #1\endcsname
+    {
+      \str_if_eq:nnTF{#1}{#2}
+         {
+           \@definecounter {#2}
+           \IfNoValueTF {#4}
+             {  % @ynthm
+               \tl_gset:cx { the #2 }
+                  {
+                    \@thmcounter{#2}
+                  }
+             }
+             {  % @xnthm
+               \@newctr{#1}[#4]
+               \tl_gset:cx { the #2 }
+                  {
+                    \expandafter\noexpand\csname the#4\endcsname
+                    \@thmcountersep
+                    \@thmcounter{#2}
+                  }
+             }
+         }
+         {  % @othm
+           \@ifundefined{c@#2}
+              { \@nocounterr{#2} }
+              {
+                \tl_gset:cn { the #1 }
+                   { \UseName { the #2 } }
+              }
+         }
+      \global\@namedef{#1}   { \@thm{#2}{#3} }
+      \global\@namedef{end#1}{ \@endtheorem  }
+    }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\@thm}
+%  \cs{@thm} executes \cs{refstepcounter} too early for hyperref
+%  and structure destinations: the generated target is outside the structure
+%  and can be separated from the theorem by a page break. We therefore move
+%  the anchor setting into \cs{@begintheorem}. \cs{@begintheorem} doesn't
+%  currently get the name of the counter as argument, so we store it in variable
+%  for now, to be able to pass it along.
+%    \begin{macrocode}
+\tl_new:N \l_@@_thm_current_counter_tl
+\def\@thm#1#2{%
+  \@kernel@refstepcounter{#1}
+  \tl_set:Nn \l_@@_thm_current_counter_tl{#1}
+  \@ifnextchar[{\@ythm{#1}{#2}}{\@xthm{#1}{#2}}}
+%    \end{macrocode}
+%  To avoid that hyperref overwrites the definition again we must its patch:     
+%    \begin{macrocode}
+\def\hyper@nopatch@thm{}
+%    \end{macrocode}
+%  \end{macro}
+%  
+%  \begin{macro}{\@begintheorem,\@opargbegintheorem}
+%
+%    The \cs{@thm} command expands to either \cs{@beginthorem} or
+%    \cs{@opargbegintheorem}. For the moment we stick with this as it
+%    will help with the transition. But instead of using a
+%    \env{trivlist} we use a blockenv and some tagging for the title
+%    (as a Caption).
+%    We do not want potential tagging from \cs{textbf} here,
+%    so we use \cs{bfseries} to set the font. The commands set also the link targets
+%    which should be inside the main structure.
+%    \begin{macrocode}
+\def\@begintheorem#1#2{
+  \UseInstance{blockenv}{theorem}{}
+  \tagpdfparaOff
+  \mode_leave_vertical: 
+  \MakeLinkTarget{\l_@@_thm_current_counter_tl} 
+  \tag_struct_begin:n{tag=Caption}
+   \group_begin:
+   \bfseries
+   \tag_mc_begin:n {}
+     #1\ 
+   \tag_mc_end:
+    \tag_struct_begin:n{tag=Lbl}
+      \tag_mc_begin:n {}
+          #2
+      \tag_mc_end:
+    \tag_struct_end:          
+    \group_end:
+  \tag_struct_end:
+  \tagpdfparaOn
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \@@_start_para_structure_unconditionally:n { \PARALABEL }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \itshape
+  \hskip\labelsep
+  \ignorespaces
+}
+\def\@opargbegintheorem#1#2#3{
+  \UseInstance{blockenv}{theorem}{}
+  \tagpdfparaOff
+  \mode_leave_vertical:  
+  \MakeLinkTarget{\l_@@_thm_current_counter_tl}
+  \tag_struct_begin:n{tag=Caption}
+   \group_begin:
+   \bfseries 
+   \tag_mc_begin:n {}
+      #1\
+   \tag_mc_end:
+   \tag_struct_begin:n{tag=Lbl}
+     \tag_mc_begin:n {}
+       #2
+     \tag_mc_end:
+   \tag_struct_end:
+     \tag_mc_begin:n {}
+      \ (#3)
+     \tag_mc_end:
+   \group_end:  
+  \tag_struct_end:  
+  \tagpdfparaOn
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \@@_start_para_structure_unconditionally:n { \PARALABEL }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \itshape
+  \hskip\labelsep
+  \ignorespaces
+}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\def\@endtheorem{\endblockenv}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%
+%
+% \subsection{Implementation of templates}
+%
+%
+% \subsubsection{Implementation of blockenv templates \ldots}
+%
+%
+%
+%  \begin{macro}{\g_block_nesting_depth_int}
+%    \LaTeXe{} already has a counter to record the nesting depth of
+%    blocks, but  we want our own name because it isn't really tied to
+%    \enquote{lists} any more. However, \cs{@listdepth} is really part
+%    of the legacy interface (for example \env{minipage} alters it to
+%    point to a different counter) so that we are stuck with using at
+%    least indirectly for now and the following line makes this look
+%    like an L3 integer variable but internally expands to \cs{@listdepth}:
+%    \begin{macrocode}
+\cs_new:Npn \g_block_nesting_depth_int { \@listdepth }  % a fake int
+                                                        % for now
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{template}{blockenv display}
+%    
+%    \begin{macrocode}
+\DeclareTemplateCode{blockenv}{display}{1}
+{
+  env-name       = \l_@@_env_name_tl ,
+  tag-name       = \l_@@_tag_name_tl ,
+  tag-class      = \l_@@_tag_class_tl ,
+  tagging-recipe = \l_@@_tagging_recipe_tl ,
+  level-increase = \l_@@_level_incr_bool ,
+  setup-code     = \l_@@_setup_code_tl , 
+  block-instance = \l_@@_block_instance_tl ,
+  para-instance  = \l_@@_para_instance_tl ,
+  inner-level-counter = \l_@@_inner_level_counter_tl ,
+  max-inner-levels    = \l_@@_max_inner_levels_tl ,
+  inner-instance-type = \l_@@_inner_instance_type_tl ,
+  inner-instance      = \l_@@_inner_instance_tl ,
+  para-flattened = \l__tag_para_flattened_bool ,
+  final-code     = \l_@@_final_code_tl , 
+}
+{
+  \@@_debug_typeout:n{\l_@@_env_name_tl -env-start}
+%  
+  \tl_if_empty:nF {#1} { \SetTemplateKeys{blockenv}{display}{#1} }
+%
+%    \end{macrocode}
+%    We need to know later if we have nested blockenvs inside
+%    a flattened environment. Whenever we  start a new blockenv we
+%    increment \cs{\l_@@_flattened_level_int} if it is already
+%    different from zero. If it is zero we increment it if flattening
+%    is requested.
+%    Thus a value of \texttt{0} means no flattening requested so far
+%    and \texttt{1} means this is the first blockenv requesting
+%    flattening. In either case we have to make sure that the blockenv
+%    is surrounded by a \texttt{text-unit} tag, while for any value above
+%    \texttt{1} we have to omit the \texttt{text-unit}.
+  %    \begin{macrocode}
+  \int_compare:nNnTF \l_@@_flattened_level_int > 0
+      {
+        \int_incr:N \l_@@_flattened_level_int
+      }
+      {
+        \bool_if:NT \l__tag_para_flattened_bool
+             {
+               \int_incr:N \l_@@_flattened_level_int
+             }
+      }
+%
+  \tl_if_empty:NF \l_@@_inner_level_counter_tl
+     {
+       \int_compare:nNnTF  \l_@@_inner_level_counter_tl >
+                           { \l_@@_max_inner_levels_tl - 1 }
+           { \@toodeep }
+           { \int_incr:N \l_@@_inner_level_counter_tl }  % not clean "o"?
+     }
+%    \end{macrocode}
+%    Legacy defaults are only roped in if the list level changes. For
+%    display blocks that remain on the same level the current values
+%    are kept.
+%    \begin{macrocode}
+  \bool_if:NT \l_@@_level_incr_bool
+     {
+       \int_compare:nNnTF  \g_block_nesting_depth_int >
+                           { \c@maxblocklevels - 1 } 
+           { \@toodeep }
+           {
+             \int_gincr:N \g_block_nesting_depth_int
+%    \end{macrocode}
+%    If there are no legacy defaults for that level then the next line
+%    does nothing, i.e., the current values (from the last level
+%    become the defaults for the next.
+%    \begin{macrocode}
+             \use:c { @list \int_to_roman:n { \g_block_nesting_depth_int } }
+           }
+     }
+%    \end{macrocode}
+%    If we are doing tagging we load one of the available recipes for
+%    tagging, which alters various kernel hooks to add appropriate
+%    tagging structures.
+%    \begin{macrocode}
+  \tag_if_active:T { \use:c { @@_recipe_ \l_@@_tagging_recipe_tl : } }
+%    \end{macrocode}
+%    Then run the setup code if any is given in the instance.
+%    \begin{macrocode}
+  \l_@@_setup_code_tl
+%    \end{macrocode}
+%    Next call a block instance at the appropriate level passing it
+%    any key/value list provided in the optional argument (keys that
+%    are not recognized are ignored---currently with an
+%    error).
+%    \begin{macrocode}
+  \@@_debug_typeout:n{use~ instance:~
+           \l_@@_block_instance_tl - \int_use:N \g_block_nesting_depth_int }
+  \UseInstance{block}
+              { \l_@@_block_instance_tl - \int_use:N
+                \g_block_nesting_depth_int }
+              {#1}
+%    \end{macrocode}
+%    After the block instance call the para and then inner (list)
+%    instance if either or both are
+%    specified (which may not be the case).
+%    \begin{macrocode}
+  \tl_if_empty:NF \l_@@_para_instance_tl 
+    {
+      \@@_debug_typeout:n{use~ para~ instance:~ \l_@@_para_instance_tl }
+%    \end{macrocode}
+%    For now we don't offer to alter instance parameters here so we
+%    pass an empty argument.
+%    \begin{macrocode}
+      \UseInstance{para}{ \l_@@_para_instance_tl } {}
+    }
+%    \end{macrocode}
+%    The inner instance may have its own levels or none depending
+%    on which the instance name differs. Again we pass it the optional
+%    key/value list.
+%    \begin{macrocode}
+  \tl_if_empty:NF \l_@@_inner_instance_tl
+    {
+      \@@_debug_typeout:n{use~ instance:~ \l_@@_inner_instance_tl
+               \tl_if_empty:NF \l_@@_inner_level_counter_tl
+                       { - \int_use:N \l_@@_inner_level_counter_tl }}
+      \UseInstance{ \l_@@_inner_instance_type_tl }
+                  { \l_@@_inner_instance_tl
+                    \tl_if_empty:NF \l_@@_inner_level_counter_tl
+                       { - \int_use:N \l_@@_inner_level_counter_tl }  % not clean
+                                                                % use "o"?
+                  }
+                  {#1}
+    }
+%    \end{macrocode}
+%    We finish off with \cs{l_@@_final_code_tl} which defaults to
+%    \cs{ignorespaces} so that spaces between \verb=\begin{...}= and
+%    the start of the text are ignored.
+%    \begin{macrocode}
+  \l_@@_final_code_tl
+}
+%    \end{macrocode}
+%  \end{template}
+%
+%
+%  \begin{macro}{\l_@@_flattened_level_int}
+%    Count the levels of nested blockenvs starting with the first that
+%    is \enquote{flattened}.
+%    \begin{macrocode}
+\int_new:N \l_@@_flattened_level_int
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\c@maxblocklevels}
+%    A counter to increase or decrease the number of supported
+%    level. If increased, one needs to supply additional level instances.
+%    \begin{macrocode}
+\newcounter{maxblocklevels}
+\setcounter{maxblocklevels}{6}
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\endblockenv}
+%    The code executed when a blockenv ends is 99\% the same for all
+%    blockenvs (at least up to now). Small differences exist, though. They 
+%    are  accounted for first in the conditionals.
+%
+%    We make this a public command so that new block environments can
+%    be set up without the need to resort to L3 layer
+%    programming.\fmi{name is bad}
+%    \begin{macrocode}
+\cs_new:Npn \endblockenv {
+  \@@_debug_typeout:n{blockenv~ common~ ending \on@line}
+%    \end{macrocode}
+%    If this block was incrementing the level we have to decrement it
+%    now again:
+%    \begin{macrocode}
+  \bool_if:NT \l_@@_level_incr_bool
+    { \int_gdecr:N \g_block_nesting_depth_int }
+%    \end{macrocode}
+%    If this block was a list and there are still \cs{item} labels to
+%    be placed we move to horizontal mode to get them typeset.
+%    \begin{macrocode}
+  \legacy_if:nT { @inlabel }
+    {
+      \mode_leave_vertical: 
+      \legacy_if_gset_false:n { @inlabel }
+    }
+%    \end{macrocode}
+%    In a pure ``displayblock'' scenario \texttt{@newlist} will be
+%    always false and the code bypassed, but we may have an outer list
+%    followed immediately by a displayblock (with the \cs{item} missing)
+%    \begin{macrocode}
+  \legacy_if:nT { @newlist }
+    {
+      \@noitemerr
+      \legacy_if_gset_false:n { @newlist }
+    }
+  \mode_if_horizontal:TF
+       { \@@_skip_remove_last: \@@_skip_remove_last: \par }
+       { \@inmatherr{\end{\@currenvir}} }
+%    \end{macrocode}
+%    Once we are back in vertical mode we can add the appropriate
+%    closing tagging structure(s), if we are doing tagging.
+%    \begin{macrocode}
+  \__kernel_displayblock_end:
+%    \end{macrocode}
+%    What to do in terms of vertical spacing  in different situations
+%    is still somewhat open to debate, right now this is more or less
+%    implementing what \LaTeXe{} list environment have been
+%    doing.\fmi{some redesign/extensions here?}
+%    \begin{macrocode}
+%    \@@_debug_typeout:n{@noparlist =
+%                       \legacy_if:nTF { @noparlist }{true}{false}}
+  \legacy_if:nF { @noparlist }
+    {
+      \@@_skip_set_to_last:N \l_tmpa_skip
+      \dim_compare:nNnT \l_tmpa_skip > \c_zero_dim
+        {
+          \skip_vertical:n { - \l_tmpa_skip }
+          \skip_vertical:n { \l_tmpa_skip + \parskip - \@outerparskip }
+        }
+      \addpenalty \@endparpenalty
+      \addvspace \l_@@_topsepadd_skip
+%    \end{macrocode}
+%    \LaTeXe{} triggered the paragraph handling after a list at this
+%    point here, i.e., only if the list didn't start a paragraph. One
+%    can make a case for that, but it can be somewhat surprising to
+%    the user and there is a good argument that even such a list could
+%    be followed explanatory text that is part of the same paragraph
+%    and doesn't start a new one.\fmi{decide which logic we want to
+%    use! If the old logic is used we need to close the text-unit
+%    ourselves in the true branch}
+%    \begin{macrocode}
+%        \legacy_if_gset_true:n { @endpe }
+    }
+%    \end{macrocode}
+%    So this is for now always done. Probably \cs{l_@@_topsepadd_skip} above
+%    should be added only if the paragraph ends here and not if it
+%    continues, so this need some further cleanup.\fmi{decide}
+%    
+%    Finally, we have a socket that handles the \cs{par} handling
+%    after the block. Normally, we use it with the \plug{on} plug (check for a
+%    following \cs{par}) but in the case of standalone environments we
+%    assign it the \plug{off} plug.
+%    \begin{macrocode}
+  \socket_use:n {tagsupport/block-endpe}
+}
+%    \end{macrocode}
+%
+%  \end{macro}
+%
+%
+%  \begin{macro}{\__kernel_displayblock_end:}
+%    The kernel hook for tagging at the end of the block.
+%    \begin{macrocode}
+\cs_new:Npn \__kernel_displayblock_end: {
+  \@@_debug_typeout:n{\detokenize{__kernel_displayblock_end:}}
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+% \begin{socketdecl}{tagsupport/block-endpe}
+%    This socket is responsible for the end environment \cs{par}
+%    handling. We define two plugs for it (\plug{on} and \plug{off}).
+%    \begin{macrocode}
+\socket_new:nn      {tagsupport/block-endpe}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+%
+% \begin{plugdecl}{on,off}
+%    The plugs set the legacy \texttt{@endpe} switch. This must always
+%    happen because block environments with different settings can be nested
+%    and should not inherit the setting from the outer environment.
+%    \begin{macrocode}
+\socket_new_plug:nnn{tagsupport/block-endpe}{on}
+                    { \legacy_if_gset_true:n  { @endpe } }
+\socket_new_plug:nnn{tagsupport/block-endpe}{off}
+                    { \legacy_if_gset_false:n { @endpe } }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\socket_assign_plug:nn{tagsupport/block-endpe}{on}
+%    \end{macrocode}
+% \end{plugdecl}
+%
+%
+%
+%
+%
+% \subsubsection{Implementation of para templates \ldots}
+%
+%  \begin{template}{para std}
+%    
+%    \begin{macrocode}
+\DeclareTemplateCode{para}{std}{1}
+{
+  indent-width      = \parindent ,
+  start-skip        = \l__par_start_skip ,              % name??
+  left-skip         = \leftskip  ,
+  right-skip        = \rightskip  ,
+  end-skip          = \parfillskip ,
+  fixed-word-spaces = \l__par_fixed_word_spaces_bool ,  % name??
+  final-hyphen-demerits = \finalhyphendemerits ,
+  cr-cmd                = \\ ,
+  para-class            = \l_tag_para_attr_class_tl ,                          
+}
+{
+  \tl_if_empty:nF {#1} { \SetTemplateKeys{para}{std}{#1} }
+  \skip_set:Nn \@rightskip \rightskip
+}
+%    \end{macrocode}
+%  \end{template}
+%
+%
+%
+%
+%
+% \subsubsection{Implementation of block templates \ldots}
+%
+%
+%
+%
+%
+% \begin{template}{block display}
+%    
+%    \begin{macrocode}
+\DeclareTemplateCode{block}{display}{1}
+{
+  heading         = \l_@@_heading_tl ,
+  beginsep        = \topsep ,
+  begin-par-skip  = \partopsep ,
+  par-skip        = \parsep ,
+  end-skip        = \l_@@_botsep_skip ,
+  end-par-skip    = \l_@@_parbotsep_skip ,
+  beginpenalty    = \@beginparpenalty ,
+  endpenalty      = \@endparpenalty ,
+  rightmargin     = \rightmargin ,
+  leftmargin      = \leftmargin ,
+  parindent       = \listparindent ,
+}
+{
+  \tl_if_empty:nF {#1} { \SetTemplateKeys{block}{display}{#1} }
+%    \end{macrocode}
+%  \fmi{generalize heading usage (or drop?)}
+%    \begin{macrocode}
+    \tl_if_blank:oF \l_@@_heading_tl
+      { \mode_leave_vertical: \textbf{\l_@@_heading_tl} } % TODO customize
+%    \end{macrocode}
+%    The code largely follows the logic of \LaTeXe{}'s \env{trivlist}
+%    implementation as far as it applicable for the \enquote{display
+%    block} but coded using the L3 programming layer. However, we keep
+%    all the legacy variables (e.g., \texttt{@noskipsec}) if there is
+%    some chance that they are set in classes or packages.
+%    \begin{macrocode}
+    \legacy_if:nT { @noskipsec } { \mode_leave_vertical: }
+    \skip_set:Nn \l_@@_topsepadd_skip { \topsep }
+    \mode_if_vertical:TF
+      {
+        \skip_add:Nn \l_@@_topsepadd_skip { \partopsep }
+%    \end{macrocode}
+%    At this point it is safe to add tagging structure(s) so we have
+%    a kernel-owned hook here for tagging. This is used to possibly
+%    start a paragraph structure (to surround the block, for example,
+%    in case of lists) and possibly do some other preparation for
+%    tagging the block.
+%    \begin{macrocode}
+        \__kernel_displayblock_beginpar_vmode:
+      }
+      {
+%    \end{macrocode}
+%    If we are in horizontal mode then the displayblock has to return
+%    to vertical mode now (after removing any immediately preceding
+%    skip or kern. But before we actually issue the\cs{par} we execute
+%    a kernel hook in which we can add tagging code. This hook is
+%    \enquote{weird} because by default it does nothing, but if
+%    tagging is wanted it takes an argument and grabs the following
+%    \cs{par} in order to put tagging code before and after the \cs{par}.
+%    \begin{macrocode}
+        \@@_skip_remove_last: \@@_skip_remove_last:
+        \__kernel_displayblock_beginpar_hmode:w \par 
+      }
+%    \end{macrocode}
+%    Now we are back to legacy list implementation \ldots
+%    \begin{macrocode}
+    \legacy_if:nTF { @inlabel }
+      {
+        \legacy_if_set_true:n { @noparitem }
+        \legacy_if_set_true:n { @noparlist }
+      }
+      {
+        \legacy_if:nT { @newlist } { \@noitemerr }
+        \legacy_if_set_false:n { @noparlist }
+        \skip_set_eq:NN \l_@@_effective_top_skip \l_@@_topsepadd_skip
+      }
+    \skip_add:Nn \l_@@_effective_top_skip { \parskip }
+%    \end{macrocode}
+%    Next lines set some paragraph defaults, this may get overwritten
+%    if there is a \key{para-instance} specified on the \xt{blockenv}.
+%    \begin{macrocode}
+    \skip_zero:N \leftskip
+    \skip_set_eq:NN \rightskip \@rightskip
+    \skip_set_eq:NN \parfillskip \@flushglue
+%    \end{macrocode}
+%    The next lines establish a parshape which is retained across
+%    paragraphs be executing \cs{para_end:} within a group and thus
+%    reestablishing the parshape for the next paragraph again. In case
+%    a list got started \cs{par} is ignored until we have seen an
+%    \cs{item} (or we have executed \cs{par} one thousand times.
+%    \begin{macrocode}
+    \int_zero:N \par@deathcycles
+    \@setpar
+      {
+        \legacy_if:nTF { @newlist }
+          {
+            \int_incr:N \par@deathcycles
+            \int_compare:nNnTF \par@deathcycles > { 1000 }
+                { \@noitemerr
+                  { \para_end: }
+                }
+          }
+          {
+            { \para_end: }
+          }
+      }
+    \skip_set_eq:NN \@outerparskip \parskip
+    \skip_set_eq:NN \parskip \parsep
+    \dim_set_eq:NN \parindent \listparindent
+    \dim_add:Nn \linewidth { - \rightmargin - \leftmargin }
+    \dim_add:Nn \@totalleftmargin { \leftmargin }
+    \tex_parshape:D 1 ~ \@totalleftmargin \linewidth
+%    \end{macrocode}
+%    This is the point where we are ready to add the tagging structure
+%    for the block, e.g., an \verb=<L>=, a \verb=<Figure>= or some
+%    other structure.
+%    \begin{macrocode}
+    \__kernel_displayblock_begin:
+%    \end{macrocode}
+%    Finally, we have to output the vertical separation and penalty at
+%    the start of the block  and make corrections for a change in
+%    \cs{parskip} and some other housekeeping, unless this block is inside a list and the list
+%    \cs{item} has not yet placed. In that case the vertical
+%    space and penalty us suppressed. This
+%    is controled through the legacy switches \texttt{@noparitem},
+%    \texttt{minipage}, and \texttt{@nobreak}.
+%    \begin{macrocode}
+    \legacy_if:nTF { @noparitem }
+      {
+        \legacy_if_set_false:n { @noparitem }
+        \hbox_gset:Nn \g_@@_labels_box
+          {
+            \skip_horizontal:n { - \leftmargin }
+            \hbox_unpack_drop:N \g_@@_labels_box
+            \skip_horizontal:n { \leftmargin }
+          }
+%    \end{macrocode}
+%    \fmi{document 2e logic used here}
+%    \begin{macrocode}
+        \legacy_if:nF { @minipage } % Why this chunk of code?
+          {
+            \@@_skip_set_to_last:N \l_@@_tmpa_skip
+            \skip_vertical:n { - \l_@@_tmpa_skip }
+            \skip_vertical:n { \l_@@_tmpa_skip + \@outerparskip - \parskip }
+          }
+      }
+      {
+        \legacy_if:nTF { @nobreak }
+          { \addvspace{\skip_eval:n{\@outerparskip-\parskip}} }
+          {
+            \addpenalty \@beginparpenalty
+            \addvspace \l_@@_effective_top_skip
+            \addvspace{-\parskip}
+          }
+      }
+}
+%    \end{macrocode}
+%
+%
+%    Extra keys to support enumitem conventions:
+%    \begin{macrocode}
+\keys_define:nn { template/block/display }
+{
+  ,topsep        .skip_set:N = \topsep
+  ,partopsep     .skip_set:N = \partopsep
+  ,listparindent .skip_set:N = \listparindent
+}
+%    \end{macrocode}
+% \end{template}
+%
+%
+%
+%  \begin{macro}{\__kernel_displayblock_begin:,
+%                \__kernel_displayblock_beginpar_hmode:w,
+%                \__kernel_displayblock_beginpar_vmode:}
+%    The internal kernel hooks for tagging.
+%    \begin{macrocode}
+\cs_new:Npn \__kernel_displayblock_begin: {
+  \@@_debug_typeout:n{\detokenize{__kernel_displayblock_begin:}}
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new:Npn \__kernel_displayblock_beginpar_hmode:w {
+  \@@_debug_typeout:n{\detokenize{__kernel_displayblock_beginpar_hmode:w}}
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new:Npn \__kernel_displayblock_beginpar_vmode: {
+  \@@_debug_typeout:n{\detokenize{__kernel_displayblock_beginpar_vmode:}}
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+% \subsubsection{Implementation of list templates \ldots}
+%
+%
+%
+%  \begin{macro}{\@itemlabel,\@listctr}
+%    Both \cs{@itemlabel} and \cs{@listctr} from the \LaTeXe{} list
+%    implementation are used (or set) by various packages. We
+%    therefore use them too, so that these packages have a fighting
+%    chance to work with the new tagging-aware implementation for
+%    \env{list}.
+%    \begin{macrocode}
+\tl_new:N \@itemlabel         % should have a top-level definition
+\tl_new:N \@listctr           % should have a top-level definition
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%
+% \begin{template}{list std}
+%    
+%    This template implements numbered and unnumbered lists  and can
+%    be combined with display blocks or with inline blocks.
+%    \begin{macrocode}
+\DeclareTemplateCode{list}{std}{1}
+{
+  counter         = \l_@@_counter_tl,
+  item-label      = \l_@@_item_label_tl,
+  start           = \l_@@_counter_start_int ,
+  resume          = \l_@@_resume_bool ,
+  item-instance   = \@@_item_instance:n ,
+  item-skip       = \itemsep ,
+%  item-par-skip   = \parsep ,
+  item-penalty    = \@itempenalty ,
+  item-indent     = \itemindent ,
+  label-width     = \labelwidth ,
+  label-sep       = \labelsep ,
+  legacy-support  = \l_@@_legacy_support_bool , % FMi questionable
+}
+{
+  \@@_debug_typeout:n{template:list:std}
+%
+  \tl_if_empty:nF {#1} { \SetTemplateKeys{list}{std}{#1} }
+%    \end{macrocode}
+%    Has this list a counter name defined in the instance?
+%    \begin{macrocode}
+  \tl_if_empty:NTF \l_@@_counter_tl
+    {                                
+%    \end{macrocode}
+%    If not we check if \cs{@listctr} has a non-empty value to be used
+%    for the list counter.      
+%
+%    We better test for blank not empty in case somebody had defined
+%    \cs{@listctr} using \cs{renewcommand} or \cs{cs_set:Npn}.
+%    \begin{macrocode}
+     \tl_if_blank:oF \@listctr
+       {
+%    \end{macrocode}
+%    In that case \texttt{@nmbrlist} should have been set too, for
+%    example, through \cs{usecounter}, so we do not set it
+%    explicitly. However, we check if we should resume a previous list.
+%    \begin{macrocode}
+         \bool_if:NF \l_@@_resume_bool
+           {
+             \int_gset:cn{ c@ \@listctr }
+                 { \l_@@_counter_start_int - 1 }
+           } 
+       } 
+%    \end{macrocode}
+%    If \cs{@listctr} is not set then we have definitely an unnumbered list.
+%    \begin{macrocode}
+       { \@nmbrlistfalse } 
+    }
+%    \end{macrocode}
+%    If a counter is set in the list instance we use that
+%    one. This should be the name of a \LaTeX{} counter that is
+%    already allocated externally---no runtime check is made for this:
+%    if it is not declared one will get \enquote{no such counter}
+%    error when the list is used.
+%    \begin{macrocode}
+    {
+     \@nmbrlisttrue
+     \tl_set_eq:NN \@listctr \l_@@_counter_tl
+     \bool_if:NF \l_@@_resume_bool
+       {
+         \int_gset:cn{ c@ \@listctr }
+             { \l_@@_counter_start_int - 1 }
+       } 
+    }
+%    \end{macrocode}
+%    Does the current instance has an item label representation? This
+%    would be possible whether or not we have a numbered list. If yes,
+%    then we use this for \cs{@itemlabel}, otherwise we expect that
+%    \cs{@itemlabel} is provided from the outside, e.g., as part of
+%    the \env{list} environment argument.
+%    \begin{macrocode}
+  \tl_if_empty:NF \l_@@_item_label_tl
+    {
+      \tl_set_eq:NN \@itemlabel \l_@@_item_label_tl
+    }
+%    \end{macrocode}
+%    finally, we signal that we are at the start of a new list (which
+%    effects how the first \cs{item} is handled and how \cs{par}
+%    commands are interpreted.
+%    \begin{macrocode}
+    \legacy_if_gset_true:n { @newlist }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \@@_debug_typeout:n{template:list:std~end}
+}
+%    \end{macrocode}
+%    
+%
+%    Extra keys to support enumitem conventions:
+%    \begin{macrocode}
+\keys_define:nn { template/list/std }
+{
+  ,nosep .code:n =
+    \dim_zero:N \itemsep
+    \dim_zero:N \parsep
+    \dim_zero:N \topsep
+    \dim_zero:N \l_@@_botsep_skip
+    \dim_zero:N \l_@@_parbotsep_skip
+  ,midsep    .skip_set:N = \topsep 
+}
+%    \end{macrocode}
+%
+%  \end{template}
+%
+%
+% \subsubsection{Implementation of \cs{item} template(s)}
+%
+%
+%
+% \begin{template}{item std}
+%   The item template has one hidden key \texttt{label} which is not available on the
+%    template for setting because it is only used to receive any
+%    optional data passed to the \cs{item} command. We therefore
+%    declare it with \cs{keys_define:nn} and ensure that the optional
+%    argument data to \cs{item} (if it is not a key/value list
+%    already) is passed to this \texttt{label} key.
+%    \begin{macrocode}
+\keys_define:nn { template/item/std }
+                { label .tl_set:N = \l_@@_label_given_tl }
+%    \end{macrocode}
+%
+% \fmi{alignment is mostly wrong (test short medium and multiline
+% labels)}
+%    \begin{macrocode}
+\DeclareTemplateCode{item}{std}{1}
+  {
+    counter-label   = \@@_counter_label:n ,
+    counter-ref     = \@@_counter_ref:n ,
+%    \end{macrocode}
+%    \fmi{next set of key not yet used}
+%    \begin{macrocode}
+    label-ref       = \@@_label_ref:n ,
+    label-autoref   = \@@_label_autoref:n ,
+    label-format    = \@@_label_format:n ,
+    label-strut     = \l_@@_label_strut_bool ,
+    label-boxed     = \l_@@_label_boxed_bool ,
+    next-line       = \l_@@_next_line_bool ,
+    text-font       = \l_@@_text_font_tl ,
+    compatibility   = \l_@@_item_compatibility_bool ,
+%    \end{macrocode}
+%    This probably needs a different implementation (and needs completing)\fmi{complete}
+%    \begin{macrocode}
+    label-align     = {
+      left    = \tl_set:Nn \l_@@_item_align_tl { \relax \hss } ,
+      center  = \tl_set:Nn \l_@@_item_align_tl { \hss \hss } ,
+      right   = \tl_set:Nn \l_@@_item_align_tl { \hss \relax } ,
+      parleft = \NOT_IMPLEMENTED ,
+    } ,
+  }
+%    \end{macrocode}
+% Then typeset the label at its natural width by applying
+% \cs{@@_make_label_box:n} to the label given or to a label constructed
+% from the counter.  If it is boxed and reasonably short, add padding to
+% make it at least of size \tn{labelwidth}, then add another layer of
+% box.  This way, when we unpack it in \cs{g_@@_labels_box} it correctly
+% remains boxed in those cases.  Afterwards, in the \texttt{nextline}
+% case add \tn{newline} if the label did not fit in the allotted space.
+%    \begin{macrocode}
+  {
+    \@@_debug_typeout:n{template:item:std}
+%    \end{macrocode}
+%    
+%    First deal with the key--value input, which in particular may
+%    provide a value for the label (the usual optional argument of
+%    \cs{item}). For this we set \cs{l_@@_label_given_tl} to
+%    \cs{c_novalue_tl} so that we can identify if an optional argument
+%    was given.
+%    \begin{macrocode}
+    \tl_set_eq:NN \l_@@_label_given_tl \c_novalue_tl
+    \tl_if_empty:nF{#1}{ \SetTemplateKeys{item}{std}{#1} }
+%    \end{macrocode}
+%    If no optional argument was given then \cs{l_@@_label_given_tl}
+%    is still equal to \cs{c_novalue_tl} and so we can distinuish
+%    that from \verb=\item[]=.
+%
+%    \begin{macrocode}
+    \tl_if_novalue:oTF \l_@@_label_given_tl
+      {
+%    \end{macrocode}
+%    The rest of the code for this template needs work and is both
+%    incomplete and partly wrong.\fmi{fix}
+%    \begin{macrocode}
+        \tl_if_blank:oF \@listctr { \@kernel@refstepcounter \@listctr }
+        \bool_if:NTF \l_@@_item_compatibility_bool   % not sure that conditional
+                                                     % makes sense
+          { \@@_make_label_box:n { \MakeLinkTarget[\@listctr]{}\@itemlabel } } % TODO ?
+          { \@@_make_label_box:n { \MakeLinkTarget[\@listctr]{}\@@_counter_label:n { \@listctr } } }
+      }
+      {
+        \@@_debug_typeout:n{item~ with~ optional}
+        \@@_make_label_box:n { \l_@@_label_given_tl } }
+    \bool_if:nT
+      {
+        \l_@@_label_boxed_bool
+        && \dim_compare_p:n { \box_wd:N \l_@@_one_label_box <= \linewidth } % TODO: is \linewidth correct?
+      }
+      {
+        \dim_compare:nNnT
+          { \box_wd:N \l_@@_one_label_box } < \labelwidth
+          {
+            \hbox_set_to_wd:Nnn \l_@@_one_label_box { \labelwidth }
+              {
+                \exp_after:wN \use_i:nn \l_@@_item_align_tl
+%    \end{macrocode}
+%    FMi: \LaTeXe{} keeps the label boxed inside (not unboxed). This
+%    means that the content stays rigid and does not vary based on
+%    glue setting in the line with the label.
+%    There are cases where we do want the unboxed version (I think
+%    enumitem offers that in some cases too) but it should probably
+%    not the default.
+%    \begin{macrocode}
+%                \hbox_unpack_drop:N \l_@@_one_label_box   %TODO: customize?
+                \box_use_drop:N \l_@@_one_label_box
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+                \exp_after:wN \use_ii:nn \l_@@_item_align_tl
+              }
+          }
+       \hbox_set:Nn \l_@@_one_label_box
+                    { \box_use_drop:N \l_@@_one_label_box }
+      }
+    \dim_compare:nNnTF { \box_wd:N \l_@@_one_label_box } > \labelwidth
+      { \bool_set_true:N \l_@@_long_label_bool }
+      { \bool_set_false:N \l_@@_long_label_bool }
+    \hbox_gset:Nn \g_@@_labels_box
+      {
+        \hbox_unpack_drop:N \g_@@_labels_box
+        \skip_horizontal:n { \itemindent - \labelsep - \labelwidth }
+        \hbox_unpack_drop:N \l_@@_one_label_box
+        \skip_horizontal:n { \labelsep }
+        \bool_if:NT \l_@@_next_line_bool
+          { \bool_if:NT \l_@@_long_label_bool { \nobreak \hfil \break } }
+        % version of \newline inside an hbox that will be unpacked
+      }
+    % \skip_set_eq:NN \parsep \l_@@_item_parsep_skip TODO??? FMi
+                                                           % what's that?
+    \dim_set_eq:NN \parindent \listparindent
+%    \end{macrocode}
+%    Placing the list label(s) is done when the paragraph for the
+%    \cs{item} is started, which executes \cs{@@_item_everypar:}
+%    inside \hook{para/begin}. By default this command does nothing, now we
+%    change it to attach the pending label or labels.
+%    \begin{macrocode}
+    \cs_set_eq:NN \@@_item_everypar: \@@_item_everypar_std:
+  }
+%    \end{macrocode}
+% \end{template}
+%
+%
+%
+%
+% \begin{variable}{\l_@@_one_label_box, \g_@@_labels_box}
+%   Each label is typeset in \cs{l_@@_one_label_box} to be measured.
+%   Once this is ready, it is put (boxed or unboxed) in
+%   \cs{g_@@_labels_box}, together with any pending labels (for the case
+%   where a list begins just after \tn{item}).  This is an analogue of
+%   \LaTeXe{}'s \tn{@labels}, but it is always unboxed before use, to
+%   support both boxed and unboxed labels.
+%    \begin{macrocode}
+\box_new:N \l_@@_one_label_box
+\box_new:N \g_@@_labels_box
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_long_label_bool}
+%   Track whether the \cs{l_@@_one_label_box} is larger than
+%   \tn{labelwidth}.
+%    \begin{macrocode}
+\bool_new:N \l_@@_long_label_bool
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{macro}{\@@_make_label_box:n, \@@_label_format:e}
+%   Make one label, wrapped in \cs{@@_label_format:n}, with an
+%   appropriate \tn{strut} and possibly \tn{makelabel} in compatibility
+%   mode (used for the \env{list} environment).
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_make_label_box:n #1
+  {
+    \hbox_set:Nn \l_@@_one_label_box
+      {
+%    \end{macrocode}
+%    If we do tagging then the contents of this box may need to be
+%    wrapped into a structure, e.g., \verb=<Lbl>=.
+%    \begin{macrocode}
+        \__kernel_list_label_begin:
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+        \@@_label_format:n
+          {
+            \bool_if:NT \l_@@_label_strut_bool { \strut }
+            \bool_if:NTF \l_@@_legacy_support_bool
+                         \makelabel
+                         \use:n 
+                 {#1}
+          }
+%    \end{macrocode}
+%    And what gets opened also needs closing:
+%    \begin{macrocode}
+        \__kernel_list_label_end:
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+%  
+%  \begin{macro}{\__kernel_list_label_begin:,
+%                \__kernel_list_label_end:}
+%    If we aren't doing tagging the kernel hooks do nothing.
+%    \begin{macrocode}
+\cs_new_eq:NN \__kernel_list_label_begin: \prg_do_nothing:
+\cs_new_eq:NN \__kernel_list_label_end:   \prg_do_nothing:
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+% \begin{macro}{\@@_item_everypar:, \@@_item_everypar_std:}
+%    The \cs{@@_item_everypar:} command is executed as part of \hook{para/begin}
+%    but most of the time does nothing, i.e., it has the following
+%    default definition.
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_item_everypar: \prg_do_nothing:
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\AddToHook{para/begin}[lists]{\@@_item_everypar:}
+%    \end{macrocode}
+%
+%    Note that we have to make sure that the above code is executed
+%    after the hook chunk from \texttt{tagpdf} because the latter uses
+%    \texttt{@inlabel} to make a decision.
+%
+%    By the end of the day both should probably move into the kernel
+%    hook instead!
+%    \begin{macrocode}
+\DeclareHookRule{para/begin}{lists}{after}{tagpdf}
+%    \end{macrocode}
+%
+%
+%    What follows is the version that resets various legacy booleans and puts
+%    the label box in the right place and finally resets itself to do
+%    nothing next time. \cs{@@_item_everypar:} is set to this by the
+%    item template so that the next paragraph start runs the code below.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_item_everypar_std: {
+    \@@_debug_typeout:n{item~ everypar \on@line }
+    \legacy_if_set_false:n { @minipage }
+    \legacy_if_gset_false:n { @newlist }
+    \legacy_if:nT { @inlabel }
+       {
+         \legacy_if_gset_false:n { @inlabel }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+         \box_if_empty:NT \g_para_indent_box { \kern - \itemindent }
+         \para_omit_indent:
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+         \box_use_drop:N \g_@@_labels_box
+%    \end{macrocode}
+%    After the labels are placed we start a paragraph structure (if
+%    appropriate). This is handled in the following kernel hook:
+%    \begin{macrocode}
+         \__kernel_list_label_after:
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+         \penalty \c_zero_int
+       }
+   \legacy_if:nTF { @nobreak }
+       {
+         \legacy_if_gset_false:n { @nobreak }
+         \int_set:Nn \clubpenalty { 10000 }
+       }
+       {
+         \int_set_eq:NN \clubpenalty \@clubpenalty
+%    \end{macrocode}
+%    Once the label(s) are typeset and we are past any special
+%    \texttt{@nobreak} handling we reset \cs{@@_item_everypar:} to do
+%    nothing.
+%    \begin{macrocode}
+         \cs_set_eq:NN \@@_item_everypar: \prg_do_nothing:
+       }
+}
+%    \end{macrocode}
+%
+% \end{macro}
+%
+%
+%  \begin{macro}{\__kernel_list_label_after:}
+%    
+%    \begin{macrocode}
+\cs_new_eq:NN \__kernel_list_label_after: \prg_do_nothing:
+%    \end{macrocode}
+%  \end{macro}
+%
+% \begin{variable}{\l_@@_tmpa_skip}
+%    \begin{macrocode}
+\skip_new:N \l_@@_tmpa_skip
+%    \end{macrocode}
+% \end{variable}
+%
+%
+%
+%
+%
+%
+%
+% \begin{variable}{\l_@@_topsepadd_skip, \l_@@_effective_top_skip}
+%   Variables equivalent to \LaTeXe{}'s \tn{@topsepadd} and \tn{@topsep}.
+%   Roughly equal to a mixture of \texttt{topsep}, \texttt{partopsep},
+%   and various \texttt{parskip} at different nesting levels in lists.
+%   The code is really elaborate when \texttt{@inlabel} is true.
+%    \begin{macrocode}
+\skip_new:N \l_@@_topsepadd_skip
+\skip_new:N \l_@@_effective_top_skip
+%    \end{macrocode}
+% \end{variable}
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+% \begin{macro}{\item}
+%   Here we already have all the building blocks.  Complain in math
+%   mode.  Distingusih between first item (do necessary tagging) and
+%    later items \cs{@@_inter_item:} to
+%   cleanly close what's before, then call \cs{@@_item_instance:n} (which
+%   calls \cs{UseInstance}\{item\}\marg{instance}) to prepare the
+%   upcoming item: it will be actually inserted only once some later
+%   material triggers \tn{everypar}.
+%    \begin{macrocode}
+\AddToHook{begindocument/before}{
+  \RenewDocumentCommand{\item}{ ={label}o }
+    {
+      \@inmatherr \item
+%    \end{macrocode}
+%    TODO: Test for being outside of a list needs updating!
+%    \begin{macrocode}
+      \tl_if_empty:oTF \@@_item_instance:n %%FMi?
+        { \msg_error:nnn { @@ } { item-in-nonlist } { \item[{#1}] } }
+        {
+          \legacy_if:nTF { @newlist }
+            { \__kernel_list_item_begin: }
+            { \@@_inter_item:            }
+%    \end{macrocode}
+%    To avoid unnecessary key/val processing we make a quick check if
+%    there was an optional argument.
+%    \begin{macrocode}
+          \tl_if_novalue:nTF {#1}          % avoids reparsing label={}
+            { \@@_item_instance:n { } }
+            { \@@_item_instance:n {#1} }
+%    \end{macrocode}
+%    Set the legacy switch that signals that we have a pending item label:
+%    \begin{macrocode}
+          \legacy_if_gset_true:n { @inlabel }
+          \ignorespaces
+        }
+    }
+}
+%    \end{macrocode}
+% \end{macro}
+%
+%
+% \begin{macro}{\@@_inter_item:}
+%   Between items.  If the previous item had no content then we need to
+%   trigger \tn{everypar}. Otherwise we simply close the previous item
+%   with \tn{par} after removing some horizontal space.  Between items,
+%   there is a penalty and some space.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_inter_item: {
+  \legacy_if:nT { @inlabel }
+                { \indent \par } % case of \item\item
+%    \end{macrocode}
+%    \cs{par} may have a strange definition and may not get us back to
+%    vertical mode in one go, so we better do not treat the next line
+%    as an else case to the above conditional (for now).
+%    \begin{macrocode}
+   \mode_if_horizontal:T { \@@_skip_remove_last:
+                           \@@_skip_remove_last: \par }
+%    \end{macrocode}
+%    End any LI-tag, then start the next LI-tag (if doing tagging):
+%    \begin{macrocode}
+  \__kernel_list_item_end:
+  \__kernel_list_item_begin:
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+  \addpenalty \@itempenalty 
+  \addvspace \itemsep
+}
+%    \end{macrocode}
+% \end{macro}
+%
+%
+%  \begin{macro}{\__kernel_list_item_begin:,
+%                \__kernel_list_item_end:}
+%    
+%    \begin{macrocode}
+\cs_new_eq:NN \__kernel_list_item_begin: \prg_do_nothing:
+\cs_new_eq:NN \__kernel_list_item_end:   \prg_do_nothing:
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%
+%
+%
+%
+% \subsection{Tagging recipes}
+%
+%  \begin{macro}{\@@_recipe_basic:}
+%    The \texttt{basic} recipe simply ensures that the block is inside
+%    a \texttt{text-unit} structure and if necessary starts one. When the
+%    block ends and is followed by a blank line the \texttt{text-unit}
+%    structure is closed too, otherwise it remains open and further
+%    text starts with just a \struct{text} structure.
+%
+%    There is otherwise no inner structure so
+%    \cs{__kernel_displayblock_begin:} and
+%    \cs{__kernel_displayblock_end:} do nothing---blockenvs with inner
+%    structure use the \texttt{standard} or \texttt{list} recipe instead.
+%    \begin{macrocode}
+\cs_new:Npn \@@_recipe_basic: {
+  \cs_set_eq:NN \__kernel_displayblock_beginpar_hmode:w
+                                              \@@_beginpar_hmode:N
+  \cs_set_eq:NN \__kernel_displayblock_beginpar_vmode:
+                                              \@@_beginpar_vmode:
+  \let \__kernel_displayblock_begin:          \prg_do_nothing:
+  \let \__kernel_displayblock_end:            \prg_do_nothing:
+%    \end{macrocode}
+%    End environment \cs{par} handling:
+%    \begin{macrocode}
+  \socket_assign_plug:nn{tagsupport/block-endpe}{on}
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\@@_recipe_standalone:}
+%    
+%    The \texttt{standalone} recipe produces a block that ensures that
+%    a previous \texttt{text-unit} ends and that after the block a new
+%    \texttt{text-unit} starts.
+%    \begin{macrocode}
+\cs_new:Npn \@@_recipe_standalone: {
+  \cs_set_eq:NN \__kernel_displayblock_beginpar_hmode:w
+                                              \prg_do_nothing:
+  \cs_set_eq:NN \__kernel_displayblock_beginpar_vmode:
+                                              \prg_do_nothing:
+  \cs_set_eq:NN \__kernel_displayblock_begin: \@@_inner_begin:
+  \cs_set_eq:NN \__kernel_displayblock_end:   \@@_inner_end:
+%    \end{macrocode}
+%    End environment \cs{par} handling:
+%    \begin{macrocode}
+  \socket_assign_plug:nn{tagsupport/block-endpe}{off}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \tl_if_empty:NTF \l_@@_tag_name_tl
+     { \tl_set:Nn    \l_@@_tag_inner_tag_tl {Sect}            }
+     { \tl_set_eq:NN \l_@@_tag_inner_tag_tl \l_@@_tag_name_tl }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\@@_recipe_standard:}
+%    The \texttt{standard} recipe does the following:
+%    \begin{itemize}
+%    \item surround the block with a \texttt{text-unit}-structure if not already in a
+%       a \texttt{text-unit}. In the latter case end the
+%    MC and the \struct{text} but leave the \texttt{text-unit} open.
+%
+%    If we are producing flattened paragraphs, just close any
+%    \struct{text} but do not open a \texttt{text-unit}.
+%
+%    \item Then open an new (inner) structure (by default
+%    \texttt{Figure} but typically the one specified on the instance).
+%    \item At the end of the block close the the inner structure
+%    (\texttt{Figure} or explicit one)
+%    but leave the \texttt{text-unit} open to be either continued or closed due to a
+%    following \cs{par}.
+%    \end{itemize}
+%    \begin{macrocode}
+\cs_new:Npn \@@_recipe_standard:
+{
+  \cs_set_eq:NN \__kernel_displayblock_beginpar_hmode:w
+                                              \@@_beginpar_hmode:N
+  \cs_set_eq:NN \__kernel_displayblock_beginpar_vmode:
+                                              \@@_beginpar_vmode:
+  \cs_set_eq:NN \__kernel_displayblock_begin: \@@_inner_begin:
+  \cs_set_eq:NN \__kernel_displayblock_end:   \@@_inner_end:
+%    \end{macrocode}
+%    End environment \cs{par} handling:
+%    \begin{macrocode}
+  \socket_assign_plug:nn{tagsupport/block-endpe}{on}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \tl_if_empty:NTF \l_@@_tag_name_tl
+     { \tl_set:Nn    \l_@@_tag_inner_tag_tl {Figure}          }
+     { \tl_set_eq:NN \l_@@_tag_inner_tag_tl \l_@@_tag_name_tl }
+} 
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\l_@@_tag_inner_tag_tl}
+%    \begin{macrocode}
+\tl_new:N \l_@@_tag_inner_tag_tl
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\@@_recipe_list:}
+%    The \texttt{list} recipe does the following.
+%    \begin{itemize}
+%    \item It opens a \struct{text-unit}-structure or keeps the current one open (only
+%      closing the MC).
+%    \item  It then starts a new structure rolemapped to  L-structure
+%      and arranges for handling list items, e.g., Li, Lbl and LBody
+%      structures.
+%    \item At the end it closes open list structures as needed but
+%      keeps the \struct{text-unit}-structure open to continue the paragraph after the
+%      list, if necessary.
+%    \end{itemize}
+%    \begin{macrocode}
+\cs_new:Npn \@@_recipe_list:
+{
+  \cs_set_eq:NN \__kernel_displayblock_beginpar_hmode:w
+                                              \@@_beginpar_hmode:N
+  \cs_set_eq:NN \__kernel_displayblock_beginpar_vmode:
+                                              \@@_beginpar_vmode:
+  \cs_set_eq:NN \__kernel_displayblock_begin: \@@_list_begin:
+  \cs_set_eq:NN \__kernel_displayblock_end:   \@@_list_end:
+%    \end{macrocode}
+%    The next two lines could be done globally, because they are only
+%    called if we do have \cs{item}s, i.e., if we are in a list. It is
+%    therefore also not necessary to reset them in other recipes
+%    (right now---this may change if we get more templates (like
+%    inline lists)). 
+%    \begin{macrocode}
+  \cs_set_eq:NN \__kernel_list_item_begin:    \@@_list_item_begin:
+  \cs_set_eq:NN \__kernel_list_item_end:      \@@_list_item_end:
+%    \end{macrocode}
+%    End environment \cs{par} handling:
+%    \begin{macrocode}
+  \socket_assign_plug:nn{tagsupport/block-endpe}{on}
+%    \end{macrocode}
+%
+%    Handle the tag name and attribute classess using the key values
+%    from the current list instance.
+%    \begin{macrocode}
+  \tl_if_empty:NTF \l_@@_tag_name_tl
+     { \tl_set:Nn    \l__tag_L_tag_tl {L}               }
+     { \tl_set_eq:NN \l__tag_L_tag_tl \l_@@_tag_name_tl }
+  \tl_if_empty:NTF \l_@@_tag_class_tl
+     { \tl_set:Nn    \l__tag_L_attr_class_tl {}                 }
+     { \tl_set_eq:NN \l__tag_L_attr_class_tl \l_@@_tag_class_tl }
+}
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+% \subsection{Blockenv instances}
+%
+%
+% \subsubsection{Basic instances}
+%
+%  \begin{instance}{blockenv displayblock}
+%    
+%    \begin{macrocode}
+\DeclareInstance{blockenv}{displayblock}{display}
+{
+  env-name       = displayblock,
+  tag-name       = ,
+  tag-class      = ,
+  tagging-recipe = standard,
+  inner-level-counter  = ,
+  level-increase = false,
+  setup-code     = ,
+  block-instance = displayblock ,
+  inner-instance = ,
+}
+%    \end{macrocode}
+%  \end{instance}
+%
+%
+%
+%  \begin{instance}{blockenv displayblockflattened}
+%    
+%    \begin{macrocode}
+\DeclareInstance{blockenv}{displayblockflattened}{display}
+{
+  env-name       = displayblockflattened,
+  tag-name       = ,
+  tag-class      = ,
+  tagging-recipe = basic,
+  inner-level-counter  = ,
+  level-increase = false,
+  setup-code     = ,
+  block-instance = displayblock ,
+  para-flattened = true ,
+  inner-instance = ,
+}
+%    \end{macrocode}
+%  \end{instance}
+%
+%
+%
+%  \begin{instance}{blockenv center}
+%    
+%    \begin{macrocode}
+\DeclareInstance{blockenv}{center}{display}
+{
+  env-name       = center,
+  tag-name       = ,
+  tag-class      = ,
+  tagging-recipe = basic,
+  inner-level-counter  = ,
+  level-increase = false,
+  setup-code     = ,
+  block-instance = displayblock ,
+  para-flattened = true ,
+  para-instance  = center ,
+  inner-instance = ,
+}
+%    \end{macrocode}
+%  \end{instance}
+%
+%
+%  \begin{instance}{blockenv flushleft}
+%    
+%    \begin{macrocode}
+\DeclareInstance{blockenv}{flushleft}{display}
+{
+  env-name       = flushleft,
+  tag-name       = ,
+  tag-class      = ,
+  tagging-recipe = basic,
+  inner-level-counter  = ,
+  level-increase = false,
+  setup-code     = ,
+  block-instance = displayblock ,
+  para-flattened = true ,
+  para-instance  = raggedright ,
+  inner-instance = ,
+}
+%    \end{macrocode}
+%  \end{instance}
+%
+%
+%
+%  \begin{instance}{blockenv flushright}
+%    
+%    \begin{macrocode}
+\DeclareInstance{blockenv}{flushright}{display}
+{
+  env-name       = flushleft,
+  tag-name       = ,
+  tag-class      = ,
+  tagging-recipe = basic,
+  inner-level-counter  = ,
+  level-increase = false,
+  setup-code     = ,
+  block-instance = displayblock ,
+  para-flattened = true ,
+  para-instance  = raggedleft ,
+  inner-instance = ,
+}
+%    \end{macrocode}
+%  \end{instance}
+%
+%
+%
+% \subsubsection{Blockquote instances}
+%
+%  \begin{instance}{blockenv quotation}
+   %
+%    \begin{macrocode}
+\DeclareInstance{blockenv}{quotation}{display}
+{
+  env-name       = quotation,
+  tag-name       = quotation,
+  tag-class      = ,
+  tagging-recipe = standard,
+  inner-level-counter  = ,
+  level-increase = true,
+  setup-code     = ,
+  block-instance = quotationblock ,
+  inner-instance =  ,
+}
+%    \end{macrocode}
+%  \end{instance}
+%
+%
+%
+%  \begin{instance}{blockenv quote}
+%    
+%    \begin{macrocode}
+\DeclareInstance{blockenv}{quote}{display}
+{
+  env-name       = quote,
+  tag-name       = quote,
+  tag-class      = ,
+  tagging-recipe = standard,
+  inner-level-counter  = ,
+  level-increase = true,
+  setup-code     = ,
+  block-instance = quoteblock ,
+  inner-instance =  ,
+}
+%    \end{macrocode}
+%  \end{instance}
+%
+%    An alternative setup for quotations, using the displayblock instance and
+%    just overwrite a bit in the setup code.\fmi{I guess the setup
+%       code is still executed too early, have to check.}
+%    This would be less flexible but would ensure visual consistency,
+%    because the displayblock settings are used throughout.
+%    \begin{macrocode}
+% \DeclareInstance{blockenv}{quotation}{display}
+% {
+%   env-name       = quotation,
+%   tag-name       = ,
+%   tag-class      = ,
+%   tagging-recipe = blockquote,
+%   inner-level-counter  = ,
+%   level-increase = true,
+%   setup-code     = \setlength\rightmargin{\leftmargin}
+%                    \setlength\parsep{1.5em} ,
+%   block-instance = displayblock ,
+%   inner-instance =  ,
+% }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+% \DeclareInstance{blockenv}{quote}{display}
+% {
+%   env-name       = quote,
+%   tag-name       = ,
+%   tag-class      = ,
+%   tagging-recipe = blockquote,
+%   inner-level-counter  = ,
+%   level-increase = true,
+%   setup-code     = \setlength\rightmargin{\leftmargin} ,
+%   block-instance = displayblock ,
+%   inner-instance =  ,
+% }
+%    \end{macrocode}
+%
+
+%    
+%    \begin{macrocode}
+\DeclareInstance{blockenv}{theorem}{display}
+{
+  env-name       = theorem-like,
+  tag-name       = theorem-like,
+  tag-class      = ,
+  tagging-recipe = standalone,
+  inner-level-counter  = ,
+  level-increase = false,
+  setup-code     = ,
+  block-instance = displayblock ,
+%  inner-instance-type = innerblock ,
+%  inner-instance = theorem,
+}
+%    \end{macrocode}
+%
+% We use \struct{theorem-like} as the structure name and rolemap it
+% to a \struct{Sect} because that can hold a \struct{Caption}.
+%
+% \subsubsection{Verbatim instances}
+%
+%  \begin{instance}{blockenv verbatim}
+%    
+%  The rolemapping is current verbatim to P and codeline to Sub (which is role mapped 
+%  to Span in pdf 1.7. Alternatives for PDF 1.7: Div and P.  
+%
+%    \begin{macrocode}
+\DeclareInstance{blockenv}{verbatim}{display}
+{
+  env-name       = verbatim,
+  tag-name       = verbatim,
+  tag-class      = ,
+  tagging-recipe = standard,
+  inner-level-counter  = ,
+  level-increase = false,
+  setup-code     = ,
+  block-instance = verbatimblock ,
+  inner-instance = ,
+  final-code     = \legacyverbatimsetup ,
+}
+%    \end{macrocode}
+%  \end{instance}
+%
+%
+% \subsubsection{Standard list instances}
+%
+%  \begin{instance}{blockenv itemize}
+%    
+%    \begin{macrocode}
+\DeclareInstance{blockenv}{itemize}{display}
+{
+  env-name       = itemize,
+  tag-name       = itemize,
+  tag-class      = itemize,
+  tagging-recipe = list,
+  inner-level-counter  = \@itemdepth,
+  level-increase = true,
+  max-inner-levels = 4,
+  setup-code     = ,
+  block-instance = list ,
+  inner-instance = itemize ,
+}
+%    \end{macrocode}
+%  \end{instance}
+%
+%
+%  \begin{instance}{blockenv enumerate}
+%    
+%    \begin{macrocode}
+\DeclareInstance{blockenv}{enumerate}{display}
+{
+  env-name            = enumerate,
+  tag-name            = enumerate,
+  tag-class           = enumerate,
+  tagging-recipe      = list,
+  level-increase      = true,
+  setup-code          = ,
+  block-instance      = list ,
+  inner-level-counter = \@enumdepth,
+  max-inner-levels    = 4,
+  inner-instance      = enum ,
+}
+%    \end{macrocode}
+%  \end{instance}
+%
+%
+%  \begin{instance}{blockenv description}
+%    
+%    \begin{macrocode}
+
+\DeclareInstance{blockenv}{description}{display}
+{
+  env-name       = description,
+  tag-name       = description,
+  tag-class      = description,
+  tagging-recipe = list,
+  inner-level-counter  = ,
+  level-increase = true,
+  setup-code     = ,
+  block-instance = list ,
+  inner-instance = description ,
+}
+%    \end{macrocode}
+%  \end{instance}
+%
+%
+%  \begin{instance}{blockenv list}
+%    The general (legacy) \env{list} environment does some of its
+%    setup in the \texttt{setup-code} key.
+%    \begin{macrocode}
+\DeclareInstance{blockenv}{list}{display}
+{
+  env-name       = list,
+  tag-name       = list,
+  tag-class      = ,
+  tagging-recipe = list,
+  level-increase = true,
+  setup-code     = \legacylistsetupcode ,
+  block-instance = list ,
+  inner-level-counter  = ,
+  inner-instance = legacy ,
+}
+%    \end{macrocode}
+%  \end{instance}
+%
+%
+%
+%
+% \subsection{Block instances}
+%
+% \subsubsection{Displayblock instances}
+%  
+%    We provide 6 nesting levels (as in \LaTeXe{}). If you want to
+%    provide more you need to change the \texttt{maxblocklevels}
+%    counter, offer further \texttt{displayblock-xx} instances but
+%    also define further (legacy) \cs{list\meta{romannumeral}} commands
+%    for the defaults. If not, then the settings from the previous
+%    level are reused automatically---which may or may not be good enough).
+%    \begin{macrocode}
+\setcounter{maxblocklevels}{6}
+%    \end{macrocode}
+%
+%  \begin{instance}{block displayblock-0,
+%                   block displayblock-1,
+%                   block displayblock-2,
+%                   block displayblock-3,
+%                   block displayblock-4,
+%                   block displayblock-5,
+%                   block displayblock-6 }
+%
+%    Here we need level zero as well in case a flattened displayblock
+%    (like the center env) it is used on top-level.
+%    \begin{macrocode}
+\DeclareInstance{block}{displayblock-0}{display}
+  {
+    leftmargin      = 0pt ,
+    parindent       = 0pt ,
+  } 
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareInstanceCopy{block}{displayblock-1}{displayblock-0}
+\DeclareInstanceCopy{block}{displayblock-2}{displayblock-0}
+\DeclareInstanceCopy{block}{displayblock-3}{displayblock-0}
+\DeclareInstanceCopy{block}{displayblock-4}{displayblock-0}
+\DeclareInstanceCopy{block}{displayblock-5}{displayblock-0}
+\DeclareInstanceCopy{block}{displayblock-6}{displayblock-0}
+%    \end{macrocode}
+%  \end{instance}
+%
+%
+%
+% \subsubsection{Verbatim instances}
+%
+%  Verbatim instances have there own levels so that one can specify
+%  specific indentations or vertical separations between line.
+%  
+%  \begin{instance}{block verbatimblock-0,
+%                   block verbatimblock-1,
+%                   block verbatimblock-2,
+%                   block verbatimblock-3,
+%                   block verbatimblock-4,
+%                   block verbatimblock-5,
+%                   block verbatimblock-6 }
+%
+%    \begin{macrocode}
+\DeclareInstance{block}{verbatimblock-0}{display}
+  {
+    leftmargin      = 0pt ,
+    parindent       = 0pt ,
+    par-skip        = 0pt ,
+  } 
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareInstanceCopy{block}{verbatimblock-1}{verbatimblock-0}
+\DeclareInstanceCopy{block}{verbatimblock-2}{verbatimblock-0}
+\DeclareInstanceCopy{block}{verbatimblock-3}{verbatimblock-0}
+\DeclareInstanceCopy{block}{verbatimblock-4}{verbatimblock-0}
+\DeclareInstanceCopy{block}{verbatimblock-5}{verbatimblock-0}
+\DeclareInstanceCopy{block}{verbatimblock-6}{verbatimblock-0}
+%    \end{macrocode}
+%  \end{instance}
+%
+%
+%
+%
+% \subsubsection{Quote/quotationblock instances}
+%
+%  Quote and quotation are not flattened, i.e., they change levels,
+%    thus they start with level 1 not 0.
+%  
+%  \begin{instance}{block quoteblock-1,
+%                   block quoteblock-2,
+%                   block quoteblock-3,
+%                   block quoteblock-4,
+%                   block quoteblock-5,
+%                   block quoteblock-6 }
+%    Default layout is to indent equaly from both side.
+%    \begin{macrocode}
+\DeclareInstance{block}{quoteblock-1}{display}
+  { rightmargin = \KeyValue{leftmargin} }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareInstanceCopy{block}{quoteblock-2}{quoteblock-1}
+\DeclareInstanceCopy{block}{quoteblock-3}{quoteblock-1}
+\DeclareInstanceCopy{block}{quoteblock-4}{quoteblock-1}
+\DeclareInstanceCopy{block}{quoteblock-5}{quoteblock-1}
+\DeclareInstanceCopy{block}{quoteblock-6}{quoteblock-1}
+%    \end{macrocode}
+%  \end{instance}
+%  
+%
+%  
+%  \begin{instance}{block quotationblock-1,
+%                   block quotationblock-2,
+%                   block quotationblock-3,
+%                   block quotationblock-4,
+%                   block quotationblock-5,
+%                   block quotationblock-6 }
+%    Quotation additionally changes the parindent.
+%    \begin{macrocode}
+\DeclareInstance{block}{quotationblock-1}{display}
+  { parindent = 1.5em , rightmargin = \KeyValue{leftmargin} }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareInstanceCopy{block}{quotationblock-2}{quotationblock-1}
+\DeclareInstanceCopy{block}{quotationblock-3}{quotationblock-1}
+\DeclareInstanceCopy{block}{quotationblock-4}{quotationblock-1}
+\DeclareInstanceCopy{block}{quotationblock-5}{quotationblock-1}
+\DeclareInstanceCopy{block}{quotationblock-6}{quotationblock-1}
+%    \end{macrocode}
+%  \end{instance}
+%  
+%
+% \subsubsection{Block instances for the standard lists}
+%
+%  \begin{instance}{block list-1,
+%                   block list-2,
+%                   block list-3,
+%                   block list-4,
+%                   block list-5,
+%                   block list-6 }
+%    The block instances for the various list environments use the
+%    same underlying instance (well by default) and nothing 
+%    needs to be set up specifically (because that is already done in
+%    the legacy \cs{list\meta{romannumeral}} unless a
+%    different layout is wanted.
+%    \begin{macrocode}
+\DeclareInstance{block}{list-1}{display}{
+%   heading          = ,
+%   beginsep         = \topsep ,
+%   begin-par-skip   = \partopsep ,
+%   par-skip         = \parsep ,
+%   end-skip         = \KeyValue{beginsep} ,
+%   end-par-skip     = \KeyValue{begin-par-skip} ,
+%   beginpenalty     = \UseName{@beginparpenalty} ,
+%   endpenalty       = \UseName{@endparpenalty} ,
+%   leftmargin       = \leftmargin ,
+%   rightmargin      = \rightmargin ,
+%   parindent        = \listparindent ,
+}
+\DeclareInstance{block}{list-2}{display}{}
+\DeclareInstance{block}{list-3}{display}{}
+\DeclareInstance{block}{list-4}{display}{}
+\DeclareInstance{block}{list-5}{display}{}
+\DeclareInstance{block}{list-6}{display}{}
+%    \end{macrocode}
+%  \end{instance}
+%  
+%
+%  
+% \subsection{List instances for the standard lists}
+%
+%    For all list instances we have to say what kind of label we want
+%    (\texttt{label-instance})  and how it should be formatted.
+%
+%  \begin{instance}{list itemize-1,
+%                   list itemize-2,
+%                   list itemize-3,
+%                   list itemize-4}
+%    For \env{itemize} environments this is all we need to do and we
+%    refer back to the external definitions rather than defining the
+%    \texttt{item-label} code in the instance to ensure that old
+%    documents still work.
+%
+%    \begin{macrocode}
+\DeclareInstance{list}{itemize-1}{std}{ item-label = \labelitemi }
+\DeclareInstance{list}{itemize-2}{std}{ item-label = \labelitemii }
+\DeclareInstance{list}{itemize-3}{std}{ item-label = \labelitemiii }
+\DeclareInstance{list}{itemize-4}{std}{ item-label = \labelitemiv }
+%    \end{macrocode}
+%  \end{instance}
+%  
+%  
+%  
+%  \begin{instance}{list enumerate-1,
+%                   list enumerate-2,
+%                   list enumerate-3,
+%                   list enumerate-4}
+%    \env{enumerate} environments are similar, except that we also
+%    have to say which counter to use on every level.
+%    \begin{macrocode}
+\DeclareInstance{list}{enum-1}{std}
+  { item-label = \labelenumi ,   counter = enumi }
+\DeclareInstance{list}{enum-2}{std}
+  { item-label = \labelenumii ,  counter = enumii }
+\DeclareInstance{list}{enum-3}{std}
+  { item-label = \labelenumiii , counter = enumiii }
+\DeclareInstance{list}{enum-4}{std}
+  { item-label = \labelenumiv ,  counter = enumiv }
+%    \end{macrocode}
+%  \end{instance}
+%  
+%  
+%
+%  \begin{instance}{list legacy}
+%    For the legacy \env{list} environment there is only one instance
+%    which is reused on all levels. This is done this way one because
+%    the legacy \env{list} environment sets all its
+%    parameters through its arguments. So this instances shouldn't
+%    really be touched. It sets the \texttt{legacy-support} key to
+%    true, which means that the list code uses \cs{makelabel} for
+%    formatting the label 
+%    \begin{macrocode}
+\DeclareInstance{list}{legacy}{std} {
+  item-instance = basic ,
+  legacy-support = true ,
+}
+%    \end{macrocode}
+%  \end{instance}
+%  
+%
+%  \begin{instance}{list description}
+%    The \env{description} lists also use only a single list instance
+%    with only one key not using the default:
+%    \begin{macrocode}
+\DeclareInstance{list}{description}{std} { item-instance = description }
+%    \end{macrocode}
+%  \end{instance}
+%
+%  
+% \subsection{Item instances}
+%
+%
+%  \begin{instance}{item basic, item description}
+%    There two item instances set up: \texttt{description} for use
+%    with the \env{description} environment and \texttt{basic} for use
+%    with all other lists (up to now).
+%    \begin{macrocode}
+\DeclareInstance{item}{basic}{std}
+  {
+    label-align = right ,
+  }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareInstance{item}{description}{std}
+  {
+    label-format = \normalfont\bfseries #1 ,
+  }
+%    \end{macrocode}
+%  \end{instance}
+%
+%
+%
+% \subsection{Para instances}
+%
+%    \begin{macrocode}
+\tag_if_active:T
+{
+  \tagpdfsetup
+      {
+        newattribute = {justify}    {/O /Layout /TextAlign/Justify},
+        newattribute = {center}     {/O /Layout /TextAlign/Center},
+        newattribute = {raggedright}{/O /Layout /TextAlign/Start},
+        newattribute = {raggedleft} {/O /Layout /TextAlign/End},
+      }
+}
+%    \end{macrocode}
+%
+%  \begin{instance}{para center}
+%    \begin{macrocode}
+\DeclareInstance{para}{center}{std}
+{
+  indent-width          = 0pt ,                  
+  start-skip            = 0pt ,
+  left-skip             = \@flushglue ,
+  right-skip            = \@flushglue ,
+  end-skip              = \z@skip ,
+  final-hyphen-demerits = 0 ,
+  cr-cmd                = \@centercr ,
+  para-class            = center ,
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareInstance{para}{raggedright}{std}
+{
+  indent-width          = 0pt ,                  
+  start-skip            = 0pt ,
+  left-skip             = \z@skip ,
+  right-skip            = \@flushglue ,
+  end-skip              = \z@skip ,
+  final-hyphen-demerits = 0 ,
+  cr-cmd                = \@centercr ,
+  para-class            = raggedright ,
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareInstance{para}{raggedleft}{std}
+{
+  indent-width          = 0pt ,                  
+  start-skip            = 0pt ,
+  left-skip             = \@flushglue ,
+  right-skip            = \z@skip ,
+  end-skip              = \z@skip ,
+  final-hyphen-demerits = 0 ,
+  cr-cmd                = \@centercr ,
+  para-class            = raggedleft ,
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\DeclareInstance{para}{justify}{std}
+{
+%  indent-width          = 0pt ,                  
+  start-skip            = 0pt ,
+  left-skip             = \z@skip ,
+  right-skip            = \z@skip ,
+  end-skip              = \@flushglue ,
+  final-hyphen-demerits =  5000 ,
+  cr-cmd                = \@normalcr ,
+  para-class            = justify ,
+}
+%    \end{macrocode}
+%  \end{instance}
+%
+%
+%
+%
+%    \begin{macrocode}
+\DeclareRobustCommand\centering  {\UseInstance{para}{center}{}}
+\DeclareRobustCommand\raggedleft {\UseInstance{para}{raggedleft}{}}
+\DeclareRobustCommand\raggedright{\UseInstance{para}{raggedright}{}}
+\DeclareRobustCommand\justifying {\UseInstance{para}{justify}{}}
+
+\justifying
+%    \end{macrocode}
+%
+%
+%
+%
+%
+% \subsection{Tagging support}
+%
+% In this section we provide code to the various kernel hooks to support
+% the tagging of the different displayblock environments. 
+%
+%
+%
+%    All of the following definitions should only be made if tagging
+%    is active!
+%    \begin{macrocode}
+\tag_if_active:TF {
+%    \end{macrocode}
+%
+%  \begin{macro}{\@@_beginpar_vmode:}
+%    When a block starts out in vertical mode, i.e., is not yet part of
+%    a paragraph, we have to start a paragraph
+%    structure. However, this is not the case if we are already
+%    flattening paragraphs, thus in this case we do nothing.
+%    We also do nothing if \texttt{@endpe} is currently true, because
+%    that means we are right now just after the end of a
+%    \texttt{blockenv} and in the process of looking if we have to end
+%    the current \texttt{text-unit}, i.e., it is already open.  
+%    \begin{macrocode}
+  \cs_set:Npn \@@_beginpar_vmode: {
+           \@@_debug_typeout:n
+              { @endpe = \legacy_if:nTF { @endpe }{true}{false}
+                \on@line }
+   \legacy_if:nTF { @endpe }
+      {
+        \legacy_if_gset_false:n { @endpe }
+      }
+%    \end{macrocode}
+%    We test for \texttt{<2} because  the first flattened environment
+%    has to surround itself with a \texttt{text-unit}. Only any inner ones
+%    then have to avoid adding another \texttt{text-unit}.
+%    \begin{macrocode}
+      {
+        \int_compare:nNnT \l_@@_flattened_level_int < 2
+            {
+              \int_gincr:N \g__tag_para_main_begin_int
+              \tagstructbegin{tag=\l__tag_para_main_tag_tl}
+            }
+      }
+  }
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\@@_beginpar_hmode:N}
+%    If the block is already part of a part  of a paragraph, i.e., when it has
+%    some text directly in front, then the first thing  to
+%    do is to return to vertical mode. However, that should be done
+%    without inserting a paragraph end tag, so before calling \cs{par}
+%    to do its normal work, we disable paragraph tagging and
+%    restarting afterwards again. The argument to this config point
+%    simply gobbles the \cs{par} following it in the code above (which
+%    is used when there is no tagging going on.
+%    \begin{macrocode}
+  \cs_set:Npn \@@_beginpar_hmode:N #1
+     {
+        \tag_mc_end:
+        \int_gincr:N \g__tag_para_end_int
+        \@@_debug_typeout:n{increment~ /P \on@line }
+        \bool_if:NT \l__tag_para_show_bool
+          { \tag_mc_begin:n{artifact}
+            \rlap{\color_select:n{red}\tiny\ \int_use:N\g__tag_para_end_int}
+            \tag_mc_end:
+          }
+        \tag_struct_end:
+        \tagpdfparaOff \par \tagpdfparaOn
+     }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\__kernel_displayblock_doendpe:}
+%    If a display block ends and is followed by a blank line we have to end the
+%    enclosing paragraph tagging structure.
+%    \begin{macrocode}
+\cs_set:Npn \__kernel_displayblock_doendpe: {
+     \bool_if:NT \l__tag_para_bool
+       {
+%    \end{macrocode}
+%    Given that restoring \cs{par} through the legacy \LaTeXe{} method
+%    can take a few iterations (for example, in case of nested lists,
+%    e.g., \verb=...\end{itemize} \item ...\par= it can happen that
+%    \cs{__kernel_displayblock_doendpe:} is called while
+%    \texttt{@endpe} is already handled and then we should not attempt
+%    to close a \texttt{text-unit} structure). So we need to check for this.
+%    \begin{macrocode}
+         \legacy_if:nT { @endpe }
+           {
+%    \end{macrocode}
+%    If the display block currently ending was \enquote{flattened}
+%    (i.e., uses simplified paragraphs that are not tagged by a
+%    combination of \texttt{text-unit} followed by \struct{text}, but simply
+%    with a \struct{text}),
+%    then we don't have to do anything, because the \struct{text} is already closed.
+%    \begin{macrocode}
+             \@@_debug_typeout:n
+                { flattened= \bool_if:NTF
+                               \l__tag_para_flattened_bool {true}{false}
+                  \on@line }
+             \bool_if:NF \l__tag_para_flattened_bool
+               {
+                 \@@_debug_typeout:n{Structure-end~
+                   \l__tag_para_main_tag_tl\space after~ displayblock \on@line }
+                 \int_gincr:N \g__tag_para_main_end_int      
+                 \tag_struct_end: %text-unit
+               }
+           }
+      }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{para/begin}
+%
+%    Paragraph tagging is mainly done using the paragraph hooks (will
+%    get moved eventually). The default hook setting is not good
+%    enough when lists get supported: we need to delay starting the
+%    paragraph tagging if we still have to place the list label.
+%    We therefore remove the existing hook data and replace it with an
+%    augmented version (this will get combined eventually).
+%    \begin{macrocode}
+\RemoveFromHook{para/begin}[tagpdf]
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\AddToHook{para/begin}[tagpdf]{
+  \bool_if:NT \l__tag_para_bool {
+%    \end{macrocode}
+%    if we are still waiting to typeset the list label we do nothing
+%    (the paragraph tagging then happens when the list is finally
+%    typeset).
+%    \begin{macrocode}
+       \legacy_if:nF { @inlabel }
+         {
+%    \end{macrocode}
+%    Otherwise, we start a \struct{text} tag structure but only if we are not
+%    starting a paragraph immediately \emph{after} a list, in which
+%    case we only start a new MC (because the \struct{text} tag is still open from
+%    before the list --- one of the reasons why lists are always put
+%    \enquote{inside} paragraphs.
+%
+%    We do this in a separate command, because it is needed elsewhere too.
+%    \begin{macrocode}
+           \@@_start_para_structure:n { \PARALABEL }
+         }
+     }
+}
+%    \end{macrocode}
+%    
+%    
+%  \begin{macro}{\@@_start_para_structure:n}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_start_para_structure:n #1 {
+   \@@_debug_typeout:n
+      { @endpe = \legacy_if:nTF { @endpe }{true}{false}
+        \on@line }
+   \legacy_if:nF { @endpe }
+     {
+       \bool_if:NF \l__tag_para_flattened_bool
+          {
+            \int_gincr:N \g__tag_para_main_begin_int
+            \tag_struct_begin:n{tag=\l__tag_para_main_tag_tl}
+          }
+      }
+   \int_gincr:N \g__tag_para_begin_int
+   \@@_debug_typeout:n{increment~ P \on@line }
+   \tag_struct_begin:n
+       {
+          tag=\l__tag_para_tag_tl
+         ,attribute-class=\l_tag_para_attr_class_tl
+       }
+   \__tag_check_para_begin_show:nn {green}{#1}    
+   \tag_mc_begin:n {}
+}
+%    \end{macrocode}
+%    The same code, but without testing \texttt{@endpe}. This is not
+%    needed in the standalone  case and wrong inside lists.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_start_para_structure_unconditionally:n #1 {
+   \bool_if:NF \l__tag_para_flattened_bool
+       {
+         \int_gincr:N \g__tag_para_main_begin_int
+         \tag_struct_begin:n{tag=\l__tag_para_main_tag_tl}
+       }
+   \int_gincr:N \g__tag_para_begin_int
+   \@@_debug_typeout:n{increment~ P \on@line }
+   \tag_struct_begin:n
+       {
+          tag=\l__tag_para_tag_tl
+         ,attribute-class=\l_tag_para_attr_class_tl
+       }
+   \__tag_check_para_begin_show:nn {green}{#1}    
+   \tag_mc_begin:n {}
+}
+%    \end{macrocode}
+%  \end{macro}
+%    
+%    \begin{macrocode}
+\RemoveFromHook{para/end}[tagpdf]
+\AddToHook{para/end}
+  {
+    \bool_if:NT \l__tag_para_bool
+      {
+        \int_gincr:N \g__tag_para_end_int
+        \@@_debug_typeout:n{increment~ /P \on@line }
+        \tag_mc_end:
+        \__tag_check_para_end_show:nn {red}{}
+        \tag_struct_end:
+        \bool_if:NF \l__tag_para_flattened_bool
+         {
+           \int_gincr:N \g__tag_para_main_end_int
+           \tag_struct_end:
+         }
+      }
+  }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\def\PARALABEL{NP-}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\para_end:}
+%    If we see a \cs{par} in vmode and a \texttt{text-unit} is still open
+%    we need to close that. For this we check if a request for
+%    \text{@endpe} was made (but the \cs{par} redefinition got lost
+%    due to (bad?) coding).
+%    \begin{macrocode}
+\cs_set_protected:Npn \para_end: {
+  \scan_stop:
+  \mode_if_horizontal:TF {
+    \mode_if_inner:F {
+         \tex_unskip:D
+         \hook_use:n{para/end}
+         \@kernel@after@para@end
+         \mode_if_horizontal:TF {
+           \if_int_compare:w 11 = \tex_lastnodetype:D
+             \tex_hskip:D \c_zero_dim
+           \fi:
+           \tex_par:D
+           \hook_use:n{para/after}
+           \@kernel@after@para@after
+         }
+         { \msg_error:nnnn { hooks }{ para-mode }{end}{horizontal} }
+    }
+  }
+  {
+    \__kernel_endpe_vmode:       % should do nothing if no tagging
+    \tex_par:D
+  }
+}
+\cs_set_eq:NN \par     \para_end:
+\cs_set_eq:NN \@@par   \para_end:
+\cs_set_eq:NN \endgraf \para_end:
+%    \end{macrocode}
+%
+%  \end{macro}
+%
+%
+%  \begin{macro}{\begin}
+%    We need to do a little more than canceling \texttt{@endpe} now.
+%    \begin{macrocode}
+\DeclareRobustCommand*\begin[1]{%
+  \UseHook{env/#1/before}%
+  \@ifundefined{#1}%
+    {\def\reserved@a{\@latex@error{Environment #1 undefined}\@eha}}%
+    {\def\reserved@a{\def\@currenvir{#1}%
+        \edef\@currenvline{\on@line}%
+        \@execute@begin@hook{#1}%
+        \csname #1\endcsname}}%
+  \@ignorefalse
+  \begingroup
+    \__kernel_endpe_vmode:
+    \reserved@a}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\__kernel_endpe_vmode:}
+%    Close an open \texttt{text-unit} if \texttt{@endpe} is true and we
+%    are in vmode. Used in \cs{para_end:} and \cs{begin}.
+%    \begin{macrocode}
+\cs_new:Npn \__kernel_endpe_vmode: {
+    \if@endpe \ifvmode
+      \bool_if:NT \l__tag_para_bool
+	{
+	  \bool_if:NF \l__tag_para_flattened_bool
+	   {
+	     \int_gincr:N \g__tag_para_main_end_int
+	     \tag_struct_end:
+	   }
+	   \@endpefalse
+	}
+    \fi \fi
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\__kernel_list_label_after:}
+%    If starting the text-unit/text tags got delayed because of a pending label we
+%    have to do it after the label got typeset
+%    \begin{macrocode}
+\cs_set:Npn \__kernel_list_label_after: {
+   \bool_if:NT \l__tag_para_bool
+     {
+       \@@_start_para_structure_unconditionally:n { LI- }
+     }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\@@_inner_begin:}
+%    Start a block that has an inner structure if it isn't also a list.
+%    \begin{macrocode}
+\cs_new:Npn \@@_inner_begin: {
+  \tagstructbegin{tag=\l_@@_tag_inner_tag_tl}
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\@@_inner_end:}
+%    End a block (which isn't also a list).
+%    \begin{macrocode}
+\cs_new:Npn \@@_inner_end: {
+  \@@_debug_typeout:n{block-end \on@line}
+  \legacy_if:nT { @endpe }
+    {
+      \int_gincr:N \g__tag_para_main_end_int
+      \@@_debug_typeout:n{close~ /text-unit \on@line}
+      \tagstructend
+    }
+  \tagstructend        % end inner structure
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%
+%
+% \subsubsection{List tags}
+%
+%
+%    \begin{macrocode}
+\tl_new:N  \l__tag_L_tag_tl
+\tl_set:Nn \l__tag_L_tag_tl {L}
+
+\tl_new:N\l__tag_L_attr_class_tl
+\tl_set:Nn \l__tag_L_attr_class_tl {list}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\tag_if_active:T
+{
+  \tagpdfsetup
+      {
+        % default if unknown
+        newattribute = {list}{/O /List /ListNumbering/None},    
+        newattribute = {itemize}{/O /List /ListNumbering/Unordered},
+        newattribute = {enumerate}{/O /List /ListNumbering/Ordered},        
+        newattribute = {description}{/O /List /ListNumbering/Description},
+      }
+}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\def\LItag{LI}
+%    \end{macrocode}
+%
+%  \begin{macro}{\@@_list_begin:}
+%    Start a list \ldots
+%    \begin{macrocode}
+\cs_set:Npn \@@_list_begin: {
+  \tagstructbegin
+      {
+         tag=\l__tag_L_tag_tl
+        ,attribute-class=\l__tag_L_attr_class_tl
+      }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\@@_list_item_begin:}
+%    Start tagging a list item.
+%    \begin{macrocode}
+\cs_set:Npn \@@_list_item_begin: { \tagstructbegin{tag=\LItag} }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\__kernel_list_label_begin:}
+%    A list label needs a \texttt{Lbl} structure tag and an MC.
+%    \begin{macrocode}
+\cs_set:Npn \__kernel_list_label_begin: {
+%
+% FMi: this needs a different logic to decide when to make the label
+%    an artifact (after cleaning up the the \item code  ), therefore
+%    disabled for now
+%  \tl_if_empty:oTF \@itemlabel
+%     {
+%       \tag_mc_begin:n {artifact}
+%     }
+%     {
+       \tagstructbegin{tag=Lbl}
+       \tagmcbegin{tag=Lbl}
+%     }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\__kernel_list_label_end:}
+%    And when we are done with the label we have to close the MC and
+%    the \texttt{Lbl} structure. We then start the \texttt{LBody}. The
+%    material inside will be \enquote{paragraph} text and the tagging
+%    for that is handled by the normal para tagging. 
+%    \begin{macrocode}
+\cs_set:Npn \__kernel_list_label_end: {
+  \tagmcend                                    % end mc-Lbl or artifact
+% FMi: unconditionally for now
+%  \tl_if_empty:oF \@itemlabel
+         \tagstructend   % end   Lbl
+  \tagstructbegin{tag=\LBody}
+}
+\def\LBody{LBody}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\@@_list_item_end:}
+%    When a list item ends we have to close \texttt{LBody} and
+%    \texttt{LI} but also a \struct{text} in the special case that the
+%    item material ends in a list (identifiable via \texttt{@endpe}).
+%    \begin{macrocode}
+\cs_set:Npn \@@_list_item_end: {
+  \legacy_if:nT { @endpe }
+    {
+      \int_gincr:N \g__tag_para_main_end_int
+      \tagstructend                           % text-unit
+%      \@@_debug_typeout:n{Structure-end~ P~ at~ item-end \on@line }
+    }
+  \tagstructend \tagstructend   % end LBody, LI
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\@@_list_end:}
+%    Finally, at the list end we have to close the open
+%    \texttt{LBody}, \texttt{LI}, \texttt{L}, and possibly a
+%    \struct{text} if the last item ends with a list.
+%    \begin{macrocode}
+\cs_set:Npn \@@_list_end: {
+  \legacy_if:nT { @endpe }
+    {
+      \int_gincr:N \g__tag_para_main_end_int
+      \tagstructend                       % text-unit
+      \@@_debug_typeout:n{Structure-end~ P~ at~ list-end \on@line }
+    }
+  \tagstructend\tagstructend  % end LBody, LI
+  \tagstructend               % end L
+}
+%    \end{macrocode}
+%  \end{macro}
+%    End of tagging related declarations.
+%    \begin{macrocode}
+}
+%    \end{macrocode}
+% These command should have a dummy declaration if tagging is not active
+%    \begin{macrocode}
+{
+  \cs_new:Npn \@@_start_para_structure_unconditionally:n #1 {}
+}
+%    \end{macrocode}
+%
+%
+%
+%  
+%
+%  
+%
+%  
+%
+%    \begin{macrocode}
+%</package>
+%    \end{macrocode}
+%
+%
+%
+%    \begin{macrocode}
+%<*latex-lab>
+\ProvidesFile{block-latex-lab-testphase.ltx}
+        [\ltlabblockdate\space v\ltlabblockversion\space
+                            blockenv implementation]
+\RequirePackage{latex-lab-testphase-block}
+%</latex-lab>
+%    \end{macrocode}
+%
+% \end{implementation}
+%
+%
+% \section{Documentation from first prototype implementations}
+%
+%
+% \subsection{Open questions}
+% \begin{itemize}
+% \item Existing questions --- moved to issues ---
+% \end{itemize}
+%
+% \subsection{Code cleanup}
+% \begin{itemize}
+% \item Actually implement what's announced.
+%
+% \item Encapsulate most uses of \cs[no-index]{legacy_if\dots} into
+%   commands with \texttt{expl3} syntax: we cannot rename these booleans
+%   for compatibility reasons but we can make the code cleaner
+%   nevertheless. --- made issue ---
+%
+% \item The \tn{topsep} and \tn{partopsep} business is tricky to
+%   reproduce exactly (see \tn{@topsepadd} and \tn{@topsep}) because of
+%   how it accumulates when lists are nested immediately.
+%
+% \end{itemize}
+%
+%
+%
+% \subsection{Tasks}
+% \begin{itemize}
+%
+% \item Change author to LaTeX Team once it's nice enough to deserve
+%   that label.
+%
+% \item Reproducing exactly the standard layouts and examples in the
+%   \pkg{enumitem} documentation.
+%
+% \item Hooks, but do not duplicate those that already exist as
+%   environment hooks.  Hence, mostly around items.
+%
+% \item Customization and interaction with LDB:
+%   \begin{itemize}
+%   \item Allow arbitrary nesting depth with automatically defined
+%     styles for labels, counters etc.
+%   \item Adapt everything to font size! (e.g. footnotes).
+%   \item How to model the inheritance from trivlist to list to
+%     enumerate?
+%   \end{itemize}
+%
+% \item Add key--value settings mimicking \pkg{enumitem}'s ability to
+%   set any four of five horizontal parameters and deduce the fifth by
+%   $\cs{leftmargin} + \cs{itemindent} = \cs{labelindent} +
+%   \cs{labelwidth} + \cs{labelsep}$.
+%
+% \item Provide good ways to customize how overlong labels are dealt with.
+%
+% \item Use the \texttt{.aux} file.
+%   \begin{itemize}
+%   \item Implement the \tn{ref} styles that \pkg{enumitem} provides.
+%   \item Reverse enumerations, important in publication lists and the
+%     like.  Somehow avoid needing 3 compilations for references to
+%     reverse enumerations to settle?
+%   \item Ability to calculate \tn{labelwidth} from the label contents.
+%     Share calculated parameters between multiple environments (cf.\
+%     \texttt{resume} option).
+%   \end{itemize}
+%
+% \item Related to grabbing the whole list environment, and input syntax
+%   variations:
+%   \begin{itemize}
+%   \item Other layouts: tabular (see \pkg{listliketab} vs
+%     \pkg{typed-checklist}), multicolumn and horizontally numbered (see
+%     \pkg{tasks}), inline lists, runin lists in the easy case where
+%     there is no intervening \tn{par}.
+%   \item Formatting the item text in a
+%     box or similar (requires grabbing the whole list).
+%   \item Filtering which items to show: hide certain items according to
+%     criteria (useful together with list reuse), see
+%     \pkg{typed-checklist}.
+%   \item Shorthands \tn{iitem} for automatic nested lists, or \cs{1},
+%     \cs{2} etc from \pkg{outlines}.
+%   \item Support markdown input like \pkg{asciilist}.
+%   \end{itemize}
+%
+% \item Check interaction with \texttt{babel} options such as
+%   \texttt{french} or \texttt{accadian} (see FrenchItemizeSpacing)
+%
+% \item RTL and vertical typesetting.
+% \end{itemize}
+%
+% \section{Plan of attack of first prototype}
+%
+% Typesetting list environments involves a rather large number of
+% parameters.  They can be affected by the context such as the total
+% list nesting level, the nesting level of the given type of list, and
+% the font size.  An environment like \texttt{enumerate} has two main
+% aspects.
+% \begin{itemize}
+% \item It has a certain layout in the page, with vertical and
+%   horizontal spacing around it.  This type of layout is shared with
+%   environments such as \texttt{quote}, \texttt{flushright}, or
+%   \texttt{tabbing}.  This common layout is implemented in \LaTeXe{}
+%   through \cs{trivlist} (or \cs{list}).
+% \item It defines how each \cs{item} should be typeset: how to
+%   construct the label, in particular the \texttt{counter} name, and
+%   how to format the content of the item.
+% \end{itemize}
+%
+% This suggests defining two object types, \xt{block} and \xt{item}
+% covering these two aspects.\footnote{Possibly also \xt{endblock} to
+% deal with decorations at the end?}  While the \xt{item} type will
+% perhaps have a single template, one could typeset a \xt{block} object
+% in several ways, for instance the standard \LaTeXe{} way or a fancy
+% colored box.
+%
+% The \xt{general} \xt{block} template should receive the following
+% parameters.  The \xt{plain} \xt{block} template is a restricted
+% template that freezes all item-related parameters to dummy values
+% (\texttt{counter}, \texttt{start}, \texttt{resume},
+% \texttt{label-width}, \texttt{label-sep} and all \texttt{item-*}).
+% The \xt{list} \xt{block} template is a restricted template\footnote{A
+% better approach could be to have a notion of inheritance for object
+% types, so that we end up with two different \emph{object types}.  Then
+% we can implement other template for the list object type: \xt{table}
+% for lists typeset as rows/columns of a table, \xt{inline} for lists
+% typeset in horizontal mode within a paragraph, and \xt{runin} for
+% run-in lists.} that omits the \texttt{heading} parameter and whose
+% default for \texttt{item-instance} is non-empty.
+% \begin{itemize}
+% \item Structural parameters: the \texttt{heading} to place before,
+%   \texttt{counter} name, \texttt{start} value, whether to
+%   \texttt{resume} a previous list, and the \texttt{item-instance} (an
+%   \xt{item} instance) to use when typesetting items.
+% \item Vertical spacing and penalties: \texttt{beginpenalty},
+%   \texttt{beginsep}, \texttt{begin-par-skip}, \texttt{item-penalty},
+%   \texttt{item-skip}, \texttt{item-par-skip}, \texttt{endpenalty},
+%   \texttt{end-skip}, \texttt{end-par-skip}.
+% \item Horizontal spacing: \texttt{rightmargin}, \texttt{leftmargin},
+%   \texttt{parindent}, \texttt{item-indent}, \texttt{label-width},
+%   \texttt{label-sep}.
+% \end{itemize}
+% A \docclass should edit these templates (or define restricted
+% templates) to set up default values that depend on \tn{g_block_nesting_depth_int},
+% namely how many lists are nested overall.\footnote{Does
+% \pkg{xtemplate} provide a way to specify default values that are only
+% evaluated once an instance is used?}  The document class should then
+% set up an instance of these templates for each environment, with
+% appropriate settings such as a \texttt{heading}, a suitable
+% \texttt{item-instance}, or making \texttt{margin-right} equal to
+% \texttt{margin-left} in a \texttt{quote} environment.
+%
+% The \xt{inline-list} \xt{block} template receives many fewer
+% parameters.  Note that \texttt{beginsep}, \texttt{item-skip},
+% \texttt{end-skip} are now \emph{horizontal} skips.
+% \begin{itemize}
+% \item Structural parameters: \texttt{counter}, \texttt{start},
+%   \texttt{resume}, \texttt{item-instance}.
+% \item Spacing and penalties: \texttt{beginpenalty},
+%   \texttt{beginsep}, \texttt{item-penalty}, \texttt{item-skip},
+%   \texttt{endpenalty}, \texttt{end-skip}.
+% \item Horizontal spacing: \texttt{label-width}, \texttt{label-sep}.
+% \end{itemize}
+%
+% The \xt{std} \xt{item} template should receive the following
+% parameters.  They depend on the type of list and its nesting level
+% among lists of such type, but typically not on the total nesting
+% level.
+% \begin{itemize}
+% \item Counter name (\texttt{counter}), shared with the parent
+%   \xt{list} \xt{block} template, but needed for incrementing.
+% \item Label construction: a function \texttt{counter-label} that
+%   produces the label from the counter name, used if \tn{item} is given
+%   without argument.
+% \item References: a function \texttt{counter-ref} for how the label
+%   should be referred to when it is constructed from the counter,
+%   \texttt{label-ref} and \texttt{label-autoref} used when \tn{item}
+%   has an optional argument.
+% \item Label formatting: \texttt{label-format} function,
+%   \texttt{label-strut} boolean.
+% \item Label alignment (\texttt{label-align}, \texttt{label-boxed},
+%   \texttt{next-line}).
+% \item Content parameters: \texttt{text-font}.
+% \item A \texttt{compatibility} boolean that controls for instance
+%   whether \tn{makelabel} is used.
+% \end{itemize}
+% The \docclass should set up an instance such as \xt{enumiii} for each
+% environment and nesting level.\footnote{This should be made easily
+% extendible to deeper levels.}
+%
+% A given environment will adjust some nesting levels, then call the
+% \xt{block} instance appropriate to the environment type, passing it
+% the \xt{item} instance appropriate to the environment and depth.
+% Additional context-dependence could be provided by \pkg{l3ldb}, but
+% the main context-dependence should not rely on it for simplicity
+% reasons and incidentally because \pkg{l3ldb} is not yet available.
+%
+%
+% \Finale
+%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\endinput

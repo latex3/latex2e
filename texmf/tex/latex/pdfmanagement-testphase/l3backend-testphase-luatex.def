@@ -20,23 +20,56 @@
 %% 
 %% File: l3backend-testphase.dtx
 \ProvidesExplFile
-  {l3backend-testphase-luatex.def}{2023-03-09}{}
+  {l3backend-testphase-luatex.def}{2023-10-09}{}
   {LaTeX~PDF~management~testphase~bundle~backend~support: PDF output (LuaTeX)}
+\cs_generate_variant:Nn \__kernel_backend_literal_page:n { e }
+\bool_if:NT \l__pdfmanagement_delayed_shipout_bool
+ {
+   \cs_new_protected:Npn \__kernel_backend_shipout_literal:e #1
+     { \tex_special:D~shipout { #1} }
+  \cs_new_protected:Npn \__kernel_backend_shipout_literal_pdf:e #1
+    {
+      \tex_pdfextension:D ~ literal ~ shipout ~
+        { #1 }
+    }
+  \cs_new_protected:Npn \__kernel_backend_shipout_literal_page:e #1
+    {
+      \tex_pdfextension:D ~ literal ~ shipout ~
+        page { #1 }
+    }
+ }
+
 \RequirePackage{l3ref-tmp}
-\cs_generate_variant:Nn \ref_label:nn {en}
-\cs_generate_variant:Nn \ref_value:nn {en}
-\cs_new_protected:Npn \__pdf_backend_ref_label:nn #1 #2
-  {
-     \@bsphack
-     \ref_label:nn{#1}{abspage}
-     \@esphack
-  }
-\cs_new:Npn \__pdf_backend_ref_value:nn #1 #2
-  {
-     \ref_value:nn{#1}{#2}
-  }
-\cs_generate_variant:Nn \__pdf_backend_ref_label:nn {en}
-\cs_generate_variant:Nn \__pdf_backend_ref_value:nn {en}
+\cs_if_exist:NTF \property_new:nnnn
+ {
+   \cs_new_protected:Npn \__pdf_backend_record_abspage:n #1
+     {
+        \@bsphack
+        \property_record:nn{#1}{abspage}
+        \@esphack
+     }
+   \cs_new:Npn \__pdf_backend_ref_abspage:n #1
+     {
+        \property_ref:nn{#1}{abspage}
+     }
+
+ }
+ {
+   \cs_new_protected:Npn \__pdf_backend_record_abspage:n #1
+    %% \__pdf_backend_ref_label:nn #1 #2
+     {
+        \@bsphack
+        \ref_label:nn{#1}{abspage}
+        \@esphack
+     }
+   \cs_new:Npn \__pdf_backend_ref_abspage:n #1
+    %% \__pdf_backend_ref_value:nn #1 #2
+     {
+        \ref_value:nn{#1}{abspage}
+     }
+ }
+\cs_generate_variant:Nn \__pdf_backend_record_abspage:n {e}
+\cs_generate_variant:Nn \__pdf_backend_ref_abspage:n {e}
 \prop_new:N \g__pdf_tmpa_prop
 \tl_new:N   \l__pdf_tmpa_tl
 \box_new:N  \l__pdf_backend_tmpa_box
@@ -144,6 +177,7 @@
       }
   }
 
+\cs_generate_variant:Nn \__pdf_backend_Page_primitive:n { e }
 \clist_const:Nn \c__pdf_backend_PageResources_clist
   {
     ExtGState,
@@ -191,17 +225,17 @@
 \cs_set_protected:Npn \__pdf_backend_bdcobject:nn #1 #2 % #1 eg. Span, #2: object name
   {
     \int_gincr:N \g__pdf_backend_name_int
-    \exp_args:Nx\__kernel_backend_literal_page:n
+    \__kernel_backend_literal_page:e
       { /#1 ~ /l3pdf\int_use:N\g__pdf_backend_name_int\c_space_tl BDC }
     \bool_if:NTF \l__pdf_backend_xform_bool
       {
-        \exp_args:Nnx\pdfdict_gput:nnn
+        \pdfdict_gput:nee
           { g__pdf_Core/Xform/Resources/Properties }
           { l3pdf\int_use:N\g__pdf_backend_name_int }
           { \__pdf_backend_object_ref:n { #2 } }
       }
       {
-        \exp_args:Nx \tex_latelua:D
+        \exp_args:Ne \tex_latelua:D
           {
             ltx.pdf.Page_Resources_Properties_gput
               (
@@ -215,17 +249,17 @@
 \cs_set_protected:Npn \__pdf_backend_bdcobject:n #1% #1 eg. Span
   {
     \int_gincr:N \g__pdf_backend_name_int
-    \exp_args:Nx\__kernel_backend_literal_page:n
-      { /#1 ~ /l3pdf\int_use:N\g__pdf_backend_name_int\c_space_tl BDC }
+    \__kernel_backend_literal_page:e
+      { /\exp_not:n{#1} ~ /l3pdf\int_use:N\g__pdf_backend_name_int\c_space_tl BDC }
     \bool_if:NTF \l__pdf_backend_xform_bool
       {
-        \exp_args:Nnx\pdfdict_gput:nnn %no handler needed
+        \pdfdict_gput:nee %no handler needed
           { g__pdf_Core/Xform/Resources/Properties }
           { l3pdf\int_use:N\g__pdf_backend_name_int }
           { \__pdf_backend_object_last: }
       }
       {
-        \exp_args:Nx \tex_latelua:D
+        \exp_args:Ne \tex_latelua:D
           {
             ltx.pdf.Page_Resources_Properties_gput
               (
@@ -249,13 +283,24 @@
   {
     \__kernel_backend_literal_page:n { /#1~<<#2>>~BDC }
   }
-\cs_set_protected:Npn \__pdf_backend_bdc:nn #1 #2
+
+ \cs_set_protected:Npn \__pdf_backend_bdc:nn #1 #2
   {
     \bool_if:NTF  \g__pdfmanagement_active_bool
       {\cs_gset_eq:NN \__pdf_backend_bdc:nn \__pdf_backend_bdc_contobj:nn}
       {\cs_gset_eq:NN \__pdf_backend_bdc:nn \__pdf_backend_bdc_contstream:nn}
       \__pdf_backend_bdc:nn {#1}{#2}
   }
+
+\bool_if:NT\l__pdfmanagement_delayed_shipout_bool
+  {
+    \cs_set_protected:Npn \__pdf_backend_bdc_shipout_contstream:ee #1 #2
+      {
+        \__kernel_backend_shipout_literal_page:e { /#1~<<#2>>~BDC }
+      }
+    \cs_set_eq:NN \__pdf_backend_bdc_shipout:ee \__pdf_backend_bdc_shipout_contstream:ee
+  }
+
 \cs_set_protected:Npn \__pdf_backend_emc:
   {
     \__kernel_backend_literal_page:n { EMC }
@@ -452,12 +497,15 @@
        <2350CAD05F8A7AF0AA4058486855344F>~
        <2350CAD05F8A7AF0AA4058486855344F>~
      ]}
-    \pdfmanagement_add:nnn{Info}{CreationDate}{(D:20010101205959-00'00')}
-    \pdfmanagement_add:nnn{Info}{ModDate}{(D:20010101205959-00'00')}
-    \AddToDocumentProperties[document]{creationdate}{D:20010101205959-00'00'}
-    \AddToDocumentProperties[document]{moddate}{D:20010101205959-00'00'}
-    \AddToDocumentProperties[hyperref]{pdfmetadate}{D:20010101205959-00'00'}
-    \AddToDocumentProperties[hyperref]{pdfdate}{D:20010101205959-00'00'}
+    \str_if_exist:NF\c_sys_timestamp_str
+      {
+       \pdfmanagement_add:nnn{Info}{CreationDate}{(D:20010101205959-00'00')}
+       \pdfmanagement_add:nnn{Info}{ModDate}{(D:20010101205959-00'00')}
+       \AddToDocumentProperties[document]{creationdate}{D:20010101205959-00'00'}
+       \AddToDocumentProperties[document]{moddate}{D:20010101205959-00'00'}
+       \AddToDocumentProperties[hyperref]{pdfmetadate}{D:20010101205959-00'00'}
+       \AddToDocumentProperties[hyperref]{pdfdate}{D:20010101205959-00'00'}
+      }
     \AddToDocumentProperties[hyperref]{pdfinstanceid}{uuid:0a57c455-157a-4141-8c19-6237d832fc80}
     \AddToDocumentProperties[hyperref]{pdfproducer}{\c_sys_engine_exec_str-NN.NN.NN}
    }

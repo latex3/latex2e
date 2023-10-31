@@ -4,5 +4,5 @@ checkengines = {"pdftex"}
 checksearch  = true
 testfiledir  = "testfiles-OR"
 
-checkruns     = 3
+checkruns     = 2
 
