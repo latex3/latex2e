@@ -655,9 +655,9 @@
     \raisebox{\baselineskip}[0pt][0pt]{\hypertarget{expstar}{}}%
     \write \@auxout { \def \string \Codedoc@expstar { } }
     \__codedoc_typeset_exp:\ indicates~fully~expandable~functions,~which~
-    can~be~used~within~an~\texttt{x}-type~argument~(in~plain~
-    \TeX{}~terms,~inside~an~\cs{edef}),~as~well~as~within~an~
-    \texttt{f}-type~argument.
+    can~be~used~within~an~\texttt{e}-type~argument~(inside~an~\tn{expanded}),~
+    \texttt{x}-type~argument~(in~plain~\TeX{}~terms,~inside~an~\tn{edef}),~
+    as~well~as~within~an~\texttt{f}-type~argument.
   }
 \NewDocumentCommand { \CodedocExplainREXP } { }
   {
@@ -665,8 +665,8 @@
     \write \@auxout { \def \string \Codedoc@rexpstar { } }
     \__codedoc_typeset_rexp:\ indicates~
     restricted~expandable~functions,~which~can~be~used~within~an~
-    \texttt{x}-type~argument~but~cannot~be~fully~expanded~within~an~
-    \texttt{f}-type~argument.
+    \texttt{x}-type~argument~or~an~\texttt{e}-type~argument,~
+    but~cannot~be~fully~expanded~within~an~\texttt{f}-type~argument.
   }
 \NewDocumentCommand { \CodedocExplainTF } { }
   {
