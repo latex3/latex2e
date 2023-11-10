@@ -15,8 +15,8 @@
 %%% From File: ltmarks.dtx
 %
 %    \begin{macrocode}
-\def\ltmarksversion{v1.0d}
-\def\ltmarksdate{2022/06/01}
+\def\ltmarksversion{v1.0e}
+\def\ltmarksdate{2023/11/10}
 %    \end{macrocode}
 %<*driver>
 \documentclass{l3doc}
@@ -784,11 +784,12 @@
 % \subsection{Updating mark structures}
 %
 %
-%  \begin{macro}{\l_@@_box,\g_@@_tmp_tl,\g_@@_new_top_tl}
-%    For some operations we need a temporary private box and two
+%  \begin{macro}{\l_@@_box,\l_@@_ii_box,\g_@@_tmp_tl,\g_@@_new_top_tl}
+%    For some operations we need two temporary private boxes and two
 %    private global token lists.
 %    \begin{macrocode}
 \box_new:N \l_@@_box
+\box_new:N \l_@@_ii_box
 \tl_new:N  \g_@@_tmp_tl
 \tl_new:N  \g_@@_new_top_tl
 %    \end{macrocode}
@@ -816,8 +817,13 @@
 %    Getting the first and last marks out of the material in \verb=#2=
 %    is done by putting the material in a box and then doing a
 %    split operation to the maximum size possible (which hopefully
-%    means all of the content).\footnote{We could verify this, maybe we
-%    should.} Because this is an action only for the sake of getting
+%    means all of the content).\footnote{With normal column material cut
+%    from the main galley we should always get all material in one go, but
+%    in certain situations, for example,
+%    in a \pkg{multicols} environment that contains
+%    some \cs{columnbreak}s a single split operation will not be
+%    enough. Thus, this this is something we need to handle.}
+%    Because this is an action only for the sake of getting
 %    at the mark values we don't want any underfull
 %    box warnings so we turn those (locally) off.
 %    \begin{macrocode}
@@ -842,11 +848,40 @@
 %    boxes end up as the last item on the page we should not unpack
 %    them.
 %
-%    We therefore do an \tn{unskip} to get rid of that glue if present and
-%    also check if we have then a \tn{vbox} as the last item and if so
-%    unpack that too, but only under certain conditions, see
-%    below. All this is temporary, just for getting the
-%    marks out, so it doesn't affect the final page production.
+%    All these issues need to be handled which is done in
+%    \cs{@@_prepare_and_extract:nn}.     
+%
+%    \begin{macrocode}
+      \@@_prepare_and_extract:nn {#1}{#2}
+%    \end{macrocode}
+%    Once all mark classes have been processed the data structures are
+%    updated and we can close the group which undoes our local
+%    changes and retains only the global ones.
+%    \begin{macrocode}
+    \group_end:
+  }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{@@_prepare_and_extract:nn}
+%    This macro expects a region name as its first argument and
+%    vertical material (not boxed) as its second. It attempts to
+%    extract mark information from \verb/#2/ and if it succeeds stores
+%    it away in the mark structure for the region. If it finds a
+%    forced break in the material it removes it and then restarts the
+%    attempt. If it finds infinite negative glue it generates an error
+%    message otherwise it finally succeeds.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_prepare_and_extract:nn #1#2 {
+%    \end{macrocode}
+%
+%    To handle the \cs{enlargethispage} case we do an \tn{unskip} to
+%    get rid of that glue if present and also check if we have then a
+%    \tn{vbox} as the last item and if so unpack that too, but only
+%    under certain conditions, see below. All this is temporary, just
+%    for getting the marks out, so it doesn't affect the final page
+%    production.
 %
 %    In fact, we go one step further and set the box to a large
 %    negative height possible and afterwards take a look at the
@@ -866,11 +901,10 @@
           \box_set_to_last:N \l_@@_box
 %    \end{macrocode}
 %    After having removed the last box from the current list (if there
-%    was one)
-%    we check if the list is now empty. If not, the the last box is
-%    definitely not the one from \tn{enlargethispage} and so we can
-%    and should leave it alone. Otherwise we check if this last box is
-%    a \tn{vbox}.
+%    was one) we check if the list is now empty. If not, the the last
+%    box is definitely not the one from \tn{enlargethispage} and so we
+%    can and should leave it alone. Otherwise we check if this last
+%    box is a \tn{vbox}.
 % \changes{v1.0d}{2022/06/01}{Extend the logic for detecting the marks
 %    in the box (gh/836)}
 %    \begin{macrocode}
@@ -879,8 +913,9 @@
               \box_if_vertical:NT \l_@@_box
                 {
 %    \end{macrocode}
-%    If it is we do a further test and reset the \cs{l_@@_box}
-%    to check if it contains infinitely shrinkable glue.
+%    If it is, we do a further test and retypeset the \cs{l_@@_box}
+%    to check if it contains infinitely shrinkable glue using the same
+%    trick as before.
 %    \begin{macrocode}
                   \vbox_set_to_ht:Nnn \l_@@_box { -.5\c_max_dim }
                     {
@@ -889,10 +924,11 @@
                                               % is not empty
                     }
 %    \end{macrocode}
-%    If not, then we unpack it, if yes we still ignore it for the process of
-%    mark extraction. We do not generate an error though, because in all
-%    likelihood this is an ordinary box like a marginal that does
-%    contain something like \tn{vss}.
+%    If we don't detect infinite negative glue we unpack the box. If
+%    yes we ignore it for the process of mark extraction. However, we
+%    do not generate an error message, because in all likelihood this
+%    is an ordinary box like a marginal that does contain something
+%    like \tn{vss}.
 %    \begin{macrocode}
                     \int_compare:nNnT \tex_badness:D > 0
                       { \vbox_unpack:N \l_@@_box }
@@ -912,16 +948,65 @@
           \tex_kern:D \c_zero_dim
         }
       \int_compare:nNnTF \tex_badness:D > 0
+        {
 %    \end{macrocode}
 %    If the box had no infinite shrinkage (or rather if our test
 %    didn't show any) we vsplit it. Note that it
 %    doesn't matter that we set it to this strange size first. If there
 %    was infinite shrinkage after all, we end up with a low-level
-%    \TeX{} error, but if there is, it is a coding error and needs
+%    \TeX{} error, but if that is the case, it is a coding error
+%    somewhere and needs
 %    correcting.
 %    \begin{macrocode}
+          \vbox_set_split_to_ht:NNn \l_@@_ii_box \l_@@_box \c_max_dim
+%    \end{macrocode}
+%    After splitting we check if there is anything left in
+%    \cs{l_@@_box}. If not then the above split has set some split marks
+%    that we can then use to finish the extraction:
+%    \begin{macrocode}
+          \box_if_empty:NTF \l_@@_box
+              { \@@_do_extraction:n {#1} }
+%    \end{macrocode}
+%    If we have a remainder after the split then this means that there was some forced
+%    break in the material. We get rid of that be combining the
+%    content of the two boxes and restart.
+%    \begin{macrocode}
+              {
+%<*trace>
+                \@@_debug:n { \iow_term:x
+                  { Marks:~ mark~ extraction~needs~ recursion~
+                    \msg_line_context: } }
+%</trace>
+                \@@_prepare_and_extract:nn {#1}
+                   { \vbox_unpack:N \l_@@_ii_box
+                     \vbox_unpack:N \l_@@_box    }
+              }
+        }
+%    \end{macrocode}
+%    If the badness was zero (we actually tested for${}>0$ but it
+%    can't get negative) then we had infinite shrinkage, so we report
+%    that and set all marks to the value the last mark had before.
+%    \begin{macrocode}
         {
-          \vbox_set_split_to_ht:NNn \l_@@_box \l_@@_box \c_max_dim
+          \msg_error:nnn { mark } { infinite-shrinkage } {#1}
+          \seq_map_inline:Nn \g_@@_classes_seq
+            {
+              \tl_gset_eq:cc { g_@@_#1_top_  ##1_tl }
+                             { g_@@_#1_last_ ##1_tl }
+              \tl_gset_eq:cc { g_@@_#1_first_##1_tl }
+                             { g_@@_#1_last_ ##1_tl }
+            }
+        }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_do_extraction:n #1 {
 %    \end{macrocode}
 %    After this action we can get first and last marks of the various
 %    classes through \cs{tex_splitfirstmarks:D} and
@@ -987,32 +1072,9 @@
                     }
                 }
             }
-        }
-%    \end{macrocode}
-%    If the badness was zero (we actually tested for${}>0$ but it
-%    can't get negative) then we had infinite shrinkage, so we report
-%    that and set all marks to the value the last mark had before.
-%    \begin{macrocode}
-        {
-          \msg_error:nnn { mark } { infinite-shrinkage } {#1}
-          \seq_map_inline:Nn \g_@@_classes_seq
-            {
-              \tl_gset_eq:cc { g_@@_#1_top_  ##1_tl }
-                             { g_@@_#1_last_ ##1_tl }
-              \tl_gset_eq:cc { g_@@_#1_first_##1_tl }
-                             { g_@@_#1_last_ ##1_tl }
-            }
-        }
-%    \end{macrocode}
-%    Once all mark classes have been processed the data structures are
-%    updated and we can close the group which undoes our local
-%    changes and retains only the global ones.
-%    \begin{macrocode}
-    \group_end:
-  }
+}
 %    \end{macrocode}
 %  \end{macro}
-%
 %
 %  \begin{macro}{\@@_update_structure_alias:nn}
 %    This function copies the structure for one region to  another
@@ -1358,7 +1420,7 @@
 %
 %
 %  \begin{macro}{\@@_status:n}
-%    Show all mark class values across all regions.
+%    Show a snapshot of all mark class values across all regions.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_status:n #1
   {
@@ -1370,6 +1432,24 @@
 %  \end{macro}
 %
 %
+%  \begin{macro}{\ShowMarksAt}
+%    Debugging helper that displays a snapshot of all known mark
+%    structures. The argument is a text string that this is
+%    displayed to help identifying when the snapshot was made.
+%
+%    This may may not stay like this which is why it isn't yet
+%    documented as an official command.
+%    \begin{macrocode}
+\cs_new_protected:Npn \ShowMarksAt #1 {
+%<*trace>
+     \@@_debug:n
+         {
+           \@@_status:n{#1}
+         }
+%</trace>
+}         
+%    \end{macrocode}
+%  \end{macro}
 %
 %
 % \subsection{Designer-level interfaces}
