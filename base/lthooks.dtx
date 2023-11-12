@@ -31,8 +31,8 @@
 %%% From File: lthooks.dtx
 %
 %    \begin{macrocode}
-\def\lthooksversion{v1.1f}
-\def\lthooksdate{2023/10/02}
+\def\lthooksversion{v2.0a}
+\def\lthooksdate{2023/11/11}
 %    \end{macrocode}
 %
 %<*driver>
@@ -51,6 +51,85 @@
 %
 % \fi
 %
+% \ExplSyntaxOn
+% ^^A material to typeset code chunks
+% \tl_new:N \l__lthooks_tl
+% \int_new:N \l__lthooks_int
+% \AddToHook{env/syntax/begin}{
+%   \def\SEP{\smash{\rule[-\dp\strutbox]{1pt}{\baselineskip}}\phantom{x}}
+%   \def\TAB{\phantom{xx}}
+%   \def\FILL#1{\prg_replicate:nn{38-(#1)}{~}}
+%   \cs_set_eq:NN \meta_saved:n \meta
+%   \def\meta#1{^^A
+%     \tl_set:Nn \l__lthooks_tl { #1 }
+%     \hbox_set:Nn \l_tmpa_box { \meta_saved:n { #1 } }
+%     \hbox_set:Nn \l_tmpb_box { x }
+%     \int_set:Nn \l__lthooks_int { \int_div_truncate:nn
+%       { \box_wd:N \l_tmpa_box  }
+%       { \box_wd:N \l_tmpb_box  }
+%     }
+%     \fp_compare:nNnT
+%       { \l__lthooks_int * \box_wd:N \l_tmpb_box }
+%       < 
+%       { \box_wd:N \l_tmpa_box }
+%       { \int_incr:N \l__lthooks_int }
+%     \makebox[ \l__lthooks_int \box_wd:N \l_tmpb_box ][c]
+%       { \box_use:N \l_tmpa_box }
+%   }
+% }
+% \int_new:N \l__lthooks_source_int
+% \hook_new:n {lthooks.source/lineno.format}
+% \hook_gput_code:nnn
+%   {lthooks.source/lineno.format}
+%   {lthooks.source/default}
+%   {\sffamily\tiny}
+% \NewDocumentEnvironment{lthooks.source}{O{}} {
+%   \keys_define:nn { lthooks.source } {
+%     lineno .bool_set:N = \l__lthooks_source_lineno_bool,
+%     lineno .default:n  = true,
+%     no-lineno .bool_set_inverse:N = \l__lthooks_source_lineno_bool,
+%     first  .int_set:N  = \l__lthooks_source_int,
+%   }
+%   \keys_set:nn { lthooks.source } {first=1, lineno=false, #1 }
+%   \cs_set:Npn\SEP{\rule[-\dp\strutbox]{1pt}{\baselineskip}~~}
+%   \cs_set:Npn\TAB{\phantom{xx}}
+%   \cs_set_eq:NN\IT\textit
+%   \bool_if:NF \c_true_bool { FAIL }
+%   \bool_if:NT \c_false_bool { FAIL }
+%   \bool_if:NTF \l__lthooks_source_lineno_bool {
+%     \keys_define:nn { lthooks.source.ROW } {
+%       format .code:n = \hook_gput_next_code:nn
+%         { lthooks.source/lineno.format }
+%         { ##1 },
+%       mark .tl_set:N = \l__lthooks_source_mark_tl,
+%       mark .initial:n = ,
+%     }
+%     \NewDocumentCommand\ROW{O{}}{
+%       \keys_define:nn { lthooks.source.ROW } {
+%         mark .initial:n = ,
+%       }
+%       \keys_set:nn { lthooks.source.ROW } { ##1, }
+%       \makebox[0pt][r]{\textcolor[gray]{0.5}{
+%         \hook_use:n { lthooks.source/lineno.format }
+%         \l__lthooks_source_mark_tl
+%         \int_use:N \l__lthooks_source_int
+%       }\hphantom{x}}\hphantom{xx}
+%       \int_incr:N \l__lthooks_source_int
+%     }
+%   } {
+%     \cs_set:Npn\ROW{
+%       \hphantom{xx}
+%     }
+%   }
+%   \begin{flushleft}\ttfamily\small
+%   \UseHook{env/syntax/begin}
+%   \def\FILL##1{\prg_replicate:nn{39-(##1)}{~}}
+% }{
+%   \end{flushleft}
+% }
+% \ExplSyntaxOff
+% \providecommand\META[1]{\ensuremath\langle\hskip-0.5ex\meta{#1}\hskip-0.5ex\ensuremath\rangle}
+
 %
 % \providecommand\hook[1]{\texttt{#1}}
 %
@@ -61,7 +140,7 @@
 %
 %
 %
-% \title{\LaTeX{}'s hook management\thanks{This module has version
+% \title{The \LaTeX\ hook management system\thanks{This module has version
 %    \lthooksversion\ dated \lthooksdate, \copyright\ \LaTeX\
 %    Project.}}
 %
@@ -73,858 +152,1322 @@
 % \tableofcontents
 %
 % \section{Introduction}
+% In \LaTeX, commands are created as a whole. If one wants to alter
+% someone's else command to better suit its own needs, he has generally
+% to redefine the command, which can be very tricky. During times,
+% package writers have elaborated various techniques to make their
+% commands customizable, by users as well as other packages. This lead
+% to a very complex situation with many incompatibilities.
 %
-%    Hooks are points in the code of commands or environments where it
-%    is possible to add processing code into existing commands. This
-%    can be done by different packages that do not know about each
-%    other and to allow for hopefully safe processing it is necessary
-%    to sort different chunks of code added by different packages into
-%    a suitable processing order.
+% The \LaTeX\ hook management system is a unified way to modify
+% commands by controlling more precisely what is executed and when.
+% It allows to write more compatible code, and lowers the risk of
+% breaking things. Not only does it replaces elegantly old techniques,
+% it opens new possibilities in writing new powerful and reliable code.
 %
-%    This is done by the packages adding chunks of code (via
-%    \cs{AddToHook}) and labeling their code with some label by
-%    default using the package name as a label.
+% \section{Presentation}
+% \subsection{Introductory example}
+% \label{sec:Introductory-example}
+% Typesetting next document with its explanatory comments introduces
+% better than words the notion of \LaTeX\ hook\footnote{A \LaTeX\ hook
+% corresponds to a hooking in computer programming.} and the related
+% workflow. It only relies on hook related commands as well as
+% |\typein| and |\typeout| to interact with the terminal.
+% \begin{lthooks.source}[lineno]
+% \ROW|\documentclass{article}|\\
+% \ROW|\begin{document}|\\
+% \ROW\cs{DeclareHook}|{MyName}       %|
+% \IT{Declare a hook named }|"MyName"|\\
+% \ROW\cs{AddToHook}|{MyName}         %|
+% \IT{Add to the hook named }|"MyName"...|\\
+% \ROW|  [labelA]{\typeout{A}}    %  |
+% \IT{the code }|"\typeout{A}"|\IT{ labeled }|"labelA"|\\
+% \ROW\cs{AddToHook}|{MyName}[labelB]{\typeout{B}}   %|
+% \IT{Same for B}\\
+% \ROW\cs{AddToHook}|{MyName}[labelC]{\typeout{C}}   %|
+% \IT{Same for C}\\
+% \ROW\cs{UseHook}|{MyName}           %|
+% \IT{Use hook named }|"MyName"|\\
+% \ROW[format=\bfseries,mark=$\to$\;,
+%   ]|\typein{Press enter}       %|
+% \IT{Step 1}\\
+% \ROW[format=\bfseries,mark=$\to$\;,
+%   ]\cs{ShowHook}|{MyName}          %|
+% \IT{Step 2: show the hook data}\\
+% \ROW|\end{document}|\\
+% \end{lthooks.source}
+% On step 1, we see the result of the command |\UseHook{MyName}|. The
+% three instructions |\typeout{A}|, |\typeout{B}| and  |\typeout{C}|
+% were executed and |A|, |B|, |C| are displayed in the terminal.
+% From step 2 we have a good understanding of \LaTeX\ hooks:
+% \begin{lthooks.source}
+% \ROW|-> The hook 'MyName':|\\
+% \ROW|> Code chunks:|\\
+% \ROW|>     labelA -> \typeout {A}|\\
+% \ROW|>     labelB -> \typeout {B}|\\
+% \ROW|>     labelC -> \typeout {C}|\\
+% \ROW|> Document-level (top-level) code (executed last):|\\
+% \ROW|>     ---|\\
+% \ROW|> Extra code for next use only:|\\
+% \ROW|>     ---|\\
+% \ROW|> Rules:|\\
+% \ROW|>     ---|\\
+% \ROW|> Execution order:|\\
+% \ROW|>     labelA, labelB, labelC.|\\
+% \end{lthooks.source}
 %
-%    At \verb=\begin{document}= all code for a hook is then sorted
-%    according to some rules (given by \cs{DeclareHookRule}) for fast
-%    execution without processing overhead. If the hook code is
-%    modified afterwards (or the rules are changed),
-%    a new version for fast processing is generated.
+% \subsection{Description}
+% A \LaTeX\ hook is uniquely identified by a string: its \emph{name}.
+% Hooks have labeled code chunks, all of which being persistent,
+% executed every time they are used.
+% They also have momentary code executed only on the next use
+% and definitely discarded afterwards.
+% On use, all the code chunks are executed in a well defined order that
+% one can control by declaring rules,
+% see section \ref{sec:Ordering-code-execution}.
 %
-%    Some hooks are used already in the preamble of the document. If
-%    that happens then the hook is prepared for execution (and sorted)
-%    already at that point.
+% \subsection{More examples}
+% \LaTeX\ has many built-in hooks so called \enquote{generic},
+% see section \ref{sec:LaTeX-generic-hooks}, one of them is simply named
+% |begindocument| (section \ref{sec:begindocument-hooks}).
+% Running
+% \begin{lthooks.source}
+% \ROW\cs{AddToHook}|{begindocument}|\Arg{code}
+% \end{lthooks.source}
+% ensures that \meta{code} will be executed after all the packages
+% have loaded.
+%
+% Hooks also allow to alter environments: with
+% \begin{lthooks.source}
+% \ROW\cs{AddToHook}|{env/quote/begin}{\color{red}}|
+% \end{lthooks.source}
+% all the forthcoming |quote| environments will be typeset in red,
+% provided the proper color management package is loaded beforehands.
+%
+% However, hooks are not a panacea. For example, if you want a
+% quote environment with a different indentation, then you can
+% define a new environment mimicking quote with appropriate settings
+% or use a dedicated package, but hooks are of no help here.
+% Moreover, hooks cannot be used in every place because they can break
+% actual code as illustrated in section \ref{sec:Generic-hooks-for-commands}.
+%
+% \subsection{Collaborative work}
+%
+% \LaTeX\ hooks are managed at the global \TeX\ level, therefore
+% great care should be taken such that no code breaks unintentionally.
+% Next conventions should be followed for that purpose in production
+% code. For the sake of simplicity, a \emph{\LaTeX\ object} denotes a
+% package, a class, the top level document or even \LaTeX\ itself,
+% it is more generally a \emph{logical unit}.
+% \begin{itemize}
+% \item A \emph{hook owner} is the \LaTeX\ object that defines both
+% the hook name and purpose. Each hook should have only one owner.
+% \item A \emph{hook user} is a \LaTeX\ object that defines when the
+% hook is used, by executing \cs{UseHook} command or similar.
+% The owner can also be a user of the hook.
+% When explicitely mentionned, other \LaTeX\ objects
+% are not authorized to be hook users.
+% \item For any given hook, a \emph{label owner} is a \LaTeX\ object
+% that adds code to a hook, though \cs{AddToHook} command or similar,
+% with a given label.
+% A \LaTeX\ object can own many different labels, but each label must
+% have only one owner. Moreover, no \LaTeX\ object label except the 
+% label owner should modify the associate code chunk.
+% \end{itemize}
+% In order to avoid collisions and melting unrelating code,
+% hook names and code labels should follow the naming scheme:
+% \enquote{\texttt{\META{root}\META{components}}}
+% where \META{components} is a possibly empty list of \enquote{\texttt
+% {/\META{component}}} and \META{root} is
+% \begin{itemize}
+% \item \enquote{\texttt{\META{package name}}}
+% if the owner is a package,
+% \item \enquote{\texttt{\META{class name}/class}}
+% if the owner is a class,
+% \item \enquote{\texttt{top-level}} if the owner is a document.
+% \end{itemize}
+% That way, the owner of a hook or a label is clearly identified.
+% To simplify code, \meta{hook} and \meta{label} command arguments
+% below can include a leading dot \enquote{|.|} as shortcut to the owner's
+% name, see section \ref{sec:Command-arguments}.
 %
 %
-% \section{Package writer interface}
+% Hooks intended for public use should be properly documented and
+% changing their name in new versions should come with a deprecation
+% error message to help in transition.
+% Moreover, the use of a code label with components on a public
+% hook should be properly documented to give third parties a chance
+% to order code properly, without digging into the source code.
+% Any future change to this label should be documented as well.
+%
+% As implemented, code labels can be quite anything but the reserved
+% \enquote{|0|} or \enquote{|*|},
+% and in some circumstances the reserved \enquote{|top-level|}.
+%
+% \subsection{Private work}
+%
+% \LaTeX\ hooks provide us with a different pattern to define commands
+% and environments, focusing essentially on the mutability of the
+% definitions. Moreover they can be defined asynchronously, meaning
+% that the real code may be defined at different places outside
+% \cs{newcommand} and alike. In that case, hooks are part of a private
+% implementation and their names should contain a \enquote{|/private|}
+% component. The hook owner, hook users, label owners are the same
+% \LaTeX\ object.
+%
+% \section{Programming interface}
 %
 %    The hook management system is offered as a set of CamelCase
-%    commands for traditional \LaTeXe{} packages (and for use in the
-%    document preamble if needed) as well as \texttt{expl3} commands
-%    for modern packages, that use the L3 programming layer of
-%    \LaTeX{}. Behind the scenes, a single set of data structures is
-%    accessed so that packages from both worlds can coexist and access
-%    hooks in other packages.
+%    commands for traditional \LaTeXe{} documents, classes and packages
+%    as well as L3 commands for modern code. Both can be used
+%    interchangeably because the underlying data structure is shared.
+%    They are documented together.
 %
+% All operations that modify hooks take place at the global \TeX\
+% level, whereas when used, hook code chunks are executed in the
+% current \TeX\ group.
 %
+% \subsection{Conventions and command arguments}
+% \label{sec:Command-arguments}
+% In the sequel \meta{...} denotes the value of a command argument
+% whereas \META{...} denotes another kind of meta value.
+% \begin{arguments}
+% \item[\META{hook}] denotes a string, a hook name.
+%   The special value \enquote{|??|} stands for \emph{any hook name}.
+% \item[\META{label}] denotes a string, a code chunk label.
+%   The special value \enquote{|top-level|} is excluded
+%   whereas \enquote{|*|} and \enquote{|0|} are reserved for internal use.
+% \end{arguments}
+% 
+% In the sequel, the command arguments are mainly one of the following.
+% \begin{arguments}
+% \item[\meta{hook name}:] on execution, full expansion occurs until
+% only inner spaces and character tokens remain, including unicode
+% characters. The result is the hook name.
+% If a non-expandable non-character token still remains,
+% a low-level \TeX{} error is raised.
+% The hook should not start or end with a space\footnote{This may not
+% raise an error now, but may in the future.}.
 %
-% \subsection{\LaTeXe\ interfaces}
+% \item[\meta{hook}:] a specifier for the hook name.
+% The argument is first treated like \meta{hook name}.
+% If the result is a single dot \enquote{|.|} or starts with
+% \enquote{|./|} the leading dot is replaced by the
+% \META{current name}, which is generally the package name,
+% the class name or the reserved keyword \enquote{|top-level|}.
+% A \enquote{|.|} anywhere else is treated literally and is not
+% replaced. See section \ref{sec:The-current-name} to manage the
+%  \META{current name}.
 %
-% \subsubsection{Declaring hooks}
+% \item[\meta{label}:] a code chunk label specifier, treated exactly
+% like \meta{hook} on execution. This argument is required for L3 commands
+% but optional for \LaTeXe\ commands. It then defaults to
+% \enquote{|.|} which is replaced by \META{current name}.
+% We therefore suggest to use the leading dot shortcut detailed for
+% above \meta{hook} whenever possible.
 %
-%  With a few exceptions, hooks have to be declared before they can
-%  be used. The exceptions are the generic hooks for commands and
-%  environments (executed at \cs{begin} and \cs{end}), and the
-%  hooks run when loading files (see section~\ref{sec:generic}).
+% \item[\meta{code}:] any \LaTeX\ code chunk.
+% \item[\meta{\#\ code}:] any \LaTeX\ code chunk where
+% \enquote{\texttt{\#\META{i}}} refers to actual argument number
+% \META{i}. The parameter tokens \enquote{\texttt{\#}$_6$} should be
+% doubled when not referring to actual arguments.
+% \end{arguments}
 %
-% \begin{function}{\NewHook}
+% 
+% \subsection{Managing labeled code chunks}
+%
+% Hooks have persistent code executed every time they are used.
+%
+% \begin{function}{
+%   \AddToHook,
+%   \hook_gput_code:nnn,
+% }
 %   \begin{syntax}
-%     \cs{NewHook} \Arg{hook}
+%     \cs{AddToHook}\Arg{hook}\oarg{label}\Arg{code}
+%     \cs{hook_gput_code:nnn} \Arg{hook} \Arg{label} \Arg{code}
 %   \end{syntax}
-%   Creates a new \meta{hook}.
-%    If this hook is declared within a package it is suggested
-%    that its name is always structured as follows:
-%    \meta{package-name}\texttt{/}\meta{hook-name}. If necessary you
-%    can further subdivide the name by adding more \texttt{/} parts.
-%    If a hook name is already taken, an error is raised and the hook
-%    is not created.
-%
-%    The \meta{hook} can be specified using the dot-syntax to denote
-%    the current package name. See section~\ref{sec:default-label}.
+%    For one time hooks already used at least once,
+%    executes \meta{code} immediately.
+%    Otherwise persistently adds \meta{code} labeled after
+%    \meta{label} for \meta{hook}.
+%    A hook for that name need not exist prior to any code addition.
+%    If such a hook is never declared or used, \meta{code} will
+%    never be executed.
+%    This allows to modify the code for a hook defined by some package,
+%    even in documents that do not use the package.
 % \end{function}
 %
-% \begin{function}{\NewReversedHook}
-%   \begin{syntax}
-%     \cs{NewReversedHook} \Arg{hook}
-%   \end{syntax}
-%     Like \cs{NewHook} declares a new \meta{hook}.
-%     the difference is that the code chunks for this hook are in
-%     reverse order by default (those added last are executed first).
-%     Any rules for the hook are applied after the default ordering.
-%     See sections~\ref{sec:order} and \ref{sec:reversed-order}
-%    for further details.
+%    For practical reasons, the addition is cumulative in the sense
+% that after
+%    \begin{lthooks.source}
+% \ROW\cs{AddToHook}|{myHook}[myLabel]|\Arg{code_1}\\
+% \ROW\cs{AddToHook}|{myHook}[myLabel]|\Arg{code_2}
+%    \end{lthooks.source}
+%    the code chunk is the same than after
+%    \begin{lthooks.source}
+% \ROW\cs{AddToHook}|{myHook}[myLabel]{|\meta{code_1}\meta{code_2}|}|
+%    \end{lthooks.source}
+%    and only the first addition is relevant in code ordering,
+%    see section \ref{sec:Ordering-code-execution}.
 %
-%    The \meta{hook} can be specified using the dot-syntax to denote
-%    the current package name. See section~\ref{sec:default-label}.
+%    As a consequence, it is not straightforward to replace or
+%    remove just one \meta{code}, the \cs{RemoveFromHook} command
+%    will empty the whole code chunk at once.
+%    Also, it is not possible to reorder dynamically the various code
+%    in a code chunk. In order to gain more control, one technique
+%    is to prepare the code beforehands with L3 |tl| commands.
+%    Another technique consists of using a supplemental private hook:
+%    \begin{lthooks.source}
+% \ROW\cs{DeclareHook}|{myHook/private}|\\
+% \ROW\cs{AddToHook}|{myHook/private}[myLabel_1]|\Arg{code_1}\\
+% \ROW|...|\\
+% \ROW\cs{AddToHook}|{myHook/private}[myLabel_n]|\Arg{code_n}\\
+% \ROW\cs{AddToHook}|{theHook}[myLabel]{\UseHook{myHook/private}}|
+%    \end{lthooks.source}
+%
+% \begin{function}{
+%   \RemoveFromHook,
+%   \hook_gremove_code:nn,
+% }
+%   \begin{syntax}
+%     \cs{RemoveFromHook}\Arg{hook}\oarg{label}\FILL{32}^^A
+% \SEP\cs{hook_gremove_code:nn} \Arg{hook} \Arg{label}
+%   \end{syntax}
+%    Removes the code chunk for \meta{label} and \meta{hook} if any,
+%    otherwise a warning is issued and the command does nothing more.
+%
+%    When the optional \meta{label} argument is not provided,
+%    it defaults to \enquote{|.|} and is generally replaced by
+%    the package name, the class name
+%    or the keyword \enquote{\texttt{top-level}} depending on the
+%    execution context (see section~\ref{sec:The-current-name}).
+%    If the label is \enquote{|*|}, then all code chunks are
+%    undistinctively removed which may break things badly. 
+%    This feature should only be used with private hooks that are
+%    under complete control.
+%
+% \end{function}
+%    In general, \cs{RemoveFromHook} should only be used when
+%    no third party code may be involved.
+%    Typically, some package adds code to a private hook,
+%    then definitely removes it later on,
+%    or the programmer adds code to a public hook under a private label
+%    then definitely removes it later on, like in the example below.
+% 
+% \medskip
+%    The command \cs{RemoveFromHook} can be used to replace a single
+%    code chunk, with some side effects though.
+%    From the introductory example, running a supplemental
+%\begin{lthooks.source}
+%   \ROW\cs{RemoveFromHook}|{MyName}|[label_A]\\
+%   \ROW\cs{AddToHook}|{MyName}[label_A]{\typeout{A alt}}|
+%\end{lthooks.source}
+%    breaks the execution order that becomes
+%    |label_B|, |label_C|, |label_A|.
+%    In order to recover exactly the original ordering,
+%    next rules are declared:
+%\begin{lthooks.source}
+%   \ROW\cs{DeclareHookRule}|{MyName}{label_A}{before}{label_B}|\\
+%   \ROW\cs{DeclareHookRule}|{MyName}{label_B}{before}{label_C}|\\
+%\end{lthooks.source}
+%
+% \medskip
+% Next example shows how to safely add temporary code to hooks while
+% inside the document body.
+%\begin{lthooks.source}
+%   \ROW\cs{AddToHook}|{env/quote/begin}{\small}|\\
+%   \ROW|\begin{quote}|\\
+%   \ROW\TAB A quote set in a smaller typeface\\
+%   \ROW|\end{quote}|\\
+%   \ROW...\\
+%   \ROW\cs{RemoveFromHook}|{env/quote/begin}|\\
+%   \ROW... |% now back to normal for further quotes|
+%\end{lthooks.source}
+% No code label was provided either to add nor remove command:
+% the \enquote{\texttt{top-level}} keyword is used by default
+% for the label such that no other code is accidentally removed.
+%
+% Note that you can't cancel the font size command with
+%\begin{lthooks.source}
+%   \ROW\cs{AddToHook}|{env/quote/begin}{}|
+%\end{lthooks.source}
+% because it only adds a further empty chunk of code to
+% the hook. Adding |\normalsize| would result in the hook
+% containing |\small\normalsize| which is not efficient code.
+%
+%    In order to temporarily disable some code, \cs{RemoveFromHook}
+%    is not suitable because it deletes stored code which is difficult
+%    to undo. Instead, use the |voids| rule to prevent code execution
+%    followed by a different rule to enable that code again
+%    (see section~\ref{sec:rules}).
+%
+% If the goal is to typeset in a smaller typeface only one quote
+% here and there and not several consecutive quotes,
+% \cs{AddToHookNext} should be preferred because the 	added code is
+% automatically deleted once executed.
+%
+% \subsection{Extra code for next use only}
+% \label{sec:Updating-code-for-hooks}
+% \label{sec:Extra-code}
+% Hooks also have transient code executed only on next use,
+% and discarded afterwards.
+% \begin{function}{
+%   \AddToHookNext,
+%   \hook_gput_next_code:nn,
+% }
+%   \begin{syntax}
+%     \cs{AddToHookNext}\Arg{hook}\Arg{code}\FILL{30}^^A
+% \SEP\cs{hook_gput_next_code:nn} \Arg{hook} \Arg{code}
+%   \end{syntax}
+%    The extra \meta{code} is appended to a dedicated transient pool
+%    for \meta{hook}\footnotemark. On next use of the hook,
+%    all the code from the transient pool is removed,
+%    then executed in due time and finally deleted.
+%
+%    For one time hooks already used at least once,
+%    \meta{code} will never execute because using a consumed hook
+%    is a do nothing operation.
+%
+%    A hook for that name need not exist prior to any code addition.
+%    If such a hook is never declared, \meta{code} will never be
+%    executed.
+% \end{function}\footnotetext{There is
+%    no mechanism to reorder or delete transient code chunks.}
+%    
+% Next example shows how to safely add temporary code to hooks while
+% inside the document body.
+%\begin{lthooks.source}
+%   \ROW\cs{AddToHookNext}|{env/quote/begin}{\small}|\\
+%   \ROW|\begin{quote}|\\
+%   \ROW\TAB A quote set in a smaller typeface\\
+%   \ROW|\end{quote}|\\
+%   \ROW... |% back to normal for further quotes|
+%\end{lthooks.source}
+% See command \cs{AddToHook} when several consecutive quote
+% must be typeset in a smaller typeface.
+%
+% For practical reasons, the addition is cumulative like for
+% \cs{AddToHook}. Moreover, it is possible to nest
+% \cs{AddToHookNext} commands: for a normal hook,
+%   \begin{lthooks.source}
+%     \ROW\cs{AddToHookNext}\Arg{hook}\verb={=\meta{code_1}^^A
+%         \cs{AddToHookNext}\Arg{hook}\Arg{code_2}\verb=}=
+%   \end{lthooks.source}
+%    results in \meta{code_1} being executed the next time the hook
+%    is used, and \meta{code_2} being executed the next time after.
+%
+% \begin{function}{
+%   \ClearHookNext,
+%   \hook_gclear_next_code:n,
+% }
+%   \begin{syntax}
+%     \cs{ClearHookNext}\Arg{hook}\FILL{22}^^A
+% \SEP\cs{hook_gclear_next_code:n} \Arg{hook}
+%   \end{syntax}
+%    Removes all code for the next use only.
+%    \cs{ClearHookNext} can be used when the next use occurs in a
+%    different situation than expected making previous code obsolete,
+%    for example, when discarding a page with \cs{DiscardShipoutBox}
+%    (but even then not always). This is a sensible command that needs
+%    enough control on the execution flow.
 % \end{function}
 %
-% \begin{function}{\NewMirroredHookPair}
+%
+% \subsection{Declaring and using normal hooks}
+%
+%  Except for generic hooks detailed in section~\ref{sec:LaTeX-generic-hooks},
+%  hooks have to be declared before they can be used effectively.
+%  Here we see hooks without arguments, either direct or reversed.
+%
+% Prior to version 2023-11-11, next commands where named with
+% \enquote{|New|} and \enquote{|_new|} instead of \enquote{|Declare|}
+% and \enquote{|_declare|}. 
+%
+% \begin{function}[added=0001-01-01]{
+%   \DeclareHook,
+%   \hook_declare:n,
+% }
 %   \begin{syntax}
-%     \cs{NewMirroredHookPair} \Arg{hook-1} \Arg{hook-2}
+%     \cs{DeclareHook}\Arg{hook}\FILL{18}^^A
+% \SEP\cs{hook_declare:n} \Arg{hook}
+%   \end{syntax}
+% Declares a hook named after \meta{hook}. If a hook was already
+% declared with that name, an error is raised and nothing more is done.
+%
+% The \cs{NewHook} command is a synonym of \cs{DeclareHook}
+% like \cs{hook_new:n} is a synonym of \cs{hook_declare:n}.
+% Both are kept like other |\New...| and |\...new...| commands
+% for compatibility.
+% \end{function}
+%
+% \begin{function}[added=0001-01-01]{
+%   \DeclareReversedHook,
+%   \hook_declare_reversed:n,
+% }
+%   \begin{syntax}
+%     \cs{DeclareReversedHook}\Arg{hook}\FILL{26}^^A
+% \SEP\cs{hook_declare_reversed:n} \Arg{hook}
+%   \end{syntax}
+%    Declares a hook like \cs{DeclareHook}, except that
+%    when used, code chunks of the hooks are executed in
+%    the reverse order.
+%    More precisions in section~\ref{sec:Ordering-code-execution}.
+% \end{function}
+%
+% \begin{function}[added=0001-01-01]{
+%   \DeclareMirroredHookPair,
+%   \hook_declare_pair:nn,
+% }
+%   \begin{syntax}
+%     \cs{DeclareMirroredHookPair}\Arg{hook_1}\Arg{hook_2}
+%     \cs{hook_declare_pair:nn} \Arg{hook_1} \Arg{hook_2}
 %   \end{syntax}
 %     A shorthand for
-%    \cs{NewHook}\Arg{hook-1}\cs{NewReversedHook}\Arg{hook-2}.
-%
-%    The \meta{hook} can be specified using the dot-syntax to denote
-%    the current package name. See section~\ref{sec:default-label}.
+%    \cs{DeclareHook}\texttt{\Arg{hook_1}}^^A
+%    \cs{DeclareReversedHook}\texttt{\Arg{hook_2}}.
 % \end{function}
 %
 %
-% \begin{function}{\NewHookWithArguments}
+%
+%
+% \begin{function}{
+%   \UseHook,
+%   \hook_use:n,
+% }
 %   \begin{syntax}
-%     \cs{NewHookWithArguments} \Arg{hook} \Arg{number}
+%     \cs{UseHook}\Arg{hook name}\FILL{19}^^A
+% \SEP\cs{hook_use:n} \Arg{hook name}
 %   \end{syntax}
-%   Creates a new \meta{hook} whose code takes \meta{number} arguments,
-%   and otherwise works exactly like \cs{NewHook}.
-%   Section~\ref{sec:hook-args} explains hooks with arguments.
+%    A hook is usable means that it is either declared or a generic
+%    hook not disabled.
+%    This command does nothing if there is no usable hook for
+%   \meta{hook name} or if the hook has already been consumed by
+%    \cs{UseOneTimeHook}, see section \ref{sec:One-time-hooks}.
+%    Otherwise it makes an ordered copy of all the code chunks
+%    previously added for \meta{hook name} and executes it.
+%    The order of execution of the code depends on the rules and the
+%    reverse attribute of the hook, see section
+%    \ref{sec:Ordering-code-execution}.
 %
-%    The \meta{hook} can be specified using the dot-syntax to denote
-%    the current package name. See section~\ref{sec:default-label}.
+%    Notice that using a hook after |\begin{document}| is faster than before.
+%
 % \end{function}
 %
-% \begin{function}{\NewReversedHookWithArguments}
+% \subsection{One time hooks}
+% \label{sec:One-time-hooks}
+%
+% Sometimes it is necessary to defer the execution of some code
+% until a condition is fulfilled, for example to execute a task only
+% once all the packages have been loaded or at the end of the document.
+% Before the condition is realized, any code is stored in a hook for
+% later use. Once the condition is realized, all the stored code is
+% executed and after the condition is realized, any code added no
+% longer needs to be stored and can execute immediately.
+%
+% A similar situation occurs when possibly many commands need the same
+% initialization task. One possibility is to initialize even if none
+% of the commands is ever used, which is inefficient coding.
+% It is highly practical to initialize the  global state at the
+% beginning of each command body. Such a pattern would be
+% \begin{lthooks.source}
+% \ROW|\newcommand{\MyCmd}{|\FILL{20}^^A
+% \SEP|\newcommand{\MyCmdInit}{|\\
+% \ROW\TAB|\MyCmdInit|\FILL{12}^^A
+% \SEP\TAB|...|\\
+% \ROW\TAB|...|\FILL{5}^^A
+% \SEP\TAB|\renewcommand{\MyCmdInit}{}|\\
+% \ROW|}|\FILL{1}^^A
+% \SEP|}|
+% \end{lthooks.source}
+% Using a one time hook will also
+% ensure that the initialization code is run exactly once,
+% whichever command is executed first, but with more flexibility:
+% \begin{lthooks.source}
+% \ROW|\newcommand{\MyCmd}{|\FILL{20}^^A
+% \SEP\cs{DeclareHook}|{MyCmdInit}|\\
+% \ROW\TAB\cs{UseOneTimeHook}|{MyCmdInit}|\FILL{28}^^A
+% \SEP\cs{AddToHook}|{MyCmdInit}{|\\
+% \ROW\TAB|...|\FILL{5}^^A
+% \SEP\TAB|...|\\
+% \ROW|}|\FILL{1}^^A
+% \SEP|}|
+% \end{lthooks.source}
+%
+%
+% \begin{function}{
+%   \UseOneTimeHook,
+%   \hook_use_once:n,
+% }
 %   \begin{syntax}
-%     \cs{NewReversedHookWithArguments} \Arg{hook} \Arg{number}
+%     \cs{UseOneTimeHook}\Arg{hook name}\FILL{26}^^A
+% \SEP\cs{hook_use_once:n} \Arg{hook name}
 %   \end{syntax}
-%   Like \cs{NewReversedHook}, but creates a hook whose code takes
-%   \meta{number} arguments.
-%   Section~\ref{sec:hook-args} explains hooks with arguments.
-%
-%    The \meta{hook} can be specified using the dot-syntax to denote
-%    the current package name. See section~\ref{sec:default-label}.
+%    This command does nothing if there is no usable hook for
+%   \meta{hook name} or if the hook has already been consumed by
+%    \cs{UseOneTimeHook}.
+%    Otherwise, marks the hook as consumed and then works like
+%   \cs{UseHook}. Next time it does nothing.
 % \end{function}
 %
-% \begin{function}{\NewMirroredHookPairWithArguments}
+%    Any labeled code added to a consumed hook, whatever method used
+% (e.g., \cs{AddToHook}, \cs{AtBeginDocument}...\@),
+%    is executed immediately instead of stored.
+%    On the contrary, any extra code added for the next use only
+%    will never be executed.
+%
+%    In particular this means that after
+%\begin{lthooks.source}
+%    \ROW\cs{AddToHook}|{|myHook|}{|\meta{code_1}^^A
+%      \cs{AddToHook}|{myHook}|\Arg{code_2}\meta{code_3}|}|^^A
+%      \footnote{Such a construct is sometimes used with
+%    \cs{AtBeginDocument} which is why it is supported.}
+%\end{lthooks.source}
+%    \cs{UseOneTimeHook}|{myHook}| is reduced to the execution of
+%    \texttt{\meta{code_1}\meta{code_2}\meta{code_3}}, and any
+%    further attempt to use that hook again is a do nothing operation.
+% On the opposit, \cs{UseHook}|{myHook}| is reduced to the execution of
+%    \texttt{\meta{code_1}\meta{code_3}} while \meta{code_2} is
+% appended to the chunk. Next \cs{UseHook}|{myHook}| is then reduced to
+%    the execution of \texttt{\meta{code_1}\meta{code_3}\meta{code_2}}
+%    while \meta{code_2} is appended once more to the chunk.
+%    And the next \cs{UseHook}|{myHook}| is then reduced to
+%    the execution of \texttt{\meta{code_1}\meta{code_3}\meta{code_2}\meta{code_2}}
+%    while \meta{code_2} is appended once more to the chunk, etc.
+%
+% \subsection{Declaring and using hooks with arguments}
+% \label{sec:Hooks-with-arguments}
+%
+%    Sometimes hooks need to know about contextual information.
+%    It is possible to simply store this information in a macro
+%    available to the hook but in many cases this is far from
+%    sufficient. Hooks with arguments are a straightforward solution
+%    to this problem. A number of arguments is one of the arguments
+%    of next commands:
+% \begin{arguments}
+% \item[\meta{n}:] an integer from 0 to 9, that
+%    should be the same for any given hook\footnote{Ignoring this rule may not give an error now, but it may in the future as the implementation changes.}.
+% \end{arguments}
+%
+% Using hooks with arguments can be really tricky because the number of
+% arguments must be correct as well as their meaning. Whereas the hook
+% must be well documented, its name can also reflect its usage.
+% A lightweight convention would be to use at least
+% \enquote{\texttt{/\#\meta{n}}} as component of the hook name.
+% A more complete convention would be a name containing
+% \texttt{/\#\meta{desc_1}/.../\#\meta{desc_{\meta{n}}}}
+% where \meta{n} is the number of arguments, \meta{desc_1}
+% is a description for \texttt{\#1}, \meta{desc_2}
+% is a description for \texttt{\#2}, ... \meta{desc_{\meta{n}}}
+% is a description for \texttt{\#\meta{n}}.
+%
+% \begin{function}[added=0001-01-01]{
+%   \DeclareHookWithArguments,
+%   \hook_declare_with_args:nn,
+% }
 %   \begin{syntax}
-%     \cs{NewMirroredHookPairWithArguments} \Arg{hook-1} \Arg{hook-2} \Arg{number}
+%    \cs{DeclareHookWithArguments}\Arg{hook}\Arg{n}
+%    \cs{hook_declare_with_args:nn} \Arg{hook} \Arg{n}
 %   \end{syntax}
-%   A shorthand for
-%   \cs{NewHookWithArguments}\Arg{hook-1}\Arg{number}\\
-%   \cs{NewReversedHookWithArguments}\Arg{hook-2}\Arg{number}.
-%   Section~\ref{sec:hook-args} explains hooks with arguments.
+%    Declares a hook like \cs{DeclareHook} does except that added
+%    code chunks can refer to \meta{n} arguments
+%    \texttt{\#1}, \texttt{\#2},... \texttt{\#\meta{n}},
+%    where \meta{n} is at most 9.
+% \end{function}
 %
-%    The \meta{hook} can be specified using the dot-syntax to denote
-%    the current package name. See section~\ref{sec:default-label}.
+% \begin{function}[added=0001-01-01]{
+%   \DeclareReversedHookWithArguments,
+%   \hook_declare_reversed_with_args:nn,
+% }
+%   \begin{syntax}
+%     \cs{DeclareReversedHookWithArguments}\Arg{hook}\Arg{n}
+%     \cs{hook_declare_reversed_with_args:nn} \Arg{hook} \Arg{n}
+%   \end{syntax}
+%    Declares a hook like \cs{DeclareReversedHook} does except
+%    that added code chunks can refer to \meta{n} arguments
+%    \texttt{\#1}, \texttt{\#2}, ... \texttt{\#\meta{n}},
+%    where \meta{n} is at most 9.
+% \end{function}
+%
+% \begin{function}[added=0001-01-01]{
+%   \DeclareMirroredHookPairWithArguments,
+%   \hook_declare_pair_with_args:nnn,
+% }
+%   \begin{syntax}
+%     \cs{DeclareMirroredHookPairWithArguments}\Arg{hook_1}\Arg{hook_2} \Arg{n}
+%     \cs{hook_declare_pair_with_args:nnn} \Arg{hook_1} \Arg{hook_2} \Arg{n}
+%   \end{syntax}
+%    A shorthand for
+%    \cs{DeclareHookWithArguments}\texttt{\Arg{hook_1}}\Arg{n}\\
+%    \cs{DeclareReversedHookWithArguments}\texttt{\Arg{hook_2}}\Arg{n}.% \end{function}
+%
+% \medskip
+%
+% Commands \cs{AddToHook} and \cs{RemoveFromHook} can be used with
+% hooks with arguments, there are also dedicated commands.
+%
+% \begin{function}{
+%   \AddToHookWithArguments,
+%   \hook_gput_code_with_args:nnn,
+% }
+%   \begin{syntax}
+%     \cs{AddToHookWithArguments}\Arg{hook}\oarg{label}\Arg{\#\ code}
+
+%     \cs{hook_gput_code_with_args:nnn} \Arg{hook} \Arg{label} \Arg{\#\ code}
+%   \end{syntax}
+%    Works like \cs{AddToHook}, except that \meta{\#\ code} can
+%    access the arguments passed to the hook using \verb|#1|, \verb|#2|,
+%    \ldots, \texttt{\#\meta{n}} where \meta{n} is exactly
+%    the argument of the corresponding \cs{DeclareHookWithArguments} or
+%    similar command.
+% \end{function}
+%
+%    This command does not take supplemental arguments, thus preventing
+%    the immediate execution of \meta{\#\ code} due to the lack of argument values.
+%    This is why one time hooks cannot be used with 
+%    \cs{AddToHookWithArguments} and alike once consumed.
+%
+%    If macros are defined inside \meta{\#\ code},
+%    their arguments are refered to with \enquote{\texttt{\#\#}}
+%    instead of \enquote{\texttt{\#}}.
+%    Next example defines a greetings command in a hook of
+%    the document body, with \cs{AddToHook}:
+%\begin{lthooks.source}[lineno]
+%   \ROW\cs{DeclareHook}|{./greetings}|\\
+%   \ROW...\\
+%   \ROW\cs{AddToHook}|{./greetings}|\\
+%   \ROW[format=\bfseries,mark=$\to$\;,
+%   ]\TAB|{\def\greetings#1{Hello, #1!}}|\\
+%   \ROW...\\
+%   \ROW\cs{UseHook}|{./greetings}|\\
+%   \ROW|\greetings{ET}|\\
+%\end{lthooks.source}
+%   A variation when \enquote{Hello} may be localized:
+%   notice how \cs[no-index]{greetings} definition is different
+%   on lines 4 above and below.
+%\begin{lthooks.source}[lineno]
+%   \ROW\cs{DeclareHookWithArguments}|{./greetings/#Hello}{1}|\\
+%   \ROW...\\
+%   \ROW\cs{AddToHookWithArguments}|{./greetings/#Hello}|\\
+%   \ROW[format=\bfseries,mark=$\to$\;,
+%   ]\TAB|{\def\greetings##1{#1, ##1!}}|\\
+%   \ROW...\\
+%   \ROW\cs{UseHookWithArguments}|{./greetings/#Hello}{1}{Hallo}|\\
+%   \ROW|\greetings{ET}|
+%\end{lthooks.source}
+%    Here \verb|#1| refers to \enquote{Hallo}
+%     whereas \verb|##1| refers to \enquote{ET}.
+%
+% \begin{function}{
+%   \AddToHookNextWithArguments,
+%   \hook_gput_next_code_with_args:nn,
+% }
+%   \begin{syntax}
+%     \cs{AddToHookNextWithArguments}\Arg{hook}\Arg{\#\ code}
+%     \cs{hook_gput_next_code_with_args:nn} \Arg{hook}\Arg{\#\ code}
+%   \end{syntax}
+%    Works like \cs{AddToHookNext}, except that \meta{\#\ code}
+%    can contain references to the arguments of the \meta{hook} as
+%    described for \cs{AddToHookWithArguments} above.
+% \end{function}
+%
+% \begin{function}{
+%   \UseHookWithArguments,
+%   \hook_use:nnw,
+% }
+%   \begin{syntax}
+%     \cs{UseHookWithArguments}\Arg{hook name}\Arg{n}\Arg{arg_1}\ldots\Arg{arg_{\scriptsize \meta{n}}}
+%     \cs{hook_use:nnw} \Arg{hook name} \Arg{n} \Arg{arg_1} \ldots \Arg{arg_{\scriptsize \meta{n}}}
+%   \end{syntax}
+%    Works like \cs{UseHook}, except that it passes arguments
+%    \texttt{\Arg{arg_1}} through \texttt{\Arg{arg_{\meta{n}}}}
+%    to the code.
+%    The \meta{n} should be the argument used to declare the hook.
+%    If the hook is not declared, this command does nothing more than
+%    consuming its \meta{n}$+2$ arguments.
+%    A low-level \TeX{} error is raised when an argument number that
+%    doesn't exist is referenced.
+% \end{function}
+%
+% \begin{function}{
+%   \UseOneTimeHookWithArguments,
+%   \hook_use_once:nnw,
+% }
+%   \begin{syntax}
+%     \cs{UseOneTimeHookWithArguments}\Arg{hook name}\Arg{n}\Arg{arg_1}\ldots\Arg{arg_{\scriptsize\meta{n}}}
+%     \cs{hook_use_once:nnw} \Arg{hook name} \Arg{n} \Arg{arg_1} \ldots \Arg{arg_{\scriptsize\meta{n}}}
+%   \end{syntax}
+%    Works like \cs{UseOneTimeHook}, but passes arguments
+%    \texttt{\Arg{arg_1}} through \texttt{\Arg{arg_{\meta{n}}}} to
+%    the code.
+%    The \meta{n} should be the same argument as used to declare
+%    the hook. If the hook is not declared, this command consumes its
+% \meta{n}+2 arguments and does nothing more.
+%    A low-level \TeX{} error is raised when |#|\META{i} is used in a
+%    code chunk while \META{i}$>$\meta{n}.
 % \end{function}
 %
 %
-% \subsubsection{Special declarations for generic hooks}
+% \subsection{Generic hooks}
 %
-%    The declarations here should normally not be used. They are available
-%    to provide support for special use cases mainly involving
-%    generic command hooks.
+% Normally, hooks have to be explicitly declared before they are
+% effectively used in code. This ensures that different packages are
+% not using the same hook for unrelated purposes, something that would
+% result in absolute chaos.
+% However, some hooks are so general that declaring them beforehands
+% is not efficient, these are simply enabled on demand.
+% The \LaTeX\ hook management system provides \emph{generic hooks}
+% for that purpose.
+%
+% There are many generic hooks built into \LaTeX, you just have
+% to add your code to them.
+% They are detailed in section \ref{sec:LaTeX-generic-hooks}.
+%    If you want to provide your own generic hooks, you should 
+%    use commands \cs{UseHook} or \cs{UseOneTimeHook}, but
+%    \emph{without declaring the hook}. Then the hook is enabled
+%    with next functions when necessary.
+%
+%    For example, \pkg{babel} provides hooks such as
+%    \hook{babel/\META{language}/afterextras}.  However, language
+%    support in \pkg{babel} is often done through external language
+%    extensions. Thus doing the activation for all languages inside the
+%    core \pkg{babel} code is not a viable approach. Instead it needs
+%    to be done separately by each language extension (or by the user
+%    who wants to use a particular hook).
+%
+%    Generic hooks defined in this way can't be reversed hooks,
+%    this is a deliberate limitation to considerably speed up
+%    the processing. But a generic hook code chunk can use
+%    reversed hooks.
 %
 % \changes{v1.0p}{2021/08/20}{Documentation updates for generic hook commands (gh/638)}
 %
-% \begin{function}{\DisableGenericHook}
+% \begin{function}{
+%   \EnableGenericHook,
+%   \hook_enable_generic:n,
+% }
 %   \begin{syntax}
-%     \cs{DisableGenericHook} \Arg{hook}
+%     \cs{EnableGenericHook}\Arg{hook}\FILL{24}^^A
+% \SEP\cs{hook_enable_generic:n} \Arg{hook}
 %   \end{syntax}
-%    After this declaration\footnotemark{} the \meta{hook} is no longer
-%    usable: Any further attempt to add code to it will result in an
-%    error and any use, e.g., via \cs{UseHook}, will simply do nothing.
+%  If the hook is already declared or already enabled, does nothing,
+%  otherwise enables the hook.
+%    This command undoes the effect of next \cs{DisableGenericHook}.
+% \end{function}
 %
-%    This is intended to be used with generic command hooks (see
-%    \texttt{ltcmdhooks-doc}) as depending on the definition of the
-%    command such generic hooks may be unusable. If that is known, a
-%    package developer can disable such hooks up front.
+% \begin{function}{
+%   \DisableGenericHook,
+%   \hook_disable_generic:n,
+% }
+%   \begin{syntax}
+%     \cs{DisableGenericHook}\Arg{hook}\FILL{25}^^A
+% \SEP\cs{hook_disable_generic:n} \Arg{hook}
+%   \end{syntax}
+%    Disables a generic hook\footnotemark: any further attempt to add code to it
+%    will result in an error and any use will not execute its code.
 %
-%    The \meta{hook} can be specified using the dot-syntax to denote
-%    the current package name. See section~\ref{sec:default-label}.
+%    This is particularly usefull with generic command related hooks,
+%    because some commands are not eligible to use hooks as explained in
+%    section \ref{sec:Generic-hooks-for-commands} and
+%    \texttt{ltcmdhooks-doc}.
+%    
 % \end{function}\footnotetext{In the 2020/06 release this command was
 %    called \cs{DisableHook}, but that name was misleading as it
 %    shouldn't be used to disable non-generic hooks.}
 %
+% \subsection{Managing the \protect\META{current name}}
+% \label{sec:The-current-name}
 %
-% \begin{function}{\ActivateGenericHook}
+% As explained in section \ref{sec:Command-arguments}, a single
+% leading \enquote{|.|} in a \meta{hook} or \meta{label} argument is
+% replaced by the \META{current name}, which is generally a
+% package name, the class name or \enquote{|top-level|},
+% depending on the execution context.
+% This is also the default value of the optional \meta{label} argument
+% when not provided.
+%
+% Internally, \LaTeX\ manages a stack of names, starting with the
+% reserved \enquote{|top-level|} name.
+% The top element of this stack is the \META{current name}.
+% Next commands interact with this stack.
+%
+% \begin{function}[added = 0001-01-01]{
+%   \HookCurrentName,
+%   \hook_current_name:,
+% }
 %   \begin{syntax}
-%     \cs{ActivateGenericHook} \Arg{hook}
+%     \cs{HookCurrentName}\FILL{16}^^A
+% \SEP\cs{hook_current_name:}
 %   \end{syntax}
-%    This declaration activates a generic hook provided by a package/class
-%    (e.g., one used in code with \cs{UseHook} or
-%    \cs{UseOneTimeHook}) without it being explicitly declared with
-%    \cs{NewHook}).
-%    This command undoes the effect of \cs{DisableGenericHook}.
-%    If the hook is already activated, this command does nothing.
-%
-%    See section~\ref{sec:generic-hooks} for a discussion of when this
-%    declaration is appropriate.
+%   Both \cs{HookCurrentName} and \cs{hook_current_name:}
+%   expand to the \META{current name}.
+%   This is mainly usefull for debugging and testing purposes.
 % \end{function}
 %
-%
-%
-%
-%
-% \subsubsection{Using hooks in code}
-%
-%
-% \begin{function}{\UseHook}
+% \begin{function}[added = 0001-01-01]{
+%   \PushHookCurrentName,
+%   \PopHookCurrentName,
+%   \hook_current_name_push:n,
+%   \hook_current_name_pop:,
+% }
 %   \begin{syntax}
-%     \cs{UseHook} \Arg{hook}
+%     \cs{PushHookCurrentName}\Arg{name}\FILL{28}^^A
+% \SEP\cs{hook_current_name_push:n} \Arg{name}
+%     \TAB\makebox[0pt][l]{\META{code}}\FILL{2}^^A
+% \SEP\TAB\META{code}
+%     \cs{PopHookCurrentName}\FILL{19}^^A
+% \SEP\cs{hook_current_name_pop:}
 %   \end{syntax}
-%    Execute the code stored in the \meta{hook}.
-%
-%    Before \verb=\begin{document}= the fast execution code for a hook
-%    is not set up, so in order to use a hook there it is explicitly
-%    initialized first. As that involves assignments using a hook at
-%    those times is not 100\% the same as using it after
-%    \verb=\begin{document}=.
-%
-%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
-%    A leading |.| is treated literally.
+%   \cs{PushHookCurrentName} pushes \meta{name} to the top of the
+%   name stack such that it becomes the \META{current name}.
+%   \cs{PopHookCurrentName} pops the top value from the stack such
+%   that the \META{current name} falls back to its previous value.
+%   Both commands must be properly balanced.
+%   The \meta{name} argument cannot expand to the value
+%   \enquote{|top-level|} which is reserved to the user document.
 % \end{function}
 %
-% \begin{function}{\UseHookWithArguments}
-%   \begin{syntax}
-%     \cs{UseHookWithArguments} \Arg{hook} \Arg{number} \Arg{arg_1} \ldots \Arg{arg_n}
-%   \end{syntax}
-%    Execute the code stored in the \meta{hook} and pass the arguments
-%    \Arg{arg_1} through \Arg{arg_n} to the \meta{hook}.  Otherwise, it
-%    works exactly like \cs{UseHook}.
-%    The \meta{number} should be the number of arguments declared for
-%    the hook.  If the hook is not declared, this command does nothing
-%    and it will remove \meta{number} items from the input.
-%   Section~\ref{sec:hook-args} explains hooks with arguments.
+%   \medskip
+%   Loading a class or a package is like running
+%   \begin{lthooks.source}
+%     \ROW\cs{PushHookCurrentName}|{|\META{package/class name}|}| \\
+%     \ROW ~~\META{package/class code}\\
+%     \ROW\cs{PopHookCurrentName}
+%   \end{lthooks.source}
+%   and inside a package or class, the \META{current name} is
+%   initially the package or class name.
 %
-%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
-%    A leading |.| is treated literally.
-% \end{function}
+% Notice that when, for example, a package defines a hook inside a
+% command body, this command may be executed after the package
+% has loaded. In that case, the \META{current name} has changed
+% and the leading dot no longer refers to the original package,
+% it may be replaced by the wrong value causing unexpected
+% results.
 %
-% \begin{function}{\UseOneTimeHook}
-%   \begin{syntax}
-%     \cs{UseOneTimeHook} \Arg{hook}
-%   \end{syntax}
-%    Some hooks are only used (and can be only used) in one place, for
-%    example, those in \verb=\begin{document}= or
-%    \verb=\end{document}=. From that point onwards, adding to the hook
-%    through a defined \cs[no-index]{\meta{addto-cmd}} command (e.g.,
-%    \cs{AddToHook} or \cs{AtBeginDocument}, etc.\@) would have no
-%    effect (as would the use of such a command inside the hook code
-%    itself). It is therefore customary to redefine
-%    \cs{\meta{addto-cmd}} to simply  process its argument, i.e.,
-%    essentially make it behave like \cs{@firstofone}.
-%
-%    \cs{UseOneTimeHook} does that: it records that the hook has been
-%    consumed and any further attempt to add to it will result in
-%    executing the code to be added immediately.
-%
-%    Using \cs{UseOneTimeHook} several times with the same
-%    \Arg{hook} means that it only executes the first time it is used.
-%    For example, if it is used in a command that can be called several times
-%    then the hook executes during only the \emph{first} invocation of that
-%    command; this allows its use as an \enquote{initialization hook}.
-%
-%    Mixing \cs{UseHook} and \cs{UseOneTimeHook} for the same
-%    \Arg{hook} should be avoided, but if this is done then neither will execute
-%    after the first \cs{UseOneTimeHook}.
-%
-%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
-%    A leading |.| is treated literally.    See
-%    section~\ref{sec:default-label} for details.
-%
-% \end{function}
-%
-% \begin{function}{\UseOneTimeHookWithArguments}
-%   \begin{syntax}
-%     \cs{UseOneTimeHookWithArguments} \Arg{hook} \Arg{number} \Arg{arg_1} \ldots \Arg{arg_n}
-%   \end{syntax}
-%    Works exactly like \cs{UseOneTimeHook}, but passes arguments
-%    \Arg{arg_1} through \Arg{arg_n} to the \meta{hook}.
-%    The \meta{number} should be the number of arguments declared for
-%    the hook.  If the hook is not declared, this command does nothing
-%    and it will remove \meta{number} items from the input.
-%
-%    It should be noted that after a one-time hook is used, it is no
-%    longer possible to use \cs{AddToHookWithArguments} or similar with
-%    that hook.  \cs{AddToHook} continues to work as normal.
-%   Section~\ref{sec:hook-args} explains hooks with arguments.
-%
-%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
-%    A leading |.| is treated literally.    See
-%    section~\ref{sec:default-label} for details.
-%
-% \end{function}
-%
-%
-% \subsubsection{Updating code for hooks}
-%
-% \begin{function}{\AddToHook}
-%   \begin{syntax}
-%     \cs{AddToHook} \Arg{hook}\oarg{label}\Arg{code}
-%   \end{syntax}
-%    Adds \meta{code} to the \meta{hook} labeled by \meta{label}.
-%    When the optional argument \meta{label} is not provided, the
-%    \meta{default label} is used (see section~\ref{sec:default-label}).
-%    If \cs{AddToHook} is used in a package/class, the
-%    \meta{default label} is the package/class name, otherwise it is
-%    \hook{top-level} (the \hook{top-level} label is treated
-%    differently:  see section~\ref{sec:top-level}).
-%
-%    If there already exists code under the \meta{label} then the new
-%    \meta{code} is appended to the existing one (even if this is a reversed hook).
-%    If you want to replace existing code under the
-%    \meta{label}, first apply \cs{RemoveFromHook}.
-%
-%    The hook doesn't have to exist for code to be added to
-%    it. However, if it is not declared, then obviously the
-%    added \meta{code} will never be executed.  This
-%    allows for hooks to work regardless of package loading order and
-%    enables packages to add to hooks from other packages without
-%    worrying whether they are actually used in the current document.
-%    See section~\ref{sec:querying}.
-%
-%    The \meta{hook} and \meta{label} can be specified using the
-%    dot-syntax to denote the current package name.
-%    See section~\ref{sec:default-label}.
-% \end{function}
-%
-% \begin{function}{\AddToHookWithArguments}
-%   \begin{syntax}
-%     \cs{AddToHookWithArguments} \Arg{hook}\oarg{label}\Arg{code}
-%   \end{syntax}
-%    Works exactly like \cs{AddToHook}, except that the \meta{code} can
-%    access the arguments passed to the hook using \verb|#1|, \verb|#2|,
-%    \ldots, \verb|#n| (up to the number of arguments declared for the
-%    hook).  If the \meta{code} should contain \emph{parameter tokens}
-%    (\verb|#|) that are not supposed to be understood as the arguments
-%    of the hook, such tokens should be doubled.  For example, with
-%    \cs{AddToHook} one can write:
-%\begin{verbatim}
-%   \AddToHook{myhook}{\def\foo#1{Hello, #1!}}
-%\end{verbatim}
-%    but to achieve the same with \cs{AddToHookWithArguments}, one should
-%    write:
-%\begin{verbatim}
-%   \AddToHookWithArguments{myhook}{\def\foo##1{Hello, ##1!}}
-%\end{verbatim}
-%    because in the latter case, \verb|#1| refers to the first argument
-%    of the hook \hook{myhook}.
-%   Section~\ref{sec:hook-args} explains hooks with arguments.
-%
-%    The \meta{hook} and \meta{label} can be specified using the
-%    dot-syntax to denote the current package name.
-%    See section~\ref{sec:default-label}.
-% \end{function}
-%
-% \begin{function}{\RemoveFromHook}
-%   \begin{syntax}
-%     \cs{RemoveFromHook} \Arg{hook}\oarg{label}
-%   \end{syntax}
-%    Removes any code labeled by \meta{label} from the \meta{hook}.
-%    When the optional argument \meta{label} is not provided, the
-%    \meta{default label} is used (see section~\ref{sec:default-label}).
-%
-%    If there is no code under the \meta{label} in the \meta{hook},
-%    or if the \meta{hook} does not exist, a warning is issued when
-%    you attempt to \cs{RemoveFromHook}, and the command is ignored.
-%    \cs{RemoveFromHook} should be used only when you know exactly what
-%    labels are in a hook. Typically this will be when some code gets added to a hook 
-%    by a package, then later this code is removed by that same package.
-%    If you want to prevent the execution of code from another
-%    package, use the |voids| rule instead (see section~\ref{sec:rules}).
-%
-%    If the optional \meta{label} argument is \texttt{*}, then all code chunks are
-%    removed. This is rather dangerous as it may well drop code from other
-%    packages (that one may not know about); it should therefore not be used
-%    in packages but only in document preambles!
-%
-%    The \meta{hook} and \meta{label} can be specified using the
-%    dot-syntax to denote the current package name.
-%    See section~\ref{sec:default-label}.
-% \end{function}
-%
-% \medskip
-%
-% In contrast to the \texttt{voids} relationship between two labels
-% in a \cs{DeclareHookRule} this is a destructive operation as the
-% labeled code is removed from the hook data structure, whereas the
-% relationship setting can be undone by providing a different
-% relationship later.
-%
-% A useful application for this declaration inside the document body
-% is when one wants to temporarily add code to hooks and later remove
-% it again, e.g.,
-%\begin{verbatim}
-%   \AddToHook{env/quote/before}{\small}
-%   \begin{quote}
-%     A quote set in a smaller typeface
-%   \end{quote}
-%   ...
-%   \RemoveFromHook{env/quote/before}
-%   ... now back to normal for further quotes
-%\end{verbatim}
-% Note that you can't cancel the setting with
-%\begin{verbatim}
-%   \AddToHook{env/quote/before}{}
-%\end{verbatim}
-% because that only \enquote{adds} a further empty chunk of code to
-% the hook. Adding \cs{normalsize} would work but that means the hook
-% then contained \cs{small}\cs{normalsize} which means two font size
-% changes for no good reason.
-%
-% The above is only needed if one wants to typeset several quotes in a
-% smaller typeface. If the hook is only needed once then
-% \cs{AddToHookNext} is simpler, because it resets itself after one use.
-%
-%
-% \begin{function}{\AddToHookNext}
-%   \begin{syntax}
-%     \cs{AddToHookNext} \Arg{hook}\Arg{code}
-%   \end{syntax}
-%    Adds \meta{code} to the next invocation of the \meta{hook}.
-%    The code is executed after the normal hook code has finished and
-%    it is executed only once, i.e. it is deleted after it was used.
-%
-%    Using this declaration is a global operation, i.e., the code is
-%    not lost even if the declaration is used inside a group and the
-%    next invocation of the hook happens after the end of that group. 
-%    If the declaration is
-%    used several times before the hook is executed then all code is
-%    executed in the order in which it was declared.\footnotemark
-%
-%    If this declaration is used with a one-time hook then the code 
-%    is only ever used if the declaration comes before the hook’s 
-%    invocation.  This is because, in contrast 
-%    to \cs{AddToHook}, the code in this declaration is not 
-%    executed immediately in the case when the invocation of the hook
-%    has already happened---in other words, this code will truly execute
-%    only on the next invocation of the hook (and in the case of a
-%    one-time hook there is no such \enquote{next invocation}).  
-%    This gives you a choice: should my code execute
-%    always, or should it execute only at the point where the
-%    one-time hook is used (and not at all if this is impossible)? For
-%    both of these possibilities there are use cases.
-%
-%    It is possible to nest this declaration using the same hook (or
-%    different hooks): e.g.,
-%   \begin{quote}
-%     \cs{AddToHookNext}\Arg{hook}\verb={=\meta{code-1}^^A
-%     \cs{AddToHookNext}\Arg{hook}\Arg{code-2}\verb=}=
-%   \end{quote}
-%    will execute \meta{code-1} next time the \meta{hook} is used and at
-%    that point puts \meta{code-2} into  the \meta{hook} so that it gets
-%    executed on following time the hook is run.
-%
-%    A hook doesn't have to exist for code to be added to it.  This
-%    allows for hooks to work regardless of package loading
-%    order.
-%    See section~\ref{sec:querying}.
-%
-%    The \meta{hook} can be specified using the dot-syntax to denote
-%    the current package name.  See section~\ref{sec:default-label}.
-% \end{function}\footnotetext{There is
-%    no mechanism to reorder such code chunks (or delete them).}
-%
-% \begin{function}{\AddToHookNextWithArguments}
-%   \begin{syntax}
-%     \cs{AddToHookNextWithArguments} \Arg{hook}\Arg{code}
-%   \end{syntax}
-%    Works exactly like \cs{AddToHookNext}, but the \meta{code} can
-%    contain references to the arguments of the \meta{hook} as described
-%    for \cs{AddToHookWithArguments} above.
-%   Section~\ref{sec:hook-args} explains hooks with arguments.
-%
-%    The \meta{hook} can be specified using the dot-syntax to denote
-%    the current package name.  See section~\ref{sec:default-label}.
-% \end{function}
-%
-%
-%
-% \begin{function}{\ClearHookNext}
-%   \begin{syntax}
-%     \cs{ClearHookNext}\Arg{hook}
-%   \end{syntax}
-%    Normally \cs{AddToHookNext} is only used when you know precisely
-%    where it will apply and why you want some extra code at that
-%    point. However, there are a few use cases in which such a
-%    declaration needs to be canceled, for example, when
-%    discarding a page with \cs{DiscardShipoutBox} (but even then not
-%    always), and in such situations \cs{ClearHookNext} can be
-%    used.
-% \end{function}
-%
-%
-%
-%
-%
-% \subsubsection{Hook names and default labels}
-% \label{sec:default-label}
-%
-% It is best practice to use \cs{AddToHook} in packages or classes
-% \emph{without specifying a \meta{label}} because then the package
-% or class name is automatically used, which is helpful if rules are
-% needed, and avoids mistyping the \meta{label}.
-%
-% Using an explicit \meta{label} is only necessary in very specific
-% situations, e.g., if you want to add several chunks of code into a
-% single hook and have them placed in different parts of the hook
-% (by providing some rules).
-%
-% The other case is when you develop a larger package with several
-% sub-packages. In that case you may want to use the same
-% \meta{label} throughout the sub-packages in order to avoid
-% that the labels change if you internally reorganize your code.
-%
-% Except for \cs{UseHook}, \cs{UseOneTimeHook} and \cs{IfHookEmptyTF}
-% (and their \pkg{expl3} interfaces \cs{hook_use:n},
-% \cs{hook_use_once:n} and \cs{hook_if_empty:nTF}), all \meta{hook}
-% and \meta{label} arguments are processed in the same way: first,
-% spaces are trimmed around the argument, then it is fully expanded
-% until only character tokens remain.  If the full expansion of the
-% \meta{hook} or \meta{label} contains a non-expandable non-character
-% token, a low-level \TeX{} error is raised (namely, the \meta{hook} is
-% expanded using \TeX's \cs{csname}\ldots\cs{endcsname}, as such,
-% Unicode characters are allowed in \meta{hook} and \meta{label}
-% arguments).  The arguments of \cs{UseHook}, \cs{UseOneTimeHook}, and
-% \cs{IfHookEmptyTF} are
-% processed much in the same way except that spaces are not trimmed
-% around the argument, for better performance.
-%
-% It is not enforced, but highly recommended that the hooks defined by
-% a package, and the \meta{labels} used to add code to other hooks
-% contain the package name to easily identify the source of the code
-% chunk and to prevent clashes.  This should be the standard practice,
-% so this hook management code provides a shortcut to refer to the
-% current package in the name of a \meta{hook} and in a \meta{label}.
-% If the \meta{hook} name or the \meta{label} consist just of a single dot
-% (|.|), or starts with a dot followed by a slash (|./|) then the dot
-% denotes the \meta{default label} (usually the current package or class
-% name---see~\cs{SetDefaultHookLabel}).
-% A \enquote{|.|} or \enquote{|./|} anywhere else in a \meta{hook} or in
-% \meta{label} is treated literally and is not replaced.
-%
-% For example,
-% inside the package \texttt{mypackage.sty}, the default label is
-% \texttt{mypackage}, so the instructions:
-% \begin{verbatim}
-%   \NewHook   {./hook}
-%   \AddToHook {./hook}[.]{code}     % Same as \AddToHook{./hook}{code}
-%   \AddToHook {./hook}[./sub]{code}
-%   \DeclareHookRule{begindocument}{.}{before}{babel}
-%   \AddToHook {file/foo.tex/after}{code}
-% \end{verbatim}
-%    are equivalent to:
-% \begin{verbatim}
-%   \NewHook   {mypackage/hook}
-%   \AddToHook {mypackage/hook}[mypackage]{code}
-%   \AddToHook {mypackage/hook}[mypackage/sub]{code}
-%   \DeclareHookRule{begindocument}{mypackage}{before}{babel}
-%   \AddToHook {file/foo.tex/after}{code}                  % unchanged
-% \end{verbatim}
-%
-% The \meta{default label} is automatically set equal to the name of the
-% current package or class at the time the package is loaded.  If the
-% hook command is used outside of a package, or the current file wasn't
-% loaded with \cs{usepackage} or \cs{documentclass}, then the
-% \texttt{top-level} is used as the \meta{default label}.  This may have
-% exceptions---see \cs{PushDefaultHookLabel}.
-%
-% This syntax is available in all \meta{label} arguments and most
-% \meta{hook} arguments, both in the \LaTeXe{} interface, and the \LaTeX3
-% interface described in section~\ref{sec:l3hook-interface}.
-%
-% Note,\marginpar{\raggedleft\rightskip5pt\itshape \textbf{Important:}\break The dot-syntax
-% is \textbf{not} available with
-% \cs{UseHook} and some other commands that are typically used within code!}
-% however, that the replacement of |.| by the \meta{default label}
-% takes place when the hook command is executed, so actions that are
-% somehow executed after the package ends will have the wrong
-% \meta{default label} if the dot-syntax is used.  For that reason,
-% this syntax is not available in \cs{UseHook} (and \cs{hook_use:n})
-% because the hook is most of the time used outside of the package file
-% in which it was defined. This syntax is also not available in the hook
-% conditionals \cs{IfHookEmptyTF} (and \cs{hook_if_empty:nTF}), because these
-% conditionals are used in some performance-critical parts of the hook
-% management code, and because they are usually used to refer to other
-% package's hooks, so the dot-syntax doesn't make much sense.
-%
-% In some cases, for example in large packages, one may want to separate
-% the code in logical parts, but still use the main package name as the
-% \meta{label}, then the \meta{default label} can be set using
-% \cs{PushDefaultHookLabel}\verb={...}=\,\ldots\cs{PopDefaultHookLabel}
-% or \cs{SetDefaultHookLabel}\verb={...}=.
-%
-% \begin{function}{\PushDefaultHookLabel,\PopDefaultHookLabel}
-%   \begin{syntax}
-%     \cs{PushDefaultHookLabel} \Arg{default label}
-%     \quad \meta{code}
-%     \cs{PopDefaultHookLabel}
-%   \end{syntax}
-%   \cs{PushDefaultHookLabel} sets the current \meta{default label} to
-%   be used in \meta{label} arguments, or when replacing a leading
-%   ``|.|'' (see above).  \cs{PopDefaultHookLabel} reverts the
-%   \meta{default label} to its previous value.
-%
-%   Inside a package or class, the \meta{default label} is equal to the
-%   package or class name, unless explicitly changed.  Everywhere else,
-%   the \meta{default label} is |top-level| (see
-%   section~\ref{sec:top-level}) unless explicitly changed.
-%
-%   The effect of \cs{PushDefaultHookLabel} holds until the next
-%   \cs{PopDefaultHookLabel}.  \cs{usepackage} (and \cs{RequirePackage}
-%   and \cs{documentclass}) internally use
-%   \begin{quote}
-%     \cs{PushDefaultHookLabel}\Arg{package name} \\
-%     \null \quad  \meta{package code} \\
-%     \cs{PopDefaultHookLabel}
-%   \end{quote}
-%   to set the \meta{default label} for the package or class file.
-%   Inside the \meta{package code} the \meta{default label} can also be
-%   changed with \cs{SetDefaultHookLabel}.  \cs{input} and other
-%   file input-related commands from the \LaTeX{} kernel do not use
-%   \cs{PushDefaultHookLabel}, so code within files loaded by these
-%   commands does \emph{not} get a dedicated \meta{label}! (that is, the
-%   \meta{default label} is the current active one when the file was
-%   loaded.)
+%   The \LaTeX\ kernel commands related to file input like \cs{input}
+%   and \cs{include} do not set the \META{current name}.
+%   Files inherit the \META{current name} from the calling context,
+%   and pass its value back to the caller when processed.
 %
 %   Packages that provide their own package-like interfaces
 %   (Ti\textit{k}Z's \cs{usetikzlibrary}, for example) can use
-%   \cs{PushDefaultHookLabel} and \cs{PopDefaultHookLabel} to set
+%   \cs{PushHookCurrentName} and \cs{PopHookCurrentName} to set
 %   dedicated labels and to emulate \cs{usepackage}-like hook behavior
 %   within those contexts.
 %
-%   The |top-level| label is treated differently, and is reserved to the
-%   user document, so it is not allowed to change the
-%   \meta{default label} to |top-level|.
-% \end{function}
+%   Prior to version 0001-01-01, these commands were called
+%   \cs{PushHookCurrentLabel} and \cs{PopHookCurrentLabel}.
 %
-% \begin{function}{\SetDefaultHookLabel}
+% \begin{function}[added = 0001-01-01]{
+%   \SetHookCurrentName,
+%   \hook_set_current_name:n,
+% }
 %   \begin{syntax}
-%     \cs{SetDefaultHookLabel} \Arg{default label}
+%     \cs{SetHookCurrentName}\Arg{name}\FILL{26}^^A
+% \SEP\cs{hook_set_current_name:n} \Arg{name}
 %   \end{syntax}
-%   Similarly to \cs{PushDefaultHookLabel},
-%   sets the current \meta{default label} to
-%   be used in \meta{label} arguments, or when replacing a leading
-%   ``|.|''. The effect holds until the label is changed again or until
-%   the next \cs{PopDefaultHookLabel}.  The difference between
-%   \cs{PushDefaultHookLabel} and \cs{SetDefaultHookLabel} is that the
-%   latter does not save the current \meta{default label}.
+%   Replaces the top element of the name stack with \meta{name}
+%   expanded value, such that it becomes the \META{current name}.
+%   The \meta{name} argument cannot expand to the value
+%   \enquote{|top-level|} which is reserved to the user document.
 %
 %   This command is useful when a large package is composed of several
-%   smaller packages, but all should have the same \meta{label}, so
-%   \cs{SetDefaultHookLabel} can be used at the beginning of each
-%   package file to set the correct label.
-%
-%   \cs{SetDefaultHookLabel} is not allowed in the main document, where
-%   the \meta{default label} is |top-level| and there is no
-%   \cs{PopDefaultHookLabel} to end its effect.
-%   It is also not allowed to change the \meta{default label} to
-%   |top-level|.
+%   smaller packages, but all should share the same default label, so
+%   \cs{SetHookCurrentName} can be used at the beginning of each
+%   smaller package file.
 % \end{function}
 %
-% \subsubsection{The \texttt{top-level} label}
-% \label{sec:top-level}
 %
-% The |top-level| label, assigned to code added from the main document,
-% is different from other labels.  Code added to hooks (usually
-% \cs{AtBeginDocument}) in the preamble is almost always to change
-% something defined by a package, so it should go at the very end of the
-% hook.
-%
-% Therefore, code added in the |top-level| is always executed at the end
-% of the hook, regardless of where it was declared.  If the hook is
-% reversed (see \cs{NewReversedHook}), the |top-level| chunk is executed
-% at the very beginning instead.
-%
-% Rules regarding |top-level| have no effect:  if a user wants to have a
-% specific set of rules for a code chunk, they should use a different
-% label to said code chunk, and provide a rule for that label instead.
-%
-% The |top-level| label is exclusive for the user, so trying to add code
-% with that label from a package results in an error.
-%
-% \subsubsection{Defining relations between hook code}
+% \subsection{Ordering code execution}
+% \label{sec:Ordering-code-execution}
 % \label{sec:rules}
+% In general, code added to hooks by different label owners are
+% independent from each other and the order in which they are
+% executed is irrelevant. While this is true in most cases it is
+% sometimes false, for example a code that relies on some package
+% should execute only after the package has loaded.
+% Moreover, in mirrored hook pairs the order in one hook
+% influences the order in the second hook and breaks any independency.
 %
-% The default assumption is that code added to hooks by different
-% packages are independent and the order in which they are executed is
-% irrelevant. While this is true in many cases it is obviously false
-% in others.
+% Before the \LaTeX\ hook management system was introduced,
+% packages had to take elaborate precautions to determine if some other
+% package got loaded and find some ways to alter its own behavior
+% accordingly. In addition it was often the user's
+% responsibility to load packages in the right order so that
+% instructions were executed in the right order. And sometimes it
+% was just impossible to resolve conflicts just changing the ordering.
 %
-% Before the hook management system was introduced
-% packages had to take elaborate precaution to determine of some other
-% package got loaded as well (before or after) and find some ways to
-% alter its behavior accordingly. In addition is was often the user's
-% responsibility to load packages in the right order so that code
-% added to hooks got added in the right order and some cases even
-% altering the loading order wouldn't resolve the conflicts.
+% Now, rules are the means to precisely describe how labeled code
+% chunks should be processed relatively to one another.
+% Using a hook consists of ordering the code chunks by applying the
+% rules to a default ordering, either direct or reversed, then execute
+% the code chunks in the resulting order.
 %
-% With the new hook management system it is now possible to define
-% rules (i.e., relationships) between code chunks added by different
-% packages and explicitly describe in which order they should be
-% processed.
-%
-% \begin{function}{\DeclareHookRule}
+% \subsubsection{Default ordering}
+% Before execution, the various code chunks follow a direct ordering:
+% \begin{enumerate}
+% \item low level code chunks in the order of the first time they were
+% added,
+% \item the \enquote{|top-level|} code chunk, if any, whenever it was
+% first added,
+% \item the extra code for next use only, if any.
+% \end{enumerate}
+% For reversed hooks, this ordered is reversed
+% \begin{enumerate}
+% \item the extra code for the next use only, if any,
+% \item the \enquote{|top-level|} code chunk, if any, whenever it was
+% first added,
+% \item low level code chunks in the inverse order of the first time
+% they were added.
+% \end{enumerate}
+
+% \subsubsection{Custom ordering}
+% The custom ordering is obtained after the rules apply to
+% the default ordering, either direct or reversed.
+% \begin{function}{
+%   \DeclareHookRule,
+%   \hook_gset_rule:nnnn,
+% }
 %   \begin{syntax}
-%     \cs{DeclareHookRule} \Arg{hook}\Arg{label1}\Arg{relation}\Arg{label2}
+%     \cs{DeclareHookRule}\Arg{hook}\Arg{label_1}\Arg{relation}\Arg{label_2}
+%     \cs{hook_gset_rule:nnnn} \Arg{hook} \Arg{label_1} \Arg{relation} \Arg{label_2}
 %   \end{syntax}
-%    Defines a relation between \meta{label1} and \meta{label2} for a
-%    given \meta{hook}. If \meta{hook} is \texttt{??} this defines a default
-%    relation for all hooks that use the two labels, i.e., that have
-%    chunks of code labeled with \meta{label1} and \meta{label2}.
-%    Rules specific to a given hook take precedence over default
-%    rules that use \texttt{??} as the \meta{hook}.
+%    Does nothing if both labels are identical, or if one of them
+%    expands to \enquote{|top-level|}, otherwise
+%    declares a relation between \meta{label_1} and \meta{label_2}
+%    for the given \meta{hook}.
+%    The hook does not needs to be declared before declaring a rule,
+%    it does not even need to ever contain code chunks for any of the
+%    given label arguments.
+% \end{function}
 %
-%    Currently, the supported relations are the following:
+%    The supported relations are:
 %    \begin{itemize}
 %
-%    \item[\texttt{before} or \texttt{\string<}]
+%    \item[\texttt{before} or \texttt{\string<}:]
 %
-%      Code for \meta{label1} comes before code for \meta{label2}.
+%      The code chunk for \meta{label_1} comes before the one for
+%      \meta{label_2}.
 %
-%    \item[\texttt{after} or \texttt{\string>}]
-%      Code for \meta{label1} comes after code for \meta{label2}.
+%    \item[\texttt{after} or \texttt{\string>}:]
+%      The code chunk for \meta{label_1} comes after the one for
+%      \meta{label_2}.
 %
-%    \item[\texttt{incompatible-warning}]
+%    \item[\texttt{incompatible-warning}:]
 %
-%      Only code for either \meta{label1} or \meta{label2} can appear
-%      for that hook (a way to say that two packages---or parts of
-%      them---are incompatible). A warning is raised if both labels
-%      appear in the same hook.
+%      A warning is raised if the hook has code chunks for both
+%      \meta{label_1} and \meta{label_2}.
 %
-%    \item[\texttt{incompatible-error}]
+%    \item[\texttt{incompatible-error}:]
 %
-%      Like \texttt{incompatible-error} but instead of a warning a
-%      \LaTeX{} error is raised, and the code for both labels are
-%      dropped from that hook until the conflict is resolved.
+%      An error is raised if the hook has code chunks for both
+%      \meta{label_1} and \meta{label_2}, and none will
+%      execute until the conflict is resolved.
 %
 %    \item[\texttt{voids}]
 %
-%      Code for \meta{label1} overwrites code for \meta{label2}. More
-%      precisely, code for \meta{label2} is dropped for that
-%      hook. This can be used, for example if one package is a
+%      The code chunk for \meta{label_1} overwrites the one for
+%     \meta{label_2}. If there is a code chunk for \meta{label_1}
+%      it will execute and the one for \meta{label_2} won't, otherwise
+%      the code chunk for \meta{label_2} will execute, if any.
+%      This can be used, for example if one package is a
 %      superset in functionality of another one and therefore wants to
-%      undo code in some hook and replace it with its own version.
+%      replace the original code with its own version.
 %
 %    \item[\texttt{unrelated}]
 %
-%       The order of code for \meta{label1} and \meta{label2} is
-%      irrelevant. This rule is there to undo an incorrect rule
-%      specified earlier.
+%      The order of the code chunks for \meta{label_1} and
+%      \meta{label_2} is irrelevant. This rule allows to cancel a
+%      previous rule.
 %
 %    \end{itemize}
-%    There can only be a single relation between two labels for a
-%    given hook,
-%    i.e., a later \cs{DeclareHookRule} overwrites any previous
-%    declaration.
+%    There can only be a single relation between two different labels
+%    for a given hook, i.e., a later \cs{DeclareHookRule} overwrites
+%    any previous declaration.
 %
-%    The \meta{hook} and \meta{label} can be specified using the
-%    dot-syntax to denote the current package name.
-%    See section~\ref{sec:default-label}.
+%    If \meta{hook} is \enquote{|??|} this declares a default
+%    relation for all hooks that use the two labels,
+%    see \cs{DeclareDefaultHookRule} command below.
 %
-% \end{function}
+%    All the declared rules must be compatible with each other,
+%    for example next codes will raise an error.
+%    \begin{lthooks.source}
+%    \ROW\cs{DeclareHookRule}|{MyHook}{labelA}<{labelB}|\\
+%    \ROW\cs{DeclareHookRule}|{MyHook}{labelB}<{labelA}|\\
+%    \end{lthooks.source}
+%    Moreover, if there are many possibilities to fulfill the rules,
+%    which one is used is undefined. For example, with
+%    \begin{lthooks.source}
+%    \ROW\cs{DeclareHookRule}|{MyHook}{labelA}<{labelB}|\\
+%    \end{lthooks.source}
+%    there are 3 possible orderings of the 3 labels
+%    |labelA|, |labelB|, |labelC|:
+% \begin{lthooks.source}
+% \ROW|labelA < labelB < labelC|\\
+% \ROW|labelA < labelC < labelB|\\
+% \ROW|labelC < labelA < labelB|
+% \end{lthooks.source}
+%    Wich one is effective is not always the same,
+%    even while typesetting one document\footnote{In very specific
+%    situations, the effective ordering may differ between different
+%    runs, eventually preventing a steady \TeX\ state from being achieved.}.
 %
+%    \medskip
+%    Next example shows how some code is temporarily deactivated.
+%    The generic hook |cmd/emph/after| is used to insert a \enquote{!}
+%    after the argument of the |\emph| command.
+%
+% \begin{lthooks.source}[lineno]
+% \ROW|\emph{W}|\\
+% \ROW\cs{AddToHook}|{cmd/emph/after}[./on]{!}%|\\
+% \ROW|\emph{W}|\\
+% \ROW\cs{DeclareHookRule}|{cmd/emph/after}{./off}{voids}{./on}%|\\
+% \ROW\cs{AddToHook}|{cmd/emph/after}[./off]{}%|\\
+% \ROW|\emph{W}|\\
+% \ROW[format=\bfseries,mark=$\to$\;,
+% ]\cs{RemoveFromHook}|{cmd/emph/after}[./off]%|\\
+% \ROW|\emph{W}|
+% \end{lthooks.source}
+%    Line 1 prints \enquote{W},
+%    line 3 prints \enquote{W} followed by the \enquote{!},
+%    added to the \hook{cmd/emph/after} hook at line 2.
+%    Line 5 adds an empty code chunk that overrides the \enquote{|!|}
+%    of line 2 due to the rule of line 5.
+%    Line 6 prints like line 1.
+%    Line 7 removes the code chunks that overrode the \enquote{|!|},
+%    such that line 8 prints like line 3.
+%
+%    We get the same result if we replace line 7 with next line,
+%    except that it might be slower due to the supplemental rule.
+% \begin{lthooks.source}[lineno,first=7]
+% \ROW[format=\bfseries,mark=$\to$\;,
+% ]\cs{DeclareHookRule}|{cmd/emph/after}{./off}{unrelated}{./on}%|
+% \end{lthooks.source}
 %
 % \begin{function}{\ClearHookRule}
 %   \begin{syntax}
-%     \cs{ClearHookRule}\Arg{hook}\Arg{label1}\Arg{label2}
+%     \cs{ClearHookRule}\Arg{hook}\Arg{label_1}\Arg{label_2}
 %   \end{syntax}
-%    Syntactic sugar for saying that \meta{label1} and \meta{label2}
-%    are unrelated for the given \meta{hook}.
+%    Synonym of each instruction amongst
+% \begin{lthooks.source}
+%    \ROW\cs{DeclareHookRule}~~~~\Arg{hook}^^A
+%    \Arg{label_1}|{unrelated}|\Arg{label_2}\\
+%    \ROW\cs{hook_gset_rule:nnnn}\Arg{hook}^^A
+%    \Arg{label_1}|{unrelated}|\Arg{label_2}
+% \end{lthooks.source}
 % \end{function}
 %
 %
 %
-% \begin{function}{\DeclareDefaultHookRule}
+% \begin{function}{
+%   \DeclareDefaultHookRule,
+%   \DeclareHookRule{??},
+%   \hook_gset_rule:nnnn{??},
+% }
 %   \begin{syntax}
-%     \cs{DeclareDefaultHookRule}\Arg{label1}\Arg{relation}\Arg{label2}
+%     \cs{DeclareDefaultHookRule} \Arg{label_1}\Arg{relation}\Arg{label_2}
+%     \cs{DeclareHookRule}    |{??}|\Arg{label_1}\Arg{relation}\Arg{label_2}
+%     \cs{hook_gset_rule:nnnn}|{??}|\Arg{label_1}\Arg{relation}\Arg{label_2}
 %   \end{syntax}
-%   This sets up a relation between \meta{label1} and \meta{label2}
-%    for all hooks unless overwritten by a specific rule for a hook.
+%    This sets up a relation between \meta{label_1} and \meta{label_2}
+%    for all hooks.
+%    Rules specific to a given hook take precedence over default
+%    rules with the same labels.
+%
 %    Useful for cases where one package has a specific relation to
 %    some other package, e.g., is \texttt{incompatible} or always
 %    needs a special ordering \texttt{before} or \texttt{after}.
-%    (Technically it is just a shorthand for using \cs{DeclareHookRule}
-%    with \texttt{??} as the hook name.)
 %
 %    Declaring default rules is only supported in the document
-%    preamble.\footnotemark{}
-%
-%    The \meta{label} can be specified using the dot-syntax to denote
-%    the current package name. See section~\ref{sec:default-label}.
-% \end{function}\footnotetext{Trying to do so, e.g., via
-%    \cs{DeclareHookRule} with \texttt{??}  has bad side-effects and
-%    is not supported (though not explicitly caught for performance
-%    reasons).}
-%
-%
-%
-% \subsubsection{Querying hooks}
-% \label{sec:querying}
-%
-% Simpler data types, like token lists, have three possible states; they
-% can:
-% \begin{itemize}
-%   \item exist and be empty;
-%   \item exist and be non-empty; and
-%   \item not exist (in which case emptiness doesn't apply);
-% \end{itemize}
-% Hooks are a bit more complicated:
-% a hook may exist or not, and independently it may or may not be empty.
-% This means that even a hook that doesn't exist may be non-empty and
-%    it can also be disabled.
-%
-% This seemingly strange state may happen when, for example, package~$A$
-% defines hook \hook{A/foo}, and package $B$ adds some code to that
-% hook.  However, a document may load package $B$ before package $A$, or
-% may not load package $A$ at all.  In both cases some code is added to
-% hook \hook{A/foo} without that hook being defined yet, thus that
-% hook is said to be non-empty, whereas it doesn't exist.  Therefore,
-% querying the existence of a hook doesn't imply its emptiness, neither
-% does the other way around.
-%
-% Given that code or rules can be added to a hook even if it doesn't
-% physically exist yet, means that a querying its existence has no
-% real use case (in contrast to other variables that can only be
-% update if they have already been declared). For that reason only the
-% test for emptiness has a public interface.
-%
-% A hook is said to be empty when no code was added to it, either to
-% its permanent code pool, or to its ``next'' token list.  The hook
-% doesn't need to be declared to have code added to its code pool.
-% A hook is said to exist when it was declared with \cs{NewHook} or
-% some variant thereof.  Generic hooks such as \hook{file} and \hook{env} hooks are
-% automatically declared when code is added to them.
-%
-% \begin{function}[EXP]{\IfHookEmptyTF}
-%   \begin{syntax}
-%     \cs{IfHookEmptyTF} \Arg{hook} \Arg{true code} \Arg{false code}
-%   \end{syntax}
-%   Tests if the \meta{hook} is empty (\emph{i.e.}, no code was added to
-%   it using either \cs{AddToHook} or \cs{AddToHookNext}) or such code
-%    was removed again (via \cs{RemoveFromHook}), and
-%   branches to either \meta{true code} or \meta{false code} depending
-%   on the result.
-%
-%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
-%    A leading |.| is treated literally.
+%    preamble. Nevertheless, a declaration somewhere else won't allways
+%    raise an error for performance reasons.
 % \end{function}
 %
 %
+% \subsubsection{Ordering mirrored hooks}
+% \label{sec:Ordering-mirrored-hooks}
 %
-% \subsubsection{Displaying hook code}
+% For a pair of mirrored hooks, things can become a bit tricky
+% when rules get involved. In general, the same rules are added to both
+% hooks, except for ordering rules that are reversed.
+% For example, |env/quote/before| and |env/quote/after| are mirrored
+% hooks that can be used to enclose the |quote| environment inside
+% other environments. See a basic example in section
+% \ref{sec:Generic-hooks-for-all-environments}.
 %
-%    If one has to adjust the code execution in a hook using a hook
-%    rule it is helpful to get some information about the code
-%    associated with a hook, its current order and the existing rules.
+% It is recommanded to allways feed mirrored hooks in parallel,
+% with the very same label. Of course, one of the hooks can be fed
+% with an empty code chunk. Moreover, the rules should also be declared
+% in parallel. That way, the risk that the mirrored are not
+% perfectly balancing each other and break code is limited.
 %
-% \begin{function}{\ShowHook,\LogHook}
+% \begin{function}[added=0001-01-01]{
+%   \DeclareMirroredHookRulePair,
+%   \hook_gset_rule_pair:nnnnn,
+% }
 %   \begin{syntax}
-%     \cs{ShowHook} \Arg{hook}
-%     \cs{LogHook}  \Arg{hook}
+%     \cs{DeclareMirroredHookRulePair}\\\TAB\Arg{hook_1}\Arg{label_1}\Arg{relation}\Arg{label_2}\Arg{hook_2}
+%     \cs{hook_gset_rule_pair:nnnnn}\\\TAB\Arg{hook_1} \Arg{label_1} \Arg{relation} \Arg{label_2} \Arg{hook_2} 
+%   \end{syntax}
+%    Shorthand for
+% \begin{lthooks.source}
+% \ROW\cs{DeclareHookRule}\Arg{hook_1}\Arg{label_1}\Arg{relation}\Arg{label_2}\\
+% \ROW\cs{DeclareHookRule}\Arg{hook_2}\Arg{label_1}\Arg{relation$^*$}\Arg{label_2}
+% \end{lthooks.source}
+% where \meta{relation$^*$} is the mirror of \meta{relation}
+% according to:
+% \begin{center}
+% \begin{tabular}{|l|l|}
+% \hline
+% \meta{relation} & \meta{relation$^*$} \\\hline
+% |before| & |after| \\\hline
+% |after| & |before| \\\hline
+% |incompatible-warning| & |incompatible-warning| \\\hline
+% |incompatible-error| & |incompatible-error| \\\hline
+% |voids| & |voids| \\\hline
+% |unrelated| & |unrelated| \\\hline
+% \end{tabular}
+% \end{center}
+% \end{function}
+%
+% \begin{function}[added=0001-01-01]{\ClearMirroredHookRulePair}
+%   \begin{syntax}
+%     \cs{ClearMirroredHookRulePair}\Arg{hook_1}\Arg{label_1}\Arg{label_2}\Arg{hook_2}
+%   \end{syntax}
+%    Synonym of each instruction amongst
+% \begin{lthooks.source}
+%    \ROW\cs{ClearMirroredHookRulePair}\\
+%    \ROW\TAB\Arg{hook_1}\Arg{label_1}|{unrelated}|\Arg{label_2}\Arg{hook_2}\\
+%    \ROW\cs{hook_gset_rule_pair:nnnnn}\\
+%    \ROW\TAB\Arg{hook_1} \Arg{label_1} |{unrelated}| \Arg{label_2} \Arg{hook_2}
+% \end{lthooks.source}
+% \end{function}
+%
+%
+% \subsection{Querying hooks}
+% \label{sec:querying}
+%
+% This is a section where the \LaTeXe\ and the L3
+% interfaces slightly differ.
+%
+% \begin{function}[EXP]{
+%   \IfHookEmptyTF,
+% }
+%   \begin{syntax}
+%     \cs{IfHookEmptyTF} \Arg{hook name} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%   Tests if the hook is empty and branches to either \meta{true code}
+%   or \meta{false code} depending on the result.
+%   A hook is empty means that all next conditions are fulfilled:
+%   \begin{itemize}
+%   \item it has no low level labeled code chunks,
+%   \item the \enquote{|top-level|} code chunk is empty,
+%   \item it has no extra code for the next use only.
+%   \end{itemize}
+%
+%   As soon as a labeled code chunk is added to a hook, it becomes
+%   a non empty hook unless the code chunk is empty and the label is
+%   \enquote{|top-level|}.
+%   For example, next instructions run at the top level with no error, %   but will raise an error when run in a package:
+%   \begin{lthooks.source}
+%   \ROW\cs{AddToHook}|{A}{}|\\
+%   \ROW\cs{IfHookEmptyTF}|{A}{}{\PackageError{FAIL}{}{}}|\\
+%   \end{lthooks.source}
+% \end{function}
+%
+% \begin{function}[pTF]{
+%   \hook_if_empty:n,
+% }
+%   \begin{syntax}
+%     \cs{hook_if_empty:nTF} \Arg{hook name} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%   L3 equivalent of \cs{IfHookEmptyTF}.
+% \end{function}
+%
+% \medskip
+% Next conditionals have no \LaTeXe\ counterpart.
+% They are exposed at least for debugging and testing purposes.
+% \begin{function}[pTF,added=0001-01-01]{
+%   \hook_if_reversed:n,
+% }
+%   \begin{syntax}
+%     \cs{hook_if_reversed:nTF} \Arg{hook name} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%   Executes \meta{true code} if the hook is reversed,
+%   \meta{false code} otherwise.
+% \end{function}
+%
+% \begin{function}[pTF,added=0001-01-01]{
+%   \hook_if_declared:n,
+% }
+%   \begin{syntax}
+%     \cs{hook_if_declared:nTF} \Arg{hook name} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%   Executes \meta{true code} if the hook is declared
+%   or generic disabled, \meta{false code} otherwise.
+% \end{function}
+%
+% \begin{function}[pTF,added=0001-01-01]{
+%   \hook_if_usable:n,
+% }
+%   \begin{syntax}
+%     \cs{hook_if_usable:nTF} \Arg{hook name} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%   Executes \meta{true code} if the hook is usable,
+%   \meta{false code} otherwise.
+%   A hook is usable means that its code chunks are executed
+%   by the \cs{Use...} commands.
+% \end{function}
+%
+% \begin{function}[pTF,added=0001-01-01]{
+%   \hook_if_disabled:n,
+% }
+%   \begin{syntax}
+%     \cs{hook_if_disabled:nTF} \Arg{hook name} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+%   Executes \meta{true code} if the hook is disabled,
+%   \meta{false code} otherwise.
+% \end{function}
+%
+%
+% \subsection{Showing and logging hooks}
+%
+% \begin{function}{
+%   \ShowHook,
+%   \hook_show:n,
+%   \LogHook,
+%   \hook_log:n,
+% }
+%   \begin{syntax}
+%     \cs{ShowHook}\Arg{hook}\FILL{17}^^A
+% \SEP\cs{hook_show:n} \Arg{hook}
+%     \cs{LogHook}\Arg{hook}\FILL{16}^^A
+% \SEP\cs{hook_log:n} \Arg{hook}
 %   \end{syntax}
 %   Displays information about the \meta{hook} such as
 %   \begin{itemize}
 %   \item
-%      the code chunks (and their labels) added to it,
+%      the hook special status (reversed, declared, disabled),
 %   \item
-%      any rules set up to order them,
+%      the low level code chunks and their labels,
 %   \item
-%      the computed order in which the chunks are executed,
+%      the top level code chunk,
 %   \item
-%      any code executed on the next invocation only.
+%      the extra code for the next use only,
+%   \item
+%      any rules use to order the low level code chunks,
+%   \item
+%      the computed order in which the low level chunks are executed.
 %   \end{itemize}
 % \end{function}
 %
-%   \cs{LogHook} prints the information to the |.log| file, and
-%   \cs{ShowHook} prints them to the terminal/command window and starts
-%   \TeX's prompt (only in \cs{errorstopmode}) to wait for user action.
-%
-%    The \meta{hook} can be specified using the dot-syntax to denote
-%    the current package name. See section~\ref{sec:default-label}.
+%   \cs{LogHook} prints the informations to the |.log| file, and
+%   \cs{ShowHook} prints them to the terminal/command window and,
+%   only in \cs{errorstopmode}, starts \TeX's prompt to wait for user
+%   action.
+% \begin{comment}
 %
 %^^A   % Code for the listing below:
-%^^A   \NewHook{example-hook}
+%^^A   \DeclareHook{example-hook}
 %^^A   \AddToHook{example-hook}{[code from 'top-level']}
 %^^A   \AddToHook{example-hook}[foo]{[code from package 'foo']}
 %^^A   \AddToHook{example-hook}[bar]{[from package 'bar']}
@@ -937,25 +1480,27 @@
 %   \def\theFancyVerbLine{\textcolor[gray]{0.5}{%^^A
 %     \sffamily\tiny\arabic{FancyVerbLine}}}
 %
-%   \bigskip
+%   \medskip
 %   Suppose a hook \texttt{example-hook} whose output of
 %   \cs{ShowHook}|{example-hook}| is:
-%   \begin{verbatim}[numbers=left]
-%   -> The hook 'example-hook':
-%   > Code chunks:
-%   >     foo -> [code from package 'foo']
-%   >     bar -> [from package 'bar']
-%   >     baz -> [package 'baz' is here]
-%   > Document-level (top-level) code (executed last):
-%   >     -> [code from 'top-level']
-%   > Extra code for next invocation:
-%   >     -> [one-time code]
-%   > Rules:
-%   >     foo|baz with relation >
-%   >     baz|bar with default relation <
-%   > Execution order (after applying rules):
-%   >     baz, foo, bar.
-%   \end{verbatim}
+%   \begin{flushleft}
+%   \def\ROW#1#2{\makebox[0pt][r]{\textcolor[gray]{0.5}{\sffamily\tiny#1}\hphantom{x}}\hphantom{xx}#2\\}
+%   \ttfamily
+%   \ROW{1}{-> The hook 'MyName':}
+%   \ROW{2}{> Code chunks:}
+%   \ROW{3}{>~~~~~labelA -> \meta{code_A}}
+%   \ROW{4}{>~~~~~labelB -> \meta{code_B}}
+%   \ROW{5}{>~~~~~labelC -> \meta{code_C}}
+%   \ROW{6}{> Document-level (top-level) code (executed last):}
+%   \ROW{7}{>~~~~~-> \meta{\enquote{top-level} code}}
+%   \ROW{8}{> Extra code for next use only:}
+%   \ROW{9}{>~~~~~-> \meta{extra code}}
+%   \ROW{10}{> Rules:}
+%   \ROW{11}{>~~~~~labelA\string|labelC with relation >}
+%   \ROW{12}{>~~~~~labelB\string|labelC with default relation <}
+%   \ROW{13}{> Execution order (after applying rules):}
+%   \ROW{14}{>~~~~~labelB, labelC, labelA.}
+%   \end{flushleft}
 %
 %   In the listing above, lines~3 to~5 show the three code chunks added
 %   to the hook and their respective labels in the format
@@ -980,9 +1525,9 @@
 %   \quad \verb|-> |\meta{next-code}
 %   \end{quote}
 %   This code will be used and disappear at the next
-%   \verb|\UseHook{example-hook}|, in contrast to the chunks mentioned
+%   \cs{UseHook}|{example-hook}|, in contrast to the chunks mentioned
 %   earlier, which can only be removed from that hook by doing
-%   \verb|\RemoveFromHook{|\meta{label}|}[example-hook]|.
+%   \cs{RemoveFromHook}|{|\meta{label}|}[example-hook]|.
 %
 %   Lines~11 and~12 show the rules declared that affect this hook in the
 %   format
@@ -998,730 +1543,27 @@
 %
 %   Finally, line~14 lists the labels in the hook after sorting;
 %   that is, in the order they will be executed when the hook is used.
+% \end{comment}
 %
-%
-% \subsubsection{Debugging hook code}
-%
-% \begin{function}{\DebugHooksOn,\DebugHooksOff}
-%   \begin{syntax}
-%     \cs{DebugHooksOn}
-%   \end{syntax}
-%    Turn the debugging of hook code on or off. This displays most changes
-%    made to the hook data structures. The output is rather coarse and
-%      not really intended for normal use.
-% \end{function}
-%
-%
-% \subsection{L3 programming layer (\texttt{expl3}) interfaces}
-% \label{sec:l3hook-interface}
-%
-%
-% This is a quick summary of the \LaTeX3 programming interfaces for
-% use with packages written in \texttt{expl3}. In contrast to the
-% \LaTeXe{} interfaces they always use mandatory arguments only, e.g.,
-% you always have to specify the \meta{label} for a code chunk.  We
-% therefore suggest to use the declarations discussed in the previous
-% section even in \texttt{expl3} packages, but the choice is yours.
-%
+% \subsection{Debugging hook code}
 %
 % \begin{function}{
-%     \hook_new:n,
-%     \hook_new_reversed:n,
-%     \hook_new_pair:nn
-%   }
+%   \DebugHooksOn,
+%   \hook_debug_on:,
+%   \DebugHooksOff,
+%   \hook_debug_off:,
+% }
 %   \begin{syntax}
-%     \cs{hook_new:n} \Arg{hook}
-%     \cs{hook_new_reversed:n} \Arg{hook}
-%     \cs{hook_new_pair:nn} \Arg{hook-1} \Arg{hook-2}
+%     \cs{DebugHooksOn}\FILL{13}^^A
+% \SEP\cs{hook_debug_on:}
+%     \cs{DebugHooksOff}\FILL{14}^^A
+% \SEP\cs{hook_debug_off:}
 %   \end{syntax}
-%   Creates a new \meta{hook} with normal or reverse ordering of code
-%    chunks. \cs{hook_new_pair:nn} creates a pair of such hooks with
-%    \Arg{hook-2} being a reversed hook.
-%    If a hook name is already taken, an error is raised and the hook
-%    is not created.
-%
-%    The \meta{hook} can be specified using the dot-syntax to denote
-%    the current package name. See section~\ref{sec:default-label}.
+%    Turns the debugging of hook code on or off.
+%    \!This displays most changes made to the hook data structures.
+%    \!The output is rather coarse and not really intended for
+%    final documents.
 % \end{function}
-%
-% \begin{function}{
-%     \hook_new_with_args:nn,
-%     \hook_new_reversed_with_args:nn,
-%     \hook_new_pair_with_args:nnn
-%   }
-%   \begin{syntax}
-%     \cs{hook_new_with_args:nn} \Arg{hook} \Arg{number}
-%     \cs{hook_new_reversed_with_args:nn} \Arg{hook} \Arg{number}
-%     \cs{hook_new_pair_with_args:nnn} \Arg{hook-1} \Arg{hook-2} \Arg{number}
-%   \end{syntax}
-%   Creates a new \meta{hook} with normal or reverse ordering of code
-%    chunks, that takes \meta{number} arguments from the input stream
-%    when it is used. \cs{hook_new_pair_with_args:nn} creates a pair of
-%    such hooks with \Arg{hook-2} being a reversed hook.
-%    If a hook name is already taken, an error is raised and the hook
-%    is not created.
-%
-%    The \meta{hook} can be specified using the dot-syntax to denote
-%    the current package name. See section~\ref{sec:default-label}.
-% \end{function}
-%
-%
-%
-% \begin{function}{\hook_disable_generic:n}
-%   \begin{syntax}
-%     \cs{hook_disable_generic:n} \Arg{hook}
-%   \end{syntax}
-%    Marks \Arg{hook} as disabled. Any further attempt to add code to
-%    it or declare it, will result in an error and any call to
-%    \cs{hook_use:n} will simply do nothing.
-%
-%    This declaration is intended for use with generic hooks that are
-%    known not to work (see \texttt{ltcmdhooks-doc}) if they receive
-%    code.
-%
-%    The \meta{hook} can be specified using the dot-syntax to denote
-%    the current package name. See section~\ref{sec:default-label}.
-% \end{function}
-%
-% \begin{function}{\hook_activate_generic:n}
-%   \begin{syntax}
-%     \cs{hook_activate_generic:n} \Arg{hook}
-%   \end{syntax}
-%    This is like \cs{hook_new:n} but it does nothing if the hook was previously
-%    declared with \cs{hook_new:n}.  This declaration should be used
-%    only in special situations, e.g., when a command from another package
-%    needs to be altered and it is not clear whether a
-%    generic \hook{cmd} hook (for that command) has been previously 
-%    explicitly declared.
-%
-%    Normally \cs{hook_new:n} should be used instead of this.
-% \end{function}
-%
-%
-%
-%
-% \begin{function}{\hook_use:n,\hook_use:nnw}
-%   \begin{syntax}
-%     \cs{hook_use:n} \Arg{hook}
-%     \cs{hook_use:nnw} \Arg{hook} \Arg{number} \Arg{arg_1} \ldots \Arg{arg_n}
-%   \end{syntax}
-%    Executes the \Arg{hook} code followed (if set up) by the code for next
-%    invocation only, then empties that next invocation code.
-%    \cs{hook_use:nnw} should be used for hooks declared with arguments,
-%    and should be followed by as many brace groups as the declared
-%    number of arguments.
-%    The \meta{number} should be the number of arguments declared for
-%    the hook.  If the hook is not declared, this command does nothing
-%    and it will remove \meta{number} items from the input.
-%
-%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
-%    A leading |.| is treated literally.
-% \end{function}
-%
-% \begin{function}{\hook_use_once:n,\hook_use_once:nnw}
-%   \begin{syntax}
-%     \cs{hook_use_once:n} \Arg{hook}
-%     \cs{hook_use_once:nnw} \Arg{hook} \Arg{number} \Arg{arg_1} \ldots \Arg{arg_n}
-%   \end{syntax}
-%     Changes the \Arg{hook} status so that from now on any addition to
-%     the hook code is executed immediately. Then execute any
-%     \Arg{hook} code already set up.
-%    \cs{hook_use_once:nnw} should be used for hooks declared with arguments,
-%    and should be followed by as many brace groups as the declared
-%    number of arguments.
-%    The \meta{number} should be the number of arguments declared for
-%    the hook.  If the hook is not declared, this command does nothing
-%    and it will remove \meta{number} items from the input.
-%
-%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
-%    A leading |.| is treated literally.
-% \end{function}
-%
-% \begin{function}{
-%     \hook_gput_code:nnn,
-%     \hook_gput_code_with_args:nnn
-%   }
-%   \begin{syntax}
-%     \cs{hook_gput_code:nnn} \Arg{hook} \Arg{label} \Arg{code}
-%     \cs{hook_gput_code_with_args:nnn} \Arg{hook} \Arg{label} \Arg{code}
-%   \end{syntax}
-%    Adds a chunk of \meta{code} to the \meta{hook} labeled
-%    \meta{label}. If the label already exists the \meta{code} is
-%    appended to the already existing code.
-%
-%    If \cs{hook_gput_code_with_args:nnn} is used, the \meta{code}
-%    can access the arguments passed to \cs{hook_use:nnw}
-%    (or~\cs{hook_use_once:nnw}) with \verb|#1|, \verb|#2|, \ldots,
-%    \verb|#n| (up to the number of arguments declared for the hook).
-%    In that case, if an actual parameter token should be added to the
-%    code, it should be doubled.
-%
-%    If code is added to an external \meta{hook} (of the kernel or
-%    another package) then the convention is to use the package name
-%    as the \meta{label} not some internal module name or some other
-%    arbitrary string.
-%
-%    The \meta{hook} and \meta{label} can be specified using the
-%    dot-syntax to denote the current package name.
-%    See section~\ref{sec:default-label}.
-% \end{function}
-%
-% \begin{function}{
-%     \hook_gput_next_code:nn,
-%     \hook_gput_next_code_with_args:nn,
-%   }
-%   \begin{syntax}
-%     \cs{hook_gput_next_code:nn} \Arg{hook} \Arg{code}
-%   \end{syntax}
-%    Adds a chunk of \meta{code} for use only in the next invocation of the
-%    \meta{hook}. Once used it is gone.
-%
-%    If \cs{hook_gput_next_code_with_args:nn} is used, the \meta{code}
-%    can access the arguments passed to \cs{hook_use:nnw}
-%    (or~\cs{hook_use_once:nnw}) with \verb|#1|, \verb|#2|, \ldots,
-%    \verb|#n| (up to the number of arguments declared for the hook).
-%    In that case, if an actual parameter token should be added to the
-%    code, it should be doubled.
-%
-%    This is simpler than \cs{hook_gput_code:nnn}, the code is simply
-%    appended to the hook in the order of declaration at the very end,
-%    i.e., after all standard code for the hook got executed.
-%    Thus if one needs to undo what the standard does one has to do
-%    that as part of \meta{code}.
-%
-%    The \meta{hook} can be specified using the dot-syntax to denote
-%    the current package name. See section~\ref{sec:default-label}.
-% \end{function}
-%
-%
-% \begin{function}{\hook_gclear_next_code:n}
-%   \begin{syntax}
-%     \cs{hook_gclear_next_code:n} \Arg{hook}
-%   \end{syntax}
-%   Undo any earlier \cs{hook_gput_next_code:nn}.
-% \end{function}
-%
-%
-%
-%  \begin{function}{\hook_gremove_code:nn}
-%   \begin{syntax}
-%     \cs{hook_gremove_code:nn} \Arg{hook} \Arg{label}
-%   \end{syntax}
-%    Removes any code for \meta{hook} labeled \meta{label}.
-%
-%    If there is no code under the \meta{label} in the \meta{hook},
-%    or if the \meta{hook} does not exist, a warning is issued when
-%    you attempt to use \cs{hook_gremove_code:nn}, and the command is ignored.
-%
-%    If the second argument is \texttt{*}, then all code chunks are
-%    removed. This is rather dangerous as it drops code from other
-%    packages one may not know about, so think twice before using
-%    that!
-%
-%    The \meta{hook} and \meta{label} can be specified using the
-%    dot-syntax to denote the current package name.
-%    See section~\ref{sec:default-label}.
-% \end{function}
-%
-%
-%  \begin{function}{\hook_gset_rule:nnnn}
-%   \begin{syntax}
-%     \cs{hook_gset_rule:nnnn} \Arg{hook} \Arg{label1} \Arg{relation} \Arg{label2}
-%   \end{syntax}
-%    Relate \meta{label1} with \meta{label2} when used in \meta{hook}.
-%    See \cs{DeclareHookRule} for the allowed \meta{relation}s.
-%    If \meta{hook} is \texttt{??} a default rule is specified.
-%
-%    The \meta{hook} and \meta{label} can be specified using the
-%    dot-syntax to denote the current package name.
-%    See section~\ref{sec:default-label}.
-%    The dot-syntax is parsed in both \meta{label} arguments, but it
-%    usually makes sense to be used in only one of them.
-% \end{function}
-%
-% \begin{function}[pTF]{\hook_if_empty:n}
-%   \begin{syntax}
-%     \cs{hook_if_empty:nTF} \Arg{hook} \Arg{true code} \Arg{false code}
-%   \end{syntax}
-%   Tests if the \meta{hook} is empty (\emph{i.e.}, no code was added to
-%   it using either \cs{AddToHook} or \cs{AddToHookNext}), and
-%   branches to either \meta{true code} or \meta{false code} depending
-%   on the result.
-%
-%    The \meta{hook} \emph{cannot} be specified using the dot-syntax.
-%    A leading |.| is treated literally.
-% \end{function}
-%
-%
-% \begin{function}{\hook_show:n,\hook_log:n}
-%   \begin{syntax}
-%     \cs{hook_show:n} \Arg{hook}
-%     \cs{hook_log:n}  \Arg{hook}
-%   \end{syntax}
-%   Displays information about the \meta{hook} such as
-%   \begin{itemize}
-%   \item
-%      the code chunks (and their labels) added to it,
-%   \item
-%      any rules set up to order them,
-%   \item
-%      the computed order in which the chunks are executed,
-%   \item
-%      any code executed on the next invocation only.
-%   \end{itemize}
-%
-%   \cs{hook_log:n} prints the information to the |.log| file, and
-%   \cs{hook_show:n} prints them to the terminal/command window and starts
-%   \TeX's prompt (only if \cs{errorstopmode}) to wait for user action.
-%
-%    The \meta{hook} can be specified using the dot-syntax to denote
-%    the current package name. See section~\ref{sec:default-label}.
-% \end{function}
-%
-% \begin{function}{\hook_debug_on:,\hook_debug_off:}
-%   \begin{syntax}
-%     \cs{hook_debug_on:}
-%   \end{syntax}
-%    Turns the debugging of hook code on or off. This displays changes
-%    to the hook data.
-% \end{function}
-%
-%
-%
-% \subsection{On the order of hook code execution} \label{sec:order}
-%
-%    Chunks of code for a \meta{hook} under different labels are supposed
-%    to be independent if there are no special rules set up that
-%    define a relation between the chunks. This means that you can't
-%    make assumptions about the order of execution!
-%
-%    Suppose you have the following declarations:
-%\begin{verbatim}
-%    \NewHook{myhook}
-%    \AddToHook{myhook}[packageA]{\typeout{A}}
-%    \AddToHook{myhook}[packageB]{\typeout{B}}
-%    \AddToHook{myhook}[packageC]{\typeout{C}}
-%\end{verbatim}
-%    then executing the hook with \cs{UseHook} will produce the
-%    typeout \texttt{A} \texttt{B} \texttt{C} in that order.  In other
-%    words, the execution order is computed to be \texttt{packageA},
-%    \texttt{packageB}, \texttt{packageC} which you can verify with
-%    \cs{ShowHook}\texttt{\{myhook\}}:
-%\begin{verbatim}
-%    -> The hook 'myhook':
-%    > Code chunks:
-%    >     packageA -> \typeout {A}
-%    >     packageB -> \typeout {B}
-%    >     packageC -> \typeout {C}
-%    > Document-level (top-level) code (executed last):
-%    >     ---
-%    > Extra code for next invocation:
-%    >     ---
-%    > Rules:
-%    >     ---
-%    > Execution order:
-%    >     packageA, packageB, packageC.
-%\end{verbatim}
-%    The reason is that the code chunks are internally saved in a property list
-%    and the initial order of such a property list is the order in
-%    which key-value pairs got added. However, that is only true if
-%    nothing other than adding happens!
-%
-%    Suppose, for example, you want to replace the code chunk for
-%    \texttt{packageA}, e.g.,
-%\begin{verbatim}
-%    \RemoveFromHook{myhook}[packageA]
-%    \AddToHook{myhook}[packageA]{\typeout{A alt}}
-%\end{verbatim}
-%    then your order becomes  \texttt{packageB},
-%    \texttt{packageC}, \texttt{packageA} because the label got removed
-%    from the property list and then re-added (at its end).
-%
-%    While that may not be too surprising,  the execution order is
-%    also sometimes altered if you add a redundant rule, e.g. if you specify
-%\begin{verbatim}
-%    \DeclareHookRule{myhook}{packageA}{before}{packageB}
-%\end{verbatim}
-%    instead of the previous lines we get
-%\begin{verbatim}
-%    -> The hook 'myhook':
-%    > Code chunks:
-%    >     packageA -> \typeout {A}
-%    >     packageB -> \typeout {B}
-%    >     packageC -> \typeout {C}
-%    > Document-level (top-level) code (executed last):
-%    >     ---
-%    > Extra code for next invocation:
-%    >     ---
-%    > Rules:
-%    >     packageB|packageA with relation >
-%    > Execution order (after applying rules):
-%    >     packageA, packageC, packageB.
-%\end{verbatim}
-%    As you can see the code chunks are still in the same order, but
-%    in the execution order for the labels \texttt{packageB} and
-%    \texttt{packageC} have
-%    swapped places.
-%    The reason is that, with the rule there are two orders that
-%    satisfy it, and the algorithm for sorting happened to pick a
-%    different one compared to the case without rules (where it
-%    doesn't run at all as there is nothing to resolve).
-%    Incidentally, if we had instead specified the redundant rule
-%\begin{verbatim}
-%    \DeclareHookRule{myhook}{packageB}{before}{packageC}
-%\end{verbatim}
-%    the execution order would not have changed.
-%
-%    In summary: it is not possible to rely on the order of execution
-%    unless there are rules that partially or fully define the order
-%    (in which you can rely on them being fulfilled).
-%
-%
-% \subsection{The use of \enquote{reversed} hooks} \label{sec:reversed-order}
-%
-%    You may have wondered why you can declare a \enquote{reversed} hook
-%    with \cs{NewReversedHook} and what that does exactly.
-%
-%    In short: the execution order of a reversed hook (without any
-%    rules!) is exactly reversed to the order you would have gotten for
-%    a hook declared with \cs{NewHook}.
-%
-%    This is helpful if you have a pair of hooks where you expect to see
-%    code added that involves grouping, e.g., starting an environment
-%    in the first and closing that environment in the second hook.
-%    To give a somewhat contrived example\footnote{there are simpler
-%    ways to achieve the same effect.}, suppose there is a package
-%    adding the following:
-%\begin{verbatim}
-%    \AddToHook{env/quote/before}[package-1]{\begin{itshape}}
-%    \AddToHook{env/quote/after} [package-1]{\end{itshape}}
-%\end{verbatim}
-%    As a result, all quotes will be in italics.
-%    Now suppose further that another |package-too| makes the quotes
-%    also in blue and therefore adds:
-%\begin{verbatim}
-%    \usepackage{color}
-%    \AddToHook{env/quote/before}[package-too]{\begin{color}{blue}}
-%    \AddToHook{env/quote/after} [package-too]{\end{color}}
-%\end{verbatim}
-%    Now if the \hook{env/quote/after} hook would be a normal hook we
-%    would get the same execution order in  both hooks, namely:
-%\begin{verbatim}
-%    package-1, package-too
-%\end{verbatim}
-%    (or vice versa) and as a result, would get:
-%\begin{verbatim}
-%    \begin{itshape}\begin{color}{blue} ...
-%    \end{itshape}\end{color}
-%\end{verbatim}
-%    and an error message saying that \verb=\begin{color}= was ended by
-%    \verb=\end{itshape}=.
-%    With \hook{env/quote/after} declared as a reversed hook the
-%    execution order is reversed and so all environments are closed in
-%    the correct sequence and \cs{ShowHook} would give us the
-%    following output:
-%\begin{verbatim}
-%    -> The hook 'env/quote/after':
-%    > Code chunks:
-%    >     package-1 -> \end {itshape}
-%    >     package-too -> \end {color}
-%    > Document-level (top-level) code (executed first):
-%    >     ---
-%    > Extra code for next invocation:
-%    >     ---
-%    > Rules:
-%    >     ---
-%    > Execution order (after reversal):
-%    >     package-too, package-1.
-%\end{verbatim}
-%
-%    The reversal of the execution order happens before applying any
-%    rules, so if you alter the order you will probably have to alter
-%    it in both hooks, not just in one, but that depends on the use case.
-%
-%
-%
-%
-% \subsection{Difference between \enquote{normal} and
-%    \enquote{one-time} hooks}
-% \label{sec:onetime-hooks}
-%
-%    When executing a hook a developer has the choice of using
-%    either \cs{UseHook} or \cs{UseOneTimeHook} (or their \pkg{expl3}
-%    equivalents \cs{hook_use:n} and \cs{hook_use_once:n}).
-%    This choice affects how \cs{AddToHook} is handled after the hook
-%    has been executed for the first time.
-%
-%    With normal hooks adding code via \cs{AddToHook} means that the
-%    code chunk is added to the hook data structure and then used each time
-%    \cs{UseHook} is called.
-%
-%    With one-time hooks it this is handled slightly differently:
-%    After \cs{UseOneTimeHook} has been called, any further attempts to
-%    add code to the hook via \cs{AddToHook} will simply execute the
-%    \meta{code} immediately.
-%
-%    This has some consequences one needs to be aware of:
-%    \begin{itemize}
-%    \item
-%
-%      If \meta{code} is added to a normal hook after the hook was
-%      executed and it is never executed again for one or the other
-%      reason, then this new \meta{code} will never be executed.
-%
-%    \item
-%
-%      In contrast if that happens with a one-time hook the \meta{code} is
-%      executed immediately.
-%
-%    \end{itemize}
-%    In particular this means that construct such as
-%\begin{quote}
-%    \cs{AddToHook}\verb={myhook}=\\
-%    \phantom{\cs{AddToHook}}\verb={= \meta{code-1}
-%                                     \cs{AddToHook}\verb={myhook}=\Arg{code-2}
-%                                     \meta{code-3} \verb=}=
-%\end{quote}
-%    works for one-time hooks\footnote{This is sometimes used with
-%    \cs{AtBeginDocument} which is why it is supported.} (all three
-%    code chunks are executed one after another), but it makes little
-%    sense with a normal hook, because with a normal hook the first time
-%    \verb=\UseHook{myhook}= is executed it would
-%    \begin{itemize}
-%    \item
-%       execute \meta{code-1},
-%    \item
-%       then execute \verb=\AddToHook{myhook}{code-2}= which adds the
-%    code chunk \meta{code-2} to the hook for use on the next invocation,
-%    \item
-%       and finally execute \meta{code-3}.
-%    \end{itemize}
-%    The second time \cs{UseHook} is called it would execute the
-%    above and in addition \meta{code-2} as that was added as a code
-%    chunk to the hook in the meantime. So each time the hook is used
-%    another copy of \meta{code-2} is added and so that code chunk
-%    is executed $\meta{\# of invocations} -1$ times.
-%
-%
-%
-% \subsection{Generic hooks provided by packages}
-% \label{sec:generic-hooks}
-%
-% \changes{v1.0p}{2021/08/20}{Section on generic hooks added (gh/638)}
-%
-%    The hook management system also implements a category of hooks
-%    that are called \enquote{Generic Hooks}. Normally a hook has to
-%    be explicitly declared before it can be used in code. This
-%    ensures that different packages are not using the same hook name
-%    for unrelated purposes---something that would result in absolute
-%    chaos.  However, there are a number of \enquote{standard} hooks
-%    where it is unreasonable to declare them beforehand, e.g, each
-%    and every command has (in theory) an associated \texttt{before}
-%    and \texttt{after} hook. In such cases, i.e., for command,
-%    environment or file hooks, they can be used simply by adding code
-%    to them with \cs{AddToHook}. For more specialized generic hooks,
-%    e.g., those provided by \pkg{babel}, you have to additionally
-%    enable them with \cs{ActivateGenericHook} as explained below.
-%
-%    The generic hooks provided by \LaTeX{} are those for
-%    \hook{cmd},
-%    \hook{env},
-%    \hook{file},
-%    \hook{include}
-%    \hook{package}, and
-%    \hook{class},
-%    and all these are available out of the box: you only have to 
-%    use \cs{AddToHook} to
-%    add code to them, but you don't have to add \cs{UseHook} or
-%    \cs{UseOneTimeHook} to your code, because this is already done for
-%    you (or, in the case of \hook{cmd} hooks, the command’s code is
-%    patched at \verb=\begin{document}=, if necessary).
-%
-%    However, if you want to provide further generic hooks in your own
-%    code, the situation is slightly different. To do this you should 
-%    use \cs{UseHook} or \cs{UseOneTimeHook}, but
-%    \emph{without declaring the hook} with \cs{NewHook}.  As
-%    mentioned earlier, a call to \cs{UseHook} with an undeclared hook
-%    name does nothing. So as an additional setup step, you need to
-%    explicitly activate your generic hook.  Note that a generic hook
-%    produced in this way is always a normal hook.
-%
-%    For a truly generic hook, with a variable part in the hook name,
-%    such upfront activation would be difficult or impossible, because
-%    you typically do not know what kind of variable parts may come up
-%    in real documents.
-%
-%    For example, \pkg{babel} provides hooks such as
-%    \hook{babel/\meta{language}/afterextras}.  However, language
-%    support in \pkg{babel} is often done through external language
-%    packages. Thus doing the activation for all languages inside the
-%    core \pkg{babel} code is not a viable approach. Instead it needs
-%    to be done by each language package (or by the user who wants to
-%    use a particular hook).
-%
-%    Because the hooks are not declared with \cs{NewHook} their names
-%    should be carefully chosen to ensure that they are (likely to be)
-%    unique. Best practice is to include the package or
-%    command name, as was done in the \pkg{babel} example above.
-%
-%    Generic hooks defined in this way are always normal hooks (i.e.,
-%    you can't implement reversed hooks this way). This is a
-%    deliberate limitation, because it speeds up the processing
-%    considerably.
-%
-%
-% \subsection{Hooks with arguments}
-% \label{sec:hook-args}
-%
-%    Sometimes it is necessary to pass contextual information to a hook,
-%    and, for one reason or another, it is not feasible to store such
-%    information in macros.  To serve this purpose, hooks can be
-%    declared with arguments, so that the programmer can pass along the
-%    data necessary for the code in the hook to function properly.
-%
-%    A hook with arguments works mostly like a regular hook, and most
-%    commands that work for regular hooks, also work for hooks that take
-%    arguments.  The differences are when the hook is declared
-%    (\cs{NewHookWithArguments} is used instead of \cs{NewHook}), then
-%    code can be added with both \cs{AddToHook} and
-%    \cs{AddToHookWithArguments}, and when the hook is used
-%    (\cs{UseHookWithArguments} instead of \cs{UseHook}).
-%
-%    \medskip
-%
-%    A hook with arguments must be declared as such (before it is first
-%    used, as all regular hooks) using
-%    \cs{NewHookWithArguments}\Arg{hook}\Arg{number}.  All code added to
-%    that hook can then use \verb|#1| to access the first argument,
-%    \verb|#2| to access the second, and so forth up to the number of
-%    arguments declared.  However, it is still possible to add code with
-%    references to the arguments of a hook that was not yet declared
-%    (we will discuss that later).  At their core, hooks are macros, so
-%    \TeX's limit of 9~arguments applies, and a low-level \TeX{} error
-%    is raised if you try to reference an argument number that doesn't
-%    exist.
-%
-%    \medskip
-%
-%    To use a hook with arguments, just write
-%    \cs{UseHookWithArguments}\Arg{hook}\Arg{number} followed by a
-%    braced list of the arguments.  For example, if the hook \hook{test}
-%    takes three arguments, write:
-%\begin{verbatim}
-%    \UseHookWithArguments{test}{3}{arg-1}{arg-2}{arg-3}
-%\end{verbatim}
-%    then, in the \meta{code} of the hook, all instances of \verb|#1|
-%    will be replaced by \verb|arg-1|, \verb|#2| by \verb|arg-2| and so
-%    on.  If, at the point of usage, the programmer provides more
-%    arguments than the hook is declared to take, the excess arguments
-%    are simply ignored by the hook.  Behaviour is
-%    unpredictable\footnote
-%      {The hook \emph{will} take the declared number of arguments, and
-%       what will happen depends on what was grabbed, and what the hook
-%       code does with its arguments.}
-%    if too few arguments are provided.  If the hook isn't declared,
-%    \meta{number} arguments are removed from the input stream.
-%
-%    \medskip
-%
-%    Adding code to a hook with arguments can be done with
-%    \cs{AddToHookWithArguments} as well as with the regular
-%    \cs{AddToHook}, to achieve different outcomes.  The main difference
-%    when it comes to adding code to a hook, in this case, is firstly
-%    the possibility of accessing a hook's arguments, of course, and
-%    second, how parameter tokens (\verb|#|$_6$) are treated.
-%
-%    Using \cs{AddToHook} in a hook that takes arguments will work as it
-%    does for all other hooks. This allows a package developer to add
-%    arguments to a hook that otherwise had none without having to worry
-%    about compatibility.  This means that, for example:
-%\begin{verbatim}
-%    \AddToHook{test}{\def\foo#1{Hello, #1!}}
-%\end{verbatim}
-%    will define the same macro \cs[no-index]{foo} regardless if the
-%    hook \hook{test} takes arguments or not.
-%
-%    Using \cs{AddToHookWithArguments} allows the \meta{code} added to
-%    access the arguments of the hook with \verb|#1|, \verb|#2|, and so
-%    forth, up to the number of the arguments declared in the hook.
-%    This means that if one wants to add a \verb|#|$_6$ to the
-%    \meta{code} that token must be doubled in the input.  The same
-%    definition from above, using \cs{AddToHookWithArguments}, needs to
-%    be rewritten:
-%\begin{verbatim}
-%    \AddToHookWithArguments{test}{\def\foo##1{Hello, ##1!}}
-%\end{verbatim}
-%
-%    Extending the above example to use the hook arguments, we could
-%    rewrite something like (now from declaration to usage, to get the
-%    whole picture):
-%\begin{verbatim}
-%    \NewHookWithArguments{test}{1}
-%    \AddToHookWithArguments{test}{%
-%      \typeout{Defining foo with "#1"}
-%      \def\foo##1{Hello, ##1! Some text after: #1}%
-%    }
-%    \UseHook{test}{Howdy!}
-%    \ShowCommand\foo
-%\end{verbatim}
-%    Running the code above prints in the terminal:
-%\begin{verbatim}
-%    Defining foo with "Howdy!"
-%    > \foo=macro:
-%    #1->Hello, #1! Some text after: Howdy!.
-%\end{verbatim}
-%    Note how \verb|##1| in the call to \cs{AddToHookWithArguments}
-%    became \verb|#1|, and the \verb|#1| was replaced by the argument
-%    passed to the hook.  Should the hook be used again, with a
-%    different argument, the definition would naturally change.
-%
-%    \bigskip
-%
-%    It is possible to add code referencing a hook's arguments before
-%    such hook is declared and the number of hooks is fixed.  However,
-%    if some code is added to the hook, that references more arguments
-%    than will be declared for the hook, there will be a low-level
-%    \TeX{} error about an \enquote{Illegal parameter number} at the
-%    time the hook is declared, which will be hard to track down because
-%    at that point \TeX{} can't know whence the offending code came
-%    from.  Thus it is important that package writers explicitly
-%    document how many arguments (if any) each hook can take, so users
-%    of those packages know how many arguments can be referenced, and
-%    equally important, what each argument means.
-%
-% \subsection{Private \LaTeX{} kernel hooks}
-%
-%    There are a few places where it is absolutely essential for
-%    \LaTeX{} to function correctly that code is executed in a precisely
-%    defined order. Even that could have been implemented with the
-%    hook management (by adding various rules to ensure the
-%    appropriate ordering with respect to other code added by
-%    packages). However, this makes every document unnecessary
-%    slow, because there has to be sorting even though the result is
-%    predetermined. Furthermore it forces package writers to
-%    unnecessarily add such rules if they add further code to the hook
-%    (or break \LaTeX{}).
-%
-%    For that reason such code is not using the hook management, but
-%    instead private kernel commands directly before or after a public
-%    hook with the following naming
-%    convention: \cs{@kernel@before@\meta{hook}} or
-%    \cs{@kernel@after@\meta{hook}}. For example, in
-%    \cs{enddocument} you find
-%\begin{verbatim}
-%   \UseHook{enddocument}%
-%   \@kernel@after@enddocument
-%\end{verbatim}
-%    which means first the user/package-accessible \hook{enddocument}
-%    hook is executed and then the internal kernel hook. As their name
-%    indicates these kernel commands should not be altered by third-party
-%    packages, so please refrain from that in the interest of
-%    stability and instead use the public hook next to it.\footnote{As
-%    with everything in \TeX{} there is not enforcement of this rule,
-%    and by looking at the code it is easy to find out how the kernel
-%    adds to them. The main reason of this section is therefore to say
-%    \enquote{please don't do that, this is unconfigurable code!}}
-%
 %
 %
 % \subsection{Legacy \LaTeXe{} interfaces}
@@ -1729,57 +1571,30 @@
 % \newcommand\onetimetext{This is a one-time hook, so after it
 %   is executed, all further
 %   attempts to add code to it will execute such code immediately
-%   (see section~\ref{sec:onetime-hooks}).}
+%   (see section~\ref{sec:One-time-hooks}).}
 %
 %  \LaTeXe{} offered a small number of hooks together with commands to
-%    add to them. They are listed here and are retained for backwards
-%    compatibility.
-%
-%  With the new hook management, several additional hooks have been added
-%    to \LaTeX\ and more will follow. See the next section for what
-%    is already available.
-%
+%    add to them. These are listed here and are retained for backwards
+%    compatibility. Using the hook directly is recommanded.
 %
 % \begin{function}{\AtBeginDocument}
 %   \begin{syntax}
-%     \cs{AtBeginDocument} \oarg{label} \Arg{code}
+%     \cs{AtBeginDocument}\oarg{label}\Arg{code}
 %   \end{syntax}
-%   If used without the optional argument \meta{label}, it works essentially
-%    like before, i.e., it is adding \meta{code} to the hook
-%    \hook{begindocument}
-%    (which is executed inside \verb=\begin{document}=).
-%    However, all code added this way is labeled with the label
-%    \hook{top-level} (see section~\ref{sec:top-level})
-%    if done outside of a package or class or with the
-%    package/class name if called inside such a file
-%    (see section~\ref{sec:default-label}).
+%    A shortcut to
+%    \cs{AddToHook}|{begindocument}|\texttt{\oarg{label}\Arg{code}}.
+%    See section \ref{sec:begindocument-hooks}.
+%    Without the optional argument \meta{label}, it works essentially
+%    like before.
 %
-%    This way one can add code to the hook using
-%    \cs{AddToHook} or \cs{AtBeginDocument} using a different label
-%    and explicitly order the code chunks as necessary, e.g., run some
-%    code before or after another package's code.  When using the
-%    optional argument the call is equivalent to running
-%    \cs{AddToHook} \texttt{\{begindocument\}} \oarg{label}
-%    \Arg{code}.
-%
-%    \cs{AtBeginDocument} is a wrapper around the \hook{begindocument}
-%    hook (see section~\ref{sec:begindocument-hooks}), which is a
-%    one-time hook.  As such, after the \hook{begindocument} hook is
-%    executed at \verb=\begin{document}= any attempt to add \meta{code}
-%    to this hook with \cs{AtBeginDocument} or with \cs{AddToHook} will
-%    cause that \meta{code} to execute immediately instead.
-%    See section~\ref{sec:onetime-hooks} for more on one-time hooks.
-%
-%    For important packages with known order requirement we may over
-%    time add rules to the kernel (or to those packages) so that they
-%    work regardless of the loading-order in the document.
 % \end{function}
 %
 % \begin{function}{\AtEndDocument}
 %   \begin{syntax}
-%     \cs{AtEndDocument} \oarg{label} \Arg{code}
+%     \cs{AtEndDocument}\oarg{label}\Arg{code}
 %   \end{syntax}
 %   Like \cs{AtBeginDocument} but for the \hook{enddocument} hook.
+%   See section \ref{sec:enddocument-hooks}.
 % \end{function}
 %
 %    \bigskip
@@ -1790,89 +1605,63 @@
 %    \cs{AtBeginDocument}. For that reason there is currently support
 %    for this, that is, if the system detects that such an internal
 %    legacy hook command contains code it adds it to the new hook
-%    system under the label \texttt{legacy} so that it doesn't get
-%    lost.
-%
-%    However, over time the remaining cases of direct usage need
+%    system under the label \enquote{\texttt{legacy}} so that it doesn't get
+%    lost.\\
+%    The\marginpar{\begin{flushright}\textbf{Important:}\end{flushright}}
+%    direct usage of private hook macros like \cs{@begindocumenthook} need
 %    updating because in one of the future release of \LaTeX{} we will
-%    turn this legacy support off, as it does unnecessary slow down
+%    remove the support of such usage, as it unnecessarily slows down
 %    the processing.
 %
 %
 % \section{\LaTeXe{} commands and environments augmented by hooks}
+% \label{sec:LaTeX2e-hooks}
 %
-%    In this section we describe the standard hooks that are now
-%    offered by \LaTeX{}, or give pointers to other documents in which
-%    they are described. This section will grow over time (and
-%    perhaps eventually move to usrguide3).  
+%^^A    In this section we describe the standard hooks that are now
+%^^A    offered by \LaTeX{}, or give pointers to other documents in which
+%^^A    they are described. This section will grow over time.
+%^^A (and perhaps eventually move to usrguide3).  
 %
 % \subsection{Generic hooks}
-% \label{sec:generic}
+% \label{sec:LaTeX-generic-hooks}
 %
-% As stated earlier, with the exception of generic hooks, all hooks must 
-% be declared with \cs{NewHook} before they can be used.  
-% All generic hooks have names of the form 
-% \enquote{\meta{type}/\meta{name}/\meta{position}}, where \meta{type}
-% is from the predefined list shown below, and \meta{name} is the variable
-% part whose meaning will depend on the \meta{type}. The last component,
-% \meta{position}, has more complex possibilities: 
-% it can always be |before| or |after|; for |env| hooks, it can also be |begin|
-% or |end|; and for |include| hooks it can also be |end|.  Each specific
-% hook is documented below, or in \texttt{ltcmdhooks-doc.pdf} or
-% \texttt{ltfilehook-doc.pdf}.
+% All generic hooks provided by \LaTeX\ have names of the form 
+% \enquote{\texttt{\meta{type}/\meta{name}/\meta{position}}} or
+% \enquote{\texttt{\meta{type}/\meta{position}}},
+% where \meta{type} is one of
+% |env|, |cmd|, |file|, |package|, |class|, |include|,
+% \meta{name} is the variable
+% part whose meaning will depend on the \meta{type},
+% and \meta{position} is one of |before|, |after|, |begin|, |end|.
+% The only available combinations are documented below,
+% in \texttt{ltcmdhooks-doc.pdf} or \texttt{ltfilehook-doc.pdf}.
 %
-% The generic hooks provided by \LaTeX{} belong to one of the six types:
-% \begin{description}
-%   \item[env] Hooks executed before and after environments --
-%     \meta{name} is the name of the environment, and available values
-%     for \meta{position} are |before|, |begin|, |end|, and |after|;
-%   \item[cmd] Hooks added to and executed before and after commands --
-%     \meta{name} is the name of the command, and available values
-%     for \meta{position} are |before| and |after|;
-%   \item[file] Hooks executed before and after reading a file --
-%     \meta{name} is the name of the file (with extension), and
-%     available values for \meta{position} are |before| and |after|;
-%   \item[package] Hooks executed before and after loading packages --
-%     \meta{name} is the name of the package, and available values for
-%     \meta{position} are |before| and |after|;
-%   \item[class] Hooks executed before and after loading classes --
-%     \meta{name} is the name of the class, and available values for
-%     \meta{position} are |before| and |after|;
-%   \item[include] Hooks executed before and after \cs{include}d files -- 
-%     \meta{name} is the name of the included file (without the |.tex|
-%     extension), and available values for \meta{position} are |before|,
-%     |end|, and |after|.
-% \end{description}
-%
-% Each of the hooks above are detailed in the following sections and
-% in linked documentation.
 % ^^A^^A^^A \pho{Wouldn't it be better to document all hooks here?}
 %
 % \subsubsection{Generic hooks for all environments}
-%
-%    Every environment \meta{env} has now four associated hooks coming
-%    with it:
+% \label{sec:Generic-hooks-for-all-environments}
+%    Every environment, named \META{env}, has four associated hooks:
 %    \begin{description}
-%    \item[\hook{env/\meta{env}/before}]
+%    \item[\hook{env/\META{env}/before}]
 %
 %       This hook is executed as part of \cs{begin} as the very first
 %       action, in particular prior to starting the environment group.
 %       Its scope is therefore not restricted by the environment.
 %
-%    \item[\hook{env/\meta{env}/begin}]
+%    \item[\hook{env/\META{env}/begin}]
 %
 %       This hook is executed as part of \cs{begin} directly in front
 %       of the code specific to the environment start (e.g., the
 %       second argument of \cs{newenvironment}).  Its scope is the
 %       environment body.
 %
-%    \item[\hook{env/\meta{env}/end}]
+%    \item[\hook{env/\META{env}/end}]
 %
 %       This hook is executed as part of \cs{end} directly in front of the
 %       code specific to the end of the environment (e.g., the third
 %       argument of \cs{newenvironment}).
 %
-%    \item[\hook{env/\meta{env}/after}]
+%    \item[\hook{env/\META{env}/after}]
 %
 %       This hook is executed as part of \cs{end} after the
 %       code specific to the environment end and after the environment
@@ -1880,93 +1669,159 @@
 %       Its scope is therefore not restricted by the environment.
 %
 %       The hook is implemented as a reversed hook so if two packages
-%       add code to \hook{env/\meta{env}/before} and to
-%       \hook{env/\meta{env}/after} they can add surrounding
+%       add code to \hook{env/\META{env}/before} and to
+%       \hook{env/\META{env}/after} they can add surrounding
 %       environments and the order of closing them happens in the
 %       right sequence.
-%
 %    \end{description}
-%    Generic environment hooks are never one-time hooks even with
-%    environments that are supposed to appear only once in a
-%    document.\footnote{Thus if one adds code to such hooks after the
-%    environment has been processed, it will only be executed if the
-%    environment appears again and if that doesn't happen the code
-%    will never get executed.}  In contrast to other hooks there is
-%    also no need to declare them using \cs{NewHook}.
 %
+%    Next examples illustrate how two packages can smoothly interact
+%    in using these hooks.
+%    With \pkg{package-1}, all \env{quote} environments can typeset
+%    in italics with either
+% \begin{lthooks.source}
+%    \ROW\cs{AddToHook}|{env/quote/begin}[package-1]{\itshape}|\\
+% \end{lthooks.source}
+%    or the functionally equivalent
+% \begin{lthooks.source}
+%    \ROW\cs{AddToHook}|{env/quote/before}[package-1]{\begin{itshape}}|\\
+%    \ROW\cs{AddToHook}|{env/quote/after} [package-1]{\end{itshape}}|\\
+% \end{lthooks.source}
+%    Similarly, with \pkg{package-2}, all \env{quote} environments can
+%    typeset in blue with a color management package and either
+% \begin{lthooks.source}
+%    \ROW\cs{AddToHook}|{env/quote/begin}[package-2]{\color{blue}}|\\
+% \end{lthooks.source}
+%    or the functionally equivalent
+% \begin{lthooks.source}
+%    \ROW\cs{AddToHook}|{env/quote/before}[package-2]{\begin{color}{blue}}|\\
+%    \ROW\cs{AddToHook}|{env/quote/after} [package2]{\end{color}}|\\
+% \end{lthooks.source}.
+%    Whatever method chosen, whatever package loaded, whatever
+%    loading order everything will work seemlessly.
+%    On the contrary, using the wrong hooks in
+% \begin{lthooks.source}
+%    \ROW\cs{AddToHook}|{env/quote/begin}[package-1]{\begin{itshape}}|\\
+%    \ROW\cs{AddToHook}|{env/quote/end}[package-1]{\end{itshape}}|\\
+%    \ROW\cs{AddToHook}|{env/quote/begin}[package-2]{\begin{color}{blue}}|\\
+%    \ROW\cs{AddToHook}|{env/quote/end}[package-2]{\end{color}}|\\
+% \end{lthooks.source}
+%    leads to the \LaTeX\ error
+% \begin{lthooks.source}
+% \ROW|! LaTeX Error: \begin{color} on input line ... ended by \end{itshape}.|
+% \end{lthooks.source}
+% because |env/quote/end| is not a reversed hook such that using the
+% \env{quote} environment would be equivalent to standard
+% \begin{lthooks.source}
+% \ROW|\begin{quote}\begin{itshape}\begin{color}{blue}|\\
+% \ROW...\\
+% \ROW|\end{itshape}\end{color}\end{quote}|\\
+% \end{lthooks.source}
+%
+%    \medskip
 %    The hooks are only executed if \cs{begin}\Arg{env} and
 %    \cs{end}\Arg{env} is used. If the environment code is executed
 %    via low-level calls to \cs[no-index]{\meta{env}} and \cs[no-index]{end\meta{env}}
 %    (e.g., to avoid the environment grouping) they are not
 %    available. If you want them available in code using this method,
 %    you would need to add them yourself, i.e., write something like
-%\begin{verbatim}
-%  \UseHook{env/quote/before}\quote
-%      ...
-%  \endquote\UseHook{env/quote/after}
-%\end{verbatim}
+%\begin{lthooks.source}
+%  \ROW\cs{UseHook}|{env/quote/before}\quote|\\
+%  \ROW...\\
+%  \ROW|\endquote|\cs{UseHook}|{env/quote/after}|\\
+%\end{lthooks.source}
 %    to add the outer hooks, etc.
 %
+%    Generic environment hooks are never one-time hooks even with
+%    environments that are supposed to appear only once in a
+%    document.\footnote{Thus if one adds code to such hooks after the
+%    environment has been processed, it will only be executed if the
+%    environment appears again and if that doesn't happen the code
+%    will never get executed.}  In contrast to other hooks there is
+%    also no need to declare them using \cs{DeclareHook}.
 %
-%    Largely for compatibility with existing packages, the following
-%    four commands are also available to set the environment hooks; but for
-%    new packages we recommend directly using the hook names and
-%    \cs{AddToHook}.
+%    \medskip
+%    Largely to support some code written for \pkg{etoolbox} package,
+%    the following four commands are also available to set the
+%    environment hooks. But for new packages and documents, we
+%    recommend to use directly using \cs{AddToHook} with the
+%    appropriate hook names.
 %
 %
 % \begin{function}{\BeforeBeginEnvironment}
 %   \begin{syntax}
-%     \cs{BeforeBeginEnvironment} \oarg{label} \Arg{env} \Arg{code}
+%     \cs{BeforeBeginEnvironment}\oarg{label}\Arg{env}\Arg{code}
 %   \end{syntax}
-%   This declaration adds to the \hook{env/\meta{env}/before} hook
-%    using the \meta{label}.  If \meta{label} is not given, the
-%    \meta{default label} is used (see section~\ref{sec:default-label}).
+%   This is a synonym of \cs{AddToHook}^^A
+%     |{|\hook{env/\meta{env}/before}|}{|\texttt{\meta{code}}|}|.
 % \end{function}
 %
 % \begin{function}{\AtBeginEnvironment}
 %   \begin{syntax}
-%     \cs{AtBeginEnvironment} \oarg{label} \Arg{env} \Arg{code}
+%     \cs{AtBeginEnvironment}\oarg{label}\Arg{env}\Arg{code}
 %   \end{syntax}
-%   This is like \cs{BeforeBeginEnvironment} but it adds to the \hook{env/\meta{env}/begin} hook.
+%   This is a synonym of \cs{AddToHook}^^A
+%     |{|\hook{env/\meta{env}/begin}|}{|\texttt{\meta{code}}|}|.
 % \end{function}
 %
 % \begin{function}{\AtEndEnvironment}
 %   \begin{syntax}
-%     \cs{AtEndEnvironment} \oarg{label} \Arg{env} \Arg{code}
+%     \cs{AtEndEnvironment}\oarg{label}\Arg{env}\Arg{code}
 %   \end{syntax}
-%   This is like \cs{BeforeBeginEnvironment} but it adds to the \hook{env/\meta{env}/end} hook.
+%   This is a synonym of \cs{AddToHook}^^A
+%     |{|\hook{env/\meta{env}/end}|}{|\texttt{\meta{code}}|}|.
 % \end{function}
 %
 % \begin{function}{\AfterEndEnvironment}
 %   \begin{syntax}
-%     \cs{AfterEndEnvironment} \oarg{label} \Arg{env} \Arg{code}
+%     \cs{AfterEndEnvironment}\oarg{label}\Arg{env}\Arg{code}
 %   \end{syntax}
-%   This is like \cs{BeforeBeginEnvironment} but it adds to the \hook{env/\meta{env}/after} hook.
+%   This is a synonym of \cs{AddToHook}^^A
+%     |{|\hook{env/\meta{env}/after}|}{|\texttt{\meta{code}}|}|.
 % \end{function}
 %
 %
 % \subsubsection{Generic hooks for commands}
-%
-%    Similar to environments there are now (at least in theory) two
-%    generic hooks available for any \LaTeX{} command. These are
+% \label{sec:Generic-hooks-for-commands}
+%    Like for environments there are now two generic hooks available
+%    for most commands:
 %    \begin{description}
-%    \item[\hook{cmd/\meta{name}/before}]
+%    \item[\hook{cmd/\META{name}/before}]
 %
-%       This hook is executed at the very start of the command
-%       execution.
+%       This hook is used at the very start
+%       of \cs[no-index]{\META{name}}.
 %
-%    \item[\hook{cmd/\meta{name}/after}]
-%       This hook is executed at the very end of the command body.  It is
-%       implemented as a reversed hook.
+%    \item[\hook{cmd/\META{name}/after}]
+%       This reversed hook is used at the very end of
+%       \cs[no-index]{\META{name}}.
 %    \end{description}
-%    In practice there are restrictions and especially the
-%    \hook{after} hook works only with a subset of commands. Details
-%    about these restrictions are documented in
-%    \texttt{ltcmdhooks-doc.pdf} or with code in
-%    \texttt{ltcmdhooks-code.pdf}.
-%
-%
-%
+%    Not all commands are eligible to use hooks, for exemple
+%    the simple instruction
+% \begin{lthooks.source}
+%    \ROW\cs{AddToHook}|{cmd/end/after}{}|
+% \end{lthooks.source}
+%    that seems harmless because it adds nothing to the |\end|
+%    command certainly breaks any standard document.
+%    Moreover, there are some subtleties in some patterns,
+%    for example swapping lines 2 and 3 below
+%    changes the typeset output from \enquote{12} to \enquote{112}.
+% \begin{lthooks.source}[lineno]
+% \ROW|\def\foo{}%                           |^^A
+% \SEP|\def\foo{}%|\\
+% \ROW[format=\bfseries,mark=$\to$\;,
+%   ]|\let\bar\foo                          |^^A
+% \SEP|\AddToHook{cmd/foo/after}{1}%|\\
+% \ROW[format=\bfseries,mark=$\to$\;,
+%   ]|\AddToHook{cmd/foo/after}{1}%         |^^A
+% \SEP|\let\bar\foo|\\
+% \ROW|\AddToHook{cmd/bar/after}{2}%         |^^A
+% \SEP|\AddToHook{cmd/bar/after}{2}%|\\
+% \ROW|\foo\bar                              |^^A
+% \SEP|\foo\bar|\\
+% \end{lthooks.source}
+%    All this is covered in \texttt{ltcmdhooks-doc.pdf} or
+%    with code in \texttt{ltcmdhooks-code.pdf},
+%    as part of a very detailed analysis.
 %
 % \subsubsection{Generic hooks provided by file loading operations}
 %
@@ -1981,65 +1836,101 @@
 % \subsection{Hooks provided by \cs{begin}\texttt{\{document\}}}
 % \label{sec:begindocument-hooks}
 %
-%    Until 2020 \cs{begin}\texttt{\{document\}} offered exactly one
-%    hook that one could add to using
-%    \cs{AtBeginDocument}. Experiences over the years have shown that
-%    this single hook in one place was not enough and as part of
-%    adding the general hook management system a number of additional
-%    hooks have been added at this point. The places for these hooks have
-%    been chosen to provide the same support as offered by external
-%    packages, such as \pkg{etoolbox} and others that augmented
-%    \cs{document} to gain better control.
-%
-%    Supported are now the following hooks (all of them one-time hooks):
+%    In addition to the generic hooks associated to the start of any
+%    environment, namely \hook{env/document/before} and
+%    \hook{env/document/begin}, there are one-time hooks that are
+%    all executed between them:
 %    \begin{description}
-%
 %
 %    \item[\hook{begindocument/before}]
 %
-%      This hook is executed at the very start of \cs{document}, one can
-%      think of it as a hook for code at the end of the preamble
-%      section and this is how it is used by \pkg{etoolbox}'s
-%      \cs{AtEndPreamble}.
-%
-%      \onetimetext
+%      This hook is executed at the end of the preamble
+%      before reading the |.aux| file.
 %
 %    \item[\hook{begindocument}]
 %
-%      This hook is added to by using \cs{AddToHook}\texttt{\{begindocument\}}
-%      or by using \cs{AtBeginDocument} and it is
-%      executed after the \texttt{.aux} file has been read and most
-%      initialization are done, so they can be altered and inspected by
-%      the hook code. It is followed by a small number of further
-%      initializations that shouldn't be altered and are therefore
-%      coming later.
+%      This hook is executed after the |.aux| file has been executed
+%      and most initialization are done, so they can be altered and
+%      inspected by the hook code.
 %
-%      The hook should not be used to add material for typesetting as
-%      we are still in \LaTeX's initialization phase and not in the
-%      document body. If such material needs to be added to the document
-%      body use the next hook instead.
-%
-%      \onetimetext
+%      The hook should not be used to add material for typesetting,
+%      use the next hook instead.
 %
 %    \item[\hook{begindocument/end}]
 %
-%      This hook is executed at the end of the \cs{document} code in
-%      other words at the beginning of the document body. The only
-%      command that follows it is \cs{ignorespaces}.
-%
-%      \onetimetext
+%      This hook is executed at the beginning of the document body,
+%      it can contain material for typesetting.
 %
 %    \end{description}
-%    The generic hooks executed by \cs{begin} also exist, i.e.,
-%    \hook{env/document/before} and \hook{env/document/begin}, but
-%    with this special environment it is better use the dedicated
-%    one-time hooks above.
-%
-%
-%
 %
 % \subsection{Hooks provided by \cs{end}\texttt{\{document\}}}
+% \label{sec:enddocument-hooks}
 %
+%    After the generic hook \hook{env/document/end} associated to
+%    any environment, next one-time hooks are used.
+%    The other generic hook \hook{env/document/after} will never get
+%    executed, because by  that time \LaTeX{} has finished the
+%    document processing.
+%    \begin{description}
+%
+%    \item[\hook{enddocument}]
+%
+%      The hook is executed at the end of the document body.
+%
+%      When this hook is executed there may be still unprocessed
+%      material (e.g., floats on the deferlist) and the hook may add
+%      further material to be typeset. After it, \cs{clearpage} is
+%      called to ensure that all such material gets typeset. If there
+%      is nothing waiting the \cs{clearpage} has no effect.
+%
+%    \item[\hook{enddocument/afterlastpage}]
+%
+%      This hook should not receive code that generates material for
+%      further pages. It is the right place to do some final
+%      housekeeping and possibly write out some information to the
+%      \texttt{.aux} file using \cs{immediate}\cs{write}. It is also
+%      the correct place to set up any testing code to be run when the
+%      \texttt{.aux} file is read once more before the end.
+%
+%      After this hook has been executed the \texttt{.aux} file is
+%      closed for writing and then read back in to do some tests
+%      (e.g., looking for missing references or duplicated labels, etc.).
+%
+%    \item[\hook{enddocument/afteraux}]
+%
+%      At this point, the \texttt{.aux} file has been reprocessed and so
+%      this is a possible place for final checks and display of
+%      information to the user before the kernel info of next hook. 
+%
+%    \item[\hook{enddocument/info}]
+%
+%      This hook is meant to receive code that write final information
+%      messages to the terminal.
+%      This hook already contains some code added by the kernel
+%      for self explaining labels \texttt{kernel/filelist} and
+%      \texttt{kernel/warnings}).
+%
+%      To write information berfore the kernel information,
+%      use the previous hook or use a rule.
+%
+%    \item[\hook{enddocument/end}]
+%
+%      This is the very last hook, just before \LaTeX\ terminates
+%      the typesetting process.
+%
+%    \end{description}
+%
+%
+%    There is also the hook \hook{shipout/lastpage}. This hook is
+%    executed as part of the last \cs{shipout} in the document to
+%    allow package to add final \cs{special}'s to that page. Where
+%    this hook is executed in relation to those from the above list
+%    can vary from document to document. Furthermore to determine correctly
+%    which of the \cs{shipout}s is the last one, \LaTeX{} needs to be run
+%    several times, so initially it might get executed on the wrong
+%    page. See section~\ref{sec:shipout} for where to find the details.
+%
+%    \medskip
 %    \LaTeXe{} has always provided \cs{AtEndDocument} to add code to the
 %    \verb=\end{document}=, just in front of the code that
 %    is normally executed there. While this was a big improvement over
@@ -2054,95 +1945,6 @@
 %    have been added to the \cs{enddocument} code to allow packages
 %    to add code in various places in a controlled way without the
 %    need for overwriting or patching the core code.
-%
-%    Supported are now the following hooks (all of them one-time hooks):
-%    \begin{description}
-%
-%    \item[\hook{enddocument}]
-%
-%      The hook associated with \cs{AtEndDocument}. It is immediately
-%      called at the beginning of \cs{enddocument}.
-%
-%      When this hook is executed there may be still unprocessed
-%      material (e.g., floats on the deferlist) and the hook may add
-%      further material to be typeset. After it, \cs{clearpage} is
-%      called to ensure that all such material gets typeset. If there
-%      is nothing waiting the \cs{clearpage} has no effect.
-%
-%      \onetimetext
-%
-%    \item[\hook{enddocument/afterlastpage}]
-%
-%      As the name indicates this hook should not receive code that
-%      generates material for further pages. It is the right place to
-%      do some final housekeeping and possibly write out some
-%      information to the \texttt{.aux} file (which is still open at
-%      this point to receive data, but since there will be no more pages you
-%      need to write to it using \cs{immediate}\cs{write}). It is also the
-%      correct place to
-%      set up any testing code to be run when the \texttt{.aux} file
-%      is re-read in the next step.
-%
-%
-%      After this hook has been executed the \texttt{.aux} file is
-%      closed for writing and then read back in to do some tests
-%      (e.g., looking for missing references or duplicated labels, etc.).
-%
-%      \onetimetext
-%
-%    \item[\hook{enddocument/afteraux}]
-%
-%      At this point, the \texttt{.aux} file has been reprocessed and so
-%      this is a possible place for final checks and display of
-%      information to the user. However, for the latter you might
-%      prefer the next hook, so that your information is displayed after the
-%      (possibly longish) list of files if that got requested via \cs{listfiles}.
-%
-%      \onetimetext
-%
-%    \item[\hook{enddocument/info}]
-%
-%      This hook is meant to receive code that write final information
-%      messages to the terminal. It follows immediately after the
-%      previous hook (so both could have been combined, but then
-%      packages adding further code would always need to also supply
-%      an explicit rule to specify where it should go.
-%
-%      This hook already contains some code added by the kernel (under
-%      the labels \texttt{kernel/filelist} and
-%      \texttt{kernel/warnings}), namely the list of files when
-%      \cs{listfiles} has been used and the warnings for duplicate
-%      labels, missing references, font substitutions etc.
-%
-%      \onetimetext
-%
-%    \item[\hook{enddocument/end}]
-%
-%      Finally, this hook is executed just in front of the final call
-%      to \cs{@{}@end}.
-%
-%      \onetimetext % is it even possible to add code after this one?
-%
-%    \end{description}
-%
-%
-%    There is also the hook \hook{shipout/lastpage}. This hook is
-%    executed as part of the last \cs{shipout} in the document to
-%    allow package to add final \cs{special}'s to that page. Where
-%    this hook is executed in relation to those from the above list
-%    can vary from document to document. Furthermore to determine correctly
-%    which of the \cs{shipout}s is the last one, \LaTeX{} needs to be run
-%    several times, so initially it might get executed on the wrong
-%    page. See section~\ref{sec:shipout} for where to find the details.
-%
-%
-%    It is in also possible to use the generic \hook{env/document/end}
-%    hook which is executed by \cs{end}, i.e., just in front of the
-%    first hook above. Note however that the other generic \cs{end}
-%    environment hook, i.e., \hook{env/document/after} will never get
-%    executed, because by that time \LaTeX{} has finished the document
-%    processing.
-%
 %
 %
 %
@@ -2253,6 +2055,51 @@
 %      apply to the mark being inserted.
 %
 %    \end{description}
+%
+% \section{Changes}
+% Some command names have changed through the years. Old names are
+% still available but using them issues a warning.
+% \begin{center}
+% \ExplSyntaxOn
+% \def\Row#1#2{
+%   \cs_if_exist:cTF { #1 } {
+%     \cs[no-index]{#1}
+%   } {
+%     \PackageError{lthooks}{Wrong~name~#1}{}
+%   }&\small
+%   \cs_if_exist:cTF { #2 } {
+%     \cs{#2}
+%   } {
+%     \cs{#2}
+%     ^^A\PackageError{lthooks}{Wrong~name~#2}{}
+%   }\\\hline
+% }
+% \ExplSyntaxOff
+% \def\Row#1#2{\small\cs[no-index]{#1}&\small\cs{#2}\\\hline
+% }
+% \begin{tabular}{|l|l|}
+% \hline
+% Old & New since 0001-01-01\\\hline
+% \Row{NewHook}                     {DeclareHook}
+% \Row{hook_new:n}                  {hook_declare:n}
+% \Row{NewReversedHook}             {DeclareReversedHook}
+% \Row{hook_new_reversed:n}         {hook_declare_reversed:n}
+% \Row{NewMirroredHookPair}         {DeclareMirroredHookPair}
+% \Row{hook_new_pair:nn}            {hook_declare_pair:nn}
+% \Row{NewHookWithArguments}        {DeclareHookWithArguments}
+% \Row{hook_new_with_args:nn}       {hook_declare_with_args:nn}
+% \Row{NewReversedHookWithArguments}{DeclareReversedHookWithArguments}
+% \Row{hook_new_reversed_with_args:nn}{hook_declare_reversed_with_args:nn}
+% \Row{NewMirroredHookPairWithArguments}{DeclareMirroredHookPairWithArguments}
+% \Row{hook_new_pair_with_args:nn}  {hook_declare_pair_with_args:nnn}
+% \Row{PushDefaultHookLabel}        {PushHookCurrentName}
+% \Row{PopDefaultHookLabel}         {PopHookCurrentName}
+% \Row{SetDefaultHookLabel}         {SetHookCurrentName}
+% \Row{hook_set_default_label:n}    {hook_set_current_name:n}
+% \Row{ActivateGenericHook}         {EnableGenericHook}
+% \end{tabular}
+% \end{center}
+%
 %
 % \MaybeStop{\setlength\IndexMin{200pt}  \PrintIndex  }
 %
