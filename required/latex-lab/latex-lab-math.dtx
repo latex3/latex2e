@@ -96,8 +96,24 @@
 %\end{verbatim}
 % would only result in a single capture of the tokens
 % ``\verb*/a \in A \text{ for all $a<5$}/''.
+% 
 %
-% \section{Math capture}
+% \section{Math capture} \label{sec:mathcapture}
+% In the current setup 
+%  \begin{itemize}
+%   \item |$|, |\(...\)| and |$$| grab (through a command in \cs{everymath}/cs{everydisplay})
+%   if the boolean \cs{l_@@_collected_bool} is false.
+%   If the boolean is true they behave normally and can for example contain verbatim.
+%   
+%   \item All (registerted) environments grab their body 
+%    regardless of the state of the boolean. For
+%    |equation|, |equation*| and |math| this is a change as they no longer can 
+%    contain verbatim.
+%   
+%   \item BUG: |\[...\]| grabs if \cs{l_@@_collected_bool} is false. If it is 
+%   true it falls back to |equation*| and then errors because this can't find the end.   
+%  \end{itemize} 
+%  
 % \subsection{Code level interfaces}
 %
 % \begin{function}{\math_register_env:n, \math_register_env:nn}
@@ -149,16 +165,85 @@
 %      Some of these have been addressed in a more recent branch.} 
 %
 % \subsection{Capture/grabbing problems}
-% 
+%  
 % \begin{enumerate}
 %   \item Incorrect grabbing of |$|-math when there is also 
 %      explicit |$|-math within a \textit{text environment} 
 %      that is itself within the math that should all be grabbed.
+%      For example,
+%       \begin{verbatim}
+%        $a\begin{minipage}{1cm}$b$\end{minipage}$
+%       \end{verbatim}
+%      would only result in the capture of the tokens
+%      ``\verb*a\begin {minipage}{1cm}/''. 
+%      This can be avoided by an additional brace group:
+%       \begin{verbatim}
+%        $a{\begin{minipage}{1cm}$b$\end{minipage}}$
+%       \end{verbatim} 
+%      
 %   \item Similar incorrect grabbing with |$$| also.
+%   
 %   \item The grabbing, for all the display environments (and |\) \]|), needs
-%       to deal with nesting: \pkg{amsmath} contains code for this.  
+%       to deal with nesting: \pkg{amsmath} contains code for this. 
+%        
+%   \item The math can't contain verbatim and verbatim-like commands. This is 
+%   nothing new for the \pkg{amsmath} environments but changes |$| and |\[\]|
+%   and |equation*| (see e.g. tagging-project issue \#30).    
+%   
+%   \item Begin and end of the math or math environment can not be hidden in commands.
+%   For example \verb+>{$}l<{$}+ in a tabular would lead to errors. 
+%   Defining |\[| to fall back to |equation*| doesn't work if |equation*| is 
+%   a grabbing environment.
+%   
+%   \item The behaviour of |\[...\]| is faulty. See above.
 % \end{enumerate} 
 %
+% \subsection{Fake math}
+% In a number of places in \LaTeX{} math commands (mainly |$|) is used 
+% only for technical reason, e.g. to access a math font, to setup a symbol
+% or to use \cs{vcenter}. 
+% 
+% The code identifies such fake math mostly by making use of the \cs{m@th} command
+% where two methods are used for the automatic detection:
+% 
+% \begin{itemize}
+%  \item After grabbing math content the code checks if the content contains the token 
+%  \cs{m@th} and if yes it doesn't call the processor before reinserting 
+%  the content and perhaps adding tagging code.
+%  This method requires that the math can be grabbed (e.g. that the end dollar is visible)
+%  and that the \cs{m@th} is visible. It applies for example in \cs{@iiiparbox} where the
+%  code from |$\vcenter| to |\m@th$| is grabbed an put back. It does not work for
+%  example for |tabular| where the dollars and the \cs{m@th} token are spread around
+%  over three commands. |tabular| needs therefore manual intervention. 
+%  
+%  A look in the list of usages (in \texttt{usage-of-m@th.md}) justifies this approach.
+%  All usages are either no math at all, or related to small elements that probably
+%  shouldn't be grabbed and processed on their own. 
+%
+%  \item \cs{m@th} is redefined so that it sets the boolean \cs{l_@@_collected_bool}
+%  to true. If \cs{m@th} is used inside math that has been grabbed 
+%  this doesn't change much as the boolean is set by the grabbing anyway. For usages
+%  outside math the benefit is not so clear: The setting avoids that in \cs{LaTeXe}
+%  the epsilon is processed as math, but it also prevents that the content of the amsmath
+%  command \cs{boxed} is processed as math. 
+%  It means that if one wants to reenable math processing inside some (fake) math
+%  one has to do it after \cs{m@th} calls. 
+% \end{itemize}
+% 
+%  Open problems
+%  \begin{enumerate}
+%   \item The grabbing code doesn't pass the info that it detected a \cs{m@th} token.
+%   This means that the tagging code has to do the same check (and doesn't do this
+%   in all cases yet).
+%   
+%   \item Commands are missing to locally disable the grabbing and processing, e.g.
+%   to handle |tabular|.
+%   
+%   \item It must be checked if setting the boolean in \cs{m@th} really makes sense
+%   or if commands like \cs{LaTeXe} should be handled manually. 
+%           
+%  \end{enumerate}
+%  
 % \subsection{Other problems}
 % 
 % \begin{enumerate} 
@@ -167,6 +252,9 @@
 %      does not necessarily indicate fakemath.  This is because  
 %      wanting mathsurround to be zero is very reasonable and common, 
 %      \emph{even when the math is genuine} (and hence needs to be collected).
+%      
+%      TODO: this claim needs some examples. 
+%      
 %   \item User-defined environments can create problems; but this area, of 
 %      new, copied and changed environments, has not yet been developed. 
 % 
