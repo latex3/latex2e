@@ -73,6 +73,8 @@ checkconfigs =
   "config-float",
   "config-bib",
   "config-LM-tagging",
+  "config-table-pdftex",
+  "config-table-luatex"
  }
 
 
