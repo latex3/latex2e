@@ -110,7 +110,7 @@
 %   if the boolean \cs{l_@@_collected_bool} is false.
 %   If the boolean is true they behave normally and can for example contain verbatim.
 %   
-%   \item All (registerted) environments grab their body 
+%   \item All (registered) environments grab their body 
 %    regardless of the state of the boolean. For
 %    |equation|, |equation*| and |math| this is a change as they no longer can 
 %    contain verbatim.
@@ -164,6 +164,54 @@
 %   \end{itemize}
 % \end{function}
 % 
+% \section{Math tagging}
+% 
+% The tagging code has to handle 
+% \begin{itemize}
+% \item the embedding into the surrounding. This means 
+%   \begin{itemize} 
+%     \item closing and reopening MC-chunks 
+%     \item closing and reopening text/P-structures
+%     \item handling interferences of the tagging code with penalties and spacing.
+%   \end{itemize}
+% \item the actual tagging which means to do some or all of the following tasks:
+%   \begin{itemize}
+%     \item setup content for an associated source file
+%     \item setup content for an associated mathml file 
+%     \item setup content for the /Alt key
+%     \item setup content for the /ActualText key
+%     \item setup attributes
+%     \item add associated files     
+%     \item add a Formula structure
+%     \item surround subparts (e.g. lines) with Formula sub structures
+%          (perhaps with their own set of additional content)
+%     \item surround elements of the equation with mathml structure elements 
+%          (currently only luatex with luamml)
+%    \end{itemize}
+%  \end{itemize}
+%  
+%  \subsection{Inline math}
+%  
+%  The embedding code is added through
+%  the sockets 
+%   \begin{itemize}
+%    \item |tagsupport/math/inline/begin|                
+%    \item |tagsupport/math/inline/end|
+%   \end{itemize}  
+%  The sockets simply push and pop the MC currently. Without
+%  tagging they use the noop-plug. 
+%  
+%  The actual tagging is in done through the sockets
+%   \begin{itemize}
+%    \item |tagsupport/math/inline/formula/begin|
+%     This socket takes the math as argument and its code
+%     should output it for typesetting. Without tagging the 
+%     socket uses the identity plug.
+%    \item |tagsupport/math/inline/formula/end|
+%   \end{itemize} 
+%    
+%    
+%   
 % \section{Known current bugs, etc.}
 %     \car*{New Section, now with subsections.\\
 %      As indicated, these lists are probably incomplete.\\
@@ -397,6 +445,62 @@
 % \end{variable}
 % 
 % \subsection{Sockets}
+% \subsubsection{Main inline math sockets}
+% 
+% \begin{socketdecl}
+%   {
+%     tagsupport/math/inline/begin,
+%     tagsupport/math/inline/end,
+%     tagsupport/math/inline/formula/begin,
+%     tagsupport/math/inline/formula/end,
+%   }
+%   The first two sockets are meant to embed inline
+%   math into the surrounding (so to close/reopen e.g. MC-chunks).
+%   The other two implement the actual formula structure.                 
+%    \begin{macrocode}
+\socket_new:nn {tagsupport/math/inline/begin}{0}
+\socket_new:nn {tagsupport/math/inline/end}{0}
+\socket_new:nn {tagsupport/math/inline/formula/begin}{1} %
+\socket_new:nn {tagsupport/math/inline/formula/end}{0}
+%    \end{macrocode}
+%\end{socketdecl}
+% 
+% 
+% \begin{plugdecl}{MC}
+%    \begin{macrocode}
+\socket_new_plug:nnn
+  {tagsupport/math/inline/begin}
+  {MC}
+  {\tag_mc_end_push:}
+\socket_new_plug:nnn
+  {tagsupport/math/inline/end}
+  {MC}
+  {\tag_mc_begin_pop:n{}}  
+%    \end{macrocode}
+% \end{plugdecl}
+% 
+% We probably will want to test different tagging receipes.
+% \begin{plugdecl}{tag/dflt}
+%    \begin{macrocode}
+\socket_new_plug:nnn
+  {tagsupport/math/inline/formula/begin}
+  {tag/dflt}
+  {  
+    \socket_use:n{tagsupport/math/content}
+    \socket_use:n{tagsupport/math/struct/begin}
+    % inner formula if multiple parts (not really implemented yet)
+    \socket_use:n{tagsupport/math/substruct/begin}
+    #1
+  }
+\socket_new_plug:nnn
+  {tagsupport/math/inline/formula/end}
+  {tag/dflt}
+  {  
+    \socket_use:n{tagsupport/math/substruct/end}
+    \socket_use:n{tagsupport/math/struct/end}
+  }  
+%    \end{macrocode}
+% \end{plugdecl}
 % 
 % \begin{socketdecl}{tagsupport/math/content}
 % The math content is stored in associated files and used for 
@@ -504,57 +608,6 @@
 % \end{macrocode}   
 
 % 
-% \begin{socketdecl}{tagsupport/math/inline/begin,
-%                    tagsupport/math/inline/end,
-%                    tagsupport/math/inline/formula/begin,
-%                    tagsupport/math/inline/formula/end,
-%                   }
-%   The first two sockets are meant to embed inline
-%   math into the surrounding (so to close/reopen e.g. MC-chunks).
-%   The other two implement the actual formula structure.                 
-%    \begin{macrocode}
-\socket_new:nn {tagsupport/math/inline/begin}{0}
-\socket_new:nn {tagsupport/math/inline/end}{0}
-\socket_new:nn {tagsupport/math/inline/formula/begin}{1} %
-\socket_new:nn {tagsupport/math/inline/formula/end}{0}
-%    \end{macrocode}
-%\end{socketdecl}
-%
-% \begin{plugdecl}{MC}
-%    \begin{macrocode}
-\socket_new_plug:nnn
-  {tagsupport/math/inline/begin}
-  {MC}
-  {\tag_mc_end_push:}
-\socket_new_plug:nnn
-  {tagsupport/math/inline/end}
-  {MC}
-  {\tag_mc_begin_pop:n{}}  
-%    \end{macrocode}
-% \end{plugdecl}
-% 
-% We probably will want to test different tagging receipes.
-% \begin{plugdecl}{tag/dflt}
-%    \begin{macrocode}
-\socket_new_plug:nnn
-  {tagsupport/math/inline/formula/begin}
-  {tag/dflt}
-  {  
-    \socket_use:n{tagsupport/math/content}
-    \socket_use:n{tagsupport/math/struct/begin}
-    % inner formula if multiple parts (not really implemented yet)
-    \socket_use:n{tagsupport/math/substruct/begin}
-    #1
-  }
-\socket_new_plug:nnn
-  {tagsupport/math/inline/formula/end}
-  {tag/dflt}
-  {  
-    \socket_use:n{tagsupport/math/substruct/end}
-    \socket_use:n{tagsupport/math/struct/end}
-  }  
-%    \end{macrocode}
-% \end{plugdecl}
 % 
 % 
 %  \begin{macro}{\__tag_math_disable:}
