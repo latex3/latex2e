@@ -2070,7 +2070,7 @@
 % \begin{macro}{\@@_copy:NN}
 % \begin{macro}{\@@_set_eq_if_exist:NN,\@@_set_eq_if_exist:cc}
 %   This macro just branches to the proper copying command by using
-%   \cs{@@_cmd_type_cases:NnnnnF}.  The copying command takes the names
+%   \cs{@@_cmd_type_cases:NnnnnnF}.  The copying command takes the names
 %   of the commands to be copied to and from, and the actual commands
 %   as its four arguments.
 %    \begin{macrocode}
@@ -2079,9 +2079,10 @@
     \use:x
       {
         \int_set:Nn \tex_escapechar:D { 92 }
-        \exp_not:N \@@_cmd_type_cases:NnnnnF \exp_not:N #2
+        \exp_not:N \@@_cmd_type_cases:NnnnnnF \exp_not:N #2
           { \@@_copy_command:nnNN }
           { \@@_copy_expandable:nnNN }
+          { \@@_copy_optimised:nnNN }
           { \@@_copy_environment:nnNN }
           { \@@_copy_environment_end:nnNN }
           { \@@_cant_copy:nwn { non-ltcmd } }
@@ -2222,6 +2223,14 @@
 %<latexrelease>  {Support~\NewCommandCopy~in~ltcmd}
 %<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
+%
+% \begin{macro}{\@@_copy_optimised:nnNN}
+%   Trivial copy.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_copy_optimised:nnNN #1#2#3#4
+  { \cs_set_eq:NN #3 #4 }
+%    \end{macrocode}
+% \end{macro}
 %
 %    \begin{macrocode}
 %<latexrelease>\IncludeInRelease{2021/11/15}{\@@_copy:NN (part 2)}%
@@ -2460,7 +2469,7 @@
 %
 % \begin{macro}{\@@_show:N}
 %   This macro just branches to the proper showing command by using
-%   \cs{@@_cmd_type_cases:NnnnnF}.  The showing command takes the command
+%   \cs{@@_cmd_type_cases:NnnnnnF}.  The showing command takes the command
 %   to be shown as argument.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_show:N #1
@@ -2468,9 +2477,10 @@
     \use:x
       {
         \int_set:Nn \tex_escapechar:D { 92 }
-        \exp_not:N \@@_cmd_type_cases:NnnnnF \exp_not:N #1
+        \exp_not:N \@@_cmd_type_cases:NnnnnnF \exp_not:N #1
           { \@@_show_command:N }
           { \@@_show_expandable:N }
+          { \@@_show_optimised:N }
           { \@@_show_environment:N }
           { \@@_show_environment_end:N }
           { \@@_cant_copy:nwn { non-ltcmd } }
@@ -2487,6 +2497,7 @@
 %     \@@_show_command:NnNNwN,
 %     \@@_show_expandable:N,
 %     \@@_show_expandable:NnNNNNnN,
+%     \@@_show_optimised:N,
 %     \@@_show_command_aux:NnNNn,
 %     \@@_show_environment:N,
 %     \@@_show:x,
@@ -2565,6 +2576,37 @@
         -> \cs_replacement_spec:N #4
       }
   }
+%    \end{macrocode}
+%
+% Optimised functions needs things done a bit differently as we need to
+% reconstruct the argument spec.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_show_optimised:N #1
+  {
+    \tl_show:e
+      {
+        \token_to_str:N #1 =
+          \token_if_protected_macro:NF #1 { expandable ~ } document~command:
+        \iow_newline:
+        \int_step_function:nN
+          { \tl_count:n { \cs_parameter_spec:N #1 } / 2 }
+          \@@_show_optimised_aux:N
+        ->
+        \use:e
+          {
+            \exp_not:N \@@_show_optimised_aux:w
+              \cs_replacement_spec:N #1
+          }
+      }
+  }
+\cs_new:Npn \@@_show_optimised_aux:N #1
+  { \c_space_tl \c_hash_str #1 : m \iow_newline: }
+\use:e
+  {
+    \cs_new:Npn \exp_not:N \@@_show_optimised_aux:w
+      \token_to_str:N \@@_start_optimised: \c_space_tl
+  }
+  { }
 %    \end{macrocode}
 %
 %   We can reuse most of the above to show an environment, except that
@@ -4413,13 +4455,14 @@
 % \end{macro}
 %
 % \begin{macro}{\__kernel_cmd_if_xparse:NTF}
-% \begin{macro}{\@@_cmd_type_cases:Nnnnn}
+% \begin{macro}{\@@_cmd_type_cases:Nnnnnn}
 % \changes{v1.0d}{2021/04/19}{Renamed \cs{__cmd_cmd_if_xparse:NTF} to
 %      \cs{__kernel_cmd_if_xparse:NTF} for cross-module usage}
 % \changes{v1.0d}{2021/07/30}{Added \cs{@@_cmd_type_cases:NnnnnF} for
 %      \cs{NewCommandCopy} and \cs{ShowCommand} support}
 % \changes{v1.0l}{2022/03/18}{Fix \cs{@@_cmd_type_cases:NnnnnF}
 %"     prematurely expanding macros (gh/795)}
+% \changes{v1.2b}{2023/11/28}{Extend for optimised commands}
 % \begin{macro}{\@@_cmd_if_xparse_aux:N}
 %
 %    To determine whether the command is an \pkg{xparse} command check
@@ -4427,13 +4470,14 @@
 %    that its |replacement_spec| starts with either
 %    \cs{@@_start:nNNnnn} (non-expandable command) or
 %    \cs{@@_start_expandable:nNNNNn} (expandable command) or
+%    \cs{@@_start_optimised:} (optimised command) or
 %    \cs{@@_start_env:nnnnn} (environment) or
 %    \cs[no-index]{environment~\#1~end~aux} (environment end).
 %
 %    This conditional is needed in several kernel modules and is
 %    therefore has a kernel-internal name.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_cmd_type_cases:NnnnnF #1 #2 #3 #4 #5 #6
+\cs_new_protected:Npn \@@_cmd_type_cases:NnnnnnF #1 #2 #3 #4 #5 #6#7
   {
     \exp_args:Ne \str_case_e:nnF
       {
@@ -4443,20 +4487,21 @@
       {
         { \exp_not:N \@@_start:nNNnnn } {#2}
         { \exp_not:N \@@_start_expandable:nNNNNn } {#3}
-        { \exp_not:N \@@_start_env:nnnnn } {#4}
+        { \exp_not:N \@@_start_optimised: } {#4}
+        { \exp_not:N \@@_start_env:nnnnn } {#5}
         {
           \exp_after:wN \exp_not:N
             \cs:w environment~
               \exp_last_unbraced:Ne \use_none:nnn
                 { \cs_to_str:N #1 } ~end~aux \cs_end:
-        } {#5}
+        } {#6}
       }
-      {#6}
+      {#7}
   }
 \cs_new_protected:Npn \__kernel_cmd_if_xparse:NTF #1
   {
-    \@@_cmd_type_cases:NnnnnF #1
-      { } { } { } { } { \use_iii:nnn }
+    \@@_cmd_type_cases:NnnnnnF #1
+      { } { } { } { } { } { \use_iii:nnn }
     \use_i:nn
   }
 %    \end{macrocode}
