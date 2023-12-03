@@ -402,7 +402,7 @@
 %    \begin{macrocode}
 \NewSocketPlug{tagsupport/tblrow/end}{TR}
   {
-    \@@_add_missing_cells:n { \g_@@_missing_cells_int }
+    \@@_add_missing_cells: 
     \seq_gput_right:Ne \g_@@_struct_cells_seq
       {
         \seq_use:Nn \g_@@_struct_cur_seq {,}
@@ -738,6 +738,10 @@
          }
       }
   }
+
+\NewSocketPlug{tagsupport/tbl/colspan}{code}
+  { \@@_set_colspan:n {#1} }
+  
 %    \end{macrocode}
 % \end{macro}
 %
@@ -764,6 +768,7 @@
    \AssignSocketPlug{tagsupport/tblhmode/end}{noop}
    \AssignSocketPlug{tagsupport/tblvmode/begin}{noop}
    \AssignSocketPlug{tagsupport/tblvmode/end}{noop}
+   \AssignSocketPlug{tagsupport/tbl/colspan}{noop}
  }
 %    \end{macrocode}
 %  \end{macro}
@@ -787,6 +792,7 @@
    \AssignSocketPlug{tagsupport/tblhmode/end}{Table}
    \AssignSocketPlug{tagsupport/tblvmode/begin}{Table}
    \AssignSocketPlug{tagsupport/tblvmode/end}{Table}
+   \AssignSocketPlug{tagsupport/tbl/colspan}{code}
  }
 %    \end{macrocode}
 %  \end{macro}
@@ -1119,8 +1125,8 @@
 %
 %
 %
-%  \begin{macro}{\@@_store_missing_cells:n,
-%                \@@_add_missing_cells:n}
+%  \begin{macro}{\@@_count_missing_cells:n,
+%                \@@_add_missing_cells:}
 %    The storing and use of the number of missing cells
 %    must happen at different places  as the testing happens at
 %    the end of the last cell of a row, but
@@ -1128,10 +1134,10 @@
 %    the endrow socket.
 %    \begin{macrocode}
 \NewSocket{tbl/celldata/missingcount}{1}
-\NewSocketPlug{tbl/celldata/missingcount}{code}{\@@_store_missing_cells:n{#1}}
+\NewSocketPlug{tbl/celldata/missingcount}{code}{\@@_count_missing_cells:n{#1}}
 \AssignSocketPlug{tbl/celldata/missingcount}{code}
 
-\cs_new:Npn \@@_store_missing_cells:n #1 {
+\cs_new:Npn \@@_count_missing_cells:n #1 {
   \int_compare:nNnT \g_@@_col_int > 0
       {
         \int_gset:Nn \g_@@_missing_cells_int
@@ -1153,18 +1159,19 @@
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-\cs_new:Npn \@@_add_missing_cells:n #1
+\cs_new:Npn \@@_add_missing_cells:
   {
 %    \end{macrocode}
 % The TD-socket messages are issued after the message about the end-row socket,
 % but the structure is ok, so better issue a message for now to avoid confusion:
 %    \begin{macrocode}
-    \int_compare:nNnT {#1}>{0}
+    \int_compare:nNnT \g_@@_missing_cells_int > 0
       {
        \typeout{==>~
-          ~Inserting~\int_eval:n{#1}~additional~cell(s)~into~previous~row:}
+         ~Inserting~\int_use:N \g_@@_missing_cells_int \space
+          additional~cell(s)~into~previous~row:}
       }
-    \int_step_inline:nn { #1 }
+    \int_step_inline:nn { \g_@@_missing_cells_int }
       {
         \UseSocket{tagsupport/tblcell/begin}
         \UseSocket{tagsupport/tblcell/end}
@@ -1201,14 +1208,14 @@
 \def\endarray{
   \ar@crcr{endarray} \egroup
   \UseSocket{tagsupport/tbl/finalize}
+  \@@_struct_data_restore:
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
   \int_gset:Nn \g_@@_col_int { \l_@@_saved_col_tl }
   \int_gset:Nn \g_@@_row_int { \l_@@_saved_row_tl }
   \tl_gset_eq:NN \g_@@_span_tl \l_@@_saved_span_tl
   \tl_gset_eq:NN \g_@@_table_cols_tl   \l_@@_saved_table_cols_tl
-  \tl_gset_eq:NN \g_@@_struct_table_tl  \l_@@_saved_struct_table_tl
-  \seq_gset_eq:NN \g_@@_struct_rows_seq \l_@@_saved_struct_rows_seq
-  \seq_gset_eq:NN \g_@@_struct_cells_seq\l_@@_saved_struct_cells_seq
-  \seq_gset_eq:NN \g_@@_struct_cur_seq  \l_@@_saved_struct_cur_seq
   \typeout{==>~ restored~cell~data:~
                 \int_use:N \g_@@_row_int,
                 \int_use:N \g_@@_col_int,
@@ -1219,6 +1226,9 @@
                     { max:~ \g_@@_table_cols_tl }
                 )
           }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
   \egroup
   \@arrayright \gdef\@preamble{}%
 }
@@ -1329,21 +1339,13 @@
 \seq_new:N \l_@@_saved_struct_cur_seq
 %    \end{macrocode}
 % \end{macro}
-%
-% \begin{macro}{\ar@ialign}
-%    A new command that replaces \cs{ialign} above.  \cs{everycr} is
-%    also applied to the \cs{cr} ending the preamble so we have to
-%    program around that.
+
+
+
+%  \begin{macro}{\@@_struct_data_init:}
+%    
 %    \begin{macrocode}
-\def\ar@ialign{%
-%    \end{macrocode}
-%    Before starting a table we locally stored the information related
-%    to the current cell (if any) so that we can restore it once the
-%    table is finished.
-%    \begin{macrocode}
-  \tl_set:No \l_@@_saved_col_tl {\int_use:N \g_@@_col_int }
-  \tl_set:No \l_@@_saved_row_tl {\int_use:N \g_@@_row_int }
-  \tl_set_eq:NN \l_@@_saved_span_tl  \g_@@_span_tl
+\cs_new_protected:Npn \@@_struct_data_init: {
   \tl_set_eq:NN  \l_@@_saved_struct_table_tl \g_@@_struct_table_tl
   \seq_set_eq:NN \l_@@_saved_struct_rows_seq \g_@@_struct_rows_seq
   \seq_set_eq:NN \l_@@_saved_struct_cells_seq \g_@@_struct_cells_seq
@@ -1359,15 +1361,54 @@
                     { max:~ \l_@@_saved_table_cols_tl }
                 )
           }
+  \seq_gclear:N\g_@@_struct_rows_seq
+  \seq_gclear:N\g_@@_struct_cells_seq
+  \seq_gclear:N\g_@@_struct_cur_seq
+}
+%    \end{macrocode}
+%  \end{macro}
+
+
+
+
+%  \begin{macro}{\@@_struct_data_restore:}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_struct_data_restore: {
+  \tl_gset_eq:NN \g_@@_struct_table_tl  \l_@@_saved_struct_table_tl
+  \seq_gset_eq:NN \g_@@_struct_rows_seq \l_@@_saved_struct_rows_seq
+  \seq_gset_eq:NN \g_@@_struct_cells_seq\l_@@_saved_struct_cells_seq
+  \seq_gset_eq:NN \g_@@_struct_cur_seq  \l_@@_saved_struct_cur_seq
+}
+%    \end{macrocode}
+%  \end{macro}
+
+
+%
+% \begin{macro}{\ar@ialign}
+%    A new command that replaces \cs{ialign} above.  \cs{everycr} is
+%    also applied to the \cs{cr} ending the preamble so we have to
+%    program around that.
+%    \begin{macrocode}
+\def\ar@ialign{%
+%    \end{macrocode}
+%    Before starting a table we locally stored the information related
+%    to the current cell (if any) so that we can restore it once the
+%    table is finished.
+%    \begin{macrocode}
+  \tl_set:No \l_@@_saved_col_tl {\int_use:N \g_@@_col_int }
+  \tl_set:No \l_@@_saved_row_tl {\int_use:N \g_@@_row_int }
+  \tl_set_eq:NN \l_@@_saved_span_tl  \g_@@_span_tl
 %    \end{macrocode}
 %    These are the initial values when starting a table:
 %    \begin{macrocode}
   \int_gzero:N \g_@@_row_int
   \int_gzero:N \g_@@_col_int
   \tl_gset:Nn  \g_@@_span_tl {1}
-  \seq_gclear:N\g_@@_struct_rows_seq
-  \seq_gclear:N\g_@@_struct_cells_seq
-  \seq_gclear:N\g_@@_struct_cur_seq
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+ \@@_struct_data_init:
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -1444,7 +1485,8 @@
 %    Now we update the colspan attribute.  This needs setting after
 %    the group as it is hidden inside the plug in \cs{insert@column}.
 %    \begin{macrocode}
-   \@@_set_colspan:n {#1}
+%   \@@_set_colspan:n {#1}
+   \UseSocket{tagsupport/tbl/colspan} {#1}
 %    \end{macrocode}
 %    \begin{macrocode}
    \def\@sharp{#3}%
@@ -1647,7 +1689,7 @@
   \ifnum\LT@rows=\LTchunksize
 %    \end{macrocode}
 %    At the end of the chunk \verb=\\= is doing something special and
-%    so we loose \cs{@@_store_missing_cells:n}. Below is about the
+%    so we loose \cs{@@_count_missing_cells:n}. Below is about the
 %    right place to add it do this code branch.
 %    \begin{macrocode}
     \UseAlignSocket{tbl/celldata/missingcount}{echunk}
@@ -1674,7 +1716,7 @@
 %    \end{macrocode}
 %    To handle missing columns in the header we need this:
 %    \begin{macrocode}
-  \__tbl_store_missing_cells:n{head/foot}
+  \UseSocket{tbl/celldata/missingcount}{head/foot}
   \int_step_inline:nn
    { \LT@rows + 1 }
    {
