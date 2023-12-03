@@ -296,7 +296,7 @@
 \tl_new:N  \l_@@_rowattribute_tl
 \tl_set:Nn \l_@@_rowattribute_tl {}
 %    \end{macrocode}
-% This will contain the number of missing cells used:
+% This will contain the number of missing cells in a row:
 %    \begin{macrocode}
 \int_new:N \g_@@_missing_cells_int
 %    \end{macrocode}
@@ -402,7 +402,7 @@
 %    \begin{macrocode}
 \NewSocketPlug{tagsupport/tblrow/end}{TR}
   {
-    \__tag_tbl_add_missing_cells:n { \g_@@_missing_cells_int }
+    \@@_add_missing_cells:n { \g_@@_missing_cells_int }
     \seq_gput_right:Ne \g_@@_struct_cells_seq
       {
         \seq_use:Nn \g_@@_struct_cur_seq {,}
@@ -1036,6 +1036,22 @@
 %  \begin{macro}{\@@_init_cell_data:}
 %
 %    \begin{macrocode}
+
+% this should not be protected
+
+\cs_set:Npn \socket_use:nw #1 {   
+  \__socket_debug_term:n
+    { Socket~ '#1'~ containing~ plug~
+      '\str_use:c { l__socket_#1_plug_str }'~ used. }
+  \use:c { __socket_#1_plug_ \str_use:c { l__socket_#1_plug_str } :w }
+}
+\cs_set_eq:NN \UseSocket         \socket_use:nw
+
+\cs_set:Npn \UseAlignSocket #1 {   
+  \use:c { __socket_#1_plug_ \str_use:c { l__socket_#1_plug_str } :w }
+}
+
+
 \NewSocket{tbl/celldata/init}{0}
 \NewSocketPlug{tbl/celldata/init}{code}{\@@_init_cell_data:}
 \AssignSocketPlug{tbl/celldata/init}{code}
@@ -1094,7 +1110,7 @@
 %    \begin{macrocode}
 \protected\def\@arraycr{
   \relax
-  \@@_store_missing_cells:n{@arraycr}
+  \UseSocket{tbl/celldata/missingcount}{@arraycr}
   %
   \iffalse{\fi\ifnum 0=`}\fi
   \@ifstar \@xarraycr \@xarraycr}
@@ -1104,13 +1120,17 @@
 %
 %
 %  \begin{macro}{\@@_store_missing_cells:n,
-%                \__tag_tbl_add_missing_cells:n}
+%                \@@_add_missing_cells:n}
 %    The storing and use of the number of missing cells
 %    must happen at different places  as the testing happens at
 %    the end of the last cell of a row, but
 %    still inside that cell, so we use two commands. The second is used in
 %    the endrow socket.
 %    \begin{macrocode}
+\NewSocket{tbl/celldata/missingcount}{1}
+\NewSocketPlug{tbl/celldata/missingcount}{code}{\@@_store_missing_cells:n{#1}}
+\AssignSocketPlug{tbl/celldata/missingcount}{code}
+
 \cs_new:Npn \@@_store_missing_cells:n #1 {
   \int_compare:nNnT \g_@@_col_int > 0
       {
@@ -1133,7 +1153,7 @@
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-\cs_new:Npn \__tag_tbl_add_missing_cells:n #1
+\cs_new:Npn \@@_add_missing_cells:n #1
   {
 %    \end{macrocode}
 % The TD-socket messages are issued after the message about the end-row socket,
@@ -1167,10 +1187,19 @@
 %    \cs{endtabular} and \cs{endtabular*} inherit from \cs{endarray}
 %    so we only need to change that. \texttt{tabularx} is handled
 %    below.
-%    \begin{macrocode}
+  %    \begin{macrocode}
+
+\def\ar@crcr #1 {  
+    \int_compare:nNnT \g_@@_col_int > 0
+        {
+          \UseSocket{tbl/celldata/missingcount} {#1}
+          \cr
+        }
+}
+
+
 \def\endarray{
-  \@@_store_missing_cells:n{endarray}
-  \crcr \egroup
+  \ar@crcr{endarray} \egroup
   \UseSocket{tagsupport/tbl/finalize}
   \int_gset:Nn \g_@@_col_int { \l_@@_saved_col_tl }
   \int_gset:Nn \g_@@_row_int { \l_@@_saved_row_tl }
@@ -1573,8 +1602,7 @@
 % The end code most stop to insert the endrow too.
 %    \begin{macrocode}
 \def\@@_patch_endlongtable{%
-  \@@_store_missing_cells:n{endlongtable}
-  \crcr
+  \ar@crcr{endlongtable}
   \noalign{%
     \UseSocket{tagsupport/tbl/finalize/longtable}
     \int_gzero:N \g_@@_row_int      % this prevents considering the next
@@ -1622,7 +1650,7 @@
 %    so we loose \cs{@@_store_missing_cells:n}. Below is about the
 %    right place to add it do this code branch.
 %    \begin{macrocode}
-    \@@_store_missing_cells:n{echunk}
+    \UseAlignSocket{tbl/celldata/missingcount}{echunk}
     \gdef\LT@setprevdepth{%
       \prevdepth\z@
       \global\let\LT@setprevdepth\relax}%
