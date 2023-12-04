@@ -439,7 +439,7 @@
       {
         \bool_set_false:N \l__tag_para_bool
 %    \end{macrocode}
-%    
+%    We also initialize the structure data variables a this point.
 %    \begin{macrocode}
         \@@_init_struct_data:
       }
@@ -454,6 +454,10 @@
 \NewSocketPlug{tagsupport/tbl/finalize}{Table}
   {
     \@@_set_header_rows:
+%    \end{macrocode}
+%    Similarly, we restore the outer values of the structure data when
+%    we leave the table.
+%    \begin{macrocode}
     \@@_restore_struct_data:
   }
 %    \end{macrocode}
@@ -685,23 +689,45 @@
 % \end{plugdecl}
 %
 %
+% \begin{plugdecl}{code}
+%    This socket takes a number, checks if is larger than one,
+%    checks if the colspan already attribute exists (we can't predefine an
+%    arbitrary number), and updates \cs{l_@@_cellattribute_tl}.
+%    \begin{macrocode}
+\tag_if_active:T
+  { \cs_generate_variant:Nn \__tag_attr_new_entry:nn {ee} }
+
+\NewSocketPlug{tagsupport/tbl/colspan}{code}
+  {
+    \int_compare:nNnT {#1}>{1}
+     {
+       \prop_get:NeNF \g__tag_attr_entries_prop
+          {colspan-\int_eval:n{#1}}
+          \l_@@_tmpa_tl
+          {
+            \__tag_attr_new_entry:ee
+              {colspan-\int_eval:n{#1}}
+              {/O /Table /ColSpan~\int_eval:n{#1}}
+          }
+       \tl_set:Ne \l_@@_cellattribute_tl
+          {colspan-\int_eval:n{#1}}
+     }
+  }
+%    \end{macrocode}
+% \end{plugdecl}
 %
 %
 %
 %\subsection{Environments}
 %
-% Currently only tabular, tabular*, tabularx and longtable.
+% Currently we support only tabular, tabular*, tabularx and longtable
+% (and possibly environments build directly on top of them). 
+
 % We must use the \texttt{before} and \texttt{after} hooks as the \texttt{end}
 % hook is executed before the end of the last row and then MC are messed up.
 % This means that this sockets should only contain code that doesn't needs to be
 % grouped!
 %    \begin{macrocode}
-%\AddToHook{env/tabular/before}  {\UseSocket{tagsupport/tblhmode/begin}}
-%\AddToHook{env/tabular/after}   {\UseSocket{tagsupport/tblhmode/end}}
-%\AddToHook{env/tabular*/before} {\UseSocket{tagsupport/tblhmode/begin}}
-%\AddToHook{env/tabular*/after}  {\UseSocket{tagsupport/tblhmode/end}}
-%%\AddToHook{env/tabularx/before} {\UseSocket{tagsupport/tblhmode/begin}}
-%%\AddToHook{env/tabularx/after}  {\UseSocket{tagsupport/tblhmode/end}}
 \AddToHook{env/longtable/before}{\UseSocket{tagsupport/tblvmode/begin}}
 \AddToHook{env/longtable/after} {\UseSocket{tagsupport/tblvmode/end}}
 %    \end{macrocode}
@@ -720,38 +746,6 @@
 %
 % \subsubsection{Tagging helper commands}
 %
-% \begin{macro}{\@@_set_colspan:n}
-%    This commands takes a number, checks if is larger than one,
-%    checks if the colspan attribute exists (we can't predefine an
-%    arbitrary number), and updates \cs{l_@@_cellattribute_tl}.
-%    \begin{macrocode}
-\tag_if_active:T
-  { \cs_generate_variant:Nn \__tag_attr_new_entry:nn {ee} }
-\cs_new_protected:Npn \@@_set_colspan:n #1
-  {
-    \tag_if_active:T
-      {
-        \int_compare:nNnT {#1}>{1}
-         {
-           \prop_get:NeNF \g__tag_attr_entries_prop
-              {colspan-\int_eval:n{#1}}
-              \l_@@_tmpa_tl
-              {
-                \__tag_attr_new_entry:ee
-                  {colspan-\int_eval:n{#1}}
-                  {/O /Table /ColSpan~\int_eval:n{#1}}
-              }
-           \tl_set:Ne \l_@@_cellattribute_tl
-              {colspan-\int_eval:n{#1}}
-         }
-      }
-  }
-
-\NewSocketPlug{tagsupport/tbl/colspan}{code}
-  { \@@_set_colspan:n {#1} }
-  
-%    \end{macrocode}
-% \end{macro}
 %
 % \subsubsection{Disabling/enabling}
 %
@@ -829,6 +823,9 @@
    }
  }
 %    \end{macrocode}
+%
+%
+%
 %
 % \subsubsection{Header support}
 %
@@ -1349,7 +1346,12 @@
 
 
 %  \begin{macro}{\@@_init_struct_data:}
-%    
+%    Save the global structure data variables locally so the we can
+%    restore them when the table ends (important in case of nested
+%    tables).
+%
+%    This is also the right point to initialize
+%    them. \cs{g_@@_struct_table_tl} is set elsewhere.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_init_struct_data: {
   \tl_set_eq:NN  \l_@@_saved_struct_table_tl \g_@@_struct_table_tl
@@ -1415,10 +1417,6 @@
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
-% \@@_init_struct_data:
-%    \end{macrocode}
-%
-%    \begin{macrocode}
   \everycr{%
     \noalign{%
 %    \end{macrocode}
@@ -1437,15 +1435,10 @@
 % \end{macro}
 %
 %
-% \begin{macro}{\multicolumn}
 %
-%    \cs{multicolumn} is also defined in \pkg{array}. The redefinition
-%    has to solve two problems: it must handle the row begin if it is
-%    used there, and it must save the numbers of cells it spans so
-%    that we can add a suitable ColSpan attribute.\footnote{FMi: This can
-%    now perhaps cleaned up somewhat}
 %    \begin{macrocode}
-\long\def\multicolumn#1#2#3{%
+\NewSocket{tbl/celldata/multicolumn}{1}
+
   % alternative: determine first col with vmode test ...
   %  \ifvmode
   %    \multispan{#1}\typeout{A==> vmode}%
@@ -1458,7 +1451,8 @@
   %    \else \expandafter \@iden \fi {\cr\noalign{do something}}%
   % so not used.
   % Instead:
-   \multispan{#1}\begingroup
+\NewSocketPlug{tbl/celldata/multicolumn}{code}
+   {
 %    \end{macrocode}
 %    Insert rowbegin socket only if this multicolumn
 %    replaces the preamble of the first column. In that case we have
@@ -1481,27 +1475,12 @@
 %    Then we set the span value so that it can be use in the next column.
 %    \begin{macrocode}
    \tl_gset:Nn \g_@@_span_tl {#1}
+   }
+
+\AssignSocketPlug{tbl/celldata/multicolumn}{code}
 %    \end{macrocode}
 %
-%    \begin{macrocode}
-  \def\@addamp{\if@firstamp\@firstampfalse \else
-                \@preamerr 5\fi}%
-   \@mkpream{#2}\@addtopreamble\@empty
-   \endgroup
-%    \end{macrocode}
-%    Now we update the colspan attribute.  This needs setting after
-%    the group as it is hidden inside the plug in \cs{insert@column}.
-%    \begin{macrocode}
-%   \@@_set_colspan:n {#1}
-   \UseTaggingSocket{tbl/colspan} {#1}
-%    \end{macrocode}
-%    \begin{macrocode}
-   \def\@sharp{#3}%
-   \@arstrut \@preamble
-   \null
-   \ignorespaces}
-%    \end{macrocode}
-% \end{macro}
+%
 %
 % \subsection{longtable}
 %
