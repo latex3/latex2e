@@ -2184,7 +2184,7 @@ Bug reports can be opened (category \texttt{#1}) at\\%
 %    second one describes the wanted preamble,
 %    e.g.\ it has the form =|c|c|c|=.
 %    \begin{macrocode}
-\def\@array[#1]#2{%
+\def\@array[#1]#2{
 %    \end{macrocode}
 %    First we define a \textsf{strut} whose size basically corresponds
 %     to a normal \textsf{strut} multiplied by the factor
@@ -2203,6 +2203,13 @@ Bug reports can be opened (category \texttt{#1}) at\\%
              \@depth \arraystretch \dp \strutbox
              \@width \z@}%
 %    \end{macrocode}
+%    The total number of table columns of the current table is
+%    determined in \cs{@@_count_table_cols:} but this is called in
+%    a group, so local settings do not survive. Thus, to save away the
+%    outer value of \cs{g_@@_table_cols_tl} we do it before the group.
+%    \begin{macrocode}
+  \tl_set_eq:NN \l_@@_saved_table_cols_tl  \g_@@_table_cols_tl
+%    \end{macrocode}
 %    Then we open a group, in which the user preamble is evaluated by
 %    the macro =\@mkpream=. As we know this must happen locally.
 %    This macro creates a preamble for a =\halign= and saves
@@ -2210,6 +2217,10 @@ Bug reports can be opened (category \texttt{#1}) at\\%
 %    \begin{macrocode}
   \begingroup
   \@mkpream{#2}%
+%    \end{macrocode}
+%    Figure out how many columns this table has:
+%    \begin{macrocode}
+  \@@_count_table_cols:
 %    \end{macrocode}
 %    We again redefine =\@preamble= so that a call up of =\@preamble=
 %    now starts the =\halign=. Thus also the arguments of \texttt{>},
@@ -2237,13 +2248,35 @@ Bug reports can be opened (category \texttt{#1}) at\\%
 %    unsupported redefinition of a \TeX{} primitive for the moment (as people rely
 %    on that experimental code).
 %    \begin{macrocode}
-  \xdef\@preamble{\noexpand \ialign \@halignto
-                  \bgroup \@arstrut \@preamble
-                          \tabskip \z@ \cr}%
+  \xdef\@preamble{
+%    \end{macrocode}
+%    \cs{ialign} in the original definition is replaced by
+%    \cs{ar@ialign} defined below.
+%    \begin{macrocode}
+    \noexpand \ar@ialign
+    \@halignto
+       \bgroup \@arstrut
 %    \end{macrocode}
 %    What we have not explained yet is the macro =\@halignto=
 %    that was just used. Depending on its replacement text the
 %    =\halign= becomes a =\halign= \texttt{to} \meta{dimen}.
+%
+%    Next, a tagging support socket is inserted.
+%    \begin{macrocode}
+      \UseTaggingSocket{tblrow/begin}
+%    \end{macrocode}
+%    At the start of the preamble for the first column we set
+%    \cs{g_@@_col_int} to \texttt{1} as we are no longer "at" but "in"
+%    the first column. This is done in \cs{@@_init_cell_data:}. In
+%    later columns this data is updated via \cs{@@_update_cell_data:}.
+%    \begin{macrocode}
+      \@@_init_cell_data:
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+      \@preamble
+      \tabskip \z@ \cr}
+%    \end{macrocode}
 %    Now we close the group again. Thus
 %    =\@startpbox= and =\@endpbox= as well as all
 %    \textsf{token} registers get their former meaning back.
@@ -2296,9 +2329,46 @@ Bug reports can be opened (category \texttt{#1}) at\\%
 %    start the wanted =\halign=.
 %    \changes{1994/12/08}{v2.3b}{add \cs{tabularnewline}}
 %    \begin{macrocode}
-  \let\\\@arraycr \let\tabularnewline\\\let\par\@empty \@preamble}
+  \let\\\@arraycr \let\tabularnewline\\\let\par\@empty
+%    \end{macrocode}
+%    Another socket for tagging. TODO: what about \cs{arrayleft} above?
+%    \begin{macrocode}
+  \UseTaggingSocket{tbl/init}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+  \@preamble
+}
 %    \end{macrocode}
 % \end{macro}
+%
+%
+%
+%  \begin{macro}{\@@_count_table_cols:}
+%    Current implementation of \cs{@mkpream} uses the scratch counter
+%    \cs{count@} to keep track of the number of toks registers it needs
+%    (2 per column), but this can't be used as it counts also
+%    insertings made with \verb+!{}+ and \verb+@{}+.
+%    So similar as does longtable for \cs{LT@cols} we count the
+%    numbers of ambersands instead.
+%    \begin{macrocode}
+\cs_new:Npn \@@_count_table_cols:  {
+  \seq_set_split:NnV\l_@@_tmpa_seq {&}\@preamble
+  \tl_gset:Ne \g_@@_table_cols_tl { \seq_count:N \l_@@_tmpa_seq }
+  \typeout{ ==>~ Table~ has~ \g_@@_table_cols_tl \space columns }
+}
+%    \end{macrocode}
+%  \end{macro}
+%  \begin{macro}{\@@_init_cell_data:}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_init_cell_data: {
+        \int_gset:Nn \g_@@_col_int {1}
+        \tl_gset:Nn  \g_@@_span_tl {1}
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
 %
 % \begin{macro}{\arraybackslash}
 % \changes{v2.4a}{2003/12/17}{(DPC) Macro added (from tabularx)}
