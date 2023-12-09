@@ -274,7 +274,6 @@
 %   ,\l_@@_rowtag_tl
 %   ,\l_@@_cellattribute_tl
 %   ,\l_@@_rowattribute_tl
-%   ,\g_@@_missingcells_int
 %   ,\l_@@_tmpa_clist
 %   ,\l_@@_tmpa_seq
 %   ,\l_@@_tmpa_tl
@@ -295,10 +294,6 @@
 \tl_set:Nn \l_@@_cellattribute_tl {}
 \tl_new:N  \l_@@_rowattribute_tl
 \tl_set:Nn \l_@@_rowattribute_tl {}
-%    \end{macrocode}
-% This will contain the number of missing cells in a row:
-%    \begin{macrocode}
-\int_new:N \g_@@_missing_cells_int
 %    \end{macrocode}
 % Temp variables
 %    \begin{macrocode}
@@ -409,9 +404,10 @@
       {
         \seq_use:Nn \g_@@_struct_cur_seq {,}
       }
-    \int_compare:nNnTF { \g_@@_row_int } = { \seq_count:N\g_@@_struct_cells_seq }
+    \int_compare:nNnTF { \g_@@_row_int } =
+                       { \seq_count:N \g_@@_struct_cells_seq }
       {
-        \typeout
+        \@@_trace:n
           {==>~
             stucture~stored~for~row~\int_use:N\g_@@_row_int :~
             \seq_use:Nn \g_@@_struct_cur_seq {,}
@@ -694,9 +690,6 @@
 %    checks if the colspan already attribute exists (we can't predefine an
 %    arbitrary number), and updates \cs{l_@@_cellattribute_tl}.
 %    \begin{macrocode}
-\tag_if_active:T
-  { \cs_generate_variant:Nn \__tag_attr_new_entry:nn {ee} }
-
 \NewSocketPlug{tagsupport/tbl/colspan}{code}
   {
     \int_compare:nNnT {#1}>{1}
@@ -714,6 +707,12 @@
      }
   }
 %    \end{macrocode}
+%    TODO: move to tagpdf
+%    \begin{macrocode}
+\tag_if_active:T
+  { \cs_generate_variant:Nn \__tag_attr_new_entry:nn {ee} }
+
+%    \end{macrocode}
 % \end{plugdecl}
 %
 %
@@ -728,8 +727,8 @@
 % This means that this sockets should only contain code that doesn't needs to be
 % grouped!
 %    \begin{macrocode}
-\AddToHook{env/longtable/before}{\UseSocket{tagsupport/tblvmode/begin}}
-\AddToHook{env/longtable/after} {\UseSocket{tagsupport/tblvmode/end}}
+%\AddToHook{env/longtable/before}{\UseSocket{tagsupport/tblvmode/begin}}
+%\AddToHook{env/longtable/after} {\UseSocket{tagsupport/tblvmode/end}}
 %    \end{macrocode}
 %
 % The \env{array} environment is math. So we disable table tagging for now.
@@ -956,11 +955,11 @@
 %    for debugging.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_show_curr_cell_data: {
-   \typeout { ==>~ current~cell~data:~
-              \int_use:N \g_@@_row_int ,
-              \int_use:N \g_@@_col_int ,
-              \g_@@_span_tl
-            }
+   \@@_trace:n { ==>~ current~cell~data:~
+                 \int_use:N \g_@@_row_int ,
+                 \int_use:N \g_@@_col_int ,
+                 \g_@@_span_tl
+               }
 }
 %    \end{macrocode}
 %  \end{macro}
@@ -992,8 +991,7 @@
 %
 %
 %
-%  \begin{macro}{\@@_count_missing_cells:n,
-%                \@@_add_missing_cells:}
+%  \begin{macro}{\@@_add_missing_cells:}
 %    The storing and use of the number of missing cells
 %    must happen at different places  as the testing happens at
 %    the end of the last cell of a row, but
@@ -1001,28 +999,9 @@
 %    the endrow socket.
 %    \begin{macrocode}
 \NewSocket{tbl/celldata/missingcount}{1}
-\NewSocketPlug{tbl/celldata/missingcount}{code}{\@@_count_missing_cells:n{#1}}
+\NewSocketPlug{tbl/celldata/missingcount}{code}{\tbl_count_missing_cells:n{#1}}
 \AssignSocketPlug{tbl/celldata/missingcount}{code}
 
-\cs_new:Npn \@@_count_missing_cells:n #1 {
-  \int_compare:nNnT \g_@@_col_int > 0
-      {
-        \int_gset:Nn \g_@@_missing_cells_int
-            {
-              \g_@@_table_cols_tl
-            - \g_@@_col_int
-            - \g_@@_span_tl
-            + 1
-            }
-        \int_compare:nNnT \g_@@_missing_cells_int < 0 \ERROR % should not happen
-        \typeout{==>~
-          (#1)~
-          This~ row~ needs~
-          \int_use:N \g_@@_missing_cells_int \space
-          additional~ cell(s)
-        }
-      }
-}
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -1034,7 +1013,7 @@
 %    \begin{macrocode}
     \int_compare:nNnT \g_@@_missing_cells_int > 0
       {
-       \typeout{==>~
+       \@@_trace:n{==>~
          ~Inserting~\int_use:N \g_@@_missing_cells_int \space
           additional~cell(s)~into~previous~row:}
       }
@@ -1251,7 +1230,7 @@
   \let\@sharp##\let\protect\relax
    \begingroup
     \@mkpream{#2}%
-    \@@_count_table_cols:
+    \tbl_count_table_cols:
     \xdef\LT@bchunk{%
 %    \end{macrocode}
 %    At the start of a chunk we set \cs{g_@@_col_int} to zero to make
@@ -1268,7 +1247,7 @@
 % Insert the socket and the setting of the conditional
 %    \begin{macrocode}
        \UseTaggingSocket{tblrow/begin}%
-       \@@_init_cell_data:
+       \tbl_init_cell_data_for_row:
 %    \end{macrocode}
 %    \begin{macrocode}
        \@preamble \tabskip\LTright \cr}%
@@ -1350,7 +1329,9 @@
   \endgroup
   \global\@mparbottom\z@
   \endgraf\penalty\z@\addvspace\LTpost
-  \ifvoid\footins\else\insert\footins{}\fi}
+  \ifvoid\footins\else\insert\footins{}\fi
+  \UseTaggingSocket{tblvmode/end}%
+}
 %    \end{macrocode}
 %
 %
@@ -1363,7 +1344,7 @@
   \ifnum\LT@rows=\LTchunksize
 %    \end{macrocode}
 %    At the end of the chunk \verb=\\= is doing something special and
-%    so we loose \cs{@@_count_missing_cells:n}. Below is about the
+%    so we loose \cs{tbl_count_missing_cells:n}. Below is about the
 %    right place to add it do this code branch.
 %    \begin{macrocode}
     \UseAlignSocket{tbl/celldata/missingcount}{echunk}
