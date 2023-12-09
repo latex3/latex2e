@@ -1072,8 +1072,39 @@
 % "\c@LT@tables". The \LaTeX\ counter "table" is still incremented
 % so that "\caption" works correctly.
 %    \begin{macrocode}
+%<@@=tbl>
+\ExplSyntaxOn
 \def\LT@array[#1]#2{%
-  \refstepcounter{table}\stepcounter{LT@tables}%
+%    \end{macrocode}
+%
+%    With respect to tagging we have a complicated situation with
+%    longtable. When at the begin the \cs{endhead},
+%    \cs{endfirsthead}, \cs{endfoot} and \cs{endlastfoot} are used to
+%    setup head and foot they create each a structure subtree with one or
+%    more rows. From this structures we want to keep at most two (head
+%    and foot) and move the foot to the end of the table. When the head
+%    and foot boxes are (re)inserted on following pages we want to mark
+%    them up as artifact with the exception of the head at the begin and
+%    the foot box at the end.
+%
+%    TODO: When a line is killed the structure subtree is there already
+%    too and must be removed.
+%  
+%    \cs{LT@array} is executed in a group, so we can disable para-tagging here.
+%    \begin{macrocode}
+  \UseTaggingSocket{tbl/init}
+  \@kernel@refstepcounter{table}\stepcounter{LT@tables}
+%    \end{macrocode}
+% The target is created rather late and a \cs{label} can come earlier, 
+% so we have to define \cs{@currentHref} explicitly. We can't currently
+% assume that \cs{theHtable} is defined always.   
+%    \begin{macrocode}
+  \tl_gset:Ne \@currentHref {table.\cs_if_exist_use:N\theHtable}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \int_gzero:N \g_@@_row_int
+  \UseTaggingSocket{tbl/init/longtable}
 %    \end{macrocode}
 % Set up the glue around the table if an optional argument given.
 %    \begin{macrocode}
@@ -1108,17 +1139,18 @@
 % here so that you can load the \package{array} package before or after
 % \package{longtable}.
 %    \begin{macrocode}
-  \let\LT@@tabarray\@tabarray
-  \let\LT@@hl\hline
+  \let\LT@@@@tabarray\@tabarray
+  \let\LT@@@@hl\hline
   \def\@tabarray{%
-    \let\hline\LT@@hl
+    \let\hline\LT@@@@hl
 %    \end{macrocode}
 %\begin{verbatim}
 %    \let\multicolumn\LT@mcol
 %\end{verbatim}
 %    \begin{macrocode}
-    \LT@@tabarray}%
-  \let\\\LT@tabularcr\let\tabularnewline\\%
+    \LT@@@@tabarray}%
+  \let\\\LT@tabularcr
+  \let\tabularnewline\\%
   \def\newpage{\noalign{\break}}%
 %    \end{macrocode}
 % \changes{v4.05}{1996/11/12}
@@ -1135,8 +1167,8 @@
 %    \end{macrocode}
 %
 % \changes{v4.08}{1998/01/20}
-%      {Move \cs{@endpbox} definition earlier and define \cs{@@endpbox}
-%      and \cs{@@startpbox} for non-array case. tools/2736}
+%      {Move \cs{@endpbox} definition earlier and define \cs{@@@@endpbox}
+%      and \cs{@@@@startpbox} for non-array case. tools/2736}
 %    \begin{macrocode}
   \let\@endpbox\LT@endpbox
 %    \end{macrocode}
@@ -1149,8 +1181,8 @@
     \let\@acol\@tabacol
     \let\@classz\@tabclassz \let\@classiv\@tabclassiv
     \def\@startpbox{\vtop\LT@startpbox}%
-    \let\@@startpbox\@startpbox
-    \let\@@endpbox\@endpbox
+    \let\@@@@startpbox\@startpbox
+    \let\@@@@endpbox\@endpbox
     \let\LT@LL@FM@cr\@tabularcr
   \else
 %    \end{macrocode}
@@ -1179,6 +1211,10 @@
    \begingroup
     \@mkpream{#2}%
 %    \end{macrocode}
+%    
+%    \begin{macrocode}
+    \tbl_count_table_cols:
+%    \end{macrocode}
 % We need to rename "\@preamble" here as F.M.'s scheme uses
 % "\global", and we may need to nest "\@mkpream", eg for
 % "\multicolumn"
@@ -1186,6 +1222,10 @@
 % We do not need to worry about nested \env{longtable}s though!
 %    \begin{macrocode}
     \xdef\LT@bchunk{%
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+       \int_gzero:N  \g_@@_col_int
 %    \end{macrocode}
 % \changes{v4.00}{1996/04/08}
 %      {(DK) Increment Chunk counter}
@@ -1212,7 +1252,15 @@
 %    \begin{macrocode}
        \tabskip\LTleft \noexpand\halign to\hsize\bgroup
 %       \tabskip\LTleft\halign to\hsize\bgroup
-      \tabskip\z@ \@arstrut \@preamble \tabskip\LTright \cr}%
+       \tabskip\z@ \@arstrut
+%    \end{macrocode}
+% Insert the socket and the setting of the conditional
+%    \begin{macrocode}
+       \UseTaggingSocket{tblrow/begin}%
+       \tbl_init_cell_data_for_row:
+%    \end{macrocode}
+%    \begin{macrocode}
+       \@preamble \tabskip\LTright \cr}%
   \endgroup
 %    \end{macrocode}
 % Find out how many columns we have (store in "\LT@cols").
@@ -1227,11 +1275,49 @@
 % A few more internal commands for \env{longtable}.
 %    \begin{macrocode}
   \m@th\let\par\@empty
-  \everycr{}\lineskip\z@\baselineskip\z@
+%    \end{macrocode}
+% Tagging socket and conditional
+%    \begin{macrocode}
+  \everycr{%
+    \noalign{%
+%    \end{macrocode}
+%    In \pkg{longtable} we have a bunch of extra \cs{cr}s that are
+%    executed whenever a chunk ends. In that case they should not
+%    increment the main row counter, sigh.
+%    \begin{macrocode}
+      \@@_trace:n {--longtable-->~chunk~row:~ \the\LT@rows \space
+                   row:~ \the\g_@@_row_int   \space
+                   column:~ \the\g_@@_col_int
+      }
+      \int_compare:nNnT \g_@@_col_int > 0
+          {
+            \UseTaggingSocket{tblrow/end}
+          }
+%    \end{macrocode}
+%    This prevents any of the additional \cs{cr}s at the end of the
+%    chunk to add another /TR. Then once we really start a new chunk
+%    it gets incremented so\ldots
+%    \begin{macrocode}
+      \int_gzero:N \g_@@_col_int           % before first col
+%    \end{macrocode}
+%    And for the same reason such \cs{cr}s should not increment the
+%    main row counter (but it has to be incremented after the preamble
+%    of a chunk), so here we test against \cs{LT@rows} which is
+%    \cs{LTchunksize} at the end of a chunk.
+%    \begin{macrocode}
+      \int_compare:nNnT \LT@rows < \LTchunksize
+         { \int_gincr:N \g_@@_row_int  }   % this row about to start
+    }%
+  }%
+%    \end{macrocode}
+%    \begin{macrocode}
+  \lineskip\z@\baselineskip\z@
 %    \end{macrocode}
 % Start the first chunk.
 %    \begin{macrocode}
   \LT@bchunk}
+\ExplSyntaxOff
+%<@@=>
 %    \end{macrocode}
 % \end{macro}
 %
