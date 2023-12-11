@@ -19,8 +19,8 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: l3doc.dtx
-\RequirePackage{expl3,calc}
-\ProvidesExplClass{l3doc}{2023-08-09}{}
+\RequirePackage{calc}
+\ProvidesExplClass{l3doc}{2023-12-11}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -378,43 +378,33 @@
     It~should~only~be~used~in~the~module~'#2'
     \tl_if_empty:nF {#3} { ,~not~in~'#3' } .
   }
-\DeclareOption { a5paper } { \@latexerr { Option~not~supported } { } }
-\DeclareOption { full }
+\DeclareKeys [ l3doc / options ]
   {
-    \bool_gset_true:N \g__codedoc_typeset_documentation_bool
-    \bool_gset_true:N \g__codedoc_typeset_implementation_bool
+    a5paper .code:n = \@latexerr { Option~not~supported } { } ,
+    full .code:n =
+      {
+        \bool_gset_true:N \g__codedoc_typeset_documentation_bool
+        \bool_gset_true:N \g__codedoc_typeset_implementation_bool
+      } ,
+   onlydoc .code:n =
+    {
+      \bool_gset_true:N \g__codedoc_typeset_documentation_bool
+      \bool_gset_false:N \g__codedoc_typeset_implementation_bool
+    } ,
+    check .bool_gset:N = \g__codedoc_checkfunc_bool ,
+    checktest .bool_gset:N = \g__codedoc_checktest_bool ,
+    kernel .bool_gset:N = \g__codedoc_kernel_bool ,
+    stdmodule .bool_gset_inverse:N = \g__codedoc_kernel_bool ,
+    lm-default .bool_gset:N = \g__codedoc_lmodern_bool ,
+    cs-break .bool_gset_inverse:N = \g__codedoc_cs_break_bool ,
+    cs-break-nohyphen .code:n = \PassOptionsToPackage{nohyphen}{underscore} ,
+    show-notes .bool_gset:N = \g__codedoc_show_notes_bool,
+    hide-notes .bool_gset_inverse:N = \g__codedoc_show_notes_bool
   }
-\DeclareOption { onlydoc }
-  {
-    \bool_gset_true:N \g__codedoc_typeset_documentation_bool
-    \bool_gset_false:N \g__codedoc_typeset_implementation_bool
-  }
-\DeclareOption { check }
-  { \bool_gset_true:N \g__codedoc_checkfunc_bool }
-\DeclareOption { nocheck }
-  { \bool_gset_false:N \g__codedoc_checkfunc_bool }
-\DeclareOption { checktest }
-  { \bool_gset_true:N \g__codedoc_checktest_bool }
-\DeclareOption { nochecktest }
-  { \bool_gset_false:N \g__codedoc_checktest_bool }
-\DeclareOption { kernel }
-  { \bool_gset_true:N \g__codedoc_kernel_bool }
-\DeclareOption { stdmodule }
-  { \bool_gset_false:N \g__codedoc_kernel_bool }
-\DeclareOption { cm-default }
-  { \bool_gset_false:N \g__codedoc_lmodern_bool }
-\DeclareOption { lm-default }
-  { \bool_gset_true:N \g__codedoc_lmodern_bool }
-\DeclareOption { cs-break-off }
-  { \bool_gset_false:N \g__codedoc_cs_break_bool }
-\DeclareOption { cs-break-nohyphen }
-  { \PassOptionsToPackage{nohyphen}{underscore} }
-\DeclareOption { show-notes }
-  { \bool_gset_true:N  \g__codedoc_show_notes_bool }
-\DeclareOption { hide-notes }
-  { \bool_gset_false:N \g__codedoc_show_notes_bool }
-\DeclareOption* { \PassOptionsToClass { \CurrentOption } { article } }
-\ExecuteOptions { full, kernel, nocheck, nochecktest, lm-default }
+\DeclareUnknownKeyHandler [ l3doc / options ]
+  { \PassOptionsToClass { \CurrentOption } { article } }
+\SetKeys [ l3doc / options ]
+  { full , kernel , check = false , checktest = false , lm-default }
 \PassOptionsToClass { a4paper } { article }
 \msg_new:nnn { l3doc } { input-cfg }
   { Local~config~file~l3doc.cfg~loaded. }
@@ -424,7 +414,7 @@
     \cs_if_exist:cF { ExplMakeTitle }
       { \msg_info:nn { l3doc } { input-cfg } }
   }
-\ProcessOptions
+\ProcessKeyOptions [ l3doc / options ]
 \LoadClass{article}
 \RequirePackage{doc}
 \RequirePackage
