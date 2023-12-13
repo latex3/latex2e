@@ -35,14 +35,15 @@
 \ProvidesFile{lttagging.dtx}
              [2023/12/01 v1.0a LaTeX Kernel (tagging support)]
 % \iffalse
-\documentclass{ltxdoc}
+\documentclass{l3doc}
 \GetFileInfo{lttagging.dtx}
 \title{\filename}
 \date{\filedate}
 \author{\LaTeX{} project}
 
 \begin{document}
- \MaintainedByLaTeXTeam{latex}
+% \MaintainedByLaTeXTeam{latex}     % should be added again the moment
+                                    % it is supported by l3doc
  \maketitle
  \DocInput{\filename}
 \end{document}
@@ -54,6 +55,8 @@
 % \providecommand\hook[1]{\texttt{#1\DescribeHook[noprint]{#1}}}
 % \providecommand\socket[1]{\texttt{#1\DescribeSocket[noprint]{#1}}}
 % \providecommand\plug[1]{\texttt{#1\DescribePlug[noprint]{#1}}}
+%
+% \let\ProvideDocElement\NewDocElement
 %
 % \ProvideDocElement[printtype=\textit{socket},idxtype=socket,idxgroup=Sockets]{Socket}{socketdecl}
 % \ProvideDocElement[printtype=\textit{hook},idxtype=hook,idxgroup=Hooks]{Hook}{hookdecl}
@@ -70,18 +73,26 @@
 %<*2ekernel|latexrelease>
 %    \end{macrocode}
 %
-% \subsection{General support for tagged output}
+%    \begin{macrocode}
+\ExplSyntaxOn
+%    \end{macrocode}
+%
+%
+% \section{General support for tagged output}
 %
 %  \begin{macro}{\SuspendTagging,\ResumeTagging}
 %    
-%    This should move to tagpdf and to kernel so that one definition
-%    is automatically available!
+%    In the kernel, these two commands get dummy definitons so that
+%    they can be used without harm in packages. The real definition is
+%    used when tagging gets enabled.
 %    \begin{macrocode}
-\ExplSyntaxOn
-
-\cs_set_eq:NN \SuspendTagging \use_none:n  
-\cs_set_eq:NN \ResumeTagging  \use_none:n
-
+\cs_new_eq:NN \SuspendTagging \use_none:n  
+\cs_new_eq:NN \ResumeTagging  \use_none:n
+%    \end{macrocode}
+%
+%    The correct definition in \pkg{tagpdf} will look different. This
+%    one here is just a simplification for now.
+%    \begin{macrocode}
 \AddToHook{begindocument/before}{
   \cs_if_exist:NT \tag_stop:n
   { 
@@ -113,33 +124,38 @@
 %
 % The code uses a number of sockets to inject the tagging
 % commands. These can be easily set to a noop-plug in case the
-% automated tagging is not wanted.  At first sockets for the begin and
-% end of cells and rows
+% automated tagging is not wanted. 
 %
-% \begin{socketdecl}{tagsupport/tblcell/begin,
-%                    tagsupport/tblcell/end,
-%                    tagsupport/tblpcell/end,
-%                    tagsupport/tblpcell/end,
-%                    tagsupport/tblrow/begin,
-%                    tagsupport/tblrow/end,
+% \begin{socketdecl}{tagsupport/tbl/cell/begin,
+%                    tagsupport/tbl/cell/end,
+%                    tagsupport/tbl/pcell/end,
+%                    tagsupport/tbl/pcell/end,
+%                    tagsupport/tbl/row/begin,
+%                    tagsupport/tbl/row/end,
 %                   }
+%     At first sockets for the begin and end of cells and table rows:
 %    \begin{macrocode}
-\NewSocket{tagsupport/tblcell/begin}{0}
-\NewSocket{tagsupport/tblcell/end}{0}
-
-\NewSocket{tagsupport/tblpcell/begin}{0}
-\NewSocket{tagsupport/tblpcell/end}{0}
-
-\NewSocket{tagsupport/tblrow/begin}{0}
-\NewSocket{tagsupport/tblrow/end}{0}
+\NewSocket{tagsupport/tbl/cell/begin}{0}
+\NewSocket{tagsupport/tbl/cell/end}{0}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\NewSocket{tagsupport/tbl/row/begin}{0}
+\NewSocket{tagsupport/tbl/row/end}{0}
+%    \end{macrocode}
+%    Multi-line cells have their own sockets (as they start out in
+%    vertical mode and need different treatment).
+%    \begin{macrocode}
+\NewSocket{tagsupport/tbl/pcell/begin}{0}
+\NewSocket{tagsupport/tbl/pcell/end}{0}
 %    \end{macrocode}
 % \end{socketdecl}
 %
 % \begin{socketdecl}{tagsupport/tbl/init}
 %    This socket should be at the begin of the table, inside a group.
-%    It is meant for settings like disabling paratagging.  This socket
-%    can perhaps be merged later into the begin-sockets when they are
-%    no longer added as hooks but in the environment definitions.
+%    It is used for settings such as disabling para-tagging inside the
+%    table.  This socket
+%    can perhaps be merged later into the begin-sockets.
 %    \begin{macrocode}
 \NewSocket{tagsupport/tbl/init}{0}
 %    \end{macrocode}
@@ -148,7 +164,7 @@
 %
 % \begin{socketdecl}{tagsupport/tbl/finalize}
 %    To fine tune the structure (change cells to header cells, remove
-%    unwanted structures, move a foot to the end, etc.) we also need a
+%    unwanted structures, move a foot to the end, etc.). We also need a
 %    socket that is executed at the end of the table but \emph{before}
 %    all the variables are restored to the outer or default values.
 %    The code in the socket can make assignments, but probably
@@ -161,7 +177,11 @@
 
 
 % \begin{socketdecl}{tagsupport/tbl/colspan}
-%    This socket
+%    This socket is used to manage spanning cells, e.g., a
+%    \cs{multicolumn}. It expects one argument (the number of cells
+%    spanned) and if tagging is enabled set appropriate tag attributes
+%    in the background. We probably need a similar socket for row
+%    spans eventually.
 %    \begin{macrocode}
 \NewSocket{tagsupport/tbl/colspan}{1}
 %    \end{macrocode}
@@ -169,6 +189,27 @@
 %
 
 
+% \begin{socketdecl}{tagsupport/tbl/hmode/begin,
+%                    tagsupport/tbl/hmode/end,
+%                    tagsupport/tbl/vmode/begin,
+%                    tagsupport/tbl/vmode/end
+%                   }
+%
+%    These sockets are used in the begin and end code of environments,
+%    to allow a fast enabling and disabling of the tagging. We
+%    distinguish between tables that can be used inside paragraphs and
+%    standalone tables such as \env{longtable} that are always in
+%    vertical mode.
+%    \begin{macrocode}
+\NewSocket{tagsupport/tbl/hmode/begin}{0}
+\NewSocket{tagsupport/tbl/hmode/end}{0}
+\NewSocket{tagsupport/tbl/vmode/begin}{0}
+\NewSocket{tagsupport/tbl/vmode/end}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+%
+%
+%
 % \begin{socketdecl}{tagsupport/tbl/longtable/init,
 %                    tagsupport/tbl/longtable/finalize}
 %    \env{longtable} needs its own sockets to fine tune the structure.
@@ -190,35 +231,6 @@
 %    \end{macrocode}
 % \end{socketdecl}
 %
-
-
-
-% \begin{socketdecl}{tagsupport/tblhmode/begin,
-%                    tagsupport/tblhmode/end,
-%                    tagsupport/tblvmode/begin,
-%                    tagsupport/tblvmode/end
-%                   }
-%
-%    These sockets are used in the begin and end code of environments,
-%    to allow a fast enabling and disabling of the tagging. We
-%    distinguish between tables that can be used inside paragraphs and
-%    standalone tables like longtable.
-%    \begin{macrocode}
-\NewSocket{tagsupport/tblhmode/begin}{0}
-\NewSocket{tagsupport/tblhmode/end}{0}
-\NewSocket{tagsupport/tblvmode/begin}{0}
-\NewSocket{tagsupport/tblvmode/end}{0}
-%    \end{macrocode}
-% \end{socketdecl}
-%
-%
-% \begin{socketdecl}{tbl/celldata/multicolumn}
-%    Temporary sockets that will most likely vanish again.
-%    \begin{macrocode}
-\NewSocket{tbl/celldata/multicolumn}{1}
-\AssignSocketPlug{tbl/celldata/multicolumn}{noop}
-%    \end{macrocode}
-% \end{socketdecl}
 %
 %
 %  \begin{macro}{\tag_socket_use:n,
@@ -513,7 +525,7 @@
 %  \begin{macro}{\tbl_update_multicolumn_cell_data:n}
 %    This macro updates \cs{g_@@_col_int} and \cs{g_@@_span_tl} inside
 %    a \cs{multicolumn} and possibly calls the tagging socket
-%    \texttt{tblrow/begin}.
+%    \texttt{tbl/row/begin}.
 %    \begin{macrocode}
 \cs_new_protected:Npn \tbl_update_multicolumn_cell_data:n #1 {
 %    \end{macrocode}
@@ -524,7 +536,7 @@
 %    \begin{macrocode}
    \int_compare:nNnTF \g_@@_col_int = 0
        {
-         \UseTaggingSocket{tblrow/begin}
+         \UseTaggingSocket{tbl/row/begin}
          \int_gset:Nn \g_@@_col_int {1}
        }
 %    \end{macrocode}
