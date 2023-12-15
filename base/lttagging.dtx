@@ -80,6 +80,61 @@
 %
 % \section{General support for tagged output}
 %
+%  \DescribeMacro\SuspendTagging
+%  \DescribeMacro\ResumeTagging
+%  The are places in code where it is import top stop any tagging
+%  activities, e.g., when we are doing trial typesetting that it is done
+%  several times. In such a case one must tag only the final version
+%  that is actually used, otherwise tagging structures are allowed
+%  which then do not end up in the PDF and confuse the mechanism. For
+%  this we have two commands that can be used in packages:
+%  \cs{SuspendTagging} and \cs{ResumeTagging}. They are available as
+%  part of the \LaTeX{} kernel, so that they can be safely used in
+%  packages whether or not tagging is requested. By default they do
+%  nothing.
+%
+%  TODO: the corresponding L3 layer commands should also have a dummy
+%  definition in the kernel!
+%
+% \DescribeMacro\UseTaggingSocket
+% \DescribeMacro\tag_socket_use:n
+% \DescribeMacro\tag_socket_use:nn
+%  To support tagging in packages we use sockets with names starting
+%  with \texttt{tagsupport/}. Usually, these sockets have exactly two
+%  plugs defined:
+%  \plug{noop} (when no tagging is requested or tagging is not wanted
+%  for some reason) and a second plug that enables the tagging. There
+%  may be more, e.g., tagging with special debugging, etc., but right
+%  now it is usually just on or off.
+%
+%  Given that we sometimes have to suspend tagging, it would be fairly
+%  inefficient to put different plugs into these sockets whenever that
+%  happens. We therefore offer \cs{UseTaggingSocket} which is like
+%  \cs{UseSocket} except that the socket name is specified without
+%  \texttt{tagsupport/}, i.e.,
+% \begin{quote}
+%   \verb=\UseTaggingSocket{foo}=      $\to$
+%   \verb=\UseSocket{tagsupport/foo}=
+% \end{quote}
+%  Beside being slightly shorter, the big advantage is that this way
+%  we can change \cs{UseTaggingSocket} to do nothing when tagging is
+%  suspended with \cs{SuspendTagging} instead of changing the plugs of
+%  the tagging support sockets back and forth.
+%
+%  It is possible to use the tagging support sockets with
+%  \cs{UseSocket} directly, but in this case the socket remains active
+%  if \cs{SuspendTagging} is in force. There my be reasons for doing
+%  that but in general we expect to always use \cs{UseTaggingSocket}.
+%
+%  The L3 programming layer versions \cs{tag_socket_use:n} and
+%  \cs{tag_socket_use:nn} are slightly more efficient than
+%  \cs{UseTaggingSocket} because they do not have to determine how
+%  many arguments the socket takes when disabling it, so in code that
+%  is using the L3 progamming layer we recomment to use them instead
+%  of the CamelCase command.
+%                
+%
+%
 %  \begin{macro}{\SuspendTagging,\ResumeTagging}
 %    
 %    In the kernel, these two commands get dummy definitons so that
@@ -115,9 +170,66 @@
     }
   }
 }
-\ExplSyntaxOff  
 %    \end{macrocode}
 %  \end{macro}
+%
+%  \begin{macro}{\tag_socket_use:n,
+%                \tag_socket_use:nn,
+%                \UseTaggingSocket,
+%               }
+%    Again this is not the final definition for the kernel; it is just
+%    a version to get going while some partsof the kernel support are
+%    still missing.
+%    \begin{macrocode}
+\AddToHook{begindocument}[kernel]{
+  \cs_if_exist:NF \tag_if_active:T
+     {
+       \prg_new_conditional:Npnn \tag_if_active: { p , T , TF, F }
+           { \prg_return_false: }
+     }
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \tag_socket_use:n #1 {
+  \tag_if_active:T
+      { \UseSocket {tagsupport/#1} }
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \tag_socket_use:nn #1#2 {
+  \tag_if_active:T
+      { \UseSocket {tagsupport/#1} {#2} }
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \UseTaggingSocket #1 {
+  \tag_if_active:TF
+      { \UseSocket{tagsupport/#1} }
+      {
+        \int_case:nnF
+            { \int_use:c { c__socket_tagsupport/#1_args_int } }
+            {
+              0 \prg_do_nothing:
+              1 \use_none:n
+              2 \use_none:nn
+%    \end{macrocode}
+%    We do not expect tagging sockets with more than one or two
+%    arguments, so for now we only provide those.
+%    \begin{macrocode}
+            }
+            \ERRORusetaggingsocket
+      }
+}
+\ExplSyntaxOff
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
 %
 %
 % \subsection{Tagging support for table/tabular packages}
@@ -233,49 +345,6 @@
 %
 %
 %
-%  \begin{macro}{\tag_socket_use:n,
-%                \tag_socket_use:nn,
-%                \UseTaggingSocket,
-%               }
-%    
-%    \begin{macrocode}
-\ExplSyntaxOn
-
-\AddToHook{begindocument}[kernel]{
-  \cs_if_exist:NF \tag_if_active:T
-     {
-       \prg_new_conditional:Npnn \tag_if_active: { p , T , TF, F }
-           { \prg_return_false: }
-     }
-}
-
-\cs_new_protected:Npn \tag_socket_use:n #1 {
-  \tag_if_active:T
-      { \UseSocket {tagsupport/#1} }
-}
-\cs_new_protected:Npn \tag_socket_use:nn #1#2 {
-  \tag_if_active:T
-      { \UseSocket {tagsupport/#1} {#2} }
-}
-
-\cs_new_protected:Npn \UseTaggingSocket #1 {
-  \tag_if_active:TF
-      { \UseSocket{tagsupport/#1} }
-      {
-        \int_case:nnF
-            { \int_use:c { c__socket_tagsupport/#1_args_int } }
-            {
-              0 \prg_do_nothing:
-              1 \use_none:n
-              2 \use_none:nn
-            }
-            \ERRORusetaggingsocket
-      }
-}
-\ExplSyntaxOff
-%    \end{macrocode}
-%  \end{macro}
-%
 %
 %
 % \section{For lttab.dtx parked here for now}
@@ -289,17 +358,29 @@
 %
 % \subsection{Variables for row, column and span counting}
 %
+%  This part needs a decision on names for various integer registers
+%  as as well as a decision if those should be also made available for
+%  \LaTeXe{}-style packages in form of 2e names and or as
+%  non-internals for the L3 programming layer.
 %
+%  At the moment they are all internal but this probably has to change.
 %
 %  \begin{macro}{
 %     \g_@@_col_int,
 %     \g_@@_row_int,
 %     \g_@@_span_tl,
 %     \g_@@_table_cols_tl}
-%    \cs{g_@@_row_int} holds the current row number in the table. The value
-%    \texttt{0} means we haven't yet processed the table preamble. It
-%    is incremented by every \cs{cr} including the one ending the
-%    table preamble.
+%    
+%    \cs{g_@@_row_int} holds the current row number in the table. The
+%    value \texttt{0} means we haven't yet processed the table
+%    preamble (or in case of longtable are just in front of the next
+%    chunk to be processed). It is incremented by every \cs{cr}
+%    including the one ending the table preamble.
+%
+%    TODO: due to the gymnastics needed inside the longtable code the
+%    row counter is directly exposed there rather than hidden by
+%    interfaces. This needs changing when it is decided how to manage
+%    these counters.
 %
 %    \cs{g_@@_col_int} holds the current column number. The value
 %    \texttt{0} means we have not yet started the table or just finished a table row
@@ -379,7 +460,9 @@
 % \subsection{Interface commands}
 %
 % All interface commands for the cell number determination have to be
-% public because they are needed in other packages as well, e.g., longtable.
+% public on some level because they are needed in other packages as
+%  well, e.g., longtable. We may or may not also want to provide 2e
+%  style names for them.
 %
 %  \begin{macro}{\tbl_update_cell_data:}
 %    Updating cell data in columns after the first means we have to
@@ -424,6 +507,16 @@
         }
       }
   }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\tbl_save_outer_table_cols:}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \tbl_save_outer_table_cols: {
+  \tl_set_eq:NN \l_@@_saved_table_cols_tl  \g_@@_table_cols_tl
 }
 %    \end{macrocode}
 %  \end{macro}
@@ -484,11 +577,66 @@
 %
 %
 %
+%  \begin{macro}{\tbl_update_cell_data_for_next_row:}
+%    \begin{macrocode}
+\cs_new_protected:Npn \tbl_update_cell_data_for_next_row: {
+      \int_gincr:N \g_@@_row_int          % this row about to start
+      \int_gzero:N \g_@@_col_int          % we are before first col
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
 %  \begin{macro}{\tbl_init_cell_data_for_row:}
+%    If we start processing a cell in the first column  we set
+%    \cs{g_@@_col_int} to \texttt{1} as we are no longer "at" but "in"
+%    the first column. We also set \cs{g_@@_span_tl} to its default
+%    value (not spanning cells).
 %    \begin{macrocode}
 \cs_new_protected:Npn \tbl_init_cell_data_for_row: {
         \int_gset:Nn \g_@@_col_int {1}
         \tl_gset:Nn  \g_@@_span_tl {1}
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\tbl_if_row_was_started:T,
+%                \tbl_if_row_was_started:TF}
+%    We use \cs{g_@@_col_int} equal zero to indicate that we are just
+%    after a TR (i.e.n between rows or at the very beginning of the
+%    table). Using the row
+%    count is not so good as longtable may split the table in chunks.
+%
+%    These conditionals have to be expandable (i.e., unprotected) as
+%    they are sometimes executed when \TeX{} is scanning inside a table.
+%    \begin{macrocode}
+\cs_new:Npn \tbl_if_row_was_started:T {
+      \int_compare:nNnT \g_@@_col_int > 0
+}
+\cs_new:Npn \tbl_if_row_was_started:TF {
+      \int_compare:nNnTF \g_@@_col_int > 0
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\tbl_incr_row_count:}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \tbl_incr_row_count: {
+  \int_gincr:N \g_@@_row_int
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\tbl_inbetween_rows:}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \tbl_inbetween_rows: {
+       \int_gzero:N  \g_@@_col_int
 }
 %    \end{macrocode}
 %  \end{macro}
