@@ -82,16 +82,20 @@
 %
 %  \DescribeMacro\SuspendTagging
 %  \DescribeMacro\ResumeTagging
+%  
 %  The are places in code where it is import top stop any tagging
-%  activities, e.g., when we are doing trial typesetting that it is done
-%  several times. In such a case one must tag only the final version
-%  that is actually used, otherwise tagging structures are allowed
-%  which then do not end up in the PDF and confuse the mechanism. For
-%  this we have two commands that can be used in packages:
-%  \cs{SuspendTagging} and \cs{ResumeTagging}. They are available as
-%  part of the \LaTeX{} kernel, so that they can be safely used in
-%  packages whether or not tagging is requested. By default they do
-%  nothing.
+%  activities, e.g., when we are doing trial typesetting that it is
+%  done several times. In such a case one must tag only the final
+%  version that is actually used, otherwise tagging structures are
+%  allowed which then do not end up in the PDF and confuse the
+%  mechanism. For this we have two commands that can be used in
+%  packages: \cs{SuspendTagging} and \cs{ResumeTagging}. They are
+%  available as part of the \LaTeX{} kernel, so that they can be
+%  safely used in packages whether or not tagging is requested .They
+%  both take string argument that is used for debugging to easily
+%  identify why tagging was suspended or restarted, for example, in
+%  \pkg{tabularx} you find \verb=\SuspendTagging{tabularx}=. By default
+%  they two commands do nothing.
 %
 %  TODO: the corresponding L3 layer commands should also have a dummy
 %  definition in the kernel!
@@ -130,14 +134,14 @@
 %  \cs{tag_socket_use:nn} are slightly more efficient than
 %  \cs{UseTaggingSocket} because they do not have to determine how
 %  many arguments the socket takes when disabling it, so in code that
-%  is using the L3 progamming layer we recomment to use them instead
+%  is using the L3 programming layer we recommend to use them instead
 %  of the CamelCase command.
 %                
 %
 %
 %  \begin{macro}{\SuspendTagging,\ResumeTagging}
 %    
-%    In the kernel, these two commands get dummy definitons so that
+%    In the kernel, these two commands get dummy definitions so that
 %    they can be used without harm in packages. The real definition is
 %    used when tagging gets enabled.
 %    \begin{macrocode}
@@ -145,29 +149,22 @@
 \cs_new_eq:NN \ResumeTagging  \use_none:n
 %    \end{macrocode}
 %
-%    The correct definition in \pkg{tagpdf} will look different. This
-%    one here is just a simplification for now.
+%    A simplified version of this defnition should move to
+%    \pkg{tagpdf} and dropped here, eventually.
 %    \begin{macrocode}
 \AddToHook{begindocument/before}{
   \cs_if_exist:NT \tag_stop:n
   { 
     \cs_set:Npn \SuspendTagging #1 {
-      \tag_stop:n {#1} 
 %    \end{macrocode}%
-%    Next line is is incomplete (only disables table sockets) and
-%    should instead be done in the above command instead of disabling them
-%    individually because that will otherwise forever change if new
-%    sockets get used.
+%    This stops tagging and also disables all tagging sockets so we are done.
 %    \begin{macrocode}
-      \__tag_tbl_disable:
+      \tag_stop:n {#1} 
     }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-    \cs_set:Npn \ResumeTagging #1 {
-      \tag_start:n {#1}
-      \__tag_tbl_enable:
-    }
+    \cs_set:Npn \ResumeTagging #1 { \tag_start:n {#1} }
   }
 }
 %    \end{macrocode}
@@ -178,7 +175,7 @@
 %                \UseTaggingSocket,
 %               }
 %    Again this is not the final definition for the kernel; it is just
-%    a version to get going while some partsof the kernel support are
+%    a version to get going while some parts of the kernel support are
 %    still missing.
 %    \begin{macrocode}
 \AddToHook{begindocument}[kernel]{
@@ -190,22 +187,46 @@
 }
 %    \end{macrocode}
 %
+%    Dummy definitions in the kernel
 %    \begin{macrocode}
-\cs_new_protected:Npn \tag_socket_use:n #1 {
+\cs_new_protected:Npn \tag_socket_use:n #1 { }
+\cs_new_protected:Npn \tag_socket_use:nn #1#2 { }
+%    \end{macrocode}
+%    The default in the kernel is just to get rid of the argument:
+%    \begin{macrocode}
+\cs_new_protected:Npn \UseTaggingSocket #1 {
+  \int_case:nnF
+      { \int_use:c { c__socket_tagsupport/#1_args_int } }
+         {
+           0 \prg_do_nothing:
+           1 \use_none:n
+           2 \use_none:nn
+%    \end{macrocode}
+%    We do not expect tagging sockets with more than one or two
+%    arguments, so for now we only provide those.
+%    \begin{macrocode}
+         }
+         \ERRORusetaggingsocket  % that should get a proper error message
+}
+%    \end{macrocode}
+%
+%    And this is how it could look in \pkg{tagpdf}:
+%    \begin{macrocode}
+\cs_set_protected:Npn \tag_socket_use:n #1 {
   \tag_if_active:T
       { \UseSocket {tagsupport/#1} }
 }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-\cs_new_protected:Npn \tag_socket_use:nn #1#2 {
+\cs_set_protected:Npn \tag_socket_use:nn #1#2 {
   \tag_if_active:T
       { \UseSocket {tagsupport/#1} {#2} }
 }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-\cs_new_protected:Npn \UseTaggingSocket #1 {
+\cs_set_protected:Npn \UseTaggingSocket #1 {
   \tag_if_active:TF
       { \UseSocket{tagsupport/#1} }
       {
@@ -479,13 +500,42 @@
 %
 %
 %
+%  \begin{macro}{\tbl_count_table_cols:}
+%    Current implementation of \cs{@mkpream} uses the scratch counter
+%    \cs{count@} to keep track of the number of toks registers it needs
+%    (2 per column), but this can't be used as it counts also
+%    insertions made with \verb+!{}+ and \verb+@{}+.
+%    So similar as does longtable for \cs{LT@cols} we count the
+%    numbers of ampersands instead.
+%    \begin{macrocode}
+\cs_new:Npn \tbl_count_table_cols:  {
+  \seq_set_split:NnV\l_@@_tmpa_seq {&}\@preamble
+  \tl_gset:Ne \g_@@_table_cols_tl { \seq_count:N \l_@@_tmpa_seq }
+  \@@_trace:n { ==>~ Table~ has~ \g_@@_table_cols_tl \space columns }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\l_@@_tmpa_seq}
+%    
+%    \begin{macrocode}
+\seq_new:N \l_@@_tmpa_seq
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
 %  \begin{macro}{\tbl_count_missing_cells:n}
+%    
 %    We might have the situation that some table package has not
-%    implemented the \cs{} in which case \cs{g_@@_table_cols_tl} would
-%    always be zero and we would get an error below when we try to
-%    determine the missing cells, so bypass that calculation if we
-%    aren't doing tagging (there the packages should have the proper
-%    code added).
+%    implemented the \cs{tbl_count_table_cols:} in which case
+%    \cs{g_@@_table_cols_tl} would always be zero and we would get an
+%    error below when we try to determine the missing cells, so bypass
+%    that calculation if we aren't doing tagging (there the packages
+%    should have the proper code added). Recall that this is code,
+%    that is called by \verb=\\= and an old table packagee might rely
+%    on whatever the \LaTeX{} kernel offers here.
 %    \begin{macrocode}
 \cs_new:Npn \tbl_count_missing_cells:n #1 {
   \tag_if_active:T {
@@ -521,30 +571,6 @@
 %    \end{macrocode}
 %  \end{macro}
 %
-%
-%  \begin{macro}{\tbl_count_table_cols:}
-%    Current implementation of \cs{@mkpream} uses the scratch counter
-%    \cs{count@} to keep track of the number of toks registers it needs
-%    (2 per column), but this can't be used as it counts also
-%    insertings made with \verb+!{}+ and \verb+@{}+.
-%    So similar as does longtable for \cs{LT@cols} we count the
-%    numbers of ampersands instead.
-%    \begin{macrocode}
-\cs_new:Npn \tbl_count_table_cols:  {
-  \seq_set_split:NnV\l_@@_tmpa_seq {&}\@preamble
-  \tl_gset:Ne \g_@@_table_cols_tl { \seq_count:N \l_@@_tmpa_seq }
-  \@@_trace:n { ==>~ Table~ has~ \g_@@_table_cols_tl \space columns }
-}
-%    \end{macrocode}
-%  \end{macro}
-%
-%
-%  \begin{macro}{\l_@@_tmpa_seq}
-%    
-%    \begin{macrocode}
-\seq_new:N \l_@@_tmpa_seq
-%    \end{macrocode}
-%  \end{macro}
 %
 %  \begin{macro}{\tbl_init_cell_data_for_table:}
 %    
