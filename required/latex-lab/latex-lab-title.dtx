@@ -52,13 +52,35 @@
 % The followings contains changes to improve the tagging of
 % the title created with the \cs{maketitle} command in the standard classes.
 % 
-% For basic tagging they are basically three main things to do:
+% For basic tagging they are basically three things to do:
 % 
 % \begin{itemize}
 % \item The actual title should be tagged with the \texttt{Title} tag.
 % \item The tabular used to format the author list should not be tagged as a tabular.
 % \item \cs{maketitle} redefines footnote internals. These must be made tagging aware.
 % \end{itemize} 
+% 
+% A second task related to title is to use it (or a shorter version) inside the 
+% XMP-metadata and in the displayed title. Currently this can only be set if hyperref
+% is loaded and requires the use of the \texttt{pdftitle} key. 
+% The new code therefore extends the \cs{title} command: It stores its argument and
+% uses it at the end of the document for the PDF metadata if the PDF title 
+% hasn't been given in another way. 
+% It also gives \cs{title} an optional argument where the PDF title can be given with
+% the pdftitle key. As with hyperref it is possible to store titles 
+% in more than one language:
+%  
+% \begin{verbatim}
+% \title
+%   [pdftitle = 
+%      {[en]English Title,[de] Deutscher Titel,[fr]{titre français, avec comma}}]
+%   {Document title} 
+% \end{verbatim}
+% 
+% If hyperref is loaded there is no difference to the \texttt{pdftitle}
+% of \cs{hypersetup}. Both can be used. 
+% 
+%   
 % 
 % \section{Implementation}
 %    \begin{macrocode}
@@ -136,8 +158,14 @@
   \vskip 2em%
   \begin{center}%
   \let \footnote \thanks
-    {\LARGE \tagtool{paratag=Title}\@title \par}%
-    \vskip 1.5em%
+%    \end{macrocode}
+% use Title around the title. As in PDF 1.7 this is 
+% rolemapped to P we change the text-unit tag there.
+%    \begin{macrocode}  
+  \pdf_version_compare:NnTF > {1.7}
+    {{\LARGE \tag_struct_begin:n{tag=Title}\@title \par\tag_struct_end:}}
+    {{\LARGE \tagtool{paratag=Title}\@title \par}}%
+   \vskip 1.5em%
     {\large
       \lineskip .5em%
       \begin{tabular}[t]{c}%
@@ -165,12 +193,14 @@
   \null\vfil
   \vskip 60\p@
 %    \end{macrocode}
-% use Title around the title. As in PDF 2.0 this is rolemapped to P
-% we change the text-unit tag here.
+% use Title around the title. As in PDF 1.7 this is 
+% rolemapped to P we change the text-unit tag there.
 %    \begin{macrocode}
   \begin{center}%
-    {\LARGE \tagtool{paratag=Title}\@title\par}%
-    \vskip 3em%
+   \pdf_version_compare:NnTF > {1.7}
+     {{\LARGE \tag_struct_begin:n{tag=Title}\@title \par\tag_struct_end:}}
+     {{\LARGE \tagtool{paratag=Title}\@title \par}}%
+   \vskip 3em%
     {\large
      \lineskip .75em%
       \begin{tabular}[t]{c}%
@@ -225,6 +255,107 @@
     \cs_set_eq:NN \@maketitle \@@_patch_@maketitle:   
     \fi
   } 
+%    \end{macrocode}
+% \subsection{Extend title to set metadata}
+% At first a variable to store the title, as \cs{@title} is emptied by \LaTeX. 
+%    \begin{macrocode}
+\tl_new:N \g_@@_title_text_tl 
+%    \end{macrocode}
+% Now we redefine \cs{title} so that it stores the title, and processes
+% keys in the optional argument. We use \texttt{hyp} as module
+% name for the key as this means that it hyperref is loaded its definition
+% of \textt{pdftitle} will be used -- at some time probably this
+% should be moved out of hyperref so that we have only one definition.
+% 
+%    \begin{macrocode}
+\RenewDocumentCommand\title{O{}m}
+ {
+    \gdef\@title{#2}
+    \cs_gset_eq:NN\g_@@_title_text_tl\@title
+    \keys_set:nn {hyp}{#1}
+ } 
+%    \end{macrocode}
+%We offer also support for \cs{texorpdfstring}
+%    \begin{macrocode}
+\providecommand\texorpdfstring[2]{#1}%
+%    \end{macrocode}
+% Now we define the \texttt{pdftitle} key. This is more or less
+% the same definition as in the generic hyperref driver. 
+%    \begin{macrocode}
+\str_new:N \g_@@_title_tmpa_str
+\str_new:N \l_@@_title_tmpa_str
+\tl_new:N \l_@@_title_tmpa_tl
+\seq_new:N \l_@@_title_tmpa_seq
+\regex_new:N\l_@@_title_optlang_regex
+\regex_set:Nn\l_@@_title_optlang_regex {\A\[([A-Za-z\-]+)\](.*)}
+\cs_generate_variant:Nn \regex_extract_once:NnN{NVN}
+\cs_generate_variant:Nn \clist_item:nn {on}
+%    \end{macrocode}
+% A helper command to convert the title into a pdfstring
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_title_pdfstring:nnN #1 #2 #3
+  {
+    \group_begin:
+%    \end{macrocode}
+% TODO: we need probably a common boolean to handle 
+% \cs{texorpdfstring} also without hyperref.
+%    \begin{macrocode}
+    \cs_set_eq:NN\texorpdfstring\use_ii:nn
+    \str_set:Ne \l_@@_title_tmpa_str {\text_purify:n { #1 } }     
+    \pdf_string_from_unicode:nVN { #2 } \l_@@_title_tmpa_str \l_@@_title_tmpa_str
+    \str_gset_eq:NN \g_@@_title_tmpa_str\l_@@_title_tmpa_str
+    \group_end:
+    \str_set_eq:NN #3 \g_@@_title_tmpa_str
+ }
+\cs_generate_variant:Nn\@@_title_pdfstring:nnN {e} 
+%    \end{macrocode}
+% and now the key.
+%    \begin{macrocode}
+\keys_define:nn { hyp }
+   {
+     pdftitle  .code:n =
+       {
+         \tl_if_blank:nTF {#1}
+           {
+             \pdfmanagement_remove:nn {Info}{Title}
+           }
+           {
+             \tl_set:Ne\l_@@_title_tmpa_tl {\clist_item:on{#1}{1}}           
+             \regex_extract_once:NVN 
+                \l_@@_title_optlang_regex 
+                \l_@@_title_tmpa_tl
+                \l_@@_title_tmpa_seq
+             \seq_if_empty:NTF\l_@@_title_tmpa_seq
+              {
+                \@@_title_pdfstring:nnN {#1}{utf16/hex}\l_@@_title_tmpa_str
+              }
+              {         
+                \@@_title_pdfstring:enN 
+                   {\seq_item:Nn \l_@@_title_tmpa_seq{3}}{utf16/hex}\l_@@_title_tmpa_str
+              }
+             \str_if_eq:VnF\l_@@_title_tmpa_str{<FEFF>}
+               {
+                 \pdfmanagement_add:nne {Info}{Title}{\l_@@_title_tmpa_str}
+               }
+           }
+          \AddToDocumentProperties[hyperref]{pdftitle}{#1}
+       }
+   }
+%    \end{macrocode}
+% At last we set the title at the end of document 
+% if that hasn't happened yet:
+%    \begin{macrocode}
+\AddToHook{enddocument}
+ {
+   \tl_if_empty:eT{\GetDocumentProperties{hyperref/pdftitle}}
+      { 
+        \group_begin:
+        \cs_set_eq:NN\thanks \use_none:n 
+        \str_set:Ne \l_@@_title_tmpa_str {\text_purify:n { \g_@@_title_text_tl } }
+        \keys_set:ne{hyp}{pdftitle=\exp_not:V\l_@@_title_tmpa_str}
+        \group_end:
+      }
+ }
 %</package>  
 %    \end{macrocode}
 
