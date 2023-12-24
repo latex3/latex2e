@@ -7,5 +7,5 @@ checkengines = {"pdftex","luatex"}
 checksearch  = true
 testfiledir  = "testfiles-title"
 
-checkruns     = 1
+checkruns     = 2
 
