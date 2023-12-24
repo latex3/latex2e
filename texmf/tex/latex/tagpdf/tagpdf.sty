@@ -28,7 +28,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: tagpdf.dtx
-\ProvidesExplPackage {tagpdf} {2023-11-19} {0.98q}
+\ProvidesExplPackage {tagpdf} {2023-12-18} {0.98r}
   { A package to experiment with pdf tagging }
 
 \bool_if:nF
@@ -112,6 +112,7 @@
 \bool_set_true:N \l__tag_active_mc_bool
 \bool_new:N \l__tag_active_struct_bool
 \bool_set_true:N \l__tag_active_struct_bool
+\bool_new:N \l__tag_active_socket_bool
 \bool_new:N \g__tag_tagunmarked_bool
 \prg_generate_conditional_variant:Nnn \pdf_object_if_exist:n {e}{T,F,TF}
 \cs_generate_variant:Nn \pdf_object_ref:n {e}
@@ -177,49 +178,44 @@
 \cs_generate_variant:Nn \__tag_seq_new:N    { c }
 \cs_generate_variant:Nn \__tag_seq_show:N   { c }
 \cs_generate_variant:Nn \__tag_prop_show:N  { c }
-\cs_new_protected:Npn \tag_stop_group_begin:
-  {
-    \group_begin:
-    \bool_set_false:N \l__tag_active_struct_bool
-    \bool_set_false:N \l__tag_active_mc_bool
-    \__tag_stop_para_ints:
-  }
-\cs_set_eq:NN \tag_stop_group_end: \group_end:
+\int_new:N \l__tag_tag_stop_int
 \cs_set_protected:Npn \tag_stop:
   {
+    \int_incr:N \l__tag_tag_stop_int
     \bool_set_false:N \l__tag_active_struct_bool
     \bool_set_false:N \l__tag_active_mc_bool
+    \bool_set_false:N \l__tag_active_socket_bool
     \__tag_stop_para_ints:
   }
 \cs_set_protected:Npn \tag_start:
   {
-    \bool_set_true:N \l__tag_active_struct_bool
-    \bool_set_true:N \l__tag_active_mc_bool
-    \__tag_start_para_ints:
-  }
-\cs_set_eq:NN\tagstop\tag_stop:
-\cs_set_eq:NN\tagstart\tag_start:
-\prop_new:N\g__tag_state_prop
-\cs_set_protected:Npn \tag_stop:n #1
-  {
-    \tag_if_active:TF
-      {
-        \bool_set_false:N \l__tag_active_struct_bool
-        \bool_set_false:N \l__tag_active_mc_bool
-        \__tag_stop_para_ints:
-        \prop_gput:Nnn \g__tag_state_prop { #1 }{ 1 }
-      }
-      {
-        \prop_gremove:Nn \g__tag_state_prop { #1 }
-      }
-  }
-\cs_set_protected:Npn \tag_start:n #1
-  {
-    \prop_gpop:NnN \g__tag_state_prop {#1}\l__tag_tmpa_tl
-     \quark_if_no_value:NF \l__tag_tmpa_tl
+    \int_if_zero:nF { \l__tag_tag_stop_int } { \int_decr:N \l__tag_tag_stop_int }
+    \int_if_zero:nT { \l__tag_tag_stop_int }
       {
         \bool_set_true:N \l__tag_active_struct_bool
         \bool_set_true:N \l__tag_active_mc_bool
+        \bool_set_true:N \l__tag_active_socket_bool
+        \__tag_start_para_ints:
+      }
+  }
+\cs_set_eq:NN\tagstop\tag_stop:
+\cs_set_eq:NN\tagstart\tag_start:
+\cs_set_protected:Npn \tag_stop:n #1
+  {
+    \int_incr:N \l__tag_tag_stop_int
+    \bool_set_false:N \l__tag_active_struct_bool
+    \bool_set_false:N \l__tag_active_mc_bool
+    \bool_set_false:N \l__tag_active_socket_bool
+    \__tag_stop_para_ints:
+  }
+\cs_set_protected:Npn \tag_start:n #1
+  {
+    \int_if_zero:nF { \l__tag_tag_stop_int } { \int_decr:N \l__tag_tag_stop_int }
+    \int_if_zero:nT { \l__tag_tag_stop_int }
+      {
+        \bool_set_true:N \l__tag_active_struct_bool
+        \bool_set_true:N \l__tag_active_mc_bool
+        \bool_set_true:N \l__tag_active_socket_bool
         \__tag_start_para_ints:
       }
   }
@@ -620,12 +616,14 @@
  {
   \tag_mc_end_push:
   \tag_mc_begin:n {artifact=#1}
-  \tag_stop_group_begin:
+  \group_begin:
+  \tag_stop:n{artifact-group}
  }
 
 \cs_set_protected:Npn \tag_mc_artifact_group_end:
  {
-  \tag_stop_group_end:
+  \tag_start:n{artifact-group}
+  \group_end:
   \tag_mc_end:
   \tag_mc_begin_pop:n{}
  }
@@ -2333,25 +2331,28 @@
 \cs_generate_variant:Nn \pdffile_embed_stream:nnN {neN}
 \cs_new_protected:Npn \__tag_struct_add_inline_AF:nn #1 #2
  {
-   \group_begin:
-   \int_gincr:N \g__tag_struct_AFobj_int
-   \pdffile_embed_stream:neN
-     {#1}
-     {tag-AFfile\int_use:N\g__tag_struct_AFobj_int.#2}
-     \l__tag_tmpa_tl
-     \__tag_struct_add_AF:ee
-       { \int_use:N \c@g__tag_struct_abs_int }
-       { \l__tag_tmpa_tl }
-     \__tag_struct_prop_gput:nne
-       { \int_use:N \c@g__tag_struct_abs_int }
-       { AF }
-       {
-         [
-           \tl_use:c
-            { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_AF_tl }
-         ]
-       }
-   \group_end:
+   \tl_if_empty:nF{#1}
+     {
+      \group_begin:
+      \int_gincr:N \g__tag_struct_AFobj_int
+      \pdffile_embed_stream:neN
+        {#1}
+        {tag-AFfile\int_use:N\g__tag_struct_AFobj_int.#2}
+        \l__tag_tmpa_tl
+        \__tag_struct_add_AF:ee
+          { \int_use:N \c@g__tag_struct_abs_int }
+          { \l__tag_tmpa_tl }
+        \__tag_struct_prop_gput:nne
+          { \int_use:N \c@g__tag_struct_abs_int }
+          { AF }
+          {
+            [
+              \tl_use:c
+               { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_AF_tl }
+            ]
+          }
+      \group_end:
+     }
  }
 
 \cs_generate_variant:Nn \__tag_struct_add_inline_AF:nn {on}
@@ -2398,16 +2399,19 @@
       },
     AFref .code:n        = % AF property
       {
-        \__tag_struct_add_AF:ee { \int_use:N \c@g__tag_struct_abs_int }{#1}
-        \__tag_struct_prop_gput:nne
-          { \int_use:N \c@g__tag_struct_abs_int }
-          { AF }
-          {
-            [
-              \tl_use:c
-              { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_AF_tl }
-            ]
-          }
+        \tl_if_empty:eF {#1}
+         {
+           \__tag_struct_add_AF:ee { \int_use:N \c@g__tag_struct_abs_int }{#1}
+           \__tag_struct_prop_gput:nne
+             { \int_use:N \c@g__tag_struct_abs_int }
+             { AF }
+             {
+               [
+                 \tl_use:c
+                 { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_AF_tl }
+               ]
+             }
+         }
       },
    ,AFinline .code:n =
      {
@@ -2420,6 +2424,7 @@
    ,texsource .code:n =
     {
       \group_begin:
+      \pdfdict_put:nnn { l_pdffile/Filespec } {Desc}{(TeX~source)}
       \pdfdict_put:nnn { l_pdffile/Filespec }{AFRelationship} { /Source }
       \__tag_struct_add_inline_AF:on {#1}{tex}
       \group_end:
@@ -2427,6 +2432,7 @@
    ,mathml .code:n =
      {
       \group_begin:
+      \pdfdict_put:nnn { l_pdffile/Filespec } {Desc}{(mathml~representation)}
       \pdfdict_put:nnn { l_pdffile/Filespec }{AFRelationship} { /Supplement }
       \__tag_struct_add_inline_AF:on {#1}{xml}
       \group_end:
@@ -2959,6 +2965,31 @@
   {
     \tag_mc_if_in:TF { #1 } { #2 }
   }
+\cs_set_protected:Npn \tag_socket_use:n #1
+  {
+    \bool_if:NT \l__tag_active_socket_bool
+      { \UseSocket {tagsupport/#1} }
+  }
+\cs_set_protected:Npn \tag_socket_use:nn #1#2
+  {
+    \bool_if:NT \l__tag_active_socket_bool
+       { \UseSocket {tagsupport/#1} {#2} }
+  }
+\cs_set_protected:Npn \UseTaggingSocket #1
+  {
+    \bool_if:NTF \l__tag_active_socket_bool
+      { \UseSocket{tagsupport/#1} }
+      {
+        \int_case:nnF
+            { \int_use:c { c__socket_tagsupport/#1_args_int } }
+            {
+              0 \prg_do_nothing:
+              1 \use_none:n
+              2 \use_none:nn
+            }
+            \ERRORusetaggingsocket
+      }
+  }
 \NewDocumentCommand\ShowTagging { m }
   {
     \keys_set:nn { __tag / show }{ #1}
@@ -3096,10 +3127,11 @@
 
 \keys_define:nn { __tag / setup}
  {
+   activate-socket .bool_set:N  = \l__tag_active_socket_bool,
    activate  .code:n =
     {
       \keys_set:nn { __tag / setup }
-        { activate-mc,activate-tree,activate-struct }
+        { activate-mc,activate-tree,activate-struct,activate-socket }
       \tl_gset:Nn\g__tag_root_default_tl {#1}
     },
    activate .default:n = Document
@@ -3107,14 +3139,12 @@
 
 \AddToHook{begindocument/before}
   {
-    \bool_lazy_all:nT
+    \bool_lazy_and:nnT
+      { \g__tag_active_struct_dest_bool }
+      { \g__tag_active_struct_bool }
       {
-        { \g__tag_active_struct_dest_bool }
-        { \g__tag_active_struct_bool }
-        { \cs_if_exist_p:N \pdf_activate_structure_destination: }
-      }
-      {
-        \tl_set:Nn \l_pdf_current_structure_destination_tl { __tag/struct/\g__tag_struct_stack_current_tl }
+        \tl_set:Nn \l_pdf_current_structure_destination_tl
+           { __tag/struct/\g__tag_struct_stack_current_tl }
         \pdf_activate_structure_destination:
       }
    }
@@ -3127,8 +3157,6 @@
      }
   }
 \providecommand\pdffakespace{}
-\bool_new:N \l__tag_para_bool
-\bool_new:N \l__tag_para_show_bool
 \int_new:N  \g__tag_para_begin_int
 \int_new:N  \g__tag_para_end_int
 \int_new:N  \g__tag_para_main_begin_int
