@@ -1298,19 +1298,6 @@
 %    the current package name. See section~\ref{sec:default-label}.
 % \end{function}
 %
-% \begin{function}{\hook_info_show:n,\hook_info_log:n}
-%   \begin{syntax}
-%     \cs{hook_info_show:n} \Arg{hook name}
-%     \cs{hook_info_log:n}  \Arg{hook name}
-%   \end{syntax}
-%   Displays information about the hook in a more friendly way than
-%   \cs{hook_show:n}.
-%
-%   \cs{hook_info_log:n} prints the information to the |.log| file, and
-%   \cs{hook_info_show:n} prints them to the terminal/command window and starts
-%   \TeX's prompt (only if \cs{errorstopmode}) to wait for user action.
-% \end{function}
-%
 % \begin{function}{\hook_debug_on:,\hook_debug_off:}
 %   \begin{syntax}
 %     \cs{hook_debug_on:}
@@ -6017,6 +6004,13 @@
 %    \end{macrocode}
 %  \end{macro}
 %
+% \begin{variable}{\l_@@_info_seq}
+% Sequence to record the code chunk labels by order of execution.
+%    \begin{macrocode}
+\seq_new:N \l_@@_info_seq
+%    \end{macrocode}
+% \end{variable}
+%
 % \begin{macro}{\hook_show:n,\hook_log:n}
 % \begin{macro}{\@@_log_line:x,\@@_log_line_indent:x}
 % \begin{macro}{\@@_log:nN}
@@ -6046,143 +6040,173 @@
 %    \begin{macrocode}
 %<latexrelease>\IncludeInRelease{2023/06/01}{\@@_log:nN}
 %<latexrelease>                 {Hooks~with~args}
+\tl_new:N \l_@@_info_tl
 \cs_new_protected:Npn \@@_log:nN #1 #2
   {
-    \@@_if_deprecated_generic:nT {#1}
+    \@@_if_deprecated_generic:nT { #1 }
       {
-        \@@_deprecated_generic_warn:n {#1}
-        \@@_do_deprecated_generic:Nn \@@_log:nN {#1} #2
-        \exp_after:wN \use_none:nnnnnnnnn \use_none:nnnnn
+        \@@_deprecated_generic_warn:n { #1 }
+        \@@_do_deprecated_generic:Nn \@@_info_log:nN { #1 } #2
+        \use_none:nnnnnnnnn
       }
-    \@@_preamble_hook:n {#1}
-    \@@_log_cmd:x
+    \@@_preamble_hook:n { #1 }
+    \@@_log_cmd:x { ^^J ==>~Hook:~'#1' }
+    \use:n
       {
-        ^^J ->~The~
-        \@@_if_generic:nT {#1} { generic~ }
-        hook~'#1'
-        \@@_if_disabled:nF {#1}
+        \seq_clear:N \l_@@_info_seq
+        \@@_if_generic:nT { #1 }
           {
-            \exp_args:Nnf \@@_print_args:nn {#1}
-              {
-                \int_eval:n
-                  { \str_count:e { \@@_parameter:n {#1} } / 3 }
-              }
+            \seq_put_right:Nn \l_@@_info_seq { builtin~generic }
+            \use_none:nnn
           }
-        :
+        \@@_if_usable:nF { #1 }
+          { \seq_put_right:Nn \l_@@_info_seq { not~declared } }
+        \@@_if_disabled:nF { #1 }
+          {
+            \exp_args:Nf \int_compare:nNnT
+              { \str_count:e { \@@_parameter:n { #1 } } } > 2
+              {
+                \seq_put_right:Nx \l_@@_info_seq
+                  {
+                    \@@_print_args:nn { #1 }
+                      {
+                        \int_eval:n
+                          { \str_count:e { \@@_parameter:n { #1 } } / 3 }
+                      }
+                  }
+              }
+              \use_none:nnn
+          }
+        \seq_put_right:Nn \l_@@_info_seq { disabled }
+        \hook_if_empty:nT { #1 }
+          {
+            \seq_if_empty:NT \l_@@_info_seq
+              { \seq_put_right:Nn \l_@@_info_seq { empty } }
+            #2 { \seq_use:Nn \l_@@_info_seq { ,~ } }
+            \use_none:nnnnnn
+          }
+        \seq_if_empty:NF \l_@@_info_seq
+          {
+            \@@_log_line_indent:x { \seq_use:Nn \l_@@_info_seq { ,~ } }
+          }
       }
 %    \end{macrocode}
-%
+% |#2| will be used whenn displaying the last executed code label.
 %    \begin{macrocode}
-    \@@_if_usable:nF {#1}
-      { \@@_log_line:x { The~hook~is~not~declared. } }
-    \@@_if_disabled:nT {#1}
-      { \@@_log_line:x { The~hook~is~disabled. } }
-    \hook_if_empty:nTF {#1}
-      { #2 { The~hook~is~empty } }
+    \hook_if_empty:nF { #1 }
       {
         \@@_log_line:x { Code~chunks: }
-        \prop_if_empty:cTF { g_@@_#1_code_prop }
-          { \@@_log_line_indent:x { --- } }
+        \prop_if_empty:cF { g_@@_#1_code_prop }
           {
             \prop_map_inline:cn { g_@@_#1_code_prop }
               {
-                \exp_after:wN \cs_set:Npn \exp_after:wN \@@_tmp:w
-                  \c_@@_nine_parameters_tl {##2}
+                \exp_after:wN \cs_set:Npn \exp_after:wN \@@_info_log_nN:w
+                  \c_@@_nine_parameters_tl { ##2 }
                 \@@_log_line_indent:x
-                  { ##1~->~\cs_replacement_spec:N \@@_tmp:w }
+                  { '##1' ~->~\cs_replacement_spec:N \@@_info_log_nN:w }
               }
           }
-%    \end{macrocode}
-%
-%    If there is code in the |top-level| token list, print it:
-%    \begin{macrocode}
-        \@@_log_line:x
+        \@@_cs_if_empty:cF { @@_toplevel~#1 }
           {
-            Document-level~(top-level)~code
-            \@@_if_usable:nT {#1}
-              { ~(executed~\@@_if_reversed:nTF {#1} {first} {last} ) } :
+            \@@_log_line_indent:x
+              { 'top-level' ~->~ \cs_replacement_spec:c { @@_toplevel~#1 } }
           }
-        \@@_log_line_indent:x
+        \@@_cs_if_empty:cF { @@_next~#1 }
           {
-            \@@_cs_if_empty:cTF { @@_toplevel~#1 }
-              { --- }
-              { -> ~ \cs_replacement_spec:c { @@_toplevel~#1 } }
-          }
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-        \@@_log_line:x { Extra~code~for~next~invocation: }
-        \@@_log_line_indent:x
-          {
-            \@@_cs_if_empty:cTF { @@_next~#1 }
-              { --- }
-%    \end{macrocode}
-%
-%    If the token list is not empty we want to display it but without
-%    the first tokens (the code to clear itself) so we call a helper
-%    command to  get rid of them.
-%    \begin{macrocode}
+            \@@_log_line_indent:x
               {
-                -> ~ \exp_last_unbraced:Nf \@@_log_next_code:w
+                next-only ~->~ \exp_last_unbraced:Nf \@@_log_next_code:w
                   { \cs_replacement_spec:c { @@_next~#1 } }
               }
           }
 %    \end{macrocode}
-%
-%   Loop through the rules in a hook and for every rule found, print it.
-%   If no rule is there, print |---|.  The boolean \cs{l_@@_tmpa_bool}
-%   here indicates if the hook has no rules.
+%   Loop through the default rules in a hook and for every rule found, print it.
+%   The boolean \cs{l_@@_tmpa_bool} here indicates if the hook has no default rules.
 %    \begin{macrocode}
-        \@@_log_line:x { Rules: }
-        \bool_set_true:N \l_@@_tmpa_bool
-        \@@_list_rules:nn {#1}
+        \cs_set:Npn \@@_info_log:nN:nw ##1 ##2 | ##3 \scan_stop:
           {
-            \bool_set_false:N \l_@@_tmpa_bool
+            \l_@@_info_tl
+            \tl_clear:N \l_@@_info_tl
             \@@_log_line_indent:x
               {
-                ##2~ with~
-                \str_if_eq:nnT {##3} {??} { default~ }
-                relation~ ##1
+                \str_case:nnF { ##1 }
+                  {
+                    { xE } { '##2'~incompatible-error~  '##3' }
+                    { xW } { '##2'~incompatible-warning~'##3' }
+                    { <  } { '##2'~before~'##3' }
+                    { <- } { '##2'~voids~ '##3' }
+                    {  > } { '##2'~after~ '##3' }
+                    { -> } { '##3'~voids~ '##2' }
+                  }
+                  { '##2'~UNKNOWN(##1)~ '##3' }
               }
           }
-        \bool_if:NT \l_@@_tmpa_bool
-          { \@@_log_line_indent:x { --- } }
-%    \end{macrocode}
-%
-%   When the hook is declared (that is, the sorting algorithm is applied
-%   to that hook) and not empty
-%    \begin{macrocode}
-        \bool_lazy_and:nnTF
-            { \@@_if_usable_p:n {#1} }
-            { ! \hook_if_empty_p:n {#1} }
+        \tl_set:Nn \l_@@_info_tl
           {
             \@@_log_line:x
               {
-                Execution~order
-                \bool_if:NTF \l_@@_tmpa_bool
-                  { \@@_if_reversed:nT {#1} { ~(after~reversal) } }
-                  { ~(after~
-                    \@@_if_reversed:nT {#1} { reversal~and~ }
-                    applying~rules)
-                  } :
-              }
-            #2 % \tl_show:n
-              {
-                \@spaces
-                \clist_if_empty:cTF { g_@@_#1_labels_clist }
-                  { --- }
-                  { \clist_use:cn { g_@@_#1_labels_clist } { ,~ } }
+                Default~rules
+                \@@_if_reversed:nT { #1 } { ,~to~be~mirrored }:
               }
           }
+        \@@_list_rules:nn {#1}
+          {
+            \str_if_eq:nnT { ##3 } { ?? }
+              { \@@_info_log:nN:nw { ##1 } ##2 \scan_stop: }
+          }
+%    \end{macrocode}
+%   Loop through the rules in a hook and for every non default rule found, print
+%   it. The boolean \cs{l_@@_tmpa_bool} here indicates if the hook only has 
+%   default rules.
+%    \begin{macrocode}
+        \tl_set:Nn \l_@@_info_tl
+          { \@@_log_line:x { Rules: } }
+        \@@_list_rules:nn { #1 }
+          {
+            \str_if_eq:nnF { ##3 } { ?? }
+              { \@@_info_log:nN:nw { ##1 } ##2 \scan_stop: }
+          }
+%    \end{macrocode}
+%   When the hook is declared (that is, the sorting algorithm is applied
+%   to that hook)
+%    \begin{macrocode}
+        \@@_if_usable:nT { #1 }
           {
             \@@_log_line:x { Execution~order: }
+            \seq_clear:N \l_@@_info_seq
+            \@@_if_reversed:nT { #1 }
+              {
+                \@@_cs_if_empty:cF { @@_toplevel~#1 }
+                  { \seq_put_right:Nn \l_@@_info_seq { 'top-level' } }
+              }
+            \clist_if_empty:cF { g_@@_#1_labels_clist }
+              {
+                \clist_map_inline:cn { g_@@_#1_labels_clist }
+                  { \seq_put_right:Nn \l_@@_info_seq { '##1' } }
+              }
+            \@@_if_reversed:nF { #1 }
+              {
+                \@@_cs_if_empty:cF { @@_toplevel~#1 }
+                  { \seq_put_right:Nn \l_@@_info_seq { 'top-level' } }
+              }
+            \@@_cs_if_empty:cT { @@_next~#1 }
+              {
+                \seq_pop_right:NN \l_@@_info_seq \l_@@_info_tl
+                \use_none:nnn
+              }
+              \tl_set:Nn \l_@@_info_tl { next-only }
+            \seq_map_indexed_inline:Nn \l_@@_info_seq
+              { \@@_log_line_indent:x { ##1:~##2 } }
             #2
               {
-                \@spaces Not~set~because~the~hook~ \@@_if_usable:nTF {#1}
-                  { code~pool~is~empty }
-                  { is~\@@_if_disabled:nTF {#1} {disabled} {undeclared} }
+                \@spaces
+                \int_eval:n { \seq_count:N \l_@@_info_seq + 1 }
+                :~
+                \l_@@_info_tl
               }
+            \use_none:nn
           }
+        #2 { No~execution }
       }
   }
 %<latexrelease>\EndIncludeInRelease
@@ -6304,22 +6328,11 @@
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{\@@_print_args:nn, \@@_info_print_args:nn}
+% \begin{macro}{\@@_print_args:nn}
 %    Pretty-prints the number of arguments of a hook.
 %    |#1| is a hook name, |#2| expands to a number.
 %    \begin{macrocode}
 \cs_new:Npn \@@_print_args:nn #1 #2
-  {
-    \int_compare:nNnT {#2} > { 0 }
-      {
-        \@@_if_declared:nT {#1} { \use_none:nnn }
-        \@@_if_cmd_hook:nT {#1}
-          { \use_i:nnn { ~ (unknown ~ } }
-        \use:n { ~ (#2 ~ }
-        argument \int_compare:nNnT {#2} > { 1 } { s } )
-      }
-  }
-\cs_new:Npn \@@_info_print_args:nn #1 #2
   {
     \int_compare:nNnT { #2 } > { 0 }
       {
@@ -6332,204 +6345,6 @@
 %
 % \end{macro}
 % \end{macro}
-% \end{macro}
-%
-% \begin{variable}{\l_@@_info_seq}
-% Sequence to record the code chunk labels by order of execution.
-%    \begin{macrocode}
-\seq_new:N \l_@@_info_seq
-%    \end{macrocode}
-% \end{variable}
-% \begin{macro}{\hook_info_show:n,\hook_info_log:n}
-%   This writes out information about the hook given in its argument onto the
-%   \texttt{.log} file and also to the terminal if \cs{show_info_hook:n} is
-%   used.  Internally both share the same structure, except that at the
-%   end, \cs{hook_info_show:n} triggers \TeX's prompt.
-%    \begin{macrocode}
-\cs_new_protected:Npn \hook_info_log:n #1
-  {
-    \cs_set_eq:NN \@@_log_cmd:x \iow_log:x
-    \@@_normalize_hook_args:Nn \@@_info_log:nN {#1} \tl_log:x
-  }
-\cs_new_protected:Npn \hook_info_show:n #1
-  {
-    \cs_set_eq:NN \@@_log_cmd:x \iow_term:x
-    \@@_normalize_hook_args:Nn \@@_info_log:nN {#1} \tl_show:x
-  }
-%    \end{macrocode}
-% Next function makes the difference between \cs{ShowHookInfo} and
-% \cs{ShowHook}. In order to call |#2| in due time, we feed
-% \cs{l_@@_info_seq} and use |#2| for the last item.
-%    \begin{macrocode}
-\tl_new:N \l_@@_info_tl
-\cs_new_protected:Npn \@@_info_log:nN #1 #2
-  {
-    \@@_if_deprecated_generic:nT { #1 }
-      {
-        \@@_deprecated_generic_warn:n { #1 }
-        \@@_do_deprecated_generic:Nn \@@_info_log:nN { #1 } #2
-        \use_none:nnnnnnnnn
-      }
-    \@@_preamble_hook:n { #1 }
-    \@@_log_cmd:x { ^^J ==>~Hook:~'#1' }
-    \use:n
-      {
-        \seq_clear:N \l_@@_info_seq
-        \@@_if_generic:nT { #1 }
-          {
-            \seq_put_right:Nn \l_@@_info_seq { builtin~generic }
-            \use_none:nnn
-          }
-        \@@_if_usable:nF { #1 }
-          { \seq_put_right:Nn \l_@@_info_seq { not~declared } }
-        \@@_if_disabled:nF { #1 }
-          {
-            \exp_args:Nf \int_compare:nNnT
-              { \str_count:e { \@@_parameter:n { #1 } } } > 2
-              {
-                \seq_put_right:Nx \l_@@_info_seq
-                  {
-                    \@@_info_print_args:nn { #1 }
-                      {
-                        \int_eval:n
-                          { \str_count:e { \@@_parameter:n { #1 } } / 3 }
-                      }
-                  }
-              }
-              \use_none:nnn
-          }
-        \seq_put_right:Nn \l_@@_info_seq { disabled }
-        \hook_if_empty:nT { #1 }
-          {
-            \seq_if_empty:NT \l_@@_info_seq
-              { \seq_put_right:Nn \l_@@_info_seq { empty } }
-            #2 { \seq_use:Nn \l_@@_info_seq { ,~ } }
-            \use_none:nnnnnn
-          }
-        \seq_if_empty:NF \l_@@_info_seq
-          {
-            \@@_log_line_indent:x { \seq_use:Nn \l_@@_info_seq { ,~ } }
-          }
-      }
-%    \end{macrocode}
-% |#2| will be used whenn displaying the last executed code label.
-%    \begin{macrocode}
-    \hook_if_empty:nF { #1 }
-      {
-        \@@_log_line:x { Code~chunks: }
-        \prop_if_empty:cF { g_@@_#1_code_prop }
-          {
-            \prop_map_inline:cn { g_@@_#1_code_prop }
-              {
-                \exp_after:wN \cs_set:Npn \exp_after:wN \@@_info_log_nN:w
-                  \c_@@_nine_parameters_tl { ##2 }
-                \@@_log_line_indent:x
-                  { '##1' ~->~\cs_replacement_spec:N \@@_info_log_nN:w }
-              }
-          }
-        \@@_cs_if_empty:cF { @@_toplevel~#1 }
-          {
-            \@@_log_line_indent:x
-              { top~level ~->~ \cs_replacement_spec:c { @@_toplevel~#1 } }
-          }
-        \@@_cs_if_empty:cF { @@_next~#1 }
-          {
-            \@@_log_line_indent:x
-              {
-                next~only ~->~ \exp_last_unbraced:Nf \@@_log_next_code:w
-                  { \cs_replacement_spec:c { @@_next~#1 } }
-              }
-          }
-%    \end{macrocode}
-%   Loop through the default rules in a hook and for every rule found, print it.
-%   The boolean \cs{l_@@_tmpa_bool} here indicates if the hook has no default rules.
-%    \begin{macrocode}
-        \cs_set:Npn \@@_info_log:nN:nw ##1 ##2 | ##3 \scan_stop:
-          {
-            \l_@@_info_tl
-            \tl_clear:N \l_@@_info_tl
-            \@@_log_line_indent:x
-              {
-                \str_case:nnF { ##1 }
-                  {
-                    { xE } { '##2'~incompatible-error~  '##3' }
-                    { xW } { '##2'~incompatible-warning~'##3' }
-                    { <  } { '##2'~before~'##3' }
-                    { <- } { '##2'~voids~ '##3' }
-                    {  > } { '##2'~after~ '##3' }
-                    { -> } { '##3'~voids~ '##2' }
-                  }
-                  { '##2'~UNKNOWN(##1)~ '##3' }
-              }
-          }
-        \tl_set:Nn \l_@@_info_tl
-          {
-            \@@_log_line:x
-              {
-                Default~rules
-                \@@_if_reversed:nT { #1 } { ,~to~be~mirrored }:
-              }
-          }
-        \@@_list_rules:nn {#1}
-          {
-            \str_if_eq:nnT { ##3 } { ?? }
-              { \@@_info_log:nN:nw { ##1 } ##2 \scan_stop: }
-          }
-%    \end{macrocode}
-%   Loop through the rules in a hook and for every non default rule found, print
-%   it. The boolean \cs{l_@@_tmpa_bool} here indicates if the hook only has 
-%   default rules.
-%    \begin{macrocode}
-        \tl_set:Nn \l_@@_info_tl
-          { \@@_log_line:x { Rules: } }
-        \@@_list_rules:nn { #1 }
-          {
-            \str_if_eq:nnF { ##3 } { ?? }
-              { \@@_info_log:nN:nw { ##1 } ##2 \scan_stop: }
-          }
-%    \end{macrocode}
-%   When the hook is declared (that is, the sorting algorithm is applied
-%   to that hook)
-%    \begin{macrocode}
-        \@@_if_usable:nT { #1 }
-          {
-            \@@_log_line:x { Execution~order: }
-            \seq_clear:N \l_@@_info_seq
-            \@@_if_reversed:nT { #1 }
-              {
-                \@@_cs_if_empty:cF { @@_toplevel~#1 }
-                  { \seq_put_right:Nn \l_@@_info_seq { top-level } }
-              }
-            \clist_if_empty:cF { g_@@_#1_labels_clist }
-              {
-                \clist_map_inline:cn { g_@@_#1_labels_clist }
-                  { \seq_put_right:Nn \l_@@_info_seq { '##1' } }
-              }
-            \@@_if_reversed:nF { #1 }
-              {
-                \@@_cs_if_empty:cF { @@_toplevel~#1 }
-                  { \seq_put_right:Nn \l_@@_info_seq { top-level } }
-              }
-            \@@_cs_if_empty:cF { @@_next~#1 }
-              { \seq_put_right:Nn \l_@@_info_seq { next-only } }
-            \seq_pop_right:NN \l_@@_info_seq \l_@@_info_tl
-            \seq_map_indexed_inline:Nn \l_@@_info_seq
-                {
-                  \@@_log_line_indent:x { ##1:~##2 }
-                }
-              #2
-                {
-                  \@spaces
-                  \int_eval:n { \seq_count:N \l_@@_info_seq + 1 }
-                  :~
-                  '\l_@@_info_tl'
-              }
-            \use_none:nn
-          }
-        #2 { No~execution }
-      }
-  }
-%    \end{macrocode}
 % \end{macro}
 %
 % \begin{macro}{\@@_list_rules:nn}
@@ -7800,13 +7615,6 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \ShowHook { \hook_show:n }
 \cs_new_protected:Npn \LogHook { \hook_log:n }
-%    \end{macrocode}
-% \end{macro}
-%
-% \begin{macro}{\ShowHookInfo,\LogHookInfo}
-%    \begin{macrocode}
-\cs_new_protected:Npn \ShowHookInfo { \hook_info_show:n }
-\cs_new_protected:Npn \LogHookInfo { \hook_info_log:n }
 %    \end{macrocode}
 % \end{macro}
 %
