@@ -89,6 +89,7 @@ l3build save -cconfig-lthooks \
    lthooks-032 \
    lthooks-033 \
    lthooks-034 \
+   lthooks-show \
    lthooks-errors \
    lthooks-errors-deprecated \
    lthooks-etoolbox \

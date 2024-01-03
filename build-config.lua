@@ -28,6 +28,7 @@ checksuppfiles = checksuppfiles     or
     "test209.tex",
     "test2e.tex",
     "regression-test.tex",
+    "lthooks-setup.tex",
     "lipsum.ltd.tex",
     "lipsum.sty",
     "*.fd",
