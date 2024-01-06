@@ -44,6 +44,10 @@ l3build save -cconfig-lthooks \
    ltcmdhooks-009 \
    ltcmdhooks-010 \
    ltcmdhooks-011 \
+   ltcmdhooks-012 \
+   ltcmdhooks-013 \
+   ltcmdhooks-014 \
+   ltcmdhooks-015 \
    filehook-001 \
    filehook-002 \
    filehook-003 \
@@ -84,6 +88,9 @@ l3build save -cconfig-lthooks \
    lthooks-028 \
    lthooks-029 \
    lthooks-029-deprecated \
+   lthooks-029-deprecated-after \
+   lthooks-029-deprecated-before \
+   lthooks-029b \
    lthooks-030 \
    lthooks-031 \
    lthooks-032 \
@@ -108,10 +115,17 @@ l3build save -cconfig-lthooks \
    github-0606 \
    github-0648 \
    github-0648b \
-   github-0818
+   github-0818 \
+   github-1052
 
+
+l3build save \
+  github-0424 \
+  github-0944 \
+  github-0962b
+
+l3build save -eluatex \
+  github-0962b
 
 
 exit
-
-
