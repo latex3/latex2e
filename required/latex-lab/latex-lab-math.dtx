@@ -535,18 +535,29 @@
 %    \end{macrocode}
 % \end{macro}
 % 
+%  We add also an attribute. 
+%    \begin{macrocode} 
+\tl_new:N\l_@@_attribute_class_tl
+\tagpdfsetup
+      {newattribute = {inline}    {/O /Layout /Placement/Inline},
+       newattribute = {display}   {/O /Layout /Placement/Block},
+      } 
+%    \end{macrocode}
+%
 % \subsection{Code related to AF}
 % Booleans to handle the options.
 % \begin{variable}{
 %   \l__tag_math_texsource_AF_bool,
 %   \l__tag_math_texsource_panel_bool,
 %   \l__tag_math_mathml_AF_bool,
+%   \g__tag_math_mathml_AF_bool,
 %   \l__tag_math_mathml_panel_bool
 % }
 %    \begin{macrocode}
 \bool_new:N\l__tag_math_texsource_AF_bool
 \bool_new:N\l__tag_math_texsource_panel_bool
 \bool_new:N\l__tag_math_mathml_AF_bool
+\bool_new:N\g__tag_math_mathml_AF_bool
 \bool_new:N\l__tag_math_mathml_panel_bool
 %    \end{macrocode}
 % \end{variable}
@@ -582,7 +593,7 @@
        \bool_if:NT \l__tag_math_mathml_panel_bool
         {\pdfmanagement_add:nne {Catalog/Names}{EmbeddedFiles}{\l_tmpa_tl}}
        \tl_new:c{g_@@_mathml_#3_tl}
-       \tl_gset_eq:cN{g_@@_mathml_#3_tl}\l_tmpa_tl
+       \tl_gset_eq:cN{g_@@_mathml_#3_tl}\l_tmpa_tl       
      }
   }   
 %    \end{macrocode}
@@ -603,12 +614,28 @@
       \cs_set_eq:NN\mml \@@_AF_mml:nnnn
       \clist_map_inline:Nn \l__tag_math_mathml_files_clist
         {
-          \file_if_exist_input:nF {##1.xml}
+          \file_if_exist:nTF {##1.xml}
             {
-               \typeout{mathml~file~##1~does~not~exist}%info message
+             \typeout{Info:~reading~mathml~file~##1}
+             \file_input:n {##1.xml}
+             \bool_gset_true:N\g__tag_math_mathml_AF_bool
+            }
+            {
+               \typeout{Info:~mathml~file~##1~does~not~exist}%info message
             }
         }  
     }
+    \bool_if:NT\g__tag_math_mathml_AF_bool
+      {
+        \typeout{Info:~Activating~mathml~support}
+        \AssignSocketPlug{tagsupport/math/struct/begin}{test-mathml}
+        \AssignSocketPlug{tagsupport/math/struct/end}{test-mathml}    
+%    \end{macrocode}
+% mathml handling doesn't like subparts, so we disable them for now:
+%    \begin{macrocode}
+        \AssignSocketPlug{tagsupport/math/substruct/begin}{noop}
+        \AssignSocketPlug{tagsupport/math/substruct/end}{noop}
+      }  
  }
 \AddToHook{begindocument}{\@@_AF_process_mathml_files:} 
 %    \end{macrocode}
@@ -868,6 +895,68 @@
 %    \end{macrocode}  
 % \end{plugdecl}   
 % 
+% \begin{plugdecl}{test-mathml}
+% This (test-)socket tries to add a mathml-AF to formula. 
+% It is activated if a mathml.xml has been found and loaded. 
+% Additionally it also sets an attribute 
+% (this can perhaps be done by default anyway.)
+% As it disturbs the reading of the AF it deactivates the /Alt key.
+%    \begin{macrocode}
+\cs_generate_variant:Nn \str_mdfive_hash:n {o}
+\tl_new:N\l_@@_content_hash_tl
+%    \end{macrocode}
+% we need to save the grabbed math:
+%    \begin{macrocode}
+\tl_new:N\l_@@_grabbed_math_tl
+%    \end{macrocode}
+% the socket definition
+%    \begin{macrocode}
+\socket_new_plug:nnn
+  {tagsupport/math/struct/begin}
+  {test-mathml}
+  {   
+   \tl_set:Ne\l_@@_content_hash_tl 
+    {\str_mdfive_hash:o { \g_@@_grabbed_math_tl }} 
+   \tl_set_eq:NN\l_@@_grabbed_math_tl\g_@@_grabbed_math_tl   
+   \tl_if_eq:NnTF\g_@@_grabbed_env_tl {math}
+     {
+       \tl_set:Nn\l_@@_attribute_class_tl{inline}       
+     }
+     {
+       \tl_set:Nn\l_@@_attribute_class_tl{display}
+     }
+%    \end{macrocode}
+% debugging option. TODO: hide in debug key.
+%    \begin{macrocode}
+   \tl_if_exist:cTF { g_@@_mathml_ \l_@@_content_hash_tl _tl }
+    {                                  
+      \typeout {Inserting~mathml~with~Hash~\l_@@_content_hash_tl}    
+    }
+    {
+      \typeout{WARNING:~mathml~missing~for~hash\l_@@_content_hash_tl}
+    }    
+   \tag_struct_begin:n
+     {
+       tag=Formula,
+       attribute-class=\l_@@_attribute_class_tl, %
+       AFref       = 
+        \cs_if_exist_use:c {g__math_mathml_ \l_@@_content_hash_tl _tl},
+       texsource   = \l_@@_content_AF_source_tl, % should be after mathml AF!
+       title-o     = \g_@@_grabbed_env_tl,    %
+     }
+   }
+%    \end{macrocode}
+% not really needed but looks more symmetric:
+%    \begin{macrocode}
+\socket_new_plug:nnn
+  {tagsupport/math/struct/end}
+  {test-mathml}
+  {
+    \tag_struct_end:
+  }     
+%    \end{macrocode}
+% \end{plugdecl}
+%  
 % \begin{socketdecl}{tagsupport/math/substruct/begin,
 %  tagsupport/math/substruct/end}
 %  This holds the code to handle subparts of the formula.
