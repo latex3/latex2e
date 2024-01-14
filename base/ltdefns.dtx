@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-% Copyright (C) 1993-2023
+% Copyright (C) 1993-2024
 % The LaTeX Project and any individual authors listed elsewhere
 % in this file.
 %
