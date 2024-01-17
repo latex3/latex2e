@@ -1,4 +1,4 @@
-l3build save -cconfig-doc -eetex \
+l3build save -cconfig-doc -epdftex \
         github-0023 \
         github-0750 \
 	tlb-dox009 \
@@ -8,15 +8,16 @@ l3build save -cconfig-doc -eetex \
 	tlb-dox013 \
 	tlb-dox014
 
-l3build save -cconfig-doc -eetex,xetex,luatex \
+l3build save -cconfig-doc -epdftex,xetex,luatex \
         github-0205 \
+        github-1230 \
 	tlb-dox004 \
 	tlb-dox005
 
-# l3build save -cconfig-doc -eetex,xetex
+# l3build save -cconfig-doc -epdftex,xetex
 
 
-l3build save -cconfig-doc -eetex,luatex \
+l3build save -cconfig-doc -epdftex,luatex \
         github-0075 \
 	tlb-doc009 \
 	tlb-dox001 \
@@ -34,5 +35,5 @@ l3build save -cconfig-doc -eetex,luatex \
 
 
 
-#l3build save -eetex \
+#l3build save -epdftex \
 
