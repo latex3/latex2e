@@ -10,6 +10,7 @@ l3build save -cconfig-doc -epdftex \
 
 l3build save -cconfig-doc -epdftex,xetex,luatex \
         github-0205 \
+        github-1230 \
 	tlb-dox004 \
 	tlb-dox005
 

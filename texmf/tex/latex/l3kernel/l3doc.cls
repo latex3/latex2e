@@ -6,7 +6,7 @@
 %%
 %% l3doc.dtx  (with options: `class')
 %% 
-%% Copyright (C) 1990-2023 The LaTeX Project
+%% Copyright (C) 1990-2024 The LaTeX Project
 %% 
 %% It may be distributed and/or modified under the conditions of
 %% the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{calc}
-\ProvidesExplClass{l3doc}{2023-12-11}{}
+\ProvidesExplClass{l3doc}{2024-01-04}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -386,11 +386,11 @@
         \bool_gset_true:N \g__codedoc_typeset_documentation_bool
         \bool_gset_true:N \g__codedoc_typeset_implementation_bool
       } ,
-   onlydoc .code:n =
-    {
-      \bool_gset_true:N \g__codedoc_typeset_documentation_bool
-      \bool_gset_false:N \g__codedoc_typeset_implementation_bool
-    } ,
+    onlydoc .code:n =
+      {
+        \bool_gset_true:N \g__codedoc_typeset_documentation_bool
+        \bool_gset_false:N \g__codedoc_typeset_implementation_bool
+      } ,
     check .bool_gset:N = \g__codedoc_checkfunc_bool ,
     checktest .bool_gset:N = \g__codedoc_checktest_bool ,
     kernel .bool_gset:N = \g__codedoc_kernel_bool ,
@@ -693,28 +693,28 @@
         \@
       }
     \bool_if:NT \l__codedoc_allow_indexing_bool
-     {
-      \bool_if:NF \l__codedoc_cmd_noindex_bool
-       {
-        \quark_if_no_value:NF \l__codedoc_cmd_index_tl
+      {
+        \bool_if:NF \l__codedoc_cmd_noindex_bool
           {
-            \__kernel_tl_set:Ne \l__codedoc_cmd_tl
-              { \c_backslash_str \exp_not:o { \l__codedoc_cmd_index_tl } }
+            \quark_if_no_value:NF \l__codedoc_cmd_index_tl
+              {
+                \__kernel_tl_set:Ne \l__codedoc_cmd_tl
+                  { \c_backslash_str \exp_not:o { \l__codedoc_cmd_index_tl } }
+              }
+            \exp_args:No \__codedoc_key_get:n { \l__codedoc_cmd_tl }
+            \quark_if_no_value:NF \l__codedoc_cmd_module_tl
+              {
+                \__kernel_tl_set:Ne \l__codedoc_index_module_tl
+                  { \tl_to_str:N \l__codedoc_cmd_module_tl }
+              }
+            \__codedoc_special_index_module:ooonN
+              { \l__codedoc_index_key_tl }
+              { \l__codedoc_index_macro_tl }
+              { \l__codedoc_index_module_tl }
+              { usage }
+              \l__codedoc_index_internal_bool
           }
-        \exp_args:No \__codedoc_key_get:n { \l__codedoc_cmd_tl }
-        \quark_if_no_value:NF \l__codedoc_cmd_module_tl
-          {
-            \__kernel_tl_set:Ne \l__codedoc_index_module_tl
-              { \tl_to_str:N \l__codedoc_cmd_module_tl }
-          }
-        \__codedoc_special_index_module:ooonN
-          { \l__codedoc_index_key_tl }
-          { \l__codedoc_index_macro_tl }
-          { \l__codedoc_index_module_tl }
-          { usage }
-          \l__codedoc_index_internal_bool
-       }
-     }
+      }
   }
 \cs_generate_variant:Nn \__codedoc_cmd:nn { no }
 \cs_new_protected:Npn \__codedoc_meta:n #1
@@ -1154,7 +1154,10 @@
     \__codedoc_typeset_aux:n { \__codedoc_get_function_name:n {#1} }
     :
     \int_compare:nTF { \seq_count:N \g__codedoc_variants_seq == 1 }
-      { \seq_use:Nn \g__codedoc_variants_seq { } }
+      {
+        \seq_use:Nn \g__codedoc_variants_seq { }
+        \bool_if:NT #2 { \__codedoc_typeset_TF: }
+      }
       {
         \hbox_set:Nn \l_tmpa_box
           { \seq_use:Nn \g__codedoc_variants_seq { \textrm| \nolinebreak[2] } }
@@ -1367,9 +1370,14 @@
       { \__codedoc_names_block_base_map:N \__codedoc_macro_save_names_aux:n }
       {
         \seq_gput_right:Ne \g__codedoc_nested_names_seq
-          { \tl_to_str:N \l__codedoc_macro_documented_tl }
+          {
+            \exp_after:wN \__codedoc_macro_save_names_aux:w
+              \l__codedoc_macro_documented_tl \q__codedoc_stop
+          }
       }
   }
+\cs_new:Npn \__codedoc_macro_save_names_aux:w #1#2 \q__codedoc_stop
+  { \token_to_str:N #1 \tl_to_str:n {#2} }
 \cs_new_protected:Npn \__codedoc_macro_save_names_aux:n #1
   { \seq_gput_right:Nn \g__codedoc_nested_names_seq {#1} }
 \cs_new_protected:Npn \__codedoc_macro_exclude_index:
@@ -1556,21 +1564,21 @@
 \cs_new_protected:Npn \__codedoc_macro_end_check_tested:
   {
     \bool_lazy_all:nT
-     {
-       { \g__codedoc_checktest_bool }
-       { ! \l__codedoc_macro_var_bool }
-       { ! \l__codedoc_macro_tested_bool }
-     }
-     {
-       \seq_set_filter:NNn \l__codedoc_tmpa_seq \l__codedoc_names_seq
-         { ! \__codedoc_if_macro_internal_p:n {##1} }
-       \seq_gput_right:Ne \g__codedoc_not_tested_seq
-         {
-           \seq_use:Nn \l__codedoc_tmpa_seq { , }
-           \bool_if:NTF \l__codedoc_macro_pTF_bool {~(pTF)}
-             { \bool_if:NT \l__codedoc_macro_TF_bool {~(TF)} }
-         }
-     }
+      {
+        { \g__codedoc_checktest_bool }
+        { ! \l__codedoc_macro_var_bool }
+        { ! \l__codedoc_macro_tested_bool }
+      }
+      {
+        \seq_set_filter:NNn \l__codedoc_tmpa_seq \l__codedoc_names_seq
+          { ! \__codedoc_if_macro_internal_p:n {##1} }
+        \seq_gput_right:Ne \g__codedoc_not_tested_seq
+          {
+            \seq_use:Nn \l__codedoc_tmpa_seq { , }
+            \bool_if:NTF \l__codedoc_macro_pTF_bool {~(pTF)}
+              { \bool_if:NT \l__codedoc_macro_TF_bool {~(TF)} }
+          }
+      }
   }
 \cs_new_protected:Npn \__codedoc_macro_end_style:n #1
   {
@@ -1676,17 +1684,17 @@
 \providecommand\Hy@footnote@currentHref{}
 \prop_new:N\g__codedoc_fnmark_prop
 \cs_new_protected:Npn \__codedoc_fn_store:
- {
-   \prop_gput:Nee\g__codedoc_fnmark_prop
-     {fn\int_use:N\c@footnote}{{\Hy@footnote@currentHref}{\int_use:N\c@footnote}}
- }
+  {
+    \prop_gput:Nee\g__codedoc_fnmark_prop
+      {fn\int_use:N\c@footnote}{{\Hy@footnote@currentHref}{\int_use:N\c@footnote}}
+  }
 \cs_new_protected:Npn \__codedoc_fn_restore:n  #1
- {
-   \prop_get:NnN \g__codedoc_fnmark_prop {fn#1}\l__codedoc_tmpa_tl
-   \tl_gset:Ne\Hy@footnote@currentHref
-     {\exp_last_unbraced:NV\use_i:nn \l__codedoc_tmpa_tl }
-   \setcounter{footnote}{\exp_last_unbraced:NV\use_ii:nn \l__codedoc_tmpa_tl}
- }
+  {
+    \prop_get:NnN \g__codedoc_fnmark_prop {fn#1}\l__codedoc_tmpa_tl
+    \tl_gset:Ne\Hy@footnote@currentHref
+      {\exp_last_unbraced:NV\use_i:nn \l__codedoc_tmpa_tl }
+    \setcounter{footnote}{\exp_last_unbraced:NV\use_ii:nn \l__codedoc_tmpa_tl}
+  }
 
 \cs_generate_variant:Nn \hook_gput_next_code:nn {ne}
 \cs_new_protected:Npn \__codedoc_fn_footnote:nn #1 #2
@@ -1767,7 +1775,7 @@
       { #1 \endinput }
   }
 \cs_if_exist:NT \MaybeStop
-   { \RenewCommandCopy \MaybeStop \StopEventually }
+  { \RenewCommandCopy \MaybeStop \StopEventually }
 \DeclareDocumentCommand \Finale { }
   { \tl_use:N \g__codedoc_finale_tl }
 \tl_new:N \g__codedoc_finale_tl
