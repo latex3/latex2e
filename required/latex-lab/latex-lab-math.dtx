@@ -251,32 +251,12 @@
 %  If the equation is numbered the numbering should be part of the MathML as 
 %  the |Lbl| substructure is ignored if an MathML is used (see https://github.com/foxitsoftware/PDF_UA-2).
 %    
-%  Currently two input syntax for the MathML
-%  are supported\footnote{We do not expect
-%  both formats to stay. Experience will show which one is more useful and if more
-%  adaptions are needed.}:
-%  \begin{description}
-%  \item[xml/tex-format]   
-%  The file can start with \verb|<x>| and end with \verb|</x>| to make it a valid
-%  xml-file that can be validated.
-%  It should have the extension \texttt{.xml}.
-%  The file should contain a number of representations in this format:
-%  \begin{syntax}
-%  \cs{mml}\Arg{key}\Arg{source}\Arg{hash}\Arg{mathml}
-%  \end{syntax}
-%  
-%  The file is read in with the catcodes of \texttt{\#} and \texttt{\%} set to other
-%  so that they can be used in the \meta{mathml}. But braces must be correctly balanced.
-%   
-%  \meta{key} and \meta{source} are currently only used for debugging, they help to identify
-%  the equation referred by this representation. \meta{hash} is a hash key and is used 
-%  to identify the equation to which the MathML should be attached. If the equation is changed 
-%  it must be adapted. \meta{mathml} is the MathML representation.
-%  
-%  \item[\texttt{html}-format] A second format is meant to be a valid html file
-%  to view and check the mathml representation of the math in a browser.
+%  The MathML representation is given in a special format. 
+%  It is meant to be a valid html file
+%  that can be viewed  in a browser.
 %  For this it can start with |<!DOCTYPE html><html>| and end with |</html>|
-%  It should have the extension \texttt{.html}.
+%  It should have the extension \texttt{.html}. The file is read in with
+%  special catcodes, so can contain hashes and comment chars.
 %  
 %  The file should contain a number of representations in this format:
 %  \begin{quote}
@@ -289,10 +269,10 @@
 %  |  </math>|\\
 %  |</div>|
 %  \end{quote}
-%  The html tags |<div>|, |h2|, |<p>|, |<math|, |</math>| |</dvi>| are required as
+%  The keywords |<div>|, |<h2>\mml|, |<p>|, |<math|, |</math>| |</div>| are required as
 %  they are used to delimit the arguments by the \LaTeX{} code.
 %  
-%  |\mml|, \meta{key} and \meta{source} are only used for debugging, they help to identify
+%  \meta{key} and \meta{source} are only used for debugging, they help to identify
 %  the equation referred by this representation. The source should be used correctly escaped
 %  |&| and |<| so that if gives valid html!
 %  
@@ -308,10 +288,8 @@
 %  
 %  By default the code tries at the begin of the document 
 %  to read a file |\jobname-mathml.html| in the |html|-format. 
-%  The input format can be changed to the |xml/tex| format with
-%  |mathml/input=xml/tex|. 
 %  The file name can be changed with |mathml/setfiles={filename1,filename2}| 
-%  (without extension, |html| or |xml| is added automatically). 
+%  (without extension, |html| is added automatically). 
 %  If there is a list, all files are loaded. 
 %  If a file doesn't exist it is ignored, only an info is written to the log.
 %  
@@ -638,7 +616,7 @@
 %    \end{macrocode}
 % \end{variable}
 
-% This is the internal variant of the \cs{mml} command
+% This is the internal variant of the \cs{mml} command. 
 % \begin{macro}{\@@_AF_mml:nnnn}
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_AF_mml:nnnn #1 #2 #3 #4
@@ -668,6 +646,22 @@
   }   
 %    \end{macrocode}
 % \end{macro}
+%
+% The html reader. 
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_AF_html_reader:w#1</h2>#2<p>#3</p>#4<p>#5</p>#6<math{
+  \begingroup
+  \let\do\@makeother \dospecials
+  \@@_AF_html_reader_verb:w{#1}{#3}{#5}<math
+}
+%    \end{macrocode}
+%    \begin{macrocode}
+\cs_new_protected:Npn\@@_AF_html_reader_verb:w#1#2#3#4~</div>{
+  \endgroup
+   \@@_AF_mml:nnnn{#1}{#2}{#3}{#4}
+   }
+%    \end{macrocode}
+
 %
 % \begin{socketdecl}{tagsupport/math/mathml/write}
 % This writes a html-template with the hash and the math content.
@@ -705,13 +699,14 @@
 %    \end{macrocode}
 % \end{plugdecl}
 % And now a key to activate the socket.
-% There should be a test so 
+% TODO: There should be a test if the stream is already open. 
 %    \begin{macrocode}
 
 \keys_define:nn { math / tagging }
    {
      mathml/writehash .code:n = 
        {
+         \bool_gset_true:N \g__tag_math_mathml_AF_bool  
          \iow_new:N  \g_@@_writehash_iow
          \iow_open:Nn \g_@@_writehash_iow 
           { 
@@ -736,13 +731,13 @@
        { l_pdffile }{Subtype} 
        { \pdf_name_from_unicode_e:n{application/mathml+xml} } 
       \char_set_catcode_other:N \#
-      \cs_set_eq:NN\mml \@@_AF_mml:nnnn
+      \cs_set_eq:NN\mml \@@_AF_html_reader:w
       \clist_map_inline:Nn \l__tag_math_mathml_files_clist
         {
-          \file_if_exist:nTF {##1.xml}
+          \file_if_exist:nTF {##1.html}
             {
              \typeout{Info:~reading~mathml~file~##1}
-             \file_input:n {##1.xml}
+             \file_input:n {##1.html}
              \bool_gset_true:N\g__tag_math_mathml_AF_bool
             }
             {
@@ -825,7 +820,6 @@
    mathml/panel    .bool_set:N = \l__tag_math_mathml_panel_bool,
    mathml/panel    .initial:n = true,
    texsource/panel .bool_set:N = \l__tag_math_texsource_panel_bool,  
-   mathml/activate .bool_gset:N = \g__tag_math_mathml_AF_bool  
   } 
 %    \end{macrocode}
 %
