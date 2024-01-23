@@ -5,6 +5,7 @@ l3build save -epdftex,xetex,luatex \
 	tlb-latexrelease-rollback-2022-06-01 \
 	tlb-latexrelease-rollback-2022-11-01 \
 	tlb-latexrelease-rollback-2023-06-01 \
+	tlb-latexrelease-rollback-2023-11-01 \
 	tlb-latexrelease-rollback-003-often \
 	tlb-rollback-004-often \
 	tlb-rollback-005 \

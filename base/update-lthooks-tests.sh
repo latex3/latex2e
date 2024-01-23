@@ -44,6 +44,10 @@ l3build save -cconfig-lthooks \
    ltcmdhooks-009 \
    ltcmdhooks-010 \
    ltcmdhooks-011 \
+   ltcmdhooks-012 \
+   ltcmdhooks-013 \
+   ltcmdhooks-014 \
+   ltcmdhooks-015 \
    filehook-001 \
    filehook-002 \
    filehook-003 \
@@ -53,6 +57,9 @@ l3build save -cconfig-lthooks \
    filehook-007 \
    filehook-008 \
    filehook-009 \
+   filehook-010 \
+   filehook-011 \
+   filehook-012 \
    filehook-013 \
    filehook-bug-140 \
    lthooks-000 \
@@ -84,11 +91,15 @@ l3build save -cconfig-lthooks \
    lthooks-028 \
    lthooks-029 \
    lthooks-029-deprecated \
+   lthooks-029-deprecated-after \
+   lthooks-029-deprecated-before \
+   lthooks-029b \
    lthooks-030 \
    lthooks-031 \
    lthooks-032 \
    lthooks-033 \
    lthooks-034 \
+   lthooks-debug \
    lthooks-errors \
    lthooks-errors-deprecated \
    lthooks-etoolbox \
@@ -110,7 +121,10 @@ l3build save -cconfig-lthooks \
    github-0606 \
    github-0648 \
    github-0648b \
-   github-0818
+   github-0818 \
+   github-0888 \
+   github-1052 \
+   github-1078
 
 
 
