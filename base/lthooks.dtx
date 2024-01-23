@@ -6103,148 +6103,346 @@
 %         {Changes to add hook arguments (hook-args).}
 % \changes{v1.1g}{2024/01/03}
 %         {Fix expansion of \cs{@@_print_args:nn} argument (gh/1221).}
+% \changes{v1.1h}{2024/01/23}
+%         {New output for the \cs{ShowHook} command.}
 %    \begin{macrocode}
-%<latexrelease>\IncludeInRelease{2023/06/01}{\@@_log:nN}
-%<latexrelease>                 {Hooks~with~args}
+%<latexrelease>\IncludeInRelease{2024/01/23}{\@@_log:nN}
+%<latexrelease>                 {New~show~hook}
+\tl_new:N \l_@@_print_tl
+\seq_new:N \l_@@_info_seq
 \cs_new_protected:Npn \@@_log:nN #1 #2
   {
     \@@_if_deprecated_generic:nT {#1}
       {
         \@@_deprecated_generic_warn:n {#1}
         \@@_do_deprecated_generic:Nn \@@_log:nN {#1} #2
-        \exp_after:wN \use_none:nnnnnnnnn \use_none:nnnnn
+        \use_none:nnnnnnnnn
       }
     \@@_preamble_hook:n {#1}
-    \@@_log_cmd:x
+    \@@_log_cmd:x { ^^J ==>~Hook:~'#1' }
+    \use:n
       {
-        ^^J ->~The~
-        \@@_if_generic:nT {#1} { generic~ }
-        hook~'#1'
+        \seq_clear:N \l_@@_info_seq
+        \@@_if_generic:nT {#1}
+          {
+            \seq_put_right:Nn \l_@@_info_seq { builtin~generic }
+            \use_none:nnn
+          }
+        \@@_if_usable:nF {#1}
+          { \seq_put_right:Nx \l_@@_info_seq { not~declared } }
+        \@@_if_reversed:nT {#1}
+          { \seq_put_right:Nx \l_@@_info_seq { reversed } }
         \@@_if_disabled:nF {#1}
           {
-            \exp_args:Nne \@@_print_args:nn {#1}
+            \cs_set:Npn \@@_log:nN:w ##1
               {
-                \int_eval:n
-                  { \str_count:e { \@@_parameter:n {#1} } / 3 }
+                \int_compare:nNnT {##1} > 2
+                  {
+                    \cs_set:Npn \@@_log:nN:w ####1
+                      {
+                        \int_compare:nNnT {####1} > { 0 }
+                          {
+                            \@@_if_declared:nT {#1} { \use_none:nnn }
+                            \@@_if_cmd_hook:nT {#1}
+                              { \use_i:nnn { unknown ~ } }
+                            \use:n { ####1 ~ }
+                            argument \int_compare:nNnT {####1} > { 1 } { s }
+                          }
+                      }
+                    \seq_put_right:Nx \l_@@_info_seq
+                      { \@@_log:nN:w { \int_eval:n { ##1 / 3 } } }
+                  }
+                \use_none:nnn
               }
+            \exp_args:Nf
+            \@@_log:nN:w { \str_count:e { \@@_parameter:n {#1} } }
           }
-        :
+        \seq_put_right:Nn \l_@@_info_seq { disabled }
+        \hook_if_empty:nT {#1}
+          {
+            \seq_if_empty:NT \l_@@_info_seq
+              { \seq_put_right:Nn \l_@@_info_seq { empty } }
+            #2 { ~ \space \seq_use:Nn \l_@@_info_seq { ,~ } }
+            \use_none:nnnnnn
+          }
+        \seq_if_empty:NF \l_@@_info_seq
+          {
+            \@@_log_line:x
+              { ~\space \seq_use:Nn \l_@@_info_seq { ,~ } }
+          }
       }
 %    \end{macrocode}
-%
+% |#2| will be used when displaying the last executed code label.
 %    \begin{macrocode}
-    \@@_if_usable:nF {#1}
-      { \@@_log_line:x { The~hook~is~not~declared. } }
-    \@@_if_disabled:nT {#1}
-      { \@@_log_line:x { The~hook~is~disabled. } }
-    \hook_if_empty:nTF {#1}
-      { #2 { The~hook~is~empty } }
+    \hook_if_empty:nF {#1}
       {
         \@@_log_line:x { Code~chunks: }
-        \prop_if_empty:cTF { g_@@_#1_code_prop }
-          { \@@_log_line_indent:x { --- } }
+        \prop_if_empty:cF { g_@@_#1_code_prop }
           {
             \prop_map_inline:cn { g_@@_#1_code_prop }
               {
-                \exp_after:wN \cs_set:Npn \exp_after:wN \@@_tmp:w
+                \exp_after:wN \cs_set:Npn \exp_after:wN \@@_log:nN:w
                   \c_@@_nine_parameters_tl {##2}
-                \@@_log_line_indent:x
-                  { ##1~->~\cs_replacement_spec:N \@@_tmp:w }
+                \@@_log_line:x
+                  { ~\space '##1' ~->~
+                    \cs_replacement_spec:N \@@_log:nN:w }
               }
           }
-%    \end{macrocode}
-%
-%    If there is code in the |top-level| token list, print it:
-%    \begin{macrocode}
-        \@@_log_line:x
+        \@@_cs_if_empty:cF { @@_toplevel~#1 }
           {
-            Document-level~(top-level)~code
-            \@@_if_usable:nT {#1}
-              { ~(executed~\@@_if_reversed:nTF {#1} {first} {last} ) } :
+            \@@_log_line:x
+              { ~\space 'top-level' ~->~
+                 \cs_replacement_spec:c { @@_toplevel~#1 } }
           }
-        \@@_log_line_indent:x
+        \@@_cs_if_empty:cF { @@_next~#1 }
           {
-            \@@_cs_if_empty:cTF { @@_toplevel~#1 }
-              { --- }
-              { -> ~ \cs_replacement_spec:c { @@_toplevel~#1 } }
-          }
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-        \@@_log_line:x { Extra~code~for~next~invocation: }
-        \@@_log_line_indent:x
-          {
-            \@@_cs_if_empty:cTF { @@_next~#1 }
-              { --- }
-%    \end{macrocode}
-%
-%    If the token list is not empty we want to display it but without
-%    the first tokens (the code to clear itself) so we call a helper
-%    command to  get rid of them.
-%    \begin{macrocode}
-              {
-                -> ~ \exp_last_unbraced:Nf \@@_log_next_code:w
+            \@@_log_line:x
+              { ~\space next-only ~->~
+                \exp_last_unbraced:Nf \@@_log_next_code:w
                   { \cs_replacement_spec:c { @@_next~#1 } }
               }
           }
 %    \end{macrocode}
-%
-%   Loop through the rules in a hook and for every rule found, print it.
-%   If no rule is there, print |---|.  The boolean \cs{l_@@_tmpa_bool}
-%   here indicates if the hook has no rules.
+%   Loop through the default rules in a hook and for every rule found, print it.
 %    \begin{macrocode}
-        \@@_log_line:x { Rules: }
-        \bool_set_true:N \l_@@_tmpa_bool
-        \@@_list_rules:nn {#1}
+        \cs_set:Npn \@@_info_log:nN:nw ##1 ##2 | ##3 \scan_stop:
           {
-            \bool_set_false:N \l_@@_tmpa_bool
-            \@@_log_line_indent:x
+            \l_@@_print_tl
+            \tl_clear:N \l_@@_print_tl
+            \str_case:nnF {##1}
               {
-                ##2~ with~
-                \str_if_eq:nnT {##3} {??} { default~ }
-                relation~ ##1
+                { xE } {
+                         \cs_set:cpn { @@.xE.##2 } {}
+                         \cs_set:cpn { @@.xE.##3 } {}
+                         \@@_log_line:x { ~\space
+                             '##2'~incompatible-error~'##3' } }
+                { xW } {
+                         \cs_set:cpn { @@.xW.##2 } {}
+                         \cs_set:cpn { @@.xW.##3 } {}
+                         \@@_log_line:x { ~\space
+                             '##2'~incompatible-warning~'##3' } }
+                { <  } { \@@_log_line:x { ~\space '##2'~before~'##3' } }
+                { <- } { \@@_log_line:x { ~\space '##2'~voids~ '##3' } }
+                {  > } { \@@_log_line:x { ~\space '##2'~after~ '##3' } }
+                { -> } { \@@_log_line:x { ~\space '##3'~voids~ '##2' } }
               }
+              { \@@_log_line:x { ~\space '##2'~UNKNOWN(##1)~ '##3' } }
           }
-        \bool_if:NT \l_@@_tmpa_bool
-          { \@@_log_line_indent:x { --- } }
-%    \end{macrocode}
-%
-%   When the hook is declared (that is, the sorting algorithm is applied
-%   to that hook) and not empty
-%    \begin{macrocode}
-        \bool_lazy_and:nnTF
-            { \@@_if_usable_p:n {#1} }
-            { ! \hook_if_empty_p:n {#1} }
+        \tl_set:Nn \l_@@_print_tl
           {
             \@@_log_line:x
               {
-                Execution~order
-                \bool_if:NTF \l_@@_tmpa_bool
-                  { \@@_if_reversed:nT {#1} { ~(after~reversal) } }
-                  { ~(after~
-                    \@@_if_reversed:nT {#1} { reversal~and~ }
-                    applying~rules)
-                  } :
-              }
-            #2 % \tl_show:n
-              {
-                \@spaces
-                \clist_if_empty:cTF { g_@@_#1_labels_clist }
-                  { --- }
-                  { \clist_use:cn { g_@@_#1_labels_clist } { ,~ } }
+                Default~rules
+                \@@_if_reversed:nT {#1} { ,~to~be~mirrored }:
               }
           }
+        \@@_list_rules:nn {#1}
+          {
+            \str_if_eq:nnT {##3} { ?? }
+              { \@@_info_log:nN:nw {##1} ##2 \scan_stop: }
+          }
+%    \end{macrocode}
+%   Loop through the rules in a hook and for every non default rule found, print
+%   it. The boolean \cs{l_@@_tmpa_bool} here indicates if the hook only has 
+%   default rules.
+%    \begin{macrocode}
+        \tl_set:Nn \l_@@_print_tl
+          { \@@_log_line:x { Rules: } }
+        \@@_list_rules:nn {#1}
+          {
+            \str_if_eq:nnF {##3} { ?? }
+              { \@@_info_log:nN:nw {##1} ##2 \scan_stop: }
+          }
+%    \end{macrocode}
+%   When the hook is declared (that is, the sorting algorithm is applied
+%   to that hook)
+%    \begin{macrocode}
+        \@@_if_usable:nT {#1}
           {
             \@@_log_line:x { Execution~order: }
+            \seq_clear:N \l_@@_info_seq
+            \@@_if_reversed:nT {#1}
+              {
+                \@@_cs_if_empty:cF { @@_toplevel~#1 }
+                  { \seq_put_right:Nn \l_@@_info_seq { 'top-level' } }
+              }
+            \clist_if_empty:cF { g_@@_#1_labels_clist }
+              {
+                \clist_map_inline:cn { g_@@_#1_labels_clist }
+                  {
+%    \end{macrocode}
+% Mark with \enquote{\texttt{Error}} the labels that should not be there
+% due to an \texttt{incompatible-error} rule.
+% Mark with \enquote{\texttt{Warning}} the other labels involved in an
+% \texttt{incompatible-warning} rule.
+%    \begin{macrocode}
+                    \cs_if_exist:cT { @@.xE.##1 }
+                      {
+                        \seq_put_right:Nn \l_@@_info_seq
+                          { '##1'~(Error:~dropped) }
+                        \cs_undefine:c { @@.xE.##1 }
+                        \cs_undefine:c { @@.xW.##1 }
+                        \use_none:nnnnnn
+                      }
+                    \cs_if_exist:cT { @@.xW.##1 }
+                      {
+                        \seq_put_right:Nn \l_@@_info_seq
+                          { '##1'~(Warning) }
+                        \cs_undefine:c { @@.xW.##1 }
+                        \use_none:nnn
+                      }
+                    \seq_put_right:Nn \l_@@_info_seq { '##1' }
+                  }
+              }
+            \@@_if_reversed:nF {#1}
+              {
+                \@@_cs_if_empty:cF { @@_toplevel~#1 }
+                  { \seq_put_right:Nn \l_@@_info_seq { 'top-level' } }
+              }
+            \@@_cs_if_empty:cT { @@_next~#1 }
+              {
+                \seq_pop_right:NN \l_@@_info_seq \l_@@_print_tl
+                \use_none:nnn
+              }
+              \tl_set:Nn \l_@@_print_tl { next-only }
+            \seq_map_indexed_inline:Nn \l_@@_info_seq
+              { \@@_log_line:x { \space\space ##1:~##2 } }
             #2
               {
-                \@spaces Not~set~because~the~hook~ \@@_if_usable:nTF {#1}
-                  { code~pool~is~empty }
-                  { is~\@@_if_disabled:nTF {#1} {disabled} {undeclared} }
+                \space\space
+                \int_eval:n { \seq_count:N \l_@@_info_seq + 1 }
+                :~
+                \l_@@_print_tl
               }
+            \use_none:nn
           }
+        #2 { No~execution }
       }
   }
+%<latexrelease>\EndIncludeInRelease
+%
+%<latexrelease>\IncludeInRelease{2023/06/01}{\@@_log:nN}
+%<latexrelease>                 {Hooks~with~args}
+%<latexrelease>\cs_new_protected:Npn \@@_log:nN #1 #2
+%<latexrelease>  {
+%<latexrelease>    \@@_if_deprecated_generic:nT {#1}
+%<latexrelease>      {
+%<latexrelease>        \@@_deprecated_generic_warn:n {#1}
+%<latexrelease>        \@@_do_deprecated_generic:Nn \@@_log:nN {#1} #2
+%<latexrelease>        \exp_after:wN \use_none:nnnnnnnnn \use_none:nnnnn
+%<latexrelease>      }
+%<latexrelease>    \@@_preamble_hook:n {#1}
+%<latexrelease>    \@@_log_cmd:x
+%<latexrelease>      {
+%<latexrelease>        ^^J ->~The~
+%<latexrelease>        \@@_if_generic:nT {#1} { generic~ }
+%<latexrelease>        hook~'#1'
+%<latexrelease>        \@@_if_disabled:nF {#1}
+%<latexrelease>          {
+%<latexrelease>            \exp_args:Nne \@@_print_args:nn {#1}
+%<latexrelease>              {
+%<latexrelease>                \int_eval:n
+%<latexrelease>                  { \str_count:e
+%<latexrelease>                      { \@@_parameter:n {#1} } / 3 }
+%<latexrelease>              }
+%<latexrelease>          }
+%<latexrelease>        :
+%<latexrelease>      }
+%<latexrelease>    \@@_if_usable:nF {#1}
+%<latexrelease>      { \@@_log_line:x { The~hook~is~not~declared. } }
+%<latexrelease>    \@@_if_disabled:nT {#1}
+%<latexrelease>      { \@@_log_line:x { The~hook~is~disabled. } }
+%<latexrelease>    \hook_if_empty:nTF {#1}
+%<latexrelease>      { #2 { The~hook~is~empty } }
+%<latexrelease>      {
+%<latexrelease>        \@@_log_line:x { Code~chunks: }
+%<latexrelease>        \prop_if_empty:cTF { g_@@_#1_code_prop }
+%<latexrelease>          { \@@_log_line_indent:x { --- } }
+%<latexrelease>          {
+%<latexrelease>            \prop_map_inline:cn { g_@@_#1_code_prop }
+%<latexrelease>              {
+%<latexrelease>                \exp_after:wN \cs_set:Npn
+%<latexrelease>                \exp_after:wN \@@_tmp:w
+%<latexrelease>                  \c_@@_nine_parameters_tl {##2}
+%<latexrelease>                \@@_log_line_indent:x
+%<latexrelease>                  { ##1~->~\cs_replacement_spec:N \@@_tmp:w }
+%<latexrelease>              }
+%<latexrelease>          }
+%<latexrelease>        \@@_log_line:x
+%<latexrelease>          {
+%<latexrelease>            Document-level~(top-level)~code
+%<latexrelease>            \@@_if_usable:nT {#1}
+%<latexrelease>              { ~(executed~\@@_if_reversed:nTF 
+%<latexrelease>                  {#1} {first} {last} ) } :
+%<latexrelease>          }
+%<latexrelease>        \@@_log_line_indent:x
+%<latexrelease>          {
+%<latexrelease>            \@@_cs_if_empty:cTF { @@_toplevel~#1 }
+%<latexrelease>              { --- }
+%<latexrelease>              { -> ~ \cs_replacement_spec:c
+%<latexrelease>                       { @@_toplevel~#1 } }
+%<latexrelease>          }
+%<latexrelease>        \@@_log_line:x { Extra~code~for~next~invocation: }
+%<latexrelease>        \@@_log_line_indent:x
+%<latexrelease>          {
+%<latexrelease>            \@@_cs_if_empty:cTF { @@_next~#1 }
+%<latexrelease>              { --- }
+%<latexrelease>              {
+%<latexrelease>                -> ~ \exp_last_unbraced:Nf \@@_log_next_code:w
+%<latexrelease>                  { \cs_replacement_spec:c { @@_next~#1 } }
+%<latexrelease>              }
+%<latexrelease>          }
+%<latexrelease>        \@@_log_line:x { Rules: }
+%<latexrelease>        \bool_set_true:N \l_@@_tmpa_bool
+%<latexrelease>        \@@_list_rules:nn {#1}
+%<latexrelease>          {
+%<latexrelease>            \bool_set_false:N \l_@@_tmpa_bool
+%<latexrelease>            \@@_log_line_indent:x
+%<latexrelease>              {
+%<latexrelease>                ##2~ with~
+%<latexrelease>                \str_if_eq:nnT {##3} {??} { default~ }
+%<latexrelease>                relation~ ##1
+%<latexrelease>              }
+%<latexrelease>          }
+%<latexrelease>        \bool_if:NT \l_@@_tmpa_bool
+%<latexrelease>          { \@@_log_line_indent:x { --- } }
+%<latexrelease>        \bool_lazy_and:nnTF
+%<latexrelease>            { \@@_if_usable_p:n {#1} }
+%<latexrelease>            { ! \hook_if_empty_p:n {#1} }
+%<latexrelease>          {
+%<latexrelease>            \@@_log_line:x
+%<latexrelease>              {
+%<latexrelease>                Execution~order
+%<latexrelease>                \bool_if:NTF \l_@@_tmpa_bool
+%<latexrelease>                  { \@@_if_reversed:nT {#1}
+%<latexrelease>                      { ~(after~reversal) } }
+%<latexrelease>                  { ~(after~
+%<latexrelease>                    \@@_if_reversed:nT {#1} { reversal~and~ }
+%<latexrelease>                    applying~rules)
+%<latexrelease>                  } :
+%<latexrelease>              }
+%<latexrelease>            #2 % \tl_show:n
+%<latexrelease>              {
+%<latexrelease>                \@spaces
+%<latexrelease>                \clist_if_empty:cTF { g_@@_#1_labels_clist }
+%<latexrelease>                  { --- }
+%<latexrelease>                  { \clist_use:cn
+%<latexrelease>                      { g_@@_#1_labels_clist } { ,~ } }
+%<latexrelease>              }
+%<latexrelease>          }
+%<latexrelease>          {
+%<latexrelease>            \@@_log_line:x { Execution~order: }
+%<latexrelease>            #2
+%<latexrelease>              {
+%<latexrelease>                \@spaces Not~set~because~the~hook~
+%<latexrelease>                \@@_if_usable:nTF {#1}
+%<latexrelease>                  { code~pool~is~empty }
+%<latexrelease>                  { is~\@@_if_disabled:nTF
+%<latexrelease>                         {#1} {disabled} {undeclared} }
+%<latexrelease>              }
+%<latexrelease>          }
+%<latexrelease>      }
+%<latexrelease>  }
 %<latexrelease>\EndIncludeInRelease
 %
 %<latexrelease>\IncludeInRelease{2020/10/01}{\@@_log:nN}
