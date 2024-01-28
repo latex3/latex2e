@@ -6,7 +6,7 @@
 %%
 %% l3doc.dtx  (with options: `class')
 %% 
-%% Copyright (C) 1990-2023 The LaTeX Project
+%% Copyright (C) 1990-2024 The LaTeX Project
 %% 
 %% It may be distributed and/or modified under the conditions of
 %% the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -19,8 +19,8 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: l3doc.dtx
-\RequirePackage{expl3,calc}
-\ProvidesExplClass{l3doc}{2023-08-09}{}
+\RequirePackage{calc}
+\ProvidesExplClass{l3doc}{2024-01-22}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -42,8 +42,9 @@
 \prop_new:N \g__codedoc_missing_tests_prop
 \seq_new:N \g__codedoc_not_tested_seq
 \seq_new:N \g__codedoc_testfiles_seq
-\bool_new:N \l__codedoc_macro_internal_set_bool
+\bool_new:N \l__codedoc_macro_deprecated_bool
 \bool_new:N \l__codedoc_macro_internal_bool
+\bool_new:N \l__codedoc_macro_nodoc_bool
 \bool_new:N \l__codedoc_macro_TF_bool
 \bool_new:N \l__codedoc_macro_pTF_bool
 \bool_new:N \l__codedoc_macro_noTF_bool
@@ -102,37 +103,20 @@
 \cs_new_eq:NN \__codedoc_tmpa:w ?
 \cs_new_eq:NN \__codedoc_tmpb:w ?
 \cs_generate_variant:Nn \seq_set_split:Nnn { NoV }
-\cs_generate_variant:Nn \seq_gput_right:Nn { Nf }
-\cs_generate_variant:Nn \str_case:nn { fn }
-\cs_generate_variant:Nn \tl_count:n { f }
-\cs_generate_variant:Nn \tl_greplace_all:Nnn { Nx , Nno }
-\cs_generate_variant:Nn \tl_if_empty:nTF { f }
-\cs_generate_variant:Nn \tl_if_head_eq_charcode:nNTF { o }
-\cs_generate_variant:Nn \tl_if_head_eq_charcode:nNT  { o }
-\cs_generate_variant:Nn \tl_if_head_eq_charcode:nNF  { o }
-\cs_generate_variant:Nn \tl_if_head_eq_meaning:nNF  { V }
-\cs_generate_variant:Nn \tl_if_in:nnTF { no , oo }
-\cs_generate_variant:Nn \tl_if_in:NnTF { No }
-\cs_generate_variant:Nn \tl_if_in:NnT  { No }
-\cs_generate_variant:Nn \tl_if_in:NnF  { No }
-\cs_generate_variant:Nn \tl_remove_all:Nn   { Nx }
-\cs_generate_variant:Nn \tl_replace_all:Nnn { Nx , Nnx, No , Nno }
-\cs_generate_variant:Nn \tl_replace_once:Nnn { Noo }
-\cs_generate_variant:Nn \tl_set_rescan:Nnn { NnV }
-\cs_generate_variant:Nn \tl_to_str:n { f , o }
+\cs_generate_variant:Nn \tl_to_str:n { f }
 \prg_new_protected_conditional:Npnn \__codedoc_if_almost_str:n #1 { TF , T , F }
   {
     \int_compare:nNnTF
       { \tl_count:n {#1} }
-      < { \tl_count:f { \tl_to_str:f {#1} } }
+      < { \tl_count:e { \tl_to_str:f {#1} } }
       { \prg_return_false: }
       { \prg_return_true: }
   }
-\cs_generate_variant:Nn \__codedoc_if_almost_str:nT { V }
+\prg_generate_conditional_variant:Nnn \__codedoc_if_almost_str:n { V } { T }
 \cs_new_protected:Npn \__codedoc_trim_right:Nn #1#2
   {
     \cs_set:Npn \__codedoc_tmp:w ##1 #2 ##2 \q_stop { \exp_not:n {##1} }
-    \__kernel_tl_set:Ne #1 { \exp_after:wN \__codedoc_tmp:w #1 #2 \q_stop }
+    \__kernel_tl_set:Nx #1 { \exp_after:wN \__codedoc_tmp:w #1 #2 \q_stop }
   }
 \cs_generate_variant:Nn \__codedoc_trim_right:Nn { No }
 \prg_new_protected_conditional:Npnn \__codedoc_str_if_begin:nn #1#2 { TF , T , F }
@@ -173,7 +157,7 @@
   \cs_new_protected:Npn \__codedoc_detect_internals_aux:N #1
     {
       \tl_set_eq:NN \l__codedoc_detect_internals_tl #1
-      \tl_replace_all:Non \l__codedoc_detect_internals_tl { \token_to_str:N _ } { _ }
+      \tl_replace_all:NVn \l__codedoc_detect_internals_tl \c_underscore_str { _ }
       \seq_set_split:NnV \l__codedoc_tmpa_seq { _ _ } \l__codedoc_detect_internals_tl
       \seq_pop_left:NN \l__codedoc_tmpa_seq \l__codedoc_detect_internals_tl
       \seq_map_variable:NNn \l__codedoc_tmpa_seq \l__codedoc_detect_internals_tl
@@ -267,14 +251,14 @@
     \__codedoc_if_almost_str:nTF {#1}
       {
         \__codedoc_key_get_base_TF:nN {#1} \l__codedoc_tmpa_tl
-        \__kernel_tl_set:Ne #2
+        \__kernel_tl_set:Nx #2
           { \__codedoc_split_function_do:on \l__codedoc_tmpa_tl { \__codedoc_base_form_aux:nnN } }
       }
       { \tl_set:Nn #2 {#1} }
   }
 \cs_new:Npe \__codedoc_key_get_base_TF:nN #1#2
   {
-    \__kernel_tl_set:Ne #2 { \exp_not:N \tl_to_str:n {#1} }
+    \__kernel_tl_set:Nx #2 { \exp_not:N \tl_to_str:n {#1} }
     \tl_if_in:NoF #2 { \tl_to_str:n {:} }
       { \exp_not:N \prg_break: }
     \tl_if_in:onT { #2 z } { \tl_to_str:n {TF} z }
@@ -394,43 +378,33 @@
     It~should~only~be~used~in~the~module~'#2'
     \tl_if_empty:nF {#3} { ,~not~in~'#3' } .
   }
-\DeclareOption { a5paper } { \@latexerr { Option~not~supported } { } }
-\DeclareOption { full }
+\DeclareKeys [ l3doc / options ]
   {
-    \bool_gset_true:N \g__codedoc_typeset_documentation_bool
-    \bool_gset_true:N \g__codedoc_typeset_implementation_bool
+    a5paper .code:n = \@latexerr { Option~not~supported } { } ,
+    full .code:n =
+      {
+        \bool_gset_true:N \g__codedoc_typeset_documentation_bool
+        \bool_gset_true:N \g__codedoc_typeset_implementation_bool
+      } ,
+    onlydoc .code:n =
+      {
+        \bool_gset_true:N \g__codedoc_typeset_documentation_bool
+        \bool_gset_false:N \g__codedoc_typeset_implementation_bool
+      } ,
+    check .bool_gset:N = \g__codedoc_checkfunc_bool ,
+    checktest .bool_gset:N = \g__codedoc_checktest_bool ,
+    kernel .bool_gset:N = \g__codedoc_kernel_bool ,
+    stdmodule .bool_gset_inverse:N = \g__codedoc_kernel_bool ,
+    lm-default .bool_gset:N = \g__codedoc_lmodern_bool ,
+    cs-break .bool_gset_inverse:N = \g__codedoc_cs_break_bool ,
+    cs-break-nohyphen .code:n = \PassOptionsToPackage{nohyphen}{underscore} ,
+    show-notes .bool_gset:N = \g__codedoc_show_notes_bool,
+    hide-notes .bool_gset_inverse:N = \g__codedoc_show_notes_bool
   }
-\DeclareOption { onlydoc }
-  {
-    \bool_gset_true:N \g__codedoc_typeset_documentation_bool
-    \bool_gset_false:N \g__codedoc_typeset_implementation_bool
-  }
-\DeclareOption { check }
-  { \bool_gset_true:N \g__codedoc_checkfunc_bool }
-\DeclareOption { nocheck }
-  { \bool_gset_false:N \g__codedoc_checkfunc_bool }
-\DeclareOption { checktest }
-  { \bool_gset_true:N \g__codedoc_checktest_bool }
-\DeclareOption { nochecktest }
-  { \bool_gset_false:N \g__codedoc_checktest_bool }
-\DeclareOption { kernel }
-  { \bool_gset_true:N \g__codedoc_kernel_bool }
-\DeclareOption { stdmodule }
-  { \bool_gset_false:N \g__codedoc_kernel_bool }
-\DeclareOption { cm-default }
-  { \bool_gset_false:N \g__codedoc_lmodern_bool }
-\DeclareOption { lm-default }
-  { \bool_gset_true:N \g__codedoc_lmodern_bool }
-\DeclareOption { cs-break-off }
-  { \bool_gset_false:N \g__codedoc_cs_break_bool }
-\DeclareOption { cs-break-nohyphen }
-  { \PassOptionsToPackage{nohyphen}{underscore} }
-\DeclareOption { show-notes }
-  { \bool_gset_true:N  \g__codedoc_show_notes_bool }
-\DeclareOption { hide-notes }
-  { \bool_gset_false:N \g__codedoc_show_notes_bool }
-\DeclareOption* { \PassOptionsToClass { \CurrentOption } { article } }
-\ExecuteOptions { full, kernel, nocheck, nochecktest, lm-default }
+\DeclareUnknownKeyHandler [ l3doc / options ]
+  { \PassOptionsToClass { \CurrentOption } { article } }
+\SetKeys [ l3doc / options ]
+  { full , check = false , checktest = false , lm-default }
 \PassOptionsToClass { a4paper } { article }
 \msg_new:nnn { l3doc } { input-cfg }
   { Local~config~file~l3doc.cfg~loaded. }
@@ -440,7 +414,7 @@
     \cs_if_exist:cF { ExplMakeTitle }
       { \msg_info:nn { l3doc } { input-cfg } }
   }
-\ProcessOptions
+\ProcessKeyOptions [ l3doc / options ]
 \LoadClass{article}
 \RequirePackage{doc}
 \RequirePackage
@@ -695,9 +669,9 @@
     \bool_if:NT \l__codedoc_cmd_replace_bool
       {
         \tl_set_rescan:Nnn \l__codedoc_tmpb_tl { } { _ }
-        \tl_replace_all:Non \l__codedoc_cmd_tl \l__codedoc_tmpb_tl { _ }
+        \tl_replace_all:NVn \l__codedoc_cmd_tl \l__codedoc_tmpb_tl { _ }
         \__codedoc_replace_at_at:N \l__codedoc_cmd_tl
-        \tl_replace_all:Nno \l__codedoc_cmd_tl { _ } \l__codedoc_tmpb_tl
+        \tl_replace_all:NnV \l__codedoc_cmd_tl { _ } \l__codedoc_tmpb_tl
       }
     \mode_if_math:T { \mbox }
       {
@@ -705,7 +679,7 @@
         \verbatim@font
         \__codedoc_if_almost_str:VT \l__codedoc_cmd_tl
           {
-            \__kernel_tl_set:Ne \l__codedoc_cmd_tl { \tl_to_str:N \l__codedoc_cmd_tl }
+            \__kernel_tl_set:Nx \l__codedoc_cmd_tl { \tl_to_str:N \l__codedoc_cmd_tl }
             \bool_if:NT \g__codedoc_cs_break_bool
               {
                 \regex_replace_all:nnN
@@ -719,28 +693,28 @@
         \@
       }
     \bool_if:NT \l__codedoc_allow_indexing_bool
-     {
-      \bool_if:NF \l__codedoc_cmd_noindex_bool
-       {
-        \quark_if_no_value:NF \l__codedoc_cmd_index_tl
+      {
+        \bool_if:NF \l__codedoc_cmd_noindex_bool
           {
-            \__kernel_tl_set:Ne \l__codedoc_cmd_tl
-              { \c_backslash_str \exp_not:o { \l__codedoc_cmd_index_tl } }
+            \quark_if_no_value:NF \l__codedoc_cmd_index_tl
+              {
+                \__kernel_tl_set:Nx \l__codedoc_cmd_tl
+                  { \c_backslash_str \exp_not:o { \l__codedoc_cmd_index_tl } }
+              }
+            \exp_args:No \__codedoc_key_get:n { \l__codedoc_cmd_tl }
+            \quark_if_no_value:NF \l__codedoc_cmd_module_tl
+              {
+                \__kernel_tl_set:Nx \l__codedoc_index_module_tl
+                  { \tl_to_str:N \l__codedoc_cmd_module_tl }
+              }
+            \__codedoc_special_index_module:ooonN
+              { \l__codedoc_index_key_tl }
+              { \l__codedoc_index_macro_tl }
+              { \l__codedoc_index_module_tl }
+              { usage }
+              \l__codedoc_index_internal_bool
           }
-        \exp_args:No \__codedoc_key_get:n { \l__codedoc_cmd_tl }
-        \quark_if_no_value:NF \l__codedoc_cmd_module_tl
-          {
-            \__kernel_tl_set:Ne \l__codedoc_index_module_tl
-              { \tl_to_str:N \l__codedoc_cmd_module_tl }
-          }
-        \__codedoc_special_index_module:ooonN
-          { \l__codedoc_index_key_tl }
-          { \l__codedoc_index_macro_tl }
-          { \l__codedoc_index_module_tl }
-          { usage }
-          \l__codedoc_index_internal_bool
-       }
-     }
+      }
   }
 \cs_generate_variant:Nn \__codedoc_cmd:nn { no }
 \cs_new_protected:Npn \__codedoc_meta:n #1
@@ -751,7 +725,7 @@
       {
         \tl_set_rescan:Nnn \l__codedoc_tmpb_tl
           { \char_set_catcode:nn { `_ } {##1} } { _ }
-        \tl_replace_all:Non \l__codedoc_tmpa_tl \l__codedoc_tmpb_tl
+        \tl_replace_all:NVn \l__codedoc_tmpa_tl \l__codedoc_tmpb_tl
           { \__codedoc_ensuremath_sb:n }
       }
     \exp_args:NV \__codedoc_meta_original:n \l__codedoc_tmpa_tl
@@ -808,15 +782,15 @@
   }
 \cs_new_protected:Npn \__codedoc_get_hyper_target:nN #1#2
   {
-    \__kernel_tl_set:Ne #2 { \tl_to_str:n {#1} }
-    \tl_replace_all:Nen #2 { \c_underscore_str } { / }
-    \tl_remove_all:Ne   #2 { \c_backslash_str }
+    \__kernel_tl_set:Nx #2 { \tl_to_str:n {#1} }
+    \tl_replace_all:NVn #2 \c_underscore_str { / }
+    \tl_remove_all:NV   #2 \c_backslash_str
     \tl_put_left:Nn #2 { doc/function// }
   }
 \cs_generate_variant:Nn \__codedoc_get_hyper_target:nN { o , e }
 \cs_new_protected:Npn \__codedoc_names_get_seq:nN #1#2
   {
-    \__kernel_tl_set:Ne \l__codedoc_tmpa_tl { \tl_to_str:n {#1} }
+    \__kernel_tl_set:Nx \l__codedoc_tmpa_tl { \tl_to_str:n {#1} }
     \bool_if:NTF \l__codedoc_names_verb_bool
       {
         \seq_clear:N #2
@@ -886,8 +860,8 @@
   {
     \seq_pop:NN #1 \l__codedoc_tmpa_tl
     \tl_gset_eq:NN \g__codedoc_base_name_tl \l__codedoc_tmpa_tl
-    \tl_greplace_all:Nno \g__codedoc_base_name_tl
-      { ~ } { \c_catcode_other_space_tl }
+    \tl_greplace_all:NnV \g__codedoc_base_name_tl
+      { ~ } \c_catcode_other_space_tl
     \seq_get:NN #1 \l__codedoc_tmpa_tl
     \str_if_eq:VnTF \l__codedoc_tmpa_tl { \scan_stop: }
       {
@@ -923,13 +897,10 @@
 \cs_generate_variant:Nn \__codedoc_names_typeset_block:nN { e }
 \prg_new_conditional:Npnn \__codedoc_if_macro_internal:n #1 { p , T , F , TF }
   {
-    \bool_if:NTF \l__codedoc_macro_internal_set_bool
+    \bool_if:NTF \l__codedoc_macro_internal_bool
+      { \prg_return_true: }
       {
-        \bool_if:NTF \l__codedoc_macro_internal_bool
-          { \prg_return_true: } { \prg_return_false: }
-      }
-      {
-        \tl_if_empty:fTF
+        \tl_if_empty:eTF
           {
             \exp_after:wN \__codedoc_if_macro_internal_aux:w
             \tl_to_str:n { #1 ~ __ }
@@ -993,7 +964,8 @@
       } ,
     added .code:n = { \__codedoc_date_set_past:Nn \l__codedoc_date_added_tl {#1} },
     updated .code:n = { \__codedoc_date_set_past:Nn \l__codedoc_date_updated_tl {#1} } ,
-    deprecated .code:n = {} , % A stub
+    deprecated .bool_set:N = \l__codedoc_macro_deprecated_bool ,
+    no-user-doc .bool_set:N = \l__codedoc_macro_nodoc_bool ,
     tested .code:n = { } ,
     label .code:n =
       {
@@ -1182,7 +1154,10 @@
     \__codedoc_typeset_aux:n { \__codedoc_get_function_name:n {#1} }
     :
     \int_compare:nTF { \seq_count:N \g__codedoc_variants_seq == 1 }
-      { \seq_use:Nn \g__codedoc_variants_seq { } }
+      {
+        \seq_use:Nn \g__codedoc_variants_seq { }
+        \bool_if:NT #2 { \__codedoc_typeset_TF: }
+      }
       {
         \hbox_set:Nn \l_tmpa_box
           { \seq_use:Nn \g__codedoc_variants_seq { \textrm| \nolinebreak[2] } }
@@ -1292,18 +1267,14 @@
         \msg_warning:nnnn { l3doc } { deprecated-option }
           { aux } { function/macro }
       } ,
+    deprecated .bool_set:N = \l__codedoc_macro_deprecated_bool ,
     internal .value_forbidden:n = true ,
     internal .code:n =
-      {
-        \bool_set_true:N \l__codedoc_macro_internal_bool
-        \bool_set_true:N \l__codedoc_macro_internal_set_bool
-      } ,
+      { \bool_set_true:N \l__codedoc_macro_internal_bool } ,
     int .value_forbidden:n = true ,
     int .code:n =
-      {
-        \bool_set_true:N \l__codedoc_macro_internal_bool
-        \bool_set_true:N \l__codedoc_macro_internal_set_bool
-      } ,
+      { \bool_set_true:N \l__codedoc_macro_internal_bool } ,
+    no-user-doc .bool_set:N = \l__codedoc_macro_nodoc_bool ,
     var .value_forbidden:n = true ,
     var .code:n =
       { \bool_set_true:N \l__codedoc_macro_var_bool } ,
@@ -1342,7 +1313,6 @@
       } ,
     added .code:n = {} , % TODO
     updated .code:n = {} , % TODO
-    deprecated .code:n = {} , % A stub
     verb .bool_set:N = \l__codedoc_names_verb_bool ,
     module .tl_set:N = \l__codedoc_override_module_tl ,
     documented-as .tl_set:N = \l__codedoc_macro_documented_tl ,
@@ -1366,8 +1336,8 @@
 \cs_new_protected:Npn \__codedoc_macro_init:
   {
     \int_incr:N \l__codedoc_nested_macro_int
+    \bool_set_false:N \l__codedoc_macro_deprecated_bool
     \bool_set_false:N \l__codedoc_macro_internal_bool
-    \bool_set_false:N \l__codedoc_macro_internal_set_bool
     \bool_set_false:N \l__codedoc_macro_TF_bool
     \bool_set_false:N \l__codedoc_macro_pTF_bool
     \bool_set_false:N \l__codedoc_macro_noTF_bool
@@ -1399,10 +1369,15 @@
     \tl_if_empty:NTF \l__codedoc_macro_documented_tl
       { \__codedoc_names_block_base_map:N \__codedoc_macro_save_names_aux:n }
       {
-        \seq_gput_right:Nf \g__codedoc_nested_names_seq
-          { \exp_after:wN \token_to_str:N \l__codedoc_macro_documented_tl }
+        \seq_gput_right:Ne \g__codedoc_nested_names_seq
+          {
+            \exp_after:wN \__codedoc_macro_save_names_aux:w
+              \l__codedoc_macro_documented_tl \q__codedoc_stop
+          }
       }
   }
+\cs_new:Npn \__codedoc_macro_save_names_aux:w #1#2 \q__codedoc_stop
+  { \token_to_str:N #1 \tl_to_str:n {#2} }
 \cs_new_protected:Npn \__codedoc_macro_save_names_aux:n #1
   { \seq_gput_right:Nn \g__codedoc_nested_names_seq {#1} }
 \cs_new_protected:Npn \__codedoc_macro_exclude_index:
@@ -1414,7 +1389,7 @@
           \l__codedoc_macro_do_not_index_tl
         \exp_args:NNV \seq_set_from_clist:Nn
           \l__codedoc_tmpa_seq \l__codedoc_macro_do_not_index_tl
-        \__kernel_tl_set:Ne \l__codedoc_macro_do_not_index_tl
+        \__kernel_tl_set:Nx \l__codedoc_macro_do_not_index_tl
           { \seq_use:Nn \l__codedoc_tmpa_seq { , } }
         \exp_args:NV \DoNotIndex \l__codedoc_macro_do_not_index_tl
       }
@@ -1446,7 +1421,6 @@
           { \__codedoc_get_function_name:n {#1} } #2
       }
   }
-\cs_generate_variant:Nn \__codedoc_macro_typeset_block:nN { x }
 \cs_new_protected:Npn \__codedoc_macro_typeset_variant_list:nN #1#2
   {
     \seq_map_inline:Nn \g__codedoc_variants_seq
@@ -1467,7 +1441,12 @@
     \DoNotIndex {#1}
     \bool_if:NT #2
       {
-        \__codedoc_if_macro_internal:nF {#1}
+        \bool_lazy_any:nF
+          {
+            { \__codedoc_if_macro_internal_p:n {#1} }
+            { \l__codedoc_macro_deprecated_bool }
+            { \l__codedoc_macro_nodoc_bool }
+          }
           { \seq_gput_right:Nn \g_doc_macros_seq {#1} }
         \hbox_set:Nw \l__codedoc_macro_index_box
           \hbox_unpack_drop:N \l__codedoc_macro_index_box
@@ -1505,8 +1484,8 @@
         \int_compare:nTF { \str_count:n {#1} <= 28 }
           { \MacroFont } { \MacroLongFont }
         \tl_set:Nn \l__codedoc_tmpa_tl {#1}
-        \tl_replace_all:Nno \l__codedoc_tmpa_tl
-          { ~ } { \c_catcode_other_space_tl }
+        \tl_replace_all:NnV \l__codedoc_tmpa_tl
+          { ~ } \c_catcode_other_space_tl
         \__codedoc_macroname_prefix:o \l__codedoc_tmpa_tl
         \__codedoc_macroname_suffix:N #2
       }
@@ -1585,21 +1564,21 @@
 \cs_new_protected:Npn \__codedoc_macro_end_check_tested:
   {
     \bool_lazy_all:nT
-     {
-       { \g__codedoc_checktest_bool }
-       { ! \l__codedoc_macro_var_bool }
-       { ! \l__codedoc_macro_tested_bool }
-     }
-     {
-       \seq_set_filter:NNn \l__codedoc_tmpa_seq \l__codedoc_names_seq
-         { ! \__codedoc_if_macro_internal_p:n {##1} }
-       \seq_gput_right:Ne \g__codedoc_not_tested_seq
-         {
-           \seq_use:Nn \l__codedoc_tmpa_seq { , }
-           \bool_if:NTF \l__codedoc_macro_pTF_bool {~(pTF)}
-             { \bool_if:NT \l__codedoc_macro_TF_bool {~(TF)} }
-         }
-     }
+      {
+        { \g__codedoc_checktest_bool }
+        { ! \l__codedoc_macro_var_bool }
+        { ! \l__codedoc_macro_tested_bool }
+      }
+      {
+        \seq_set_filter:NNn \l__codedoc_tmpa_seq \l__codedoc_names_seq
+          { ! \__codedoc_if_macro_internal_p:n {##1} }
+        \seq_gput_right:Ne \g__codedoc_not_tested_seq
+          {
+            \seq_use:Nn \l__codedoc_tmpa_seq { , }
+            \bool_if:NTF \l__codedoc_macro_pTF_bool {~(pTF)}
+              { \bool_if:NT \l__codedoc_macro_TF_bool {~(TF)} }
+          }
+      }
   }
 \cs_new_protected:Npn \__codedoc_macro_end_style:n #1
   {
@@ -1609,8 +1588,8 @@
 \cs_new_protected:Npn \__codedoc_macro_end_wrap_item:n #1
   {
     \tl_set:Nn \l__codedoc_tmpa_tl {#1}
-    \tl_replace_all:Non \l__codedoc_tmpa_tl
-      { \token_to_str:N _ } { \_ }
+    \tl_replace_all:NVn \l__codedoc_tmpa_tl
+      \c_underscore_str { \_ }
     \texttt { \l__codedoc_tmpa_tl }
   }
 \cs_new_protected:Npn \__codedoc_print_end_definition:
@@ -1632,7 +1611,14 @@
   {
     \seq_gset_filter:NNn \g__codedoc_nested_names_seq
       \g__codedoc_nested_names_seq
-      { ! \__codedoc_if_macro_internal_p:n {##1} }
+      {
+        ! \bool_lazy_any_p:n
+          {
+            { \__codedoc_if_macro_internal_p:n {##1} }
+            { \l__codedoc_macro_deprecated_bool }
+            { \l__codedoc_macro_nodoc_bool }
+          }
+      }
     \seq_if_empty:NF \g__codedoc_nested_names_seq
       {
         \int_set:Nn \l__codedoc_tmpa_int
@@ -1698,17 +1684,17 @@
 \providecommand\Hy@footnote@currentHref{}
 \prop_new:N\g__codedoc_fnmark_prop
 \cs_new_protected:Npn \__codedoc_fn_store:
- {
-   \prop_gput:Nee\g__codedoc_fnmark_prop
-     {fn\int_use:N\c@footnote}{{\Hy@footnote@currentHref}{\int_use:N\c@footnote}}
- }
+  {
+    \prop_gput:Nee\g__codedoc_fnmark_prop
+      {fn\int_use:N\c@footnote}{{\Hy@footnote@currentHref}{\int_use:N\c@footnote}}
+  }
 \cs_new_protected:Npn \__codedoc_fn_restore:n  #1
- {
-   \prop_get:NnN \g__codedoc_fnmark_prop {fn#1}\l__codedoc_tmpa_tl
-   \tl_gset:Ne\Hy@footnote@currentHref
-     {\exp_last_unbraced:NV\use_i:nn \l__codedoc_tmpa_tl }
-   \setcounter{footnote}{\exp_last_unbraced:NV\use_ii:nn \l__codedoc_tmpa_tl}
- }
+  {
+    \prop_get:NnN \g__codedoc_fnmark_prop {fn#1}\l__codedoc_tmpa_tl
+    \tl_gset:Ne\Hy@footnote@currentHref
+      {\exp_last_unbraced:NV\use_i:nn \l__codedoc_tmpa_tl }
+    \setcounter{footnote}{\exp_last_unbraced:NV\use_ii:nn \l__codedoc_tmpa_tl}
+  }
 
 \cs_generate_variant:Nn \hook_gput_next_code:nn {ne}
 \cs_new_protected:Npn \__codedoc_fn_footnote:nn #1 #2
@@ -1789,7 +1775,7 @@
       { #1 \endinput }
   }
 \cs_if_exist:NT \MaybeStop
-   { \RenewCommandCopy \MaybeStop \StopEventually }
+  { \RenewCommandCopy \MaybeStop \StopEventually }
 \DeclareDocumentCommand \Finale { }
   { \tl_use:N \g__codedoc_finale_tl }
 \tl_new:N \g__codedoc_finale_tl
@@ -1995,18 +1981,18 @@
         \tl_clear:N \l__codedoc_doc_def_tl
         \tl_clear:N \l__codedoc_doc_undef_tl
         \tl_clear:N \l__codedoc_undoc_def_tl
+        \seq_gremove_duplicates:N \g_doc_functions_seq
+        \seq_gremove_duplicates:N \g_doc_macros_seq
         \seq_map_inline:Nn \g_doc_functions_seq
           {
             \seq_if_in:NnTF \g_doc_macros_seq {##1}
               {
                 \tl_put_right:Ne \l__codedoc_doc_def_tl
-                  { ##1 \iow_newline: }
-                \iow_now:Nn \g__codedoc_func_iow { > ~ ##1 }
+                  { \iow_newline: > ~ ##1 }
               }
               {
                 \tl_put_right:Ne \l__codedoc_doc_undef_tl
-                  { ##1 \iow_newline: }
-                \iow_now:Nn \g__codedoc_func_iow { ! ~ ##1 }
+                  { \iow_newline: ! ~ ##1 }
               }
           }
         \seq_map_inline:Nn \g_doc_macros_seq
@@ -2014,8 +2000,7 @@
             \seq_if_in:NnF \g_doc_functions_seq {##1}
               {
                 \tl_put_right:Ne \l__codedoc_undoc_def_tl
-                  { ##1 \iow_newline: }
-                \iow_now:Nn \g__codedoc_func_iow { ? ~ ##1 }
+                  { \iow_newline: ? ~ ##1 }
               }
           }
         \__codedoc_functions_typeout:nN
@@ -2040,11 +2025,11 @@
   {
     \tl_if_empty:NF #2
       {
-        \typeout
+        \iow_now:Ne \g__codedoc_func_iow
           {
             \c__codedoc_iow_midrule_tl \iow_newline:
             #1 \iow_newline:
-            \c__codedoc_iow_midrule_tl \iow_newline:
+            \c__codedoc_iow_midrule_tl
             #2
           }
         \tl_clear:N #2
@@ -2272,10 +2257,10 @@
 \cs_new_protected:Npn \__codedoc_hdindex_aux:w #1 M { }
 \cs_new_protected:Npn \__codedoc_special_index_set:Nn #1#2
   {
-    \__kernel_tl_set:Ne #1 { \tl_to_str:n {#2} }
+    \__kernel_tl_set:Nx #1 { \tl_to_str:n {#2} }
     \__codedoc_if_almost_str:nTF {#2}
       {
-        \tl_replace_all:Non #1 { \tl_to_str:n { __ } }
+        \tl_replace_all:Nen #1 { \tl_to_str:n { __ } }
           {
             \verbatimchar
             \token_to_str:N \_ \token_to_str:N \_
@@ -2290,7 +2275,7 @@
                 \token_to_str:N \verb * \verbatimchar
               }
           }
-        \__kernel_tl_set:Ne #1
+        \__kernel_tl_set:Nx #1
           {
             \token_to_str:N \verb * \verbatimchar
             #1 \verbatimchar
@@ -2298,8 +2283,8 @@
       }
       {
         \tl_set:Nn #1 {#2}
-        \tl_replace_all:Non #1
-          { \c_backslash_str }
+        \tl_replace_all:NVn #1
+          \c_backslash_str
           { \token_to_str:N \bslash \c_space_tl }
       }
     \__codedoc_quote_special_char:N #1
@@ -2312,50 +2297,49 @@
           { \tl_to_str:N ##1 } { \quotechar \tl_to_str:N ##1 }
       }
   }
-\cs_new_protected:Npn \__codedoc_key_get:n #1
+\cs_new_protected:Npe \__codedoc_key_get:n #1
   {
-    \__codedoc_key_get_base:nN {#1} \l__codedoc_index_macro_tl
-    \__kernel_tl_set:Ne \l__codedoc_index_key_tl
-      { \tl_to_str:N \l__codedoc_index_macro_tl }
-    \tl_clear:N \l__codedoc_index_module_tl
-    \tl_if_in:NoTF \l__codedoc_index_key_tl { \tl_to_str:n { __ } }
-      { \bool_set_true:N \l__codedoc_index_internal_bool }
-      { \bool_set_false:N \l__codedoc_index_internal_bool }
-    \exp_last_unbraced:NNo
-    \tl_if_head_eq_charcode:oNT
-      { \l__codedoc_index_key_tl } \c_backslash_str
-      { \__codedoc_key_pop: }
-    \tl_if_in:NoTF \l__codedoc_index_key_tl { \token_to_str:N : }
-      { \__codedoc_key_func: }
+    \exp_not:N \__codedoc_key_get_base:nN {#1} \exp_not:N \l__codedoc_index_macro_tl
+    \__kernel_tl_set:Nx \exp_not:N \l__codedoc_index_key_tl
+      { \exp_not:N \tl_to_str:N \exp_not:N \l__codedoc_index_macro_tl }
+    \tl_clear:N \exp_not:N \l__codedoc_index_module_tl
+    \tl_if_in:NnTF \exp_not:N \l__codedoc_index_key_tl { \tl_to_str:n { __ } }
+      { \bool_set_true:N \exp_not:N \l__codedoc_index_internal_bool }
+      { \bool_set_false:N \exp_not:N \l__codedoc_index_internal_bool }
+    \exp_not:N \tl_if_head_eq_charcode:VNT
+      \exp_not:N \l__codedoc_index_key_tl \c_backslash_str
+      { \exp_not:N \__codedoc_key_pop: }
+    \tl_if_in:NnTF \exp_not:N \l__codedoc_index_key_tl { \token_to_str:N : }
+      { \exp_not:N \__codedoc_key_func: }
       {
-        \tl_if_in:NoTF \l__codedoc_index_key_tl { \token_to_str:N _ }
-          { \__codedoc_key_var: }
+        \tl_if_in:NnTF \exp_not:N \l__codedoc_index_key_tl { \token_to_str:N _ }
+          { \exp_not:N \__codedoc_key_var: }
           {
-            \tl_if_in:NoT \l__codedoc_index_key_tl { \token_to_str:N @ }
-              { \tl_set:Nn \l__codedoc_index_module_tl { TeX } }
+            \tl_if_in:NnT \exp_not:N \l__codedoc_index_key_tl { \token_to_str:N @ }
+              { \tl_set:Nn \exp_not:N \l__codedoc_index_module_tl { TeX } }
           }
       }
   }
 \cs_new_protected:Npn \__codedoc_key_pop:
   {
-    \__kernel_tl_set:Ne \l__codedoc_index_key_tl
+    \__kernel_tl_set:Nx \l__codedoc_index_key_tl
       { \tl_tail:N \l__codedoc_index_key_tl }
   }
 \cs_new_protected:Npn \__codedoc_key_trim_module:n #1
   {
     \cs_set:Npn \__codedoc_tmpa:w ##1 #1 ##2 \q_stop
       { \exp_not:n {##1} }
-    \__kernel_tl_set:Ne \l__codedoc_index_module_tl
+    \__kernel_tl_set:Nx \l__codedoc_index_module_tl
       { \exp_after:wN \__codedoc_tmpa:w \l__codedoc_index_module_tl #1 \q_stop }
   }
 \cs_new_protected:Npn \__codedoc_key_drop_underscores:
   {
-    \tl_if_head_eq_charcode:oNT { \l__codedoc_index_key_tl } _
+    \tl_if_head_eq_charcode:VNT \l__codedoc_index_key_tl _
       { \__codedoc_key_pop: \__codedoc_key_drop_underscores: }
   }
 \cs_new_protected:Npn \__codedoc_key_func:
   {
-    \tl_if_head_eq_charcode:oNT { \l__codedoc_index_key_tl } .
+    \tl_if_head_eq_charcode:VNT \l__codedoc_index_key_tl .
       { \__codedoc_key_pop: }
     \__codedoc_key_drop_underscores:
     \tl_set_eq:NN \l__codedoc_index_module_tl \l__codedoc_index_key_tl
@@ -2367,7 +2351,7 @@
     \exp_args:Ne \tl_if_head_eq_charcode:nNTF
       { \exp_args:No \str_tail:n \l__codedoc_index_key_tl } _
       {
-        \str_case:fn { \str_head:N \l__codedoc_index_key_tl }
+        \str_case:en { \str_head:N \l__codedoc_index_key_tl }
           {
             { q } { \tl_set:Nn \l__codedoc_index_module_tl { quark } }
             { s } { \tl_set:Nn \l__codedoc_index_module_tl { scan } }
