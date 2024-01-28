@@ -26,6 +26,7 @@ installfiles   =
     "*.ltx",
     "*.lua",
     "*.sty",
+    "checkencodingsubset.tex",
     "docstrip.tex",
     "idx.tex",
     "lablst.tex",
