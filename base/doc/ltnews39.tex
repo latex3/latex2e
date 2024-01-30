@@ -144,9 +144,91 @@
 
 \section{Introduction}
 
+\emph{to write}
 
+
+\section{Enhancements to the new mark mechanism}
+
+In June 2022 we introduced a new mark mechanism in
+\LaTeX{}~\cite[p.~76]{39:ltnews} that allows keeping track of multiple
+independent marks. It also  properly supports top marks, something that wasn't
+reliably possible with \LaTeX{} before.
+
+There was, however, one limitation: to retrieve the marks from the
+page data it was necessary to \cs{vsplit} that data artificially so
+that \TeX{} would produce split marks that the mechanism could then
+use. Unfortunately, \TeX{} gets very upset if it finds infinite
+negative glue (e.g., from \cs{vss}) within this data. This is not
+totally surprising because such glue would allow splitting off any
+amount of material as such glue would hide the size of it. \TeX{}
+therefore responds with an error message if it find such glue while
+doing a \cs{vsplit} operation (and it does so even if a later glue
+item cancels the infinite glue).
+
+To account for this, the code in 2022 attempted to detect this
+situation beforehand and if so did not do any splitting but, of
+course, it would then also not extract any mark information.
+
+In this release the approach has been changed and we always do a
+\cs{vsplit} operation and thus always get the right mark data
+extracted. While it is not possible to avoid upsetting \TeX{} in case
+we have infinite negative glue present, it is possible to hide this
+(more or less) from the user.\footnote{A note to \pkg{l3build} users
+that make use of its testing capabilities: the new mechanism
+temporarily changes \cs{interactionmode} and, for implementation
+reasons in \TeX{}, that results in extra newlines in the \texttt{.log}
+file, so instead of seeing \texttt{[1] [2]} you will see each on
+separate lines. This means that test files might show difference of
+that nature, once the code is active, and must therefore be
+regenerated as necessary.}  With the new code \TeX{} will neither stop
+nor show anything on the terminal. What we can't do, though, is to
+avoid that an error is written to the log file, but to make it clear
+that this error is harmless and should be ignored we have arranged the
+code so that the error message, if it is issued, takes the following
+format:
+\begin{verbatim}
+! Infinite glue shrinkage found in box being split.
+<argument> Infinite shrink error above ignored ! 
+l. ...  }
+\end{verbatim}
+Not perfect (especially the somewhat unmotivated \texttt{<argument>}),
+but you can only do so much if error messages and their texts are
+hard-wired in the engine.
+
+So why all this? There are two reasons: we do not lose marks in edge
+cases any longer and perhaps more importantly we are now also reliably
+able to extract marks from arbitrarily boxed data, something that
+wasn't possible at all before. This is, for example, necessary to
+support extended marks in \env{multicols} environments or extract them
+from floats, marginpars, etc.
+
+Details about the implementation can be found in \texttt{texdoc
+  ltmarks-code} or in the shorter \texttt{texdoc ltmarks-doc} (which
+only describes the general concepts and  the command interfaces).
 
 \section{New or improved commands}
+
+\subsection{pkg{doc}: provide \cs{ProvideDocElement}}
+
+Beside \cs{NewDocElement} and \cs{RenewDocElement} we now also offer a
+\cs{ProvideDocElement} declaration that does nothing unless the doc
+element could be declared with \cs{NewDocElement}. This can be useful
+if documentation files are processed both individually as well as
+combined.
+
+
+\subsection{pkg{doc}: better support for \pkg{upquote}}
+
+In \LaTeX{} News~37~\cite{39:ltnews37} we wrote that support for the
+\pkg{upquote} package was added to the \pkg{doc} package, but back
+then this was only done for \cs{verb}, and the \env{verbatim}
+environments. However, the bulk of code in a typical \texttt{.dtx} file is
+within \env{macrocode} or \env{macrocode*} environments which were not
+affected by adding \pkg{upquote}. We have now updated those, such that
+\pkg{upquote} alters the quote characters in these environments as
+well.
+%
+\githubissue{1230}
 
 
 \section{Code improvements}
@@ -197,6 +279,137 @@ defined it is not altered, but instead a warning message is displayed.
 %
 \githubissue{823}
 
+\subsection{Extended information in \cs{listfiles}}
+
+The \cs{listfiles} command provides useful information when finding issues
+related to variation in package versions. However, this has to date relied on
+the information in the \cs{ProvidesPackage} line, or similar: that can be
+misleading if for example a file has been edited locally. We have now extended
+\cs{listfiles} to take an optional argument which will then include the MD5
+hash of each file (and the size of each file) in the \texttt{.log}. Thus for
+example you can use
+\begin{verbatim}
+\listfiles[hashes,sizes]
+\end{verbatim}
+to get both the file sizes and file hashes in the \texttt{.log} as well as
+the standard release information.
+%
+\githubissue{945}
+
+\subsection{Optimize creation of simple document commands}
+
+Creating document commands using \cs{NewDocumentCommand}, etc., provides a very
+flexible way of grabbing arguments. When the document command only takes simple
+mandatory arguments, this has to-date added an overhead that could be avoided.
+We have now refined the internal code path such that \enquote{simple} document
+commands avoid almost any overhead at point-of-use, making the results
+essentially as efficient as using \cs{newcommand} for low-level \TeX{}
+constructs. Note that as \cs{NewDocumentCommand} makes engine-robust commands,
+the direct equivalent to \cs{newcommand} is \cs{NewExpandableDocumentCommand}.
+%
+\githubissue{1189}
+
+\subsection{Declaring appropriate sub-encodings for \texttt{TS1} symbol fonts}
+
+In 2020 we incorporated support for the \texttt{TS1} symbol encoding
+directly into the kernel and in this way removed the need to load the
+\pkg{textcomp} package~\cite{39:ltnews31} to make commands such as
+\cs{texteuro} available.
+
+There is, however, a big problem with this \texttt{TS1} symbol
+encoding: only very few fonts can provide every glyph that is supposed
+to be part of \texttt{TS1}. This means that changing font families
+might result in certain symbols becoming unavailable. This can be a
+major disaster if, for example, the \cs{textteuro} (\texteuro) or the
+\cs{textohm} (\textohm) are no longer printed in your document, just
+because you altered your text font family.
+
+To mitigate this problem, we also introduced in 2020 the declaration
+\cs{DeclareEncodingSubset}. This declaration is supposed to be used in
+font definition files for the \texttt{TS1} encoding to specify which
+subset (we have defined 10 common ones) a specific font implements. If
+such a declaration is used then missing symbols are automatically
+taking from a fallback font. While this is not perfect, it is the best
+you can do other than painstrickenly checking that your document only
+uses glyphs that the font supports and if necessary switch to a
+different font or avoid the missing symbols. See also the discussion
+in \cite{39:ltnews33}.
+
+To jumpstart the process we also added declarations to the \LaTeX{}
+kernel for most of the fonts found in \TeX{}Live at the time\Dash with
+the assumption that such declarations would over time be superseded by
+declarations in the \texttt{.fd} files. Unfortunately, this hasn't
+happened yet (or not often) and so many of the initial declarations
+went stale: several fonts got new glyphs added to them (so their
+sub-encoding should have been changed but didn't); others (mainly due
+to license issues) changed the family name and thus our declarations
+became useless and the renamed fonts (now without a declaration) ended
+up in the default sub-encoding which offers only few glyphs; yet
+others such as CharisSIL (which triggered the GitHub issue) were
+simply not around at the time.
+
+We have therefore, again attempted to provide the (currently) correct
+declarations, but it is obvious that this is not a workable
+process. As we do not maintain the fonts we do not have the
+information that something has changed, and to regularly check the
+ever growing font support bundles is simply not possible. It is
+therefore very important that maintainers of font packages do not only
+provide \texttt{.fd} files but also add such a declaration to every
+\texttt{TS1...fd} font definition file that they distribute.
+
+To simplify this process, we now provide a simple \LaTeX{} file
+(\texttt{checkencodingsubset.tex}) for determining the correct (safe)
+sub-encoding. If run, it asks for a font family and then outputs its
+findings, for example, for \texttt{AlgolRevived-TLF} you will get:
+\begin{verbatim}
+-----------------------------------------
+Testing font family AlgolRevived-TLF
+(currently TS1-sub-encoding 9)
+-----------------------------------------
+Some glyphs are missing from sub-encoding 8:
+   ==> \textcelsius (137) is missing
+   ==> \texttwosuperior (178) is missing
+   ==> \textthreesuperior (179) is missing
+   ==> \textonesuperior (185) is missing
+Some glyphs are missing from sub-encoding 7:
+   ==> \texteuro (191) is missing
+All glyphs between sub-encoding 6 and 7 exist
+All glyphs between sub-encoding 5 and 6 exist
+All glyphs between sub-encoding 4 and 5 exist
+Some glyphs are missing from sub-encoding 3:
+   ==> \textwon (142) is missing
+All glyphs between sub-encoding 2 and 3 exist
+Some glyphs are missing from sub-encoding 1:
+   ==> \textmho (77) is missing
+   ==> \textpertenthousand (152) is missing
+All glyphs between sub-encoding 0 and 1 exist
+All glyphs in core exist
+-----------------------------------------
+TS1 encoding subset for AlgolRevived-TLF (ok)
+Use sub-encoding 9
+-----------------------------------------
+\end{verbatim}
+This output is meant for human consumption, e.g., you see which glyphs
+are missing and why a certain sub-encoding is suggested, but it is not
+that hard to use it in a script and extract the suggested sub-encoding
+by grepping for the line starting with \texttt{Use sub-encoding}.
+
+Of course, this check will only work if the missing glyphs are really
+missing: some fonts placed \enquote{tofu}\footnote{Little squares to
+indicate a missing symbol.} into such slots and in this case it looks
+to \TeX{} as if the glyph is provided. For example, for the old
+Palatino fonts (family \texttt{ppl}) it would report
+\begin{verbatim}
+-----------------------------------------
+TS1 encoding subset for ppl (bad)
+Use sub-encoding 0 (not 5)
+-----------------------------------------
+\end{verbatim}
+i.e., all glyphs are provided, while in reality more than twenty are
+missing and sub-encoding 5 as declared in the kernel is correct.
+%
+\githubissue{1257}
+
 
 
 %\section{Bug fixes}
@@ -218,22 +431,37 @@ in a hotfix for release 2023-11.
 %
 \githubissue{1160}
 
+\subsection{\pkg{verbatim}: Support tabs in \cs{verbatiminput*}}
 
-\subsection{\pkg{multicol}: \cs{columnbreak} interfers with mark mechanism}
+Mimicking the kernel update (November, 2023) that allowed \cs{verb*}
+to mark tabs as spaces, the \pkg{verbatim} package has been updated
+such that \cs{verbatiminput*} marks tabs as spaces as well.
+%
+\githubissue{1245}
+
+
+\subsection{\pkg{multicol}: \cs{columnbreak} interferes with mark mechanism}
 
 The \pkg{multicol} package has to keep track of marks (from
 \cs{markright} or \cs{markboth}) as part of its output routine code
 and can't rely on \LaTeX{} handling that automatically. It does so by
-artifically splitting page data with \cs{vsplit} to extract the mark
+artificially splitting page data with \cs{vsplit} to extract the mark
 data. With the introduction of \cs{columnbreak} that code failed
 sometimes, because it was not seeing any mark that followed such a
 forced column break.
 
 This has now been corrected, but there is further work to do, because
-as of now \pkg{multicol} does not handle marks using the new mark
-mechanism at all.
+as of now \pkg{multicol} does not yet handle marks using the new mark
+mechanism\Dash see the discussion at the beginning of the newsletter.
 %
 \githubissue{1130}
+
+\subsection{\pkg{showkeys}: Allow \cs{newline} in \pkg{amsthm} to work}
+%
+Previously \pkg{showkeys} added an extra box layer which disabled the \cs{newline}
+of \pkg{amsthm} theorem styles. This extra box has now been avoided.
+%
+\githubissue{1123}
 
 
 \section{Changes to files in the \pkg{cyrillic} category}
@@ -263,11 +491,24 @@ didn't get this treatment. This oversight has now been corrected.
 %\newblock ISBN 0-201-52983-1.
 %\newblock Reprinted with corrections in 1996.
 %
+
+\bibitem{39:ltnews} \LaTeX{} Project Team.
+  \emph{\LaTeXe{} news 1--39}. June, 2024.
+  \url{https://latex-project.org/news/latex2e-news/ltnews.pdf}
 %
-%\bibitem{39:ltnews} \LaTeX{} Project Team.
-%  \emph{\LaTeXe{} news 1--39}.\\
-%  \url{https://latex-project.org/news/latex2e-news/ltnews.pdf}
 %
+\bibitem{39:ltnews31} \LaTeX{} Project Team.
+  \emph{\LaTeXe{} news 31}. February, 2020.
+  \url{https://latex-project.org/news/latex2e-news/ltnews31.pdf}
+
+\bibitem{39:ltnews33} \LaTeX{} Project Team.
+  \emph{\LaTeXe{} news 33}. June 2021.\\
+  \url{https://latex-project.org/news/latex2e-news/ltnews33.pdf}
+
+\bibitem{39:ltnews37} \LaTeX{} Project Team.
+  \emph{\LaTeXe{} news 37}. June 2023.\\
+  \url{https://latex-project.org/news/latex2e-news/ltnews37.pdf}
+
 %\bibitem{39:blueprint} Frank Mittelbach and Chris Rowley.
 %  \emph{\LaTeX{} Tagged PDF \Dash A blueprint for a large project}.\\
 %  \url{https://latex-project.org/publications/indexbyyear/2020/}

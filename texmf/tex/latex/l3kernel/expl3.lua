@@ -10,7 +10,7 @@
 -- l3token.dtx  (with options: `package,lua')
 -- l3intarray.dtx  (with options: `package,lua')
 -- 
--- Copyright (C) 1990-2023 The LaTeX Project
+-- Copyright (C) 1990-2024 The LaTeX Project
 -- 
 -- It may be distributed and/or modified under the conditions of
 -- the LaTeX Project Public License (LPPL), either version 1.3c of
