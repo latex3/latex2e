@@ -28,6 +28,11 @@ checkdeps =
 
 checkruns = 3  -- some tests need 3 runs to settle!
 
+typesetdeps =
+  {
+    maindir .. "/required/amsmath"    -- for l3doc.cls :-(
+  }
+
 -- Allow for TU and other tests test
 checkconfigs = {"build","config-TU","config-legacy","config-search"}
 
