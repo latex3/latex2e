@@ -7,7 +7,7 @@
 
 
 
-\LoadClass{l3doc}
+\LoadClass[kernel]{l3doc}
 
 \RemoveFromHook{begindocument}[l3doc]          % drop the standard setting  making " a shortverb
 \AddToHook{begindocument}{\MakeShortVerb \|}   % but readd | as one
@@ -302,6 +302,9 @@ Bug reports can be opened (category \texttt{#1}) at\\%
 % don't run tocs when they are in some module files
 \AddToHook{cmd/tableofcontents/after}{\global\let\tableofcontents\relax} 
 
+
+% pages > 1000
+\renewcommand\@pnumwidth{2em}
 
 \InputIfFileExists{ltxdoc.cfg}
            {\typeout{*************************************^^J%
