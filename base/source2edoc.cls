@@ -7,7 +7,7 @@
 
 
 
-\LoadClass{l3doc}
+\LoadClass[kernel]{l3doc}
 
 \RemoveFromHook{begindocument}[l3doc]          % drop the standard setting  making " a shortverb
 \AddToHook{begindocument}{\MakeShortVerb \|}   % but readd | as one
