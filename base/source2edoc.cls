@@ -303,6 +303,9 @@ Bug reports can be opened (category \texttt{#1}) at\\%
 \AddToHook{cmd/tableofcontents/after}{\global\let\tableofcontents\relax} 
 
 
+% pages > 1000
+\renewcommand\@pnumwidth{2em}
+
 \InputIfFileExists{ltxdoc.cfg}
            {\typeout{*************************************^^J%
                      * Local config file ltxdoc.cfg used^^J%
