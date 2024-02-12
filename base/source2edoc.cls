@@ -176,7 +176,7 @@
          dd%
          \else\@ctrerr\fi}
 \def\docincludeaux{%
-  \def\thepart{\aalph{part}}\def\filesep{\thepart-}%
+  \def\thepart{\ifnum\value{part}<10 0\fi\arabic{part}}\def\filesep{\thepart-}%
   \let\filekey\@gobble
   \g@addto@macro\index@prologue{%
     \gdef\@oddfoot{\parbox[t]{\textwidth}{\strut\footnotesize
