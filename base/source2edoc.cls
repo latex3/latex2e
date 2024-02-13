@@ -2,7 +2,7 @@
 % This class is buggy and needs fixing
 
 \ProvidesClass{source2edoc}
-              [2024/02/12 v0.2d Quick hack to typeset source2.tex
+              [2024/02/14 v0.2d Quick hack to typeset source2.tex
                (not usable for anything else and buggy -- will vanish again)!]
 
 
@@ -47,84 +47,6 @@
          }
       }
     \seq_gclear:N \g__codedoc_nested_names_seq
-  }
-
-
-  
-% some l3doc's def are buggy (already fixed there but not distributed yet)
-
-\RenewDocumentCommand \DocInclude { m }
-  {
-    \relax\clearpage
-    \docincludeaux
-    \IfFileExists{#1.fdd}
-      { \cs_set:Npn \currentfile{#1.fdd} }
-      { \cs_set:Npn \currentfile{#1.dtx} }
-    \int_compare:nNnTF \@auxout = \@partaux
-      { \@latexerr{\string\include\space cannot~be~nested}\@eha }
-      { \@docinclude {#1} }  % <--- braces needed!
-    \int_compare:nNnF { \tex_currentgrouplevel:D } = { 0 }
-      {
-        \int_compare:nNnT { \tex_interactionmode:D } = { 0 }
-          { \int_set:Nn \tex_interactionmode:D { 1 } }
-        \msg_fatal:nnn { source2edoc } { missing-endgroup } {#1}
-      }
-  }
-\msg_new:nnn { source2edoc } { missing-endgroup }
-  {
-    \str_if_eq:VnTF \@currenvir { document }
-      {
-        There~are~\int_use:N \tex_currentgrouplevel:D
-        \c_space_tl unclosed~groups~in~#1.dtx.
-      }
-      {
-        The~\@currenvir \c_space_tl environment~on~line~\@currenvline
-        \c_space_tl doesn't~have~a~matching~\iow_char:N\\end{\@currenvir}.
-      }
-  }
-\cs_gset:Npn \@docinclude #1
-  {
-    \clearpage
-    \immediate\write\@mainaux{\string\@input{#1.aux}}
-    \@tempswatrue
-    \if@partsw
-      \@tempswafalse
-      \cs_set:Npx \@tempb {#1}
-      \clist_map_inline:Nn \@partlist
-        {
-          \if_meaning:w \@tempa \@tempb
-            \@tempswatrue
-          \fi:
-        }
-    \fi
-    \if@tempswa
-      \cs_set_eq:NN \@auxout                 \@partaux
-      \immediate\openout\@partaux #1.aux
-      \immediate\write\@partaux{\relax}
-      \cs_set_eq:NN \@ltxdoc@PrintIndex      \PrintIndex
-      \cs_set_eq:NN \PrintIndex              \relax
-      \cs_set_eq:NN \@ltxdoc@PrintChanges    \PrintChanges
-      \cs_set_eq:NN \PrintChanges            \relax
-      \cs_set_eq:NN \@ltxdoc@theglossary     \theglossary
-      \cs_set_eq:NN \@ltxdoc@endtheglossary  \endtheglossary
-      \part{\currentfile}
-      {
-        \cs_set_eq:NN \ttfamily\relax
-        \cs_gset:Npx \filekey
-          { \filekey,~ \thepart = { \ttfamily \currentfile } } % <-- mising spaces considered harmful
-      }
-      \DocInput{\currentfile}
-      \cs_set_eq:NN \PrintIndex              \@ltxdoc@PrintIndex
-      \cs_set_eq:NN \PrintChanges            \@ltxdoc@PrintChanges
-      \cs_set_eq:NN \theglossary             \@ltxdoc@theglossary
-      \cs_set_eq:NN \endtheglossary          \@ltxdoc@endtheglossary
-      \clearpage
-      \@writeckpt{#1}
-      \immediate \closeout \@partaux
-    \else
-      \@nameuse{cp@#1}
-    \fi
-    \cs_set_eq:NN \@auxout \@mainaux
   }
 
 
