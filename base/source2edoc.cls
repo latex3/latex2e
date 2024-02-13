@@ -2,12 +2,12 @@
 % This class is buggy and needs fixing
 
 \ProvidesClass{source2edoc}
-              [2022/04/03 v0.2c Quick hack to typeset source2.tex
+              [2024/02/12 v0.2d Quick hack to typeset source2.tex
                (not usable for anything else and buggy -- will vanish again)!]
 
 
 
-\LoadClass{l3doc}
+\LoadClass[kernel]{l3doc}
 
 \RemoveFromHook{begindocument}[l3doc]          % drop the standard setting  making " a shortverb
 \AddToHook{begindocument}{\MakeShortVerb \|}   % but readd | as one
@@ -176,7 +176,7 @@
          dd%
          \else\@ctrerr\fi}
 \def\docincludeaux{%
-  \def\thepart{\aalph{part}}\def\filesep{\thepart-}%
+  \def\thepart{\ifnum\value{part}<10 0\fi\arabic{part}}\def\filesep{\thepart-}%
   \let\filekey\@gobble
   \g@addto@macro\index@prologue{%
     \gdef\@oddfoot{\parbox[t]{\textwidth}{\strut\footnotesize
@@ -302,6 +302,9 @@ Bug reports can be opened (category \texttt{#1}) at\\%
 % don't run tocs when they are in some module files
 \AddToHook{cmd/tableofcontents/after}{\global\let\tableofcontents\relax} 
 
+
+% pages > 1000
+\renewcommand\@pnumwidth{2em}
 
 \InputIfFileExists{ltxdoc.cfg}
            {\typeout{*************************************^^J%
