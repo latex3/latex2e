@@ -2,7 +2,7 @@
 % This class is buggy and needs fixing
 
 \ProvidesClass{source2edoc}
-              [2024/02/14 v0.2d Quick hack to typeset source2.tex
+              [2024/02/14 v0.2e Quick hack to typeset source2.tex
                (not usable for anything else and buggy -- will vanish again)!]
 
 
