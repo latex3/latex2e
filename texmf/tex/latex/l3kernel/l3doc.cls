@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{calc}
-\ProvidesExplClass{l3doc}{2024-01-22}{}
+\ProvidesExplClass{l3doc}{2024-02-13}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -534,7 +534,7 @@
       { \c_backslash_str #2 }
   }
 \DeclareDocumentCommand \meta { m }
-  { \__codedoc_meta:n {#1} }
+  { \texttt{ \__codedoc_meta:n {#1} } }
 \DeclareExpandableDocumentCommand
   { \__codedoc_pdfstring_cmd:w } { o m } { \token_to_str:N #2 }
 \DeclareExpandableDocumentCommand
@@ -543,16 +543,17 @@
   { < \tl_to_str:n {#1} > }
 \pdfstringdefDisableCommands
   {
-    \cs_set_eq:NN \cmd  \__codedoc_pdfstring_cmd:w
-    \cs_set_eq:NN \cs   \__codedoc_pdfstring_cs:w
-    \cs_set_eq:NN \tn   \__codedoc_pdfstring_cs:w
-    \cs_set_eq:NN \meta \__codedoc_pdfstring_meta:w
+    \cs_set_eq:NN \cmd       \__codedoc_pdfstring_cmd:w
+    \cs_set_eq:NN \cs        \__codedoc_pdfstring_cs:w
+    \cs_set_eq:NN \tn        \__codedoc_pdfstring_cs:w
+    \cs_set_eq:NN \meta      \__codedoc_pdfstring_meta:w
+    \cs_set_eq:NN \__codedoc_meta:n \__codedoc_pdfstring_meta:w
   }
 \newcommand\Arg[1]
-  { \texttt{\char`\{} \meta{#1} \texttt{\char`\}} }
+  { \texttt{\char`\{} \__codedoc_meta:n {#1} \texttt{\char`\}} }
 \providecommand\marg[1]{ \Arg{#1} }
-\providecommand\oarg[1]{ \texttt[ \meta{#1} \texttt] }
-\providecommand\parg[1]{ \texttt( \meta{#1} \texttt) }
+\providecommand\oarg[1]{ \texttt[ \__codedoc_meta:n {#1} \texttt] }
+\providecommand\parg[1]{ \texttt( \__codedoc_meta:n {#1} \texttt) }
 \DeclareRobustCommand \file {\nolinkurl}
 \DeclareRobustCommand \env {\texttt}
 \DeclareRobustCommand \pkg {\textsf}
@@ -1796,6 +1797,18 @@
   }
 \DeclareDocumentCommand \DocInputAgain { }
   { \clist_map_function:NN \g_docinput_clist \__codedoc_input:n }
+\msg_new:nnn { l3doc } { missing-endgroup }
+  {
+    \str_if_eq:VnTF \@currenvir { document }
+      {
+        There~are~\int_use:N \tex_currentgrouplevel:D
+        \c_space_tl unclosed~groups~in~#1.
+      }
+      {
+        The~\@currenvir \c_space_tl environment~on~line~\@currenvline
+        \c_space_tl doesn't~have~a~matching~\iow_char:N\\end{\@currenvir}.
+      }
+  }
 \NewDocumentCommand \DocInclude { m }
   {
     \relax\clearpage
@@ -1806,6 +1819,13 @@
     \int_compare:nNnTF \@auxout = \@partaux
       { \@latexerr{\string\include\space cannot~be~nested}\@eha }
       { \@docinclude {#1} }
+    % check missing \endgroup, e.g., missing "\end{macro}" in time
+    \int_compare:nNnF { \tex_currentgrouplevel:D } = { 0 }
+      {
+        \int_compare:nNnT { \tex_interactionmode:D } = { 0 }
+          { \int_gset:Nn \tex_interactionmode:D { 1 } }
+        \msg_fatal:nne { l3doc } { missing-endgroup } { \currentfile }
+      }
   }
 \cs_gset:Npn \@docinclude #1
   {
@@ -2086,7 +2106,7 @@
             \int_set:Nn \l__codedoc_tmpa_int { \tex_interactionmode:D }
             \errorstopmode
             \ClassError { l3doc } { \l__codedoc_tmpa_tl } { }
-            \int_set:Nn \tex_interactionmode:D { \l__codedoc_tmpa_int }
+            \int_gset:Nn \tex_interactionmode:D { \l__codedoc_tmpa_int }
           }
       }
   }
