@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.98w",       --TAGVERSION
-    date          = "2024-02-22", --TAGDATE
+    version       = "0.98x",       --TAGVERSION
+    date          = "2024-02-29", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -806,6 +806,7 @@ function ltx.__tag.func.fill_parent_tree_line (page)
      end
     else
       ltx.__tag.trace.log ("INFO PARENTTREE-NO-DATA: page "..page,3)
+      numsentry = pdfpage.." []"
     end
     return numsentry
 end
