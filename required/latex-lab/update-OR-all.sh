@@ -54,6 +54,7 @@ l3build save -cconfig-OR \
 	footmisc-twocol-floats-latex-flushbottom \
 	footnote-float-above \
 	footnote-hyperref-001 \
+	footnote-patches \
 	github-001 \
 	memoir-001 \
 	scrartcl-001 \
