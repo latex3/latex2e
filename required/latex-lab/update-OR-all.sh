@@ -20,6 +20,7 @@ l3build save -cconfig-OR \
 	footmisc-012-side \
 	footmisc-012-side-hyperref \
 	footmisc-013-scrartcl \
+	footmisc-014-hang \
 	footmisc-floats-abovefloats \
 	footmisc-floats-abovefloats-flushbottom \
 	footmisc-floats-belowfloats \
