@@ -74,7 +74,8 @@ checkconfigs =
   "config-bib",
   "config-LM-tagging",
   "config-table-pdftex",
-  "config-table-luatex"
+  "config-table-luatex",
+  "config-title"
  }
 
 

@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{calc}
-\ProvidesExplClass{l3doc}{2024-01-04}{}
+\ProvidesExplClass{l3doc}{2024-02-20}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -116,7 +116,7 @@
 \cs_new_protected:Npn \__codedoc_trim_right:Nn #1#2
   {
     \cs_set:Npn \__codedoc_tmp:w ##1 #2 ##2 \q_stop { \exp_not:n {##1} }
-    \__kernel_tl_set:Ne #1 { \exp_after:wN \__codedoc_tmp:w #1 #2 \q_stop }
+    \__kernel_tl_set:Nx #1 { \exp_after:wN \__codedoc_tmp:w #1 #2 \q_stop }
   }
 \cs_generate_variant:Nn \__codedoc_trim_right:Nn { No }
 \prg_new_protected_conditional:Npnn \__codedoc_str_if_begin:nn #1#2 { TF , T , F }
@@ -251,14 +251,14 @@
     \__codedoc_if_almost_str:nTF {#1}
       {
         \__codedoc_key_get_base_TF:nN {#1} \l__codedoc_tmpa_tl
-        \__kernel_tl_set:Ne #2
+        \__kernel_tl_set:Nx #2
           { \__codedoc_split_function_do:on \l__codedoc_tmpa_tl { \__codedoc_base_form_aux:nnN } }
       }
       { \tl_set:Nn #2 {#1} }
   }
 \cs_new:Npe \__codedoc_key_get_base_TF:nN #1#2
   {
-    \__kernel_tl_set:Ne #2 { \exp_not:N \tl_to_str:n {#1} }
+    \__kernel_tl_set:Nx #2 { \exp_not:N \tl_to_str:n {#1} }
     \tl_if_in:NoF #2 { \tl_to_str:n {:} }
       { \exp_not:N \prg_break: }
     \tl_if_in:onT { #2 z } { \tl_to_str:n {TF} z }
@@ -404,7 +404,7 @@
 \DeclareUnknownKeyHandler [ l3doc / options ]
   { \PassOptionsToClass { \CurrentOption } { article } }
 \SetKeys [ l3doc / options ]
-  { full , kernel , check = false , checktest = false , lm-default }
+  { full , check = false , checktest = false , lm-default }
 \PassOptionsToClass { a4paper } { article }
 \msg_new:nnn { l3doc } { input-cfg }
   { Local~config~file~l3doc.cfg~loaded. }
@@ -534,7 +534,7 @@
       { \c_backslash_str #2 }
   }
 \DeclareDocumentCommand \meta { m }
-  { \__codedoc_meta:n {#1} }
+  { \texttt{ \__codedoc_meta:n {#1} } }
 \DeclareExpandableDocumentCommand
   { \__codedoc_pdfstring_cmd:w } { o m } { \token_to_str:N #2 }
 \DeclareExpandableDocumentCommand
@@ -543,16 +543,17 @@
   { < \tl_to_str:n {#1} > }
 \pdfstringdefDisableCommands
   {
-    \cs_set_eq:NN \cmd  \__codedoc_pdfstring_cmd:w
-    \cs_set_eq:NN \cs   \__codedoc_pdfstring_cs:w
-    \cs_set_eq:NN \tn   \__codedoc_pdfstring_cs:w
-    \cs_set_eq:NN \meta \__codedoc_pdfstring_meta:w
+    \cs_set_eq:NN \cmd       \__codedoc_pdfstring_cmd:w
+    \cs_set_eq:NN \cs        \__codedoc_pdfstring_cs:w
+    \cs_set_eq:NN \tn        \__codedoc_pdfstring_cs:w
+    \cs_set_eq:NN \meta      \__codedoc_pdfstring_meta:w
+    \cs_set_eq:NN \__codedoc_meta:n \__codedoc_pdfstring_meta:w
   }
 \newcommand\Arg[1]
-  { \texttt{\char`\{} \meta{#1} \texttt{\char`\}} }
+  { \texttt{\char`\{} \__codedoc_meta:n {#1} \texttt{\char`\}} }
 \providecommand\marg[1]{ \Arg{#1} }
-\providecommand\oarg[1]{ \texttt[ \meta{#1} \texttt] }
-\providecommand\parg[1]{ \texttt( \meta{#1} \texttt) }
+\providecommand\oarg[1]{ \texttt[ \__codedoc_meta:n {#1} \texttt] }
+\providecommand\parg[1]{ \texttt( \__codedoc_meta:n {#1} \texttt) }
 \DeclareRobustCommand \file {\nolinkurl}
 \DeclareRobustCommand \env {\texttt}
 \DeclareRobustCommand \pkg {\textsf}
@@ -679,7 +680,7 @@
         \verbatim@font
         \__codedoc_if_almost_str:VT \l__codedoc_cmd_tl
           {
-            \__kernel_tl_set:Ne \l__codedoc_cmd_tl { \tl_to_str:N \l__codedoc_cmd_tl }
+            \__kernel_tl_set:Nx \l__codedoc_cmd_tl { \tl_to_str:N \l__codedoc_cmd_tl }
             \bool_if:NT \g__codedoc_cs_break_bool
               {
                 \regex_replace_all:nnN
@@ -698,13 +699,13 @@
           {
             \quark_if_no_value:NF \l__codedoc_cmd_index_tl
               {
-                \__kernel_tl_set:Ne \l__codedoc_cmd_tl
+                \__kernel_tl_set:Nx \l__codedoc_cmd_tl
                   { \c_backslash_str \exp_not:o { \l__codedoc_cmd_index_tl } }
               }
             \exp_args:No \__codedoc_key_get:n { \l__codedoc_cmd_tl }
             \quark_if_no_value:NF \l__codedoc_cmd_module_tl
               {
-                \__kernel_tl_set:Ne \l__codedoc_index_module_tl
+                \__kernel_tl_set:Nx \l__codedoc_index_module_tl
                   { \tl_to_str:N \l__codedoc_cmd_module_tl }
               }
             \__codedoc_special_index_module:ooonN
@@ -782,7 +783,7 @@
   }
 \cs_new_protected:Npn \__codedoc_get_hyper_target:nN #1#2
   {
-    \__kernel_tl_set:Ne #2 { \tl_to_str:n {#1} }
+    \__kernel_tl_set:Nx #2 { \tl_to_str:n {#1} }
     \tl_replace_all:NVn #2 \c_underscore_str { / }
     \tl_remove_all:NV   #2 \c_backslash_str
     \tl_put_left:Nn #2 { doc/function// }
@@ -790,7 +791,7 @@
 \cs_generate_variant:Nn \__codedoc_get_hyper_target:nN { o , e }
 \cs_new_protected:Npn \__codedoc_names_get_seq:nN #1#2
   {
-    \__kernel_tl_set:Ne \l__codedoc_tmpa_tl { \tl_to_str:n {#1} }
+    \__kernel_tl_set:Nx \l__codedoc_tmpa_tl { \tl_to_str:n {#1} }
     \bool_if:NTF \l__codedoc_names_verb_bool
       {
         \seq_clear:N #2
@@ -1389,7 +1390,7 @@
           \l__codedoc_macro_do_not_index_tl
         \exp_args:NNV \seq_set_from_clist:Nn
           \l__codedoc_tmpa_seq \l__codedoc_macro_do_not_index_tl
-        \__kernel_tl_set:Ne \l__codedoc_macro_do_not_index_tl
+        \__kernel_tl_set:Nx \l__codedoc_macro_do_not_index_tl
           { \seq_use:Nn \l__codedoc_tmpa_seq { , } }
         \exp_args:NV \DoNotIndex \l__codedoc_macro_do_not_index_tl
       }
@@ -1796,6 +1797,18 @@
   }
 \DeclareDocumentCommand \DocInputAgain { }
   { \clist_map_function:NN \g_docinput_clist \__codedoc_input:n }
+\msg_new:nnn { l3doc } { missing-endgroup }
+  {
+    \str_if_eq:VnTF \@currenvir { document }
+      {
+        There~are~\int_use:N \tex_currentgrouplevel:D
+        \c_space_tl unclosed~groups~in~#1.
+      }
+      {
+        The~\@currenvir \c_space_tl environment~on~line~\@currenvline
+        \c_space_tl doesn't~have~a~matching~\iow_char:N\\end{\@currenvir}.
+      }
+  }
 \NewDocumentCommand \DocInclude { m }
   {
     \relax\clearpage
@@ -1806,6 +1819,13 @@
     \int_compare:nNnTF \@auxout = \@partaux
       { \@latexerr{\string\include\space cannot~be~nested}\@eha }
       { \@docinclude {#1} }
+    % check missing \endgroup, e.g., missing "\end{macro}" in time
+    \int_compare:nNnF { \tex_currentgrouplevel:D } = { 0 }
+      {
+        \int_compare:nNnT { \tex_interactionmode:D } = { 0 }
+          { \int_gset:Nn \tex_interactionmode:D { 1 } }
+        \msg_fatal:nne { l3doc } { missing-endgroup } { \currentfile }
+      }
   }
 \cs_gset:Npn \@docinclude #1
   {
@@ -2086,7 +2106,7 @@
             \int_set:Nn \l__codedoc_tmpa_int { \tex_interactionmode:D }
             \errorstopmode
             \ClassError { l3doc } { \l__codedoc_tmpa_tl } { }
-            \int_set:Nn \tex_interactionmode:D { \l__codedoc_tmpa_int }
+            \int_gset:Nn \tex_interactionmode:D { \l__codedoc_tmpa_int }
           }
       }
   }
@@ -2257,7 +2277,7 @@
 \cs_new_protected:Npn \__codedoc_hdindex_aux:w #1 M { }
 \cs_new_protected:Npn \__codedoc_special_index_set:Nn #1#2
   {
-    \__kernel_tl_set:Ne #1 { \tl_to_str:n {#2} }
+    \__kernel_tl_set:Nx #1 { \tl_to_str:n {#2} }
     \__codedoc_if_almost_str:nTF {#2}
       {
         \tl_replace_all:Nen #1 { \tl_to_str:n { __ } }
@@ -2275,7 +2295,7 @@
                 \token_to_str:N \verb * \verbatimchar
               }
           }
-        \__kernel_tl_set:Ne #1
+        \__kernel_tl_set:Nx #1
           {
             \token_to_str:N \verb * \verbatimchar
             #1 \verbatimchar
@@ -2300,7 +2320,7 @@
 \cs_new_protected:Npe \__codedoc_key_get:n #1
   {
     \exp_not:N \__codedoc_key_get_base:nN {#1} \exp_not:N \l__codedoc_index_macro_tl
-    \__kernel_tl_set:Ne \exp_not:N \l__codedoc_index_key_tl
+    \__kernel_tl_set:Nx \exp_not:N \l__codedoc_index_key_tl
       { \exp_not:N \tl_to_str:N \exp_not:N \l__codedoc_index_macro_tl }
     \tl_clear:N \exp_not:N \l__codedoc_index_module_tl
     \tl_if_in:NnTF \exp_not:N \l__codedoc_index_key_tl { \tl_to_str:n { __ } }
@@ -2322,14 +2342,14 @@
   }
 \cs_new_protected:Npn \__codedoc_key_pop:
   {
-    \__kernel_tl_set:Ne \l__codedoc_index_key_tl
+    \__kernel_tl_set:Nx \l__codedoc_index_key_tl
       { \tl_tail:N \l__codedoc_index_key_tl }
   }
 \cs_new_protected:Npn \__codedoc_key_trim_module:n #1
   {
     \cs_set:Npn \__codedoc_tmpa:w ##1 #1 ##2 \q_stop
       { \exp_not:n {##1} }
-    \__kernel_tl_set:Ne \l__codedoc_index_module_tl
+    \__kernel_tl_set:Nx \l__codedoc_index_module_tl
       { \exp_after:wN \__codedoc_tmpa:w \l__codedoc_index_module_tl #1 \q_stop }
   }
 \cs_new_protected:Npn \__codedoc_key_drop_underscores:

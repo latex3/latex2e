@@ -13,7 +13,6 @@ unpackdeps  = unpackdeps  or {maindir .. "/base"}
 
 -- We really need 4 on most files (toc + references + index (which needs two runs))
 typesetruns  = 4
-maxprintline = 9999
 
 -- Set up the check system to work in 'stand-alone' mode
 -- This relies on a format being built by the 'base' dependency

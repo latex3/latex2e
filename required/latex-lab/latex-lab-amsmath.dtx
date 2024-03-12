@@ -2,7 +2,7 @@
 %
 %% File: latex-lab-amsmath.dtx
 %
-% Copyright (C) 2022,2023 The LaTeX Project
+% Copyright (C) 2022-2024 The LaTeX Project
 %
 % It may be distributed and/or modified under the conditions of the
 % LaTeX Project Public License (LPPL), either version 1.3c of this
@@ -66,7 +66,7 @@
 % \subsection{File declaration}
 %    \begin{macrocode}
 \ProvidesFile{latex-lab-amsmath.ltx}
-        [2023-01-05 v0.1a amsmath adaptions]
+        [2024-02-12 v0.1b amsmath adaptions]
 %    \end{macrocode}
 % \subsection{Tagpdf support}
 % To make the code independent from tagging being loaded and active
@@ -90,7 +90,11 @@
       \def\intertext##1{%
         \ifvmode\else\\\@empty\fi
         \noalign{%
-          \penalty\postdisplaypenalty\vskip\belowdisplayskip
+%    \end{macrocode}
+% we have to flip the sign and use a negative \cs{belowdisplayskip}
+% as we flipped the sign at the outside.
+%    \begin{macrocode}
+          \penalty\postdisplaypenalty\vskip-\belowdisplayskip
           \vbox{
 %    \end{macrocode}
 % Stop tagging when measuring:
@@ -105,9 +109,13 @@
 %    \begin{macrocode}
             \tag_mc_end_push:
 %    \end{macrocode}
-% We are already in a par so we change now to Span:
+% We are already in a par so we change now to text:
 %    \begin{macrocode}
-            \tagpdfsetup{paratag=Span}%
+            \tagpdfsetup{paratag=P}% 
+%    \end{macrocode}
+% TODO why \cs{tagpdfparaOn} needed? 
+%    \begin{macrocode}
+            \tagpdfparaOn
             \noindent\ignorespaces##1\par
 %    \end{macrocode}
 % Restart the MC
@@ -117,6 +125,78 @@
         }%
     }}
   }      
+%    \end{macrocode}
+%
+% \subsection{\cs{text}}
+% 
+% The \cs{text} command uses \cs{mathchoice} which \enquote{typesets} the argument
+% four times. This makes it quite problematic for tagging. Without precautions 
+% structure objects would be created four times and would get MC-chunks as kids 
+% that doesn't really exist. amsmath contains a switch that allows to execute code
+% only in the first (displaymath) branch, but that isn't usable here. At first because
+% we don't know if the first branch creates the same structure as the one that is
+% actually used. At second because the engines executes some commands like \cs{label}
+% and \cs{pdfannot} only at shipout from the branch that really was used. So we would
+% get structure data from one \cs{mathchoice}-branch and MC-labels and links from another 
+% one and that gets very messy. 
+% 
+% We therefore have to avoid that tagging is active in unused branches. In pdflatex it
+% is not possible to detect the mathstyle before, so we use a label. With lualatex is
+% is possible to redefine \cs{text} not to use \cs{mathchoice}
+% 
+%    \begin{macrocode}
+\AddToHook{package/amstext/after}
+ {
+%    \end{macrocode}
+% currently amsmath is loaded in a begindocument hook, so this
+% test is fine. If amstext is loaded earlier (in the kernel), this needs perhaps a change.
+%    \begin{macrocode}
+   \tag_if_active:T
+    {
+      \sys_if_engine_luatex:TF
+       {
+         \def\text@#1{{%
+           \ifcase\mathstyle
+           \hbox{{#1}}\or
+           \hbox{{#1}}\or
+           \hbox{{#1}}\or
+           \hbox{{#1}}\or
+           \hbox{{\let\f@size\sf@size\selectfont#1}}\or
+           \hbox{{\let\f@size\sf@size\selectfont#1}}\or
+           \hbox{{\let\f@size\ssf@size\selectfont#1}}\or
+           \hbox{{\let\f@size\ssf@size\selectfont#1}}\or
+           \ERROR
+           \fi
+           \check@mathfonts
+         }}       
+       }
+       {
+         \def\text@#1
+          {{
+           \int_gincr:N\g__math_mathchoice_int
+           \tag_stop:
+           \mathchoice
+            {
+             \@@_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{0}
+             \textdef@\displaystyle\f@size{#1}
+            }
+            {
+             \@@_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{2}
+             \textdef@\textstyle\f@size{\firstchoice@false #1}
+            }
+            {
+             \@@_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{4}
+             \textdef@\textstyle\sf@size{\firstchoice@false #1}
+            }
+            {
+              \@@_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{6}
+              \textdef@\textstyle \ssf@size{\firstchoice@false #1}
+            }
+            \check@mathfonts
+          }}     
+       }
+    }
+ }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
