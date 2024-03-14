@@ -1,6 +1,6 @@
 -- merged file : lualibs-extended-merged.lua
 -- parent file : lualibs-extended.lua
--- merge date  : 2022-10-04 17:16
+-- merge date  : 2023-07-13 12:55
 
 do -- begin closure to overcome local limits and interference
 
@@ -481,13 +481,13 @@ if bit32 and not streams.tocardinal1 then
  local extract=bit32.extract
  local char=string.char
     streams.tocardinal1=char
- function streams.tocardinal2(n)   return char(extract(8,8),extract(0,8)) end
- function streams.tocardinal3(n)   return char(extract(16,8),extract(8,8),extract(0,8)) end
- function streams.tocardinal4(n)   return char(extract(24,8),extract(16,8),extract(8,8),extract(0,8)) end
+ function streams.tocardinal2(n)   return char(extract(n,8,8),extract(n,0,8)) end
+ function streams.tocardinal3(n)   return char(extract(n,16,8),extract(n,8,8),extract(n,0,8)) end
+ function streams.tocardinal4(n)   return char(extract(n,24,8),extract(n,16,8),extract(n,8,8),extract(n,0,8)) end
     streams.tocardinal1le=char
- function streams.tocardinal2le(n) return char(extract(0,8),extract(8,8)) end
- function streams.tocardinal3le(n) return char(extract(0,8),extract(8,8),extract(16,8)) end
- function streams.tocardinal4le(n) return char(extract(0,8),extract(8,8),extract(16,8),extract(24,8)) end
+ function streams.tocardinal2le(n) return char(extract(n,0,8),extract(n,8,8)) end
+ function streams.tocardinal3le(n) return char(extract(n,0,8),extract(n,8,8),extract(n,16,8)) end
+ function streams.tocardinal4le(n) return char(extract(n,0,8),extract(n,8,8),extract(n,16,8),extract(n,24,8)) end
 end
 if not streams.readcstring then
  local readchar=streams.readchar
@@ -701,6 +701,7 @@ local p_prune_intospace=Cs (noleading*(notrailing+intospace+1     )^0 )
 local p_retain_normal=Cs ((normalline+normalempty )^0 )
 local p_retain_collapse=Cs ((normalline+doubleempty )^0 )
 local p_retain_noempty=Cs ((normalline+singleempty )^0 )
+local p_collapse_all=Cs (stripstart*(stripend+((whitespace+newline)^1/" ")+1)^0 )
 local striplinepatterns={
  ["prune"]=p_prune_normal,
  ["prune and collapse"]=p_prune_collapse,
@@ -709,6 +710,7 @@ local striplinepatterns={
  ["retain"]=p_retain_normal,
  ["retain and collapse"]=p_retain_collapse,
  ["retain and no empty"]=p_retain_noempty,
+ ["collapse all"]=p_collapse_all,
  ["collapse"]=patterns.collapser,
 }
 setmetatable(striplinepatterns,{ __index=function(t,k) return p_prune_collapse end })
@@ -2090,7 +2092,7 @@ else
     local v=t[0]
     if v then
      m=m+1
-     r[m]="[0]='"
+     r[m]="[0]="
      if type(v)=="table" then
       fastserialize(v)
      else
@@ -2879,7 +2881,9 @@ function parsers.groupedsplitat(symbol,withaction)
  if not pattern then
   local symbols=S(symbol)
   local separator=space^0*symbols*space^0
-  local value=lbrace*C((nobrace+nestedbraces)^0)*rbrace+C((nestedbraces+(1-(space^0*(symbols+P(-1)))))^0)
+  local value=lbrace*C((nobrace+nestedbraces)^0)
+*(rbrace*(#symbols+P(-1))) 
++C((nestedbraces+(1-(space^0*(symbols+P(-1)))))^0)
   if withaction then
    local withvalue=Carg(1)*value/function(f,s) return f(s) end
    pattern=spaces*withvalue*(separator*withvalue)^0
@@ -2965,7 +2969,17 @@ hashes.settings_to_set=table.setmetatableindex(function(t,k)
  t[k]=v
  return v
 end)
-getmetatable(hashes.settings_to_set).__mode="kv" 
+function parsers.settings_to_set(str)
+ return str and lpegmatch(pattern,str) or {}
+end
+local pattern=Ct((C((1-S(", "))^1)*S(", ")^0)^1)
+hashes.settings_to_list=table.setmetatableindex(function(t,k) 
+ local v=k and lpegmatch(pattern,k) or {}
+ t[k]=v
+ return v
+end)
+getmetatable(hashes.settings_to_set ).__mode="kv" 
+getmetatable(hashes.settings_to_list).__mode="kv" 
 function parsers.simple_hash_to_string(h,separator)
  local t={}
  local tn=0
@@ -3298,6 +3312,8 @@ local dimenfactors=allocate {
  ["pc"]=(1/12)/65536,
  ["dd"]=(1157/1238)/65536,
  ["cc"]=(1157/14856)/65536,
+ ["es"]=(9176/129)/65536,
+ ["ts"]=(4588/645)/65536,
 }
 local f_none=formatters["%s%s"]
 local f_true=formatters["%0.5F%s"]
@@ -3323,12 +3339,13 @@ function number.topoints   (n,fmt) return numbertodimen(n,"pt",fmt) end
 function number.toinches   (n,fmt) return numbertodimen(n,"in",fmt) end
 function number.tocentimeters (n,fmt) return numbertodimen(n,"cm",fmt) end
 function number.tomillimeters (n,fmt) return numbertodimen(n,"mm",fmt) end
-function number.toscaledpoints(n,fmt) return numbertodimen(n,"sp",fmt) end
 function number.toscaledpoints(n)  return   n.."sp"   end
 function number.tobasepoints  (n,fmt) return numbertodimen(n,"bp",fmt) end
 function number.topicas    (n,fmt) return numbertodimen(n "pc",fmt) end
 function number.todidots   (n,fmt) return numbertodimen(n,"dd",fmt) end
 function number.tociceros  (n,fmt) return numbertodimen(n,"cc",fmt) end
+function number.toediths   (n,fmt) return numbertodimen(n,"es",fmt) end
+function number.totoves    (n,fmt) return numbertodimen(n,"ts",fmt) end
 local amount=(S("+-")^0*R("09")^0*P(".")^0*R("09")^0)+Cc("0")
 local unit=R("az")^1+P("%")
 local dimenpair=amount/tonumber*(unit^1/dimenfactors+Cc(1)) 
@@ -3342,7 +3359,7 @@ setmetatableindex(dimenfactors,function(t,s)
 end)
 local stringtodimen 
 local amount=S("+-")^0*R("09")^0*S(".,")^0*R("09")^0
-local unit=P("pt")+P("cm")+P("mm")+P("sp")+P("bp")+P("in")+P("pc")+P("dd")+P("cc")+P("nd")+P("nc")
+local unit=P("pt")+P("cm")+P("mm")+P("sp")+P("bp")+P("es")+P("ts")+P("pc")+P("dd")+P("cc")+P("in")
 local validdimen=amount*unit
 lpeg.patterns.validdimen=validdimen
 local dimensions={}
@@ -3392,8 +3409,9 @@ function dimensions.__index(tab,key)
  end
  return 1/d
 end
-   dimenfactors["ex"]=4*1/65536 
-   dimenfactors["em"]=10*1/65536
+   dimenfactors["ex"]=4/65536 
+   dimenfactors["em"]=10/65536
+   dimenfactors["eu"]=(9176/129)/65536
 local known={} setmetatable(known,{ __mode="v" })
 function dimen(a)
  if a then
@@ -4984,11 +5002,13 @@ end
 local files=utilities.files
 local openfile=files.open
 local closefile=files.close
+local getsize=files.size
 local readstring=files.readstring
 local readcardinal2=files.readcardinal2le
 local readcardinal4=files.readcardinal4le
 local setposition=files.setposition
 local getposition=files.getposition
+local skipbytes=files.skip
 local band=bit32.band
 local rshift=bit32.rshift
 local lshift=bit32.lshift
@@ -5011,6 +5031,55 @@ local openzipfile,closezipfile,unzipfile,foundzipfile,getziphash,getziplist  do
    handle=openfile(name,0),
   }
  end
+ local function update(handle,data)
+  position=data.offset
+  setposition(handle,position)
+  local signature=readstring(handle,4)
+  if signature=="PK\3\4" then
+   local version=readcardinal2(handle)
+   local flag=readcardinal2(handle)
+   local method=readcardinal2(handle)
+          skipbytes(handle,4)
+   local crc32=readcardinal4(handle)
+   local compressed=readcardinal4(handle)
+   local uncompressed=readcardinal4(handle)
+   local namelength=readcardinal2(handle)
+   local extralength=readcardinal2(handle)
+   local filename=readstring(handle,namelength)
+   local descriptor=band(flag,8)~=0
+   local encrypted=band(flag,1)~=0
+   local acceptable=method==0 or method==8
+   local skipped=0
+   local size=0
+   if encrypted then
+    size=readcardinal2(handle)
+    skipbytes(handle,size)
+    skipped=skipped+size+2
+    skipbytes(8)
+    skipped=skipped+8
+    size=readcardinal2(handle)
+    skipbytes(handle,size)
+    skipped=skipped+size+2
+    size=readcardinal4(handle)
+    skipbytes(handle,size)
+    skipped=skipped+size+4
+    size=readcardinal2(handle)
+    skipbytes(handle,size)
+    skipped=skipped+size+2
+   end
+   if acceptable then
+     if        filename~=data.filename  then
+    else
+     position=position+30+namelength+extralength+skipped
+     data.position=position
+     return position
+    end
+   else
+   end
+  end
+  data.position=false
+  return false
+ end
  local function collect(z)
   if not z.list then
    local list={}
@@ -5018,72 +5087,68 @@ local openzipfile,closezipfile,unzipfile,foundzipfile,getziphash,getziplist  do
    local position=0
    local index=0
    local handle=z.handle
-   while true do
-    setposition(handle,position)
-    local signature=readstring(handle,4)
-    if signature=="PK\3\4" then
-     local version=readcardinal2(handle)
-     local flag=readcardinal2(handle)
-     local method=readcardinal2(handle)
-     local filetime=readcardinal2(handle)
-     local filedate=readcardinal2(handle)
-     local crc32=readcardinal4(handle)
-     local compressed=readcardinal4(handle)
-     local uncompressed=readcardinal4(handle)
-     local namelength=readcardinal2(handle)
-     local extralength=readcardinal2(handle)
-     local filename=readstring(handle,namelength)
-     local descriptor=band(flag,8)~=0
-     local encrypted=band(flag,1)~=0
-     local acceptable=method==0 or method==8
-     local skipped=0
-     local size=0
-     if encrypted then
-      size=readcardinal2(handle)
-      skipbytes(size)
-      skipped=skipped+size+2
-      skipbytes(8)
-      skipped=skipped+8
-      size=readcardinal2(handle)
-      skipbytes(size)
-      skipped=skipped+size+2
-      size=readcardinal4(handle)
-      skipbytes(size)
-      skipped=skipped+size+4
-      size=readcardinal2(handle)
-      skipbytes(size)
-      skipped=skipped+size+2
+   local size=getsize(handle)
+   for i=size-4,size-64*1024,-1 do
+    setposition(handle,i)
+    local enddirsignature=readcardinal4(handle)
+    if enddirsignature==0x06054B50 then
+     local thisdisknumber=readcardinal2(handle)
+     local centraldisknumber=readcardinal2(handle)
+     local thisnofentries=readcardinal2(handle)
+     local totalnofentries=readcardinal2(handle)
+     local centralsize=readcardinal4(handle)
+     local centraloffset=readcardinal4(handle)
+     local commentlength=readcardinal2(handle)
+     local comment=readstring(handle,length)
+     if size-i>=22 then
+      if thisdisknumber==centraldisknumber then
+       setposition(handle,centraloffset)
+       while true do
+        if readcardinal4(handle)==0x02014B50 then
+                skipbytes(handle,4)
+         local flag=readcardinal2(handle)
+         local method=readcardinal2(handle)
+                skipbytes(handle,4)
+         local crc32=readcardinal4(handle)
+         local compressed=readcardinal4(handle)
+         local uncompressed=readcardinal4(handle)
+         local namelength=readcardinal2(handle)
+         local extralength=readcardinal2(handle)
+         local commentlength=readcardinal2(handle)
+                skipbytes(handle,8)
+         local headeroffset=readcardinal4(handle)
+         local filename=readstring(handle,namelength)
+                skipbytes(handle,extralength+commentlength)
+         local descriptor=band(flag,8)~=0
+         local encrypted=band(flag,1)~=0
+         local acceptable=method==0 or method==8
+         if acceptable then
+          index=index+1
+          local data={
+           filename=filename,
+           index=index,
+           position=nil,
+           method=method,
+           compressed=compressed,
+           uncompressed=uncompressed,
+           crc32=crc32,
+           encrypted=encrypted,
+           offset=headeroffset,
+          }
+          hash[filename]=data
+          list[index]=data
+         end
+        else
+         break
+        end
+       end
+      end
+      break
      end
-     position=position+30+namelength+extralength+skipped
-     if descriptor then
-      setposition(handle,position+compressed)
-      crc32=readcardinal4(handle)
-      compressed=readcardinal4(handle)
-      uncompressed=readcardinal4(handle)
-     end
-     if acceptable then
-      index=index+1
-      local data={
-       filename=filename,
-       index=index,
-       position=position,
-       method=method,
-       compressed=compressed,
-       uncompressed=uncompressed,
-       crc32=crc32,
-       encrypted=encrypted,
-      }
-      hash[filename]=data
-      list[index]=data
-     else
-     end
-     position=position+compressed
-    else
-     break
     end
-    z.list=list
-    z.hash=hash
    end
+   z.list=list
+   z.hash=hash
   end
  end
  function getziplist(z)
@@ -5122,7 +5187,10 @@ local openzipfile,closezipfile,unzipfile,foundzipfile,getziphash,getziplist  do
    local handle=z.handle
    local position=data.position
    local compressed=data.compressed
-   if compressed>0 then
+   if position==nil then
+    position=update(handle,data)
+   end
+   if position and compressed>0 then
     setposition(handle,position)
     local result=readstring(handle,compressed)
     if data.method==8 then
@@ -5333,8 +5401,10 @@ if xzip then
    closezip(zipf)
   end
  end
- local function unzipdir(zipname,path,verbose)
+ local function unzipdir(zipname,path,verbose,collect,validate)
   if type(zipname)=="table" then
+   validate=zipname.validate
+   collect=zipname.collect
    verbose=zipname.verbose
    path=zipname.path
    zipname=zipname.zipname
@@ -5355,34 +5425,47 @@ if xzip then
     local done=0
     local steps=verbose=="steps"
     local time=steps and osclock()
+    if collect then
+     collect={}
+    else
+     collect=false
+    end
     for i=1,count do
      local l=list[i]
      local n=l.filename
-     local d=unzipfile(z,n) 
-     if d then
-      local p=filejoin(path,n)
-      if mkdirs(dirname(p)) then
-       if steps then
-        total=total+#d
-        done=done+1
-        if done>=step then
-         done=0
-         logwriter(format("%4i files of %4i done, %10i bytes, %0.3f seconds",i,count,total,osclock()-time))
+     if not validate or validate(n) then
+      local d=unzipfile(z,n) 
+      if d then
+       local p=filejoin(path,n)
+       if mkdirs(dirname(p)) then
+        if steps then
+         total=total+#d
+         done=done+1
+         if done>=step then
+          done=0
+          logwriter(format("%4i files of %4i done, %10i bytes, %0.3f seconds",i,count,total,osclock()-time))
+         end
+        elseif verbose then
+         logwriter(n)
         end
-       elseif verbose then
-        logwriter(n)
+        savedata(p,d)
+        if collect then
+         collect[#collect+1]=p
+        end
        end
-       savedata(p,d)
+      else
+       logwriter(format("problem with file %s",n))
       end
      else
-      logwriter(format("problem with file %s",n))
      end
     end
     if steps then
      logwriter(format("%4i files of %4i done, %10i bytes, %0.3f seconds",count,count,total,osclock()-time))
     end
     closezipfile(z)
-    return true
+    if collect then
+     return collect
+    end
    else
     closezipfile(z)
    end

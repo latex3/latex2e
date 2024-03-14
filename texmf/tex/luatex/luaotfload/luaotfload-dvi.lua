@@ -6,8 +6,8 @@
 
 assert(luaotfload_module, "This is a part of luaotfload and should not be loaded independently") { 
     name          = "luaotfload-dvi",
-    version       = "3.23",       --TAGVERSION
-    date          = "2022-10-03", --TAGDATE
+    version       = "3.28",       --TAGVERSION
+    date          = "2024-02-14", --TAGDATE
     description   = "luaotfload submodule / DVI",
     license       = "GPL v2.0",
     author        = "Marcel Krüger",
@@ -31,6 +31,9 @@ local vlist_t = node.id'vlist'
 local disc_t = node.id'disc'
 local glyph_t = node.id'glyph'
 
+require'luaotfload-configuration'
+local configuration = config.luaotfload
+
 -- DVI output support
 --
 -- When writing DVI files, we can't assume that the DVI reader has access to our
@@ -48,7 +51,6 @@ local glyph_t = node.id'glyph'
 -- mapped_fonts maps fontids from the user to fontids used in the DVI file
 local mapped_fonts = setmetatable({}, {__index = function(t, fid)
   local font = getfont(fid)
-  print(fid, font and font.fullname)
   local mapped = font and font.backend_font or false
   t[fid] = mapped
   return mapped
@@ -83,7 +85,7 @@ function full_hprocess(head)
         end
         if last_mapping then
           local mapped = last_mapping[c]
-          if mapped then setfont(n, mapped_font, mapped) end
+          if mapped then setfont(n, last_mapped_font, mapped) end
         end
       end
     elseif id == glyph_t then
@@ -94,7 +96,6 @@ function full_hprocess(head)
       end
       if last_mapping then
         local mapped = last_mapping[c]
-        print(c, f, mapped)
         if mapped then setfont(n, last_mapped_font, mapped) end
       end
     end
@@ -134,7 +135,11 @@ local function process(head, font)
   end end
 end
 local function manipulate(tfmdata, _, dvi_kind)
-  if dvi_kind ~= 'dvisvgm' then
+  if dvi_kind == 'xdvipsk' then
+    -- xdvipsk wants to read tea leaves instead of using reasonable interfaces.
+    -- They will have to make sense of whatever output this produces.
+    return
+  elseif dvi_kind ~= 'dvisvgm' then
     texio.write_nl(string.format('WARNING (luaotfload): Unsupported DVI backend %q, falling back to dvisvgm.', dvi_kind))
   end
   -- Legacy fonts can be written to the DVI file directly
@@ -180,13 +185,14 @@ end
 
 fonts.constructors.features.otf.register {
   name = "dvifont",
-  default = "dvisvgm",
+  default = configuration.run.default_dvi_driver,
   manipulators = {
     node = manipulate,
     base = manipulate,
   },
-  processors = {
-    node = process,
-    base = process,
-  },
+  -- Processors are not needed since we are using pre_shipout_filter
+  -- processors = {
+  --   node = process,
+  --   base = process,
+  -- },
 }

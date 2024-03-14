@@ -25,8 +25,8 @@ lualibs = lualibs or { }
 
 lualibs.module_info = {
   name          = "lualibs",
-  version       = "2.75",       --TAGVERSION
-    date        = "2022-10-04", --TAGDATE
+  version       = "2.76",       --TAGVERSION
+    date        = "2023-07-13", --TAGDATE
   description   = "ConTeXt Lua standard libraries.",
   author        = "Hans Hagen, PRAGMA-ADE, Hasselt NL & Elie Roux & Philipp Gesang",
   copyright     = "PRAGMA ADE / ConTeXt Development Team",

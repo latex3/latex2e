@@ -5,8 +5,8 @@
 do -- block to avoid to many local variables error
  assert(luaotfload_module, "This is a part of luaotfload and should not be loaded independently") { 
      name          = "luaotfload-harf-define",
-     version       = "3.23",       --TAGVERSION
-     date          = "2022-10-03", --TAGDATE
+     version       = "3.28",       --TAGVERSION
+     date          = "2024-02-14", --TAGDATE
      description   = "luaotfload submodule / HarfBuzz font loading",
      license       = "GPL v2.0",
      author        = "Khaled Hosny, Marcel Krüger",
@@ -76,6 +76,18 @@ local get_designsize do
   end
 end
 
+local keyhash do
+  local formatstring = string.rep('%02x', 256/8)
+  local sha256 = sha2.digest256
+  local format = string.format
+  local byte = string.byte
+  keyhash = setmetatable({}, {__index = function(t, k)
+    local h = format(formatstring, byte(sha256(k), 1, -1))
+    t[k] = h
+    return h
+  end})
+end
+
 local containers = luaotfload.fontloader.containers
 local hbcacheversion = 1.4
 local fontcache = containers.define("fonts", "hb", hbcacheversion, true)
@@ -93,7 +105,7 @@ end
 local function loadfont(spec)
   local path, sub = spec.resolved, spec.sub or 1
 
-  local key = gsub(string.format("%s:%d:%s", path, sub, instance), "[/\\]", ":")
+  local key = string.format("%s:%d:%s", path, sub, instance)
 
   local attributes = lfs.attributes(path)
   if not attributes then return end
@@ -182,6 +194,10 @@ local function loadfont(spec)
   else
     varkey = ''
   end
+
+  -- Paths get get rather long and contain many characters which can not appear in filenames.
+  -- Therefore we hash the key to get it into a more regular form
+  key = keyhash[key]
 
   local cached = containers.read(fontcache, key)
   local iscached = cached and cached.date == date and cached.size == size
