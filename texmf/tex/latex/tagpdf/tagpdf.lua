@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.98v",       --TAGVERSION
-    date          = "2024-02-04", --TAGDATE
+    version       = "0.98x",       --TAGVERSION
+    date          = "2024-02-29", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -328,7 +328,7 @@ if tex.outputmode == 0 then
  else -- assume a dvips variant
   function __tag_backend_create_bmc_node (tag)
     local bmcnode = nodenew("whatsit","special")
-    bmcnode.data = "ps:SDict begin mark/"..tag.." BMC pdfmark end"
+    bmcnode.data = "ps:SDict begin mark/"..tag.." /BMC pdfmark end"
     return bmcnode
   end
  end
@@ -358,7 +358,7 @@ if tex.outputmode == 0 then
  else -- assume a dvips variant
   function __tag_backend_create_bdc_node (tag,dict)
     local bdcnode = nodenew("whatsit","special")
-    bdcnode.data = "ps:SDict begin mark/"..tag.."<<"..dict..">> BDC pdfmark end"
+    bdcnode.data = "ps:SDict begin mark/"..tag.."<<"..dict..">> /BDC pdfmark end"
     return bdcnode
   end
  end
@@ -378,7 +378,7 @@ local function __tag_insert_bdc_node (head,current,tag,dict)
 end
 local function __tag_pdf_object_ref (name)
    local tokenname = 'c__pdf_backend_object_'..name..'_int'
-   local object = token.create(tokenname).index..' 0 R'
+   local object = token.create(tokenname).mode ..' 0 R'
    return object
 end
 ltx.__tag.func.pdf_object_ref=__tag_pdf_object_ref
@@ -806,6 +806,7 @@ function ltx.__tag.func.fill_parent_tree_line (page)
      end
     else
       ltx.__tag.trace.log ("INFO PARENTTREE-NO-DATA: page "..page,3)
+      numsentry = pdfpage.." []"
     end
     return numsentry
 end
