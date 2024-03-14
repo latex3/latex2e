@@ -17,7 +17,7 @@ local pfb          = fonts.handlers.pfb
 local hashes       = fonts.hashes
 local identifiers  = hashes.identifiers
 
-local version      = otf.version or 0.011
+local version      = otf.version or 0.015
 local shapescache  = containers.define("fonts", "shapes",  version, true)
 local streamscache = containers.define("fonts", "streams", version, true)
 
@@ -150,6 +150,8 @@ end
 local readers   = otf.readers
 local cleanname = otf.readers.helpers.cleanname
 
+-- todo: shared hash for this but not accessed often
+
 local function makehash(filename,sub,instance)
     local name = cleanname(file.basename(filename))
     if instance then
@@ -234,17 +236,21 @@ local function loadstreams(cache,filename,sub,instance)
             if data then
                 local glyphs  = data.glyphs
                 local streams = { }
+             -- local widths  = { }
                 if glyphs then
                     for i=0,#glyphs do
                         local glyph = glyphs[i]
                         if glyph then
                             streams[i] = glyph.stream or ""
+                         -- widths [i] = glyph.width  or 0
                         else
                             streams[i] = ""
+                         -- widths [i] = 0
                         end
                     end
                 end
                 data.streams = streams
+             -- data.widths  = widths -- maybe more reliable!
                 data.glyphs  = nil
                 data.size    = size
                 data.format  = data.format or (kind == "otf" and "opentype") or "truetype"
@@ -259,8 +265,11 @@ local function loadstreams(cache,filename,sub,instance)
             local names, encoding, streams, metadata = pfb.loadvector(filename,false,true)
             if streams then
                 local fontbbox = metadata.fontbbox or { 0, 0, 0, 0 }
+             -- local widths   = { }
                 for i=0,#streams do
-                    streams[i] = streams[i].stream or "\14"
+                    local s = streams[i]
+                    streams[i] = s.stream or "\14"
+                 -- widths [i] = s.width  or 0
                 end
                 data = {
                     filename   = filename,
@@ -268,6 +277,7 @@ local function loadstreams(cache,filename,sub,instance)
                     time       = time,
                     format     = "type1",
                     streams    = streams,
+                 -- widths     = widths,
                     fontheader = {
                         fontversion = metadata.version,
                         units       = 1000, -- can this be different?
@@ -346,7 +356,8 @@ local function getstreamhash(fontid)
     local fontdata = identifiers[fontid]
     if fontdata then
         local properties = fontdata.properties
-        return makehash(properties.filename,properties.subfont,properties.instance), fontdata
+        local fonthash   = makehash(properties.filename,properties.subfont,properties.instance)
+        return fonthash, fontdata
     end
 end
 

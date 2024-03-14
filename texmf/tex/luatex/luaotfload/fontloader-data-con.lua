@@ -13,19 +13,17 @@ local trace_cache      = false  trackers.register("resolvers.cache",      functi
 local trace_containers = false  trackers.register("resolvers.containers", function(v) trace_containers = v end)
 local trace_storage    = false  trackers.register("resolvers.storage",    function(v) trace_storage    = v end)
 
---[[ldx--
-<p>Once we found ourselves defining similar cache constructs several times,
-containers were introduced. Containers are used to collect tables in memory and
-reuse them when possible based on (unique) hashes (to be provided by the calling
-function).</p>
-
-<p>Caching to disk is disabled by default. Version numbers are stored in the
-saved table which makes it possible to change the table structures without
-bothering about the disk cache.</p>
-
-<p>Examples of usage can be found in the font related code. This code is not
-ideal but we need it in generic too so we compromise.</p>
---ldx]]--
+-- Once we found ourselves defining similar cache constructs several times,
+-- containers were introduced. Containers are used to collect tables in memory and
+-- reuse them when possible based on (unique) hashes (to be provided by the calling
+-- function).
+--
+-- Caching to disk is disabled by default. Version numbers are stored in the saved
+-- table which makes it possible to change the table structures without bothering
+-- about the disk cache.
+--
+-- Examples of usage can be found in the font related code. This code is not ideal
+-- but we need it in generic too so we compromise.
 
 containers              = containers or { }
 local containers        = containers
@@ -56,7 +54,7 @@ local mt = {
     __storage__ = true
 }
 
-function containers.define(category, subcategory, version, enabled)
+function containers.define(category, subcategory, version, enabled, reload)
     if category and subcategory then
         local c = allocated[category]
         if not c then
@@ -70,6 +68,7 @@ function containers.define(category, subcategory, version, enabled)
                 subcategory = subcategory,
                 storage     = { },
                 enabled     = enabled,
+                reload      = reload,
                 version     = version or math.pi, -- after all, this is TeX
                 trace       = false,
              -- writable    = getwritablepath  and getwritablepath (category,subcategory) or { "." },
@@ -97,7 +96,8 @@ end
 
 function containers.read(container,name)
     local storage = container.storage
-    local stored = storage[name]
+    local reload  = container.reload
+    local stored  = not reload and storage[name]
     if not stored and container.enabled and caches and containers.usecache then
         stored = loaddatafromcache(container.readables,name,container.writable)
         if stored and stored.cache_version == container.version then

@@ -7,11 +7,9 @@ if not modules then modules = { } end modules ['font-afk'] = {
     dataonly  = true,
 }
 
---[[ldx--
-<p>For ligatures, only characters with a code smaller than 128 make sense,
-anything larger is encoding dependent. An interesting complication is that a
-character can be in an encoding twice but is hashed once.</p>
---ldx]]--
+-- For ligatures, only characters with a code smaller than 128 make sense, anything
+-- larger is encoding dependent. An interesting complication is that a character can
+-- be in an encoding twice but is hashed once.
 
 local allocate = utilities.storage.allocate
 

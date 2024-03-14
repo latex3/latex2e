@@ -5,8 +5,8 @@
 do
  assert(luaotfload_module, "This is a part of luaotfload and should not be loaded independently") { 
      name          = "luaotfload-harf-var-cff2",
-     version       = "3.23",       --TAGVERSION
-     date          = "2022-10-03", --TAGDATE
+     version       = "3.28",       --TAGVERSION
+     date          = "2024-02-14", --TAGDATE
      description   = "luaotfload submodule / CFF2 table processing",
      license       = "GPL v2.0",
      author        = "Marcel Krüger",
@@ -51,9 +51,6 @@ local function parse_real(cs, offset)
 end
 
 local function get_number(result)
-  if #result ~= 1 then
-    print(require'inspect'(result))
-  end
   assert(#result == 1)
   local num = result[1]
   result[1] = nil
@@ -231,23 +228,19 @@ local function parse_charstring(buf, start, after, globalsubrs, subrs, result)
       for i = before + n + 1, #lastresult do
         lastresult[i] = nil
       end
-    elseif cmd == 12 then
-      start = start+1
-      cmd = buf:byte(start)
-      lastresult[1] = -cmd-1
-      lastresult = {false}
-      result[#result+1] = lastresult
-    elseif cmd == 19 or cmd == 20 then
-      if #result == 1 then
-        lastresult = {}
-        result[#result+1] = lastresult
-      end
-      lastresult[1] = cmd
-      local newi = start+(result.stemcount+7)//8
-      lastresult[2] = buf:sub(start+1, newi)
-      start = newi
     else
-      if cmd == 21 and #result == 1 then
+      if cmd == 12 then
+        start = start+1
+        cmd = -buf:byte(start)-1
+      elseif cmd == 19 or cmd == 20 then
+        if #result == 1 then
+          lastresult = {}
+          result[#result+1] = lastresult
+        end
+        local newi = start+(result.stemcount+7)//8
+        lastresult[2] = buf:sub(start+1, newi)
+        start = newi
+      elseif cmd == 21 and #result == 1 then
         table.insert(result, 1, {false})
         if #lastresult == 4 then
           result[1][2] = lastresult[2]

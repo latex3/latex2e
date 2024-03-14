@@ -269,6 +269,7 @@ local p_prune_intospace = Cs ( noleading  * ( notrailing + intospace  + 1       
 local p_retain_normal   = Cs (              (              normalline + normalempty )^0 )
 local p_retain_collapse = Cs (              (              normalline + doubleempty )^0 )
 local p_retain_noempty  = Cs (              (              normalline + singleempty )^0 )
+local p_collapse_all    = Cs ( stripstart * ( stripend   + ((whitespace+newline)^1/" ") + 1)^0 )
 
 -- function striplines(str,prune,collapse,noempty)
 --     if prune then
@@ -298,6 +299,7 @@ local striplinepatterns = {
     ["retain"]              = p_retain_normal,
     ["retain and collapse"] = p_retain_collapse,
     ["retain and no empty"] = p_retain_noempty,
+    ["collapse all"]        = p_collapse_all,
     ["collapse"]            = patterns.collapser,
 }
 
@@ -312,6 +314,9 @@ end
 function strings.collapse(str) -- maybe also in strings
     return str and lpegmatch(p_prune_intospace,str) or str
 end
+
+-- local s = "\naa\n\naa\na   a\n\n"
+-- print("["..strings.striplines(s,"collapse all").."]")
 
 -- also see: string.collapsespaces
 
