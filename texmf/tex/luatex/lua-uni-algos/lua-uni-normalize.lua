@@ -1,5 +1,5 @@
 -- lua-uni-normalize.lua
--- Copyright 2020--2021 Marcel Krüger
+-- Copyright 2020--2022 Marcel Krüger
 --
 -- This work may be distributed and/or modified under the
 -- conditions of the LaTeX Project Public License, either version 1.3
@@ -115,7 +115,7 @@ local ccc, composition_mapping, decomposition_mapping, compatibility_mapping, nf
     local first_decomp = decomposition_mapping[first]
     if not first_decomp then return false end
     if fixup_decomp(first_decomp) then
-      print('nested', first)
+      -- print('nested', first)
     end
     move(decomp, 2, #decomp, #first_decomp + 1)
     move(first_decomp, 1, #first_decomp, 1, decomp)
