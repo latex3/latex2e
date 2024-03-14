@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{calc}
-\ProvidesExplClass{l3doc}{2024-02-20}{}
+\ProvidesExplClass{l3doc}{2024-03-14}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -768,11 +768,9 @@
       { \hyperlink { explTF } }
       { \mbox }
       {
-        \color{black}
         \itshape TF
         \makebox[0pt][r]
           {
-            \cs_if_exist:NT \Codedoc@explTF { \color{red} }
             \underline { \phantom{\itshape TF} \kern-0.1em }
           }
       }
@@ -1487,18 +1485,16 @@
         \tl_set:Nn \l__codedoc_tmpa_tl {#1}
         \tl_replace_all:NnV \l__codedoc_tmpa_tl
           { ~ } \c_catcode_other_space_tl
-        \__codedoc_macroname_prefix:o \l__codedoc_tmpa_tl
-        \__codedoc_macroname_suffix:N #2
+        \__codedoc_print_macroname_aux:on
+          \l__codedoc_tmpa_tl { \bool_if:NT #2 { \__codedoc_typeset_TF: } }
       }
   }
-\cs_new_protected:Npn \__codedoc_macroname_prefix:n #1
+\cs_new_protected:Npn \__codedoc_print_macroname_aux:nn #1#2
   {
     \__codedoc_if_macro_internal:nTF {#1}
-      { \__codedoc_typeset_aux:n {#1} } {#1}
+      { \__codedoc_typeset_aux:n { #1 #2 } } { #1 #2 }
   }
-\cs_generate_variant:Nn \__codedoc_macroname_prefix:n { o }
-\cs_new_protected:Npn \__codedoc_macroname_suffix:N #1
-  { \bool_if:NTF #1 { \__codedoc_typeset_TF: } { } }
+\cs_generate_variant:Nn \__codedoc_print_macroname_aux:nn { o }
 \providecommand \MacroLongFont
   {
     \fontfamily{lmtt}\fontseries{lc}\small
