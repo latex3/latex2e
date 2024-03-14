@@ -741,8 +741,24 @@ end
 
 -- not used in context but was in luatex once:
 
-local symlinkattributes = lfs.symlinkattributes
+do
 
-function lfs.readlink(name)
-    return symlinkattributes(name,"target") or nil
+    local symlinktarget     = lfs.symlinktarget     -- luametatex (always returns string)
+    local symlinkattributes = lfs.symlinkattributes -- luatex     (can return nil)
+
+    if symlinktarget then
+        function lfs.readlink(name)
+            local target = symlinktarget(name)
+            return name ~= target and name or nil
+        end
+    elseif symlinkattributes then
+        function lfs.readlink(name)
+            return symlinkattributes(name,"target") or nil
+        end
+    else
+        function lfs.readlink(name)
+            return nil
+        end
+    end
+
 end

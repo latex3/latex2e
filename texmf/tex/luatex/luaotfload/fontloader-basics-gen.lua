@@ -19,6 +19,7 @@ local formatters, split, format, dump = string.formatters, string.split, string.
 local loadfile, type = loadfile, type
 local setmetatable, getmetatable, collectgarbage = setmetatable, getmetatable, collectgarbage
 local floor = math.floor
+local mkdirp = lfs.mkdirp or lfs.mkdirs
 
 local dummyfunction = function()
 end
@@ -231,7 +232,7 @@ do
     for i=1,#cachepaths do
         local cachepath = cachepaths[i]
         if not lfs.isdir(cachepath) then
-            lfs.mkdirs(cachepath) -- needed for texlive and latex
+            mkdirp(cachepath .. '/') -- needed for texlive and latex
             if lfs.isdir(cachepath) then
                 logs.report("system","creating cache path '%s'",cachepath)
             end

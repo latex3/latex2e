@@ -5,8 +5,8 @@
 
 assert(luaotfload_module, "This is a part of luaotfload and should not be loaded independently") { 
     name          = "luaotfload-notdef",
-    version       = "3.23",       --TAGVERSION
-    date          = "2022-10-03", --TAGDATE
+    version       = "3.28",       --TAGVERSION
+    date          = "2024-02-14", --TAGDATE
     description   = "luaotfload submodule / notdef",
     license       = "GPL v2.0",
     author        = "Marcel Krüger"
@@ -87,6 +87,8 @@ local ignorable_codepoints do
     ignorable_codepoints[i] = nil
   end
 end
+
+ignorable_codepoints[0xAD] = nil
 
 local function setnotdef(tfmdata, factor)
   local desc = tfmdata.shared.rawdata.descriptions
