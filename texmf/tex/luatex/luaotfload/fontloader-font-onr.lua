@@ -7,18 +7,16 @@ if not modules then modules = { } end modules ['font-onr'] = {
     license   = "see context related readme files"
 }
 
---[[ldx--
-<p>Some code may look a bit obscure but this has to do with the fact that we also use
-this code for testing and much code evolved in the transition from <l n='tfm'/> to
-<l n='afm'/> to <l n='otf'/>.</p>
-
-<p>The following code still has traces of intermediate font support where we handles
-font encodings. Eventually font encoding went away but we kept some code around in
-other modules.</p>
-
-<p>This version implements a node mode approach so that users can also more easily
-add features.</p>
---ldx]]--
+-- Some code may look a bit obscure but this has to do with the fact that we also
+-- use this code for testing and much code evolved in the transition from TFM to AFM
+-- to OTF.
+--
+-- The following code still has traces of intermediate font support where we handles
+-- font encodings. Eventually font encoding went away but we kept some code around
+-- in other modules.
+--
+-- This version implements a node mode approach so that users can also more easily
+-- add features.
 
 local fonts, logs, trackers, resolvers = fonts, logs, trackers, resolvers
 
@@ -44,12 +42,9 @@ afm.readers              = readers
 
 afm.version              = 1.513 -- incrementing this number one up will force a re-cache
 
---[[ldx--
-<p>We start with the basic reader which we give a name similar to the built in <l n='tfm'/>
-and <l n='otf'/> reader.</p>
-<p>We use a new (unfinished) pfb loader but I see no differences between the old
-and new vectors (we actually had one bad vector with the old loader).</p>
---ldx]]--
+-- We start with the basic reader which we give a name similar to the built in TFM
+-- and OTF reader. We use a PFB loader but I see no differences between the old and
+-- new vectors (we actually had one bad vector with the old loader).
 
 local get_indexes, get_shapes
 
@@ -211,6 +206,8 @@ do
       + P(1)
     )^0 * Carg(1)
 
+    -- cache this?
+
     local function loadpfbvector(filename,shapestoo,streams)
         -- for the moment limited to encoding only
 
@@ -303,11 +300,10 @@ do
 
 end
 
---[[ldx--
-<p>We start with the basic reader which we give a name similar to the built in <l n='tfm'/>
-and <l n='otf'/> reader. We only need data that is relevant for our use. We don't support
-more complex arrangements like multiple master (obsolete), direction specific kerning, etc.</p>
---ldx]]--
+-- We start with the basic reader which we give a name similar to the built in TFM
+-- and OTF reader. We only need data that is relevant for our use. We don't support
+-- more complex arrangements like multiple master (obsolete), direction specific
+-- kerning, etc.
 
 local spacer     = patterns.spacer
 local whitespace = patterns.whitespace

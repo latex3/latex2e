@@ -72,7 +72,7 @@ local function tounicode16(unicode)
         return s_unknown
     else
         unicode = unicode - 0x10000
-        return f_double(idiv(k,0x400)+0xD800,unicode%0x400+0xDC00)
+        return f_double(idiv(unicode,0x400)+0xD800,unicode%0x400+0xDC00)
     end
 end
 
@@ -93,7 +93,7 @@ local function tounicode16sequence(unicodes)
             t[l] = s_unknown
         else
             u = u - 0x10000
-            t[l] = f_double(idiv(k,0x400)+0xD800,u%0x400+0xDC00)
+            t[l] = f_double(idiv(u,0x400)+0xD800,u%0x400+0xDC00)
         end
     end
     return concat(t)

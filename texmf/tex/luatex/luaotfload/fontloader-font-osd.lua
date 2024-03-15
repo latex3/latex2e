@@ -6,16 +6,6 @@ if not modules then modules = { } end modules ['font-osd'] = { -- script devanag
     license   = "see context related readme files"
 }
 
--- local experiment1   = false
--- local experiment2   = false
--- local experiment2b1 = false
--- local experiment2b2 = false
-
--- experiments.register("fonts.indic.experiment1",   function(v) experiment1   = v end)
--- experiments.register("fonts.indic.experiment2",   function(v) experiment2   = v end)
--- experiments.register("fonts.indic.experiment2b1", function(v) experiment2b1 = v end)
--- experiments.register("fonts.indic.experiment2b2", function(v) experiment2b2 = v end)
-
 -- we need to check nbsphash (context only)
 
 -- A few remarks:
@@ -69,6 +59,10 @@ if not modules then modules = { } end modules ['font-osd'] = { -- script devanag
 -- and scripts and in the process some more tracing was added as well as a mixed
 -- conjuncts options that can deal with fuzzy fonts. The machinery does what it has
 -- to do but some fonts expect more magic to be applied.
+--
+-- Some changes have been reverted because they interfere with proper fonts. We just
+-- don't support bad fonts with heuristics any longer. If needed one can use the
+-- translitaration filters that come with ConTeXt.
 --
 -- Hans Hagen, PRAGMA-ADE, Hasselt NL
 
@@ -225,6 +219,9 @@ end
 -- We can assume that script are not mixed in the source but if that is the case
 -- we might need to have consonants etc per script and initialize a local table
 -- pointing to the right one. But not now.
+
+-- We have additional data in char-def that provides information not present (at
+-- least when this was written) in Unicode.
 
 local indicgroups = characters and characters.indicgroups
 
@@ -1392,16 +1389,13 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
     end
 
     if reph or vattu then
---         print(">>> has reph or vattu")
         local current = start
         local cns     = nil
         local done    = false
         while current ~= stop do
---             print("\t>>> current ~= stop yet")
             local c = current
             local n = getnext(current)
             if ra[getchar(current)] and halant[getchar(n)] then
---                 print("\t\t>>> current ra; next halant")
                 c = n
                 n = getnext(n)
                 local b, bn = base, base
@@ -1415,7 +1409,6 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
                 if getstate(current,s_rphf) then
                     -- position Reph (Ra + H) after post-base 'matra' (if any) since these
                     -- become marks on the 'matra', not on the base glyph
---                     print("\t\t\t>>> ra + halant form → reph")
                     if b ~= current then
                         if current == start then
                             if head == start then
@@ -1435,7 +1428,6 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
                     end
                 elseif cns and getnext(cns) ~= current then -- todo: optimize next
                     -- position below-base Ra (vattu) following the consonants on which it is placed (either the base consonant or one of the pre-base consonants)
---                     print("\t\t\t>>> ra below base (vattu) → rkrf")
                     local cp   = getprev(current)
                     local cnsn = getnext(cns)
                     setlink(cp,n)
@@ -1449,17 +1441,14 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
                     current = getprev(n)
                 end
             else
---                 print("\t\t>>> NOT! current ra; next halant")
                 local char = getchar(current)
                 if consonant[char] then
---                     print("\t\t\t>>> is consonant")
                     cns = current
                     local next = getnext(cns)
                     if halant[getchar(next)] then
                         cns = next
                     end
                     if not vatucache[char] then
---                         print("\t\t\t\t>>> is in vatucache")
                         next = getnext(cns)
                         while dependent_vowel[getchar(next)] do
                             cns  = next
@@ -1467,7 +1456,6 @@ local function reorder_one(head,start,stop,font,attr,nbspaces)
                         end
                     end
                 elseif char == c_nbsp then
---                     print("\t\t\t>>> is nbsp")
                     nbspaces   = nbspaces + 1
                     cns        = current
                     local next = getnext(cns)
@@ -1936,8 +1924,6 @@ local function reorder_two(head,start,stop,font,attr,nbspaces) -- maybe do a pas
     reorderreph.coverage = { } -- use local
     rephbase[font]       = { } -- use local
 
---     print("!!!!!! reorder two ")
-
     for i=1,#seqsubset do
 
         -- this can be done more efficient, the last test and less getnext
@@ -2064,7 +2050,7 @@ local function reorder_two(head,start,stop,font,attr,nbspaces) -- maybe do a pas
         end
     end
 
-    local current, base, firstcons = start, nil, nil
+    local current, base, firstcons, subnotafterbase, postnotafterbase = start, nil, nil, nil, nil
 
     if getstate(start,s_rphf) then
         -- if syllable starts with Ra + H and script has 'Reph' then exclude Reph from candidates for base consonants
@@ -2125,10 +2111,15 @@ local function reorder_two(head,start,stop,font,attr,nbspaces) -- maybe do a pas
             end
         end
     else -- not Stand Alone cluster
---         print("!!!! not standalone cluster")
         local last = getnext(stop)
         while current ~= last do    -- find base consonant
             local next = getnext(current)
+            if current == subpos then
+                subnotafterbase = current
+            end
+            if current == postpos then
+                postnotafterbase = current
+            end
             if consonant[getchar(current)] then
                 if not (current ~= stop and next ~= stop and halant[getchar(next)] and getchar(getnext(next)) == c_zwj) then
                     if not firstcons then
@@ -2138,6 +2129,12 @@ local function reorder_two(head,start,stop,font,attr,nbspaces) -- maybe do a pas
                     local a = getstate(current)
                     if not (a == s_blwf or a == s_pstf or (a ~= s_rphf and a ~= s_blwf and ra[getchar(current)])) then
                         base = current
+                        if subnotafterbase then
+                            subpos = base
+                        end
+                        if postnotafterbase then
+                            postpos = base
+                        end
                     end
                 end
             end
@@ -2195,10 +2192,7 @@ local function reorder_two(head,start,stop,font,attr,nbspaces) -- maybe do a pas
             end
         end
         --
---         print("char: " .. char)
---         if not moved[current] and dependent_vowel[char] then
-        if dependent_vowel[char] then
---             print(">>!! dependent vowel")
+         if not moved[current] and dependent_vowel[char] then
             if pre_mark[char] then -- or: if before_main or before_half
                 moved[current] = true
                 -- can be helper to remove one node
@@ -2251,14 +2245,11 @@ local function reorder_two(head,start,stop,font,attr,nbspaces) -- maybe do a pas
                 end
             elseif above_mark[char] then
                 -- after main consonant
-                target = basepos
-                if subpos == basepos then
-                    subpos = current
-                end
-                if postpos == basepos then
+                target = subpos
+                if postpos == subpos then
                     postpos = current
                 end
-                basepos = current
+                subpos = current
             elseif below_mark[char] then
                 -- after subjoined consonants
                 target = subpos
@@ -2502,12 +2493,7 @@ local function analyze_next_chars_one(c,font,variant) -- skip one dependent vowe
             if pre_mark[v] and not already_pre_mark then
                 already_pre_mark = true
             elseif post_mark[v] and not already_post_mark then
-                if devanagarihash[font].conjuncts == "mixed" then
-                    -- for messy fonts
-                    return c
-                else
-                    already_post_mark = true
-                end
+                 already_post_mark = true
             elseif below_mark[v] and not already_below_mark then
                 already_below_mark = true
             elseif above_mark[v] and not already_above_mark then
@@ -2710,10 +2696,6 @@ local function analyze_next_chars_two(c,font)
                 for k=1,#vowels do
                     local v = vowels[k]
                     if pre_mark[v] and not already_pre_mark then
---                         print(">>> pre_mark")
---                         if dependent_vowel[v] then
---                             print(">>>> dependent vowel")
---                         end
                         already_pre_mark = true
                     elseif above_mark[v] and not already_above_mark then
                         already_above_mark = true
@@ -2731,12 +2713,7 @@ local function analyze_next_chars_two(c,font)
                 if pre_mark[v] and not already_pre_mark then
                     already_pre_mark = true
                 elseif post_mark[v] and not already_post_mark then
-                    if devanagarihash[font].conjuncts == "mixed" then
-                        -- for messy fonts
-                        return c
-                    else
-                        already_post_mark = true
-                    end
+                       already_post_mark = true
                 elseif below_mark[v] and not already_below_mark then
                     already_below_mark = true
                 elseif above_mark[v] and not already_above_mark then
@@ -3068,15 +3045,12 @@ local function method_two(head,font,attr)
                 end
             end
             if independent_vowel[char] then
---                 print("!!>>> independent_vowel")
                 -- vowel-based syllable: [Ra+H]+V+[N]+[<[<ZWJ|ZWNJ>]+H+C|ZWJ+C>]+[{M}+[N]+[H]]+[SM]+[(VD)]
                 current = analyze_next_chars_one(c,font,1)
                 syllableend = current
             else
---                 print("!!>>> dependent vowel")
                 local standalone = char == c_nbsp
                 if standalone then
---                 print("!!>>> standalone")
                     nbspaces = nbspaces + 1
                     local p = getprev(current)
                     if not p then
@@ -3090,12 +3064,10 @@ local function method_two(head,font,attr)
                     end
                 end
                 if standalone then
---                     print("!!>>>>>>> next standalone")
                     -- Stand Alone cluster (at the start of the word only): #[Ra+H]+NBSP+[N]+[<[<ZWJ|ZWNJ>]+H+C>]+[{M}+[N]+[H]]+[SM]+[(VD)]
                     current = analyze_next_chars_one(c,font,2)
                     syllableend = current
                 elseif consonant[getchar(current)] then
---                     print("!!>>>>>>> a consonant")
                     -- WHY current INSTEAD OF c ?
                     -- Consonant syllable: {C+[N]+<H+[<ZWNJ|ZWJ>]|<ZWNJ|ZWJ>+H>} + C+[N]+[A] + [< H+[<ZWNJ|ZWJ>] | {M}+[N]+[H]>]+[SM]+[(VD)]
                     current = analyze_next_chars_two(current,font) -- not c !
@@ -3104,7 +3076,6 @@ local function method_two(head,font,attr)
             end
         end
         if syllableend then
---             print("!!!>>> syllable end")
             syllabe = syllabe + 1
             local c = syllablestart
             local n = getnext(syllableend)

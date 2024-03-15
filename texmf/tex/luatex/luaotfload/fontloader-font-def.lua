@@ -24,10 +24,9 @@ trackers.register("fonts.loading", "fonts.defining", "otf.loading", "afm.loading
 
 local report_defining = logs.reporter("fonts","defining")
 
---[[ldx--
-<p>Here we deal with defining fonts. We do so by intercepting the
-default loader that only handles <l n='tfm'/>.</p>
---ldx]]--
+-- Here we deal with defining fonts. We do so by intercepting the default loader
+-- that only handles TFM files. Although, we started out that way but in the
+-- meantime we can hardly speak of TFM any more.
 
 local fonts         = fonts
 local fontdata      = fonts.hashes.identifiers
@@ -53,25 +52,18 @@ local designsizes   = constructors.designsizes
 
 local resolvefile   = fontgoodies and fontgoodies.filenames and fontgoodies.filenames.resolve or function(s) return s end
 
---[[ldx--
-<p>We hardly gain anything when we cache the final (pre scaled)
-<l n='tfm'/> table. But it can be handy for debugging, so we no
-longer carry this code along. Also, we now have quite some reference
-to other tables so we would end up with lots of catches.</p>
---ldx]]--
-
---[[ldx--
-<p>We can prefix a font specification by <type>name:</type> or
-<type>file:</type>. The first case will result in a lookup in the
-synonym table.</p>
-
-<typing>
-[ name: | file: ] identifier [ separator [ specification ] ]
-</typing>
-
-<p>The following function split the font specification into components
-and prepares a table that will move along as we proceed.</p>
---ldx]]--
+-- We hardly gain anything when we cache the final (pre scaled) TFM table. But it
+-- can be handy for debugging, so we no longer carry this code along. Also, we now
+-- have quite some reference to other tables so we would end up with lots of
+-- catches.
+--
+-- We can prefix a font specification by "name:" or "file:". The first case will
+-- result in a lookup in the synonym table.
+--
+--   [ name: | file: ] identifier [ separator [ specification ] ]
+--
+-- The following function split the font specification into components and prepares
+-- a table that will move along as we proceed.
 
 -- beware, we discard additional specs
 --
@@ -164,9 +156,7 @@ if context then
 
 end
 
---[[ldx--
-<p>We can resolve the filename using the next function:</p>
---ldx]]--
+-- We can resolve the filename using the next function:
 
 definers.resolvers = definers.resolvers or { }
 local resolvers    = definers.resolvers
@@ -258,23 +248,17 @@ function definers.resolve(specification)
     return specification
 end
 
---[[ldx--
-<p>The main read function either uses a forced reader (as determined by
-a lookup) or tries to resolve the name using the list of readers.</p>
-
-<p>We need to cache when possible. We do cache raw tfm data (from <l
-n='tfm'/>, <l n='afm'/> or <l n='otf'/>). After that we can cache based
-on specificstion (name) and size, that is, <l n='tex'/> only needs a number
-for an already loaded fonts. However, it may make sense to cache fonts
-before they're scaled as well (store <l n='tfm'/>'s with applied methods
-and features). However, there may be a relation between the size and
-features (esp in virtual fonts) so let's not do that now.</p>
-
-<p>Watch out, here we do load a font, but we don't prepare the
-specification yet.</p>
---ldx]]--
-
--- very experimental:
+-- The main read function either uses a forced reader (as determined by a lookup) or
+-- tries to resolve the name using the list of readers.
+--
+-- We need to cache when possible. We do cache raw tfm data (from TFM, AFM or OTF).
+-- After that we can cache based on specificstion (name) and size, that is, TeX only
+-- needs a number for an already loaded fonts. However, it may make sense to cache
+-- fonts before they're scaled as well (store TFM's with applied methods and
+-- features). However, there may be a relation between the size and features (esp in
+-- virtual fonts) so let's not do that now.
+--
+-- Watch out, here we do load a font, but we don't prepare the specification yet.
 
 function definers.applypostprocessors(tfmdata)
     local postprocessors = tfmdata.postprocessors
@@ -439,17 +423,13 @@ function constructors.readanddefine(name,size) -- no id -- maybe a dummy first
     return fontdata[id], id
 end
 
---[[ldx--
-<p>So far the specifiers. Now comes the real definer. Here we cache
-based on id's. Here we also intercept the virtual font handler. Since
-it evolved stepwise I may rewrite this bit (combine code).</p>
-
-In the previously defined reader (the one resulting in a <l n='tfm'/>
-table) we cached the (scaled) instances. Here we cache them again, but
-this time based on id. We could combine this in one cache but this does
-not gain much. By the way, passing id's back to in the callback was
-introduced later in the development.</p>
---ldx]]--
+-- So far the specifiers. Now comes the real definer. Here we cache based on id's.
+-- Here we also intercept the virtual font handler.
+--
+-- In the previously defined reader (the one resulting in a TFM table) we cached the
+-- (scaled) instances. Here we cache them again, but this time based on id. We could
+-- combine this in one cache but this does not gain much. By the way, passing id's
+-- back to in the callback was introduced later in the development.
 
 function definers.registered(hash)
     local id = internalized[hash]
@@ -522,9 +502,7 @@ function font.getfont(id)
     return fontdata[id] -- otherwise issues
 end
 
---[[ldx--
-<p>We overload the <l n='tfm'/> reader.</p>
---ldx]]--
+-- We overload the <l n='tfm'/> reader.
 
 if not context then
     callbacks.register('define_font', definers.read, "definition of fonts (tfmdata preparation)")

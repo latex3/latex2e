@@ -52,7 +52,7 @@ local report_otf          = logs.reporter("fonts","otf loading")
 local fonts               = fonts
 local otf                 = fonts.handlers.otf
 
-otf.version               = 3.120 -- beware: also sync font-mis.lua and in mtx-fonts
+otf.version               = 3.134 -- beware: also sync font-mis.lua and in mtx-fonts
 otf.cache                 = containers.define("fonts", "otl", otf.version, true)
 otf.svgcache              = containers.define("fonts", "svg", otf.version, true)
 otf.pngcache              = containers.define("fonts", "png", otf.version, true)
@@ -643,25 +643,33 @@ local function read_from_otf(specification)
     return tfmdata
 end
 
-local function checkmathsize(tfmdata,mathsize)
-    local mathdata = tfmdata.shared.rawdata.metadata.math
-    local mathsize = tonumber(mathsize)
-    if mathdata then -- we cannot use mathparameters as luatex will complain
-        local parameters = tfmdata.parameters
-        parameters.scriptpercentage       = mathdata.ScriptPercentScaleDown
-        parameters.scriptscriptpercentage = mathdata.ScriptScriptPercentScaleDown
-        parameters.mathsize               = mathsize -- only when a number !
-    end
-end
-
-registerotffeature {
-    name         = "mathsize",
-    description  = "apply mathsize specified in the font",
-    initializers = {
-        base = checkmathsize,
-        node = checkmathsize,
-    }
-}
+-- if context then
+--
+--     -- so the next will go to some generic module instead
+--
+-- else
+--
+--     local function checkmathsize(tfmdata,mathsize)
+--         local mathdata = tfmdata.shared.rawdata.metadata.math
+--         local mathsize = tonumber(mathsize)
+--         if mathdata then -- we cannot use mathparameters as luatex will complain
+--             local parameters = tfmdata.parameters
+--             parameters.scriptpercentage       = mathdata.ScriptPercentScaleDown
+--             parameters.scriptscriptpercentage = mathdata.ScriptScriptPercentScaleDown
+--             parameters.mathsize               = mathsize -- only when a number !
+--         end
+--     end
+--
+--     registerotffeature {
+--         name         = "mathsize",
+--         description  = "apply mathsize specified in the font",
+--         initializers = {
+--             base = checkmathsize,
+--             node = checkmathsize,
+--         }
+--     }
+--
+-- end
 
 -- readers
 

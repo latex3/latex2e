@@ -5,8 +5,8 @@
 do -- block to avoid to many local variables error
  assert(luaotfload_module, "This is a part of luaotfload and should not be loaded independently") { 
      name          = "luaotfload-database",
-     version       = "3.23",       --TAGVERSION
-     date          = "2022-10-03", --TAGDATE
+     version       = "3.28",       --TAGVERSION
+     date          = "2024-02-14", --TAGDATE
      description   = "luaotfload submodule / database",
      license       = "GPL v2.0",
      author        = "Khaled Hosny, Elie Roux, Philipp Gesang, Marcel Krüger",
@@ -150,7 +150,6 @@ local kpsefind_file            = kpse.find_file
 local kpselookup               = kpse.lookup
 local kpsereadable_file        = kpse.readable_file
 local lfsattributes            = lfs.attributes
-local lfschdir                 = lfs.chdir
 local lfscurrentdir            = lfs.currentdir
 local lfsdir                   = lfs.dir
 local mathabs                  = math.abs
@@ -202,6 +201,7 @@ local resolversfindfile        = context_environment.resolvers.findfile
 --- some of our own
 local unicode                  = require'luaotfload-unicode'
 local casefold                 = require'lua-uni-case'.casefold
+local realpath                 = require'luaotfload-realpath'.realpath
 local alphnum_only             = unicode.alphnum_only
 
 local name_index               = nil --> upvalue for names.data
@@ -220,9 +220,20 @@ local format_precedence = {
 local location_precedence = {
     "local", "system", "texmf",
 }
+local enabled_locations = {
+    ['local'] = true,
+    system = true,
+    texmf = true,
+}
 
 local function set_location_precedence (precedence)
     location_precedence = precedence
+    for location in next, enabled_locations do
+        enabled_locations[location] = nil
+    end
+    for _, location in ipairs(location_precedence) do
+        enabled_locations[location] = location ~= 'local' or config.luaotfload.db.scan_local == true
+    end
 end
 
 --[[doc--
@@ -307,36 +318,19 @@ local function sanitize_fontnames (rawnames)
     return result
 end
 
-local function find_files_indeed (acc, dirs, filter)
-    if not next (dirs) then --- done
-        return acc
-    end
-
-    local pwd   = lfscurrentdir ()
-    local dir   = dirs[#dirs]
-    dirs[#dirs] = nil
-
-    if lfschdir (dir) then
-        lfschdir (pwd)
-
-        local newfiles = { }
-        for ent in lfsdir (dir) do
-            if ent ~= "." and ent ~= ".." then
-                local fullpath = dir .. "/" .. ent
-                if filter (fullpath) == true then
-                    if lfsisdir (fullpath) then
-                        dirs[#dirs+1] = fullpath
-                    elseif lfsisfile (fullpath) then
-                        newfiles[#newfiles+1] = fullpath
-                    end
-                end
-            end
+local list_dir_or_empty do
+    local function inner_list_dir_or_empty (dir, success, ...)
+        if success then
+            return ...
+        else
+            -- Skipping unreadable directory.
+            -- TODO: Print warning
+            return next, {}
         end
-        return find_files_indeed (tableappend (acc, newfiles),
-                                  dirs, filter)
     end
-    --- could not cd into, so we skip it
-    return find_files_indeed (acc, dirs, filter)
+    function list_dir_or_empty (dir)
+        return inner_list_dir_or_empty(dir, pcall(lfsdir, dir))
+    end
 end
 
 local function dummyfilter () return true end
@@ -347,9 +341,30 @@ local function dummyfilter () return true end
 
 --- string -> function? -> string list
 local function find_files (root, filter)
-    if lfsisdir (root) then
-        return find_files_indeed ({}, { root }, filter or dummyfilter)
+    if not lfsisdir (root) then return end
+
+    local files = {}
+    local dirs = { root }
+    filter = filter or dummyfilter
+
+    while dirs[1] do
+        local dir   = dirs[#dirs]
+        dirs[#dirs] = nil
+
+        for ent in list_dir_or_empty (dir) do
+            if ent ~= "." and ent ~= ".." then
+                local fullpath = dir .. "/" .. ent
+                if filter (fullpath) == true then
+                    if lfsisdir (fullpath) then
+                        dirs[#dirs+1] = fullpath
+                    elseif lfsisfile (fullpath) then
+                        files[#files+1] = fullpath
+                    end
+                end
+            end
+        end
     end
+    return files
 end
 
 
@@ -852,23 +867,25 @@ Also, the fields “resolved”, “sub”, “force” etc. influence the outco
 
 --doc]]--
 
-local concat_char = "#"
-local hash_fields = {
-    --- order is important
-    "specification", "style", "sub", "optsize", "size",
-}
-local n_hash_fields = #hash_fields
+local hash_request do
+    local concat_char = "#"
+    local hash_fields = {
+        --- order is important
+        "specification", "style", "sub", "optsize", "size",
+    }
+    local n_hash_fields = #hash_fields
 
---- spec -> string
-local function hash_request (specification)
-    local key = { } --- segments of the hash
-    for i=1, n_hash_fields do
-        local field = specification[hash_fields[i]]
-        if field then
-            key[#key+1] = field
+    --- spec -> string
+    function hash_request (specification)
+        local key = { } --- segments of the hash
+        for i=1, n_hash_fields do
+            local field = specification[hash_fields[i]]
+            if field then
+                key[#key+1] = field
+            end
         end
+        return tableconcat(key, concat_char)
     end
-    return tableconcat(key, concat_char)
 end
 
 --- 'a -> 'a -> table -> (string * int|boolean * boolean)
@@ -2164,17 +2181,19 @@ local function process_dir_tree (acc, dirs, done)
         return acc
     end
 
-    local pwd   = lfscurrentdir ()
     local dir   = dirs[#dirs]
     dirs[#dirs] = nil
 
-    if not lfschdir (dir) then
-        --- Cannot cd; skip.
+    local mode_or_err
+    dir, mode_or_err = realpath(dir)
+    if not dir then
+        logreport ("both", 1, "db", "Skipping font directory: %s", mode_or_err)
+        return process_dir_tree (acc, dirs, done)
+    elseif mode_or_err ~= 'directory' then
+        logreport ("both", 1, "db", "Skipping non-directory while searching fonts: %q (%s)", dir, mode_or_err)
         return process_dir_tree (acc, dirs, done)
     end
 
-    dir = lfscurrentdir () --- resolve symlinks
-    lfschdir (pwd)
     if tablecontains (done, dir) then
         --- Already traversed. Note that it’d be unsafe to rely on the
         --- hash part above due to Lua only processing up to 32 bytes
@@ -2213,35 +2232,38 @@ local function process_dir_tree (acc, dirs, done)
 end
 
 local function process_dir (dir)
-    local pwd = lfscurrentdir ()
-    if lfschdir (dir) then
-        dir = lfscurrentdir () --- resolve symlinks
-        lfschdir (pwd)
+    local mode_or_err
+    dir, mode_or_err = realpath(dir)
+    if not dir then
+        logreport ("both", 1, "db", "Skipping font directory: %s", mode_or_err)
+        return {}
+    elseif mode_or_err ~= 'directory' then
+        logreport ("both", 1, "db", "Skipping non-directory while searching fonts: %q (%s)", dir, mode_or_err)
+        return {}
+    end
 
-        local files = { }
-        local blacklist = names.blacklist
-        for ent in lfsdir (dir) do
-            if ent ~= "." and ent ~= ".." and not blacklist[ent] then
-                local fullpath = dir .. "/" .. ent
-                if lfsisfile (fullpath) then
-                    ent = stringlower (ent)
-                    if lpegmatch (p_font_filter, ent)
-                    then
-                        if filesuffix (ent) == "afm" then
-                            local pfbpath = locate_matching_pfb (ent, dir)
-                            if pfbpath then
-                                files[#files+1] = pfbpath
-                            end
-                        else
-                            files[#files+1] = fullpath
+    local files = { }
+    local blacklist = names.blacklist
+    for ent in lfsdir (dir) do
+        if ent ~= "." and ent ~= ".." and not blacklist[ent] then
+            local fullpath = dir .. "/" .. ent
+            if lfsisfile (fullpath) then
+                ent = stringlower (ent)
+                if lpegmatch (p_font_filter, ent)
+                then
+                    if filesuffix (ent) == "afm" then
+                        local pfbpath = locate_matching_pfb (ent, dir)
+                        if pfbpath then
+                            files[#files+1] = pfbpath
                         end
+                    else
+                        files[#files+1] = fullpath
                     end
                 end
             end
         end
-        return files
     end
-    return { }
+    return files
 end
 
 --- string -> bool -> string list
@@ -3119,10 +3141,17 @@ local function collect_font_filenames ()
     local bisect    = config.luaotfload.misc.bisect
     local max_fonts = config.luaotfload.db.max_fonts --- XXX revisit for lua 5.3 wrt integers
 
-    tableappend (filenames, collect_font_filenames_texmf  ())
-    tableappend (filenames, collect_font_filenames_system ())
-    local scan_local = config.luaotfload.db.scan_local == true
-    if scan_local then
+    -- We can't just scan in the order of location_precedence here since
+    -- the order is important. In the common situation of having texmf
+    -- added to the system font path, scanning system first would
+    -- classify all texmf fonts as system fonts.
+    if enabled_locations.texmf then
+        tableappend (filenames, collect_font_filenames_texmf  ())
+    end
+    if enabled_locations.system then
+        tableappend (filenames, collect_font_filenames_system ())
+    end
+    if enabled_locations['local'] then
         local localfonts, found = collect_font_filenames_local()
         if found then
             tableappend (filenames, localfonts)
@@ -3138,7 +3167,7 @@ local function collect_font_filenames ()
     if bisect then
         return { unpack (filenames, bisect[1], bisect[2]) }
     end
-    return filenames, scan_local
+    return filenames
 end
 
 --[[doc--
@@ -3409,8 +3438,8 @@ function update_names (currentnames, force, dry_run)
         read_blacklist ()
 
         --- pass 1: Collect the names of all fonts we are going to process.
-        local font_filenames, local_fonts = collect_font_filenames ()
-        if local_fonts then
+        local font_filenames = collect_font_filenames ()
+        if enabled_locations['local'] then
             targetnames.meta['local'] = true
         end
 
@@ -3804,6 +3833,7 @@ return function ()
     names.data      = nil      --- contains the loaded database
     names.lookups   = nil      --- contains the lookup cache
 
+    enabled_locations['local'] = enabled_locations['local'] and config.luaotfload.db.scan_local == true
     for sym, ref in next, export do names[sym] = ref end
     for sym, ref in next, api    do names[sym] = names[sym] or ref end
     return true

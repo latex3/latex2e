@@ -711,7 +711,11 @@ local function do_serialize(root,name,depth,level,indexed)
             elseif tv == "number" then
                 if tk == "number" then
                     if hexify then
-                        handle(format("%s [0x%X]=0x%X,",depth,k,v))
+                        if accurate then
+                            handle(format("%s [0x%X]=%q,",depth,k,v))
+                        else
+                            handle(format("%s [0x%X]=%s,",depth,k,v))
+                        end
                     elseif accurate then
                         handle(format("%s [%s]=%q,",depth,k,v))
                     else
@@ -719,7 +723,11 @@ local function do_serialize(root,name,depth,level,indexed)
                     end
                 elseif tk == "boolean" then
                     if hexify then
-                        handle(format("%s [%s]=0x%X,",depth,k and "true" or "false",v))
+                        if accurate then
+                            handle(format("%s [%s]=%q,",depth,k and "true" or "false",v))
+                        else
+                            handle(format("%s [%s]=%s,",depth,k and "true" or "false",v))
+                        end
                     elseif accurate then
                         handle(format("%s [%s]=%q,",depth,k and "true" or "false",v))
                     else
@@ -729,7 +737,12 @@ local function do_serialize(root,name,depth,level,indexed)
                     -- ignore
                 elseif noquotes and not reserved[k] and lpegmatch(propername,k) then
                     if hexify then
-                        handle(format("%s %s=0x%X,",depth,k,v))
+                        if accurate then
+                            handle(format("%s %s=%q,",depth,k,v))
+                        else
+--                             handle(format("%s %s=%s,",depth,k,v))
+                            handle(format("%s %s=0x%X,",depth,k,v))
+                        end
                     elseif accurate then
                         handle(format("%s %s=%q,",depth,k,v))
                     else
@@ -737,7 +750,12 @@ local function do_serialize(root,name,depth,level,indexed)
                     end
                 else
                     if hexify then
-                        handle(format("%s [%q]=0x%X,",depth,k,v))
+                        if accurate then
+                            handle(format("%s [%q]=%q,",depth,k,v))
+                        else
+--                             handle(format("%s [%q]=%s,",depth,k,v))
+                            handle(format("%s [%q]=0x%X,",depth,k,v))
+                        end
                     elseif accurate then
                         handle(format("%s [%q]=%q,",depth,k,v))
                     else
