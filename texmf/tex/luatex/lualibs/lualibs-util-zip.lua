@@ -34,11 +34,13 @@ end
 local files         = utilities.files
 local openfile      = files.open
 local closefile     = files.close
+local getsize       = files.size
 local readstring    = files.readstring
 local readcardinal2 = files.readcardinal2le
 local readcardinal4 = files.readcardinal4le
 local setposition   = files.setposition
 local getposition   = files.getposition
+local skipbytes     = files.skip
 
 local band          = bit32.band
 local rshift        = bit32.rshift
@@ -69,6 +71,158 @@ local openzipfile, closezipfile, unzipfile, foundzipfile, getziphash, getziplist
         }
     end
 
+ -- https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
+
+--     local function collect(z)
+--         if not z.list then
+--             local list     = { }
+--             local hash     = { }
+--             local position = 0
+--             local index    = 0
+--             local handle   = z.handle
+--             while true do
+--                 setposition(handle,position)
+--                 local signature = readstring(handle,4)
+--                 if signature == "PK\3\4" then
+--                     -- [local file header 1]
+--                     -- [encryption header 1]
+--                     -- [file data 1]
+--                     -- [data descriptor 1]
+--                     local version      = readcardinal2(handle)
+--                     local flag         = readcardinal2(handle)
+--                     local method       = readcardinal2(handle)
+--                     local filetime     = readcardinal2(handle)
+--                     local filedate     = readcardinal2(handle)
+--                     local crc32        = readcardinal4(handle)
+--                     local compressed   = readcardinal4(handle)
+--                     local uncompressed = readcardinal4(handle)
+--                     local namelength   = readcardinal2(handle)
+--                     local extralength  = readcardinal2(handle)
+--                     local filename     = readstring(handle,namelength)
+--                     local descriptor   = band(flag,8) ~= 0
+--                     local encrypted    = band(flag,1) ~= 0
+--                     local acceptable   = method == 0 or method == 8
+--                     -- 30 bytes of header including the signature
+--                     local skipped      = 0
+--                     local size         = 0
+--                     if encrypted then
+--                         size = readcardinal2(handle)
+--                         skipbytes(handle,size)
+--                         skipped = skipped + size + 2
+--                         skipbytes(8)
+--                         skipped = skipped + 8
+--                         size = readcardinal2(handle)
+--                         skipbytes(handle,size)
+--                         skipped = skipped + size + 2
+--                         size = readcardinal4(handle)
+--                         skipbytes(handle,size)
+--                         skipped = skipped + size + 4
+--                         size = readcardinal2(handle)
+--                         skipbytes(handle,size)
+--                         skipped = skipped + size + 2
+--                     end
+--                     position = position + 30 + namelength + extralength + skipped
+--                  -- if descriptor then
+--                  --     -- where is this one located
+--                  --     setposition(handle,position + compressed)
+--                  --     crc32        = readcardinal4(handle)
+--                  --     compressed   = readcardinal4(handle)
+--                  --     uncompressed = readcardinal4(handle)
+--                  -- end
+--                     if acceptable then
+--                         index = index + 1
+--                         local data = {
+--                             filename     = filename,
+--                             index        = index,
+--                             position     = position,
+--                             method       = method,
+--                             compressed   = compressed,
+--                             uncompressed = uncompressed,
+--                             crc32        = crc32,
+--                             encrypted    = encrypted,
+--                         }
+--                         hash[filename] = data
+--                         list[index]    = data
+--                     else
+--                         -- maybe a warning when encrypted
+--                     end
+--                     position = position + compressed
+--                 else
+--                     break
+--                 end
+--                 z.list = list
+--                 z.hash = hash
+--             end
+--         end
+--     end
+-- end
+
+--         end
+--     end
+
+    local function update(handle,data)
+        position = data.offset
+        setposition(handle,position)
+        local signature = readstring(handle,4)
+        if signature == "PK\3\4" then -- 0x04034B50
+            -- [local file header 1]
+            -- [encryption header 1]
+            -- [file data 1]
+            -- [data descriptor 1]
+            local version      = readcardinal2(handle)
+            local flag         = readcardinal2(handle)
+            local method       = readcardinal2(handle)
+                                  skipbytes(handle,4)
+            ----- filetime     = readcardinal2(handle)
+            ----- filedate     = readcardinal2(handle)
+            local crc32        = readcardinal4(handle)
+            local compressed   = readcardinal4(handle)
+            local uncompressed = readcardinal4(handle)
+            local namelength   = readcardinal2(handle)
+            local extralength  = readcardinal2(handle)
+            local filename     = readstring(handle,namelength)
+            local descriptor   = band(flag,8) ~= 0
+            local encrypted    = band(flag,1) ~= 0
+            local acceptable   = method == 0 or method == 8
+            -- 30 bytes of header including the signature
+            local skipped      = 0
+            local size         = 0
+            if encrypted then
+                size = readcardinal2(handle)
+                skipbytes(handle,size)
+                skipped = skipped + size + 2
+                skipbytes(8)
+                skipped = skipped + 8
+                size = readcardinal2(handle)
+                skipbytes(handle,size)
+                skipped = skipped + size + 2
+                size = readcardinal4(handle)
+                skipbytes(handle,size)
+                skipped = skipped + size + 4
+                size = readcardinal2(handle)
+                skipbytes(handle,size)
+                skipped = skipped + size + 2
+            end
+            if acceptable then
+                    if                       filename     ~= data.filename     then
+             -- elseif                       method       ~= data.method       then
+             -- elseif                       encrypted    ~= data.encrypted    then
+             -- elseif crc32        ~= 0 and crc32        ~= data.crc32        then
+             -- elseif uncompressed ~= 0 and uncompressed ~= data.uncompressed then
+             -- elseif compressed   ~= 0 and compressed   ~= data.compressed   then
+                else
+                    position = position + 30 + namelength + extralength + skipped
+                    data.position = position
+                    return position
+                end
+            else
+                -- maybe a warning when encrypted
+            end
+        end
+        data.position = false
+        return false
+    end
+
     local function collect(z)
         if not z.list then
             local list     = { }
@@ -76,78 +230,88 @@ local openzipfile, closezipfile, unzipfile, foundzipfile, getziphash, getziplist
             local position = 0
             local index    = 0
             local handle   = z.handle
-            while true do
-                setposition(handle,position)
-                local signature = readstring(handle,4)
-                if signature == "PK\3\4" then
-                    -- [local file header 1]
-                    -- [encryption header 1]
-                    -- [file data 1]
-                    -- [data descriptor 1]
-                    local version      = readcardinal2(handle)
-                    local flag         = readcardinal2(handle)
-                    local method       = readcardinal2(handle)
-                    local filetime     = readcardinal2(handle)
-                    local filedate     = readcardinal2(handle)
-                    local crc32        = readcardinal4(handle)
-                    local compressed   = readcardinal4(handle)
-                    local uncompressed = readcardinal4(handle)
-                    local namelength   = readcardinal2(handle)
-                    local extralength  = readcardinal2(handle)
-                    local filename     = readstring(handle,namelength)
-                    local descriptor   = band(flag,8) ~= 0
-                    local encrypted    = band(flag,1) ~= 0
-                    local acceptable   = method == 0 or method == 8
-                    -- 30 bytes of header including the signature
-                    local skipped      = 0
-                    local size         = 0
-                    if encrypted then
-                        size = readcardinal2(handle)
-                        skipbytes(size)
-                        skipped = skipped + size + 2
-                        skipbytes(8)
-                        skipped = skipped + 8
-                        size = readcardinal2(handle)
-                        skipbytes(size)
-                        skipped = skipped + size + 2
-                        size = readcardinal4(handle)
-                        skipbytes(size)
-                        skipped = skipped + size + 4
-                        size = readcardinal2(handle)
-                        skipbytes(size)
-                        skipped = skipped + size + 2
+            local size     = getsize(handle)
+            --
+            -- Not all files have the compressed into set so we need to get the directory
+            -- first. We only handle single disk zip files.
+            --
+            for i=size-4,size-64*1024,-1 do
+                setposition(handle,i)
+                local enddirsignature = readcardinal4(handle)
+                if enddirsignature == 0x06054B50 then
+                    local thisdisknumber    = readcardinal2(handle)
+                    local centraldisknumber = readcardinal2(handle)
+                    local thisnofentries    = readcardinal2(handle)
+                    local totalnofentries   = readcardinal2(handle)
+                    local centralsize       = readcardinal4(handle)
+                    local centraloffset     = readcardinal4(handle)
+                    local commentlength     = readcardinal2(handle)
+                    local comment           = readstring(handle,length)
+                    if size - i >= 22 then
+                        if thisdisknumber == centraldisknumber then
+                            setposition(handle,centraloffset)
+                            while true do
+                                if readcardinal4(handle) == 0x02014B50 then
+                                                          skipbytes(handle,4)
+                                    ----- versionmadeby = readcardinal2(handle)
+                                    ----- versionneeded = readcardinal2(handle)
+                                    local flag          = readcardinal2(handle)
+                                    local method        = readcardinal2(handle)
+                                                          skipbytes(handle,4)
+                                    ----- filetime      = readcardinal2(handle)
+                                    ----- filedate      = readcardinal2(handle)
+                                    local crc32         = readcardinal4(handle)
+                                    local compressed    = readcardinal4(handle)
+                                    local uncompressed  = readcardinal4(handle)
+                                    local namelength    = readcardinal2(handle)
+                                    local extralength   = readcardinal2(handle)
+                                    local commentlength = readcardinal2(handle)
+                                                          skipbytes(handle,8)
+                                    ----- disknumber    = readcardinal2(handle)
+                                    ----- intattributes = readcardinal2(handle)
+                                    ----- extattributes = readcardinal4(handle)
+                                    local headeroffset  = readcardinal4(handle)
+                                    local filename      = readstring(handle,namelength)
+                                                          skipbytes(handle,extralength+commentlength)
+                                    ----- extradata     = readstring(handle,extralength)
+                                    ----- comment       = readstring(handle,commentlength)
+                                    --
+                                    local descriptor   = band(flag,8) ~= 0
+                                    local encrypted    = band(flag,1) ~= 0
+                                    local acceptable   = method == 0 or method == 8
+                                    if acceptable then
+                                        index = index + 1
+                                        local data = {
+                                            filename     = filename,
+                                            index        = index,
+                                            position     = nil,
+                                            method       = method,
+                                            compressed   = compressed,
+                                            uncompressed = uncompressed,
+                                            crc32        = crc32,
+                                            encrypted    = encrypted,
+                                            offset       = headeroffset,
+                                        }
+                                        hash[filename] = data
+                                        list[index]    = data
+                                    end
+                                else
+                                    break
+                                end
+                            end
+                        end
+                        break
                     end
-                    position = position + 30 + namelength + extralength + skipped
-                    if descriptor then
-                        setposition(handle,position + compressed)
-                        crc32        = readcardinal4(handle)
-                        compressed   = readcardinal4(handle)
-                        uncompressed = readcardinal4(handle)
-                    end
-                    if acceptable then
-                        index = index + 1
-                        local data = {
-                            filename     = filename,
-                            index        = index,
-                            position     = position,
-                            method       = method,
-                            compressed   = compressed,
-                            uncompressed = uncompressed,
-                            crc32        = crc32,
-                            encrypted    = encrypted,
-                        }
-                        hash[filename] = data
-                        list[index]    = data
-                    else
-                        -- maybe a warning when encrypted
-                    end
-                    position = position + compressed
-                else
-                    break
                 end
-                z.list = list
-                z.hash = hash
             end
+         -- for i=1,index do -- delayed
+         --     local data = list[i]
+         --     if not data.position then
+         --         update(handle,list[i])
+         --     end
+         -- end
+            z.list = list
+            z.hash = hash
         end
     end
 
@@ -156,6 +320,7 @@ local openzipfile, closezipfile, unzipfile, foundzipfile, getziphash, getziplist
         if not list then
             collect(z)
         end
+     -- inspect(z.list)
         return z.list
     end
 
@@ -193,7 +358,10 @@ local openzipfile, closezipfile, unzipfile, foundzipfile, getziphash, getziplist
             local handle     = z.handle
             local position   = data.position
             local compressed = data.compressed
-            if compressed > 0 then
+            if position == nil then
+                position = update(handle,data)
+            end
+            if position and compressed > 0 then
                 setposition(handle,position)
                 local result = readstring(handle,compressed)
                 if data.method == 8 then
@@ -451,11 +619,13 @@ if xzip then -- flate then do
         end
     end
 
-    local function unzipdir(zipname,path,verbose)
+    local function unzipdir(zipname,path,verbose,collect,validate)
         if type(zipname) == "table" then
-            verbose = zipname.verbose
-            path    = zipname.path
-            zipname = zipname.zipname
+            validate = zipname.validate
+            collect  = zipname.collect
+            verbose  = zipname.verbose
+            path     = zipname.path
+            zipname  = zipname.zipname
         end
         if not zipname or zipname == "" then
             return
@@ -473,34 +643,49 @@ if xzip then -- flate then do
                 local done  = 0
                 local steps = verbose == "steps"
                 local time  = steps and osclock()
+             -- local skip  = 0
+                if collect then
+                    collect = { }
+                else
+                    collect = false
+                end
                 for i=1,count do
                     local l = list[i]
                     local n = l.filename
-                    local d = unzipfile(z,n) -- true for check
-                    if d then
-                        local p = filejoin(path,n)
-                        if mkdirs(dirname(p)) then
-                            if steps then
-                                total = total + #d
-                                done = done + 1
-                                if done >= step then
-                                    done = 0
-                                    logwriter(format("%4i files of %4i done, %10i bytes, %0.3f seconds",i,count,total,osclock()-time))
+                    if not validate or validate(n) then
+                        local d = unzipfile(z,n) -- true for check
+                        if d then
+                            local p = filejoin(path,n)
+                            if mkdirs(dirname(p)) then
+                                if steps then
+                                    total = total + #d
+                                    done = done + 1
+                                    if done >= step then
+                                        done = 0
+                                        logwriter(format("%4i files of %4i done, %10i bytes, %0.3f seconds",i,count,total,osclock()-time))
+                                    end
+                                elseif verbose then
+                                    logwriter(n)
                                 end
-                            elseif verbose then
-                                logwriter(n)
+                                savedata(p,d)
+                                if collect then
+                                    collect[#collect+1] = p
+                                end
                             end
-                            savedata(p,d)
+                        else
+                            logwriter(format("problem with file %s",n))
                         end
                     else
-                        logwriter(format("problem with file %s",n))
+                     -- skip = skip + 1
                     end
                 end
                 if steps then
                     logwriter(format("%4i files of %4i done, %10i bytes, %0.3f seconds",count,count,total,osclock()-time))
                 end
                 closezipfile(z)
-                return true
+                if collect then
+                    return collect
+                end
             else
                 closezipfile(z)
             end

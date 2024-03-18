@@ -7,8 +7,8 @@
 
 assert(luaotfload_module, "This is a part of luaotfload and should not be loaded independently") { 
     name          = "luaotfload-configuration",
-    version       = "3.23",       --TAGVERSION
-    date          = "2022-10-03", --TAGDATE
+    version       = "3.28",       --TAGVERSION
+    date          = "2024-02-14", --TAGDATE
     description   = "luaotfload submodule / config file reader",
     license       = "GPL v2.0"
 }
@@ -89,6 +89,13 @@ local config_paths = {
 
 local valid_formats = tabletohash {
   "otf", "ttc", "ttf", "afm", "pfb"
+}
+
+local default_location_precedence = {
+  "system", "texmf", "local"
+}
+local valid_locations = tabletohash {
+  "system", "texmf", "local"
 }
 
 local default_anon_sequence = {
@@ -189,6 +196,10 @@ local permissible_color_callbacks = {
   pre_output_filter     = "pre_output_filter",
 }
 
+local known_dvi_drivers = {
+  xdvipsk = 'xdvipsk',
+  dvisvgm = 'dvisvgm',
+}
 
 -------------------------------------------------------------------------------
 ---                                DEFAULTS
@@ -196,22 +207,24 @@ local permissible_color_callbacks = {
 
 local default_config = {
   db = {
-    formats         = "otf,ttf,ttc",
-    scan_local      = false,
-    skip_read       = false,
-    strip           = true,
-    update_live     = true,
-    compress        = true,
-    max_fonts       = 2^51,
-    designsize_dimen= "bp",
+    location_precedence = default_location_precedence,
+    formats             = "otf,ttf,ttc",
+    scan_local          = false,
+    skip_read           = false,
+    strip               = true,
+    update_live         = true,
+    compress            = true,
+    max_fonts           = 2^51,
+    designsize_dimen    = "bp",
   },
   run = {
-    anon_sequence  = default_anon_sequence,
-    resolver       = "cached",
-    definer        = "patch",
-    log_level      = 0,
-    color_callback = "post_linebreak_filter",
-    fontloader     = default_fontloader (),
+    anon_sequence      = default_anon_sequence,
+    resolver           = "cached",
+    definer            = "patch",
+    log_level          = 0,
+    color_callback     = "post_linebreak_filter",
+    fontloader         = default_fontloader (),
+    default_dvi_driver = "dvisvgm"
   },
   misc = {
     bisect         = false,
@@ -313,6 +326,18 @@ local function set_font_filter ()
   return true
 end
 
+local function set_location_precedence_list ()
+  local names = fonts.names
+  if names and names.set_location_precedence then
+    local locations = config.luaotfload.db.location_precedence
+    if not locations or locations == "" then
+      locations = default_config.db.location_precedence
+    end
+    fonts.names.set_location_precedence (locations)
+  end
+  return true
+end
+
 local function set_size_dimension ()
   local names = fonts.names
   if names and names.set_size_dimension then
@@ -396,6 +421,7 @@ reconf_tasks = {
   { "Set design size dimension" , set_size_dimension   },
   { "Install font name resolver", set_name_resolver    },
   { "Set default features"      , set_default_features },
+  { "Set location precedence"   , set_location_precedence_list },
 }
 
 -------------------------------------------------------------------------------
@@ -482,6 +508,44 @@ local option_spec = {
           return nil
         end
         return tableconcat (result, ",")
+      end
+    },
+    location_precedence = {
+      in_t      = string_t,
+      out_t     = table_t,
+      transform = function (s)
+        local bits = { lpegmatch (commasplitter, s) }
+        if next (bits) then
+          local seq = { }
+          local done = { }
+          for i = 1, #bits do
+            local bit = bits [i]
+            if valid_locations [bit] then
+              if not done [bit] then
+                done [bit] = true
+                seq [#seq + 1] = bit
+              else
+                logreport ("both", 0, "conf",
+                           "ignoring duplicate location %s at position %d \z
+                            in precedence list",
+                           bit, i)
+              end
+            else
+              logreport ("both", 0, "conf",
+                         "location precedence list contains invalid item %s \z
+                          at position %d.",
+                         bit, i)
+            end
+          end
+          if next (seq) then
+            logreport ("both", 2, "conf",
+                       "overriding anon lookup sequence %s.",
+                       tableconcat (seq, ","))
+            return seq
+          end
+        end
+        logreport ("both", 0, "conf", "no lookup locations enabled, falling back to default precedence list")
+        return default_location_precedence
       end
     },
     scan_local   = { in_t = boolean_t, },
@@ -594,6 +658,24 @@ local option_spec = {
                     .. "falling back to default.",
                     cb_spec)
         return permissible_color_callbacks.default
+      end,
+    },
+    default_dvi_driver = {
+      in_t      = string_t,
+      out_t     = string_t,
+      transform = function (driver)
+        local mapped = known_dvi_drivers[driver]
+        if mapped then
+          logreport ("log", 5, "conf",
+                     "Using default DVI driver %q if used in DVI mode.",
+                     mapped)
+          return mapped
+        end
+        logreport ("log", 0, "conf",
+                    "Requested default DVI driver %q invalid, "
+                    .. "falling back to dvisvgm.",
+                    driver)
+        return known_dvi_drivers.dvisvgm
       end,
     },
   },
@@ -740,12 +822,13 @@ local formatters = {
     lookups_file = { false, format_string },
   },
   run = {
-    anon_sequence   = { false, format_list    },
-    color_callback  = { false, format_string  },
-    definer         = { false, format_string  },
-    fontloader      = { true, format_string  },
-    log_level       = { false, format_integer },
-    resolver        = { false, format_string  },
+    anon_sequence      = { false, format_list    },
+    color_callback     = { false, format_string  },
+    definer            = { false, format_string  },
+    fontloader         = { true,  format_string  },
+    log_level          = { false, format_integer },
+    resolver           = { false, format_string  },
+    default_dvi_driver = { false, format_string  },
   },
 }
 

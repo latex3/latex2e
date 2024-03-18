@@ -23,7 +23,8 @@ l3build save -cconfig-table-pdftex \
 	table-017 \
 	table-018 \
 	table-019 \
-	table-020
+	table-020 \
+	table-021-longtable
 
 l3build save -cconfig-table-luatex \
 	table-000 \
@@ -50,4 +51,6 @@ l3build save -cconfig-table-luatex \
 	table-017 \
 	table-018 \
 	table-019 \
-	table-020
+	table-020 \
+	table-021-longtable
+

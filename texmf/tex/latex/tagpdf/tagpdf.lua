@@ -6,7 +6,7 @@
 -- 
 --  tagpdf-backend.dtx  (with options: `lua')
 --  
---  Copyright (C) 2019-2023 Ulrike Fischer
+--  Copyright (C) 2019-2024 Ulrike Fischer
 --  
 --  It may be distributed and/or modified under the conditions of
 --  the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.98r",       --TAGVERSION
-    date          = "2023-12-18", --TAGDATE
+    version       = "0.98x",       --TAGVERSION
+    date          = "2024-02-29", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -328,7 +328,7 @@ if tex.outputmode == 0 then
  else -- assume a dvips variant
   function __tag_backend_create_bmc_node (tag)
     local bmcnode = nodenew("whatsit","special")
-    bmcnode.data = "ps:SDict begin mark/"..tag.." BMC pdfmark end"
+    bmcnode.data = "ps:SDict begin mark/"..tag.." /BMC pdfmark end"
     return bmcnode
   end
  end
@@ -358,7 +358,7 @@ if tex.outputmode == 0 then
  else -- assume a dvips variant
   function __tag_backend_create_bdc_node (tag,dict)
     local bdcnode = nodenew("whatsit","special")
-    bdcnode.data = "ps:SDict begin mark/"..tag.."<<"..dict..">> BDC pdfmark end"
+    bdcnode.data = "ps:SDict begin mark/"..tag.."<<"..dict..">> /BDC pdfmark end"
     return bdcnode
   end
  end
@@ -378,7 +378,7 @@ local function __tag_insert_bdc_node (head,current,tag,dict)
 end
 local function __tag_pdf_object_ref (name)
    local tokenname = 'c__pdf_backend_object_'..name..'_int'
-   local object = token.create(tokenname).index..' 0 R'
+   local object = token.create(tokenname).mode ..' 0 R'
    return object
 end
 ltx.__tag.func.pdf_object_ref=__tag_pdf_object_ref
@@ -411,6 +411,7 @@ local function __tag_mark_spaces (head)
     local id = n.id
     if id == GLYPH then
       local glyph = n
+      default_currfontid = glyph.font
       if glyph.next and (glyph.next.id == GLUE)
         and not inside_math  and (glyph.next.width >0)
       then
@@ -448,7 +449,8 @@ local function __tag_mark_spaces (head)
         and not inside_math  and (glyph.next.width >0) and n.subtype==0
       then
         nodesetattribute(glyph.next,iwspaceattributeid,1)
-      --  nodesetattribute(glyph.next,iwfontattributeid,glyph.font)
+        --  changed 2024-01-18, issue #72
+        nodesetattribute(glyph.next,iwfontattributeid,default_currfontid)
       -- for debugging
        if ltx.__tag.trace.showspaces then
         __tag_show_spacemark (head,glyph)
@@ -479,6 +481,7 @@ end
 ltx.__tag.func.markspaceoff=__tag_deactivate_mark_space
 local default_space_char = nodenew(GLYPH)
 local default_fontid     = fontid("TU/lmr/m/n/10")
+local default_currfontid = fontid("TU/lmr/m/n/10")
 default_space_char.char  = 32
 default_space_char.font  = default_fontid
 local function __tag_font_has_space (fontid)
@@ -803,6 +806,7 @@ function ltx.__tag.func.fill_parent_tree_line (page)
      end
     else
       ltx.__tag.trace.log ("INFO PARENTTREE-NO-DATA: page "..page,3)
+      numsentry = pdfpage.." []"
     end
     return numsentry
 end

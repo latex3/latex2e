@@ -55,7 +55,7 @@ Latin Modern fonts in the test files.
 
 ## Layout and interface deficiencies
 
-Upfront we should probably stress that 'deficiencies' in the design of
+Upfront we should probably stress that 'deficiencies' in the design
 of the standard document classes (`article`, `report` and `book`) as
 well a questionable but long established interface behavior of commands
 is something that we will normally not change, even if we can all agree
