@@ -18,6 +18,7 @@ l3build save -cconfig-block -epdftex,luatex \
 	blocks-list-02 \
 	blocks-list-02b \
 	blocks-list-03b \
+	blocks-list-04 \
 	blocks-description-01 \
 	blocks-description-01b \
 	blocks-description-02b \
