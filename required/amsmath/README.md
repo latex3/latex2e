@@ -1,7 +1,7 @@
 The amsmath bundle for LaTeX
 ============================
 
-Release 2024-06-01 pre-release 0
+Release 2024-06-01 pre-release 2
 
 Overview
 --------
