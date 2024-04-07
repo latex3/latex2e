@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.98x",       --TAGVERSION
-    date          = "2024-02-29", --TAGDATE
+    version       = "0.99a",       --TAGVERSION
+    date          = "2024-03-27", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -377,7 +377,7 @@ local function __tag_insert_bdc_node (head,current,tag,dict)
  return head
 end
 local function __tag_pdf_object_ref (name)
-   local tokenname = 'c__pdf_backend_object_'..name..'_int'
+   local tokenname = 'c__pdf_object_'..name..'_int'
    local object = token.create(tokenname).mode ..' 0 R'
    return object
 end
