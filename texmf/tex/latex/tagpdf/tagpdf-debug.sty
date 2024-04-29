@@ -13,7 +13,7 @@
 %% tagpdf-struct.dtx  (with options: `debug')
 %% tagpdf-space.dtx  (with options: `debug')
 %% 
-%% Copyright (C) 2019-2022 Ulrike Fischer
+%% Copyright (C) 2019-2024 Ulrike Fischer
 %% 
 %% It may be distributed and/or modified under the conditions of
 %% the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -26,13 +26,79 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: tagpdf.dtx
-\ProvidesExplPackage {tagpdf-debug} {2023-10-27} {0.98m}
+\ProvidesExplPackage {tagpdf-debug} {2024-04-12} {0.99b}
   { debug code for tagpdf }
 \@ifpackageloaded{tagpdf}{}{\PackageWarning{tagpdf-debug}{tagpdf~not~loaded,~quitting}\endinput}
 \prop_gput:Nnn \g_msg_module_type_prop { tag / debug} {}
 \prop_gput:Nnn \g_msg_module_name_prop { tag / debug }{tagpdf~DEBUG}
+\cs_if_free:NT \pdf_object_new_indexed:nn
+ {
+   \cs_generate_variant:Nn \pdf_object_new:n {e}
+   \cs_generate_variant:Nn \pdf_object_write:nnn {enn}
+   \cs_new_protected:Npn \pdf_object_new_indexed:nn #1 #2
+     {
+       \pdf_object_new:e {#1/\int_eval:n{#2}}
+     }
+   \cs_new_protected:Npn \pdf_object_write_indexed:nnnn #1 #2 #3 #4
+     {
+       \pdf_object_write:enn {#1/\int_eval:n{#2}}{#3}{#4}
+     }
+   \cs_generate_variant:Nn \pdf_object_write_indexed:nnnn {nnne}
+   \cs_new:Npn\pdf_object_ref_indexed:nn #1 #2
+     {
+       \pdf_object_ref:e {#1/\int_eval:n{#2}}
+     }
+   \cs_new:Npn \__kernel_pdf_object_id_indexed:nn #1 #2
+     {
+       \int_use:c
+         { c__pdf_object_ #1/\int_eval:n{#2} _int }
+     }
+ }
 
-
+\cs_set_protected:Npn \tag_stop:
+  {
+     \msg_note:nne {tag / debug }{tag-stop}{ \int_use:N \l__tag_tag_stop_int }
+    \int_incr:N \l__tag_tag_stop_int
+    \bool_set_false:N \l__tag_active_struct_bool
+    \bool_set_false:N \l__tag_active_mc_bool
+    \bool_set_false:N \l__tag_active_socket_bool
+    \__tag_stop_para_ints:
+  }
+\cs_set_protected:Npn \tag_start:
+  {
+    \int_if_zero:nF { \l__tag_tag_stop_int } { \int_decr:N \l__tag_tag_stop_int }
+    \int_if_zero:nT { \l__tag_tag_stop_int }
+      {
+        \bool_set_true:N \l__tag_active_struct_bool
+        \bool_set_true:N \l__tag_active_mc_bool
+        \bool_set_true:N \l__tag_active_socket_bool
+        \__tag_start_para_ints:
+      }
+    \msg_note:nne {tag / debug }{tag-start}{ \int_use:N \l__tag_tag_stop_int }
+  }
+\cs_set_eq:NN\tagstop\tag_stop:
+\cs_set_eq:NN\tagstart\tag_start:
+\cs_set_protected:Npn \tag_stop:n #1
+  {
+    \msg_note:nnee {tag / debug }{tag-stop}{ \int_use:N \l__tag_tag_stop_int }{#1}
+    \int_incr:N \l__tag_tag_stop_int
+    \bool_set_false:N \l__tag_active_struct_bool
+    \bool_set_false:N \l__tag_active_mc_bool
+    \bool_set_false:N \l__tag_active_socket_bool
+    \__tag_stop_para_ints:
+  }
+\cs_set_protected:Npn \tag_start:n #1
+  {
+    \int_if_zero:nF { \l__tag_tag_stop_int } { \int_decr:N \l__tag_tag_stop_int }
+    \int_if_zero:nT { \l__tag_tag_stop_int }
+      {
+        \bool_set_true:N \l__tag_active_struct_bool
+        \bool_set_true:N \l__tag_active_mc_bool
+        \bool_set_true:N \l__tag_active_socket_bool
+        \__tag_start_para_ints:
+      }
+    \msg_note:nnee {tag / debug }{tag-start}{ \int_use:N \l__tag_tag_stop_int }{#1}
+  }
 \bool_if:NTF \g__tag_mode_lua_bool
   {
    \RequirePackage {tagpdf-debug-lua}
@@ -41,6 +107,7 @@
    \RequirePackage {tagpdf-debug-generic} %
   }
 %% File: tagpdf-checks.dtx
+
 \msg_new:nnn { tag/debug } { show-struct }
   {
     =========================\\
@@ -92,7 +159,7 @@
  }
 \msg_new:nnn { tag / debug } {struct-begin}
   {
-    Struct~\tag_get:n{struct_num}~begin~#1~with~options:~\tl_to_str:n{#2}~[\msg_line_context:]
+    Struct~\tag_get:n{struct_num}~begin~#1~with~options:~\tl_to_str:n{#2}~\\[\msg_line_context:]
   }
 \msg_new:nnn { tag / debug } {struct-end}
   {
@@ -143,15 +210,32 @@
            {#1}
            {\exp_last_unbraced:NV\use_i:nn \l__tag_tmpa_tl}
            {
-             \msg_warning:nnxx { tag/debug }{ struct-end-wrong }
+             \msg_warning:nnee { tag/debug }{ struct-end-wrong }
               {#1}
               {\exp_last_unbraced:NV\use_i:nn \l__tag_tmpa_tl}
            }
         }
      }
  }
-
+\msg_new:nnn { tag / debug } {tag-stop}
+  {
+    \int_if_zero:nTF
+      {#1}
+      {Tagging~stopped}
+      {Tagging~(not)~stopped~(already~inactive)}\\
+    level:~#1~==>~\int_eval:n{#1+1}\tl_if_empty:nF{#2}{,~label:~#2}~[\msg_line_context:]
+  }
+\msg_new:nnn { tag / debug } {tag-start}
+  {
+    \int_if_zero:nTF
+      {#1}
+      {Tagging~restarted}
+      {Tagging~(not)~restarted}\\
+    level:~\int_eval:n{#1+1}~==>~#1\tl_if_empty:nF{#2}{,~label:~#2}~[\msg_line_context:]
+  }
 %% File: tagpdf-user.dtx
+
+
 
 
 
@@ -162,7 +246,7 @@
       {
         \int_step_inline:nnn{#1}{\c@g__tag_struct_abs_int}
            {
-            \msg_term:nnxxxx
+            \msg_term:nneeee
                    { tag/debug } { show-struct }
                    { ##1 }
                    {
@@ -171,7 +255,7 @@
                        \msg_show_item_unbraced:nn
                    }
                    { } { }
-            \msg_term:nnxxxx
+            \msg_term:nneeee
                    { tag/debug } { show-kids }
                    {  ##1 }
                    {
@@ -182,7 +266,7 @@
                    { } { }
           }
       }
-    ,debug/structures .default:n = 0
+    ,debug/structures .default:n = 1
   }
 %% File: tagpdf-mc-shared.dtx
 
@@ -197,13 +281,13 @@
  }
 \cs_generate_variant:Nn \__tag_struct_prop_gput:nnn {nne,nee,nno}
 
-\prop_new:c { g__tag_struct_debug_0_prop }
-\seq_new:c  { g__tag_struct_debug_kids_0_seq }
-\prop_gset_eq:cc { g__tag_struct_debug_0_prop }{ g__tag_struct_0_prop }
-\prop_gremove:cn { g__tag_struct_debug_0_prop }{Namespaces}
+\prop_new:c { g__tag_struct_debug_1_prop }
+\seq_new:c  { g__tag_struct_debug_kids_1_seq }
+\prop_gset_eq:cc { g__tag_struct_debug_1_prop }{ g__tag_struct_1_prop }
+\prop_gremove:cn { g__tag_struct_debug_1_prop }{Namespaces}
 \cs_set_protected:Npn \__tag_struct_kid_mc_gput_right:nn #1 #2 %#1 structure num, #2 MCID absnum%
   {
-    \__tag_seq_gput_right:cx
+    \__tag_seq_gput_right:ce
       { g__tag_struct_kids_#1_seq }
       {
         \__tag_struct_mcid_dict:n {#2}
@@ -221,10 +305,10 @@
   }
 \cs_set_protected:Npn\__tag_struct_kid_struct_gput_right:nn #1 #2 %#1 num of parent struct, #2 kid struct
   {
-    \__tag_seq_gput_right:cx
+    \__tag_seq_gput_right:ce
       { g__tag_struct_kids_#1_seq }
       {
-        \pdf_object_ref:n { __tag/struct/#2 }
+        \pdf_object_ref_indexed:nn { __tag/struct }{ #2 }
       }
     \seq_gput_right:cn
       { g__tag_struct_debug_kids_#1_seq }
@@ -240,7 +324,7 @@
       {
         /Type/OBJR/Obj~#2/Pg~#3
       }
-    \__tag_seq_gput_right:cx
+    \__tag_seq_gput_right:ce
       { g__tag_struct_kids_#1_seq }
       {
         \pdf_object_ref_last:
@@ -262,13 +346,24 @@
         \__tag_new_output_prop_handler:n {\int_eval:n { \c@g__tag_struct_abs_int }}
         \__tag_seq_new:c  { g__tag_struct_kids_\int_eval:n { \c@g__tag_struct_abs_int }_seq}
          \seq_new:c { g__tag_struct_debug_kids_\int_eval:n {\c@g__tag_struct_abs_int}_seq }
-        \exp_args:Ne
-          \pdf_object_new:n
-            { __tag/struct/\int_eval:n { \c@g__tag_struct_abs_int } }
+          \pdf_object_new_indexed:nn { __tag/struct }
+            { \c@g__tag_struct_abs_int }
          \__tag_struct_prop_gput:nnn
             { \int_use:N \c@g__tag_struct_abs_int }
             { Type }
             { /StructElem }
+         \tl_if_empty:NF \l__tag_struct_lang_tl
+           {
+             \__tag_struct_prop_gput:nne
+              { \int_use:N \c@g__tag_struct_abs_int }
+              { Lang }
+              { (\l__tag_struct_lang_tl) }
+           }
+         \__tag_struct_prop_gput:nnn
+            { \int_use:N \c@g__tag_struct_abs_int }
+            { Type }
+            { /StructElem }
+
         \tl_set:Nn \l__tag_struct_stack_parent_tmpa_tl {-1}
         \keys_set:nn { __tag / struct} { #1 }
         \__tag_struct_set_tag_info:eVV
@@ -378,7 +473,7 @@
               { \int_use:N \c@g__tag_struct_abs_int }
               { P }
               {
-                \pdf_object_ref:e { __tag/struct/\l__tag_struct_stack_parent_tmpa_tl }
+                \pdf_object_ref_indexed:nn { __tag/struct} { \l__tag_struct_stack_parent_tmpa_tl }
               }
             %record this structure as kid:
             %\tl_show:N \g__tag_struct_stack_current_tl
@@ -400,7 +495,7 @@
                  {no~parent:~stashed}
                  {
                    parent~structure:~\l__tag_struct_stack_parent_tmpa_tl\c_space_tl =~
-                   \l__tag_get_parent_tmpa_tl
+                   \prop_item:cn{ g__tag_struct_\l__tag_struct_stack_parent_tmpa_tl _prop }{S}
                  }
              }
            \prop_gput:cne
@@ -450,7 +545,7 @@
 
 \cs_set_protected:Npn \tag_struct_end:n #1
  {
-\__tag_debug_struct_end_check:n{#1}
+    \__tag_check_if_active_struct:T{\__tag_debug_struct_end_check:n{#1}}
    \tag_struct_end:
  }
 \cs_set_protected:Npn \tag_struct_use:n #1 %#1 is the label
@@ -464,23 +559,23 @@
             %add the label structure as kid to the current structure (can be the root)
             \__tag_struct_kid_struct_gput_right:ee
               { \g__tag_struct_stack_current_tl }
-              { \__tag_property_ref:enn{tagpdfstruct-#1}{tagstruct}{0} }
+              { \__tag_property_ref:enn{tagpdfstruct-#1}{tagstruct}{1} }
             %add the current structure to the labeled one as parents
-            \__tag_prop_gput:cnx
-              { g__tag_struct_\__tag_property_ref:enn{tagpdfstruct-#1}{tagstruct}{0}_prop }
+            \__tag_prop_gput:cne
+              { g__tag_struct_\__tag_property_ref:enn{tagpdfstruct-#1}{tagstruct}{1}_prop }
               { P }
               {
-                \pdf_object_ref:e { __tag/struct/\g__tag_struct_stack_current_tl }
+                \pdf_object_ref_indexed:nn { __tag/struct } { \g__tag_struct_stack_current_tl }
               }
            \prop_gput:cne
-             { g__tag_struct_debug_\__tag_property_ref:enn{tagpdfstruct-#1}{tagstruct}{0}_prop }
+             { g__tag_struct_debug_\__tag_property_ref:enn{tagpdfstruct-#1}{tagstruct}{1}_prop }
              { P }
              {
                parent~structure:~\g__tag_struct_stack_current_tl\c_space_tl=~
                \g__tag_struct_tag_tl
              }
              \__tag_struct_get_parentrole:eNN
-              {\__tag_property_ref:enn{tagpdfstruct-#1}{tagstruct}{0}}
+              {\__tag_property_ref:enn{tagpdfstruct-#1}{tagstruct}{1}}
               \l__tag_tmpa_tl
               \l__tag_tmpb_tl
             \__tag_check_parent_child:VVVVN
@@ -521,16 +616,16 @@
               {
                 \msg_warning:nnn { tag } {struct-used-twice} {#1}
               }
-            %add the label structure as kid to the current structure (can be the root)
+            %add the \#1 structure as kid to the current structure (can be the root)
             \__tag_struct_kid_struct_gput_right:ee
               { \g__tag_struct_stack_current_tl }
               { #1 }
-            %add the current structure to the labeled one as parents
+            %add the current structure to \#1 as parent
              \__tag_struct_prop_gput:nne
               { #1 }
               { P }
               {
-                \pdf_object_ref:e { __tag/struct/\g__tag_struct_stack_current_tl }
+                \pdf_object_ref_indexed:nn { __tag/struct }{ \g__tag_struct_stack_current_tl }
               }
            \prop_gput:cne
              { g__tag_struct_debug_#1_prop }
