@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{calc}
-\ProvidesExplClass{l3doc}{2024-03-14}{}
+\ProvidesExplClass{l3doc}{2024-05-08}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -798,7 +798,8 @@
       {
         \tl_remove_all:Ne \l__codedoc_tmpa_tl
           { \iow_char:N \^^M \c_percent_str }
-        \tl_remove_all:Nx \l__codedoc_tmpa_tl { \token_to_str:N \obeyedline \c_space_tl \c_percent_str }
+        \tl_remove_all:Ne \l__codedoc_tmpa_tl
+          { \token_to_str:N \obeyedline \c_space_tl \c_percent_str }
         \tl_remove_all:Ne \l__codedoc_tmpa_tl { \tl_to_str:n { ^ ^ A } }
         \tl_remove_all:Ne \l__codedoc_tmpa_tl { \iow_char:N \^^I }
         \tl_remove_all:Ne \l__codedoc_tmpa_tl { \iow_char:N \^^M }

@@ -9,6 +9,7 @@
 -- l3sys.dtx  (with options: `package,lua')
 -- l3token.dtx  (with options: `package,lua')
 -- l3intarray.dtx  (with options: `package,lua')
+-- l3pdf.dtx  (with options: `package,lua')
 -- 
 -- Copyright (C) 1990-2024 The LaTeX Project
 -- 
@@ -418,11 +419,11 @@ do
     [cmd'outer_call' or cmd'tolerant_call'] = true,
     [cmd'long_outer_call' or cmd'tolerant_protected_call'] = true,
     [cmd'assign_glue' or cmd'register_glue'] = index_not_nil,
-    [cmd'assign_mu_glue' or cmd'register_mu_glue'] = index_not_nil,
+    [cmd'assign_mu_glue' or cmd'register_mu_glue' or cmd'register_muglue'] = index_not_nil,
     [cmd'assign_toks' or cmd'register_toks'] = index_not_nil,
-    [cmd'assign_int' or cmd'register_int'] = index_not_nil,
+    [cmd'assign_int' or cmd'register_int' or cmd'register_integer'] = index_not_nil,
     [cmd'assign_attr' or cmd'register_attribute'] = true,
-    [cmd'assign_dimen' or cmd'register_dimen'] = index_not_nil,
+    [cmd'assign_dimen' or cmd'register_dimen' or cmd'register_dimension'] = index_not_nil,
   }
 
   luacmd("__token_if_primitive_lua:N", function()
@@ -569,3 +570,49 @@ luacmd('__intarray_gset_range:w', function()
     from = from + 1
   end
   end, 'global', 'protected')
+-- File: l3pdf.dtx
+
+local scan_int = token.scan_int
+local scan_string = token.scan_string
+local cprint = tex.cprint
+
+local __pdf_objects_named = {}
+local __pdf_objects_indexed = {}
+
+luacmd('__pdf_object_record:nN', function()
+  local name = scan_string()
+  local n = scan_int()
+  __pdf_objects_named[name] = n
+end,'protected','global')
+
+local function object_id(name,index)
+  if index then
+    return __pdf_objects_indexed[name][index] or 0
+  else
+    return __pdf_objects_named[name] or 0
+  end
+end
+
+luacmd('__pdf_object_retrieve:n', function()
+  local name = scan_string()
+  return cprint(12,tostring(object_id(name)))
+end,'global')
+
+ltx.pdf = ltx.pdf or {}
+ltx.pdf.object_id = object_id
+
+
+luacmd('__pdf_object_record:nnN', function()
+  local name = scan_string()
+  local index = tonumber(scan_string())
+  local n = scan_int()
+  __pdf_objects_indexed[name] = __pdf_objects_indexed[name] or {}
+  __pdf_objects_indexed[name][index] = n
+end,'protected','global')
+
+luacmd('__pdf_object_retrieve:nn', function()
+  local name = scan_string()
+  local index = tonumber(scan_string())
+  return cprint(12,tostring(object_id(name,index)))
+end,'global')
+
