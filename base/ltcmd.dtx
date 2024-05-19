@@ -4617,6 +4617,93 @@
 % \end{macro}
 % \end{variable}
 %
+% \begin{macro}{\@@_split_keyval:nn}
+%   The |key=value| splitting processor stores all known keys and the
+%   corresponding arguments in form of numbered token list variables inside a
+%   |prop|, which is done during \cs{@@_split_keyval_setup:n}. The individual
+%   keys are stored in those token lists during \cs{@@_split_keyval_do:n}, and
+%   their values are later retrieved from a full expansion of \cs{l_@@_tmpa_tl}.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_split_keyval:nn #1#2
+  {
+    \group_begin:
+      \@@_split_keyval_setup:n {#1}
+      \int_compare:nNnT \l_@@_split_keyval_item_int = \c_zero_int
+        { \msg_error:nn { cmd } { no-keys } {#2} }
+      \@@_split_keyval_do:n {#2}
+      \exp_args:NNNe
+    \group_end:
+    \tl_set:Nn \ProcessedArgument { \l_@@_split_keyval_args_tl }
+  }
+%    \end{macrocode}
+% \begin{variable}{\l_@@_split_keyval_item_int,\l_@@_split_keyval_args_tl}
+%   Count the current list element during setup and collect the individual key
+%   value holding token lists.
+%    \begin{macrocode}
+\int_new:N \l_@@_split_keyval_item_int
+\tl_new:N \l_@@_split_keyval_args_tl
+%    \end{macrocode}
+% \end{variable}
+% \begin{macro}
+%   {
+%     \@@_split_keyval_setup:n, \@@_split_keyval_setup_k:n,
+%     \@@_split_keyval_setup_kv:nn, \@@_split_keyval_setup_kv:no,
+%     \@@_split_keyval_setup_kv:Nnn, \@@_split_keyval_setup_kv:cnn
+%   }
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_split_keyval_setup:n
+  {
+    \int_zero:N \l_@@_split_keyval_item_int
+    \tl_clear:N \l_@@_split_keyval_args_tl
+    \keyval_parse:NNn \@@_split_keyval_setup_k:n \@@_split_keyval_setup_kv:nn
+  }
+\cs_new_protected:Npn \@@_split_keyval_setup_k:n #1
+  { \@@_split_keyval_setup_kv:no {#1} \c_novalue_tl }
+\cs_new_protected:Npn  \@@_split_keyval_setup_kv:nn
+  {
+    \int_incr:N \l_@@_split_keyval_item_int
+    \@@_split_keyval_setup_kv:cnn
+      { l_@@_split_keyval_arg_ \int_use:N \l_@@_split_keyval_item_int _tl }
+  }
+\cs_new_protected:Npn \@@_split_keyval_setup_kv:Nnn #1#2#3
+  {
+    \tl_clear_new:N #1
+    \prop_put:Nnn \l_@@_tmp_prop {#2} {#1}
+    \tl_set:Nn #1 {#3}
+    \tl_put_right:Nn \l_@@_split_keyval_args_tl { { \exp_not:o #1 } }
+  }
+\cs_generate_variant:Nn \@@_split_keyval_setup_kv:nn { no }
+\cs_generate_variant:Nn \@@_split_keyval_setup_kv:Nnn { cnn }
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{\@@_split_keyval_do:n}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_split_keyval_do:n #1
+  {
+    \tl_set:Nn \l_@@_tmpb_tl {#1}
+    \keyval_parse:NNn \@@_split_keyval_do_key:n \@@_split_keyval_do_pair:nn {#1}
+  }
+\cs_new_protected:Npn \@@_split_keyval_do_key:n #1
+  { \@@_split_keyval_do_pair:nn {#1} {} }
+\cs_new_protected:Npn \@@_split_keyval_do_pair:nn #1#2
+  {
+    \prop_get:NnNTF \l_@@_tmp_prop {#1} \l_@@_tmpa_tl
+      { \exp_after:wN \tl_set:Nn \l_@@_tmpa_tl {#2} }
+      {
+        \msg_error:nnnee { cmd } { unknown-key }
+          {#1}
+          { \exp_not:V \l_@@_tmpb_tl }
+          {
+            \exp_last_unbraced:Ne \use_none:n
+              { \prop_map_tokens:Nn \l_@@_tmp_prop { ,~ \use_i:nn } }
+            \prg_do_nothing:
+          }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
 % \begin{macro}{\@@_split_argument:nnn}
 % \begin{macro}{\@@_split_argument_aux:nnnn}
 % \begin{macro}[EXP]{\@@_split_argument_aux:n}
@@ -5344,6 +5431,22 @@
     at~each~occurrence~of~the~separator~'#1'~into~#2~parts.~
     Too~many~separators~were~found.
   }
+\msg_new:nnnn { cmd } { unknown-key }
+  { Unknown~key~'#1'~in~argument. }
+  {
+    LaTeX~was~asked~to~split~the~input~'#2'~as~a~key=value~list,~
+    and~the~encountered~key~'#1'~wasn't~defined.
+    \\ \\
+    Maybe~you~just~misspelled~it.~The~following~keys~are~defined:
+    \\
+    #3
+  }
+\msg_new:nnnn { cmd } { no-keys }
+  { No~keys~specified. }
+  {
+    LaTeX~was~asked~to~split~the~input~'#1'~as~a~key=value~list,~
+    but~no~keys~were~declared.
+  }
 \msg_new:nnnn { cmd } { verbatim-nl }
   { Verbatim-like~#1~ended~by~end~of~line. }
   {
@@ -5717,13 +5820,15 @@
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{\ReverseBoolean, \SplitArgument, \SplitList, \TrimSpaces}
+% \begin{macro}
+%   {\ReverseBoolean, \SplitArgument, \SplitList, \TrimSpaces, \SplitKeyval}
 %   Simple copies.
 %    \begin{macrocode}
 \cs_new_eq:NN \ReverseBoolean \@@_bool_reverse:N
 \cs_new_eq:NN \SplitArgument  \@@_split_argument:nnn
 \cs_new_eq:NN \SplitList      \@@_split_list:nn
 \cs_new_eq:NN \TrimSpaces     \@@_trim_spaces:n
+\cs_new_eq:NN \SplitKeyval    \@@_split_keyval:nn
 %    \end{macrocode}
 % \end{macro}
 %
