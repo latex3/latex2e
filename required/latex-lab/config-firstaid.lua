@@ -6,6 +6,6 @@
 checkengines = {"pdftex"}
 checksearch  = true
 testfiledir  = "testfiles-firstaid"
-
+excludetests={"test-cleveref"} -- doesn't work if firstaid is not in the format
 checkruns     = 4
 
