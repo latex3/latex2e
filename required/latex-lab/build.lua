@@ -38,6 +38,7 @@ checkengines = { "pdftex", "luatex" }
 checkdeps =
   {
     maindir .. "/base",
+    maindir .. "/required/firstaid",
     maindir .. "/required/amsmath",
     maindir .. "/required/graphics",
     maindir .. "/required/tools"
