@@ -9,7 +9,8 @@ l3build save -cconfig-ltmarks \
 	xmarks-007 \
 	xmarks-008 \
 	xmarks-009 \
-	github-0836
+	github-0836 \
+	github-1359
 
 
 exit
