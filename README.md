@@ -94,5 +94,4 @@ The LaTeX kernel is developed by [The LaTeX Project](https://latex-project.org).
 
 This README file is
 
-Copyright (C) 2019-2023
-The LaTeX Project
+Copyright (C) 2019-2024 The LaTeX Project

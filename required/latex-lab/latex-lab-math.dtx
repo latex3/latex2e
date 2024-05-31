@@ -2,7 +2,7 @@
 %
 %% File: latex-lab-math.dtx
 %
-% Copyright (C) 2022-2023 The LaTeX Project
+% Copyright (C) 2022-2024 The LaTeX Project
 %
 % It may be distributed and/or modified under the conditions of the
 % LaTeX Project Public License (LPPL), either version 1.3c of this
@@ -19,8 +19,8 @@
 % for those people who are interested or want to report an issue.
 %
 %
-\def\ltlabmathdate{2023-09-11}
-\def\ltlabmathversion{0.5c}
+\def\ltlabmathdate{2024-04-16}
+\def\ltlabmathversion{0.5j}
 %
 %<*driver>
 \documentclass{l3doc}
@@ -46,7 +46,14 @@
 % \newcommand\NEW[1]{\marginpar{\mbox{}\hfill\fbox{New: #1}}}
 % \providecommand\class[1]{\texttt{#1.cls}}
 % \providecommand\pkg[1]{\texttt{#1}}
-% \providecommand\hook[1]{\texttt{#1}}
+%
+% \providecommand\hook[1]{\texttt{#1\DescribeHook[noprint]{#1}}}
+% \providecommand\socket[1]{\texttt{#1\DescribeSocket[noprint]{#1}}}
+% \providecommand\plug[1]{\texttt{#1\DescribePlug[noprint]{#1}}}
+%
+% \NewDocElement[printtype=\textit{socket},idxtype=socket,idxgroup=Sockets]{Socket}{socketdecl}
+% \NewDocElement[printtype=\textit{hook},idxtype=hook,idxgroup=Hooks]{Hook}{hookdecl}
+% \NewDocElement[printtype=\textit{plug},idxtype=plug,idxgroup=Plugs]{Plug}{plugdecl}
 %
 % ^^A \car {...} for marginal comments
 % ^^A \car*{...} for longer inline comments
@@ -58,8 +65,6 @@
 % \NewDocumentCommand\fmi{sO{}m}
 %   {\IfBooleanTF{#1}{\todo[inline,#2]{#3}}^^A
 %                    {\todo[#2]{#3}}}
-%
-%
 %
 % \begin{abstract}
 %    This is an experimental prototype. It captures math material
@@ -75,6 +80,18 @@
 % \car*{Todo: update all the documentation! Both here and 
 %   (what little there is!) in the implementation section.}
 %
+% Tagging math involves a variety of tasks that require that math is captured before the
+% typesetting
+% \begin{itemize} 
+% \item When typesetting the math MC-tags and structure commands must 
+% be inserted at the begin and the end, and perhaps also around lines 
+% or other subparts of the equation.   
+% \item The source and/or a mathml-representation of the source must be available
+% so that it can be (perhaps after some preprocessing) be used in an associated file
+% or in an alternate text
+% \item It must be possible to measure the math for e.g. a bbox setting. 
+% \end{itemize}
+% 
 % This file implements capture of all math mode material at the outer
 % level, i.e., a formula is captured in its entirety with inner text
 % blocks (possibly containing further math) absorbed as part of the
@@ -84,7 +101,24 @@
 %\end{verbatim}
 % would only result in a single capture of the tokens
 % ``\verb*/a \in A \text{ for all $a<5$}/''.
+% 
 %
+% \section{Math capture} \label{sec:mathcapture}
+% In the current setup 
+%  \begin{itemize}
+%   \item |$|, |\(...\)| and |$$| grab (through a command in \cs{everymath}/cs{everydisplay})
+%   if the boolean \cs{l_@@_collected_bool} is false.
+%   If the boolean is true they behave normally and can for example contain verbatim.
+%   
+%   \item All (registered) environments grab their body 
+%    regardless of the state of the boolean. For
+%    |equation|, |equation*| and |math| this is a change as they no longer can 
+%    contain verbatim.
+%   
+%   \item BUG: |\[...\]| grabs if \cs{l_@@_collected_bool} is false. If it is
+%   true it falls back to |equation*| and then errors because this can't find the end.   
+%  \end{itemize} 
+%  
 % \subsection{Code level interfaces}
 %
 % \begin{function}{\math_register_env:n, \math_register_env:nn}
@@ -109,7 +143,8 @@
 %   \end{syntax}
 %   Declares that the captured math content should be passed to the
 %   \meta{tokens}, which will receive the environment type as |#1| and
-%   the content as |#2|.
+%   the content as |#2|. The processing is done before the typesetting. It is not
+%   applied if \cs{ifmeasuring@} is true.
 % \end{function}
 %
 % \subsection{Document level interfaces}
@@ -129,38 +164,275 @@
 %   \end{itemize}
 % \end{function}
 % 
+% \section{Math tagging}
+% 
+% The tagging code has to handle 
+% \begin{itemize}
+% \item the embedding into the surrounding. This means 
+%   \begin{itemize} 
+%     \item closing and reopening MC-chunks 
+%     \item closing and reopening text/P-structures
+%     \item handling interferences of the tagging code with penalties and spacing.
+%   \end{itemize}
+% \item the actual tagging which means to do some or all of the following tasks:
+%   \begin{itemize}
+%     \item setup content for an associated source file
+%     \item setup content for an associated mathml file 
+%     \item setup content for the /Alt key
+%     \item setup content for the /ActualText key
+%     \item setup attributes
+%     \item add associated files     
+%     \item add a Formula structure
+%     \item surround subparts (e.g. lines) with Formula sub structures
+%          (perhaps with their own set of additional content)
+%     \item surround elements of the equation with mathml structure elements 
+%          (currently only luatex with luamml)
+%    \end{itemize}
+%  \end{itemize}
+%  
+%  \subsection{Inline math}
+%  
+%  The embedding code is added through
+%  the sockets 
+%   \begin{itemize}
+%    \item |tagsupport/math/inline/begin|                
+%    \item |tagsupport/math/inline/end|
+%   \end{itemize}  
+%  The sockets simply push and pop the MC currently. Without
+%  tagging they use the noop-plug. 
+%  
+%  The actual tagging is in done through the sockets
+%   \begin{itemize}
+%    \item |tagsupport/math/inline/formula/begin|
+%     This socket takes the math as argument and its code
+%     should output it for typesetting. Without tagging the 
+%     socket uses the identity plug.
+%     The |default| plug of the socket calls these three internal sockets
+%     for the tagging support:
+%      \begin{itemize}
+%      \item |tagsupport/math/content| This should set up the various
+%      content variables (empty variables are ignored by the structure code
+%       and so can be used to suppress a setting).
+%      \item |tagsupport/math/struct/begin| This calls \cs{tag_struct_begin:n}.
+%      It should also write the associated files if needed.
+%      \item |tagsupport/math/substruct/begin| this handles subparts.
+%      TODO: does it really make sense in inline math to have that?? 
+%      \end{itemize}
+%    \item |tagsupport/math/inline/formula/end|
+%      This socket ends the formula structure(s). The |default|
+%      plug calls these internal sockets:
+%       \begin{itemize}
+%        \item |tagsupport/math/substruct/end|
+%        \item |tagsupport/math/struct/end|      
+%       \end{itemize}
+%   \end{itemize} 
+%    
+%  \subsection{Display math}
+%    
+%  \textit{to be written}
+%    
+%  \subsection{Associated Files}
+%  
+%  The current code allows the attachment of two types of associated file to the
+%  Formula structure:
+%  the \LaTeX\ source and a MathML representation. 
+%  Technically both can be attached---AF is an array
+%  of file references---practically there can be problems with PDF consumers: 
+%  e.g. ngpdf used both and so showed the equation twice 
+%  (this has been corrected in the newest version) and 
+%  Foxit seems to see only the first AF in the array (so we attach the
+%  mathml as first file).
+%  
+%  The \LaTeX\ source can be (and is) attached automatically. 
+%  It can be suppressed by an option with
+%  \texttt{math/tex/AF=false}, see below. 
+%  
+%  The MathML is attached if a file |\jobname-mathml.html| is found and
+%  if it contains a suitable MathML snippet for the current formula. 
+%  The MathML processing can be suppressed globally by emptying the list of
+%  mathml files with |math/mathml/sources=|. Locally for a formula |math/mathml/AF=false|
+%  can be used. 
+%  
+%  For a MathML representation a file with such representations must be provided. 
+%  If the equation is numbered the numbering should be part of the MathML as 
+%  the |Lbl| substructure is ignored if an MathML is used (see https://github.com/foxitsoftware/PDF_UA-2).
+%    
+%  The MathML representation is given in a special format. 
+%  It is meant to be a valid html file
+%  that can be viewed  in a browser.
+%  For this it can start with |<!DOCTYPE html><html>| and end with |</html>|
+%  It should have the extension \texttt{.html}. The \meta{mathml} content 
+%  is read with special catcodes, so can contain ambersands, hashes, comment chars
+%  and unmatched braces such as |<mo>{</mo>|
+%  
+%  The file should contain a number of representations in this format:
+%  \begin{quote}
+%  |<div>| \\
+%  |  <h2>\mml| \meta{key}|</h2>|\\
+%  |  <p>|\meta{source}|</p>| \\
+%  |  <p>|\meta{hash}|</p>|   \\
+%  |  <math | \meta{attributes} |>|\\
+%  \meta{mathml}\\
+%  |  </math>|\\
+%  |</div>|
+%  \end{quote}
+%  The keywords |<div>|, |<h2>\mml|, |<p>|, |<math|, |</math>| |</div>| are required as
+%  they are used to delimit the arguments by the \LaTeX{} code.
+%  
+%  \meta{key} and \meta{source} are only used for debugging, they help to identify
+%  the equation referred by this representation. The source should be used correctly escaped
+%  |&| and |<| so that if gives valid html!
+%  
+%  \meta{attributes} is not required either, but can e.g. contain attributes
+%  to improve the display in a browser:
+%  \begin{verbatim}
+%  <math alttext="\mathbf{G}" class="ltx_Math" display="inline">
+%  \end{verbatim}
+%  It can also contain the name space declaration: |xmlns="http://www.w3.org/1998/Math/MathML"|%
+%  \footnote{But it is probably not needed and only blows up the PDF.}
+%  
+%  
+%  By default the code tries at the begin of the document 
+%  to read a file |\jobname-mathml.html| in the |html|-format. 
+%  The file name can be changed with |mathml/setfiles={filename1,filename2}| 
+%  (without extension, |html| is added automatically). 
+%  If there is a list, all files are loaded. 
+%  If a file doesn't exist it is ignored, only an info is written to the log.
+%  
+%  Currently every MathML-snippet from a file is embedded into the PDF, 
+%  it is not checked first if it is actually used (simply writing everything to the PDF 
+%  is a bit easier than keeping everything in memory and also means that 
+%  the snippets are one after the other in the PDF). 
+%  
+%  As mentioned above the MathML-AF can be suppressed for the equations in a group with 
+%  |math/mathml/AF=false|, or
+%  completly by setting |math/mathml/sources=| in the preamble. 
+%  
+%  Files embedded in a PDF can be listed in the attachments panel of a PDF viewer.
+%  This is probably not so useful for lots of small files (but one could create
+%  collections), but as long as PDF editors or viewers don't offer 
+%  proper support to access the AF it can help so have them there. The MathML are
+%  added by default, but the \LaTeX{} source not. This can be changed with
+%  |viewer/pane/mathsource=true| (anywhere in the document) and |viewer/pane/mathml=false| (in the
+%  preamble, before the external file is read).  
+%  
+%  \subsection{Options}
+%      
+%   
 % \section{Known current bugs, etc.}
 %     \car*{New Section, now with subsections.\\
 %      As indicated, these lists are probably incomplete.\\
 %      Some of these have been addressed in a more recent branch.} 
 %
 % \subsection{Capture/grabbing problems}
-% 
+%  
 % \begin{enumerate}
 %   \item Incorrect grabbing of |$|-math when there is also 
 %      explicit |$|-math within a \textit{text environment} 
 %      that is itself within the math that should all be grabbed.
+%      For example,
+%       \begin{verbatim}
+%        $a\begin{minipage}{1cm}$b$\end{minipage}$
+%       \end{verbatim}
+%      would only result in the capture of the tokens
+%      ``\verb*/a\begin {minipage}{1cm}/''. 
+%      This can be avoided by an additional brace group:
+%       \begin{verbatim}
+%        $a{\begin{minipage}{1cm}$b$\end{minipage}}$
+%       \end{verbatim} 
+%      
 %   \item Similar incorrect grabbing with |$$| also.
+%   
 %   \item The grabbing, for all the display environments (and |\) \]|), needs
 %       to deal with nesting: \pkg{amsmath} contains code for this. 
-%   \item 
+%        
+%   \item The math can't contain verbatim and verbatim-like commands. This is 
+%   nothing new for the \pkg{amsmath} environments but changes |$| and |\[\]|
+%   and |equation*| (see e.g. tagging-project issue \#30).    
+%   
+%   \item Begin and end of the math or math environment can not be hidden in commands.
+%   For example \verb+>{$}l<{$}+ in a tabular would lead to errors. 
+%   Defining |\[| to fall back to |equation*| doesn't work if |equation*| is 
+%   a grabbing environment.
+%   
+%   \item The behaviour of |\[...\]| is faulty. See above.
 % \end{enumerate} 
 %
+% \subsection{Fake math}
+% In a number of places in \LaTeX{} math commands (mainly |$|) is used 
+% only for technical reason, e.g. to access a math font, to setup a symbol
+% or to use \cs{vcenter}. 
+% 
+% The code identifies such fake math mostly by making use of the \cs{m@th} command
+% where two methods are used for the automatic detection:
+% 
+% \begin{itemize}
+%  \item After grabbing math content the code checks if the content contains the token 
+%  \cs{m@th} and if yes it doesn't call the processor before reinserting
+%  the content and perhaps adding tagging code.
+%  This method requires that the math can be grabbed (e.g. that the end dollar is visible)
+%  and that the \cs{m@th} is visible. It applies for example in \cs{@iiiparbox} where the
+%  code from |$\vcenter| to |\m@th$| is grabbed an put back. It does not work for
+%  example for |tabular| where the dollars and the \cs{m@th} token are spread around
+%  over three commands. |tabular| needs therefore manual intervention. 
+%  
+%  A look in the list of usages (in \texttt{usage-of-m@th.md}) justifies this approach.
+%  All usages are either not math at all, or related to small elements that probably
+%  shouldn't be grabbed and processed on their own. 
+%
+%  \item \cs{m@th} is redefined so that it sets the boolean \cs{l_@@_collected_bool}
+%  to true. If \cs{m@th} is used inside math that has been grabbed
+%  this doesn't change much as the boolean is set by the grabbing anyway. For usages
+%  outside math the benefit is not so clear: The setting avoids that in \cs{LaTeXe}
+%  the epsilon is processed as math, but it also prevents that the content of the amsmath
+%  command \cs{boxed} is processed as math. 
+%  It means that if one wants to reenable math processing inside some (fake) math
+%  one has to do it after \cs{m@th} calls.
+% \end{itemize}
+% 
+%  Open problems
+%  \begin{enumerate}
+%   \item The grabbing code doesn't pass the info that it detected a \cs{m@th} token.
+%   This means that the tagging code has to do the same check (and doesn't do this
+%   in all cases yet).
+%   
+%   \item Commands are missing to locally disable the grabbing and processing, e.g.
+%   to handle |tabular|.
+%   
+%   \item It must be checked if setting the boolean in \cs{m@th} really makes sense
+%   or if commands like \cs{LaTeXe} should be handled manually. 
+%           
+%  \end{enumerate}
+%  
+% \subsection{Processor}
+%  
+% The grabbed math is at first passed to the processor. The processor is not called
+% in a measuring phase (from the amsmath \cs{ifmeasuring@}) and if the \cs{m@th} 
+% token is detected. 
+% It is not quite clear what purpose the processor has. As it is a public interface
+% it can't be used for internal code. And typesetting happens later and the processor
+% can't really change this. Currently it is mostly used for debugging and messages.
+% If the \cs{m@th} is found the \cs{l_@@_fakemath_bool} is set, so if the code
+% is changed this must be preserved.
+%  
 % \subsection{Other problems}
 % 
 % \begin{enumerate} 
 %   \item 
-%      The presence of \cs{m@th} in association with \cs{ensuremath} 
+%      The presence of \cs{m@th} in association with \cs{ensuremath}
 %      does not necessarily indicate fakemath.  This is because  
 %      wanting mathsurround to be zero is very reasonable and common, 
 %      \emph{even when the math is genuine} (and hence needs to be collected).
+%      
+%      TODO: this claim needs some examples. 
+%      
 %   \item User-defined environments can create problems; but this area, of 
 %      new, copied and changed environments, has not yet been developed. 
 % 
 %  \car*{Joseph wrote, inter alia:\\
 %      My thinking [regarding] \cs{RegisterMathEnvironment}\\
 %    - (New) Math environments should not be created-then-patched, but only
-%    generated by a [(future)] dedicated command (\cs{DeclareMathEnviornment}, 
+%    generated by a [(future)] dedicated command (\cs{DeclareMathEnvironment}, 
 %    presumably)\\
 %    - Math environments created with \pkg{ltcmd} [commands] should not be copied, . . .\\
 %    - Package authors should be able to manually set up math environments with a public boolean.}
@@ -172,7 +444,10 @@
 % \begin{enumerate}
 %  \item Add (some of) the math display commands that were \enquote{lifted from 
 %    plain}, e.g., \cs{displaylines} \cs{eqalign}(??).
-%  \item 
+%  \item The breqn packages changes catcodes and that isn't yet covered
+%    by our mechanism.
+%  \item \cs{intertext} is not correctly taken into account by the
+%  code splitting multiline math into subformulas.   
 % \end{enumerate}
 %
 %
@@ -218,36 +493,823 @@
 % have conditional definitions and deals with how to define \cs{[}/\cs{]}
 % neatly.
 %    \begin{macrocode}
-\tl_gput_right:Nn \@kernel@before@begindocument
-  { \RequirePackage { amsmath } }
+\AddToHook{begindocument/before}{ \RequirePackage { amsmath } }
 %    \end{macrocode} 
 %
 %
 % \subsection{Data structures}
 %
-%
-%
-% \begin{variable}{\l_@@_collected_bool} 
+% \begin{variable}{\l_@@_collected_bool}
 %   Tracks whether math mode material has been collected, which happens inside
 %   \pkg{amsmath} environments as well as those handled directly here.
-%
-%
+%   If true following math will not grab and/or process. 
+%   See \ref{sec:mathcapture} for details.
 %    \begin{macrocode}
 \bool_new:N \l_@@_collected_bool
 %    \end{macrocode}
 % \end{variable}
-% 
+%
+% \begin{variable}{\l_@@_fakemath_bool}
+%   Tracks whether math mode material has been identified as fake math during
+%   the grabbing phase, which happens currently if the 
+%   grabbed contents contains the \cs{m@th} token.
+%
+%    \begin{macrocode}
+\bool_new:N \l_@@_fakemath_bool
+%    \end{macrocode}
+% \end{variable}
+%
+%
 %  \car{Change first tl name below: `env' $=>$ `info'?\\
 %        Or do we need an extra storage tl?}
 %
 % \begin{variable}{\g_@@_grabbed_env_tl, \g_@@_grabbed_math_tl}
-% \cs{g_@@_grabbed_env_tl} contains the name of the math environment (\texttt{math} in the case 
-% of inline math, \cs{g_@@_grabbed_math_tl} the math content.
+% \cs{g_@@_grabbed_env_tl} contains the name of the math environment
+% (\texttt{math} in the case of inline math,
+% \cs{g_@@_grabbed_math_tl} the math content.
 %    \begin{macrocode}
 \tl_new:N \g_@@_grabbed_env_tl
 \tl_new:N \g_@@_grabbed_math_tl
 %    \end{macrocode}
 % \end{variable}
+% 
+% \begin{variable}{\l_@@_tmpa_tl,\l_@@_tmpa_skip,\l_@@_tmpa_str}
+% Temporary variables
+%    \begin{macrocode}
+\tl_new:N \l_@@_tmpa_tl
+\skip_new:N \l_@@_tmpa_skip
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_content_alt_tl,
+%  \l_@@_content_actual_tl,
+%  \l_@@_content_AF_tl}
+% Temporary variables to hold math content that should 
+% be used in actual or alt text and stored as AF. 
+%    \begin{macrocode}
+\tl_new:N \l_@@_content_alt_tl
+\tl_new:N \l_@@_content_actual_tl
+\tl_new:N \l_@@_content_AF_source_tl
+\tl_new:N \l_@@_content_AF_source_tmpa_tl
+\tl_new:N \l_@@_content_AF_mathml_tl
+%    \end{macrocode}
+% \end{variable}
+% 
+% \subsection{Tagging tools}
+% The following commands implement small tagging code chunks. 
+% This should probably be collected and moved into tagpdf later.
+% \begin{macro}{\__tag_tool_close_P:}
+% This closes a P/text-chunk, both the MC and the structure and
+% increases the counter manually.
+%    \begin{macrocode}
+\cs_new_protected:Npn \__tag_tool_close_P: 
+  {
+    \tag_if_active:T
+     {
+       \tag_mc_end: %end P-chunk, should perhaps be \tag_mc_end_push: ...
+         \__tag_gincr_para_end_int:
+         \__tag_check_para_end_show:nn{red}{} %debug: show para
+         \tag_struct_end:
+     }
+  }
+%    \end{macrocode}
+% \end{macro}
+% 
+%  We add also an attribute. 
+%    \begin{macrocode} 
+\tl_new:N\l_@@_attribute_class_tl
+\tagpdfsetup
+      {role/new-attribute = {inline}    {/O /Layout /Placement/Inline},
+       role/new-attribute = {display}   {/O /Layout /Placement/Block},
+      } 
+%    \end{macrocode}
+%
+% \subsection{Code related to AF}
+% Booleans to handle the options.
+% \begin{variable}{
+%   \l__tag_math_texsource_AF_bool,
+%   \l__tag_math_texsource_pane_bool,
+%   \l__tag_math_mathml_AF_bool,
+%   \g__tag_math_mathml_AF_bool,
+%   \l__tag_math_mathml_pane_bool,
+%   \l__tag_math_alt_bool
+% }
+%    \begin{macrocode}
+\bool_new:N\l__tag_math_texsource_AF_bool
+\bool_new:N\l__tag_math_texsource_pane_bool
+\bool_new:N\l__tag_math_mathml_AF_bool
+\bool_new:N\g__tag_math_mathml_AF_bool
+\bool_new:N\l__tag_math_mathml_pane_bool
+\bool_new:N\l__tag_math_alt_bool
+%    \end{macrocode}
+% \end{variable}
+% 
+% \begin{variable}{
+%    \g_@@_mathml_total_int,
+%    \g_@@_mathml_int,
+%    \g_@@_math_total_int,
+%    \g_@@_mathml_AF_found_int,
+%    \g_@@_mathml_AF_attached_int,
+%    }
+% \cs{g_@@_mml_total_int} records the mathml fragments read in.
+% \cs{g_@@_mml_int} records the mathml fragments read in with a different hash.
+% \cs{g_@@_AF_total_int} records the number of math structures that try to 
+% attach a mathml AF. 
+% \cs{g_@@_AF_found_int} records the number of math structures for which a fitting
+% mathml is found. 
+% \cs{g_@@_AF_attached_int} records the number of math structures which got a mathml fragment
+% (if mathml-AF are not disabled locally this should be the equal to the previous number.
+% 
+%    \begin{macrocode}
+\int_new:N\g_@@_mathml_total_int
+\int_new:N\g_@@_mathml_int
+\int_new:N\g_@@_math_total_int
+\int_new:N\g_@@_mathml_AF_found_int
+\int_new:N\g_@@_mathml_AF_attached_int
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l__tag_math_mathml_files_clist}
+% A sequence to store the file list for the mathml.
+%    \begin{macrocode}
+\clist_new:N\l__tag_math_mathml_files_clist
+\clist_put_right:Ne\l__tag_math_mathml_files_clist {\c_sys_jobname_str-mathml}
+%    \end{macrocode}
+% \end{variable}
+
+% This is the internal variant of the \cs{mml} command. 
+% \begin{macro}{\@@_AF_mml:nnnn}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_AF_mml:nnnn #1 #2 #3 #4
+%#1 number, #2 tex source for debugging, #3 hash, #4 mathml
+  {
+    \int_gincr:N \g_@@_mathml_total_int
+%    \end{macrocode}
+% mathml with the same hash should be included only once:
+%    \begin{macrocode}
+    \tl_if_exist:cF { g_@@_mathml_#3_tl }
+     {
+       \int_gincr:N \g_@@_mathml_int
+%    \end{macrocode}
+%  a simple Desc key, take care that it is a valid string!
+%    \begin{macrocode}
+       \pdfdict_put:nne {l_pdffile/Filespec} {Desc}{(mathml-#1)} 
+       \pdffile_embed_stream:nnN {#4}{mathml-#1.xml}\l_@@_tmpa_tl
+%    \end{macrocode}
+%  not strictly necessary but makes the files visible in the file attachment 
+%  page 
+%    \begin{macrocode}
+       \bool_if:NT \l__tag_math_mathml_pane_bool
+        {\pdfmanagement_add:nne {Catalog/Names}{EmbeddedFiles}{\l_@@_tmpa_tl}}
+       \tl_new:c{g_@@_mathml_#3_tl}
+       \tl_gset_eq:cN{g_@@_mathml_#3_tl}\l_@@_tmpa_tl       
+     }
+  }   
+%    \end{macrocode}
+% \end{macro}
+%
+% The html reader. 
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_AF_html_reader:w#1</h2>#2<p>#3</p>#4<p>#5</p>#6<math{
+  \begingroup
+   \char_set_catcode_other:N\{
+   \char_set_catcode_other:N\}
+   \char_set_catcode_other:N\#
+   \char_set_catcode_other:N\%
+   \@@_AF_html_reader_verb:w{#1}{#3}{#5}<math
+}
+%    \end{macrocode}
+%    \begin{macrocode}
+\cs_new_protected:Npn\@@_AF_html_reader_verb:w#1#2#3#4~</div>{
+  \endgroup
+   \@@_AF_mml:nnnn{#1}{#2}{#3}{#4}
+   }
+%    \end{macrocode}
+
+%
+% \begin{socketdecl}{tagsupport/math/mathml/write}
+% This writes a html-dummy with the hash and the math content.
+% This should be optional, so it uses a socket that can be disabled
+% 
+%    \begin{macrocode}
+\socket_new:nn {tagsupport/math/mathml/write}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+% 
+% \begin{plugdecl}{On}
+%    \begin{macrocode}
+\socket_new_plug:nnn{tagsupport/math/mathml/write}{On}
+ {
+    \str_set:NV\l_@@_tmpa_str\l_@@_content_AF_source_tl
+    \str_replace_all:Nnn\l_@@_tmpa_str{&}{&amp;}
+    \str_replace_all:Nnn\l_@@_tmpa_str{<}{&lt;}
+    \iow_now:Ne \g_@@_writedummy_iow 
+     {
+      \iow_newline:
+      <div>
+      \iow_newline:
+      <h2>\c_backslash_str mml\c_space_tl \int_use:N \g_@@_math_total_int </h2>
+      \iow_newline:
+      <p>\l_@@_tmpa_str</p>
+      \iow_newline:
+      <p>\l_@@_content_hash_tl </p>
+      \iow_newline:
+      <math></math>
+      \iow_newline:
+      </div>
+      \iow_newline:
+      }
+ }
+%    \end{macrocode}
+% \end{plugdecl}
+% And now a key to activate the socket.
+%    \begin{macrocode}
+
+\keys_define:nn { __tag / setup }
+   {
+     math/mathml/write-dummy .code:n = 
+       {
+         \bool_gset_true:N \g__tag_math_mathml_AF_bool
+         \tl_if_exist:NF\g_@@_writedummy_iow  
+          {
+            \iow_new:N  \g_@@_writedummy_iow
+            \iow_open:Nn \g_@@_writedummy_iow 
+             { 
+               \c_sys_jobname_str-mathml-dummy.html
+             }
+            \iow_now:Ne \g_@@_writedummy_iow
+             {
+               <!DOCTYPE~html>
+               \iow_newline:
+               <html>
+             }
+            \AssignSocketPlug {tagsupport/math/mathml/write}{On}
+            \AddToHook{enddocument/afterlastpage}
+             {
+               \iow_now:Nn \g_@@_writedummy_iow {</html>}
+               \iow_close:N \g_@@_writedummy_iow
+             }
+          }  
+       },
+     math/mathml/write-dummy .usage:n=preamble  
+   }          
+%    \end{macrocode}
+%
+% \begin{macro}{\@@_AF_process_mathml_files:}
+%    \begin{macrocode}
+\box_new:N\l_@@_tmpa_box
+\cs_new_protected:Npn \@@_AF_process_mathml_files:
+ {
+   \hbox_set:Nn \l_@@_tmpa_box
+    {
+      \pdfdict_put:nnn { l_pdffile/Filespec }{AFRelationship} { /Supplement }
+      \pdfdict_put:nne 
+       { l_pdffile }{Subtype} 
+       { \pdf_name_from_unicode_e:n{application/mathml+xml} } 
+      \char_set_catcode_other:N \#
+      \cs_set_eq:NN\mml \@@_AF_html_reader:w
+      \clist_map_inline:Nn \l__tag_math_mathml_files_clist
+        {
+          \file_if_exist:nTF {##1.html}
+            {
+              \typeout{Info:~reading~mathml~file~##1}
+              \file_input:n {##1.html}
+              \bool_gset_true:N\g__tag_math_mathml_AF_bool
+            }
+            {
+              \typeout{Info:~mathml~file~##1~does~not~exist}%info message
+            }
+        }  
+    }
+    \bool_if:NT\g__tag_math_mathml_AF_bool
+      {
+        \typeout{Info:~Activating~mathml~support}
+        \AssignSocketPlug{tagsupport/math/struct/begin}{test-mathml}
+        \AssignSocketPlug{tagsupport/math/struct/end}{test-mathml}    
+%    \end{macrocode}
+% mathml handling doesn't like subparts, so we disable them for now:
+%    \begin{macrocode}
+        \AssignSocketPlug{tagsupport/math/substruct/begin}{single}
+        \AssignSocketPlug{tagsupport/math/substruct/end}{single}
+        \AddToHook{enddocument/info}
+         {
+           \iow_term:n{MathML~statistic}
+           \iow_term:n{================}
+           \iow_term:e{==>~\int_use:N\g_@@_mathml_total_int\c_space_tl 
+           MathML~fragments~read}
+           \iow_term:e{==>~\int_use:N\g_@@_mathml_int\c_space_tl 
+           different~MathML~fragments}
+           \iow_term:e{==>~\int_use:N\g_@@_math_total_int\c_space_tl 
+           math~fragments~found}
+           \iow_term:e{==>~\int_use:N\g_@@_mathml_AF_found_int\c_space_tl 
+           fitting~MathML~AF~found}
+           \iow_term:e{==>~\int_use:N\g_@@_mathml_AF_attached_int\c_space_tl 
+           MathML~AF~attached}
+         }
+      }  
+ }
+\AddToHook{begindocument}{\@@_AF_process_mathml_files:} 
+%    \end{macrocode}
+% \end{macro}
+% 
+% \subsection{Mathstyle detection}
+% In some cases we need to detect the mathstyle used in a \cs{mathchoice}
+% command and to disable/enable tagging in the unused branches. 
+% This is currently only used in the amstext command \cs{text}
+% but is perhaps also needed in other cases, so we create a general command.
+% 
+%\begin{macro}{\l_@@_mathstyle_int,\g_@@_mathchoice_int,mathstyle}
+%    \begin{macrocode}
+\int_new:N \l_@@_mathstyle_int
+\int_new:N \g_@@_mathchoice_int
+\property_new:nnnn{mathstyle}{now}{-1}{\int_use:N \l_@@_mathstyle_int }
+%    \end{macrocode}
+%\end{macro}
+% For now internal, but perhaps will need a public version.
+% The command should be used in every branch of a \cs{mathchoice}
+% (with the correct mathstyle number) and with an unique label (which should
+% be the same in every branch). 
+% \cs{g_@@_mathchoice_int} can be e.g. increased before the mathchoice and 
+% then used.
+% \begin{macro}{\@@_tag_if_mathstyle:nn}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_tag_if_mathstyle:nn #1 #2 
+ %#1 refers to label
+ %#2 is a number for the mathstyle (typically 0,2,4,6)
+ {
+   \int_set:Nn \l_@@_mathstyle_int {#2}
+   \property_record:nn {#1} { mathstyle }
+   \int_compare:nNnTF { \property_ref:nn {#1}{ mathstyle} } = { #2 }
+    { \tag_start: }{ \tag_stop: }
+ }
+\cs_generate_variant:Nn \@@_tag_if_mathstyle:nn {en} 
+%    \end{macrocode}
+% \end{macro}
+% 
+% \subsection{Tagging options}
+%    \begin{macrocode}
+\keys_define:nn { __tag / setup }
+  {
+   math/mathml/sources .clist_set:N = \l__tag_math_mathml_files_clist,
+   math/alt/use       .bool_set:N = \l__tag_math_alt_bool,
+   viewer/pane/mathml      .bool_set:N = \l__tag_math_mathml_pane_bool,
+   viewer/pane/mathml      .initial:n = true,
+   viewer/pane/mathsource  .bool_set:N = \l__tag_math_texsource_pane_bool, 
+   math/mathml/AF .bool_set:N = \l__tag_math_mathml_AF_bool,
+   math/mathml/AF  .initial:n = true,
+   math/tex/AF    .bool_set:N = \l__tag_math_texsource_AF_bool,
+   math/tex/AF    .initial:n = true
+  } 
+%    \end{macrocode}
+%
+% \subsection{Sockets}
+% \subsubsection{Main inline math sockets}
+% 
+% \begin{socketdecl}
+%   {
+%     tagsupport/math/inline/begin,
+%     tagsupport/math/inline/end,
+%     tagsupport/math/inline/formula/begin,
+%     tagsupport/math/inline/formula/end,
+%   }
+%   The first two sockets are meant to embed inline
+%   math into the surrounding (so to close/reopen e.g. MC-chunks).
+%   The other two implement the actual formula structure.  
+%   The formula sockets are despite their naming not symmetric:
+%   the begin socket is issued after the math has started, while 
+%   the end socket is after the math!                               
+%    \begin{macrocode}
+\socket_new:nn {tagsupport/math/inline/begin}{0}
+\socket_new:nn {tagsupport/math/inline/end}{0}
+\socket_new:nn {tagsupport/math/inline/formula/begin}{1} %
+\socket_new:nn {tagsupport/math/inline/formula/end}{0}
+%    \end{macrocode}
+%\end{socketdecl}
+% 
+% 
+% \begin{plugdecl}{MC}
+%    \begin{macrocode}
+\socket_new_plug:nnn
+  {tagsupport/math/inline/begin}
+  {MC}
+  {\tag_mc_end_push:}
+\socket_new_plug:nnn
+  {tagsupport/math/inline/end}
+  {MC}
+  {\tag_mc_begin_pop:n{}}  
+%    \end{macrocode}
+% \end{plugdecl}
+% 
+% We probably will want to test different tagging receipes.
+% \begin{plugdecl}{default}
+%    \begin{macrocode}
+\socket_new_plug:nnn
+  {tagsupport/math/inline/formula/begin}
+  {default}
+  {  
+    \socket_use:n{tagsupport/math/content}
+    \socket_use:n{tagsupport/math/struct/begin}
+%    \end{macrocode}
+% TODO: does inline math need subformula handling?
+%    \begin{macrocode}
+    % inner formula if multiple parts (not really implemented yet)
+    \socket_use:n{tagsupport/math/substruct/begin}
+    #1
+    \socket_use:n{tagsupport/math/end}
+  }
+\socket_new_plug:nnn
+  {tagsupport/math/inline/formula/end}
+  {default}
+  {  
+    \socket_use:n{tagsupport/math/substruct/end}
+    \socket_use:n{tagsupport/math/struct/end}
+  }  
+%    \end{macrocode}
+% \end{plugdecl}
+% 
+% \subsubsection{Main display math sockets}
+% 
+% \begin{socketdecl}
+%   {
+%     tagsupport/math/display/begin,
+%     tagsupport/math/display/end,
+%     tagsupport/math/display/formula/begin,
+%     tagsupport/math/display/formula/end,
+%   }
+%   The first two sockets are meant to embed display
+%   math into the surrounding (so to close/reopen e.g. MC-chunks and
+%   P-structure).
+%   The other two implement the actual formula structure. 
+%   The formula sockets are despite their naming not symmetric:
+%   the begin socket is issued after the math has started, while 
+%   the end socket is after the math!                
+%    \begin{macrocode}
+\socket_new:nn {tagsupport/math/display/begin}{0}
+\socket_new:nn {tagsupport/math/display/end}{0}
+\socket_new:nn {tagsupport/math/display/formula/begin}{1} %
+\socket_new:nn {tagsupport/math/display/formula/end}{0}
+%    \end{macrocode}
+%\end{socketdecl}
+
+% \begin{plugdecl}{default}
+%    \begin{macrocode}
+\socket_new_plug:nnn
+  {tagsupport/math/display/begin}
+  {default}
+  { \__tag_tool_close_P:  }
+\socket_new_plug:nnn
+  {tagsupport/math/display/end}
+  {default}
+  {
+  }  
+%    \end{macrocode}
+% \end{plugdecl}
+
+
+% \begin{plugdecl}{default}
+%    \begin{macrocode}
+\socket_new_plug:nnn
+  {tagsupport/math/display/formula/begin}
+  {default}
+  { 
+    \socket_use:n{tagsupport/math/content}
+    \socket_use:n{tagsupport/math/struct/begin}
+    \socket_use:n{tagsupport/math/substruct/begin}
+    #1 
+    \socket_use:n{tagsupport/math/end}
+  }
+\socket_new_plug:nnn
+  {tagsupport/math/display/formula/end}
+  {default}
+  {  
+    \socket_use:n{tagsupport/math/substruct/end}
+    \socket_use:n{tagsupport/math/struct/end}
+  }  
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \subsubsection{Internal sockets}
+% 
+% \begin{variable}{\l_@@_content_template_tl}
+% The default text used as alt or actual text.
+%    \begin{macrocode}
+\tl_new:N\l_@@_content_template_tl
+\tl_set:Nn \l_@@_content_template_tl
+   {
+       LaTeX~ formula~ starts~
+       \exp_not:N\begin{\g_@@_grabbed_env_tl}
+       \c_space_tl
+       \exp_not:V\g_@@_grabbed_math_tl
+       \c_space_tl
+       \exp_not:N\end{\g_@@_grabbed_env_tl}
+       \c_space_tl LaTeX~ formula~ ends~
+   }    
+%    \end{macrocode}
+% \end{variable}
+
+% \begin{variable}{\l_@@_texsource_template_tl}
+% The default text used as texsource
+%    \begin{macrocode}
+\tl_new:N\l_@@_texsource_template_tl
+\tl_const:Nn\c_@@_inline_env_tl {math}
+\tl_set:Nn \l_@@_texsource_template_tl
+   {    
+     \tl_if_eq:NNTF\g_@@_grabbed_env_tl\c_@@_inline_env_tl
+      {
+       $
+         \exp_not:V\g_@@_grabbed_math_tl
+       $
+      }
+      {
+       \exp_not:N\begin{\g_@@_grabbed_env_tl}
+       \exp_not:V\g_@@_grabbed_math_tl
+       \exp_not:N\end{\g_@@_grabbed_env_tl}
+      } 
+   } 
+%    \end{macrocode}
+% \end{variable}
+
+% 
+% \begin{socketdecl}{tagsupport/math/content}
+% The math content is stored in associated files and used for 
+% actual and alternative text. As the exact text is still
+% unclear we use a socket to be able to test variants.
+% The socket should set all four tl vars above, if needed
+% to identical values. It can use the two variables 
+% \cs{g_@@_grabbed_env_tl} and \cs{g_@@_grabbed_math_tl}
+%    \begin{macrocode}
+\socket_new:nn {tagsupport/math/content}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+% 
+% Some default sockets to set the contents.
+% TODO: think about naming convention. 
+% TODO: think how this should organized so that one
+% has options to change from the outside and so that
+% there are less repetitions. 
+% \begin{plugdecl}{actual+source}
+%    \begin{macrocode}
+\socket_new_plug:nnn
+  {tagsupport/math/content}
+  {actual+source}
+  {
+   \tl_set:Ne\l_@@_content_actual_tl
+    {
+       \l_@@_content_template_tl
+    }   
+   \tl_set:Ne \l_@@_content_AF_source_tl 
+    {
+      \l_@@_texsource_template_tl
+    }  
+   \tl_set:Nn    \l_@@_content_AF_mathml_tl {}
+   \tl_set:Nn    \l_@@_content_alt_tl    {}
+  }
+%    \end{macrocode}
+% \end{plugdecl}  
+% 
+% \begin{plugdecl}{alt+source}
+%    \begin{macrocode}
+\socket_new_plug:nnn
+  {tagsupport/math/content}
+  {alt+source}
+  {
+   \tl_set:Ne\l_@@_content_alt_tl
+    {
+       \l_@@_content_template_tl
+    }   
+   \tl_set:Ne \l_@@_content_AF_source_tl 
+    {
+       \l_@@_texsource_template_tl
+    }  
+   \tl_set:Nn    \l_@@_content_AF_mathml_tl {}
+   \tl_set:Nn    \l_@@_content_actual_tl    {}
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+%    \begin{macrocode}
+\socket_assign_plug:nn {tagsupport/math/content}{alt+source}  
+%    \end{macrocode}
+%
+% \begin{socketdecl}{tagsupport/math/struct/begin,
+%  tagsupport/math/struct/end}
+% For the main structure we use a socket too. 
+% This allow e.g. to create a special one for luamml
+% which setups additional objects. 
+% The begin socket can use the two variables 
+% \cs{g_@@_grabbed_env_tl} and \cs{g_@@_grabbed_math_tl}
+%    \begin{macrocode}
+\socket_new:nn {tagsupport/math/struct/begin}{0}
+\socket_new:nn {tagsupport/math/struct/end}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+%
+% \begin{plugdecl}{default}
+% TODO: think about some naming convention ...
+%    \begin{macrocode}
+\socket_new_plug:nnn
+  {tagsupport/math/struct/begin}
+  {default}
+  {
+    \bool_if:NTF\l__tag_math_texsource_AF_bool  
+     { \tl_set_eq:NN \l_@@_content_AF_source_tmpa_tl \l_@@_content_AF_source_tl }
+     { \tl_clear:N \l_@@_content_AF_source_tmpa_tl }
+    \tag_struct_begin:n
+     {
+       tag=Formula,
+       texsource   = \l_@@_content_AF_source_tmpa_tl,
+       title-o     = \g_@@_grabbed_env_tl,
+       actualtext  = \l_@@_content_actual_tl,
+       alt         = \l_@@_content_alt_tl
+     }
+  }
+\socket_new_plug:nnn
+  {tagsupport/math/struct/end}
+  {default}
+  { \tag_struct_end: }
+  
+\socket_assign_plug:nn {tagsupport/math/struct/begin}{default}  
+\socket_assign_plug:nn {tagsupport/math/struct/end}{default}   
+%    \end{macrocode}  
+% \end{plugdecl}   
+% 
+% \begin{plugdecl}{test-mathml}
+% This (test-)socket tries to add a mathml-AF to formula. 
+% It is activated if a mathml.html has been found and loaded. 
+% Additionally it also sets an attribute 
+% (this can perhaps be done by default anyway.)
+% As it disturbs the reading of the AF it currently deactivates the /Alt key,
+% unless it has been reenabled with |math/alt/use=true| 
+%    \begin{macrocode}
+\cs_generate_variant:Nn \str_mdfive_hash:n {o}
+\tl_new:N\l_@@_content_hash_tl
+%    \end{macrocode}
+% we need to save the grabbed math:
+%    \begin{macrocode}
+\tl_new:N\l_@@_grabbed_math_tl
+%    \end{macrocode}
+% the socket definition
+%    \begin{macrocode}
+\socket_new_plug:nnn
+  {tagsupport/math/struct/begin}
+  {test-mathml}
+  { 
+   \int_gincr:N\g_@@_math_total_int  
+   \tl_set:Ne\l_@@_content_hash_tl 
+    {\str_mdfive_hash:o { \l_@@_content_AF_source_tl }} 
+   \tl_set_eq:NN\l_@@_grabbed_math_tl\g_@@_grabbed_math_tl   
+   \tl_if_eq:NnTF\g_@@_grabbed_env_tl {math}
+     {
+       \tl_set:Nn\l_@@_attribute_class_tl{inline}       
+     }
+     {
+       \tl_set:Nn\l_@@_attribute_class_tl{display}
+     }
+   \bool_if:NF\l__tag_math_alt_bool
+     { \tl_set:Nn \l_@@_content_alt_tl{} }  
+%    \end{macrocode}
+% debugging option. TODO: hide in debug key.
+%    \begin{macrocode}
+   \tl_if_exist:cTF { g_@@_mathml_ \l_@@_content_hash_tl _tl }
+    {  
+      \int_gincr:N\g_@@_mathml_AF_found_int 
+      \bool_if:NTF \l__tag_math_mathml_AF_bool
+       { 
+         \int_gincr:N\g_@@_mathml_AF_attached_int                                        
+         \typeout {Inserting~mathml~with~Hash~\l_@@_content_hash_tl}
+       }      
+       {
+         \typeout {Ignoring~mathml~with~Hash~\l_@@_content_hash_tl}
+       }
+    }
+    {
+      \typeout{WARNING:~mathml~missing~for~hash~\l_@@_content_hash_tl}
+    }    
+   \socket_use:n {tagsupport/math/mathml/write} % write hash if request  
+    \bool_if:NTF\l__tag_math_texsource_AF_bool  
+     { \tl_set_eq:NN \l_@@_content_AF_source_tmpa_tl \l_@@_content_AF_source_tl }
+     { \tl_clear:N \l_@@_content_AF_source_tmpa_tl }   
+   \tag_struct_begin:n
+     {
+       tag=Formula,
+       attribute-class=\l_@@_attribute_class_tl, %
+       AFref       = 
+        \bool_if:NT\l__tag_math_mathml_AF_bool
+         {
+           \cs_if_exist_use:c {g_@@_mathml_ \l_@@_content_hash_tl _tl}
+         },
+       texsource   = \l_@@_content_AF_source_tmpa_tl, % should be after mathml AF!
+       title-o     = \g_@@_grabbed_env_tl,    %
+       alt         = \l_@@_content_alt_tl
+     }
+   }
+%    \end{macrocode}
+% not really needed but looks more symmetric:
+%    \begin{macrocode}
+\socket_new_plug:nnn
+  {tagsupport/math/struct/end}
+  {test-mathml}
+  {
+    \tag_struct_end:
+  }     
+%    \end{macrocode}
+% \end{plugdecl}
+%  
+% \begin{socketdecl}{tagsupport/math/substruct/begin,
+%  tagsupport/math/substruct/end}
+%  This holds the code to handle subparts of the formula.
+%    \begin{macrocode}
+\socket_new:nn {tagsupport/math/substruct/begin}{0}
+\socket_new:nn {tagsupport/math/substruct/end}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+% 
+% \begin{plugdecl}{default}
+%    \begin{macrocode}
+\socket_new_plug:nnn
+  {tagsupport/math/substruct/begin}
+  {default}
+  { \grabaformulapartandstart }
+\socket_new_plug:nnn
+  {tagsupport/math/substruct/end}
+  {default}
+  { 
+    \tagmcend
+    \if@subformulas
+      \tagstructend
+    \fi
+ } 
+\socket_assign_plug:nn {tagsupport/math/substruct/begin}{default}  
+\socket_assign_plug:nn {tagsupport/math/substruct/end}{default}   
+%    \end{macrocode}  
+% \end{plugdecl}  
+
+% \begin{plugdecl}{single}
+% We need an option to disable subparts as it is unclear
+% if consumers can handle them:
+%    \begin{macrocode}
+\socket_new_plug:nnn
+  {tagsupport/math/substruct/begin}
+  {single}
+  {
+    \typeout{====>subpart~splitting~deactivated}
+    \typeout{====>grabbed~math=\meaning\g_@@_grabbed_math_tl}
+    \tag_mc_begin:n{} 
+  }
+\socket_new_plug:nnn
+  {tagsupport/math/substruct/end}
+  {single}
+  { \tag_mc_end:}
+%    \end{macrocode}
+% \end{plugdecl}
+% 
+% \begin{socketdecl}{tagsupport/math/end}
+%  A socket used at the end of the math (before the closing dollar(s))
+%  which can e.g. set a flag for luamml.
+%    \begin{macrocode}
+\socket_new:nn {tagsupport/math/end}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+ 
+% 
+%  \begin{macro}{\__tag_math_disable:}
+%  Similar to the table code we collect the plugs that should be
+%  assigned to do nothing if we don't want tagging
+%    \begin{macrocode}
+\cs_new_protected:Npn \__tag_math_disable: 
+  {
+    \socket_assign_plug:nn {tagsupport/math/inline/begin}{noop}
+    \socket_assign_plug:nn {tagsupport/math/inline/end}{noop}
+    \socket_assign_plug:nn {tagsupport/math/inline/formula/begin}{identity}
+    \socket_assign_plug:nn {tagsupport/math/inline/formula/end}{noop}
+    \socket_assign_plug:nn {tagsupport/math/display/begin}{noop}
+    \socket_assign_plug:nn {tagsupport/math/display/end}{noop}
+    \socket_assign_plug:nn {tagsupport/math/display/formula/begin}{identity}
+    \socket_assign_plug:nn {tagsupport/math/display/formula/end}{noop}   
+  } 
+%    \end{macrocode}
+% \end{macro}
+% 
+%  \begin{macro}{\__tag_math_enable:}
+%  Similar to the table code we collect the default plugs that should be
+%  assigned if we want tagging
+%    \begin{macrocode}
+\cs_new_protected:Npn \__tag_math_enable: 
+  {
+    \socket_assign_plug:nn {tagsupport/math/inline/begin}{MC}
+    \socket_assign_plug:nn {tagsupport/math/inline/end}{MC}
+    \socket_assign_plug:nn {tagsupport/math/inline/formula/begin}{default}
+    \socket_assign_plug:nn {tagsupport/math/inline/formula/end}{default}
+    \socket_assign_plug:nn {tagsupport/math/display/begin}{default}
+    \socket_assign_plug:nn {tagsupport/math/display/end}{default}
+    \socket_assign_plug:nn {tagsupport/math/display/formula/begin}{default}
+    \socket_assign_plug:nn {tagsupport/math/display/formula/end}{default}
+  } 
+%    \end{macrocode}
+% \end{macro}
+% At begin document we can activate:
+%    \begin{macrocode}
+\AtBeginDocument{\tag_if_active:T{\__tag_math_enable: }}
+%    \end{macrocode}
 %
 % \subsection{Interface commands}
 %
@@ -260,7 +1322,8 @@
   {
     \legacy_if:nF { measuring@ }
       {
-        \tl_if_in:nnF {#2} { \m@th }
+        \tl_if_in:nnTF {#2} { \m@th }
+          { \bool_set_true:N\l_@@_fakemath_bool }
           { \tl_trim_spaces_apply:nN {#2} \@@_process_auxi:nn {#1} }
       }
   }
@@ -287,15 +1350,15 @@
 %
 % \begin{macro}{\@@_grab_dollar:w}
 %   Grab up to a single |$|, for inline math mode, suppressing
-%   any processing if the first token is \tn{m@th}.
+%   any processing if the token is \tn{m@th} found in the content.
 %
-%    \fmi{what's that test doing?} 
+%    \fmi{what's that test doing?}
 %
-%    \car{It is some kind of fix, to avoid the remote 
-%      possibility that the math is empty, making the code 
-%      produce an unwanted \texttt{\$\$}.} 
-% 
-%\car{cf.~the code for this in \cs{@ensuredmath}} 
+%    \car{It is some kind of fix, to avoid the remote
+%      possibility that the math is empty, making the code
+%      produce an unwanted \texttt{\$\$}.}
+%
+%\car{cf.~the code for this in \cs{@ensuredmath}}
 %
 %\car{It is harmless but unnecessary in the dollardollar grabbing below.}
 %
@@ -309,91 +1372,62 @@
     \tl_if_blank:nF {#1}
       {
         \@@_process:nn { math } {#1} % $
-% fairly simple this one
 %    \end{macrocode}
-% We do not want math tagging in fakemath or when measuring, 
-% so we imitate the test inside \cs{@@_process:nn} for now, 
-% see https://github.com/latex3/tagging-project/issues/5
-% TODO: use socket to get more control about typesetting variants (tagged, drop etc)?
+%  We do not want math tagging in fakemath or when measuring,
+%  We also do not want math tagging if tagging has been suspended.
 %    \begin{macrocode}
-        \legacy_if:nTF { measuring@ }
-          { #1 $ }
-          {
-            \tl_if_in:nnTF {#1} { \m@th }
-              { #1 $ }
-              { 
-                \tagmcend %end P-chunk, in code: \tag_mc_end_push:
-                \@kernel@math@begin
-                #1 $
-                \@kernel@math@end
-                \tagmcbegin{}  % restart P-chunk (whatsits in pdftex)
-              }
-          }        
+      \bool_lazy_or:nnTF 
+        {\legacy_if_p:n { measuring@ }}
+        { \l_@@_fakemath_bool }
+        { #1 $ }
+        {
+            \tag_socket_use:n  {math/inline/begin} %end P-MC  
+            \tag_socket_use:nn {math/inline/formula/begin}{#1}
+             $
+            \tag_socket_use:n  {math/inline/formula/end}
+            \tag_socket_use:n  {math/inline/end} % restart P-MC
+        }         
       }
   }
 %    \end{macrocode}
 % \end{macro}
+% 
 % \begin{macro}{\@@_grab_dollardollar:w}
 %   And for the classical \TeX{} display structure.
 %    \begin{macrocode}
-
-\skip_new:N \l_@@_tmpa_skip
-  
 \cs_new_protected:Npn \@@_grab_dollardollar:w % $$
   #1 $$
   {
     \tl_if_blank:nF {#1}
       {
-        \@@_tag_dollardollar_display:nn { equation* }{#1}
-        #1
+        \@@_process:nn { equation* } {#1}
+        \socket_use:n {tagsupport/math/display/begin}
+        \socket_use:nn{tagsupport/math/display/formula/begin}{#1}
         $$
       }
   }
 %    \end{macrocode}
-% To allow to use the code without tagging we guard. But probably tagpdf should
-% provide some tools for such manual para-ends.
+% 
+% The end code is added through a \cs{aftergroup} so we
+% store it inside a command.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@kernel@close@P {
-   \tag_if_active:T
-    {
-     \tagmcend %end P-chunk, should perhaps be \tag_mc_end_push: ...
-        \int_gincr:N \g__tag_para_end_int
-        \bool_if:NT \l__tag_para_show_bool
-          { \tag_mc_begin:n{artifact}
-            \rlap{\color_select:n{red}\tiny\ \int_use:N\g__tag_para_end_int}
-            \tag_mc_end:
-          }
-        \tag_struct_end:
-    }    
-}
-  
-
-
-\cs_new_protected:Npn \@@_tag_dollardollar_display:nn #1#2 {
-  \@@_process:nn {#1} {#2}
-  \@kernel@close@P
-  \@kernel@math@begin
-%        \skip_set:Nn \belowdisplayskip      {-\belowdisplayskip}
-%        \skip_set:Nn \belowdisplayshortskip {-\belowdisplayshortskip}
-%        \int_set:Nn \postdisplaypenalty {10000}
-%%
-%        \group_insert_after:N \@@_tag_dollardollar_display_end:
-}
-
-\cs_new_protected:Npn \@@_tag_dollardollar_display_end: {
-%  \typeout{== tag dollarldollar display end}
-%  \ShowTagging{struct-stack}
-  \tagpdfparaOff
-  \para_raw_end:
-  \tagpdfparaOn
-  \l_@@_tmpa_skip \lastskip  
-  \@kernel@math@end
-  \penalty \postdisplaypenalty
+\cs_new_protected:Npn \@@_tag_dollardollar_display_end: 
+  {
+    %  \typeout{== tag dollarldollar display end}
+    %  \ShowTagging{struct-stack}
+    \para_raw_end:
+%    \end{macrocode}
+% TODO why is that needed? where is para-tagging disabled?
+%    \begin{macrocode}
+    \tagpdfparaOn
+    \l_@@_tmpa_skip \lastskip
+    \socket_use:n{tagsupport/math/display/formula/end}    
+    \penalty \postdisplaypenalty
 %    \end{macrocode}
 % This reinserts the below display skips. It must be doubled to
 % get the right amount:
 %    \begin{macrocode}
-  \skip_vertical:n { -\l_@@_tmpa_skip * 2 }  
+  \skip_vertical:n { -\l_@@_tmpa_skip * 2 }
 %
   \@doendpe             % this has no \end{...} to take care of it
 }
@@ -410,13 +1444,13 @@
   {
     \tl_if_blank:nF {#1}
       {
-        \@@_process:nn { math } {#1}
         $ #1 $
       }
     \bool_set_false:N \l_@@_collected_bool
   }
 %    \end{macrocode}
 % \end{macro}
+%
 % \begin{macro}{\@@_grab_eqn:w}
 %   For the most common use of \cs{[}/\cs{]}: turn into an environment.
 %    \begin{macrocode}
@@ -463,7 +1497,7 @@
 % \begin{macro}{\math_register_env:n}
 % \begin{macro}{\RegisterMathEnvironment}
 %   Set up to capture environment content and make available.
-% 
+%
 %    \begin{macrocode}
 \cs_new_protected:Npn \math_register_env:nn #1#2
   {
@@ -472,15 +1506,8 @@
     \cs_gset_eq:cc { @@_env_ #1 _begin: } {#1}
     \cs_gset_eq:cc { @@_env_ #1 _end: } { end #1 }
 %
-    \ExpandArgs { nnx } \RenewDocumentEnvironment {#1} { b }
+    \ExpandArgs { nne } \RenewDocumentEnvironment {#1} { b }
       {
-%        \bool_set_true:N \exp_not:N \l_@@_collected_bool
-%        \cs_if_exist:cTF { @@_env #1 _aux: }
-%          {
-%            \exp_not:c { @@_env #1 _aux: }
-%              ####1 \exp_not:N \@@_env_end: {#1}
-%          }
-%          { \exp_not:N \@@_process:nn {#1} {####1} }
         \exp_not:N \bool_if:NTF \exp_not:N \l_@@_collected_bool
           {
 %            \typeout{===>B1}
@@ -490,34 +1517,22 @@
             \cs_if_exist:cTF { @@_env #1 _aux: }
               {
                 \exp_not:c { @@_env #1 _aux: }
-                  ####1 \exp_not:N \@@_env_end: {#1}
+                  ##1 \exp_not:N \@@_env_end: {#1}
               }
-              { \exp_not:N \@@_process:nn {#1} {####1} }
+              { \exp_not:N \@@_process:nn {#1} {##1} }
             \exp_not:n { \@kernel@math@registered@begin }
             \bool_set_true:N \exp_not:N \l_@@_collected_bool
           }
-%        \exp_not:N \tracingall  
+%        \exp_not:N \tracingall
         \exp_not:c { @@_env_ #1 _begin: }
-        ####1
+        ##1
         \exp_not:c { @@_env_ #1 _end: }
-%        \exp_not:c { @@_env_ #1 _end: }
 %        \exp_not:N \tracingnone
-%        \exp_not:n { \@kernel@math@registered@end }
      }
-      {
-      }
+     {
+     }
   }
 
-\cs_set_protected:Npn \__cs_tmp:w #1
-  {
-    \group_begin:
-      \exp_args:No \__cs_generate_internal_variant:n
-        { \tl_to_str:n {#1} }
-    \group_end:
-  }
-\__cs_tmp:w { nnxx }
-  
-  
 \cs_new_protected:Npn \math_register_halign_env:nn #1#2
   {
     \tl_set:Nn \l_@@_env_name_tl {#1}
@@ -525,15 +1540,8 @@
     \cs_gset_eq:cc { @@_env_ #1 _begin: } {#1}
     \cs_gset_eq:cc { @@_env_ #1 _end: } { end #1 }
 %
-    \ExpandArgs { nnxx } \RenewDocumentEnvironment {#1} { b }
+    \ExpandArgs { nnee } \RenewDocumentEnvironment {#1} { b }
       {
-%        \bool_set_true:N \exp_not:N \l_@@_collected_bool
-%        \cs_if_exist:cTF { @@_env #1 _aux: }
-%          {
-%            \exp_not:c { @@_env #1 _aux: }
-%              ####1 \exp_not:N \@@_env_end: {#1}
-%          }
-%          { \exp_not:N \@@_process:nn {#1} {####1} }
         \exp_not:N \bool_if:NTF \exp_not:N \l_@@_collected_bool
           {
 %            \typeout{===>B1}
@@ -543,23 +1551,24 @@
             \cs_if_exist:cTF { @@_env #1 _aux: }
               {
                 \exp_not:c { @@_env #1 _aux: }
-                  ####1 \exp_not:N \@@_env_end: {#1}
+                  ##1 \exp_not:N \@@_env_end: {#1}
               }
-              { \exp_not:N \@@_process:nn {#1} {####1} }
+              { \exp_not:N \@@_process:nn {#1} {##1} }
             \exp_not:n { \@kernel@math@registered@begin }
             \bool_set_true:N \exp_not:N \l_@@_collected_bool
           }
-%        \exp_not:N \tracingall  
+%        \exp_not:N \tracingall
         \exp_not:c { @@_env_ #1 _begin: }
-        ####1
-%        \exp_not:c { @@_env_ #1 _end: }
+        ##1
 %        \exp_not:N \tracingnone
      }
-      {
-        \exp_not:c { @@_env_ #1 _end: }
-      }
+     {
+       \exp_not:c { @@_env_ #1 _end: }
+     }
   }
-
+%    \end{macrocode}
+% TODO: the following command is neither documented nor used. Is is needed?
+%    \begin{macrocode}
 \cs_new_protected:Npn \math_register_odd_env:nn #1#2
   {
     \tl_set:Nn \l_@@_env_name_tl {#1}
@@ -567,7 +1576,7 @@
     \cs_gset_eq:cc { @@_env_ #1 _begin: } {#1}
     \cs_gset_eq:cc { @@_env_ #1 _end: } { end #1 }
 %
-    \ExpandArgs { nnxx } \RenewDocumentEnvironment {#1} { b }
+    \ExpandArgs { nnee } \RenewDocumentEnvironment {#1} { b }
       {
         \exp_not:N \bool_if:NTF \exp_not:N \l_@@_collected_bool
           {
@@ -578,19 +1587,19 @@
             \cs_if_exist:cTF { @@_env #1 _aux: }
               {
                 \exp_not:c { @@_env #1 _aux: }
-                  ####1 \exp_not:N \@@_env_end: {#1}
+                  ##1 \exp_not:N \@@_env_end: {#1}
               }
-              { \exp_not:N \@@_process:nn {#1} {####1} }
+              { \exp_not:N \@@_process:nn {#1} {##1} }
             \exp_not:n { \@kernel@math@registered@begin }
             \bool_set_true:N \exp_not:N \l_@@_collected_bool
           }
-%        \exp_not:N \tracingall  
+%        \exp_not:N \tracingall
         \exp_not:c { @@_env_ #1 _begin: }
-        ####1
+        ##1
      }
       {
         \exp_not:c { @@_env_ #1 _end: }
-% needed if we don't have $$...$$        
+% needed if we don't have $$...$$
 %        \exp_not:n { \typeout{---> @kernel@math@registered@end }}
         \exp_not:n { \@kernel@math@registered@end }
       }
@@ -614,7 +1623,7 @@
 
 
 \cs_new:Npn \@kernel@math@registered@begin {
-%  \ShowTagging{struct-stack} 
+%  \ShowTagging{struct-stack}
 %\typeout{==>A1}\ShowTagging{struct-stack,mc-current}
   \mode_if_vertical:TF
        {
@@ -623,19 +1632,21 @@
 %           { \__block_list_beginpar_vmode: }
 %
 %         \typeout{==>~ at:~ \g__tag_struct_tag_tl}
-%         
-         \exp_args:Noo\str_if_eq:nnF \g__tag_struct_tag_tl { \l__tag_para_main_tag_tl }    % needs correction!
+%
+        \tag_if_active:T
+          {
+            \exp_args:Noo\str_if_eq:nnF \g__tag_struct_tag_tl { \l__tag_para_main_tag_tl }    % needs correction!
              {
 %               \typeout{==>A2}
                \__block_beginpar_vmode:
              }              % needs correction!
+          }
        }
        {
 %         \typeout{==>A3}
-         \@kernel@close@P
-%         \tagmcend                      % needs correction!
+         \__tag_tool_close_P: 
        }
-  \@kernel@math@begin
+  \socket_use:nn{tagsupport/math/display/formula/begin}{}
   \tagpdfparaOff
 %  \typeout{==>MC1}\ShowTagging{mc-current}
 }
@@ -644,13 +1655,14 @@
 %  \typeout{==>MC2}\ShowTagging{mc-current}
   \para_raw_end:
   \tagpdfparaOn
-  \@kernel@math@end
+  \socket_use:n{tagsupport/math/display/formula/end}
 %  \typeout{==>MC3}\ShowTagging{mc-current}
   \@endpetrue
 }
-  
+
 \cs_new_protected:Npn \math_register_env:n #1
   { \math_register_env:nn {#1} { } }
+  
 \NewDocumentCommand \RegisterMathEnvironment { O{} m }
   { \math_register_env:nn {#2} {#1} }
 %    \end{macrocode}
@@ -660,12 +1672,12 @@
 %
 % \begin{macro}{\@@_env_forward:w}
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_env_forward:w #1 \@@_env_end: #2 
+\cs_new_protected:Npn \@@_env_forward:w #1 \@@_env_end: #2
   { \@@_process:nn {#2} {#1} }
 %    \end{macrocode}
 % \end{macro}
-% 
-% \subsection{Document commands} 
+%
+% \subsection{Document commands}
 %
 % \car*{Add one more here: \texttt{displaymath}, which
 %        is equivalent to \cs{[} , \cs{]}\\
@@ -692,9 +1704,9 @@
 % at the moment register_env can only do display math
 %    \math_register_env:n { math }
     \RenewDocumentEnvironment{math} {b}{$#1$}{}
-% and this one doesn't work either    
+% and this one doesn't work either
 %    \math_register_env:n { displaymath }
-    \RenewDocumentEnvironment{displaymath} {b}{\[#1\]}{}    
+    \RenewDocumentEnvironment{displaymath} {b}{\[#1\]}{}
   }
 %    \end{macrocode}
 % \end{macro}
@@ -737,29 +1749,31 @@
   {
     \cs_gset_protected:Npn \[ % \]
        {
-        \bool_if:NTF \l_@@_collected_bool
-          { \begin { equation* } }
-          { \@@_grab_eqn:w }
+         \@@_grab_eqn:w 
+ %       \bool_if:NTF \l_@@_collected_bool
+%          { \begin { equation* } }
+%          { \@@_grab_eqn:w }
       } % \[
     \cs_gset_protected:Npn \]
       {
-        \bool_if:NTF \l_@@_collected_bool
-          { \end{ equation* } }
-          { \@badmath }
+        \@badmath
+%        \bool_if:NTF \l_@@_collected_bool
+%          { \end{ equation* } }
+%          { \@badmath }
       }
   }
 %    \end{macrocode}
 % \end{macro}
-% 
+%
 %
 % \begin{macro}{\ensuremath}
 %   A bit of nesting fun to make sure we collect only if required.
 %   \fmi{why does ensuremath need handling at all?}
-% 
-%   \car{Indeed!  Currently, this is setup to process the math that 
-%     it has anyways already captured as its argument; thus it is more 
+%
+%   \car{Indeed!  Currently, this is setup to process the math that
+%     it has anyways already captured as its argument; thus it is more
 %     efficient than leaving the capture to be repeated by the \cs{everymath}}
-% 
+%
 %    \begin{macrocode}
 %\cs_gset_protected:Npn \ensuremath #1
 %  {
@@ -786,47 +1800,6 @@
 % have macro control.
 %    \begin{macrocode}
 
-\tl_new:N\tmpmathcontent
-
-  
-\def\@kernel@math@begin {
-%  \typeout{==>~math~begin}
-% needs different handling if we support nesting
-  \tl_gset:Nx\tmpmathcontent
-     {
-       LaTeX~ formula~ starts~
-       \exp_not:N\begin{\g_@@_grabbed_env_tl}
-       \space
-       \exp_not:V\g_@@_grabbed_math_tl
-       \space
-       \exp_not:N\end{\g_@@_grabbed_env_tl} 
-       \space LaTeX~ formula~ ends~
-    }
-  \tagstructbegin{tag=Formula,
-    AFinline-o=\tmpmathcontent,
-    title-o=\g_@@_grabbed_env_tl,
-    actualtext=\tmpmathcontent
-%    alt=\tmpmathcontent
-  }
-% inner formula if multiple parts (not really implemented yet)
-  \grabaformulapartandstart
-% the above does:  
-%    \tagstructbegin{tag=Formula}\tagmcbegin{}
-%  or just
-% \tagmcbegin{}
-}
-\def\@kernel@math@end {
-%  \typeout{==>~math~end}
-%  \ShowTagging{struct-stack}
-  \tagmcend
-  \if@subformulas
-    \tagstructend
-  \else
-  \fi
-  \tagstructend
-%  \ShowTagging{struct-stack} 
-}
-  
 \exp_args:No \tex_everymath:D
   {
     \tex_the:D \tex_everymath:D
@@ -841,24 +1814,21 @@
   {
     \tex_the:D \tex_everydisplay:D
     \iftrue  % this may have to be a settable flag!
-%      {
 %        \typeout{==>~ in~ everydisplay}
 %    \end{macrocode}
-% flipping the \cs{belowdisplay} values is done so that we get (assumption) 
-% a negative skip and not make the page bigger then we take that out, 
-% then we add the tagging code (in \cs{@@_tag_dollardollar_display_end} ) and 
-% then we put a real \cs{postdisplaypenalty} in and 
-% the right skip (of which we don't know if it is short or a 
-% normal \cs{belowdisplayskip}). This might need some refinement if that skip 
-% is actually negative from the start 
+% flipping the \cs{belowdisplay} values is done so that we get (assumption)
+% a negative skip and not make the page bigger then we take that out,
+% then we add the tagging code (in \cs{@@_tag_dollardollar_display_end} ) and
+% then we put a real \cs{postdisplaypenalty} in and
+% the right skip (of which we don't know if it is short or a
+% normal \cs{belowdisplayskip}). This might need some refinement if that skip
+% is actually negative from the start
 % (not sure it ever is and is worth bothering about)
 %    \begin{macrocode}
         \skip_set:Nn \belowdisplayskip      {-\belowdisplayskip}
         \skip_set:Nn \belowdisplayshortskip {-\belowdisplayshortskip}
         \int_set:Nn \postdisplaypenalty {10000}
-%
         \group_insert_after:N \@@_tag_dollardollar_display_end:
-%      }
     \fi
     \bool_if:NF \l_@@_collected_bool
       {
@@ -876,14 +1846,23 @@
 \math_register_env:n { eqnarray* }
 %    \end{macrocode}
 %
-% Places where math mode is (ab)used.
+% Tabulars currently contain a \$ that shouldn't trigger math
+% tagging.  
 %    \begin{macrocode}
-\clist_map_inline:nn
-  { tabular }
-  {
-    \AddToHook{ env / #1 / begin }
-      { \bool_set_true:N \l_@@_collected_bool }
-  }
+\RequirePackage{array}
+\tl_if_in:NnT\@tabular{$}
+ {
+   \def\@tabular{%
+   \leavevmode
+   \UseTaggingSocket{tbl/hmode/begin}%
+   \hbox \bgroup
+   \bool_set_true:N \l_@@_collected_bool 
+   $
+   \bool_set_false:N \l_@@_collected_bool
+   \col@sep\tabcolsep \let\d@llarbegin\begingroup
+                                    \let\d@llarend\endgroup
+   \@tabarray}
+ }
 %    \end{macrocode}
 %
 % \begin{macro}{\@@_m@th:, \m@th}
@@ -898,6 +1877,20 @@
   }
 %    \end{macrocode}
 % \end{macro}
+% 
+% \subsection{Disable math grabbing in the begindocument hook}
+% For example amsart uses math to measure text there.
+% 
+%    \begin{macrocode}
+\tl_gput_right:Nn\@kernel@before@begindocument
+  {
+    \bool_set_true:N\l_@@_collected_bool
+  }
+\tl_gput_right:Nn\@kernel@after@begindocument
+ {
+   \bool_set_false:N\l_@@_collected_bool
+ }
+%    \end{macrocode}
 %
 % \subsection{Modifying \pkg{amsmath}}
 %
@@ -934,7 +1927,7 @@
   $$\ignorespacesafterend
 }
 %    \end{macrocode}
-%    
+%
 %    \begin{macrocode}
 \def\common@align@ending {
   \math@cr \black@\totwidth@
@@ -1007,9 +2000,11 @@
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-%    
+%
   \math_register_halign_env:nn {align}{}
   \math_register_halign_env:nn {align*}{}
+  \math_register_halign_env:nn {alignat}{}
+  \math_register_halign_env:nn {alignat*}{}  
   \math_register_halign_env:nn {flalign}{}
   \math_register_halign_env:nn {flalign*}{}
   \math_register_halign_env:nn {gather}{}
@@ -1032,44 +2027,8 @@
     \fi
   }
 %    \end{macrocode}
-%    
-%    \begin{macrocode}
-    \def\intertext@{%
-      \def\intertext##1{%
-        \ifvmode\else\\\@empty\fi
-        \noalign{%
-% we have to flip the sign on the skip because we flipped it on the outside
-          \penalty\postdisplaypenalty\vskip-\belowdisplayskip
-          \vbox{
-%    \end{macrocode}
-% Stop tagging when measuring:
-%    \begin{macrocode}
-           \ifmeasuring@\tag_stop:\fi
-           \normalbaselines
-            \ifdim\linewidth=\columnwidth
-            \else \parshape\@ne \@totalleftmargin \linewidth
-            \fi
-%    \end{macrocode}
-% End the previous mc:\fmi{if we use 2 levels of formulas this would
-%    need changing}
-%    \begin{macrocode}
-            \tag_mc_end_push:
-%    \end{macrocode}
-% We are already in a par so we change now to Span:\fmi{not true any longer}
-%    \begin{macrocode}
-            \tagpdfsetup{paratag=P}%
-            \tagpdfparaOn
-            \noindent\ignorespaces##1\par
-%    \end{macrocode}
-% Restart the MC
-%    \begin{macrocode}
-            \tag_mc_begin_pop:n{}}%
-          \penalty\predisplaypenalty\vskip\abovedisplayskip%
-        }%
-      }
-    }
-%    \end{macrocode}
-%    
+%
+%
 %    \begin{macrocode}
 \@namedef{math@cr @ @ @ gather}{%
     \ifst@rred\nonumber\fi
@@ -1083,7 +2042,7 @@
     \cr
 }
 %    \end{macrocode}
-%    
+%
 %    \begin{macrocode}
 \@namedef{math@cr @ @ @ align}{%
   \ifst@rred\nonumber\fi
@@ -1104,7 +2063,7 @@
   \cr
 }
 %    \end{macrocode}
-%    
+%
 %    \begin{macrocode}
 \def\restore@math@cr{\@namedef{math@cr @ @ @}{
 %
@@ -1113,7 +2072,7 @@
     \cr}}
 \restore@math@cr
 %    \end{macrocode}
-%    
+%
 %    \begin{macrocode}
 }
 %    \end{macrocode}
@@ -1125,8 +2084,17 @@
 %
 %
 
-%  \begin{macro}{}
+%  \begin{macro}{\@@_split_at_nl:NN}
+%  This splits grabbed math at newlines. 
 %    
+%    \begin{macrocode}
+\cs_new:Npn \@@_split_at_nl:NN #1#2 {
+  \tl_set:Nf \l_@@_tmpa_tl {
+      \exp_after:wN \@@_split_at_nl_first:w #1 \\ \q_nil \\ \s_stop }
+  \exp_after:wN \@@_split_at_nl_aux:nnNN \l_@@_tmpa_tl #1 #2
+}
+%    \end{macrocode}
+% and the auxiliary commands
 %    \begin{macrocode}
 \cs_new:Npn \@@_split_at_nl_first:w #1 \\ #2 \\ #3 \s_stop
   {
@@ -1137,8 +2105,15 @@
           #2 \\ #3 \s_stop
       }
   }
-\cs_new:Npn \@@_split_chk_if_begin:ww #1 \begin #2 #3 \s_mark
-    #4 \\ \q_nil \\ \s_stop
+  
+\cs_new_protected:Npn \@@_split_at_nl_aux:nnNN #1 #2 #3 #4
+  {
+    \tl_gset:Nn #4 {#1}
+    \tl_gset:Nn #3 {#2}
+  }
+
+\cs_new:Npn \@@_split_chk_if_begin:ww 
+   #1 \begin #2 #3 \s_mark #4 \\ \q_nil \\ \s_stop
   {
     \quark_if_nil:nTF {#2}
       { {#1} {#4} }
@@ -1148,7 +2123,9 @@
             { } { 1 }
       }
   }
+
 \cs_new:Npn \@@_split_cleanup_begin_q_nil:w #1 \begin \q_nil {#1}
+
 \cs_new:Npn \@@_split_collect_one_end:w #1 \end #2 #3 \s_stop #4 #5
   {
     \exp_args:Nf \@@_split_check_count_begins:nnnn
@@ -1157,14 +2134,16 @@
   }
 \cs_new:Npn \@@_split_count_begins:n #1
   { \int_eval:n { 0 \@@_split_count_begins:w #1 \begin \q_nil } }
+
 \cs_new:Npn \@@_split_count_begins:w #1 \begin #2
   { \quark_if_nil:nF {#2} { +1 \@@_split_count_begins:w } }
+
 \cs_new:Npn \@@_split_check_count_begins:nnnn #1 #2 #3 #4
   {
     \int_compare:nNnTF {#1} = {#2}
       {
         \exp_last_unbraced:Nf \@@_split_final_cleanup:nn
-          { \split:n { \@@_split_guard:n {#3} #4 } }
+          { \@@_split:n { \@@_split_guard:n {#3} #4 } }
       }
       {
         \exp_args:No \use_ii_i:nn
@@ -1184,29 +2163,17 @@
       { \exp_end: { #4 #1 } }
       { \@@_split_final_cleanup:w #3 \s_mark { #4 #1 #2 } }
   }
-\NewDocumentCommand \splitnl { mm +m }
-  {
-    \tl_set:Nf \l_tmpa_tl { \split:n {#3} }
-    \show \l_tmpa_tl
-    \exp_after:wN \__splitnl_aux:nnNN \l_tmpa_tl #1 #2
-  }
-
-
-\cs_new:Npn \split:n #1 {
+  
+\cs_new:Npn \@@_split:n #1 {
     \@@_split_at_nl_first:w #1 \\ \q_nil \\ \s_stop }
-
-\cs_new:Npn \@@_split_at_nl:NN #1#2 {
-  \tl_set:Nf \l_tmpa_tl {
-      \exp_after:wN \@@_split_at_nl_first:w #1 \\ \q_nil \\ \s_stop }
-  \exp_after:wN \@@_split_at_nl_aux:nnNN \l_tmpa_tl #1 #2
-}
-
-\cs_new_protected:Npn \@@_split_at_nl_aux:nnNN #1 #2 #3 #4
-  {
-    \tl_gset:Nn #4 {#1}
-    \tl_gset:Nn #3 {#2}
-}
-
+  
+% this looks unused.  
+%\NewDocumentCommand \splitnl { mm +m }
+%  {
+%    \tl_set:Nf \l_@@_tmpa_tl { \split:n {#3} }
+%    \show \l_@@_tmpa_tl
+%    \exp_after:wN \__splitnl_aux:nnNN \l_@@_tmpa_tl #1 #2
+%  }
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -1233,9 +2200,11 @@
        \edef\resulttitle{\g_@@_grabbed_env_tl\space (part)}
        \tagstructbegin{tag=Formula,
 %    \end{macrocode}
-%    For now we don't put anything in /alt or /ActualText on subformulas
+%    For now we don't put real content in /alt or /ActualText on subformulas
+%    but we add a short text to satisfy the pdf/ua-2 validator
 %    \begin{macrocode}
 %         alt=\result,
+         alt = subformula,         
          title-o=\resulttitle
        }
     }
@@ -1300,10 +2269,6 @@
 %<@@=>
 %    \end{macrocode}
 %    
-%    \begin{macrocode}
-%
-%    \end{macrocode}
-%
 %    \begin{macrocode}
 %</kernel>
 %    \end{macrocode}
