@@ -17,7 +17,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltmarks.dtx}
-             [2024/05/16 v1.0e LaTeX Kernel (Marks)]
+             [2024/05/30 v1.0f LaTeX Kernel (Marks)]
 % \iffalse
 %
 \documentclass{l3doc}
@@ -283,6 +283,11 @@
 %    tests return \emph{true} (not an error).}
 %    The \meta{pos\textsubscript{\itshape i}} argument can be either
 %    \texttt{top}, \texttt{first}, or \texttt{last}.
+%
+%    Important to note is that the comparison is not with respect to
+%    the textual content of the marks but whether or not they
+%    originated from the same \cs{InsertMark} command (or the L3 layer
+%    version \cs{mark_insert:nn}).
 %
 %    If you wish to compare marks across different regions or across
 %    different classes, you have to do it using the generic test only
@@ -1399,7 +1404,18 @@
 %    \begin{macrocode}
           \@kernel@before@insertmark
           \hook_use:n { insertmark }
-          \unrestored@protected@xdef \g_@@_tmp_tl {#2}
+          \unrestored@protected@xdef \g_@@_tmp_tl
+               {
+%    \end{macrocode}
+%    To ensure that marks are unique we insert a hidden sequence
+%    marker at the beginning of the content of the mark containing the
+%    sequence number of the mark.
+% \changes{v1.0f}{2024/05/30}{Use sequence marker to make all marks
+%    unique on nearby regions (gh/1359)}
+%    \begin{macrocode}
+                 \@@_number:n{ \int_use:N\g_@@_int }
+                 #2
+               }
 %<*trace>
           \@@_debug:n{ \iow_term:x { Marks:~ set~#1~<-~
               '\tl_to_str:V \g_@@_tmp_tl' ~ \msg_line_context: } }
@@ -1412,9 +1428,11 @@
 %    becomes empty, but not immediately; otherwise we just put
 %    \cs{g_@@_tmp_tl} in.
 %    \begin{macrocode}
-              \tl_if_empty:NTF \g_@@_tmp_tl
-                { \exp_not:n { \prg_do_nothing: } }
-                { \exp_not:o { \g_@@_tmp_tl } }
+% this is no longer needed with 1.0f
+%              \tl_if_empty:NTF \g_@@_tmp_tl
+%                { \exp_not:n { \prg_do_nothing: } }
+%                { \exp_not:o { \g_@@_tmp_tl } }
+              \exp_not:o { \g_@@_tmp_tl }
             }
         \group_end:
 %    \end{macrocode}
@@ -1436,15 +1454,43 @@
 %  \end{macro}
 %
 %
+%  \begin{macro}{\@@_number:n}
+%    A hidden marker is placed into every mark added by
+%    \cs{mark_insert:nn}. It will will not show up in the output but
+%    its argument (a counter value that is incremented) makes all
+%    marks unique so the test for \enquote{equal} is not fooled by two
+%    different marks having the same mark text.
+% \changes{v1.0f}{2024/05/30}{Use sequence marker to make all marks
+%    unique on nearby regions (gh/1359)}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_number:n #1 { }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
 % \begin{macro}[int]{\@kernel@before@insertmark}
 % \begin{macro}{insertmark}
 %    By default \cs{label}, \cs{index}, and \cs{glossary} do nothing
 %    when the mark is inserted.
 %    \begin{macrocode}
+\int_new:N \g_@@_int
 \cs_new:Npn \@kernel@before@insertmark {
           \cs_set_eq:NN \label    \scan_stop:
           \cs_set_eq:NN \index    \scan_stop:
           \cs_set_eq:NN \glossary \scan_stop:
+%    \end{macrocode}
+%    We count each mark and use that to place a hidden marker in front
+%    of the mark text. To ensure that there is no overflow (very
+%    unlikely but you never know) we restart every 100000 marks. Thus,
+%    if somebody puts more than that number of marks on a single page
+%    you could construct a scenario in which that approach fails.
+% \changes{v1.0f}{2024/05/30}{Use sequence marker to make all marks
+%    unique on nearby regions (gh/1359)}
+%    \begin{macrocode}
+          \int_compare:nNnTF \g_@@_int < {99999}
+              { \int_gincr:N \g_@@_int }
+              { \int_gzero:N \g_@@_int }
+                
 }
 %    \end{macrocode}
 %    The public hook to augment the setup.
@@ -1845,6 +1891,12 @@
 %    \begin{macrocode}
       \seq_map_inline:Nn \g_@@_classes_seq
         {
+%    \end{macrocode}
+%    The \texttt{previous-page} updates need to come before the
+%    updates for \texttt{page} region because otherwise the values
+%    to copy are already overwritten.
+%    necessary values.
+%    \begin{macrocode}
           \tl_gset_eq:cc { g_@@_previous-page_top_   ##1 _tl }
                          { g_@@_page_top_            ##1 _tl }
           \tl_gset_eq:cc { g_@@_previous-page_first_ ##1 _tl }
@@ -1852,16 +1904,48 @@
           \tl_gset_eq:cc { g_@@_previous-page_last_  ##1 _tl }
                          { g_@@_page_last_           ##1 _tl }
 %    \end{macrocode}
-%    The \texttt{page} updates need to come after the corresponding
-%    updates for \texttt{previous-page} otherwise we loose the
-%    necessary value.
+%    To update the \texttt{top} we only have to copy what is in
+%    \texttt{first-column}:                      
 %    \begin{macrocode}
           \tl_gset_eq:cc { g_@@_page_top_           ##1 _tl }
                          { g_@@_first-column_top_   ##1 _tl }
-          \tl_gset_eq:cc { g_@@_ page_first_        ##1 _tl }
-                         { g_@@_first-column_first_ ##1 _tl }
-          \tl_gset_eq:cc { g_@@_page_last_          ##1 _tl }
-                         { g_@@_last-column_last_   ##1 _tl }
+             
+%    \end{macrocode}
+%    Updating the \texttt{first} mark for the \texttt{page} region is
+%    more complicated. We first have to find out of there is any mark
+%    in the first column (this can be done by comparing the \texttt{top} and
+%    the \texttt{first} mark of of that region). 
+% \changes{v1.0f}{2024/05/30}{Correct logic for first mark in page
+%    region if first column contains no marks (gh/1359)}
+%    \begin{macrocode}
+          \tl_if_eq:ccTF { g__@@_first-column_top_   ##1 _tl }
+                         { g__@@_first-column_first_ ##1 _tl }
+             {
+%    \end{macrocode}
+%    If there is no mark in the first column we copy the first mark of
+%    the last column. If that doesn't contain a mark we still get the
+%    right result because the first mark is then equal to the top mark.
+%    \begin{macrocode}
+               \tl_gset_eq:cc { g_@@_page_first_        ##1 _tl }
+                              { g_@@_last-column_first_ ##1 _tl }
+             }
+             {
+%    \end{macrocode}
+%    On the other hand, if there is a mark in the first column we copy
+%    over the \texttt{first} mark from that column.
+%    \begin{macrocode}
+               \tl_gset_eq:cc { g_@@_page_first_         ##1 _tl }
+                              { g_@@_first-column_first_ ##1 _tl }
+             }
+%    \end{macrocode}
+%    The logic for the \texttt{last} page mark is again simple, we can
+%    just copy the value in the \texttt{last} mark of the last column.
+%    If that column doesn't contain any marks, then the value in
+%    \texttt{last} will be automatically the same as the \texttt{last}
+%    from the first column.
+%    \begin{macrocode}
+          \tl_gset_eq:cc { g_@@_page_last_        ##1 _tl }
+                         { g_@@_last-column_last_ ##1 _tl }
         }
     }
 %<*trace>
