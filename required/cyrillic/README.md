@@ -1,7 +1,7 @@
 The LaTeX `cyrillic` bundle
 ===========================
 
-Release 2024-06-01
+Release 2024-06-01 patch level 0
 
 Overview
 --------
