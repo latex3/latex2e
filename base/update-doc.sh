@@ -2,6 +2,8 @@ l3build save -cconfig-doc -epdftex \
         github-0023 \
         github-0344 \
         github-0750 \
+        github-1000 \
+        github-1000b \
 	tlb-dox009 \
 	tlb-dox010 \
 	tlb-dox011 \
