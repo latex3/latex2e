@@ -162,7 +162,7 @@ function update_tag_ltx(file,content,tagname,tagdate)
     tag = tagname
   end
   if main_branch then
-    if rev then
+    if rev and rev ~= 0 then
       tag = tag .. " patch level " .. rev
     end
   else
