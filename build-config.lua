@@ -116,20 +116,15 @@ function update_tag(file,content,tagname,tagdate)
     tag = tagname
   end
   local patch_level = ""
-  if main_branch then
-    if rev then
+  if rev and rev ~= 0 then
+    if main_branch then
       tag = tag .. " patch level " .. rev
-      patch_level = rev
     else
-      patch_level = "0"
-    end
-  else
-    if rev and rev ~= 0 then
       tag = tag .. " pre-release " .. rev
-      patch_level = "-" .. rev
-    else
-      patch_level = "0"
     end
+    patch_level = rev
+  else
+    patch_level = "0"
   end
   if file == "README.md" then
     return string.gsub(content,
