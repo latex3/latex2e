@@ -116,7 +116,7 @@ function update_tag(file,content,tagname,tagdate)
     tag = tagname
   end
   local patch_level = "0"
-  if rev and rev ~= 0 then
+  if rev and tonumber(rev) ~= 0 then
     if main_branch then
       tag = tag .. " patch level " .. rev
     else
@@ -162,7 +162,7 @@ function update_tag_ltx(file,content,tagname,tagdate)
     tag = tagname
   end
   if main_branch then
-    if rev and rev ~= 0 then
+    if rev and tonumber(rev) ~= 0 then
       tag = tag .. " patch level " .. rev
     end
   else
