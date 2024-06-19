@@ -38,7 +38,8 @@ l3build save -cconfig-block -epdftex,luatex \
         ptag-001 \
         problem-blocks-tabbing \
         gallery-III \
-        gallery-III-with-sec
+        gallery-III-with-sec \
+	github-0097
 
 
 exit
