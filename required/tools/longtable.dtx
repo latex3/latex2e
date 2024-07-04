@@ -38,7 +38,7 @@
 %<driver> \ProvidesFile{longtable.drv}
 % \fi
 %         \ProvidesFile{longtable.dtx}
-          [2024-04-26 v4.20 Multi-page Table package (DPC)]
+          [2024-07-04 v4.21 Multi-page Table package (DPC)]
 %
 % \iffalse
 %<*driver>
@@ -179,7 +179,7 @@
 % \env{longtable}, which has most of the features of the \env{tabular}
 % environment, but produces tables which may be broken by \TeX's
 % standard page-breaking algorithm. It also shares some features with
-% the \env{table} environment. In particular it uses the same counter,
+% the \env{table} environment. In particular it uses by default the same counter,
 % \texttt{table}, and has a similar "\caption" command. Also, the
 % standard "\listoftables" command lists tables produced by either the
 % \env{table} or \env{longtable} environments.
@@ -335,6 +335,29 @@
 % \caption{A floating table}
 % \end{table}
 %
+% \section{Counter and Caption Types}
+% 
+% As mentioned in the introduction \env{longtable} uses and updates by default
+% the \texttt{table} counter, the "\caption" command creates a table caption
+% which is added to the list of tables.
+% Packages like \pkg{ltcaption} added more flexibility here by adding the
+% command "\LTcaptype" which allowed to change the type, e.g. to a listing. 
+% Starting with version 4.21 \pkg{longtable} supports this command directly.
+% \DescribeMacro{\LTcaptype}%
+% By redefining this command it is possible to change the counter and caption type.
+% After "\renewcommand\LTcaptype{"\meta{counter}"}" \env{longtable} will update
+% the counter \meta{counter}, use "\fnum@"\meta{counter} in the caption (which
+% typically will make use of "\"\meta{counter}"name" and "\the"\meta{counter}), and
+% write content line entries into the file with the extension stored in the
+% command "\ext@"\meta{counter}. When \pkg{hyperref} is loaded the name of
+% the anchor will use \meta{counter} too. Packages or documents that change
+% "\LTcaptype" to some nonstandard value must ensure that the counter
+% \meta{counter} and the commands "\fnum@"\meta{counter}
+% and "\ext@"\meta{counter} exist and do not error.
+% If "\LTcaptype" is empty no counter is advanced and "\"\meta{counter}"name" in 
+% the caption is suppressed. 
+% 
+% 
 % \section{Captions and Headings}
 %
 % At the start of the table one may specify lines which are to appear at
@@ -907,6 +930,15 @@
 %    \end{macrocode}
 % \end{macro}
 %
+% \begin{macro}{\LTcaptype}
+% The name used as counter, in caption, "\addcontentsline" and in targets.
+% "\providecommand" is used for compability with \pkg{ltcaption}
+% \changes{v4.21}{2024/07/04}
+%    {Added \cs{LTcaptype} to support other types beside table.}
+%    \begin{macrocode}
+\providecommand\LTcaptype{table}
+%    \end{macrocode}
+% \end{macro}
 % \subsection{Internal Parameters}
 %
 % \begin{macro}{\LT@head}
@@ -957,8 +989,11 @@
 % are preserved correctly when "\includeonly" is used. In the rest of
 % the file "\LT@tables" has been replaced by "\c@LT@tables" without
 % further comment.
+% \changes{v4.21}{2024/07/04}
+%    {Provide a \cs{theH}-representation for targets.}
 %    \begin{macrocode}
 \newcounter{LT@tables}
+\providecommand\theHLT@tables{\theLT@tables}
 %    \end{macrocode}
 % \end{macro}
 %
@@ -1080,6 +1115,9 @@
 % Since Version 3.02, \package{longtable} has used the internal counter
 % "\c@LT@tables". The \LaTeX\ counter "table" is still incremented
 % so that "\caption" works correctly.
+% \changes{v4.21}{2024/07/04}
+%    {Use \cs{LTcaptype} instead of \texttt{table} in various places
+%     to support other types beside table.}
 %    \begin{macrocode}
 \def\LT@array[#1]#2{%
 %    \end{macrocode}
@@ -1102,13 +1140,19 @@
 % \changes{v4.19}{2023/12/16}{Support for tagged PDF}
 %    \begin{macrocode}
   \UseTaggingSocket{tbl/init}
-  \@kernel@refstepcounter{table}\stepcounter{LT@tables}
+  \tl_if_empty:eTF { \LTcaptype }
+    {
+      \tl_gset:Ne \@currentHref {LT@tables.\theHLT@tables}
+    }
+    {
+      \@kernel@refstepcounter{\LTcaptype}\stepcounter{LT@tables}
 %    \end{macrocode}
 % The target is created rather late and a \cs{label} can come earlier, 
 % so we have to define \cs{@currentHref} explicitly. We can't currently
 % assume that \cs{theHtable} is defined always.
 %    \begin{macrocode}
-  \tl_gset:Ne \@currentHref {table.\cs_if_exist_use:N\theHtable}
+      \tl_gset:Ne \@currentHref {\LTcaptype.\cs_if_exist_use:c {theH\LTcaptype}}
+    }  
 %    \end{macrocode}
 %    
 % \changes{v4.19}{2023/12/16}{Managing cell indexes}
@@ -1476,9 +1520,17 @@
     \maxdepth\z@
   \fi
 %    \end{macrocode}
-%    
+% \changes{v4.21}{2024/07/04}
+%    {Use \cs{LTcaptype} to support other types beside table and handle
+%     the case if it is empty.}    
 %    \begin{macrocode}
-  \MakeLinkTarget{table}
+  \tl_if_empty:eTF{\LTcaptype}
+   {
+     \MakeLinkTarget{LT@tables}
+   }
+   {
+     \MakeLinkTarget{\LTcaptype}
+   }    
 %    \end{macrocode}
 % Put the table head on the page, and then switch to the new output
 % routine.
@@ -1579,7 +1631,11 @@
   \ifx\LT@save@row\LT@@@@save@row
   \else
     \LT@warn{Column~ widths~ have~ changed\MessageBreak
-             in~ table~ \thetable}%
+             in~ 
+               \tl_if_empty:eTF{\LTcaptype}
+                 {longtable~ \theLT@tables}
+                 {\LTcaptype\c_space_tl\use:c{the\LTcaptype}}
+             }%
     \LT@final@warn
   \fi
 %    \end{macrocode}
@@ -2161,7 +2217,6 @@
     \tbl_gdecr_row_count:
     \penalty\@M}
   \@gtempa}
-\ExplSyntaxOff
 %<@@=>
 %    \end{macrocode}
 % \end{macro}
@@ -2187,14 +2242,22 @@
 %      {Add new control argument}
 % \changes{v4.16}{2021/05/07}
 %      {use \cs{ext@table} gh/561}
+% \changes{v4.21}{2024/07/04}
+%    {Use \cs{LTcaptype} to support other types beside table.}      
 %    \begin{macrocode}
 \def\LT@c@ption#1[#2]#3{%
-  \LT@makecaption#1\fnum@table{#3}%
+ \tl_if_empty:eTF{\LTcaptype}
+  {\LT@makecaption\@gobble{}{#3}}%
+  {\LT@makecaption#1{\csname fnum@\LTcaptype\endcsname}{#3}
   \def\@tempa{#2}%
   \ifx\@tempa\@empty\else
      {\let\\\space
-     \addcontentsline{\ext@table}{table}{\protect\numberline{\thetable}{#2}}}%
-  \fi}
+     \addcontentsline
+       {\@nameuse{ext@\LTcaptype}}
+       {\LTcaptype}
+       {\protect\numberline{\@nameuse{the\LTcaptype}}{#2}}}%
+  \fi}}
+\ExplSyntaxOff  
 %    \end{macrocode}
 % \end{macro}
 %
