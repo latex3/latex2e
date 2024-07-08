@@ -43,8 +43,8 @@ typesetsuppfiles = typesetsuppfiles or
 
 -- Ensure the local format file is used
 function tex(file,dir,mode)
-  local dir = dir or "."
-  local mode = mode or "nonstopmode"
+  dir = dir or "."
+  mode = mode or "nonstopmode"
   return runcmd(
     'pdftex -fmt=pdflatex -interaction=' .. mode .. ' -jobname="' ..
       string.match(file,"^[^.]*") .. '" "\\input ' .. file .. '"',
