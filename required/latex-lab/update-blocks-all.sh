@@ -38,7 +38,9 @@ l3build save -cconfig-block -epdftex,luatex \
         ptag-001 \
         problem-blocks-tabbing \
         gallery-III \
-        gallery-III-with-sec
+        gallery-III-with-sec \
+	tagging-0097 \
+	tagging-0097b
 
 
 exit

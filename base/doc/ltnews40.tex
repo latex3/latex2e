@@ -152,11 +152,77 @@ As it is well known the font encoding OT1 supports only 128 characters and has v
 The introduction of the \cs{DocumentMetadata} command, which announces \emph{new} code
 and changes that can also affect the layout gives us now the opportunity to make this step. So with this version a use of \cs{DocumentMetadata} with (pdf)\LaTeX{} will setup  T1 as default font encoding\footnote{The Unicode engines will continue to use TU as encoding.}. To ensure that scalable fonts are used, the package \pkg{cm-super} has to be installed. Users that want to revert to the OT1 encoding in their document can do this \verb+\usepackage[OT1]{fontenc}+.
 
+\section{Handling paragraph continuation}
+
+Already \LaTeX~2.09 offered some automatism to detect whether or not
+text after a list or some other display environment is meant to be a
+continuation of the current paragraph or should start a new one.  The
+document-level syntax for this is that a blank line after such an
+environment signals to \LaTeX{} that it should start a new paragraph; whilst
+no blank line signals that there should be no new paragraph and the
+text should be considered a continuation.
+
+Unfortunately, there are a number of cases where the original 2.09
+approach failed, e.g., with
+\begin{flushleft}
+  \ttfamily
+\{\meta{local customizations}\\
+\cs{begin}\{equation\} a<b \cs{end}\{equation\}\} \\
+\meta{some text}
+\end{flushleft}
+the \meta{some text} incorrectly started a new paragraph.  Bug reports
+about this behavior can be traced back to the time \LaTeXe{} was
+developed, e.g., one test file from 1992 has a note that the above
+case was unfortunately not resolvable despite some improvements made back
+then.  The main cause of the issue (as you probably guessed) is that
+the mechanism failed whenever the environment was executed within a
+group (\texttt{\{...\}}, \cs{begingroup}/\cs{endgroup}, or
+\cs{bgroup}/\cs{egroup} pair) that was closed before the next blank
+line was reached.
+
+While most of the time  this could be visually corrected by adding some
+explicit \cs{noindent}, the situation got worse when we tried to
+implement tagged PDFs resulting in incorrect structures or worse.
+
+We therefore made a new attempt to resolve this problem in every
+situation and this new solution is rolled out in the current
+release.
 
 
 \section{New or improved commands}
 
 \section{Code improvements}
+
+\subsection{Avoiding keyval option clashes between classes and packages}
+
+In \LaTeX{} News~35~\cite{40:ltnews35} we introduced keyval option processing
+to the kernel. Following the standard for \LaTeXe{} options, keyval options
+given to the \cs{documentclass} line were treated as global and so parsed by
+every package. However, with keyvals, the likelihood of a name clash between a
+class-specific option and one used by a package is much higher than it is with
+simple strings. We have therefore refined the mechanism in the current release.
+
+When a class uses the kernel keyval processor, any options it recognises are
+recorded and any packages using the keyval processor will then \emph{skip}
+these \enquote{global} options. To allow for the case where a class directly
+uses an option which should be global (for example \texttt{draft}), a new key
+property \texttt{.pass-to-packages} has been added. This can then be set to
+indicate that this key is not to be skipped. For example
+\begin{verbatim}
+\DeclareKeys{
+  draft .if = {ifl@cls@draft},
+  draft .pass-to-packages = true,
+  mode  .store = \cls@mode
+}
+\end{verbatim}
+in a class would create two options, \texttt{draft} and \texttt{mode}. The
+\texttt{draft} option will be treated in the normal way by packages using
+keyvals, but they will ignore the \texttt{mode} option: it is effectively
+marked as \enquote{private} to the class.
+
+
+
+\githubissue{1279}
 
 \section{Bug fixes}
 
@@ -178,6 +244,24 @@ This has now been corrected.
 %
 \githubissue{870}
 
+\subsection*{Fix existence check of document environments}
+\cs{NewDocumentEnvironment} and friends define (or redefine) a document
+environment using the space-trimmed \meta{envname}, but the existence
+check for \meta{envname} was done without space trimming. Thus when the
+user-specified \meta{envname} consists of leading and/or trailing
+space(s), it may lead to erroneously silent environment declaration.
+For example, in
+\begin{verbatim}
+  \NewDocumentEnvironment{myenv}{}{begin}{end}
+  \NewDocumentEnvironment{ myenv }{}{begin}{end}
+\end{verbatim}
+the first line defines a new environment \env{myenv} but the second
+line would check existence for \env{ myenv } (which is not yet defined),
+then redefine \env{myenv} environment without raising any errors.
+This has now been corrected.
+%
+\githubissue{1399}
+
 \subsection{\pkg{doc}:\ \cs{PrintDescribeMacro} in preamble}
 
 In \pkg{doc} version 2 it was possible alter the definition of
@@ -189,12 +273,33 @@ preamble are possible again.
 \githubissue{1000}
 
 
+\section{Improvement to \XeTeX\ \cs{showhyphens}}
+When using \cs{showhyphens} with \XeTeX, missing character warnings
+would be generated for any character not in Latin Modern. This has been
+corrected and the warnings are suppressed.
+%
+\githubissue{1380}
 
 %\section{Changes to packages in the \pkg{amsmath} category}
 
 %\section{Changes to packages in the \pkg{graphics} category}
 
-%\section{Changes to packages in the \pkg{tools} category}
+\section{Changes to packages in the \pkg{tools} category}
+\subsection{\pkg{longtable}: Extend caption type}
+
+The \pkg{longtable} has been extended and now provides the command \cs{LTcaptype}
+(stemming from the \pkg{ltcaption} package) to change
+the counter and caption type used by the \cs{caption} command from longtable.
+So with \verb+\renewcommand\LTcaptype{figure}+, a longtable will step the
+figure counter instead of the table counter and produce an
+entry in the list of figures. An empty definition, \verb+\renewcommand\LTcaptype{}+,
+will suppress increasing of the counter. This makes it easy to define an
+unnumbered variant of longtable:
+\begin{verbatim}
+\newenvironment{longtable*}
+  {\renewcommand\LTcaptype{}\longtable}
+  {\endlongtable}
+\end{verbatim}
 
 %\section{Changes to files in the \pkg{cyrillic} category}
 
@@ -214,6 +319,10 @@ Leslie Lamport.
   \emph{\LaTeXe{} news 1--39}. June, 2024.
   \url{https://latex-project.org/news/latex2e-news/ltnews.pdf}
 
+\bibitem{40:ltnews35} \LaTeX{} Project Team.
+  \emph{\LaTeXe{} news 35}. June 2022.
+  \url{https://latex-project.org/news/latex2e-news/ltnews35.pdf}
+
 \bibitem{40:ltnews39} \LaTeX{} Project Team.
   \emph{\LaTeXe{} news 39}. June 2024.
   \url{https://latex-project.org/news/latex2e-news/ltnews39.pdf}
@@ -221,4 +330,3 @@ Leslie Lamport.
 \end{thebibliography}
 
 \end{document}
-

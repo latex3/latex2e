@@ -20,6 +20,7 @@ l3build save -cconfig-table-pdftex \
 	table-014-pbox-longtable \
 	table-015 \
 	table-016 \
+	table-016-math \
 	table-017 \
 	table-018 \
 	table-019 \
