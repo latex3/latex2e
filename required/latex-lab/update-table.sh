@@ -25,7 +25,8 @@ l3build save -cconfig-table-pdftex \
 	table-018 \
 	table-019 \
 	table-020 \
-	table-021-longtable
+	table-021-longtable \
+	table-022-cline
 
 l3build save -cconfig-table-luatex \
 	table-000 \
