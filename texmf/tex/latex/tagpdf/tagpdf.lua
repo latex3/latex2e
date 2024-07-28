@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.99b",       --TAGVERSION
-    date          = "2024-04-12", --TAGDATE
+    version       = "0.99c",       --TAGVERSION
+    date          = "2024-06-20", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -53,8 +53,8 @@ ltx.__tag.page   will contain page data
 ltx.__tag.tables contains also data from mc and struct (from older code). This needs cleaning up.
              There are certainly dublettes, but I don't dare yet ...
 ltx.__tag.func   will contain (public) functions.
-ltx.__tag.trace  will contain tracing/loging functions.
-local funktions starts with __
+ltx.__tag.trace  will contain tracing/logging functions.
+local functions starts with __
 functions meant for users will be in ltx.tag
 
 functions
@@ -67,7 +67,7 @@ functions
  ltx.__tag.func.store_mc_kid (mcnum,kid,page): stores the mc-kids of mcnum on page page
  ltx.__tag.func.store_mc_in_page(mcnum,mcpagecnt,page): stores in the page table the number of mcnum on this page
  ltx.__tag.func.store_struct_mcabs (structnum,mcnum): stores relations structnum<->mcnum (abs)
- ltx.__tag.func.mc_insert_kids (mcnum): inserts the /K entries for mcnum by wandering throught the [kids] table
+ ltx.__tag.func.mc_insert_kids (mcnum): inserts the /K entries for mcnum by wandering through the [kids] table
  ltx.__tag.func.mark_page_elements(box,mcpagecnt,mccntprev,mcopen,name,mctypeprev) : the main function
  ltx.__tag.func.mark_shipout (): a wrapper around the core function which inserts the last EMC
  ltx.__tag.func.fill_parent_tree_line (page): outputs the entries of the parenttree for this page
