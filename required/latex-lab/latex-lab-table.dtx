@@ -230,7 +230,7 @@
 % the tagging of the table must be deactivated with \verb|\tagpdfsetup{table/tagging=false}|
 % or \verb|\tagpdfsetup{table/tagging=presentation}|.
 %
-% \item Only simple header rows and columns are currently supported. complex headers with
+% \item Only simple header rows and columns are currently supported. Complex headers with
 % subheaders will be handled later as that needs some syntax changes. Tables
 % with more than one header row or column are probably not pdf/UA as the headers array in
 % the cells is missing.
@@ -281,9 +281,6 @@
 %
 %  \item Longtable captions should be properly supported.
 %
-%  \item Handle p-cells better. para-tagging should probably be enabled,
-%  but Part can't be a child of TD, so this should probably be changed to Div here.
-%  Also there is a stray MC somewhere.
 %
 %  \item More packages must be tested.
 %  \end{itemize}
@@ -341,6 +338,11 @@
 \tl_new:N  \l_@@_rowattribute_tl
 \tl_set:Nn \l_@@_rowattribute_tl {}
 %    \end{macrocode}
+% Variable to store cell info like which cell must be skipped when tagging multirows.
+%    \begin{macrocode}
+\prop_new:N\g_@@_untagged_cells_prop
+\prop_new:N\l_@@_saved_untagged_cells_prop
+%    \end{macrocode}
 % Temp variables
 %    \begin{macrocode}
 \clist_new:N \l_@@_tmpa_clist
@@ -353,7 +355,41 @@
 %
 %
 % This are the standard plugs for tagging of cells and rows.
-%
+% 
+% \begin{plugdecl}{default}
+% This socket is used inside \cs{tbl_init_cell_data_for_table} for the
+% case that this a nested table in a cell.
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tbl/init/celldata}{default}
+  {
+    \prop_set_eq:NN\l_@@_saved_untagged_cells_prop \g_@@_untagged_cells_prop
+    \prop_gclear:N \g_@@_untagged_cells_prop
+  }
+\AssignSocketPlug{tagsupport/tbl/init/celldata}{default}  
+%    \end{macrocode}
+% \end{plugdecl}
+
+% \begin{plugdecl}{default}
+% This socket is used inside \cs{tbl_restore_outer_cell_data:} and restores
+% values when a nested table is ended.
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tbl/restore/celldata}{default}
+  {
+    \prop_gset_eq:NN\g_@@_untagged_cells_prop \l_@@_saved_untagged_cells_prop
+  }
+\AssignSocketPlug{tagsupport/tbl/restore/celldata}{default}  
+%    \end{macrocode}
+% \end{plugdecl}
+% 
+% \begin{plugdecl}{default}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tbl/init/celldata}{default}
+  {
+    \tag_mc_end:
+    \tag_struct_end:
+  }
+%    \end{macrocode}
+% \end{plugdecl}
 % \begin{plugdecl}{TD}
 %    \begin{macrocode}
 \NewSocketPlug{tagsupport/tbl/cell/begin}{TD}
@@ -364,37 +400,43 @@
 %    \begin{macrocode}
     \@@_show_curr_cell_data:
 %    \end{macrocode}
+% We test if the cell should be tagged at all.
+%    \begin{macrocode}
+    \@@_if_tag_cell:nnT {\g_@@_row_int } { \g_@@_col_int }
+      {
+%    \end{macrocode}
 % this sets row headers
 %    \begin{macrocode}
-    \clist_if_in:NVT \l_@@_header_columns_clist\g_@@_col_int
-      { 
-        \tl_set:Nn \l_@@_celltag_tl {TH} 
-        \tl_set:Ne \l_@@_cellattribute_tl {\l_@@_cellattribute_tl,TH-row}
-      }
+        \clist_if_in:NVT \l_@@_header_columns_clist\g_@@_col_int
+          { 
+            \tl_set:Nn \l_@@_celltag_tl {TH} 
+            \tl_set:Ne \l_@@_cellattribute_tl {\l_@@_cellattribute_tl,TH-row}
+          }
 %    \end{macrocode}
 % Here we handle negative value for row headers:
 %    \begin{macrocode}
-    \tl_set:Ne \l_@@_tmpa_tl {\int_eval:n { \g_@@_col_int - 1 - \g_@@_table_cols_tl }} 
-    \clist_if_in:NoT \l_@@_header_columns_clist { \l_@@_tmpa_tl }
-      { 
-        \tl_set:Nn \l_@@_celltag_tl {TH} 
-        \tl_set:Ne \l_@@_cellattribute_tl {\l_@@_cellattribute_tl,TH-row}
-      }        
-    \tag_struct_begin:n
-      {
-        tag             =\l_@@_celltag_tl,
-        attribute-class ={\l_@@_cellattribute_tl}
-      }
-    \seq_gput_right:Ne \g_@@_struct_cur_seq { \tag_get:n {struct_num} }
+        \tl_set:Ne \l_@@_tmpa_tl {\int_eval:n { \g_@@_col_int - 1 - \g_@@_table_cols_tl }} 
+        \clist_if_in:NoT \l_@@_header_columns_clist { \l_@@_tmpa_tl }
+          { 
+            \tl_set:Nn \l_@@_celltag_tl {TH} 
+            \tl_set:Ne \l_@@_cellattribute_tl {\l_@@_cellattribute_tl,TH-row}
+          }        
+        \tag_struct_begin:n
+          {
+            tag             =\l_@@_celltag_tl,
+            attribute-class ={\l_@@_cellattribute_tl}
+          }
+        \seq_gput_right:Ne \g_@@_struct_cur_seq { \tag_get:n {struct_num} }
 %    \end{macrocode}
 %   we store the cells of multicolumns as negative number. This allow to skip them
 %   or to use them as needed.
 %    \begin{macrocode}
-    \int_step_inline:nn { \g_@@_span_tl - 1 }
-      {
-        \seq_gput_right:Ne \g_@@_struct_cur_seq { -\tag_get:n {struct_num} }
-      }
-    \tag_mc_begin:n{}
+        \int_step_inline:nn { \g_@@_span_tl - 1 }
+          {
+            \seq_gput_right:Ne \g_@@_struct_cur_seq { -\tag_get:n {struct_num} }
+          }
+        \tag_mc_begin:n{}
+      }  
   }
 %    \end{macrocode}
 % \end{plugdecl}
@@ -403,8 +445,11 @@
 %    \begin{macrocode}
 \NewSocketPlug{tagsupport/tbl/cell/end}{TD}
   {
-    \tag_mc_end:
-    \tag_struct_end:
+    \@@_if_tag_cell:nnT {\g__tbl_row_int } { \g__tbl_col_int }
+      {
+        \tag_mc_end:
+        \tag_struct_end:
+      }        
   }
 %    \end{macrocode}
 % \end{plugdecl}
@@ -416,23 +461,26 @@
 \NewSocketPlug{tagsupport/tbl/pcell/begin}{TDpbox}
   {
     \@@_show_curr_cell_data:
-    \clist_if_in:NVT \l_@@_header_columns_clist\g_@@_col_int
-      { 
-        \tl_set:Nn \l_@@_celltag_tl {TH} 
-        \tl_set:Ne \l_@@_cellattribute_tl {\l_@@_cellattribute_tl,TH-row}
-      }        
-    \tag_struct_begin:n
+    \@@_if_tag_cell:nnT {\g__tbl_row_int } { \g__tbl_col_int }
       {
-        tag             =\l_@@_pcelltag_tl,
-        attribute-class ={\l_@@_cellattribute_tl}
-      }
-    \seq_gput_right:Ne \g_@@_struct_cur_seq { \tag_get:n {struct_num} }
-    \int_step_inline:nn { \g_@@_span_tl - 1 }
-      {
-        \seq_gput_right:Ne \g_@@_struct_cur_seq { -\tag_get:n {struct_num} }
-      }
-    \tagpdfparaOn
-    \tl_set:Nn \l__tag_para_main_tag_tl {Div}
+        \clist_if_in:NVT \l_@@_header_columns_clist\g_@@_col_int
+          { 
+            \tl_set:Nn \l_@@_celltag_tl {TH} 
+            \tl_set:Ne \l_@@_cellattribute_tl {\l_@@_cellattribute_tl,TH-row}
+          }        
+        \tag_struct_begin:n
+          {
+            tag             =\l_@@_pcelltag_tl,
+            attribute-class ={\l_@@_cellattribute_tl}
+          }
+        \seq_gput_right:Ne \g_@@_struct_cur_seq { \tag_get:n {struct_num} }
+        \int_step_inline:nn { \g_@@_span_tl - 1 }
+          {
+            \seq_gput_right:Ne \g_@@_struct_cur_seq { -\tag_get:n {struct_num} }
+          }
+        \tagpdfparaOn
+        \tl_set:Nn \l__tag_para_main_tag_tl {Div}
+     }
   }
 %    \end{macrocode}
 % \end{plugdecl}
@@ -441,7 +489,8 @@
 %    \begin{macrocode}
 \NewSocketPlug{tagsupport/tbl/pcell/end}{TDpbox}
   {
-    \tag_struct_end:
+    \@@_if_tag_cell:nnT {\g_@@_row_int } { \g_@@_col_int }
+      { \tag_struct_end: }
   }  
 %    \end{macrocode}
 % \end{plugdecl}
@@ -872,8 +921,7 @@
 % \subsection{Interfaces to tagging}
 %
 % \subsubsection{Tagging helper commands}
-%
-%
+
 % \subsubsection{Disabling/enabling}
 %
 %  For now we have only the option true/false but this will probably be extended
@@ -1092,8 +1140,111 @@
   }
 %    \end{macrocode}
 %
+% \subsection{Multirow support}
+% 
+% \begin{macro}{\@@_multirow:n}
+% This command makes the current cell into a multirow cell:
+% it creates if needed an RowSpan-attribute, add it to the attributes
+% of the cell structure, and marks all follow up cells spanned by the multirow
+% a cells that should not be tagged. The argument is the number of spanned row
+% (including the current row).
+%    \begin{macrocode}
+\cs_generate_variant:Nn \__tag_struct_prop_gput:nnn {one}
+\cs_new_protected:Npn \@@_multirow:n #1
+ { 
+%    \end{macrocode}
+% Create an attribute if needed:
+%    \begin{macrocode}
+   \prop_get:NeNF \g__tag_attr_entries_prop
+      {rowspan-\int_eval:n{#1}}
+      \l_@@_tmpa_tl
+      {
+        \__tag_attr_new_entry:ee
+          {rowspan-\int_eval:n{#1}}
+          {/O /Table /RowSpan~\int_eval:n{#1}}
+      }
+%    \end{macrocode}
+% ensure that the attribute is marked as used:
+%    \begin{macrocode}
+   \seq_gput_left:Ne\g__tag_attr_class_used_seq
+     {\pdf_name_from_unicode_e:n{rowspan-\int_eval:n{#1}}}   
+%    \end{macrocode}
+% Get the structure number of the current cell
+%    \begin{macrocode}
+   \seq_get_right:NN\g_@@_struct_cur_seq \l_@@_tmpb_tl
+%    \end{macrocode}
+% If we are in a multicolumn the number can be negative and 
+% this must be changed
+%    \begin{macrocode}
+   \tl_set:Ne \l_@@_tmpb_tl { \int_abs:n{\l_@@_tmpb_tl} }
+%    \end{macrocode}
+% no we must update an existing attribute.
+% TODO: simplify this ... (see also colspan handling).
+%    \begin{macrocode}
+   \prop_get:cnNTF
+      { g__tag_struct_\l_@@_tmpb_tl _prop }
+      { C }
+      \l_@@_tmpa_tl
+      {
+        \tl_remove_once:Nn \l_@@_tmpa_tl {[}
+        \tl_remove_once:Nn \l_@@_tmpa_tl {]}
+        \__tag_struct_prop_gput:one{ \l_@@_tmpb_tl }
+          {C}
+          {[/rowspan-\int_eval:n{#1}~\l_@@_tmpa_tl]} 
+      } 
+      {
+        \__tag_struct_prop_gput:one{ \l_@@_tmpb_tl }
+          {C}
+          {[/rowspan-\int_eval:n{#1}]} 
+      } 
+%    \end{macrocode}
+% Now marked the spanned cells that should be ignored.
+%    \begin{macrocode}
+    \@@_gset_untagged_row_cells:nn {#1-1}{\g_@@_span_tl}   
+ }
+%    \end{macrocode}
+% \end{macro}
 %
+%    \begin{macrocode}
+\keys_define:nn{ __tag / setup }
+ { table/multirow .code:n = {\@@_multirow:n {#1} }
+  ,table/multirow .default:n = 1
+ } 
+%    \end{macrocode}
 %
+% \begin{macro}{\@@_gset_untagged_row_cells:nn}
+% This command marks a number of cells below and below right of the current cell
+% as cells that should not be tagged as they are a part of a rowspan.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_gset_untagged_row_cells:nn #1 #2 % #1 number of rows, #2 number of columns
+  {
+    \int_step_inline:nn {#1}
+     { 
+       \int_step_inline:nn {#2}
+        {
+          \prop_gput:Nee \g_@@_untagged_cells_prop
+           { \int_eval:n {\g_@@_row_int + ##1},\int_eval:n{\g_@@_col_int + ####1 -1 } }{}
+        }   
+     }  
+  }
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\@@_if_tag_cell:nn}
+% We must be able to detect if a cell should be tagged. For this
+% we define a conditional --- if more options are needed it can be extended.
+%    \begin{macrocode}
+\prg_new_protected_conditional:Npnn\@@_if_tag_cell:nn #1 #2 %#1 row, #2 col
+  { T,TF }
+  {
+    \prop_get:NeNTF \g_@@_untagged_cells_prop 
+      {\int_eval:n{#1},\int_eval:n{#2}}\l__tbl_tmpa_tl
+      { \prg_return_false:}
+      { \prg_return_true: } 
+  }
+%    \end{macrocode}
+% \end{macro}
+% 
 % \subsection{Misc stuff}
 %
 %  \begin{macro}{\@@_show_curr_cell_data:}
