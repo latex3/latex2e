@@ -73,10 +73,22 @@
           	    {github issue#1 #2}%
            )}%
      \par\smallskip}
+
+
+% same for issues in the tagging repository:
+
+\providecommand\taggingissue[2][]{\ifhmode\unskip\fi
+     \quad\penalty500\strut\nobreak\hfill
+     \mbox{\small\slshape(%
+       \href{https://github.com/latex3/tagging-project/issues/\getfirstgithubissue#2 \relax}%
+          	    {github tagging issue#1 #2}%
+           )}%
+     \par\smallskip}
+
 %% But Chris has to mostly disable \href for his TEXPAD app:
 %% \def\href #1#2{#2} % Only For Chris' deficient TeX engine
 
-% simple solution right now (just link to the first issue if there are more)
+% simple solution right now (just link to the first issue if there are several)
 \def\getfirstgithubissue#1 #2\relax{#1}
 
 \providecommand\sxissue[1]{\ifhmode\unskip
@@ -95,6 +107,8 @@
           	    {gnats issue #1/#2}%
            )}%
      \par}
+
+
 
 \let\cls\pkg
 \providecommand\env[1]{\texttt{#1}}
@@ -145,6 +159,43 @@
 
 % To write
 
+\section{Handling paragraph continuation}
+
+Already \LaTeX~2.09 offered some automatism to detect whether or not
+text after a list or some other display environment is meant to be a
+continuation of the current paragraph or should start a new one.  The
+document-level syntax for this is that a blank line after such an
+environment signals to \LaTeX{} that it should start a new paragraph; whilst
+no blank line signals that there should be no new paragraph and the
+text should be considered a continuation.
+
+Unfortunately, there are a number of cases where the original 2.09
+approach failed, e.g., with
+\begin{flushleft}
+  \ttfamily
+\{\meta{local customizations}\\
+\cs{begin}\{equation\} a<b \cs{end}\{equation\}\} \\
+\meta{some text}
+\end{flushleft}
+the \meta{some text} incorrectly started a new paragraph.  Bug reports
+about this behavior can be traced back to the time \LaTeXe{} was
+developed, e.g., one test file from 1992 has a note that the above
+case was unfortunately not resolvable despite some improvements made back
+then.  The main cause of the issue (as you probably guessed) is that
+the mechanism failed whenever the environment was executed within a
+group (\texttt{\{...\}}, \cs{begingroup}/\cs{endgroup}, or
+\cs{bgroup}/\cs{egroup} pair) that was closed before the next blank
+line was reached.
+
+While most of the time  this could be visually corrected by adding some
+explicit \cs{noindent}, the situation got worse when we tried to
+implement tagged PDFs resulting in incorrect structures or worse.
+
+We therefore made a new attempt to resolve this problem in every
+situation and this new solution is rolled out in the current
+release.
+
+
 \section{New or improved commands}
 
 \section{Code improvements}
@@ -176,6 +227,8 @@ in a class would create two options, \texttt{draft} and \texttt{mode}. The
 keyvals, but they will ignore the \texttt{mode} option: it is effectively
 marked as \enquote{private} to the class.
 
+
+
 \githubissue{1279}
 
 \section{Bug fixes}
@@ -186,10 +239,12 @@ When \LaTeX{} is rolled back to date \meta{date1} and a class or
 package with minimum date requirement \meta{date2} is to be loaded, a
 rollback warning is raised if \meta{date2} is later than \meta{date1}:
 \begin{verbatim}
-LaTeX Warning: Suspicious rollback/min-date date given
-               A minimal date of YYYY-MM-DD has been specified for package
-               '<pkgname>'.
-               But this is in conflict with a rollback request to YYYY-MM-DD.
+LaTeX Warning: Suspicious rollback/min-date
+               date given.
+  A minimal date of YYYY-MM-DD has been
+  specified for package '<pkgname>'.
+  But this is in conflict with a rollback
+  request to YYYY-MM-DD.
 \end{verbatim}
 
 In some cases this message showed a wrong file type, i.e.,
@@ -197,6 +252,24 @@ In some cases this message showed a wrong file type, i.e.,
 This has now been corrected.
 %
 \githubissue{870}
+
+\subsection*{Fix existence check of document environments}
+\cs{NewDocumentEnvironment} and friends define (or redefine) a document
+environment using the space-trimmed \meta{envname}, but the existence
+check for \meta{envname} was done without space trimming. Thus when the
+user-specified \meta{envname} consists of leading and/or trailing
+space(s), it may lead to erroneously silent environment declaration.
+For example, in
+\begin{verbatim}
+  \NewDocumentEnvironment{myenv}{}{begin}{end}
+  \NewDocumentEnvironment{ myenv }{}{begin}{end}
+\end{verbatim}
+the first line defines a new environment \env{myenv} but the second
+line would check existence for \env{ myenv } (which is not yet defined),
+then redefine \env{myenv} environment without raising any errors.
+This has now been corrected.
+%
+\githubissue{1399}
 
 \subsection{\pkg{doc}:\ \cs{PrintDescribeMacro} in preamble}
 
@@ -216,6 +289,22 @@ corrected and the warnings are suppressed.
 %
 \githubissue{1380}
 
+
+\section{Avoid code duplication in rollback}
+
+When the kernel uses \cs{AddToHook} in a region that might be 
+rolled back (which happens in a few places) and a document requests a
+rollback, then we have the situation that the hook already contains code to which we added the same
+(or slightly different) code during the
+rollback; this results in code duplication or, worse, in errors. This has
+now been corrected by dropping any such code chunk (if there is one) prior to
+adding the rollback code.
+%
+\githubissue{1407}
+
+
+
+
 \section{Changes to packages in the \pkg{amsmath} category}
 
 \section{Extend support for \cs{dots}}
@@ -224,9 +313,45 @@ corrected and the warnings are suppressed.
 %
 \githubissue{1265}
 
+
+
 %\section{Changes to packages in the \pkg{graphics} category}
 
-%\section{Changes to packages in the \pkg{tools} category}
+\section{Changes to packages in the \pkg{tools} category}
+
+
+\subsection{\pkg{array}: Tagging support for \cs{cline}}
+
+In the last release we added tagging support for \pkg{array},
+\pkg{longtable} and other tabular packages, but we overlooked that the
+kernel definition for \cs{cline} also needs modification because the
+rule generated by the command needs to be tagged as an
+artifact. Furthermore, the processing of a \cs{cline} looks to the
+algorithm as if another row is added (which is technically what
+happens), thus it was also necessary to decrement the internal row
+counter to get a correct row count. This has now been corrected in
+\pkg{array} which is automatically loaded for tagging, so that all
+these packages are now fully compatible with the tagging code if it is
+turned on.
+%
+\taggingissue{134}
+
+
+\subsection{\pkg{longtable}: Extend caption type}
+
+The \pkg{longtable} has been extended and now provides the command \cs{LTcaptype}
+(stemming from the \pkg{ltcaption} package) to change
+the counter and caption type used by the \cs{caption} command from longtable.
+So with \verb+\renewcommand\LTcaptype{figure}+, a longtable will step the
+figure counter instead of the table counter and produce an
+entry in the list of figures. An empty definition, \verb+\renewcommand\LTcaptype{}+,
+will suppress increasing of the counter. This makes it easy to define an
+unnumbered variant of longtable:
+\begin{verbatim}
+\newenvironment{longtable*}
+  {\renewcommand\LTcaptype{}\longtable}
+  {\endlongtable}
+\end{verbatim}
 
 %\section{Changes to files in the \pkg{cyrillic} category}
 
@@ -245,6 +370,10 @@ Leslie Lamport.
 \bibitem{40:ltnews} \LaTeX{} Project Team.
   \emph{\LaTeXe{} news 1--39}. June, 2024.
   \url{https://latex-project.org/news/latex2e-news/ltnews.pdf}
+
+\bibitem{40:ltnews35} \LaTeX{} Project Team.
+  \emph{\LaTeXe{} news 35}. June 2022.
+  \url{https://latex-project.org/news/latex2e-news/ltnews35.pdf}
 
 \bibitem{40:ltnews39} \LaTeX{} Project Team.
   \emph{\LaTeXe{} news 39}. June 2024.
