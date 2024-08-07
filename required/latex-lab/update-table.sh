@@ -9,6 +9,7 @@ l3build save -cconfig-table-pdftex \
 	table-006-longtable \
 	table-007-longtable \
 	table-008-multi \
+	table-008-disable \
 	table-009 \
 	table-009-pdf \
 	table-010-longtable-pdf \
@@ -25,7 +26,8 @@ l3build save -cconfig-table-pdftex \
 	table-018 \
 	table-019 \
 	table-020 \
-	table-021-longtable
+	table-021-longtable \
+	table-022-cline
 
 l3build save -cconfig-table-luatex \
 	table-000 \
