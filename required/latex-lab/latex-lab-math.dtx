@@ -19,8 +19,8 @@
 % for those people who are interested or want to report an issue.
 %
 %
-\def\ltlabmathdate{2024-07-05}
-\def\ltlabmathversion{0.5j}
+\def\ltlabmathdate{2024-08-12}
+\def\ltlabmathversion{0.6a}
 %
 %<*driver>
 \documentclass{l3doc}
@@ -1349,25 +1349,24 @@
 % \subsection{Content grabbing}
 %
 % \begin{macro}{\@@_grab_dollar:w}
-%   Grab up to a single |$|, for inline math mode, suppressing
-%   any processing if the token is \tn{m@th} found in the content.
-%
-%    \fmi{what's that test doing?}
-%
-%    \car{It is some kind of fix, to avoid the remote
-%      possibility that the math is empty, making the code
-%      produce an unwanted \texttt{\$\$}.}
-%
-%\car{cf.~the code for this in \cs{@ensuredmath}}
-%
-%\car{It is harmless but unnecessary in the dollardollar grabbing below.}
-%
+% \begin{macro}{\@@_grab_dollar:n}
+%   Top-level function to handle grabbing of inline math mode delimited by
+%   |$| tokens. We provide two different ways to do that: a token-by-token
+%   one that can be used everywhere, and a fast delimited one that does not
+%   work anywhere that the end |$| token may be hidden, most obviously in
+%   tabulars. The function here is therefore set up as a variable starting
+%   point.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_grab_dollar:w % $
-  #1 $
+\cs_new_protected:Npn \@@_grab_dollar:w { \@@_grab_dollar_delim:w }
+%    \end{macrocode}
+%   After grabbing inline math material, there is again common processing
+%   independent of mechanism of collection.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_dollar:n #1
   {
 %    \end{macrocode}
-%    \fmi{what's that test doing?}
+%   To avoid further work with entirely empty math segments, we test before
+%   doing anything more.
 %    \begin{macrocode}
     \tl_if_blank:nF {#1}
       {
@@ -1389,6 +1388,16 @@
         }         
       }
   }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_grab_dollar_delim:w}
+%   Grab up to a single |$|, for inline math mode, suppressing
+%   any processing if the token is \tn{m@th} found in the content.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_dollar_delim:w #1 $ % $
+  { \@@_grab_dollar:n {#1} }
 %    \end{macrocode}
 % \end{macro}
 % 
@@ -1460,6 +1469,170 @@
 %     \typeout{collected? = \bool_if:NTF \l_@@_collected_bool {true}{false}}
      \begin { equation* } #1 \end { equation* }
    }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Token-by-token inline grabbing}
+%
+% Grabbing inline math token-by-token is more involved. The mechanism here
+% is essentially a simplified version of that originally seen in
+% \pkg{collcell} and refined in \pkg{siunitx}. We make use of the fact that
+% in math mode spaces are ignored, so we have to deal with only \texttt{N}-type
+% tokens and groups. Furthermore, there is no need to look inside groups, so
+% the only special cases are a small selection of \texttt{N}-type tokens.
+%
+% \begin{variable}{\l_@@_grabbed_tl}
+%   For collection of the material piecewise.
+%    \begin{macrocode}
+\tl_new:N \l_@@_grabbed_tl
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_grab_env_int}
+%   Needed to count up the number of nested environments encountered.
+%    \begin{macrocode}
+\int_new:N \l_@@_grab_env_int
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{macro}{\@@_grab_dollar_loop:}
+% \begin{macro}{\@@_grab_loop:}
+%   The lead-off here establishes a group: we need that as we will have to
+%   be careful in the way \tn{cr} is handled and ensure this is only
+%   manipulated whilst grabbing. The main loop is then started.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_dollar_loop:
+  {
+    \group_begin:
+      \tl_clear:N \l_@@_grabbed_tl
+      \@@_grab_loop:
+  }
+\cs_new_protected:Npn \@@_grab_loop:
+  {
+    \peek_remove_spaces:n
+      {
+        \peek_meaning:NTF \c_group_begin_token
+          { \@@_grab_loop_group:n }
+          { \@@_grab_loop_token:N }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_grab_loop_group:n}
+% \begin{macro}{\@@_grab_loop_store:n}
+%   Handling of grabbed groups is pretty easy.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_loop_group:n #1
+  { \@@_grab_loop_store:n { {#1} } }
+\cs_new_protected:Npn \@@_grab_loop_store:n #1
+  {
+    \tl_put_right:Nn \l_@@_grabbed_tl {#1}
+    \@@_grab_loop:
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_grab_loop_token:N}
+% \begin{macro}
+%   {
+%      \@@_grab_loop_$:              ,
+%      \@@_grab_loop_\\:             ,
+%      \@@_grab_loop_\begin:         ,
+%      \@@_grab_loop_\begin :        ,
+%      \@@_grab_loop_\end:           ,
+%      \@@_grab_loop_\ignorespaces:  ,
+%      \@@_grab_loop_\unskip:        ,
+%      \@@_grab_loop_\textonly@unskip:
+%   }
+%   Filter out the special cases: for performance reasons, use a hash table
+%   approach rather than a loop (\emph{cf.}~\pkg{collcell}). The need to cover
+%   \verb*|begin | is that at the start of a cell, \TeX{} will expand \cs{begin}
+%   but the \LaTeX{} robust mechanism will mean this yields \verb*|begin |.
+%   If\cs{begin} were protected, that would not be needed.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_loop_token:N #1
+  {
+    \cs_if_exist_use:cF
+      { @@_grab_loop_ \token_to_str:N #1 : }
+      { \@@_grab_loop_store:n {#1} }
+  }
+\cs_new_protected:cpn { @@_grab_loop_ \token_to_str:N $ : }
+  { \@@_grab_loop_end: }
+\cs_new_protected:cpn { @@_grab_loop_ \token_to_str:N \\ : }
+  {
+    \int_compare:nNnTF \l_@@_grab_env_int = 0
+       { \@@_grab_loop_newline: }
+       { \@@_grab_loop_store:n { \\ } }
+  }
+%    \end{macrocode}
+%   In contrast to \pkg{collcell}, nesting is tracked by counting
+%   \cs{begin}/\cs{end} pairs: this is needed in case there is a tabular-like
+%   construct containing |\\| inside a cell. As a result, the end-of-tabular
+%   can be detected without checking the name argument: if \cs{end} is
+%   encountered at nesting level~0, we've hit the end of a cell. In that case,
+%   end the row and leave the environment to clean up.
+%    \begin{macrocode}
+\cs_new_protected:cpn { @@_grab_loop_ \token_to_str:N \begin : }
+  {
+    \int_incr:N \l_@@_grab_env_int
+    \@@_grab_loop_store:n { \begin }
+  }
+\cs_new_eq:cc { @@_grab_loop_ \token_to_str:N \begin \c_space_tl : }
+  { @@_grab_loop_ \token_to_str:N \begin : }
+\cs_new_protected:cpn { @@_grab_loop_ \token_to_str:N \end : }
+  {
+    \int_compare:nNnTF \l_@@_grab_env_int = 0
+       {
+         \@@_grab_loop_newline:
+         \end
+       }
+       {
+         \int_decr:N \l_@@_grab_env_int
+         \@@_grab_loop_store:n { \end }
+       }
+  }
+\tl_map_inline:nn { \ignorespaces \unskip \textonly@unskip }
+  {
+    \cs_new_protected:cpn { @@_grab_loop_ \token_to_str:N #1 : }
+      { \@@_grab_loop: }
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_grab_loop_newline:}
+%   To allow collection of tokens in the part of the \tn{halign} template after
+%   |#|, we need \TeX{} to see the primitive with the loop token in the right
+%   place. That is done by re-defining \tn{cr} at present. Ideally there would
+%   be a socket in the definition of \texttt{tabular}, etc., to handle this:
+%   there is also the need to examine in interaction with \pkg{longtable}, which
+%   also redefines \tn{cr}.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_loop_newline:
+  {
+    \if_false: { \fi:
+    \cs_set_protected:Npn \cr
+      {
+        \@@_grab_loop:
+        \tex_cr:D
+      }
+    \if_false: } \fi:
+    \\
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_grab_loop_end:}
+%   Clean up and pass on.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_loop_end:
+  {
+    \exp_args:NNV \group_end:
+    \@@_grab_dollar:n \l_@@_grabbed_tl
+  }
 %    \end{macrocode}
 % \end{macro}
 %
