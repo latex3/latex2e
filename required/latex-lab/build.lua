@@ -64,7 +64,7 @@ checksearch  = true
 
 checkconfigs = 
  {"build","config-TU","config-OR",
-  "config-math",
+  "config-math","config-math-luatex",
   "config-OR-luatex",
   "config-sec",
   "config-toc",
