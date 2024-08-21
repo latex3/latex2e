@@ -76,7 +76,8 @@ checkconfigs =
   "config-LM-tagging",
   "config-table-pdftex",
   "config-table-luatex",
-  "config-title"
+  "config-title",
+  "config-firstaid"
  }
 
 
