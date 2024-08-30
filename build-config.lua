@@ -119,10 +119,11 @@ function update_tag(file,content,tagname,tagdate)
   if rev and tonumber(rev) ~= 0 then
     if main_branch then
       tag = tag .. " patch level " .. rev
+      patch_level = rev
     else
       tag = tag .. " pre-release " .. rev
+      patch_level = "-" .. rev
     end
-    patch_level = rev
   end
   if file == "README.md" then
     return string.gsub(content,

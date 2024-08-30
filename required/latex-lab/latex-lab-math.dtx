@@ -19,8 +19,8 @@
 % for those people who are interested or want to report an issue.
 %
 %
-\def\ltlabmathdate{2024-08-12}
-\def\ltlabmathversion{0.6a}
+\def\ltlabmathdate{2024-08-29}
+\def\ltlabmathversion{0.6d}
 %
 %<*driver>
 \documentclass{l3doc}
@@ -205,7 +205,9 @@
 %   \begin{itemize}
 %    \item |tagsupport/math/inline/formula/begin|
 %     This socket takes the math as argument and its code
-%     should output it for typesetting. Without tagging the 
+%     should output it for typesetting. 
+%     It is not \emph{used} as a tagging socket as the math argument should
+%     not be lost without tagging, so without tagging the 
 %     socket uses the identity plug.
 %     The |default| plug of the socket calls these three internal sockets
 %     for the tagging support:
@@ -247,8 +249,15 @@
 %  It can be suppressed by an option with
 %  \texttt{math/tex/AF=false}, see below. 
 %  
-%  The MathML is attached if a file |\jobname-mathml.html| is found and
-%  if it contains a suitable MathML snippet for the current formula. 
+%  The MathML is attached if the files |\jobname-mathml.html| and/or 
+%  |\jobname-luamml-mathml.html| are found 
+%  and if they contains a suitable MathML snippet for the current formula. 
+%  If the files contain more than one suitable snippet (as identified by the hash)
+%  the first one is used. 
+%  |\jobname-luamml-mathml.html| is automatically generated (see below section~\ref{sec:luamml})
+%  and read after |\jobname-mathml.html|. This means that |\jobname-mathml.html| can contain
+%  improved versions of a formula. 
+%  
 %  The MathML processing can be suppressed globally by emptying the list of
 %  mathml files with |math/mathml/sources=|. Locally for a formula |math/mathml/AF=false|
 %  can be used. 
@@ -315,6 +324,27 @@
 %  added by default, but the \LaTeX{} source not. This can be changed with
 %  |viewer/pane/mathsource=true| (anywhere in the document) and |viewer/pane/mathml=false| (in the
 %  preamble, before the external file is read).  
+%  
+%  
+%  \subsection{Automatic mathml creation with luamml}\label{sec:luamml}
+%  
+%  If lualatex is used, if the package \texttt{unicode-math} is used
+%  and if the package \texttt{luamml} is found
+%  then it will automatically generate the file |\jobname-luamml-mathml.html| 
+%  with mathml representations of all math formulas.
+%  The generation of the file can be suppressed with |math/mathml/luamml=false|.
+%  If \texttt{unicode-math} is not used, 
+%  the generation of the file can be forced 
+%  with |math/mathml/luamml=true| or |math/mathml/luamml| but be aware that
+%  it is then probable that various symbols are mapped to the wrong unicode code
+%  points.
+%  The package is still quite experimental and the output should be checked. 
+%  The |\jobname-luamml-mathml.html| file may be previewed in a browser although 
+%  you may need to add additional css or javascript declarations 
+%  to enable browser support for all mathml constructs.
+%  The file is then used in subsequent compilations and works also with 
+%  pdflatex. 
+%  
 %  
 %  \subsection{Options}
 %      
@@ -538,6 +568,7 @@
 %    \begin{macrocode}
 \tl_new:N \l_@@_tmpa_tl
 \skip_new:N \l_@@_tmpa_skip
+\str_new:N \l_@@_tmpa_str
 %    \end{macrocode}
 % \end{variable}
 %
@@ -592,8 +623,12 @@
 %   \l__tag_math_mathml_AF_bool,
 %   \g__tag_math_mathml_AF_bool,
 %   \l__tag_math_mathml_pane_bool,
-%   \l__tag_math_alt_bool
+%   \l__tag_math_alt_bool,
+%   \g__tag_math_luamml_tl,
 % }
+% The variable \cs{g__tag_math_luamml_tl} is initially 0 and
+% the user key can set it to -1 or 1. This allows to distinguish
+% the unset case from a value set by the user.
 %    \begin{macrocode}
 \bool_new:N\l__tag_math_texsource_AF_bool
 \bool_new:N\l__tag_math_texsource_pane_bool
@@ -601,6 +636,8 @@
 \bool_new:N\g__tag_math_mathml_AF_bool
 \bool_new:N\l__tag_math_mathml_pane_bool
 \bool_new:N\l__tag_math_alt_bool
+\tl_new:N\g__tag_math_luamml_tl
+\tl_gset:Nn\g__tag_math_luamml_tl {0}
 %    \end{macrocode}
 % \end{variable}
 % 
@@ -631,9 +668,11 @@
 %
 % \begin{variable}{\l__tag_math_mathml_files_clist}
 % A sequence to store the file list for the mathml.
+% If luatex is detected with also check the luamml file.
 %    \begin{macrocode}
 \clist_new:N\l__tag_math_mathml_files_clist
-\clist_put_right:Ne\l__tag_math_mathml_files_clist {\c_sys_jobname_str-mathml}
+\clist_put_right:Ne\l__tag_math_mathml_files_clist 
+  {\c_sys_jobname_str-mathml,\c_sys_jobname_str-luamml-mathml}
 %    \end{macrocode}
 % \end{variable}
 
@@ -685,8 +724,268 @@
    \@@_AF_mml:nnnn{#1}{#2}{#3}{#4}
    }
 %    \end{macrocode}
-
 %
+% As with luatex we write two files we define a few constants for 
+% the shared texts.
+% 
+% \begin{macro}
+%  {\c_@@_mathml_write_init_tl,\l_@@_mathml_write_before_tl,
+%   \c_@@_mathml_write_after_tl,\c_@@_mathml_write_final_tl} 
+%    \begin{macrocode}
+\tl_const:Nn \c_@@_mathml_write_init_tl 
+  {
+    <!DOCTYPE~html>
+    \iow_newline:
+    <html>
+    \iow_newline:
+  }
+\tl_new:N \l_@@_mathml_write_before_tl  
+\tl_const:Nn \c_@@_mathml_write_after_tl 
+  {
+    \iow_newline:
+    </div>
+    \iow_newline:
+  }  
+\tl_const:Nn \c_@@_mathml_write_final_tl 
+  {
+    </html>
+  }  
+%    \end{macrocode}
+% \end{macro}
+
+% \begin{socketdecl}{tagsupport/math/mathml/write/prepare}
+% To prepare the hash and the starting command we use a socket, so 
+% that both the dummy and luamml can make use of it.
+%    \begin{macrocode}
+\socket_new:nn {tagsupport/math/mathml/write/prepare}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+%
+% \begin{plugdecl}{On}
+%    \begin{macrocode}
+\socket_new_plug:nnn{tagsupport/math/mathml/write/prepare}{On}
+  {
+    \str_set:NV\l_@@_tmpa_str\l_@@_content_AF_source_tl
+    \str_replace_all:Nnn\l_@@_tmpa_str{&}{&amp;}
+    \str_replace_all:Nnn\l_@@_tmpa_str{<}{&lt;}
+    \tl_set:Nn \l_@@_mathml_write_before_tl 
+      {
+        <div>
+        \iow_newline:
+        <h2>\c_backslash_str mml\c_space_tl \int_use:N \g_@@_math_total_int </h2>
+        \iow_newline:
+        <p>\l_@@_tmpa_str</p>
+        \iow_newline:
+        <p>\l_@@_content_hash_tl </p>
+        \iow_newline:
+      }   
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% With luatex we automatically generate mathml with luamml if the package
+% can be loaded and unicode-math is detected. 
+% We start the process in the begindocument/end hook
+% so that the reading from a previous compilation can happen before!
+%    \begin{macrocode}
+\sys_if_engine_luatex:T
+ {
+   \file_if_exist:nT { luamml.sty }
+     {
+       \RequirePackage  { luamml }
+%    \end{macrocode}
+% Temporary (!) fixes for endarray 
+%    \begin{macrocode}
+       \AddToHook{package/array/after}
+        {
+          \cs_set:Npn \endarray 
+           {
+             \tbl_crcr:n{endarray}
+             \__luamml_array_save_array:
+             \egroup
+             \UseTaggingSocket{tbl/finalize}
+             \tbl_restore_outer_cell_data: 
+             \egroup
+             \mode_if_math:T { \__luamml_array_finalize_array: }
+             \@arrayright
+             \gdef \@preamble {}
+           }
+         \cs_set:Npn \@classz 
+           {
+            \@classx
+            \@tempcnta \count@
+            \prepnext@tok
+            \@addtopreamble {
+              \ifcase \@chnum
+                \hfil
+                \hskip 1sp
+                \d@llarbegin
+                \cs_if_eq:NNTF \d@llarbegin \begingroup {
+                  \insert@column
+                  \d@llarend
+                } {
+                  \__luamml_array_init_col:
+                  \insert@column
+                  \luamml_flag_save:nn {} {mtd}
+                  \d@llarend
+                  \__luamml_array_finalize_col:w 0~
+                }
+                \do@row@strut
+                \hfil
+              \or
+                \hskip 1sp
+                \d@llarbegin
+                \cs_if_eq:NNTF \d@llarbegin \begingroup {
+                  \insert@column
+                  \d@llarend
+                } {
+                  \__luamml_array_init_col:
+                  \insert@column
+                  \luamml_flag_save:nn {} {mtd}
+                  \d@llarend
+                  \__luamml_array_finalize_col:w 1~
+                }
+                \do@row@strut
+                \hfil
+              \or
+                \hfil
+                \hskip 1sp
+                \d@llarbegin
+                \cs_if_eq:NNTF \d@llarbegin \begingroup {
+                  \insert@column
+                  \d@llarend
+                } {
+                  \__luamml_array_init_col:
+                  \insert@column
+                  \luamml_flag_save:nn {} {mtd}
+                  \d@llarend
+                  \__luamml_array_finalize_col:w 2~
+                }
+                \do@row@strut
+              \or
+                \setbox \ar@mcellbox \vbox \@startpbox { \@nextchar }
+                  \insert@pcolumn
+                \@endpbox
+                \ar@align@mcell
+                \do@row@strut
+              \or
+                \vtop \@startpbox { \@nextchar }
+                  \insert@pcolumn
+                \@endpbox
+                \do@row@strut
+              \or
+                \vbox \@startpbox { \@nextchar }
+                  \insert@pcolumn
+                \@endpbox
+                \do@row@strut
+              \fi
+            }
+            \prepnext@tok
+          }          
+        }  
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+       \AddToHook{begindocument/end}
+         { 
+           \str_case:on \g__tag_math_luamml_tl 
+             { 
+               { 1 } { 
+                       \@@_luamml_activate_write:
+                       \msg_note:nnnn { tag } 
+                         { luamml-status }{ enabled }{ create }
+                     }
+               {-1 } { 
+                       \msg_note:nnnn { tag } 
+                         { luamml-status }{ disabled }{ not~create } 
+                     }
+               { 0 } 
+               {  
+                 \@ifpackageloaded { unicode-math }
+                  { 
+                    \@@_luamml_activate_write: 
+                    \msg_note:nnnn { tag } 
+                      { luamml-status }{ enabled }{ create }
+                  }
+                  { \msg_warning:nn { tag }{ unicode-math-missing } } 
+               }                
+             } 
+         }
+     }
+ }
+\msg_new:nnn { tag }{ luamml-status } 
+  {
+    luamml~has~been~#1~and~will~#2~an~MathML~file.
+  } 
+ 
+\msg_new:nnn { tag }{ unicode-math-missing } 
+  {
+    The~package~unicode-math~is~missing\\
+    luamml~will~not~create~an~MathML~file.\\
+    To~avoid~this~warning~load~unicode-math~\\
+    or~disable~luamml~with~\\
+    \tl_to_str:n{\tagpdfsetup{math/mathml/luamml=false}}\\
+    or~force~luamml~with~\\
+    \tl_to_str:n{\tagpdfsetup{math/mathml/luamml=true}}
+  } 
+\cs_new_protected:Npn \@@_luamml_activate_write:
+ {
+%    \end{macrocode}
+% to avoid that nothing is written in the first run, we must activate the sockets:
+%    \begin{macrocode}
+   \bool_gset_true:N\g__tag_math_mathml_AF_bool
+   \AssignSocketPlug{tagsupport/math/struct/begin}{test-mathml}
+   \AssignSocketPlug{tagsupport/math/struct/end}{test-mathml}
+   \AssignSocketPlug{tagsupport/math/substruct/begin}{single}
+   \AssignSocketPlug{tagsupport/math/substruct/end}{single} 
+   \int_set:Nn \l__luamml_pretty_int { 5 }
+   \RegisterFamilyMapping\symsymbols{oms}
+   \RegisterFamilyMapping\symletters{oml}
+   \AssignSocketPlug{tagsupport/math/mathml/write/prepare}{On}
+   \iow_new:N   \g_@@_luamml_iow
+   \iow_open:Nn \g_@@_luamml_iow {\c_sys_jobname_str-luamml-mathml.html}
+   \iow_now:Ne  \g_@@_luamml_iow { \c_@@_mathml_write_init_tl  }
+   \cs_new:Npn  \@@_luamml_output_hook:n  ##1 
+     {
+       \tl_if_empty:NF \l_@@_mathml_write_before_tl 
+         {                  
+          \iow_now:Ne \g_@@_luamml_iow 
+           {
+             \l_@@_mathml_write_before_tl            
+             ##1
+             \c_@@_mathml_write_after_tl 
+           }        
+         } 
+     }
+   \__luamml_register_output_hook:N \@@_luamml_output_hook:n
+%    \end{macrocode}
+% this starts the process and set flag to 3, 
+% not really needed, as it is the default but set here for clarity:
+%    \begin{macrocode}
+   \luamml_flag_process:
+%    \end{macrocode}
+% At the end of the document we must finish and close the file:
+%    \begin{macrocode}
+   \AddToHook{enddocument/afterlastpage}
+     {
+       \iow_now:Ne \g_@@_luamml_iow 
+         { \c_@@_mathml_write_final_tl }
+       \iow_close:N \g_@@_luamml_iow 
+     }                  
+ } 
+%    \end{macrocode}
+%  And now a key to deactivate luamml
+%    \begin{macrocode}
+
+\keys_define:nn { __tag / setup }
+   {
+     math/mathml/luamml .choice: ,
+     math/mathml/luamml/true  .code:n = {\tl_gset:Nn \g__tag_math_luamml_tl{1}},
+     math/mathml/luamml/false .code:n = {\tl_gset:Nn \g__tag_math_luamml_tl{-1}},
+     math/mathml/luamml .default:n = true,
+     math/mathml/luamml .usage:n=preamble 
+   }
+%    \end{macrocode}
 % \begin{socketdecl}{tagsupport/math/mathml/write}
 % This writes a html-dummy with the hash and the math content.
 % This should be optional, so it uses a socket that can be disabled
@@ -700,24 +999,11 @@
 %    \begin{macrocode}
 \socket_new_plug:nnn{tagsupport/math/mathml/write}{On}
  {
-    \str_set:NV\l_@@_tmpa_str\l_@@_content_AF_source_tl
-    \str_replace_all:Nnn\l_@@_tmpa_str{&}{&amp;}
-    \str_replace_all:Nnn\l_@@_tmpa_str{<}{&lt;}
     \iow_now:Ne \g_@@_writedummy_iow 
      {
-      \iow_newline:
-      <div>
-      \iow_newline:
-      <h2>\c_backslash_str mml\c_space_tl \int_use:N \g_@@_math_total_int </h2>
-      \iow_newline:
-      <p>\l_@@_tmpa_str</p>
-      \iow_newline:
-      <p>\l_@@_content_hash_tl </p>
-      \iow_newline:
+      \l_@@_mathml_write_before_tl
       <math></math>
-      \iow_newline:
-      </div>
-      \iow_newline:
+      \c_@@_mathml_write_after_tl
       }
  }
 %    \end{macrocode}
@@ -739,14 +1025,14 @@
              }
             \iow_now:Ne \g_@@_writedummy_iow
              {
-               <!DOCTYPE~html>
-               \iow_newline:
-               <html>
+               \c_@@_mathml_write_init_tl
              }
+            \AssignSocketPlug {tagsupport/math/mathml/write/prepare}{On} 
             \AssignSocketPlug {tagsupport/math/mathml/write}{On}
             \AddToHook{enddocument/afterlastpage}
              {
-               \iow_now:Nn \g_@@_writedummy_iow {</html>}
+               \iow_now:Ne \g_@@_writedummy_iow 
+                 { \c_@@_mathml_write_final_tl }
                \iow_close:N \g_@@_writedummy_iow
              }
           }  
@@ -907,15 +1193,15 @@
   {tagsupport/math/inline/formula/begin}
   {default}
   {  
-    \socket_use:n{tagsupport/math/content}
-    \socket_use:n{tagsupport/math/struct/begin}
+    \tag_socket_use:n{math/content}
+    \tag_socket_use:n{math/struct/begin}
 %    \end{macrocode}
 % TODO: does inline math need subformula handling?
 %    \begin{macrocode}
     % inner formula if multiple parts (not really implemented yet)
-    \socket_use:n{tagsupport/math/substruct/begin}
+    \tag_socket_use:n{math/substruct/begin}
     #1
-    \socket_use:n{tagsupport/math/end}
+    \tag_socket_use:n{math/end}
   }
 \socket_new_plug:nnn
   {tagsupport/math/inline/formula/end}
@@ -942,7 +1228,10 @@
 %   The other two implement the actual formula structure. 
 %   The formula sockets are despite their naming not symmetric:
 %   the begin socket is issued after the math has started, while 
-%   the end socket is after the math!                
+%   the end socket is after the math!  
+%   The socket |tagsupport/math/display/formula/begin| should similar to
+%   the inline version not be used as tagging socket so that the argument, the math,
+%   is not lost.              
 %    \begin{macrocode}
 \socket_new:nn {tagsupport/math/display/begin}{0}
 \socket_new:nn {tagsupport/math/display/end}{0}
@@ -972,11 +1261,11 @@
   {tagsupport/math/display/formula/begin}
   {default}
   { 
-    \socket_use:n{tagsupport/math/content}
-    \socket_use:n{tagsupport/math/struct/begin}
-    \socket_use:n{tagsupport/math/substruct/begin}
+    \tag_socket_use:n{math/content}
+    \tag_socket_use:n{math/struct/begin}
+    \tag_socket_use:n{math/substruct/begin}
     #1 
-    \socket_use:n{tagsupport/math/end}
+    \tag_socket_use:n{math/end}
   }
 \socket_new_plug:nnn
   {tagsupport/math/display/formula/end}
@@ -1184,6 +1473,7 @@
     {
       \typeout{WARNING:~mathml~missing~for~hash~\l_@@_content_hash_tl}
     }    
+   \socket_use:n {tagsupport/math/mathml/write/prepare} 
    \socket_use:n {tagsupport/math/mathml/write} % write hash if request  
     \bool_if:NTF\l__tag_math_texsource_AF_bool  
      { \tl_set_eq:NN \l_@@_content_AF_source_tmpa_tl \l_@@_content_AF_source_tl }
@@ -1350,6 +1640,7 @@
 %
 % \begin{macro}{\@@_grab_dollar:w}
 % \begin{macro}{\@@_grab_dollar:n}
+% \changes{v0.6c}{2024-08-22}{Correct handling of empty math segments}
 %   Top-level function to handle grabbing of inline math mode delimited by
 %   |$| tokens. We provide two different ways to do that: a token-by-token
 %   one that can be used everywhere, and a fast delimited one that does not
@@ -1365,28 +1656,34 @@
 \cs_new_protected:Npn \@@_grab_dollar:n #1
   {
 %    \end{macrocode}
-%   To avoid further work with entirely empty math segments, we test before
-%   doing anything more.
+%  We need to do processing first as this picks up \enquote{fake} math mode:
+%  that information is needed below.
 %    \begin{macrocode}
-    \tl_if_blank:nF {#1}
-      {
-        \@@_process:nn { math } {#1} % $
+    \@@_process:nn { math } {#1}
 %    \end{macrocode}
 %  We do not want math tagging in fakemath or when measuring,
 %  We also do not want math tagging if tagging has been suspended.
 %    \begin{macrocode}
-      \bool_lazy_or:nnTF 
-        {\legacy_if_p:n { measuring@ }}
-        { \l_@@_fakemath_bool }
-        { #1 $ }
+      \bool_lazy_any:nTF 
+        {
+          {\legacy_if_p:n { measuring@ }}
+          { \l_@@_fakemath_bool }
+          { \tl_if_blank_p:n {#1} }
+        }
+        {
+          #1 $ % $
+        }
         {
             \tag_socket_use:n  {math/inline/begin} %end P-MC  
-            \tag_socket_use:nn {math/inline/formula/begin}{#1}
-             $
+%    \end{macrocode}
+% We do no use a tagging socket here, so that the argument (the
+% math) is not lost, tagging-project issue 661.
+%    \begin{macrocode}
+            \socket_use:nn {tagsupport/math/inline/formula/begin}{#1}
+            $ % $
             \tag_socket_use:n  {math/inline/formula/end}
             \tag_socket_use:n  {math/inline/end} % restart P-MC
-        }         
-      }
+        }
   }
 %    \end{macrocode}
 % \end{macro}
@@ -1410,10 +1707,10 @@
     \tl_if_blank:nF {#1}
       {
         \@@_process:nn { equation* } {#1}
-        \socket_use:n {tagsupport/math/display/begin}
+        \tag_socket_use:n {math/display/begin}
         \socket_use:nn{tagsupport/math/display/formula/begin}{#1}
-        $$
       }
+    $$
   }
 %    \end{macrocode}
 % 
@@ -1430,7 +1727,7 @@
 %    \begin{macrocode}
     \tagpdfparaOn
     \l_@@_tmpa_skip \lastskip
-    \socket_use:n{tagsupport/math/display/formula/end}    
+    \tag_socket_use:n{math/display/formula/end}    
     \penalty \postdisplaypenalty
 %    \end{macrocode}
 % This reinserts the below display skips. It must be doubled to
