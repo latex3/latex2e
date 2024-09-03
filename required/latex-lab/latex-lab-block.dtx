@@ -9,7 +9,7 @@
 %
 %    https://www.latex-project.org/lppl.txt
 %
-\def\ltlabblockdate{2024-09-02}
+\def\ltlabblockdate{2024-09-03}
 \def\ltlabblockversion{0.8q}
 %<*driver>
 \documentclass[kernel]{l3doc}
@@ -1774,10 +1774,17 @@
       \legacy_if_gset_false:n { @inlabel }
     }
 %    \end{macrocode}
-%    The 2e implementation had a \texttt{@newlist} test here, which
-%    generated a \cs{@noitemerr} if true. This has been moved to
-%    \cs{@@_list_end:}.
-%  \changes{v0.8q}{2024/09/02}{\cs{@noitemerr} moved to a better place}
+%    In we are ending a list environment and haven't seen any
+%    \cs{item}, i.e., \texttt{@newlist} is still true, we raise an
+%    error. In pure a ``displayblock'' scenario \texttt{@newlist} will be
+%    always false, but if such an environment appears inside an outer
+%    list the code could still be triggered and that is undesirable
+%    (as it will be detected at the wrong point and later again). We
+%    therefore run it only if the current environment is a list.
+%  \changes{v0.8q}{2024/09/03}{Raise a \cs{@noitemerr} if appropriate}
+%    \begin{macrocode}
+  \@@_if_list:T { \legacy_if:nT { @newlist } { \@noitemerr } }
+%    \end{macrocode}
 %    \begin{macrocode}
   \mode_if_horizontal:TF
        { \@@_skip_remove_last: \@@_skip_remove_last: \par }
@@ -1787,6 +1794,13 @@
 %    closing tagging structure(s), if we are doing tagging.
 %    \begin{macrocode}
   \__kernel_displayblock_end:
+%    \end{macrocode}
+%    Resetting the \texttt{@newlist} switch is also only done if the
+%    current enviornment is a list and not unconditionally.
+%  \changes{v0.8q}{2024/09/03}{Setting \texttt{@newlist} to false
+%    moved after tagging code if in a list}
+%    \begin{macrocode}
+  \@@_if_list:T { \legacy_if_gset_false:n { @newlist } }
 %    \end{macrocode}
 %    What to do in terms of vertical spacing  in different situations
 %    is still somewhat open to debate, right now this is more or less
@@ -1834,6 +1848,19 @@
 %  \end{macro}
 %
 %
+%  \begin{macro}{\@@_if_list:T}
+%    This needs some redesigning, as there is no good test for \enquote{is
+%    this environment a \enquote{list} that has \cs{item}s}. For now
+%    this here does the trick well enough.\fmi{revisit}
+%  \changes{v0.8q}{2024/09/03}{Provide a test for: Am I in a list?}
+%    \begin{macrocode}
+\cs_new:Npn \@@_if_list:T
+   { \tl_if_eq:NnT \l_@@_block_instance_tl {list} }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%      
 %  \begin{macro}{\__kernel_displayblock_end:}
 %    The kernel hook for tagging at the end of the block.
 %    \begin{macrocode}
@@ -4067,20 +4094,27 @@
 %    \struct{text} if the last item ends with a list.
 %    However, if the user forgot to add an \cs{item} there is no
 %    \texttt{LI} and \texttt{LBody} open, so we check for the status
-%    of \texttt{@newlist} and generate a no-item error.
+%    of \texttt{@newlist}. The corresponding no-item error was
+%    generated earlier outside the tagging code.
+%
+%    One could argue that it doesn't matter if the tagging is wrong
+%    after a \cs{@noitemerr} was issued. However, there is one case
+%    where it isn't an error: In the \texttt{thebibliography}
+%    environment (which is internally a list) it is often the case
+%    that documents start out with an empty environment, not
+%    containing any \cs{bibitem}s. For that reason \cs{@noitemerr} is
+%    redefined inside that environment to only produce a warning;
+%    hence we have to produce correct tag structures in that case.
 %  \changes{v0.8q}{2024/09/02}{Do not close LI and LBody if they
 %    never were opened.}
 %    \begin{macrocode}
 \cs_set:Npn \@@_list_end: {
-  \legacy_if:nTF { @newlist }
-    {
-      \@noitemerr
 %    \end{macrocode}
-%    Reset the \texttt{@newlist} switch so that it is always false
-%    outside of lists.
+%    If \texttt{@newlist} is true (ie when we have an error or warning
+%    situation) there is not much to close. If \verb=<L></L>= is not
+%    valid syntax we could add an empty \verb=<LI>= at this point instead.\fmi{check}
 %    \begin{macrocode}
-      \legacy_if_gset_false:n { @newlist }
-    }
+  \legacy_if:nF { @newlist }
     {
       \legacy_if:nT { @endpe }
         {
