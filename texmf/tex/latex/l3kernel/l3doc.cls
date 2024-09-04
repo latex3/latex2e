@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{calc}
-\ProvidesExplClass{l3doc}{2024-06-19}{}
+\ProvidesExplClass{l3doc}{2024-08-30}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -789,17 +789,20 @@
 \cs_generate_variant:Nn \__codedoc_get_hyper_target:nN { o , e }
 \cs_new_protected:Npn \__codedoc_names_get_seq:nN #1#2
   {
-    \__kernel_tl_set:Nx \l__codedoc_tmpa_tl { \tl_to_str:n {#1} }
     \bool_if:NTF \l__codedoc_names_verb_bool
       {
         \seq_clear:N #2
-        \seq_put_right:NV #2 \l__codedoc_tmpa_tl
+        \seq_put_right:No #2 { \tl_to_str:n {#1} }
       }
       {
+        \tl_set:Nn \l__codedoc_tmpa_tl {#1}
+        \tl_remove_all:Ne \l__codedoc_tmpa_tl
+          { \exp_not:N \obeyedline \c_percent_str }
+        \tl_remove_all:Ne \l__codedoc_tmpa_tl
+          { \exp_not:N \obeyedline }
+        \__kernel_tl_set:Nx \l__codedoc_tmpa_tl { \tl_to_str:N \l__codedoc_tmpa_tl }
         \tl_remove_all:Ne \l__codedoc_tmpa_tl
           { \iow_char:N \^^M \c_percent_str }
-        \tl_remove_all:Ne \l__codedoc_tmpa_tl
-          { \token_to_str:N \obeyedline \c_space_tl \c_percent_str }
         \tl_remove_all:Ne \l__codedoc_tmpa_tl { \tl_to_str:n { ^ ^ A } }
         \tl_remove_all:Ne \l__codedoc_tmpa_tl { \iow_char:N \^^I }
         \tl_remove_all:Ne \l__codedoc_tmpa_tl { \iow_char:N \^^M }
@@ -1136,7 +1139,6 @@
       { \__codedoc_typeset_variant_list:nN {#1} #2 }
     \\
   }
-\cs_generate_variant:Nn \__codedoc_typeset_function_block:nN { e }
 \cs_new_protected:Npn \__codedoc_function_index:n #1
   {
     \seq_gput_right:Nn \g_doc_functions_seq {#1}
@@ -2186,7 +2188,6 @@
       {#2}
       \l__codedoc_index_internal_bool
   }
-\cs_generate_variant:Nn \__codedoc_special_index:nn { o }
 \tl_new:N \l__codedoc_index_escaped_macro_tl
 \tl_new:N \l__codedoc_index_escaped_key_tl
 \cs_new_protected:Npn \__codedoc_special_index_module:nnnnN #1#2#3#4#5

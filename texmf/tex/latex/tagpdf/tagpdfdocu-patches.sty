@@ -1,5 +1,5 @@
 %\RequirePackage[enable-debug]{expl3}[2018/06/14]
-\ProvidesExplPackage {tagpdfdocu-patches} {2024-04-12} {0.99b}
+\ProvidesExplPackage {tagpdfdocu-patches} {2024-08-02} {0.99d}
  {patches/commands for the tagpdf documentation}
 \RequirePackage{etoolbox,xpatch}
 
@@ -33,7 +33,7 @@
     \else
       \addpenalty\@secpenalty\addvspace{1.5ex}%
     \fi
-  {\tagpdfsetup{paratag=H10}\parindent \z@    
+  {\tagpdfsetup{para/maintag=P,para/tag=Strong}\parindent \z@    
    \setlength{\parfillskip}{\z@ plus 1fil}%
     \raggedright\normalfont\bfseries\nobreak
     \nobreak\interlinepenalty \@M #1\par\nobreak%
@@ -82,17 +82,13 @@
 % }
 
 \ExplSyntaxOff
-% ======== tikzpicture ==========
-% TODO this needs some investigation: it messes up the stack if one add paraOff
-
-\AddToHook{env/tikzpicture/begin}{}
 
 %======== tcolorbox ========
 % We switch of paratagging at the begin and reenable it locally in before upper.
 % the before upper setting is dangerous as it can be overwritten by
 % users. So a more stable hook is needed.
 % we force also a \par and add a div structure, to avoid clashes with the block
-% tagging code. This needs revisting!
+% tagging code. This needs revisiting!
 
 \AddToHook{env/tcolorbox/before}{\par\tagstructbegin{tag=Div}}
 \AddToHook{env/tcolorbox/begin}{\tagpdfparaOff \tcbset{before upper=\tagpdfparaOn}}
@@ -138,22 +134,6 @@
 % ======= footnote ========
 % done in testphase code
 
-% ======= bibliography ========
-% biblatex. Creates some empty mc-chunks.
-% no internal patches, but redefining begentry/finentry is not safe.
-% better hook is needed.
-
-
-\def\blx@endbibliography{%
-  \csuse{blx@endenv@\blx@theenv}%
-  \blx@noitem
-  \blx@locallabelwidth@finish
-  \endgroup
-  \blx@bibnote\blx@thepostnote
-%  \endgroup
-   \expandafter\endgroup\if@endpe\@doendpe\fi
-}
-
 % ====== hyperref ========
 % this should probably go into tagpdf, but it is related to
 % problem of pdf strings and context ....
@@ -167,30 +147,147 @@
    \let\tagstructend\relax
  }}{}
 
-%====== picture =======
+%====== tikz picture =======
+% first draft to tag. The main problem is to handle paragraphs. One 
+\ExplSyntaxOn
+\cs_new_protected:Npn\__tag_tikz_savepos:n #1
+ {
+  \tex_savepos:D 
+  \tikz@resetexpandcount%
+  \tikz@scan@one@point\pgfutil@firstofone(current~bounding~box.north~east)\relax
+  \pgf@pos@transform{\pgf@x}{\pgf@y}%
+  \property_record:nn{#1}{xpos,ypos,abspage}
+  \property_record:nn{#1-tr}{pgfx,pgfy}
+  \tikz@scan@one@point\pgfutil@firstofone(current~bounding~box.south~west)\relax
+  \pgf@pos@transform{\pgf@x}{\pgf@y}%
+  \property_record:nn{#1-bl}{pgfx,pgfy}
+  \tex_savepos:D 
+ }
+\cs_generate_variant:Nn \__tag_tikz_savepos:n {e}
+ 
+\NewProperty{pgfx}{now}{0}
+ {
+   \dim_compare:nNnTF {\dim_abs:n {\pgf@x}} > {15999pt} 
+    { 0 }
+    { \dim_to_decimal_in_sp:n{\pgf@x} } 
+ }  
+\NewProperty{pgfy}{now}{0}
+ {
+   \dim_compare:nNnTF {\dim_abs:n {\pgf@y}} > {15999pt} 
+    { 0 }
+    { \dim_to_decimal_in_sp:n{\pgf@y} } 
+ }  
 
-% PAC3 complained that the BBox is missing, so we are cheating for now
-% and add a fix size.
-\tagpdfsetup
-  {
-     newattribute =
-        {bbox}{/O /Layout /BBox [0 0 100 100]}
+\cs_new_protected:Npn \__tag_tikz_getbbox:
+ {
+   \int_gincr:N\g__tag_graphic_int
+   \tl_set:Ne\l__tag_graphic_currentlabel_tl {__tag_graphic_\int_use:N \g__tag_graphic_int}
+   \tl_gset:Ne\g__tag_graphic_lx_tl
+     {
+       \dim_to_decimal_in_bp:n 
+         {   \property_ref:een {\l__tag_graphic_currentlabel_tl}{xpos}{0}sp 
+           + \property_ref:een {\l__tag_graphic_currentlabel_tl-bl}{pgfx}{0}sp  
+         }
+     }  
+   \tl_gset:Ne\g__tag_graphic_ly_tl
+        {
+          \dim_to_decimal_in_bp:n 
+            { \property_ref:een {\l__tag_graphic_currentlabel_tl}{ypos}{0}sp 
+              + \property_ref:een {\l__tag_graphic_currentlabel_tl-bl}{pgfy}{0}sp
+            }
+        } 
+   \tl_gset:Ne\g__tag_graphic_ux_tl
+     {
+       \dim_to_decimal_in_bp:n 
+         {   \property_ref:een {\l__tag_graphic_currentlabel_tl}{xpos}{0}sp 
+           + \property_ref:een {\l__tag_graphic_currentlabel_tl-tr}{pgfx}{0}sp  
+         }
+     }
+   \tl_gset:Ne\g__tag_graphic_uy_tl
+     {
+       \dim_to_decimal_in_bp:n 
+         {   \property_ref:een {\l__tag_graphic_currentlabel_tl}{ypos}{0}sp 
+           + \property_ref:een {\l__tag_graphic_currentlabel_tl-tr}{pgfy}{0}sp  
+         }
+     }  
   }
 
-% ======= maketitle
+\cs_new_protected:Npn \__tag_graphic_tikz_begin_picture:
+ {
+  \tag_mc_end_push:
+  \bool_if:NTF \l__tag_graphic_artifact_bool
+   { \tagmcbegin{artifact} }
+   {   
+     \__tag_tikz_getbbox:
+     \tagstructbegin{tag=Figure,alt=\l__tag_graphic_alt_tl}\tagmcbegin{}
+     \__tag_prop_gput:cne
+         { g__tag_struct_\int_eval:n {\c@g__tag_struct_abs_int}_prop }
+         { A } 
+         {
+           << 
+             /O /Layout /BBox~
+             [
+              \g__tag_graphic_lx_tl\c_space_tl
+              \g__tag_graphic_ly_tl\c_space_tl
+              \g__tag_graphic_ux_tl\c_space_tl
+              \g__tag_graphic_uy_tl
+             ]
+           >>   
+         }
+    \bool_if:NT\l__tag_graphic_debug_bool
+     {
+       \__tag_graphic_show_bbox:VVVVne
+        \g__tag_graphic_lx_tl
+        \g__tag_graphic_ly_tl
+        \g__tag_graphic_ux_tl
+        \g__tag_graphic_uy_tl
+        {red}
+        {\int_use:N\g__tag_graphic_int}
+      }
+    }      
+    \SuspendTagging{tikz}      
+  }
 
-\renewcommand\maketitle{%
-   \tagstructbegin{tag=Title}
-   \begin{center}%
-   \let\thanks\footnote
-   \makeatletter
-   \huge \@title \par
-   \vskip .5em
-   \@author \par
-   \vskip 1em%
-   \@date \par
-   \end{center}%
-   \tagstructend}
+\cs_new_protected:Npn \__tag_graphic_tikz_end_picture:
+ {
+   \ResumeTagging{tikz}\tagmcend
+   \bool_if:NF \l__tag_graphic_artifact_bool
+     {
+       \tagstructend
+       \__tag_tikz_savepos:e {__tag_graphic_\int_use:N \g__tag_graphic_int}
+     }
+   \tag_mc_begin_pop:n{}
+ }
+ 
+\tikzset
+ {
+   every~picture/.style=
+    {
+     artifact,
+     execute~at~begin~picture=\__tag_graphic_tikz_begin_picture:, 
+     execute~at~end~picture=\__tag_graphic_tikz_end_picture:
+    }
+ }
+\AddToHook{env/tikzpicture/before}{\leavevmode} 
+ 
+\tikzset
+ {
+   alt/.code= 
+     {
+       \bool_set_false:N \l__tag_graphic_artifact_bool
+       \tl_set:Nn \l__tag_graphic_alt_tl{#1}
+     } 
+ } 
+\tikzset
+ {
+   artifact/.code= 
+    \bool_set_true:N \l__tag_graphic_artifact_bool
+ } 
+
+\ExplSyntaxOff
+
+
+
 
 
 \endinput
