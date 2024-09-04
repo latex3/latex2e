@@ -9,8 +9,8 @@
 %
 %    https://www.latex-project.org/lppl.txt
 %
-\def\ltlabblockdate{2024-08-11}
-\def\ltlabblockversion{0.8p}
+\def\ltlabblockdate{2024-09-03}
+\def\ltlabblockversion{0.8q}
 %<*driver>
 \documentclass[kernel]{l3doc}
 \usepackage{amstext}
@@ -1774,15 +1774,18 @@
       \legacy_if_gset_false:n { @inlabel }
     }
 %    \end{macrocode}
-%    In a pure ``displayblock'' scenario \texttt{@newlist} will be
-%    always false and the code bypassed, but we may have an outer list
-%    followed immediately by a displayblock (with the \cs{item} missing)
+%    In we are ending a list environment and haven't seen any
+%    \cs{item}, i.e., \texttt{@newlist} is still true, we raise an
+%    error. In pure a ``displayblock'' scenario \texttt{@newlist} will be
+%    always false, but if such an environment appears inside an outer
+%    list the code could still be triggered and that is undesirable
+%    (as it will be detected at the wrong point and later again). We
+%    therefore run it only if the current environment is a list.
+%  \changes{v0.8q}{2024/09/03}{Raise a \cs{@noitemerr} if appropriate}
 %    \begin{macrocode}
-  \legacy_if:nT { @newlist }
-    {
-      \@noitemerr
-      \legacy_if_gset_false:n { @newlist }
-    }
+  \@@_if_list:T { \legacy_if:nT { @newlist } { \@noitemerr } }
+%    \end{macrocode}
+%    \begin{macrocode}
   \mode_if_horizontal:TF
        { \@@_skip_remove_last: \@@_skip_remove_last: \par }
        { \@inmatherr{\end{\@currenvir}} }
@@ -1791,6 +1794,13 @@
 %    closing tagging structure(s), if we are doing tagging.
 %    \begin{macrocode}
   \__kernel_displayblock_end:
+%    \end{macrocode}
+%    Resetting the \texttt{@newlist} switch is also only done if the
+%    current enviornment is a list and not unconditionally.
+%  \changes{v0.8q}{2024/09/03}{Setting \texttt{@newlist} to false
+%    moved after tagging code if in a list}
+%    \begin{macrocode}
+  \@@_if_list:T { \legacy_if_gset_false:n { @newlist } }
 %    \end{macrocode}
 %    What to do in terms of vertical spacing  in different situations
 %    is still somewhat open to debate, right now this is more or less
@@ -1838,6 +1848,19 @@
 %  \end{macro}
 %
 %
+%  \begin{macro}{\@@_if_list:T}
+%    This needs some redesigning, as there is no good test for \enquote{is
+%    this environment a \enquote{list} that has \cs{item}s}. For now
+%    this here does the trick well enough.\fmi{revisit}
+%  \changes{v0.8q}{2024/09/03}{Provide a test for: Am I in a list?}
+%    \begin{macrocode}
+\cs_new:Npn \@@_if_list:T
+   { \tl_if_eq:NnT \l_@@_block_instance_tl {list} }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%      
 %  \begin{macro}{\__kernel_displayblock_end:}
 %    The kernel hook for tagging at the end of the block.
 %    \begin{macrocode}
@@ -2081,6 +2104,71 @@
 % \end{template}
 %
 %
+%  \begin{macro}{\addpenalty}
+%    The 2e implementation of \cs{addpenalty} (and \cs{addvspace})
+%    have a strange \cs{@noitemerr} if they are called in
+%    hmode. Generating this error in this case is definitely not
+%    necessary and in fact wrong, so below it is commented
+%    out. However, one could consider changing the logic and simply
+%    issue a \cs{par} in that case rather than omitting the penalty
+%    (or the vspace).\fmi{Evaluate if that change makes sense.}
+%  \changes{v0.8q}{2024/09/02}{Drop \cs{@noitemerr}}
+%    \begin{macrocode}
+\def\addpenalty#1{%
+  \ifvmode
+    \if@minipage
+    \else
+      \if@nobreak
+      \else
+        \ifdim\lastskip=\z@
+          \penalty#1\relax
+        \else
+          \@tempskipb\lastskip
+          \begingroup
+            \@tempskipa\@tempskipb
+            \advance \@tempskipb
+              \ifdim\prevdepth>\maxdepth\maxdepth\else
+                 \ifdim \prevdepth = -\@m\p@ \z@ \else \prevdepth \fi
+               \fi
+             \vskip -\@tempskipb
+             \penalty#1%
+             \ifdim\@tempskipa=\@tempskipb
+             \else
+               \advance\@tempskipb -\@tempskipa
+               \vskip \@tempskipb
+             \fi
+             \vskip \@tempskipa
+          \endgroup
+        \fi
+      \fi
+    \fi
+%  \else
+%    \@noitemerr
+  \fi
+}%
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{\addvspace}
+%    See \cs{addpenalty}
+%  \changes{v0.8q}{2024/09/02}{Drop \cs{@noitemerr}}
+%    \begin{macrocode}
+\def\addvspace#1{%
+  \ifvmode
+     \if@minipage\else
+       \ifdim \lastskip =\z@
+         \@vspace@calcify{#1}%
+       \else
+       \setlength\@tempskipb{#1}%
+         \@xaddvskip
+       \fi
+     \fi
+%  \else
+%    \@noitemerr
+  \fi}
+%    \end{macrocode}
+%  \end{macro}
 %
 %  \begin{macro}{\__kernel_displayblock_begin:,
 %                \__kernel_displayblock_beginpar_hmode:w,
@@ -2210,11 +2298,25 @@
       \tl_set_eq:NN \@itemlabel \l_@@_item_label_tl
     }
 %    \end{macrocode}
-%    finally, we signal that we are at the start of a new list (which
+%    Finally, we signal that we are at the start of a new list (which
 %    effects how the first \cs{item} is handled and how \cs{par}
 %    commands are interpreted.
 %    \begin{macrocode}
     \legacy_if_gset_true:n { @newlist }
+%    \end{macrocode}
+%    If we encounter horizontal material before the first \cs{item} we
+%    do want a \cs{@noitemerr} straight away, because afterwards we
+%    end up with tagging structure faults  and the cause is the
+%    missing \cs{item}. So we setup up \cs{@@_item_everypar:} to test
+%    for this. When the first \cs{item} is encountered this is then
+%    reset. This is only relevant for vertical lists, if we have
+%    inline lists one would need to test for somethingg else to
+%    identify that there is horizontal material between list start and
+%    the first \cs{item}, maybe some \cs{spacefactor} trick could be
+%    used then.\fmi{Think about a better implementation at some point.}
+%  \changes{v0.8q}{2024/09/02}{}
+%    \begin{macrocode}
+    \cs_set_eq:NN \@@_item_everypar: \@@_item_everypar_first:
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
@@ -2306,6 +2408,7 @@
     \tl_set_eq:NN \l_@@_label_given_tl \c_novalue_tl
     \tl_if_empty:nF{#1}{ \SetTemplateKeys{item}{std}{#1} }
 %    \end{macrocode}
+%    
 %    If no optional argument was given then \cs{l_@@_label_given_tl}
 %    is still equal to \cs{c_novalue_tl} and so we can distinuish
 %    that from \verb=\item[]=.
@@ -2457,16 +2560,16 @@
 %
 %
 %
-% \begin{macro}{\@@_item_everypar:, \@@_item_everypar_std:}
+% \begin{macro}{\@@_item_everypar:, \@@_item_everypar_std:, \@@_item_everypar_first:}
 %    The \cs{@@_item_everypar:} command is executed as part of \hook{para/begin}
 %    but most of the time does nothing, i.e., it has the following
-%    default definition.
+%    default definition outside of lists and most of the time within lists.
 %    \begin{macrocode}
 \cs_new_eq:NN \@@_item_everypar: \prg_do_nothing:
 %    \end{macrocode}
-%
+%    
 %    \begin{macrocode}
-\AddToHook{para/begin}[lists]{\@@_item_everypar:}
+\AddToHook{para/begin}[items]{\@@_item_everypar:}
 %    \end{macrocode}
 %
 %    Note that we have to make sure that the above code is executed
@@ -2474,9 +2577,9 @@
 %    \texttt{@inlabel} to make a decision.
 %
 %    By the end of the day both should probably move into the kernel
-%    hook instead!
+%    hook instead or into sockets really.
 %    \begin{macrocode}
-\DeclareHookRule{para/begin}{lists}{after}{tagpdf}
+\DeclareHookRule{para/begin}{items}{after}{tagpdf}
 %    \end{macrocode}
 %
 %
@@ -2525,6 +2628,16 @@
 %    \begin{macrocode}
          \cs_set_eq:NN \@@_item_everypar: \prg_do_nothing:
        }
+}
+%    \end{macrocode}
+%
+%    This is the setting for \cs{@@_item_everypar:} before the first
+%    \cs{item} is encountered.
+%  \changes{v0.8q}{2024/09/02}{Call \cs{@noitemerr} if hmode is
+%    started before the first item}
+%    \begin{macrocode}
+\cs_new:Npn \@@_item_everypar_first: {
+  \legacy_if:nT { @newlist }  { \@noitemerr }
 }
 %    \end{macrocode}
 %
@@ -2594,8 +2707,16 @@
         }
         {
           \legacy_if:nTF { @newlist }
-            { \__kernel_list_item_begin: }
-            { \@@_inter_item:            }
+            {
+              \__kernel_list_item_begin:
+%    \end{macrocode}
+%    The first item of a list also has to change the \texttt{@newlist} switch.
+%  \changes{v0.8q}{2024/09/02}{Set \texttt{@newlist} to false after
+%    the first \cs{item}}
+%    \begin{macrocode}
+              \legacy_if_gset_false:n { @newlist }
+            }
+            { \@@_inter_item: }
 %    \end{macrocode}
 %    To avoid unnecessary key/val processing we make a quick check if
 %    there was an optional argument.
@@ -3971,15 +4092,38 @@
 %    Finally, at the list end we have to close the open
 %    \texttt{LBody}, \texttt{LI}, \texttt{L}, and possibly a
 %    \struct{text} if the last item ends with a list.
+%    However, if the user forgot to add an \cs{item} there is no
+%    \texttt{LI} and \texttt{LBody} open, so we check for the status
+%    of \texttt{@newlist}. The corresponding no-item error was
+%    generated earlier outside the tagging code.
+%
+%    One could argue that it doesn't matter if the tagging is wrong
+%    after a \cs{@noitemerr} was issued. However, there is one case
+%    where it isn't an error: In the \texttt{thebibliography}
+%    environment (which is internally a list) it is often the case
+%    that documents start out with an empty environment, not
+%    containing any \cs{bibitem}s. For that reason \cs{@noitemerr} is
+%    redefined inside that environment to only produce a warning;
+%    hence we have to produce correct tag structures in that case.
+%  \changes{v0.8q}{2024/09/02}{Do not close LI and LBody if they
+%    never were opened.}
 %    \begin{macrocode}
 \cs_set:Npn \@@_list_end: {
-  \legacy_if:nT { @endpe }
+%    \end{macrocode}
+%    If \texttt{@newlist} is true (ie when we have an error or warning
+%    situation) there is not much to close. If \verb=<L></L>= is not
+%    valid syntax we could add an empty \verb=<LI>= at this point instead.\fmi{check}
+%    \begin{macrocode}
+  \legacy_if:nF { @newlist }
     {
-      \__tag_gincr_para_main_end_int:
-      \tagstructend                       % text-unit
-      \@@_debug_typeout:n{Structure-end~ P~ at~ list-end \on@line }
+      \legacy_if:nT { @endpe }
+        {
+          \__tag_gincr_para_main_end_int:
+          \tagstructend                       % text-unit
+          \@@_debug_typeout:n{Structure-end~ P~ at~ list-end \on@line }
+        }
+      \tagstructend\tagstructend  % end LBody, LI
     }
-  \tagstructend\tagstructend  % end LBody, LI
   \tagstructend               % end L
 }
 %    \end{macrocode}
