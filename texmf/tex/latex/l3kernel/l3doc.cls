@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{calc}
-\ProvidesExplClass{l3doc}{2024-08-30}{}
+\ProvidesExplClass{l3doc}{2024-09-10}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -1026,7 +1026,7 @@
 \cs_new_protected:Npn \__codedoc_function_typeset_stop:
   {
     \par
-    \dim_set:Nn \prevdepth { \box_dp:N \l__codedoc_descr_coffin }
+    \dim_set:Nn \prevdepth { \coffin_dp:N \l__codedoc_descr_coffin }
     \allowbreak
   }
 \cs_new_protected:Npn \__codedoc_function_init:
@@ -1062,7 +1062,7 @@
     \dim_zero:N \l__codedoc_trial_width_dim
     \hcoffin_set:Nn \l__codedoc_functions_coffin { \__codedoc_typeset_functions: }
     \dim_set:Nn \l__codedoc_trial_width_dim
-      { \box_wd:N \l__codedoc_functions_coffin }
+      { \coffin_wd:N \l__codedoc_functions_coffin }
     \bool_set:Nn \l__codedoc_long_name_bool
       { \dim_compare_p:nNn \l__codedoc_trial_width_dim > \marginparwidth }
   }
@@ -1090,7 +1090,7 @@
         \coffin_join:NnnNnnnn
           \l__codedoc_output_coffin {l} {b}
           \l__codedoc_descr_coffin  {l} {t}
-          {0.75\marginparwidth + \marginparsep} {-\medskipamount}
+          {\marginparwidth + \marginparsep} {-\medskipamount}
         \coffin_typeset:Nnnnn \l__codedoc_output_coffin
           {\l__codedoc_descr_coffin-l} {\l__codedoc_descr_coffin-t}
           {0pt} {0pt}
@@ -1236,7 +1236,7 @@
       {
         \textwidth
         \bool_if:NT \l__codedoc_long_name_bool
-          { + 0.75 \marginparwidth - \l__codedoc_trial_width_dim }
+          { + \marginparwidth - \l__codedoc_trial_width_dim }
       }
     \hbox_gset:Nw \g__codedoc_syntax_box
       \small \ttfamily
