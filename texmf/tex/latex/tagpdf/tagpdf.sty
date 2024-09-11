@@ -29,7 +29,7 @@
 %% 
 %% File: tagpdf.dtx
 \ProvidesExplPackage {tagpdf} {2024-08-02} {0.99d}
-  { A package to experiment with pdf tagging }
+  { LaTeX kernel code for PDF tagging }
 
 \bool_if:nF
   {
@@ -65,30 +65,23 @@
 \ExecuteOptions{luamode}
 \ProcessOptions
 \RequirePackage{tagpdf-base}
-\cs_if_free:NT \pdf_object_new_indexed:nn
- {
-   \cs_generate_variant:Nn \pdf_object_new:n {e}
-   \cs_generate_variant:Nn \pdf_object_write:nnn {enn}
-   \cs_new_protected:Npn \pdf_object_new_indexed:nn #1 #2
-     {
-       \pdf_object_new:e {#1/\int_eval:n{#2}}
-     }
-   \cs_new_protected:Npn \pdf_object_write_indexed:nnnn #1 #2 #3 #4
-     {
-       \pdf_object_write:enn {#1/\int_eval:n{#2}}{#3}{#4}
-     }
-   \cs_generate_variant:Nn \pdf_object_write_indexed:nnnn {nnne}
-   \cs_new:Npn\pdf_object_ref_indexed:nn #1 #2
-     {
-       \pdf_object_ref:e {#1/\int_eval:n{#2}}
-     }
-   \cs_new:Npn \__kernel_pdf_object_id_indexed:nn #1 #2
-     {
-       \int_use:c
-         { c__pdf_object_ #1/\int_eval:n{#2} _int }
-     }
- }
-
+\AddToHook{package/latex-lab-testphase-new-or-2/after}
+  {
+    \cs_set_protected:Npn \__fnote_gput_ref:nn #1 #2 %#1 the structure number receiving the ref #2
+      {
+        \tag_struct_gput:nnn {#1}{ref_num}{#2}
+      }
+  }
+\AddToHook{package/latex-lab-testphase-toc/after}
+  {
+    \cs_set_protected:Npn \g__tag_struct_ref_by_dest:
+      {
+        \prop_map_inline:Nn\g__tag_struct_ref_by_dest_prop
+          {
+            \tag_struct_gput:nnn {##1}{ref_dest}{##2}
+          }
+      }
+  }
 \cs_new_protected:Npn \__tag_lastpagelabel:
   {
     \legacy_if:nT { @filesw }
@@ -110,6 +103,7 @@
   {\__tag_lastpagelabel:}
 \tl_new:N    \l__tag_tmpa_tl
 \tl_new:N    \l__tag_tmpb_tl
+\tl_new:N    \l__tag_Ref_tmpa_tl
 \tl_new:N    \l__tag_get_tmpc_tl
 \tl_new:N    \l__tag_get_parent_tmpa_tl
 \tl_new:N    \l__tag_get_parent_tmpb_tl
@@ -329,6 +323,11 @@
   { structure~with~label~#1~is~unknown~rerun}
 \msg_new:nnn { tag } {struct-show-closing}
   { closing~structure~#1~tagged~\use:e{\prop_item:cn{g__tag_struct_#1_prop}{S}} }
+\msg_new:nnn { tag } {struct-Ref-unknown}
+ {
+     #1~has~no~related~structure.\\
+    /Ref~not~updated.
+ }
 \msg_new:nnn { tag } {tree-struct-still-open}
   {
     There~are~still~open~structures~on~the~stack!\\
@@ -759,30 +758,6 @@
       },
   }
 %% File: tagpdf.dtx
-\cs_if_free:NT \pdf_object_new_indexed:nn
- {
-   \cs_generate_variant:Nn \pdf_object_new:n {e}
-   \cs_generate_variant:Nn \pdf_object_write:nnn {enn}
-   \cs_new_protected:Npn \pdf_object_new_indexed:nn #1 #2
-     {
-       \pdf_object_new:e {#1/\int_eval:n{#2}}
-     }
-   \cs_new_protected:Npn \pdf_object_write_indexed:nnnn #1 #2 #3 #4
-     {
-       \pdf_object_write:enn {#1/\int_eval:n{#2}}{#3}{#4}
-     }
-   \cs_generate_variant:Nn \pdf_object_write_indexed:nnnn {nnne}
-   \cs_new:Npn\pdf_object_ref_indexed:nn #1 #2
-     {
-       \pdf_object_ref:e {#1/\int_eval:n{#2}}
-     }
-   \cs_new:Npn \__kernel_pdf_object_id_indexed:nn #1 #2
-     {
-       \int_use:c
-         { c__pdf_object_ #1/\int_eval:n{#2} _int }
-     }
- }
-
 \bool_if:NTF \g__tag_mode_lua_bool
   {
    \RequirePackage {tagpdf-mc-code-lua}
@@ -1999,7 +1974,8 @@
 \tl_new:N \g__tag_struct_tag_NS_tl
 \tl_new:N \l__tag_struct_roletag_tl
 \tl_new:N \l__tag_struct_roletag_NS_tl
-\tl_new:N \l__tag_struct_key_label_tl
+\prop_new_linked:N \g__tag_struct_label_num_prop
+
 \bool_new:N \l__tag_struct_elem_stash_bool
 \prop_new_linked:N \g__tag_struct_ref_by_dest_prop
 \cs_new:Npn \__tag_struct_output_prop_aux:nn #1 #2 %#1 num, #2 key
@@ -2260,18 +2236,30 @@
     \tl_clear:N #2
     \prop_map_inline:cn { g__tag_struct_#1_prop }
       {
-        \tl_put_right:Ne #2
+        \cs_if_exist_use:cTF {__tag_struct_format_##1:nnN}
           {
-           \cs_if_exist_use:cTF {__tag_struct_format_##1:nn}
-             {{##1}{##2}}
-             {\c_space_tl/##1~##2}
+            {##1}{##2}#2
+          }
+          {
+            \tl_put_right:Ne #2 { \c_space_tl/##1~##2 }
           }
       }
   }
-\cs_new:Nn\__tag_struct_format_rolemap:nn{}
-\cs_new:Nn\__tag_struct_format_parentrole:nn{}
+\cs_new:Nn\__tag_struct_format_rolemap:nnN{}
+\cs_new:Nn\__tag_struct_format_parentrole:nnN{}
 
-\cs_new:Nn\__tag_struct_format_Ref:nn{\c_space_tl/#1~[#2]}
+\cs_new_protected:Nn\__tag_struct_format_Ref:nnN
+  {
+    \tl_put_right:Nn #3 { ~/#1~[ } %]
+    \clist_map_inline:nn{ #2 }
+     {
+       ##1 #3
+     }
+    \tl_put_right:Nn #3
+     { %[
+      \c_space_tl]
+     }
+  }
 \cs_new_protected:Npn \__tag_struct_write_obj:n #1 % #1 is the struct num
   {
     \prop_if_exist:cTF { g__tag_struct_#1_prop }
@@ -2377,7 +2365,14 @@
 
 \keys_define:nn { __tag / struct }
   {
-    label .tl_set:N      = \l__tag_struct_key_label_tl,
+    label .code:n        =
+      {
+        \prop_gput:Nee\g__tag_struct_label_num_prop
+          {#1}{\int_use:N \c@g__tag_struct_abs_int}
+        \__tag_property_record:eV
+          {tagpdfstruct-#1}
+          \c__tag_property_struct_clist
+      },
     stash .bool_set:N    = \l__tag_struct_elem_stash_bool,
     parent .code:n       =
       {
@@ -2462,16 +2457,58 @@
           { Lang }
           { (#1) }
       },
+    }
+\cs_new_protected:Npn \__tag_struct_Ref_obj:nN #1 #2 %#1 a object reference
+  {
+    \tl_put_right:Ne#2
+      {
+        \c_space_tl#1
+      }
+  }
+
+\cs_new_protected:Npn \__tag_struct_Ref_label:nN #1 #2 %#1 a label
+  {
+    \prop_get:NnNTF \g__tag_struct_label_num_prop {#1} \l__tag_tmpb_tl
+      {
+        \tl_put_right:Ne#2
+          {
+            \c_space_tl\tag_struct_object_ref:e{ \l__tag_tmpb_tl }
+          }
+      }
+      {
+        \msg_warning:nnn {tag}{struct-Ref-unknown}{Label~#1}
+      }
+  }
+\cs_new_protected:Npn \__tag_struct_Ref_dest:nN #1 #2 %#1 a dest name
+  {
+    \prop_get:NnNTF \g__tag_struct_dest_num_prop {#1} \l__tag_tmpb_tl
+      {
+        \tl_put_right:Ne#2
+          {
+            \c_space_tl\tag_struct_object_ref:e{ \l__tag_tmpb_tl }
+          }
+      }
+      {
+        \msg_warning:nnn {tag}{struct-Ref-unknown}{Destination~#1}
+      }
+  }
+\cs_new_protected:Npn \__tag_struct_Ref_num:nN #1 #2 %#1 a structure number
+  {
+    \tl_put_right:Ne#2
+      {
+        \c_space_tl\tag_struct_object_ref:e{ #1 }
+      }
+  }
+
+\keys_define:nn { __tag / struct }
+  {
     ref .code:n        = % ref property
       {
-        \tl_clear:N\l__tag_tmpa_tl
         \clist_map_inline:on {#1}
           {
-            \tl_put_right:Ne \l__tag_tmpa_tl
-              {~\__tag_property_ref:en{tagpdfstruct-##1}{tagstructobj} }
+            \tag_struct_gput:nne
+              {\int_use:N \c@g__tag_struct_abs_int}{ref_label}{ ##1 }
           }
-        \__tag_struct_gput_data_ref:ee
-         { \int_use:N \c@g__tag_struct_abs_int } {\l__tag_tmpa_tl}
       },
     E .code:n        = % E property
       {
@@ -2654,13 +2691,6 @@
            \g__tag_struct_tag_tl
            \g__tag_struct_tag_NS_tl
         \__tag_check_structure_has_tag:n { \int_use:N \c@g__tag_struct_abs_int }
-        \tl_if_empty:NF
-          \l__tag_struct_key_label_tl
-          {
-            \__tag_property_record:eV
-             {tagpdfstruct-\l__tag_struct_key_label_tl}
-             \c__tag_property_struct_clist
-          }
         \int_compare:nNnT { \l__tag_struct_stack_parent_tmpa_tl } = { -1 }
           {
             \seq_get:NNF
@@ -2914,7 +2944,7 @@
    \pdf_object_ref_indexed:nn {__tag/struct}{ #1 }
  }
 \cs_generate_variant:Nn \tag_struct_object_ref:n {e}
-\cs_new_protected:Npn \tag_struct_gput:nnn #1 #2 #3
+\cs_set_protected:Npn \tag_struct_gput:nnn #1 #2 #3
  {
    \cs_if_exist_use:cF {__tag_struct_gput_data_#2:nn}
     { %warning??
@@ -2923,19 +2953,44 @@
     {#1}{#3}
  }
 \cs_generate_variant:Nn \tag_struct_gput:nnn {ene,nne}
-\cs_new_protected:Npn \__tag_struct_gput_data_ref:nn #1 #2
-  % #1 receiving struct num, #2 list of object ref
+\cs_new_protected:Npn \__tag_struct_gput_data_ref_aux:nnn #1 #2 #3
+  % #1 receiving struct num, #2 key word #3 value
    {
-     \prop_get:cnN
-        { g__tag_struct_#1_prop }
-        {Ref}
-        \l__tag_get_tmpc_tl
-     \__tag_struct_prop_gput:nne
-        { #1 }
-        { Ref }
-        { \quark_if_no_value:NF\l__tag_get_tmpc_tl { \l__tag_get_tmpc_tl\c_space_tl }#2 }
+     \prop_get:cnNTF
+       { g__tag_struct_#1_prop }
+       {Ref}
+       \l__tag_get_tmpc_tl
+       {
+         \tl_put_right:No \l__tag_get_tmpc_tl
+           {\cs:w __tag_struct_Ref_#2:nN \cs_end: {#3},}
+       }
+       {
+         \tl_set:No \l__tag_get_tmpc_tl
+           {\cs:w __tag_struct_Ref_#2:nN \cs_end: {#3},}
+       }
+       \__tag_struct_prop_gput:nno
+         { #1 }
+         { Ref }
+         { \l__tag_get_tmpc_tl }
     }
-\cs_generate_variant:Nn \__tag_struct_gput_data_ref:nn {ee}
+\cs_new_protected:Npn \__tag_struct_gput_data_ref:nn #1 #2
+  {
+    \__tag_struct_gput_data_ref_aux:nnn {#1}{obj}{#2}
+  }
+\cs_new_protected:Npn \__tag_struct_gput_data_ref_label:nn #1 #2
+  {
+    \__tag_struct_gput_data_ref_aux:nnn {#1}{label}{#2}
+  }
+\cs_new_protected:Npn \__tag_struct_gput_data_ref_dest:nn #1 #2
+  {
+    \__tag_struct_gput_data_ref_aux:nnn {#1}{dest}{#2}
+  }
+\cs_new_protected:Npn \__tag_struct_gput_data_ref_num:nn #1 #2
+  {
+    \__tag_struct_gput_data_ref_aux:nnn {#1}{num}{#2}
+  }
+
+\cs_generate_variant:Nn \__tag_struct_gput_data_ref:nn {ee,no}
 \cs_new_protected:Npn \tag_struct_insert_annot:nn #1 #2 %#1 should be an object reference
                                                         %#2 struct parent num
   {
@@ -3057,6 +3112,7 @@
     },
   }
 %% File: tagpdf-space.dtx
+\bool_new:N\l__tag_showspaces_bool
 \keys_define:nn { __tag / setup }
   {
     activate/spaces .choice:,
