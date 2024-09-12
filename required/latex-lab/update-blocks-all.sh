@@ -4,6 +4,8 @@
 
 l3build save -cconfig-block -epdftex,luatex \
 	blocks-item-01 \
+	blocks-item-02 \
+	blocks-item-03 \
 	blocks-000 \
 	blocks-enumerate-01 \
 	blocks-enumerate-01b \
