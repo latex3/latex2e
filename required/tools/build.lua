@@ -50,7 +50,7 @@ function bundleunpack(sourcedirs, sources)
     print(" * Renaming rename-to-empty-base.tex to .tex")
     errorlevel = ren(unpackdir,"rename-to-empty-base.tex",".tex")
     if errorlevel ~= 0 then
-     return errorlevel
+      return errorlevel
     end
   end
   return 0
