@@ -40,29 +40,21 @@ checkconfigs = {"build","config-TU","config-legacy","config-search"}
 dofile (maindir .. "/build-config.lua")
 
 -- special code to handle .tex
-
-function unpack(sources, sourcedirs)
-  local errorlevel = dep_install(unpackdeps)
+oldbundleunpack=bundleunpack
+function bundleunpack(sourcedirs, sources)
+  errorlevel = oldbundleunpack(sourcedirs, sources)
   if errorlevel ~= 0 then
     return errorlevel
   end
-  errorlevel = bundleunpack(sourcedirs, sources)
-  if errorlevel ~= 0 then
-    return errorlevel
-  end
-  texio.write(" * Renaming rename-to-empty-base.tex to .tex")
-  errorlevel = ren(unpackdir,"rename-to-empty-base.tex",".tex")
-  if errorlevel ~= 0 then
-    return errorlevel
-  end
-  for _,i in ipairs(installfiles) do
-    errorlevel = cp(i, unpackdir, localdir)
+  if module == "tools" then
+    texio.write(" * Renaming rename-to-empty-base.tex to .tex\n")
+    errorlevel = ren(unpackdir,"rename-to-empty-base.tex",".tex")
     if errorlevel ~= 0 then
-      return errorlevel
+     return errorlevel
     end
   end
   return 0
 end
 
 -- update function binding
-target_list.unpack.func = unpack
+target_list.bundleunpack.func = bundleunpack
