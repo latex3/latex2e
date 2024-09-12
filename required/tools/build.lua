@@ -63,3 +63,6 @@ function unpack(sources, sourcedirs)
   end
   return 0
 end
+
+-- update function binding
+target_list.unpack.func = unpack
