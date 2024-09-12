@@ -47,7 +47,7 @@ function bundleunpack(sourcedirs, sources)
     return errorlevel
   end
   if module == "tools" then
-    texio.write(" * Renaming rename-to-empty-base.tex to .tex\n")
+    print(" * Renaming rename-to-empty-base.tex to .tex")
     errorlevel = ren(unpackdir,"rename-to-empty-base.tex",".tex")
     if errorlevel ~= 0 then
      return errorlevel
