@@ -43,6 +43,7 @@
 % customizations}}
 %
 % \providecommand\hook[1]{\texttt{#1}}
+% \ProvideDocElement[printtype=\textit{plug},idxtype=plug,idxgroup=Plugs]{Plug}{plugdecl}
 % \begin{documentation}
 % \begin{abstract}
 % The following code implements a first draft for the tagging of float 
@@ -146,22 +147,28 @@
   {Code related to the tagging of floats}
 %    \end{macrocode}
 % \subsection{Variables}
-% We rolemap to float to Aside, and float sections to Sect.
+% We rolemap floats to Aside, and float sections to Sect.
 %
 % \begin{variable}{
 %  \g_@@_float_sect_prop,
 %  \g_@@_float_types_seq,
-%  \@current@float@struct
+%  \@current@float@struct,
+%  \g_@@_float_int
 %   }
 % These variables will hold the structure number for the float container  
 % and the list of float types. Currently only figure and table are supported
 % TODO: interface to declare new float types.
+% To set the target for links we need also a unique counter.
+% With tagging we could use the structure number, but
+% the structure commands now are hidden inside tagging sockets 
+% so we use a dedicated counter.
 %    \begin{macrocode}
 \prop_new:N \g_@@_float_sect_prop
 \seq_new:N  \g_@@_float_types_seq
 \seq_gput_right:Nn \g_@@_float_types_seq {figure}
 \seq_gput_right:Nn \g_@@_float_types_seq {table}
 \tl_new:N\@current@float@struct
+\int_new:N\g_@@_float_int
 %    \end{macrocode}
 % \end{variable}
 % 
@@ -176,6 +183,17 @@
 %    \end{macrocode}
 % \end{variable}
 % 
+% \begin{macro}{\@@_float_init:}
+% To be able to set unique targets for links, we
+% need a counter outside the tagging sockets.  
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_float_init:
+ {
+   \int_gincr:N \g_@@_float_int
+   \tl_set:Ne \@current@float@struct { \int_use:N \g_@@_float_int}
+ }
+%    \end{macrocode}
+% \end{macro}
 % 
 %\subsection{Moving float structures}
 % 
@@ -260,15 +278,71 @@
   {
    split-float .code:n = 
     { 
-      \@@_float_end:
-      \@@_float_begin:
-      \MakeLinkTarget*{floatstructure.\int_use:N\c@g__tag_struct_abs_int}
+      \UseTaggingSocket{float/end}
+      \@@_float_init:     
+      \UseTaggingSocket{float/begin}
+      \MakeLinkTarget*{floatstructure.\@current@float@struct}
     }  
  }
 %    \end{macrocode}
 % \end{macro}
- 
-% \subsection{Patching}
+% 
+% \subsection{Tagging sockets}
+% For now we test if the sockets are already defined
+%    \begin{macrocode}
+\str_if_exist:cF { l__socket_tagsupport/float/begin_plug_str }
+  {
+    \NewSocket{tagsupport/float/hmode/begin}{0}
+    \NewSocket{tagsupport/float/hmode/end}{0}
+    \NewSocket{tagsupport/float/begin}{0}
+    \NewSocket{tagsupport/float/end}{0}
+  }
+%    \end{macrocode}
+%
+% \begin{plugdecl}{default}
+% This plug should be used if a float is called in hmode.
+% In then closes the MC-chunks and starts the structure.
+%    \begin{macrocode}
+\NewSocketPlug {tagsupport/float/hmode/begin}{default}
+  {
+    \@@_float_stop_par:
+  }
+\AssignSocketPlug{tagsupport/float/hmode/begin}{default}  
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \begin{plugdecl}{default}
+% This plug should be used if a float is called in hmode
+% and the end of the float it then restarts the MC.
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/float/hmode/end}{default}
+  {
+    \@@_float_start_par:
+  } 
+\AssignSocketPlug{tagsupport/float/hmode/end}{default}  
+%    \end{macrocode}
+% \end{plugdecl}
+% 
+% \begin{plugdecl}{default}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/float/begin}{default}
+  {
+    \@@_float_begin:
+  }
+\AssignSocketPlug{tagsupport/float/begin}{default}   
+%    \end{macrocode}
+% \end{plugdecl}
+% 
+% \begin{plugdecl}{default}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/float/end}{default}
+  {
+    \@@_float_end:
+  } 
+\AssignSocketPlug{tagsupport/float/end}{default}   
+%    \end{macrocode}
+% \end{plugdecl}
+% 
 % \begin{macro}{\@@_float_stop_par:,\@@_float_start_par:}
 % if a float is in a par, we need commands to stop and restart the P-mc
 %    \begin{macrocode}
@@ -287,8 +361,7 @@
       \tag_struct_begin:n{tag=text}%
      }
    \tag_mc_begin:n{tag=P}    
-  }
- 
+  } 
 %    \end{macrocode}
 % \end{macro}
 % These commands are the main commands to start and end the float tagging.
@@ -315,6 +388,7 @@
 \cs_new_protected:Npn\@@_float_end:{\tag_struct_end:} %end Aside
 
 %    \end{macrocode}
+% \subsection{Patching}
 % This patches the main command \cs{@xfloat}.
 % There is a : in the code, so we disable expl3 syntax
 %    \begin{macrocode}
@@ -337,7 +411,7 @@
 %    \end{macrocode}
 % If the float is in hmode we have to interrupt the P 
 %    \begin{macrocode}
-     \@nameuse{@@_float_stop_par:}% <---end P
+     \UseTaggingSocket{float/hmode/begin}%
      \@floatpenalty -\@Mii
    \else
      \@floatpenalty-\@Miii
@@ -383,7 +457,8 @@
 %    \end{macrocode}
 % This starts the structure for the float.
 %    \begin{macrocode}
-  \@nameuse{@@_float_begin:}%
+  \csname @@_float_init:\endcsname
+  \UseTaggingSocket{float/begin}%
   \global \setbox\@currbox
     \color@vbox
       \normalcolor
@@ -394,14 +469,14 @@
 %    \end{macrocode}
 % We add a target for links. TODO: check that it doesn't affect spacing!!
 %    \begin{macrocode}
-        \MakeLinkTarget*{floatstructure.\number\value{g__tag_struct_abs_int}}%
+        \MakeLinkTarget*{floatstructure.\@current@float@struct}%
 }%
 %    \end{macrocode}
 %  The end code of the float ...
 %    \begin{macrocode}
 \def\end@float{%
   \@endfloatbox
-  \@nameuse{@@_float_end:}%
+  \UseTaggingSocket{float/end}%
   \ifnum\@floatpenalty <\z@
     \@largefloatcheck
     \@cons\@currlist\@currbox
@@ -413,7 +488,7 @@
       \penalty\@floatpenalty
     \else
       \vadjust{\penalty -\@Miv \vbox{}\penalty\@floatpenalty}\@Esphack
-      \@nameuse{@@_float_start_par:}% restart P safe here??
+      \UseTaggingSocket{float/hmode/end}%
     \fi
   \fi
 }
@@ -423,7 +498,7 @@
 \def\end@dblfloat{%
   \if@twocolumn
     \@endfloatbox
-    \@nameuse{@@_float_end:}%
+    \UseTaggingSocket{float/end}%
     \ifnum\@floatpenalty <\z@
       \@largefloatcheck
       \global\dp\@currbox1sp %
@@ -436,7 +511,7 @@
         \penalty\@floatpenalty
       \else
         \vadjust{\penalty -\@Miv \vbox{}\penalty\@floatpenalty}\@Esphack
-        \@nameuse{@@_float_start_par:}% restart P safe here??
+        \UseTaggingSocket{float/hmode/end}%
       \fi
     \fi
   \else
@@ -456,7 +531,6 @@
 % With hyperref that means that the \cs{refstepcounter} now can affect spacing so we
 % change that to the kernel refstepcounter:
 %    \begin{macrocode}
-\let\@kernel@refstepcounter\refstepcounter %as long it is not in the kernel
 \def\caption{%
    \ifx\@captype\@undefined
      \@latex@error{\noexpand\caption\c_space_tl outside~float}\@ehd
@@ -482,14 +556,7 @@
    {\@dblarg{\@caption\@captype}}%
 }
 %    \end{macrocode}
-% As we will use the structure number in the target, we need to provide a
-% theH-representation. (Once the kernel will create
-% theH-representation generally this will be provided automatically, as tagpdf uses
-% \cs{newcounter})
-%    \begin{macrocode}
-\providecommand\theHg__tag_struct_abs_int{\int_use:N\c@g__tag_struct_abs_int}
-%    \end{macrocode}
-
+%
 % \begin{macro}{\@makecaption}
 % \cs{@makecaption} is defined by the classes so we overwrite it for now
 % at begin document.
@@ -501,9 +568,9 @@
 %    \end{macrocode}
 % we don't want tagging when storing the caption for the singleline check
 %    \begin{macrocode}
-      \tag_stop:n{caption}
+      \SuspendTagging{\@makecaption}
       \sbox\@tempboxa{#1:~#2}%
-      \tag_start:n{caption} 
+      \ResumeTagging{\@makecaption} 
 %    \end{macrocode}
 % we stop paratagging. TODO: check 
 %    \begin{macrocode}
