@@ -28,7 +28,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: tagpdf.dtx
-\ProvidesExplPackage {tagpdf} {2024-09-11} {0.99e}
+\ProvidesExplPackage {tagpdf} {2024-09-16} {0.99f}
   { LaTeX kernel code for PDF tagging }
 
 \bool_if:nF
@@ -180,12 +180,14 @@
 \cs_set_eq:NN \__tag_seq_new:N         \seq_new:N
 \cs_set_eq:NN \__tag_prop_gput:Nnn     \prop_gput:Nnn
 \cs_set_eq:NN \__tag_seq_gput_right:Nn \seq_gput_right:Nn
+\cs_set_eq:NN \__tag_seq_gput_left:Nn  \seq_gput_left:Nn
 \cs_set_eq:NN \__tag_seq_item:cn       \seq_item:cn
 \cs_set_eq:NN \__tag_prop_item:cn      \prop_item:cn
 \cs_set_eq:NN \__tag_seq_show:N        \seq_show:N
 \cs_set_eq:NN \__tag_prop_show:N       \prop_show:N
 \cs_generate_variant:Nn \__tag_prop_gput:Nnn      { Nen , Nee, Nne , cnn, cen, cne, cno, cnx}
 \cs_generate_variant:Nn \__tag_seq_gput_right:Nn  { Ne  , No, cn, ce }
+\cs_generate_variant:Nn \__tag_seq_gput_left:Nn   { ce }
 \cs_generate_variant:Nn \__tag_prop_new:N   { c }
 \cs_generate_variant:Nn \__tag_seq_new:N    { c }
 \cs_generate_variant:Nn \__tag_seq_show:N   { c }
@@ -212,7 +214,7 @@
   }
 \cs_set_eq:NN\tagstop\tag_stop:
 \cs_set_eq:NN\tagstart\tag_start:
-\cs_set_protected:Npn \tag_stop:n #1
+\cs_set_protected:Npn \tag_suspend:n #1
   {
     \int_incr:N \l__tag_tag_stop_int
     \bool_set_false:N \l__tag_active_struct_bool
@@ -220,7 +222,8 @@
     \bool_set_false:N \l__tag_active_socket_bool
     \__tag_stop_para_ints:
   }
-\cs_set_protected:Npn \tag_start:n #1
+\cs_set_eq:NN \tag_stop:n \tag_suspend:n
+\cs_set_protected:Npn \tag_resume:n #1
   {
     \int_if_zero:nF { \l__tag_tag_stop_int } { \int_decr:N \l__tag_tag_stop_int }
     \int_if_zero:nT { \l__tag_tag_stop_int }
@@ -231,6 +234,7 @@
         \__tag_start_para_ints:
       }
   }
+\cs_set_eq:NN \tag_start:n \tag_resume:n
 \keys_define:nn { __tag / setup }
   {
     activate/mc     .bool_gset:N = \g__tag_active_mc_bool,
@@ -666,12 +670,12 @@
   \tag_mc_end_push:
   \tag_mc_begin:n {artifact=#1}
   \group_begin:
-  \tag_stop:n{artifact-group}
+  \tag_suspend:n{artifact-group}
  }
 
 \cs_set_protected:Npn \tag_mc_artifact_group_end:
  {
-  \tag_start:n{artifact-group}
+  \tag_resume:n{artifact-group}
   \group_end:
   \tag_mc_end:
   \tag_mc_begin_pop:n{}
@@ -1973,6 +1977,9 @@
 \prop_new_linked:N \g__tag_struct_label_num_prop
 
 \bool_new:N \l__tag_struct_elem_stash_bool
+\tl_new:N  \l__tag_struct_addkid_tl
+\tl_set:Nn \l__tag_struct_addkid_tl {right}
+
 \prop_new_linked:N \g__tag_struct_ref_by_dest_prop
 \cs_new:Npn \__tag_struct_output_prop_aux:nn #1 #2 %#1 num, #2 key
   {
@@ -2097,7 +2104,7 @@
        /MCID \c_space_tl \property_ref:enn{mcid-#1}{tagmcid}{1}
      >>
   }
-\cs_new_protected:Npn \__tag_struct_kid_mc_gput_right:nn #1 #2 %#1 structure num, #2 MCID absnum%
+\cs_new_protected:Npn \__tag_struct_kid_mc_gput_right:nn #1 #2
   {
     \__tag_seq_gput_right:ce
       { g__tag_struct_kids_#1_seq }
@@ -2111,7 +2118,8 @@
       }
   }
 \cs_generate_variant:Nn \__tag_struct_kid_mc_gput_right:nn {ne}
-\cs_new_protected:Npn\__tag_struct_kid_struct_gput_right:nn #1 #2 %#1 num of parent struct, #2 kid struct
+\cs_new_protected:Npn\__tag_struct_kid_struct_gput_right:nn #1 #2
+%%#1 num of parent struct, #2 kid struct
   {
     \__tag_seq_gput_right:ce
       { g__tag_struct_kids_#1_seq }
@@ -2119,11 +2127,21 @@
         \pdf_object_ref_indexed:nn { __tag/struct }{ #2 }
       }
   }
-
 \cs_generate_variant:Nn \__tag_struct_kid_struct_gput_right:nn {ee}
-\cs_new_protected:Npn\__tag_struct_kid_OBJR_gput_right:nnn #1 #2 #3 %#1 num of parent struct,
-                                                             %#2 obj reference
-                                                             %#3 page object reference
+\cs_new_protected:Npn\__tag_struct_kid_struct_gput_left:nn #1 #2
+%%#1 num of parent struct, #2 kid struct
+  {
+    \__tag_seq_gput_left:ce
+      { g__tag_struct_kids_#1_seq }
+      {
+        \pdf_object_ref_indexed:nn { __tag/struct }{ #2 }
+      }
+  }
+\cs_generate_variant:Nn \__tag_struct_kid_struct_gput_left:nn {ee}
+\cs_new_protected:Npn\__tag_struct_kid_OBJR_gput_right:nnn #1 #2 #3
+
+
+%%#1 num of parent struct,#2 obj reference,#3 page object reference
   {
     \pdf_object_unnamed_write:nn
       { dict }
@@ -2262,7 +2280,8 @@
       {
         \prop_get:cnNF { g__tag_struct_#1_prop } {P}\l__tag_tmpb_tl
           {
-            \prop_gput:cne { g__tag_struct_#1_prop } {P}{\pdf_object_ref_indexed:nn { __tag/struct }{1}}
+            \prop_gput:cne { g__tag_struct_#1_prop } {P}
+              {\pdf_object_ref_indexed:nn { __tag/struct }{1}}
             \prop_gput:cne { g__tag_struct_#1_prop } {S}{/Artifact}
             \seq_if_empty:cF {g__tag_struct_kids_#1_seq}
               {
@@ -2288,8 +2307,9 @@
         \msg_error:nnn { tag } { struct-no-objnum } { #1}
       }
   }
-\cs_new_protected:Npn \__tag_struct_insert_annot:nn #1 #2 %#1 object reference to the annotation/xform
-                                                       %#2 structparent number
+\cs_new_protected:Npn \__tag_struct_insert_annot:nn #1 #2
+ %#1 object reference to the annotation/xform
+ %#2 structparent number
   {
     \bool_if:NT \g__tag_active_struct_bool
       {
@@ -2311,7 +2331,8 @@
             #1 %
           }
           {
-            \pdf_pageobject_ref:n { \property_ref:nnn {@tag@objr@page@#2 }{ tagabspage }{1} }
+            \pdf_pageobject_ref:n
+              { \property_ref:nnn {@tag@objr@page@#2 }{ tagabspage }{1} }
           }
         % add the parent obj number to the parent tree:
         \exp_args:Nne
@@ -2320,7 +2341,8 @@
             #2
           }
           {
-            \pdf_object_ref_indexed:nn { __tag/struct }{ \l__tag_struct_stack_parent_tmpa_tl }
+            \pdf_object_ref_indexed:nn
+              { __tag/struct }{ \l__tag_struct_stack_parent_tmpa_tl }
           }
         % increase the int:
         \int_gincr:N \c@g__tag_parenttree_obj_int
@@ -2341,7 +2363,8 @@
 \socket_new:nn { tag/struct/tag }{1}
 \socket_new_plug:nnn { tag/struct/tag }{ latex-tags }
  {
-   \seq_set_split:Nne \l__tag_tmpa_seq { / } {#1/\prop_item:Ne\g__tag_role_tags_NS_prop{#1}}
+   \seq_set_split:Nne \l__tag_tmpa_seq { / }
+     {#1/\prop_item:Ne\g__tag_role_tags_NS_prop{#1}}
    \tl_gset:Ne \g__tag_struct_tag_tl   { \seq_item:Nn\l__tag_tmpa_seq {1} }
    \tl_gset:Ne \g__tag_struct_tag_NS_tl{ \seq_item:Nn\l__tag_tmpa_seq {2} }
    \__tag_check_structure_tag:N \g__tag_struct_tag_tl
@@ -2349,10 +2372,12 @@
 
 \socket_new_plug:nnn { tag/struct/tag }{ pdf-tags }
  {
-   \seq_set_split:Nne \l__tag_tmpa_seq { / } {#1/\prop_item:Ne\g__tag_role_tags_NS_prop{#1}}
+   \seq_set_split:Nne \l__tag_tmpa_seq { / }
+     {#1/\prop_item:Ne\g__tag_role_tags_NS_prop{#1}}
    \tl_gset:Ne \g__tag_struct_tag_tl   { \seq_item:Nn\l__tag_tmpa_seq {1} }
    \tl_gset:Ne \g__tag_struct_tag_NS_tl{ \seq_item:Nn\l__tag_tmpa_seq {2} }
-   \__tag_role_get:VVNN \g__tag_struct_tag_tl\g__tag_struct_tag_NS_tl\l__tag_tmpa_tl\l__tag_tmpb_tl
+   \__tag_role_get:VVNN
+     \g__tag_struct_tag_tl \g__tag_struct_tag_NS_tl \l__tag_tmpa_tl \l__tag_tmpb_tl
    \tl_gset:Ne \g__tag_struct_tag_tl {\l__tag_tmpa_tl}
    \tl_gset:Ne \g__tag_struct_tag_NS_tl{\l__tag_tmpb_tl}
    \__tag_check_structure_tag:N \g__tag_struct_tag_tl
@@ -2387,6 +2412,7 @@
           }
       },
     parent .default:n    = {-1},
+firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
     tag   .code:n        = % S property
       {
         \socket_use:nn { tag/struct/tag }{#1}
@@ -2548,7 +2574,7 @@
  }
 
 \cs_generate_variant:Nn \__tag_struct_add_inline_AF:nn {on}
-\cs_new_protected:Npn \__tag_struct_add_AF:nn #1 #2 % #1 struct num #2 object reference
+\cs_new_protected:Npn \__tag_struct_add_AF:nn #1 #2
   {
      \tl_if_exist:cTF
        {
@@ -2574,7 +2600,8 @@
       {
         \pdf_object_if_exist:eTF {#1}
           {
-            \__tag_struct_add_AF:ee { \int_use:N \c@g__tag_struct_abs_int }{\pdf_object_ref:e {#1}}
+            \__tag_struct_add_AF:ee
+             { \int_use:N \c@g__tag_struct_abs_int }{\pdf_object_ref:e {#1}}
             \__tag_struct_prop_gput:nne
              { \int_use:N \c@g__tag_struct_abs_int }
              { AF }
@@ -2788,7 +2815,7 @@
             %record this structure as kid:
             %\tl_show:N \g__tag_struct_stack_current_tl
             %\tl_show:N \l__tag_struct_stack_parent_tmpa_tl
-            \__tag_struct_kid_struct_gput_right:ee
+            \use:c { __tag_struct_kid_struct_gput_ \l__tag_struct_addkid_tl :ee }
                { \l__tag_struct_stack_parent_tmpa_tl }
                { \g__tag_struct_stack_current_tl }
             %\prop_show:c { g__tag_struct_\g__tag_struct_stack_current_tl _prop }
@@ -3515,9 +3542,9 @@
             {\tagmcbegin{tag=Lbl}}
            {#1}
          }
-   \tag_stop:n{hangfrom}
+   \tag_suspend:n{hangfrom}
    \hangindent \wd\@tempboxa\noindent
-   \tag_start:n{hangfrom}
+   \tag_resume:n{hangfrom}
    \tagmcbegin{}\box\@tempboxa\tagmcend\tagstructend\tagmcbegin{}
    }
  }
@@ -3768,11 +3795,11 @@
        \bool_gset_false:N \g__tag_in_mc_bool
      }
     \tag_mc_begin:n {artifact}
-    \tag_stop:n{headfoot}
+    \tag_suspend:n{headfoot}
  }
 \cs_new_protected:Npn \__tag_exclude_headfoot_end:
  {
-    \tag_start:n{headfoot}
+    \tag_resume:n{headfoot}
     \tag_mc_end:
     \bool_if:NTF \g__tag_mode_lua_bool
      {
@@ -3796,12 +3823,12 @@
      }
     \tag_struct_begin:n{tag=Artifact,attribute-class=__tag/attr/#1}
     \tag_mc_begin:n {artifact=#1}
-    \tag_stop:n{headfoot}
+    \tag_suspend:n{headfoot}
  }
 
 \cs_new_protected:Npn \__tag_exclude_struct_headfoot_end:
  {
-    \tag_start:n{headfoot}
+    \tag_resume:n{headfoot}
     \tag_mc_end:
     \tag_struct_end:
     \bool_if:NTF \g__tag_mode_lua_bool
