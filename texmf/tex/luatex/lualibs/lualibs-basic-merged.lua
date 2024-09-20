@@ -1,6 +1,6 @@
 -- merged file : lualibs-basic-merged.lua
 -- parent file : lualibs-basic.lua
--- merge date  : 2022-10-04 17:16
+-- merge date  : 2023-07-13 12:55
 
 do -- begin closure to overcome local limits and interference
 
@@ -1274,7 +1274,7 @@ if not modules then modules={} end modules ['l-string']={
  license="see context related readme files"
 }
 local string=string
-local sub,gmatch,format,char,byte,rep,lower=string.sub,string.gmatch,string.format,string.char,string.byte,string.rep,string.lower
+local sub,gmatch,format,char,byte,rep,lower,find=string.sub,string.gmatch,string.format,string.char,string.byte,string.rep,string.lower,string.find
 local lpegmatch,patterns=lpeg.match,lpeg.patterns
 local P,S,C,Ct,Cc,Cs=lpeg.P,lpeg.S,lpeg.C,lpeg.Ct,lpeg.Cc,lpeg.Cs
 local unquoted=patterns.squote*C(patterns.nosquote)*patterns.squote+patterns.dquote*C(patterns.nodquote)*patterns.dquote
@@ -1284,10 +1284,18 @@ end
 function string.quoted(str)
  return format("%q",str) 
 end
-function string.count(str,pattern) 
+function string.count(str,pattern)
  local n=0
- for _ in gmatch(str,pattern) do 
-  n=n+1
+ local i=1
+ local l=#pattern
+ while true do
+  i=find(str,pattern,i)
+  if i then
+   n=n+1
+   i=i+l
+  else
+   break
+  end
  end
  return n
 end
@@ -4022,9 +4030,23 @@ function file.withinbase(path)
  end
  return true
 end
-local symlinkattributes=lfs.symlinkattributes
-function lfs.readlink(name)
- return symlinkattributes(name,"target") or nil
+do
+ local symlinktarget=lfs.symlinktarget  
+ local symlinkattributes=lfs.symlinkattributes 
+ if symlinktarget then
+  function lfs.readlink(name)
+   local target=symlinktarget(name)
+   return name~=target and name or nil
+  end
+ elseif symlinkattributes then
+  function lfs.readlink(name)
+   return symlinkattributes(name,"target") or nil
+  end
+ else
+  function lfs.readlink(name)
+   return nil
+  end
+ end
 end
 
 end -- closure
@@ -4136,7 +4158,7 @@ dir=dir or {}
 local dir=dir
 local lfs=lfs
 local attributes=lfs.attributes
-local walkdir=lfs.dir
+local scandir=lfs.dir
 local isdir=lfs.isdir  
 local isfile=lfs.isfile 
 local currentdir=lfs.currentdir
@@ -4167,6 +4189,15 @@ else
  lfs.isdir=isdir
  lfs.isfile=isfile
 end
+local isreadable=file.isreadable
+local walkdir=function(p,...)
+ if isreadable(p.."/.") then
+  return scandir(p,...)
+ else
+  return function() end
+ end
+end
+lfs.walkdir=walkdir
 function dir.current()
  return (gsub(currentdir(),"\\","/"))
 end
@@ -4580,6 +4611,23 @@ do
    str=gsub(str,"/%./","/")
    str=gsub(str,"(.)/%.$","%1")
    return str
+  end
+ end
+ function dir.expandlink(dir,report)
+  local curdir=currentdir()
+  local trace=type(report)=="function"
+  if chdir(dir) then
+   local newdir=currentdir()
+   if newdir~=dir and trace then
+    report("following symlink %a to %a",dir,newdir)
+   end
+   chdir(curdir)
+   return newdir
+  else
+   if trace then
+    report("unable to check path %a",dir)
+   end
+   return dir
   end
  end
 end

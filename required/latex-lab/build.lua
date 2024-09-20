@@ -15,6 +15,7 @@ installfiles = {
                  "*.ltx",
                  "*.sty",
 		 "glyphtounicode-cmex.tex",
+         "tagpdf-ns-latex-lab.def"  
 		}
 typesetfiles = {
                  "latex-lab-*.dtx",
@@ -37,6 +38,7 @@ checkengines = { "pdftex", "luatex" }
 checkdeps =
   {
     maindir .. "/base",
+    maindir .. "/required/firstaid",
     maindir .. "/required/amsmath",
     maindir .. "/required/graphics",
     maindir .. "/required/tools"
@@ -62,16 +64,20 @@ checksearch  = true
 
 checkconfigs = 
  {"build","config-TU","config-OR",
-  "config-mathtagging",
+  "config-math","config-math-luatex",
   "config-OR-luatex",
   "config-sec",
   "config-toc",
-  "config-block-tagging",
+  "config-block",
   "config-graphic",
   "config-minipage",
   "config-float",
   "config-bib",
   "config-LM-tagging",
+  "config-table-pdftex",
+  "config-table-luatex",
+  "config-title",
+  "config-firstaid"
  }
 
 

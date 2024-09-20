@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-%% File: latex-lab-toc-kernel-functions.dtx (C) Copyright 2022-2023 LaTeX Project
+%% File: latex-lab-toc-kernel-changes.dtx (C) Copyright 2022-2024 LaTeX Project
 %
 % It may be distributed and/or modified under the conditions of the
 % LaTeX Project Public License (LPPL), either version 1.3c of this
@@ -16,6 +16,9 @@
 %
 % for those people who are interested or want to report an issue.
 %
+% dates for latex-lab-kernel-changes.sty (pulled from various sources, see ins)
+\def\ltlabkerneldate{2024-07-11}
+\def\ltlabkernelversion{0.85d}
 %<*driver>
 \documentclass{l3doc}
 \EnableCrossrefs
@@ -41,6 +44,11 @@
 %
 % \providecommand\hook[1]{\texttt{#1}}
 %
+%
+% \ProvideDocElement[printtype=\textit{socket},idxtype=socket,idxgroup=Sockets]{Socket}{socketdecl}
+% \ProvideDocElement[printtype=\textit{hook},idxtype=hook,idxgroup=Hooks]{Hook}{hookdecl}
+% \ProvideDocElement[printtype=\textit{plug},idxtype=plug,idxgroup=Plugs]{Plug}{plugdecl}
+% 
 % \begin{abstract}
 % \end{abstract}
 %
@@ -56,13 +64,20 @@
 % They are marked as [class]. They are inserted with hooks here: this will break
 % if a non-standard class is used.
 %
+% \subsection{Package declaration}
+%    \begin{macrocode}
+%<*kernelchange>
+\ProvidesPackage{latex-lab-kernel-changes}
+        [\ltlabkerneldate\space v\ltlabkernelversion\space 
+         General kernel and class changes]
+%    \end{macrocode}
+%
 % \subsection{Providing the counter representation \cs{theHxx} generally}
 % 
 % This has been moved to base.
 % 
 % We still suppress the patches from hyperref:
 %    \begin{macrocode}
-%<*kernelchange>
 \def\hyper@nopatch@counter{}
 %    \end{macrocode}
 
@@ -89,8 +104,32 @@
 \def\toclevel@subparagraph{5}
 \def\toclevel@figure{1}
 \def\toclevel@table{1}
+%    \end{macrocode}
+%
+%\subsection{Storing the relation between target names and structure numbers}
+% To be able to add a /Ref key to structures the tagging makes use of target names
+% and stores the relationship in a property. We add a hook to \cs{MakeLinkTarget} to 
+% catch as much as possible, see also tagging issue \#20. This should work also
+% without hyperref. The property is defined in tagpdf-base, so the code would 
+% work also without tagging but we add a test anyway, this is probably faster.
+%    \begin{macrocode}
+\ExplSyntaxOn
+\AddToHookWithArguments{cmd/MakeLinkTarget/after}
+  {
+    \tag_if_active:T
+      {    
+        \tl_if_blank:VF \@currentHref
+          {
+            \prop_gput:Nee \g__tag_struct_dest_num_prop {\@currentHref}{\tag_get:n{struct_num}}
+          }
+      }    
+  }
+\ExplSyntaxOff  
+%    \end{macrocode}
+%    \begin{macrocode}
 %</kernelchange>
 %    \end{macrocode}
+%
 % \subsection{load kernel changes}
 %    \begin{macrocode}
 %<*package>
@@ -100,12 +139,24 @@
 % \subsection{\cs{contentsline} extension}
 % [latex-lab]
 % The tagging code must add code at the begin and end of \cs{contentsline}.
-% This code must have access to the arguments. We set it up as config point
-% for now.
+% This code must have access to the arguments. They are passed
+% together in tagging socket.
+% \begin{socketdecl}{tagsupport/toc/contentsline/before,
+%  tagsupport/toc/contentsline/after}
+%  Tagging sockets at the begin and end of contentsline.
+%  They receive \emph{all} contentsline arguments as one argument
+%  in four brace groups. The socket code should then use the parts it needs.
+%  The sockets will be in lttagging.dtx, but that may only happen in
+%  the next main release, so for now we test if they are in the
+%  format and if not define them now.
 %    \begin{macrocode}
-\def\@contentsline@cfgpoint@before#1#2#3#4{}
-\def\@contentsline@cfgpoint@after#1#2#3#4{}
+\str_if_exist:cF { l__socket_tagsupport/toc/contentsline/before_plug_str }
+    {
+      \NewSocket{tagsupport/toc/contentsline/before}{1}
+      \NewSocket{tagsupport/toc/contentsline/after}{1}
+    }
 %    \end{macrocode}
+% \end{socketdecl}
 % for the hooks we need that the \cs{l@XX} pass also the destination and
 % that \cs{l@XX} takes three arguments. 
 % TODO: test that, if there are two many problems we should pass the 
@@ -113,10 +164,10 @@
 %    \begin{macrocode}
 \def\contentsline#1#2#3#4%
   {%
-    \@contentsline@cfgpoint@before{#1}{#2}{#3}{#4}%
+    \UseTaggingSocket{toc/contentsline/before}{{#1}{#2}{#3}{#4}}%
     \gdef\@contentsline@destination{#4}%
     \csname l@#1\endcsname{#2}{#3}%
-    \@contentsline@cfgpoint@after{#1}{#2}{#3}{#4}%
+    \UseTaggingSocket{toc/contentsline/after}{{#1}{#2}{#3}{#4}}%
   }
 %    \end{macrocode}
 %
@@ -138,17 +189,33 @@
 % \subsection{\cs{@starttoc}}
 % [kernel?]
 %
-% We add a configuration point before and after reading the file
+% We add a tagging socket before and after reading the file
 % for the tagging.
+% \begin{socketdecl}{tagsupport/toc/starttoc/before,
+%                    tagsupport/toc/starttoc/after}
+% Tagging sockets for the begin and end of start of \cs{@starttoc}.
+% They take one argument, the extension.  
+% The sockets will be in lttagging.dtx, but that may only happen in
+% the next main release, so for now we test if they are in the
+% format and if not define them now.
 %    \begin{macrocode}
-\def\@starttoc@cfgpoint@before#1{}
-\def\@starttoc@cfgpoint@after#1{}
+\str_if_exist:cF { l__socket_tagsupport/toc/starttoc/before_plug_str }
+    {
+      \NewSocket{tagsupport/toc/starttoc/before}{1}
+      \NewSocket{tagsupport/toc/starttoc/after}{1}
+    }
+%    \end{macrocode}                  
+%    \begin{macrocode}
+%    \end{macrocode}
+% \end{socketdecl}
+% 
+%    \begin{macrocode}
 \def\@starttoc#1{%
   \begingroup
     \makeatletter
-    \@starttoc@cfgpoint@before{#1}%
+    \UseTaggingSocket{toc/starttoc/before}{#1}%
     \@input{\jobname.#1}%
-    \@starttoc@cfgpoint@after{#1}
+    \UseTaggingSocket{toc/starttoc/after}{#1}%
     \if@filesw
       \expandafter\newwrite\csname tf@#1\endcsname
       \immediate\openout \csname tf@#1\endcsname \jobname.#1\relax
@@ -182,15 +249,32 @@
 \NewMirroredHookPairWithArguments{contentsline/page/before}{contentsline/page/after}{4}%
 %    \end{macrocode}
 %
-% The dot in the leader must be set as artifact.
+% The dots in the leader must be set as artifact.
 % But luatex requires that the mc are set outside the leaders.
-% So we need a config point.
+% So we need sockets.
 %
 % \cs{@dottedtocline} needs hooks and formatting commands.
-% We add a sixth argument so that it can grab the destination too.
+% To make the leaders into artifact we use tagging sockets.
+% The declaration should perhaps be moved into lttagging so that
+% it can be used also by external packages even if the tagging code is not
+% loaded?
+% \begin{socketdecl}{tagsupport/toc/leaders/before,
+%                    tagsupport/toc/leaders/after}
+% Tagging sockets to make the dot leaders an artifact.
+% They do not take an argument.   
+% The sockets will be in lttagging.dtx, but that may only happen in
+% the next main release, so for now we test if they are in the
+% format and if not define them now.
 %    \begin{macrocode}
-\def\@dottedtocline@cfgpoint@leaders#1{#1}
-
+\str_if_exist:cF { l__socket_tagsupport/toc/leaders/before_plug_str }
+    {
+      \NewSocket{tagsupport/toc/leaders/before}{0}
+      \NewSocket{tagsupport/toc/leaders/after}{0}
+    }
+%    \end{macrocode}                  
+% \end{socketdecl}
+% The destination is accessed through \cs{@contentsline@destination}.
+%    \begin{macrocode}
 \def\@dottedtocline#1#2#3#4#5{%
   \ifnum #1>\c@tocdepth \else
     \vskip \z@ \@plus.2\p@
@@ -204,10 +288,11 @@
      \csname contentsline@text@#1@format\endcsname{#4}%
      \UseHookWithArguments{contentsline/text/after}{4}{#1}{#4}{#5}{\@contentsline@destination}%
      \nobreak
-     \@dottedtocline@cfgpoint@leaders{%
+     \UseTaggingSocket{toc/leaders/before}\SuspendTagging{toc/leaders}%
        \leaders\hbox{$\m@th
          \mkern \@dotsep mu\hbox{.}\mkern \@dotsep
-          mu$}\hfill}%
+          mu$}\hfill
+     \ResumeTagging{toc/leaders}\UseTaggingSocket{toc/leaders/after}%          
      \nobreak
      \hb@xt@\@pnumwidth{\hfil\normalfont \normalcolor
      \UseHookWithArguments{contentsline/page/before}{4}{#1}{#4}{#5}{\@contentsline@destination}%
@@ -407,14 +492,4 @@
 %    \end{macrocode}
 %    \begin{macrocode}
 %</package>
-%    \end{macrocode}
-
-%    \begin{macrocode}
-%<*latex-lab>
-\ProvidesFile{toc-tagging-latex-lab-testphase.ltx}
-        [2023-05-20 v0.81 code related to the tagging of toc and similar lists]
-
-\RequirePackage{latex-lab-testphase-toc}
-
-%</latex-lab>
 %    \end{macrocode}

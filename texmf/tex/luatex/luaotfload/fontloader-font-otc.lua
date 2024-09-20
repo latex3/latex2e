@@ -142,6 +142,12 @@ local function addfeature(data,feature,specifications,prepareonly)
 
     local descriptions = data.descriptions
     local resources    = data.resources
+
+    if not descriptions or not resources then
+        report_otf("missing specification")
+        return
+    end
+
     local features     = resources.features
     local sequences    = resources.sequences
 
@@ -780,7 +786,12 @@ local function addfeature(data,feature,specifications,prepareonly)
                     local list     = askedsteps[i]
                     local coverage = nil
                     local format   = nil
-                    if featuretype == "substitution" then
+if type(list) == "function" then
+    list = list(data,specification,list,i)
+end
+                    if not list then
+                        -- see ebgaramond hack
+                    elseif featuretype == "substitution" then
                         -- see font-imp-tweaks: we directly pass a mapping so no checks done
                         category = "gsub"
                         coverage = (mapping and list) or prepare_substitution(list,featuretype,nocheck)

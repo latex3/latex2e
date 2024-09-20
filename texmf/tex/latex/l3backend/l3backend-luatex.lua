@@ -7,7 +7,7 @@
 -- l3backend-color.dtx  (with options: `lua')
 -- l3backend-opacity.dtx  (with options: `lua')
 -- 
--- Copyright (C) 2023 The LaTeX Project
+-- Copyright (C) 2023,2024 The LaTeX Project
 -- 
 -- It may be distributed and/or modified under the conditions of
 -- the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -53,6 +53,15 @@ if luaotfload and luaotfload.set_transparent_colorstack then
     local html = htmlcolor:match(value)
     if html then return html end
 
+    local l3color_prop = token.get_macro(string.format('l__color_named_%s_prop', value))
+    if l3color_prop == nil or l3color_prop == '' then
+      local legacy_color_macro = token.create(string.format('\\color@%s', value))
+      if legacy_color_macro.cmdname ~= 'undefined_cs' then
+        token.put_next(legacy_color_macro)
+        return token.scan_argument()
+      end
+    end
+
     tex.runtoks(function()
       token.get_next()
       color_export[6] = value
@@ -81,7 +90,7 @@ local pdfmanagement_active do
 end
 
 if pdfmanagement_active and luaotfload and luaotfload.set_transparent_colorstack then
-  luaotfload.set_transparent_colorstack(token.create'c__opacity_backend_stack_int'.index)
+  luaotfload.set_transparent_colorstack(function() return token.create'c__opacity_backend_stack_int'.index end)
 
   local transparent_register = {
     token.create'pdfmanagement_add:nnn',

@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-%% File: latex-lab-firstaid.dtx (C) Copyright 2023 LaTeX Project
+%% File: latex-lab-firstaid.dtx (C) Copyright 2023-2024 LaTeX Project
 %
 % It may be distributed and/or modified under the conditions of the
 % LaTeX Project Public License (LPPL), either version 1.3c of this
@@ -16,6 +16,8 @@
 %
 % for those people who are interested or want to report an issue.
 %
+\def\ltlabfirstaiddate{2024-08-11}
+\def\ltlabfirstaidversion{0.85e}
 %<*driver>
 \documentclass{l3doc}
 \EnableCrossrefs
@@ -28,9 +30,9 @@
 % \fi
 %
 % \title{The \textsf{latex-lab-firstaid} package\\
-% Temporary patches to external packages}
+% Temporary patches to external packages needed for the tagging project}
 % \author{\LaTeX{} Project\thanks{Initial implementation done by Ulrike Fischer}}
-% \date{Version 0.80 2023-06-04}
+% \date{v\ltlabfirstaidversion\ \ltlabfirstaiddate}
 %
 % \maketitle
 %
@@ -53,16 +55,165 @@
 % patches once the packages have been updated.
 
 % \section{Implementation}
+%
 %    \begin{macrocode}
 %<*package>
 %<@@=tag>
 %    \end{macrocode}
 %    \begin{macrocode}
-\ProvidesPackage {latex-lab-testphase-firstaid} [2023-06-04 v0.8
-   Temporary patches to external packages need for the tagging project]
+\ProvidesPackage {latex-lab-testphase-firstaid} [%
+   \ltlabfirstaiddate\space v\ltlabfirstaiddate\space
+   Temporary patches to external packages needed for the tagging project]
 %    \end{macrocode}
+%  \begin{macro}{\FirstAidNeededT}
+%    This is a very simple help to ensure that we only apply first aid
+%    to an unmodified package or class. It only works in the case the
+%    file has already been loaded and the csname \cs{ver@\#1.\#2} got
+%    defined (holding the current date, version, and short description
+%    info). We then compare its content to a frozen string and make
+%    the modification \verb=#3= only if both agree. If they differ we
+%    assume that the package/class in question got updated by its
+%    maintainer.
+%    \begin{macrocode}
+\ExplSyntaxOn 
+\providecommand\FirstAidNeededT[3]{            
+  \exp_args:Ncx\str_if_eq:onF{ver@#1.#2}{#3}
+      { \typeout{==>~ First~ Aid~ for~ #1.#2~ no~ longer~ applied!^^J
+          \@spaces Expected:^^J
+          \@spaces\@spaces #3^^J
+          \@spaces but~ found:^^J
+          \@spaces\@spaces \use:c{ver@#1.#2}^^J
+          \@spaces so~ I'm~ assuming~ it~ got~ fixed.
+      } }
+  \exp_args:Ncx\str_if_eq:onT{ver@#1.#2}{#3}
+}
+\ExplSyntaxOff
+%    \end{macrocode}
+%  \end{macro}
 
+% \subsection{ams classes}
+% The amsart, amsbook and amsproc classes do not use \cs{@author} to store the author list
+% but a command \cs{authors}. To be able to nevertheless use the authors in the
+% xmp-metadata we map \cs{@author} to this new command. 
+% 
+%    \begin{macrocode}
+\AddToHook{class/amsart/after}
+ {\def\@author{\authors}}
+\AddToHook{class/amsbook/after}
+ {\def\@author{\authors}}
+\AddToHook{class/amsproc/after}
+ {\def\@author{\authors}}  
+%    \end{macrocode}
+%
+%
+%
+% \subsection{verse}
+%
+%    The \pkg{verse} package has its own definition of the
+%    \env{verse} environment, which would tag correctly, except that
+%    it is overwritten by the block code in the hook
+%    \texttt{begindocument/before}. So the simplest way to make
+%    tagging work is to reinstall the package version afterwards,
+%    which is what we are doing here.
+%    \begin{macrocode}
+\AddToHook{package/verse/after}[latex-lab-firstaid]{%
+  \FirstAidNeededT{verse}{sty}{2014/05/10 v2.4b verse typesetting}%
+   {%
+     \AtBeginDocument{%
+       \renewenvironment{verse}[1][\linewidth]{%
+         \stepcounter{verse@envctr}%
+         \setcounter{poemline}{0}\refstepcounter{poemline}%
+         \setcounter{vslineno}{1}%
+         \let\\=\@vscentercr
+         \list{}{\itemsep \z@
+                 \itemindent  -\vindent
+                 \listparindent\itemindent
+                 \parsep       \stanzaskip
+                 \ifdim #1 < \linewidth
+                   \rightmargin        \z@
+                   \setlength{\leftmargin}{\linewidth}%
+                   \addtolength{\leftmargin}{-#1}%
+                   \addtolength{\leftmargin}{-0.5\leftmargin}%
+                 \else
+                   \rightmargin        \leftmargin
+                 \fi
+                 \addtolength{\leftmargin}{\vindent}}%
+         \item[]%
+       }%
+       {\endlist}%
+     }%
+   }%
+}
+%    \end{macrocode}
+%    Of course, this means that the
+%    optional argument of the environment then only accepts a length
+%    value and not any more a key value list for altering the
+%    environment settings.
+%    
+%    A more elabroate version could be something like this that allows
+%    key/val and legacy interface. Or one could extend the list
+%    template to support a \texttt{list-width} key.
+%\begin{verbatim}
+% \ExplSyntaxOn
+% \cs_new_protected:Npn \ExtractAndDropKey #1#2#3#4#5 {
+%   \tl_set_eq:NN #4 \c_novalue_tl      % or empty?
+%   \keys_define:nn { #1 } { #2 .code:n = \tl_set:Nn #4{##1} }
+%   \keys_set_known:nnN { #1 } { #3 } #5
+% }
+% \ExplSyntaxOff
+% 
+% % Change the env definition for verse matching verse.sty
+% % This keeps the verse.sty interface as it is and only adjusts the
+% % main environment to use the basic list env with the verse.sty
+% % specific settings.
+% \makeatletter
+% 
+% \AddToHook{package/verse/after}{%
+%   \AtBeginDocument{%
+%   \RenewDocumentEnvironment{verse}{={verse-width}!O{\linewidth}}%
+%     {% 
+%       \stepcounter{verse@envctr}%
+%       \setcounter{poemline}{0}\refstepcounter{poemline}%
+%       \setcounter{vslineno}{1}%
+%       \let\\=\@vscentercr
+%   %
+%       \ExtractAndDropKey{verse}{verse-width}{#1}\@vswidth\@vsremainingkvlist
+%   % If other keys have been specified but not verse-width we have no
+%   % default for \@vswidth and need to set it again
+%       \ExpandArgs{o}\IfNoValueT \@vswidth
+%                         {\def\@vswidth{\linewidth}}%
+%   %
+%   % This is a bit ugly but we can't stick \cs{@vsremainingkvlist} into
+%   % the instance argument as keys are expected to be visible on
+%   % top-level not hidden inside a macro.  The alternative is to push
+%   % in \verb=#1= but then the key/value \verb/verse-width=.../ is
+%   % passed into the instance which is not known there (not harmful as
+%   % it will get ignored but noticeably more and unnecessary
+%   % processing).
+%   %                      
+%       \def\next##1{%
+%         \UseInstance{blockenv}{list}% 
+%           {%
+%             item-indent =-\vindent,%
+%             parindent   =-\vindent,%
+%             par-skip    =\stanzaskip,%
+%             item-skip   =0pt,%
+%             leftmargin  = (\linewidth-\@vswidth)/2+\vindent,%
+%             rightmargin = \ifdim\@vswidth<\linewidth 0pt
+%                           \else (\linewidth-\@vswidth)/2\fi,%
+%             ##1%
+%            }}%
+%       \ExpandArgs{o}\next\@vsremainingkvlist
+%       \item\relax    
+%     }{\endblockenv}%
+%   }%
+% }  
+% \makeatother
+%\end{verbatim}
+%
+%
 % \subsection{blindtext}
+%
 % The blindtext package generates lists with nested \cs{loop} command.
 % The inner loop introduces a group around the list which error when lists are tagged
 % as \cs{@doendpe} is lost.
@@ -103,43 +254,80 @@
    }%
  }
 %    \end{macrocode}
-% \subsection{ltugboat}
-% ltugboat need only a redefinition of \cs{l@section} to add the hooks
+%
+%
+% \subsection{cleveref}
+%
+% The cleveref package redefines \cs{@makefntext} and this means that the patches in
+% the new footnote code fails. We use a hook instead
 %    \begin{macrocode}
-\AddToHook{file/ltugboat.cls/after}
+\AddToHook{package/cleveref/after} 
  {
-   \def\l@section#1#2{\addpenalty{\@secpenalty}%
-     \addvspace{\TBtocsectionspace}%
-     \@tempdima 1.5em
-     \begingroup
-       \parindent\z@ \rightskip\z@  % article style makes \rightskip > 0
-       \parfillskip\z@
-       \TBtocsectionfont
-       \leavevmode\advance\leftskip\@tempdima\hskip-\leftskip
-        \UseHookWithArguments{contentsline/text/before}{4}
-            {\toclevel@part}{#1}{#2}{\@contentsline@destination}%
-          \csname contentsline@text@1@format\endcsname{#1}%
-        \UseHookWithArguments{contentsline/text/after}{4}
-            {\toclevel@part}{#1}{#2}{\@contentsline@destination}%
-          \nobreak\hfil
-       \nobreak\hb@xt@\@pnumwidth{\hss  
-         \UseHookWithArguments{contentsline/page/before}{4}
-            {\toclevel@part}{#1}{#2}{\@contentsline@destination}%
-          #2%
-         \UseHookWithArguments{contentsline/page/after}{4}
-            {\toclevel@part}{#1}{#2}{\@contentsline@destination}%
-         }\par
-     \endgroup}
- }  
+   \let\@makefntext\cref@old@makefntext
+   \AddToHook{cmd/@makefntext/before}{%
+    \cref@constructprefix{footnote}{\cref@result}%
+    \protected@edef\cref@currentlabel{%
+     [footnote][\arabic{footnote}][\cref@result]%
+    \p@footnote\@thefnmark}}
 %    \end{macrocode}
- 
+% The second problem is that it redefines \cs{refstepcounter} to use an argument.
+% In itself this isn't a problem but as the new definition doesn't grab the arguments
+% directly it fails over the generic hook inserted at the end of the definition
+%    \begin{macrocode}
+   \RenewDocumentCommand\refstepcounter{om}{%
+     \IfNoValueTF{#1}%
+      {\refstepcounter@noarg{#2}}%
+      {\refstepcounter@optarg[#1]{#2}}%
+    }%
+ }   
+%    \end{macrocode}
+%
+% \subsection{booktabs}
+% In some cases booktabs inserts a 
+% \cs{multispan} into the table (through the commands \cs{@cmidruleb} 
+% and \cs{@cmidrulea} and this then errors 
+% with the tagging code. 
+% This affects both tabular and longtable 
+% (but longtable more as booktabs handles lines in longtable differently).
+% See also issue \url{https://github.com/latex3/tagging-project/issues/69}
+% 
+% 
+\ExplSyntaxOn
+\AddToHook{package/booktabs/after} 
+ {
+  \def\@cmidrulea{
+   \multispan\@cmidla
+   &\multispan\@cmidlb
+   \unskip\hskip\cmrkern@l
+  {
+   \tag_mc_begin:n{artifact}
+   \CT@arc@\leaders\hrule \@height\@thisrulewidth\hfill\kern\z@}
+   \hskip\cmrkern@r
+   \tag_mc_end: \int_gdecr:N \g__tbl_row_int 
+   \cr}
+
+  \def\@cmidruleb{%
+    \multispan\@cmidlb
+    \unskip\hskip \cmrkern@l%
+   {
+    \tag_mc_begin:n{artifact}
+    \CT@arc@\leaders\hrule \@height\@thisrulewidth\hfill\kern\z@}
+    \hskip\cmrkern@r
+    \tag_mc_end: \int_gdecr:N \g__tbl_row_int 
+    \cr} 
+  }
+\ExplSyntaxOff 
+%
 %    \begin{macrocode}
 %</package>
 %    \end{macrocode}
+%
+%
 %    \begin{macrocode}
 %<*latex-lab>
 \ProvidesFile{firstaid-latex-lab-testphase.ltx}
-        [2023-06-04 v0.8 Temporary patches to external packages need for the tagging project]
+        [\ltlabfirstaiddate\space v\ltlabfirstaidversion\space
+         latex-lab wrapper firstaid]
 
 \RequirePackage{latex-lab-testphase-firstaid}
 

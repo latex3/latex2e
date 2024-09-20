@@ -6,7 +6,7 @@
 -- 
 --  tagpdf-backend.dtx  (with options: `lua')
 --  
---  Copyright (C) 2019-2022 Ulrike Fischer
+--  Copyright (C) 2019-2024 Ulrike Fischer
 --  
 --  It may be distributed and/or modified under the conditions of
 --  the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.98h",       --TAGVERSION
-    date          = "2023-06-06", --TAGDATE
+    version       = "0.99f",       --TAGVERSION
+    date          = "2024-09-16", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -53,8 +53,8 @@ ltx.__tag.page   will contain page data
 ltx.__tag.tables contains also data from mc and struct (from older code). This needs cleaning up.
              There are certainly dublettes, but I don't dare yet ...
 ltx.__tag.func   will contain (public) functions.
-ltx.__tag.trace  will contain tracing/loging functions.
-local funktions starts with __
+ltx.__tag.trace  will contain tracing/logging functions.
+local functions starts with __
 functions meant for users will be in ltx.tag
 
 functions
@@ -67,12 +67,12 @@ functions
  ltx.__tag.func.store_mc_kid (mcnum,kid,page): stores the mc-kids of mcnum on page page
  ltx.__tag.func.store_mc_in_page(mcnum,mcpagecnt,page): stores in the page table the number of mcnum on this page
  ltx.__tag.func.store_struct_mcabs (structnum,mcnum): stores relations structnum<->mcnum (abs)
- ltx.__tag.func.mc_insert_kids (mcnum): inserts the /K entries for mcnum by wandering throught the [kids] table
+ ltx.__tag.func.mc_insert_kids (mcnum): inserts the /K entries for mcnum by wandering through the [kids] table
  ltx.__tag.func.mark_page_elements(box,mcpagecnt,mccntprev,mcopen,name,mctypeprev) : the main function
  ltx.__tag.func.mark_shipout (): a wrapper around the core function which inserts the last EMC
  ltx.__tag.func.fill_parent_tree_line (page): outputs the entries of the parenttree for this page
  ltx.__tag.func.output_parenttree(): outputs the content of the parenttree
- ltx.__tag.func.pdf_object_ref(name): outputs the object reference for the object name
+ ltx.__tag.func.pdf_object_ref(name,index): outputs the object reference for the object name
  ltx.__tag.func.markspaceon(), ltx.__tag.func.markspaceoff(): (de)activates the marking of positions for space chars
  ltx.__tag.trace.show_mc_data (num,loglevel): shows ltx.__tag.mc[num] is the current log level is >= loglevel
  ltx.__tag.trace.show_all_mc_data (max,loglevel): shows a maximum about mc's if the current log level is >= loglevel
@@ -85,10 +85,13 @@ functions
 
 local mctypeattributeid  = luatexbase.new_attribute ("g__tag_mc_type_attr")
 local mccntattributeid   = luatexbase.new_attribute ("g__tag_mc_cnt_attr")
+local iwspaceOffattributeid = luatexbase.new_attribute ("g__tag_interwordspaceOff_attr")
 local iwspaceattributeid = luatexbase.new_attribute ("g__tag_interwordspace_attr")
 local iwfontattributeid  = luatexbase.new_attribute ("g__tag_interwordfont_attr")
 local tagunmarkedbool= token.create("g__tag_tagunmarked_bool")
 local truebool       = token.create("c_true_bool")
+local softhyphenbool = token.create("g__tag_softhyphen_bool")
+
 local catlatex       = luatexbase.registernumber("catcodetable@latex")
 local tableinsert    = table.insert
 local nodeid           = node.id
@@ -106,6 +109,10 @@ local nodeinsertafter  = node.insert_after
 local nodeinsertbefore = node.insert_before
 local pdfpageref       = pdf.pageref
 
+local fonthashes      = fonts.hashes
+local identifiers     = fonthashes.identifiers
+local fontid          = font.id
+
 local HLIST          = node.id("hlist")
 local VLIST          = node.id("vlist")
 local RULE           = node.id("rule")
@@ -116,6 +123,9 @@ local KERN           = node.id("kern")
 local PENALTY        = node.id("penalty")
 local LOCAL_PAR      = node.id("local_par")
 local MATH           = node.id("math")
+
+local explicit_disc = 1
+local regular_disc = 3
 ltx             = ltx        or { }
 ltx.__tag          = ltx.__tag        or { }
 ltx.__tag.mc       = ltx.__tag.mc     or  { } -- mc data
@@ -284,41 +294,118 @@ function ltx.__tag.func.mc_num_of_kids (mcnum)
  ltx.__tag.trace.log ("INFO MC-KID-NUMBERS: " .. mcnum .. "has " .. num .. "KIDS",4)
  return num
 end
+local __tag_backend_create_emc_node
+if tex.outputmode == 0 then
+ if token.get_macro("c_sys_backend_str") == "dvipdfmx" then
+  function __tag_backend_create_emc_node ()
+    local emcnode = nodenew("whatsit","special")
+      emcnode.data = "pdf:code EMC"
+    return emcnode
+  end
+ else -- assume a dvips variant
+  function __tag_backend_create_emc_node ()
+    local emcnode = nodenew("whatsit","special")
+      emcnode.data = "ps:SDict begin mark /EMC pdfmark end"
+    return emcnode
+  end
+ end
+else -- pdf mode
+  function __tag_backend_create_emc_node ()
+    local emcnode = nodenew("whatsit","pdf_literal")
+      emcnode.data = "EMC"
+      emcnode.mode=1
+    return emcnode
+  end
+end
+
 local function __tag_insert_emc_node (head,current)
- local emcnode = nodenew("whatsit","pdf_literal")
-       emcnode.data = "EMC"
-       emcnode.mode=1
-       head = node.insert_before(head,current,emcnode)
- return head
+  local emcnode= __tag_backend_create_emc_node()
+  head = node.insert_before(head,current,emcnode)
+  return head
 end
+local __tag_backend_create_bmc_node
+if tex.outputmode == 0 then
+ if token.get_macro("c_sys_backend_str") == "dvipdfmx" then
+  function __tag_backend_create_bmc_node (tag)
+    local bmcnode = nodenew("whatsit","special")
+    bmcnode.data = "pdf:code /"..tag.." BMC"
+    return bmcnode
+  end
+ else -- assume a dvips variant
+  function __tag_backend_create_bmc_node (tag)
+    local bmcnode = nodenew("whatsit","special")
+    bmcnode.data = "ps:SDict begin mark/"..tag.." /BMC pdfmark end"
+    return bmcnode
+  end
+ end
+else -- pdf mode
+  function __tag_backend_create_bmc_node (tag)
+    local bmcnode = nodenew("whatsit","pdf_literal")
+    bmcnode.data = "/"..tag.." BMC"
+    bmcnode.mode=1
+    return bmcnode
+  end
+end
+
 local function __tag_insert_bmc_node (head,current,tag)
- local bmcnode = nodenew("whatsit","pdf_literal")
-       bmcnode.data = "/"..tag.." BMC"
-       bmcnode.mode=1
-       head = node.insert_before(head,current,bmcnode)
+ local bmcnode = __tag_backend_create_bmc_node (tag)
+ head = node.insert_before(head,current,bmcnode)
  return head
 end
+local __tag_backend_create_bdc_node
+
+if tex.outputmode == 0 then
+ if token.get_macro("c_sys_backend_str") == "dvipdfmx" then
+  function __tag_backend_create_bdc_node (tag,dict)
+    local bdcnode = nodenew("whatsit","special")
+    bdcnode.data = "pdf:code /"..tag.."<<"..dict..">> BDC"
+    return bdcnode
+  end
+ else -- assume a dvips variant
+  function __tag_backend_create_bdc_node (tag,dict)
+    local bdcnode = nodenew("whatsit","special")
+    bdcnode.data = "ps:SDict begin mark/"..tag.."<<"..dict..">> /BDC pdfmark end"
+    return bdcnode
+  end
+ end
+else -- pdf mode
+  function __tag_backend_create_bdc_node (tag,dict)
+    local bdcnode = nodenew("whatsit","pdf_literal")
+    bdcnode.data = "/"..tag.."<<"..dict..">> BDC"
+    bdcnode.mode=1
+    return bdcnode
+  end
+end
+
 local function __tag_insert_bdc_node (head,current,tag,dict)
- local bdcnode = nodenew("whatsit","pdf_literal")
-       bdcnode.data = "/"..tag.."<<"..dict..">> BDC"
-       bdcnode.mode=1
-       head = node.insert_before(head,current,bdcnode)
+ bdcnode= __tag_backend_create_bdc_node (tag,dict)
+ head = node.insert_before(head,current,bdcnode)
  return head
 end
-local function __tag_pdf_object_ref (name)
-   local tokenname = 'c__pdf_backend_object_'..name..'_int'
-   local object = token.create(tokenname).index..' 0 R'
+local function __tag_pdf_object_ref (name,index)
+   local object
+   if ltx.pdf.object_id then
+     object = ltx.pdf.object_id (name,index) ..' 0 R'
+   else
+     local tokenname = 'c__pdf_object_'..name..'/'..index..'_int'
+     object = token.create(tokenname).mode ..' 0 R'
+   end
    return object
 end
-ltx.__tag.func.pdf_object_ref=__tag_pdf_object_ref
+ltx.__tag.func.pdf_object_ref = __tag_pdf_object_ref
 local function __tag_show_spacemark (head,current,color,height)
  local markcolor = color or "1 0 0"
  local markheight = height or 10
- local pdfstring = node.new("whatsit","pdf_literal")
+ local pdfstring
+ if tex.outputmode == 0 then
+  -- ignore dvi mode for now
+ else
+  pdfstring = node.new("whatsit","pdf_literal")
        pdfstring.data =
        string.format("q "..markcolor.." RG "..markcolor.." rg 0.4 w 0 %g m 0 %g l S Q",-3,markheight)
        head = node.insert_after(head,current,pdfstring)
- return head
+  return head
+ end
 end
 local function __tag_fakespace()
    tex.setattribute(iwspaceattributeid,1)
@@ -335,6 +422,7 @@ local function __tag_mark_spaces (head)
     local id = n.id
     if id == GLYPH then
       local glyph = n
+      default_currfontid = glyph.font
       if glyph.next and (glyph.next.id == GLUE)
         and not inside_math  and (glyph.next.width >0)
       then
@@ -372,7 +460,8 @@ local function __tag_mark_spaces (head)
         and not inside_math  and (glyph.next.width >0) and n.subtype==0
       then
         nodesetattribute(glyph.next,iwspaceattributeid,1)
-      --  nodesetattribute(glyph.next,iwfontattributeid,glyph.font)
+        --  changed 2024-01-18, issue #72
+        nodesetattribute(glyph.next,iwfontattributeid,default_currfontid)
       -- for debugging
        if ltx.__tag.trace.showspaces then
         __tag_show_spacemark (head,glyph)
@@ -401,15 +490,29 @@ local function __tag_deactivate_mark_space ()
 end
 
 ltx.__tag.func.markspaceoff=__tag_deactivate_mark_space
-local default_space_char = node.new(GLYPH)
-local default_fontid     = font.id("TU/lmr/m/n/10")
+local default_space_char = nodenew(GLYPH)
+local default_fontid     = fontid("TU/lmr/m/n/10")
+local default_currfontid = fontid("TU/lmr/m/n/10")
 default_space_char.char  = 32
 default_space_char.font  = default_fontid
+local function __tag_font_has_space (fontid)
+ t= fonts.hashes.identifiers[fontid]
+ if luaotfload.aux.slot_of_name(fontid,"space")
+    or t.characters and t.characters[32] and t.characters[32]["unicode"]==32
+ then
+    return true
+ else
+    return false
+ end
+end
 local function __tag_space_chars_shipout (box)
  local head = box.head
   if head then
     for n in node.traverse(head) do
-      local spaceattr = nodegetattribute(n,iwspaceattributeid)  or -1
+      local spaceattr = -1
+      if not nodehasattribute(n,iwspaceOffattributeid) then
+        spaceattr = nodegetattribute(n,iwspaceattributeid)  or -1
+      end
       if n.id == HLIST  then -- enter the hlist
          __tag_space_chars_shipout (n)
       elseif n.id == VLIST then -- enter the vlist
@@ -423,7 +526,10 @@ local function __tag_space_chars_shipout (box)
           local space_char = node.copy(default_space_char)
           local curfont    = nodegetattribute(n,iwfontattributeid)
           ltx.__tag.trace.log ("INFO SPACE-FUNCTION-FONT: ".. tostring(curfont),3)
-          if curfont and luaotfload.aux.slot_of_name(curfont,"space") then
+          if curfont and
+            -- luaotfload.aux.slot_of_name(curfont,"space")
+            __tag_font_has_space (curfont)
+          then
             space_char.font=curfont
           end
           head, space = node.insert_before(head, n, space_char) --
@@ -491,6 +597,17 @@ function ltx.__tag.func.store_mc_in_page (mcnum,mcpagecnt,page)
  ltx.__tag.trace.log("INFO TAG-MC-INTO-PAGE: page " .. page ..
                    ": inserting MCID " .. mcpagecnt .. " => " .. mcnum,3)
 end
+local function __tag_update_mc_attributes (head,mcnum,type)
+ for n in node.traverse(head) do
+   node.set_attribute(n,mccntattributeid,mcnum)
+   node.set_attribute(n,mctypeattributeid,type)
+   if n.id == HLIST or n.id == VLIST then
+     __tag_update_mc_attributes (n.list,mcnum,type)
+   end
+ end
+ return head
+end
+ltx.__tag.func.update_mc_attributes = __tag_update_mc_attributes
 --[[
     Now follows the core function
     It wades through the shipout box and checks the attributes
@@ -646,10 +763,8 @@ end
 function ltx.__tag.func.mark_shipout (box)
  mcopen = ltx.__tag.func.mark_page_elements (box,-1,-100,0,"Shipout",-1)
  if mcopen~=0 then -- there is a chunk open, close it (hope there is only one ...
-  local emcnode = nodenew("whatsit","pdf_literal")
+  local emcnode = __tag_backend_create_emc_node ()
   local list = box.list
-  emcnode.data = "EMC"
-  emcnode.mode=1
   if list then
      list = node.insert_after (list,node.tail(list),emcnode)
      mcopen = mcopen - 1
@@ -683,7 +798,7 @@ function ltx.__tag.func.fill_parent_tree_line (page)
       local structnum = ltx.__tag.mc[mcnum]["parent"]
       local propname  = "g__tag_struct_"..structnum.."_prop"
       --local objref   =  ltx.__tag.tables[propname]["objref"] or "XXXX"
-      local objref = __tag_pdf_object_ref('__tag/struct/'..structnum)
+      local objref = __tag_pdf_object_ref('__tag/struct',structnum)
       ltx.__tag.trace.log("INFO PARENTTREE-STRUCT-OBJREF:  =====>"..
         tostring(objref),5)
       numsentry = pdfpage .. " [".. objref .. "]"
@@ -696,7 +811,7 @@ function ltx.__tag.func.fill_parent_tree_line (page)
         local structnum = ltx.__tag.mc[mcnum]["parent"] or 0
         local propname  = "g__tag_struct_"..structnum.."_prop"
         --local objref   =  ltx.__tag.tables[propname]["objref"] or "XXXX"
-        local objref = __tag_pdf_object_ref('__tag/struct/'..structnum)
+        local objref = __tag_pdf_object_ref('__tag/struct',structnum)
         numsentry = numsentry .. " ".. objref
        end
       numsentry = numsentry .. "] "
@@ -705,6 +820,7 @@ function ltx.__tag.func.fill_parent_tree_line (page)
      end
     else
       ltx.__tag.trace.log ("INFO PARENTTREE-NO-DATA: page "..page,3)
+      numsentry = pdfpage.." []"
     end
     return numsentry
 end
@@ -714,6 +830,54 @@ function ltx.__tag.func.output_parenttree (abspage)
   line = ltx.__tag.func.fill_parent_tree_line (i) .. "^^J"
   tex.sprint(catlatex,line)
  end
+end
+do
+  local properties = node.get_properties_table()
+  local is_soft_hyphen_prop = 'tagpdf.rewrite-softhyphen.is_soft_hyphen'
+  local hyphen_char = 0x2D
+  local soft_hyphen_char = 0xAD
+  local softhyphen_fonts = setmetatable({}, {__index = function(t, fid)
+    local fdir = identifiers[fid]
+    local format = fdir and fdir.format
+    local result = (format == 'opentype' or format == 'truetype')
+    local characters = fdir and fdir.characters
+    result = result and (characters and characters[soft_hyphen_char]) ~= nil
+    t[fid] = result
+    return result
+  end})
+  local function process_softhyphen_pre(head, _context, _dir)
+    if softhyphenbool.mode ~= truebool.mode then return true end
+    for disc, sub in node.traverse_id(DISC, head) do
+      if sub == explicit_disc or sub == regular_disc then
+        for n, _ch, _f in node.traverse_char(disc.pre) do
+          local props = properties[n]
+          if not props then
+            props = {}
+            properties[n] = props
+          end
+          props[is_soft_hyphen_prop] = true
+        end
+      end
+    end
+    return true
+  end
+
+  local function process_softhyphen_post(head, _context, _dir)
+    if softhyphenbool.mode ~= truebool.mode then return true end
+    for disc, sub in node.traverse_id(DISC, head) do
+      for n, ch, fid in node.traverse_glyph(disc.pre) do
+        local props = properties[n]
+        if softhyphen_fonts[fid] and ch == hyphen_char and props and props[is_soft_hyphen_prop] then
+          n.char = soft_hyphen_char
+          props.glyph_info = nil
+        end
+      end
+    end
+    return true
+  end
+
+  luatexbase.add_to_callback('pre_shaping_filter', process_softhyphen_pre, 'tagpdf.rewrite-softhyphen')
+  luatexbase.add_to_callback('post_shaping_filter', process_softhyphen_post, 'tagpdf.rewrite-softhyphen')
 end
 -- 
 --  End of File `tagpdf.lua'.

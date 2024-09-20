@@ -5,8 +5,8 @@
 
 assert(luaotfload_module, "This is a part of luaotfload and should not be loaded independently") { 
     name          = "luaotfload-features",
-    version       = "3.23",       --TAGVERSION
-    date          = "2022-10-03", --TAGDATE
+    version       = "3.28",       --TAGVERSION
+    date          = "2024-02-14", --TAGDATE
     description   = "luaotfload submodule / features",
     license       = "GPL v2.0",
     author        = "Hans Hagen, Khaled Hosny, Elie Roux, Philipp Gesang, Marcel Krüger",
@@ -614,6 +614,13 @@ local tlig_specification = {
     },
 }
 
+-- "substitution" features allow to replace individual characters with other
+-- characters. This is often used inside of fonts to e.g. implement stylistic
+-- sets.
+-- As an example how such features can be added in the fontloader, we have a
+-- simple implementation of the ROT13 cipher as a font feature. It can be
+-- used by enabling the `rot13` font feature in a font, but we are not aware of
+-- any practical usecase for this.
 local rot13_specification = {
     type      = "substitution",
     features  = everywhere,
@@ -883,7 +890,42 @@ fonts.constructors.features.otf.register {
       end,
     },
 }
+require'luaotfload-arabic'
 
+-- mathsize feature for compatibility with older fontloader versions
+-- Not all that useful in most cases since it leads to messy font sizes,
+-- especially reloading a font using this feature based on it's \fontname
+-- will load a wrong size.
+-- Only supported for base mode since the other modes don't make sense for
+-- math fonts.
+local calculatescale = fonts.constructors.calculatescale
+function fonts.constructors.calculatescale(tfmdata, size, _, spec)
+    local parameters = tfmdata.parameters
+    local sizepercentage = parameters and parameters.sizepercentage
+    if sizepercentage then
+        size = size * sizepercentage / 100
+    end
+    return calculatescale(tfmdata, size, _, spec)
+end
+
+fonts.constructors.features.otf.register {
+    name = 'mathsize',
+    description = 'Scale math fonts based on their scriptpercentage parameters',
+    initializers = {
+        base = function(tfmdata, mathsize)
+            local mathdata = tfmdata.shared.rawdata.metadata.math
+            if not mathdata then return end
+
+            if mathsize == 1 then
+                tfmdata.parameters.sizepercentage = 100
+            elseif mathsize == 2 then
+                tfmdata.parameters.sizepercentage = mathdata.ScriptPercentScaleDown
+            elseif mathsize == 3 then
+                tfmdata.parameters.sizepercentage = mathdata.ScriptScriptPercentScaleDown
+            end
+        end,
+    },
+}
 
 return function ()
     if not fonts and fonts.handlers then

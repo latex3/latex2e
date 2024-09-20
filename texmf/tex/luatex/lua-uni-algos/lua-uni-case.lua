@@ -1,5 +1,5 @@
 -- lua-uni-graphemes.lua
--- Copyright 2020--2021 Marcel Krüger
+-- Copyright 2020--2022 Marcel Krüger
 --
 -- This work may be distributed and/or modified under the
 -- conditions of the LaTeX Project Public License, either version 1.3

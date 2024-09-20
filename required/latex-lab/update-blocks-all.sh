@@ -1,9 +1,11 @@
-#l3build save -cconfig-block-tagging -epdftex,luatex \
-#l3build save -cconfig-block-tagging -epdftex \
+#l3build save -cconfig-block -epdftex,luatex \
+#l3build save -cconfig-block -epdftex \
 
 
-l3build save -cconfig-block-tagging -epdftex,luatex \
+l3build save -cconfig-block -epdftex,luatex \
 	blocks-item-01 \
+	blocks-item-02 \
+	blocks-item-03 \
 	blocks-000 \
 	blocks-enumerate-01 \
 	blocks-enumerate-01b \
@@ -18,6 +20,7 @@ l3build save -cconfig-block-tagging -epdftex,luatex \
 	blocks-list-02 \
 	blocks-list-02b \
 	blocks-list-03b \
+	blocks-list-04 \
 	blocks-description-01 \
 	blocks-description-01b \
 	blocks-description-02b \
@@ -25,6 +28,7 @@ l3build save -cconfig-block-tagging -epdftex,luatex \
 	blocks-hyperref-01 \
 	blocks-theorem-01 \
 	blocks-theorem-02 \
+	blocks-theorem-03 \
         blocks-quote-01 \
         blocks-quote-02 \
         blocks-trivlist-00 \
@@ -36,7 +40,9 @@ l3build save -cconfig-block-tagging -epdftex,luatex \
         ptag-001 \
         problem-blocks-tabbing \
         gallery-III \
-        gallery-III-with-sec
+        gallery-III-with-sec \
+	tagging-0097 \
+	tagging-0097b
 
 
 exit

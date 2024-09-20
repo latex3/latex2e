@@ -264,8 +264,13 @@ function parsers.groupedsplitat(symbol,withaction)
     if not pattern then
         local symbols   = S(symbol)
         local separator = space^0 * symbols * space^0
-        local value     = lbrace * C((nobrace + nestedbraces)^0) * rbrace
-                        + C((nestedbraces + (1-(space^0*(symbols+P(-1)))))^0)
+        local value     =
+                        lbrace
+                        * C((nobrace + nestedbraces)^0)
+                     -- * rbrace
+                        * (rbrace * (#symbols + P(-1))) -- new per 2023-03-11
+                        +
+                        C((nestedbraces + (1-(space^0*(symbols+P(-1)))))^0)
         if withaction then
             local withvalue = Carg(1) * value / function(f,s) return f(s) end
             pattern = spaces * withvalue * (separator*withvalue)^0
@@ -378,9 +383,25 @@ hashes.settings_to_set =  table.setmetatableindex(function(t,k) -- experiment, n
     return v
 end)
 
+function parsers.settings_to_set(str)
+    return str and lpegmatch(pattern,str) or { }
+end
+
+local pattern = Ct((C((1-S(", "))^1) * S(", ")^0)^1)
+
+hashes.settings_to_list =  table.setmetatableindex(function(t,k) -- experiment, not public
+    local v = k and lpegmatch(pattern,k) or { }
+    t[k] = v
+    return v
+end)
+
+-- inspect(hashes.settings_to_set["a,b, c, d"])
+-- inspect(hashes.settings_to_list["a,b, c, d"])
+
 -- as we use a next, we are not sure when the gc kicks in
 
-getmetatable(hashes.settings_to_set).__mode = "kv" -- could be an option (maybe sharing makes sense)
+getmetatable(hashes.settings_to_set ).__mode = "kv" -- could be an option (maybe sharing makes sense)
+getmetatable(hashes.settings_to_list).__mode = "kv" -- could be an option (maybe sharing makes sense)
 
 function parsers.simple_hash_to_string(h, separator)
     local t  = { }

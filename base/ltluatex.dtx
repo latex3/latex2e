@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-% Copyright (C) 2015-2023
+% Copyright (C) 2015-2024
 % The LaTeX Project and any individual authors listed elsewhere
 % in this file.
 %
@@ -23,16 +23,22 @@
 %<tex>  \ProvidesFile\undefined\begingroup\def\ProvidesFile
 %<tex>  #1#2[#3]{\endgroup\immediate\write-1{File: #1 #3}}
 %<tex>\fi
-%<plain>\ProvidesFile{ltluatex.tex}%
-%<*driver>
+%<*dtx>
 \ProvidesFile{ltluatex.dtx}
-%</driver>
-%<*tex>
-[2023/01/19 v1.2b
-%</tex>
-%<plain>  LuaTeX support for plain TeX (core)
-%<*tex>
+%</dtx>
+%<plain>\ProvidesFile{ltluatex.tex}
+%<*plain>
+% \fi
+% \ProvidesFile{ltluatex.dtx}
+[2024/08/16 v1.2e
+% LaTeX Kernel (LuaTeX support)^^A
+%\iffalse
+%<plain>   LuaTeX support for plain TeX (core)%
+%\fi
 ]
+% \iffalse
+%</plain>  
+%<*tex>
 \edef\etatcatcode{\the\catcode`\@}
 \catcode`\@=11
 %</tex>
@@ -324,6 +330,8 @@
 % field |date| in the usual \LaTeX{} format |yyyy/mm/dd|. Optional fields
 % |version| (a string) and |description| may be used if present. This
 % information will be recorded in the log. Other fields are ignored.
+% If the |version| begins with a digit, a \texttt{v} will be added at the
+% start in the log.
 %
 % \noindent
 % \DescribeMacro{module_info}
@@ -414,7 +422,7 @@
 % same callback and descriptions.
 %
 % The callback functions do not have to be registered yet when the functions is called.
-% Ony the constraints for which both callback descriptions refer to callbacks
+% Only the constraints for which both callback descriptions refer to callbacks
 % registered at the time the callback is called will have an effect.
 %
 % \endgroup
@@ -541,9 +549,9 @@
                 \csname globbox\endcsname
 %    \end{macrocode}
 %
-% Define|\e@alloc| as in latex (the existing macros in |etex.src|
+% Define|\e@alloc| as in \LaTeX{} (the existing macros in |etex.src| are
 % hard to extend to further register types as they assume specific
-% 26x and 27x count range. For compatibility the existing register
+% 26x and 27x count range). For compatibility the existing register
 % allocation is not changed.
 %
 %    \begin{macrocode}
@@ -998,6 +1006,8 @@ local modules = modules or { }
 % \begin{macro}{provides_module}
 % \changes{v1.0a}{2015/09/24}{Function added}
 % \changes{v1.0f}{2015/10/03}{use luatexbase\_log}
+% \changes{v1.2d}{2024/06/04}{Add \texttt{v} to version string if required (gh/1364)}
+% \changes{v1.2e}{2024/08/16}{Support missing version string (gh/1443)}
 % Local function to write to the log.
 %    \begin{macrocode}
 local function luatexbase_log(text)
@@ -1018,7 +1028,7 @@ local function provides_module(info)
   luatexbase_log(
     "Lua module: " .. info.name
       .. spaced(info.date)
-      .. spaced(info.version)
+      .. spaced(info.version and string_gsub(info.version or "","^(%d)","v%1"))
       .. spaced(info.description)
   )
   modules[info.name] = info
@@ -1284,6 +1294,7 @@ luatexbase.new_chunkname = new_chunkname
 %
 % \begin{macro}{new_luafunction}
 % \changes{v1.1i}{2018/10/21}{Function added}
+% \changes{v1.2c}{2023/07/02}{Ensure existing table entries not overwritten gh/1100}
 % Much the same as for attribute allocation in Lua.
 % The optional \meta{name} argument is used in the log if given.
 %    \begin{macrocode}
@@ -1291,7 +1302,11 @@ local luafunction_count_name =
                          luafunction_count_name or "e@alloc@luafunction@count"
 local function new_luafunction(name)
   tex_setcount("global", luafunction_count_name,
-                         tex_count[luafunction_count_name] + 1)
+                         math.max(
+                           #(lua.get_functions_table()),
+                           tex_count[luafunction_count_name])
+                          + 1)
+  lua.get_functions_table()[tex_count[luafunction_count_name]] = false
   if tex_count[luafunction_count_name] > 65534 then
     luatexbase_error("No room for a new luafunction register")
   end
@@ -1325,7 +1340,7 @@ luatexbase.new_luafunction = new_luafunction
 % Additionally |callbackrules| describes the ordering constraints: It contains two
 % element tables with the descriptions of the constrained callback implementations.
 % It can additionally contain a |type| entry indicating the kind of rule. A missing
-% value indicates a normal ordering contraint.
+% value indicates a normal ordering constraint.
 %
 % \changes{v1.2a}{2022/10/03}{Add rules for callback ordering}
 %    \begin{macrocode}
@@ -1387,7 +1402,7 @@ local callbacklist = setmetatable({}, {
           end
           list[i] = current.value
         else
-          -- Cycle occured. TODO: Show cycle for debugging
+          -- Cycle occurred. TODO: Show cycle for debugging
           -- list[i] = ...
           local remaining = {}
           for name, entry in next, meta do
@@ -1421,7 +1436,7 @@ local callbacklist = setmetatable({}, {
           for i=2, length//2 do
             cycle[i], cycle[length + 1 - i] = cycle[length + 1 - i], cycle[i]
           end
-          error('Cycle occured at ' .. table.concat(cycle, ' -> ', 1, length))
+          error('Cycle occurred at ' .. table.concat(cycle, ' -> ', 1, length))
         end
       end
     end
@@ -2147,12 +2162,13 @@ luatexbase.uninstall = uninstall
 % \begin{macro}{mlist_to_hlist}
 % \changes{v1.1l}{2020/02/02}{|pre/post_mlist_to_hlist| added}
 % \changes{v1.1y}{2022/08/13}{Use shared\_callback system for pre/post/mlist_to_hlist}
+% \changes{v1.2c}{2023/08/03}{Fix callback type of post_mlist_to_hlist_callback}
 %   To emulate these callbacks, the ``real'' |mlist_to_hlist| is replaced by a
 %   wrapper calling the wrappers before and after.
 %    \begin{macrocode}
 create_callback('pre_mlist_to_hlist_filter', 'list')
 create_callback('mlist_to_hlist', 'exclusive', node.mlist_to_hlist)
-create_callback('post_mlist_to_hlist_filter', 'list')
+create_callback('post_mlist_to_hlist_filter', 'reverselist')
 function shared_callbacks.mlist_to_hlist.handler(head, display_type, need_penalties)
   local current = call_callback("pre_mlist_to_hlist_filter", head, display_type, need_penalties)
   if current == false then
