@@ -33,7 +33,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{lttagging.dtx}
-             [2024/08/10 v1.0g LaTeX Kernel (tagging support)]
+             [2024/09/17 v1.0h LaTeX Kernel (tagging support)]
 % \iffalse
 \documentclass{l3doc}
 \GetFileInfo{lttagging.dtx}
@@ -75,6 +75,9 @@
 %
 %  \DescribeMacro\SuspendTagging
 %  \DescribeMacro\ResumeTagging
+%  \DescribeMacro\tag_suspend:n
+%  \DescribeMacro\tag_resume:n
+
 %  
 %  The are places in code where it is import top stop any tagging
 %  activities, e.g., when we are doing trial typesetting that it is
@@ -88,10 +91,8 @@
 %  both take string argument that is used for debugging to easily
 %  identify why tagging was suspended or restarted, for example, in
 %  \pkg{tabularx} you find \verb=\SuspendTagging{tabularx}=. By default
-%  they two commands do nothing.
+%  these four commands do nothing.
 %
-%  TODO: the corresponding L3 layer commands should also have a dummy
-%  definition in the kernel!
 %
 % \DescribeMacro\UseTaggingSocket
 % \DescribeMacro\tag_socket_use:n
@@ -144,34 +145,16 @@
 %
 %
 %
-%  \begin{macro}{\SuspendTagging,\ResumeTagging}
+%  \begin{macro}{\tag_suspend:n,\tag_resume:n,\SuspendTagging,\ResumeTagging}
 %    
-%    In the kernel, these two commands get dummy definitions so that
+%    In the kernel, these commands get dummy definitions so that
 %    they can be used without harm in packages. The real definition is
 %    used when tagging gets enabled.
 %    \begin{macrocode}
-\cs_new_eq:NN \SuspendTagging \use_none:n  
-\cs_new_eq:NN \ResumeTagging  \use_none:n
-%    \end{macrocode}
-%
-%    A simplified version of this definition should move to
-%    \pkg{tagpdf} and dropped here, eventually.
-%    \begin{macrocode}
-\AddToHook{begindocument/before}{
-  \cs_if_exist:NT \tag_stop:n
-  { 
-    \cs_set:Npn \SuspendTagging #1 {
-%    \end{macrocode}%
-%    This stops tagging and also disables all tagging sockets so we are done.
-%    \begin{macrocode}
-      \tag_stop:n {#1} 
-    }
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-    \cs_set:Npn \ResumeTagging #1 { \tag_start:n {#1} }
-  }
-}
+\cs_new_eq:NN \tag_suspend:n \use_none:n  
+\cs_new_eq:NN \tag_resume:n  \use_none:n
+\cs_new_protected:Npn \SuspendTagging #1 { \tag_suspend:n {#1} }
+\cs_new_protected:Npn \ResumeTagging #1  { \tag_resume:n {#1} }
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -261,6 +244,13 @@
 \ExplSyntaxOff 
 %    \end{macrocode}
 % \end{plugdecl}
+% 
+% \begin{socketdecl}{tagsupport/para/begin,tagsupport/para/end}
+% These sockets are currently defined in tagpdf. They overwrite
+% definitions in the latex-lab-block code. There is also a simpler
+% definition that probably should be a general socket too.
+% TODO: move this into lttagging.
+% \end{socketdecl}
 
 % \subsubsection{Tagging sockets for toc}
 
@@ -295,7 +285,7 @@
 %    \end{macrocode}
 % \end{socketdecl}
 % 
-% \subsection{Tagging support for table/tabular packages}
+% \subsubsection{Tagging support for table/tabular packages}
 %
 % The code uses a number of sockets to inject the tagging
 % commands. These can be easily set to a noop-plug in case the
@@ -433,10 +423,57 @@
 %    \end{macrocode}
 % \end{socketdecl}
 %
+% \subsubsection{Tagging Support for floats}
+% 
+% \begin{socketdecl}{tagsupport/float/hmode/begin,
+%                    tagsupport/float/hmode/end}
+%  These sockets are used if the float is called in 
+%  hmode.
+% \changes{v1.0h}{2024/09/13}{Sockets for floats added}
+%    \begin{macrocode}
+\NewSocket{tagsupport/float/hmode/begin}{0}
+\NewSocket{tagsupport/float/hmode/end}{0}
+%    \end{macrocode}
+% \end{socketdecl}
 %
+% \begin{socketdecl}{tagsupport/float/begin,
+%                    tagsupport/float/end}
+%  These sockets start and stop the float structure.
+%    \begin{macrocode}
+\NewSocket{tagsupport/float/begin}{0}
+\NewSocket{tagsupport/float/end}{0}
+%    \end{macrocode}
+% \end{socketdecl}
 %
-%
-%
+% 
+% \begin{socketdecl}{tagsupport/caption/begin,
+%                    tagsupport/caption/end}
+%  These sockets are used in \cs{@makecaption}.
+%  They open and close the \texttt{Caption} structure.
+%  Their default plugs assume that they are used in 
+%  vmode. The argument of the begin socket is
+%  the structure number of the parent float. If it is
+%  empty the current structure number is used. 
+%    \begin{macrocode}
+\NewSocket{tagsupport/caption/begin}{1}
+\NewSocket{tagsupport/caption/end}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+% 
+% \begin{socketdecl}{tagsupport/caption/label/begin,
+%                    tagsupport/caption/label/end}
+%  These sockets are used in \cs{@makecaption} around the
+%  label. Their default plugs ensure that 
+%  the label is outside the paragraph and that 
+%  the rest of the caption uses flattened para mode. If the
+%  caption is not in a hbox, the \texttt{para/begin} 
+%  socket should follow to properly start the paragraph. 
+%    \begin{macrocode}
+\NewSocket{tagsupport/caption/label/begin}{0}
+\NewSocket{tagsupport/caption/label/end}{0} 
+%    \end{macrocode}
+% \end{socketdecl}
+% 
 % \section{For lttab.dtx parked here for now}
 %
 %    
