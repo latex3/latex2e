@@ -16,8 +16,8 @@
 %
 % for those people who are interested or want to report an issue.
 %
-\def\ltlabfirstaiddate{2024-08-11}
-\def\ltlabfirstaidversion{0.85e}
+\def\ltlabfirstaiddate{2024-09-26}
+\def\ltlabfirstaidversion{0.85f}
 %<*driver>
 \documentclass{l3doc}
 \EnableCrossrefs
@@ -87,7 +87,6 @@
       } }
   \exp_args:Ncx\str_if_eq:onT{ver@#1.#2}{#3}
 }
-\ExplSyntaxOff
 %    \end{macrocode}
 %  \end{macro}
 
@@ -105,7 +104,168 @@
  {\def\@author{\authors}}  
 %    \end{macrocode}
 %
+% \subsection{ams classes and amsthm}
+% The amsart, amsbook and amsproc classes redefine the theorem code
+% and this breaks the tagging added by the block code. The following
+% reenables tagging. It does \emph{not} give a completly identical output
+% (similar to the new theorem code, 
+%  see \url{https://github.com/latex3/tagging-project/issues/715}). 
+%  The code also does not try to use sockets yet, as the theorem definitions
+%  in the block code don't do that yet either.  
 %
+%    \begin{macrocode}
+\AddToHook{class/amsart/after}[latex-lab-testphase-firstaid/amsthm]
+ {\tag_if_active:T{\@@_firstaid_amsthm:}}
+\AddToHook{class/amsbook/after}[latex-lab-testphase-firstaid/amsthm]
+ {\tag_if_active:T{\@@_firstaid_amsthm:}}
+\AddToHook{class/amsproc/after}[latex-lab-testphase-firstaid/amsthm]
+ {\tag_if_active:T{\@@_firstaid_amsthm:}} 
+\AddToHook{package/amsthm/after}[latex-lab-testphase-firstaid/amsthm]
+ {\tag_if_active:T{\@@_firstaid_amsthm:}} 
+%    \end{macrocode}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_firstaid_amsthm:
+  {
+%    \end{macrocode}
+%  \cs{@endtheorem} must use the endblock code
+%    \begin{macrocode}
+    \def\@endtheorem{\endblockenv}  
+%    \end{macrocode}
+% In \cs{@thm} we have to remove the \cs{trivlist}
+%    \begin{macrocode}
+    \RenewDocumentCommand\@thm{mmmO{}}{%
+      \ifhmode\unskip\unskip\par\fi
+      \normalfont
+      \let\thmheadnl\relax
+      \let\thm@swap\@gobble
+      \thm@notefont{\fontseries\mddefault\upshape}%
+      \thm@headpunct{.}% add period after heading
+      \thm@headsep 5\p@ plus\p@ minus\p@\relax
+      \thm@space@setup
+      ##1% style overrides
+      \@topsep \thm@preskip               % used by thm head
+      \@topsepadd \thm@postskip           % used by \@endparenv
+%    \end{macrocode}
+% We store the counter name so that the anchor can make use of it.
+%    \begin{macrocode}
+      \tl_set:Nn \l__block_thm_current_counter_tl{##2}
+      \tl_if_empty:nTF{##2}
+       {
+        \@begintheorem{##3}{}[##4] 
+       }
+       {
+         \@kernel@refstepcounter{##2}
+         \@begintheorem{##3}{\csname the##2\endcsname}[##4]
+       }
+      }
+%    \end{macrocode}
+% \cs{@begintheorem} has a larger number of changes
+%    \begin{macrocode}
+    \def\@begintheorem##1##2[##3]{%
+%    \end{macrocode}
+% We use the theorem instance.
+%    \begin{macrocode}
+      \UseInstance{blockenv}{theorem}{}
+%    \end{macrocode}
+% While create the caption/label we disable para-tagging.
+%    \begin{macrocode}
+      \tagpdfparaOff
+      \mode_leave_vertical:
+%    \end{macrocode}
+% The anchor for links
+%    \begin{macrocode}
+      \MakeLinkTarget{\l__block_thm_current_counter_tl}
+      \group_begin:
+      \normalfont
+      \the\thm@headfont \thm@indent
+        \@ifempty{##1}
+         {\let\thmname\@gobble}
+%    \end{macrocode}
+% we insert the MC and the Lbl structure into \cs{thmname},
+% \cs{thmnumber} and \cs{thmnote}. This will also work
+% with new theorem style as long as they use these command.
+%    \begin{macrocode}
+         {\def\thmname####1{\tag_mc_begin:n {}####1\tag_mc_end:}}%
+        \@ifempty{##2}
+         {\let\thmnumber\@gobble}
+         {\def\thmnumber####1
+           {\tag_struct_begin:n{tag=Lbl}\tag_mc_begin:n {}
+             ####1
+            \tag_mc_end:\tag_struct_end:}}%
+        \@ifempty{##3}
+         {\let\thmnote\@gobble}
+         {\def\thmnote####1{\tag_mc_begin:n{}####1\tag_mc_end:}}%
+        \thm@swap\swappedhead\thmhead{##1}{##2}{##3}%      
+        \thmheadnl % possibly a newline.
+        \hskip\thm@headsep
+      \group_end: 
+%    \end{macrocode}
+% Now we restart para tagging and start a paragraph. The socket
+% is currently defined in tagpdf, so the code should only
+% be used if tagging is active!
+%    \begin{macrocode}
+       \tagpdfparaOn
+       \UseTaggingSocket{para/begin}  %
+      \ignorespaces}  
+%    \end{macrocode}
+% This redefines the standard styles for the theorem heads.
+% \cs{thm@headpunct} has been moved into the head code
+% to make tagging more easier. 
+%    \begin{macrocode}
+    \def\thmhead@plain##1##2##3{%
+      \tag_struct_begin:n{tag=Caption}  
+      \thmname{##1}
+      \thmnumber{
+        \@ifnotempty{##1}{~}\@upn{##2}   
+       }%   
+      \thmnote{\pdffakespace\space{\the\thm@notefont(##3)}}
+      %moved for easier tagging
+      \tag_mc_begin:n{}\the\thm@headpunct\tag_mc_end:  
+      \tag_struct_end:
+      }
+    \let\thmhead\thmhead@plain
+    \def\swappedhead##1##2##3{%
+      \tag_struct_begin:n{tag=Caption}
+      \thmnumber{##2}
+      \thmname{\@ifnotempty{##2}{\nobreakspace}##1}
+      \thmnote{\pdffakespace\space{\the\thm@notefont(##3)}}
+      \tag_mc_begin:n{}\the\thm@headpunct\tag_mc_end:
+      \tag_struct_end:
+     }  
+    \let\swappedhead@plain=\swappedhead 
+%    \end{macrocode}
+% At last some adjustments for the proof environment.
+% The qed symbols use a drawn box by default. We add an actualtext.
+%    \begin{macrocode}
+    \renewcommand{\openbox}{\leavevmode
+      \hbox to.77778em{\pdf_bdc:nn{Span}{/ActualText<FEFF220E>}%
+      \pdffakespace\hfil\vrule
+      \vbox to.675em{\hrule width.6em\vfil\hrule}%
+      \vrule\hfil\pdf_emc:}}  
+%    \end{macrocode}
+% And redefine proof to no longer use a trivlist.
+%    \begin{macrocode}
+    \renewenvironment{proof}[1][\proofname]{\par
+      \pushQED{\qed}%
+      \UseInstance{blockenv}{theorem}{beginsep=6\p@\@plus6\p@}
+      \normalfont
+      \tagpdfparaOff 
+      \AddToHookNext{para/begin}
+       {\tag_struct_begin:n{tag=Caption}
+        \tag_mc_begin:n{}%
+         \textit{##1\@addpunct{.}}%
+        \tag_mc_end:
+        \tag_struct_end:
+        \tagpdfparaOn
+        \UseTaggingSocket{para/begin}
+        \pdffakespace\hspace{\labelsep}} 
+      \ignorespaces
+    }{%
+      \popQED\endblockenv\par
+     }
+  }
+\ExplSyntaxOff
+%    \end{macrocode}
 %
 % \subsection{verse}
 %
