@@ -16,8 +16,8 @@
 %
 % for those people who are interested or want to report an issue.
 %
-\def\ltlabfirstaiddate{2024-09-26}
-\def\ltlabfirstaidversion{0.85f}
+\def\ltlabfirstaiddate{2024-10-04}
+\def\ltlabfirstaidversion{0.85g}
 %<*driver>
 \documentclass{l3doc}
 \EnableCrossrefs
@@ -53,7 +53,9 @@
 % 
 % Similar to the main firstaid package the goal is to remove the 
 % patches once the packages have been updated.
-
+%
+% \changes{v0.85g}{2024/10/04}{Removed firstaid for blindtext. No longer needed with new doenpe-code.}
+% \changes{v0.85g}{2024/10/04}{Added firstaid for fancyvrb.}
 % \section{Implementation}
 %
 %    \begin{macrocode}
@@ -372,50 +374,6 @@
 %\end{verbatim}
 %
 %
-% \subsection{blindtext}
-%
-% The blindtext package generates lists with nested \cs{loop} command.
-% The inner loop introduces a group around the list which error when lists are tagged
-% as \cs{@doendpe} is lost.
-%    \begin{macrocode}
-\AddToHook{file/blindtext.sty/after}[latex-lab-firstaid]{%
-  \FirstAidNeededT{blindtext}{sty}{\blindfiledate\space\blindfileversion\space%
-                 blindtext-Package}%
-   {%
-    \renewcommand{\blind@items}{%
-       \setcounter{blind@listcount}{1}%
-      \loop
-      \ifblind@optional
-        \ifblind@long
-          \item[\blindtext@countitem] \blindtext@text
-        \else
-          \item[\blindtext@count] \blindtext@item
-        \fi
-        \else % \blind@optionalfalse
-          \ifblind@long
-            \item \blindtext@text
-          \else
-            \item \blindtext@countitem
-          \fi
-        \fi % \ifblind@optional
-        {%
-          \loop
-          \ifnum\value{blindlistlevel}>\value{blindlist@level}%
-            \stepcounter{blind@levelcount}%
-            \blind@list[\value{blindlist}]\relax
-            \addtocounter{blind@levelcount}{-1}%
-            \setcounter{blind@listcount}{1}%
-          \repeat
-        \expandafter}\if@endpe\@doendpe\fi % <----------changed
-      \ifnum\value{blind@listcount}<\value{blindlist}%
-        \stepcounter{blind@listcount}%
-      \repeat
-    }
-   }%
- }
-%    \end{macrocode}
-%
-%
 % \subsection{cleveref}
 %
 % The cleveref package redefines \cs{@makefntext} and this means that the patches in
@@ -452,6 +410,7 @@
 % See also issue \url{https://github.com/latex3/tagging-project/issues/69}
 % 
 % 
+%    \begin{macrocode}
 \ExplSyntaxOn
 \AddToHook{package/booktabs/after} 
  {
@@ -476,8 +435,145 @@
     \tag_mc_end: \int_gdecr:N \g__tbl_row_int 
     \cr} 
   }
-\ExplSyntaxOff 
+\ExplSyntaxOff   
+%    \end{macrocode}
+
 %
+% \subsection{fancyvrb}
+% The firstaid adds first partial tagging support to the environments 
+% of fancyvrb (inline verbatim is untested). 
+% This supports then also packages like minted which internally uses fancyvrb
+% and classes like l3doc (where currently the verbatim environment based on fancyvrb
+% is overwritten by the block code).
+% The environments are surrounded by a \texttt{verbatim} structure, 
+% every line by a \texttt{codeline} 
+% structure (this requires the block code, but firstaid should be used only with
+% phase-III anyway). Line numbers are tagged as Lbl, currently outside of the 
+% \texttt{codeline} structure. The frame lines are marked as artifact. 
+% 
+% \begin{macro}{\FV@LeaveVMode}
+% If we are in vmode we have to open a text-unit structure, if we are 
+% in hmode we have to set para mode to flattened before the fancyhdr code
+% issues the\cs{par}. The closing of the text-unit structure is handled by the
+% doendpe code in the block code.
+%    \begin{macrocode}
+\ExplSyntaxOn
+\AddToHook{package/fancyvrb/after}
+{
+    \def\FV@LeaveVMode{%
+      \if@noskipsec
+        \leavevmode
+      \else
+        \if@FV@ResetMargins\if@inlabel\leavevmode\fi\fi
+      \fi
+      \ifvmode
+        \@noparlisttrue
+        \__tag_gincr_para_main_begin_int:
+        \tag_struct_begin:n{tag=\l__tag_para_main_tag_tl}    
+      \else
+        \bool_set_true:N\l__tag_para_flattened_bool
+        \@noparlistfalse
+        \unskip\par
+      \fi    
+      }
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\FV@List}
+% At the begin of the list code we have to tag the frame as artifact
+% and start the \texttt{verbatim} structure
+%    \begin{macrocode}
+    \def\FV@List#1{%
+      \begingroup
+      \FV@UseKeyValues
+      \FV@LeaveVMode
+      \if@inlabel\else\setbox\@labels=\box\voidb@x\fi
+      \FV@ListNesting{#1}%
+      \FV@ListParameterHook
+      \FV@ListVSpace
+      \FV@SetLineWidth
+      \FV@InterLinePenalty
+      \let\FV@ProcessLine\FV@ListProcessLine@i
+      \FV@CatCodes
+      \FV@FormattingPrep
+      \FV@ObeyTabsInit
+      \cs_if_exist:NT \FV@BeginListFrame
+        {
+         \tag_mc_begin:n{artifact}
+         \FV@BeginListFrame
+         \tag_mc_end:
+        } 
+      \tag_struct_begin:n{tag=verbatim}     
+      }
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{\FV@EndList}
+% At the end of the list code we close the \texttt{verbatim} structure and
+% tag the frame as artifact.
+%    \begin{macrocode}
+    \def\FV@EndList{%
+      \FV@ListProcessLastLine
+      \tag_struct_end:
+      \cs_if_exist:NT \FV@EndListFrame
+        {
+         \tag_mc_begin:n{artifact}
+         \FV@EndListFrame
+         \tag_mc_end:
+        } 
+      \@endparenv    
+      \endgroup  
+      \@endpetrue
+      }  
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\FV@ListProcessLine}
+% At last the tagging of the code lines. Here we have to tag also
+% numbers and frame parts if they exist.
+%    \begin{macrocode}
+    \def\FV@ListProcessLine#1{%
+      \hbox to \hsize{%
+        \kern\leftmargin
+        \hbox to \linewidth{%
+          \cs_if_exist:NT \FV@LeftListNumber
+           {
+             \tag_struct_begin:n{tag=Lbl}
+             \tag_mc_begin:n{} 
+             \FV@LeftListNumber
+             \tag_mc_end:
+             \tag_struct_end:
+           }
+          \cs_if_exist:NT \FV@LeftListFrame
+           {
+             \tag_mc_begin:n{artifact}
+             \FV@LeftListFrame
+             \tag_mc_end:
+           }
+          \tag_struct_begin:n{tag=codeline}
+          \tag_mc_begin:n{}% 
+          \FancyVerbFormatLine{#1}%
+          \tag_mc_end:
+          \tag_struct_end:\hss
+          \cs_if_exist:NT \FV@RightListFrame
+           {
+             \tag_mc_begin:n{artifact}
+             \FV@RightListFrame
+             \tag_mc_end:
+           }
+          \cs_if_exist:NT \FV@RightListNumber
+           {
+             \tag_struct_begin:n{tag=Lbl}
+             \tag_mc_begin:n{} 
+             \FV@RightListNumber
+             \tag_mc_begin:n{}
+             \tag_struct_end:
+           }      
+          }
+          \hss}}
+  }          
+\ExplSyntaxOff  
+%    \end{macrocode}
+% \end{macro}
 %    \begin{macrocode}
 %</package>
 %    \end{macrocode}

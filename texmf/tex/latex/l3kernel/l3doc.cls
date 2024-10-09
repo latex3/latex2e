@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{calc}
-\ProvidesExplClass{l3doc}{2024-09-10}{}
+\ProvidesExplClass{l3doc}{2024-10-09}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -91,8 +91,8 @@
 \bool_new:N \l__codedoc_in_implementation_bool
 \bool_new:N \g__codedoc_typeset_documentation_bool
 \bool_new:N \g__codedoc_typeset_implementation_bool
-\bool_set_true:N \g__codedoc_typeset_documentation_bool
-\bool_set_true:N \g__codedoc_typeset_implementation_bool
+\bool_gset_true:N \g__codedoc_typeset_documentation_bool
+\bool_gset_true:N \g__codedoc_typeset_implementation_bool
 \tl_new:N \g__codedoc_base_name_tl
 \prop_new:N \l__codedoc_variants_prop
 \clist_new:N \l__codedoc_function_label_clist
@@ -439,12 +439,23 @@
 \raggedbottom
 \bool_if:NT \g__codedoc_lmodern_bool
   {
-    \RequirePackage[T1]{fontenc}
-    \RequirePackage{lmodern}
-    \group_begin:
-      \ttfamily
-      \DeclareFontShape{T1}{lmtt}{m}{it}{<->ec-lmtto10}{}
-    \group_end:
+    \bool_lazy_or:nnTF
+      { \sys_if_engine_luatex_p: }{ \sys_if_engine_xetex_p: }
+      {
+        \group_begin:
+          \ttfamily
+          \DeclareFontShape{TU}{lmtt}{m}{it}
+            {<-> \UnicodeFontFile{lmmonoslant10-regular}{}}{}
+        \group_end:
+      }
+      {
+        \RequirePackage[T1]{fontenc}
+        \RequirePackage{lmodern}
+        \group_begin:
+          \ttfamily
+          \DeclareFontShape{T1}{lmtt}{m}{it}{<->ec-lmtto10}{}
+        \group_end:
+      }
   }
 \RequirePackage{hypdoc}
 \cs_gset:Npn \MakePrivateLetters
@@ -1791,7 +1802,7 @@
   {
     \clist_map_inline:nn {#1}
       {
-        \clist_put_right:Nn \g_docinput_clist {##1}
+        \clist_gput_right:Nn \g_docinput_clist {##1}
         \__codedoc_input:n {##1}
       }
   }
@@ -1885,7 +1896,7 @@
           { MMMMV - \filesep \int_use:N \c@CodelineNo }
       }
   }
-\tl_gclear:N \filesep
+\tl_clear_new:N \filesep
 \cs_new_protected:Npn \__codedoc_index_page_hc:nn #1#2
   {
     \protected@write \@indexfile {}
