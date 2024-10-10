@@ -1,0 +1,266 @@
+% \iffalse meta-comment
+%
+%% File: latex-lab-tikz.dtx (C) Copyright 2023 LaTeX Project
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+%
+% The development version of the bundle can be found below
+%
+%    https://github.com/latex3/latex2e/required/latex-lab
+%
+% for those people who are interested or want to report an issue.
+%
+\def\ltlabtikzdate{2024-10-09}
+\def\ltlabtikzversion{0.80a}
+%<*driver>
+\documentclass{l3doc}
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{latex-lab-tikz.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+% \newcommand\tikzname{Ti\emph {k}Z}
+% \title{The \textsf{latex-lab-tikz} package\\
+% Support for the tagging of \tikzname\ pictures }
+% \author{\LaTeX{} Project\thanks{Initial implementation done by Ulrike Fischer}}
+% \date{v\ltlabtikzversion\ \ltlabtikzdate}
+%
+% \maketitle
+%
+% \newcommand{\xt}[1]{\textsl{\textsf{#1}}}
+% \newcommand{\TODO}[1]{\textbf{[TODO:} #1\textbf{]}}
+% \newcommand{\docclass}{document class \marginpar{\raggedright document class
+% customizations}}
+% \newcommand\tikzname{Ti\emph {k}Z}
+% \providecommand\hook[1]{\texttt{#1}}
+% 
+% \NewDocElement[printtype=\textit{socket},idxtype=socket,idxgroup=Sockets]{Socket}{socketdecl}
+% \NewDocElement[printtype=\textit{hook},idxtype=hook,idxgroup=Hooks]{Hook}{hookdecl}
+% \NewDocElement[printtype=\textit{plug},idxtype=plug,idxgroup=Plugs]{Plug}{plugdecl}
+%
+
+%
+% \begin{abstract}
+% \end{abstract}
+%
+% \section{Introduction}
+%
+% Tagging of \tikzname\ pictures is non trivial. 
+% At first such pictures have a large variaty of purposes
+% \begin{itemize}
+% \item they can be purely ornamental and decorative, e.g. some page border. This should normally 
+% be tagged as artifact. 
+% \item they can show a illustrative figure, similar to png graphics included with
+% \cs{includegraphics}. This should normally be tagged as a Figure structure with alternative text
+% and the content should be an artifact again.
+% \item they can be meant as normal text. For example the todonotes package uses a
+% \tikzname\ picture to surround the text in a node with some colored background. 
+% In this case the text should tagged e.g. as an Aside. 
+% \item they can represent a symbol. Then we want to tag a Span or Figure with an /ActualText.
+% \item and naturally there can be all sort of mixtures of these elements, e.g. when a tcolorbox
+% surrounds text with lots of decoration but also includes a title. 
+% \end{itemize}
+% 
+% At second \tikzname\ pictures uses lots of boxes and similar and moves them around 
+% and that makes is not easy
+% to get the tagging right -- at least with pdflatex where one has to pay attention to
+% insert the literals at the right time.
+% 
+% At third at least when the \tikzname\ picture is tagged as Figure one normally should
+% calculate the BBox. This is currently not really possible without low-level hacking 
+% into the code.
+% 
+% The following is a first try to tag at least some of the tikz.
+% It is incomplete and should be used with care. Resulting structures and contents should
+% be checked!
+% 
+% The main idea of the implementation is to use socket that allow to change the
+% purpose of the \tikzname\ picture. This must be done before the actual environment as
+% \tikzname\ processes the keys too late to allow to do this in the optional argument.
+% 
+% 
+% \section{Implementation}
+%    \begin{macrocode}
+%<*package>
+%<@@=tag>
+%    \end{macrocode}
+%    \begin{macrocode}
+\ProvidesExplPackage {latex-lab-testphase-tikz} {\ltlabtikzdate} {\ltlabtikzversion}
+  {Code related to the tagging of \tikzname\ pictures}
+%    \end{macrocode}
+%
+% \subsection{Sockets}
+% 
+% \begin{socketdecl}{tagsupport/tikzpicture/begin,tagsupport/tikzpicture/end}
+% Sockets at the begin and the end of a tikzpicture
+%    \begin{macrocode}
+\NewSocket{tagsupport/tikzpicture/begin}{0}
+\NewSocket{tagsupport/tikzpicture/end}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+% \begin{socketdecl}{tagsupport/tikzpicture/textbegin,tagsupport/tikzpicture/textend}
+% Sockets at the end and begin of text parts. 
+%    \begin{macrocode}
+\NewSocket{tagsupport/tikzpicture/textbegin}{0}
+\NewSocket{tagsupport/tikzpicture/textend}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+% 
+% \begin{socketdecl}{tagsupport/tikzpicture/alt}
+% This socket takes as argument an alt text and will add it to the Figure structure.
+%    \begin{macrocode}
+\NewSocket{tagsupport/tikzpicture/alt}{1}
+%    \end{macrocode}
+% \end{socketdecl}
+% \subsection{Variables}
+% 
+% \begin{variable}{\l__tag_tikzpicture_usetext_bool}
+% We can not rely on tagging sockets to activate tagging in the text parts 
+% as they do nothing if tagging is suspended so we use a boolean.
+%    \begin{macrocode}
+\bool_new:N\l__tag_tikzpicture_usetext_bool
+%    \end{macrocode}
+% \end{variable}
+% 
+% \subsection{Plugs}
+% \begin{plugdecl}{text (tagsupport/tikzpicture/begin),text (tagsupport/tikzpicture/end)}
+% This plug handles the \tikzname\ picture as a text object. So the graphical parts
+% are tagged as artifact, but when we encounter a node with activate tagging there.
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tikzpicture/begin}{text}
+ {
+   \ifvmode
+    {
+     \UseTaggingSocket{para/begin}  %check 
+    }     
+   \fi
+   \tag_mc_end_push: 
+   \tagmcbegin{artifact}
+   \bool_set_true:N\l__tag_tikzpicture_usetext_bool
+ }
+\NewSocketPlug{tagsupport/tikzpicture/end}{text}
+ {
+   \tagmcend
+   \tag_mc_begin_pop:n{}
+ } 
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{plugdecl}{figure (tagsupport/tikzpicture/begin),figure (tagsupport/tikzpicture/end)}
+% This plug handles the \tikzname\ picture as a figure. So the graphical parts and all
+% text nodes are tagged as artifact. Around the graphic is a Figure environment which will
+% use a alt text given in the optional argument. Currently the bbox is not set!
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tikzpicture/begin}{figure}
+ {
+   \ifvmode
+    {
+     \UseTaggingSocket{para/begin}   
+    }     
+   \fi
+   \tag_mc_end_push: 
+   \tagstructbegin{tag=Figure,
+    alt=figure%
+    %,attribute=bbox
+    }
+   \bool_set_false:N\l__tag_tikzpicture_usetext_bool 
+   \tagmcbegin{artifact}
+ } 
+ 
+\NewSocketPlug{tagsupport/tikzpicture/end}{figure}
+ {
+   \tagmcend
+   \tagstructend
+   \tag_mc_begin_pop:n{}
+ } 
+%    \end{macrocode}
+% \end{plugdecl}
+%  These are also the default plugs
+%    \begin{macrocode}
+\AssignSocketPlug{tagsupport/tikzpicture/begin}{figure}
+\AssignSocketPlug{tagsupport/tikzpicture/end}{figure}
+%    \end{macrocode}
+%
+% We add the sockets to the environment and then suspend tagging.
+% TODO: check how to handle the command and if we can use some inner environment
+%    \begin{macrocode}
+\AddToHook{env/tikzpicture/before}
+ {
+  \UseTaggingSocket{tikzpicture/begin}
+  \SuspendTagging{\tikzpicture}
+ }
+
+\AddToHook{env/tikzpicture/after}
+ {
+  \ResumeTagging{\tikzpicture}
+  \UseTaggingSocket{tikzpicture/end}
+ }
+%    \end{macrocode}
+%
+% \begin{plugdecl}{text (tagsupport/tikzpicture/textbegin),
+%  text (tagsupport/tikzpicture/textend)}
+% The text plugs in end the artifact mc and restart if after the text. 
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tikzpicture/textbegin}{text}  
+ {
+  \tag_mc_end:        
+ }
+\NewSocketPlug{tagsupport/tikzpicture/textend}{text}  
+ {
+  \tag_mc_begin:n{artifact}
+ } 
+\AssignSocketPlug{tagsupport/tikzpicture/textbegin}{text}
+\AssignSocketPlug{tagsupport/tikzpicture/textend}{text} 
+%    \end{macrocode}
+% \end{plugdecl}
+% 
+% We hook into two pgf commands to add the tagging code
+% TODO: check if that is safe and ask for an interface.
+% If the text should be tagged we resume tagging.
+%    \begin{macrocode}
+\def\pgfsys@begin@text
+ {
+   \bool_if:NT\l__tag_tikzpicture_usetext_bool
+     {\ResumeTagging{\tikzpicture}} 
+   \UseTaggingSocket{tikzpicture/textbegin}
+ }
+\def\pgfsys@end@text
+ {
+   \UseTaggingSocket{tikzpicture/textend}
+   \bool_if:NT\l__tag_tikzpicture_usetext_bool
+     {\SuspendTagging{\tikzpicture} } 
+ }
+%    \end{macrocode}
+%
+% \begin{plugdecl}{default (tagsupport/tikzpicture/alt)}
+% This setups the alt key.
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/tikzpicture/alt}{default}
+ { \keys_set:nn { __tag / struct }{alt=#1} }
+\AssignSocketPlug{tagsupport/tikzpicture/alt}{default} 
+\tikzset{alt/.code={\UseTaggingSocket{tikzpicture/alt}{#1}}}
+%    \end{macrocode}
+% \end{plugdecl}
+%    \begin{macrocode}
+%</package>
+%    \end{macrocode}
+%    \begin{macrocode}
+%<*latex-lab>
+\ProvidesFile{tikz-latex-lab-testphase.ltx}
+        [\ltlabtikzdate\space v\ltlabtikzversion\space 
+         latex-lab wrapper tikz]
+
+\RequirePackage{latex-lab-testphase-tikz}
+
+%</latex-lab>
+%    \end{macrocode}
