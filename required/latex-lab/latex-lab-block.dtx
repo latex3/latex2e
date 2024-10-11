@@ -9,8 +9,8 @@
 %
 %    https://www.latex-project.org/lppl.txt
 %
-\def\ltlabblockdate{2024-10-10}
-\def\ltlabblockversion{0.8u}
+\def\ltlabblockdate{2024-10-11}
+\def\ltlabblockversion{0.8v}
 %<*driver>
 \documentclass[kernel]{l3doc}
 \usepackage{amstext}
@@ -1269,9 +1269,15 @@
 %    We do this by storing them away and then call the list
 %    instance. Inside this instance the \texttt{setup-code} key
 %    contains \cs{legacylistsetupcode}, which makes use of the stored values.
+%  \changes{v0.8v}{2024/10/11}{Update \cs{@itemlabel} in
+%    \cs{l_@@_legacy_env_params_tl} and not at the start of the
+%    environment (tagging/730)}
 %    \begin{macrocode}
-      \tl_set:Nn \@itemlabel {#2}
-      \tl_set:Nn \l_@@_legacy_env_params_tl {#3}
+      \tl_set:Nn \l_@@_legacy_env_params_tl
+         {
+           \tl_set:Nn \@itemlabel {#2}
+           #3
+         }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -1300,10 +1306,14 @@
     \dim_zero:N \itemindent
 %    \end{macrocode}
 %    
-%    By default a \env{list} environment is not numbered:
+%    By default a \env{list} environment is not numbered, but this
+%    happens already in the block template.
+%  \changes{v0.8v}{2024/10/11}{Set the defaults for \cs{@itemlabel},
+%    \cs{@listctr} and \texttt{@nmbrlist} early in the block code
+%    before the setup code gets executed (tagging/730)}
 %    \begin{macrocode}
-    \tl_set:Nn \@listctr {}
-    \legacy_if_set_false:n { @nmbrlist } % needed if lists are nested
+%    \tl_set:Nn \@listctr {}
+%    \legacy_if_set_false:n { @nmbrlist } % needed if lists are nested
 %    \end{macrocode}
 %    By default there is a simple definition for \cs{makelabel}. It can be
 %    overwritten in the second mandatory argument to the list
@@ -1614,6 +1624,23 @@
 %    tagging structures.
 %    \begin{macrocode}
   \tag_if_active:T { \use:c { @@_recipe_ \l_@@_tagging_recipe_tl : } }
+%    \end{macrocode}
+%    The default for \env{list} environments is that they have an
+%    empty label and are not numbered (something that is then
+%    overwritting by the setup of a specific list). We ensure
+%    this here even for non-lists, because we need a defined state
+%    that then can be overwritting by the legacy setup code for
+%    the \env{list} environment in \cs{l_@@_setup_code_tl}.
+%    This is needed in case lists are nested as they otherwise would
+%    inherit outer values (and suddenly an \env{itemize} would start
+%    incrementing an outer \env{enumerate} counter, etc. 
+%  \changes{v0.8v}{2024/10/11}{Set the defaults for \cs{@itemlabel},
+%    \cs{@listctr} and \texttt{@nmbrlist} early in the block code
+%    before the setup code gets executed (tagging/730)}
+%    \begin{macrocode}
+  \tl_clear:N \@itemlabel
+  \tl_clear:N \@listctr
+  \legacy_if_set_false:n { @nmbrlist } 
 %    \end{macrocode}
 %    Then run the setup code if any is given in the instance.
 %    \begin{macrocode}
@@ -2180,29 +2207,25 @@
   \tl_if_empty:NTF \l_@@_counter_tl
     {                                
 %    \end{macrocode}
-%    If not we check if \cs{@listctr} has a non-empty value to be used
-%    for the list counter.      
-%
-%    We better test for blank not empty in case somebody had defined
-%    \cs{@listctr} using \cs{renewcommand} or \cs{cs_set:Npn}.
+%    If not we check if \cs{@nmbrlist} is true which may be the case
+%    in legacy environments that used \cs{usecounter} in the argument
+%    to the \env{list} environment.
+%  \changes{v0.8v}{2024/10/11}{Correct logic for setting up the list
+%    counter  (tagging/730)}
 %    \begin{macrocode}
-     \tl_if_blank:oF \@listctr
-       {
+    \legacy_if:nT { @nmbrlist }
+        {
 %    \end{macrocode}
-%    In that case \texttt{@nmbrlist} should have been set too, for
-%    example, through \cs{usecounter}, so we do not set it
-%    explicitly. However, we check if we should resume a previous list.
+%    In that case we only check if we should resume a previous list
+%    (\cs{@listctr} should be set in that case through the legacy
+%    method as well so we should be able to use it).
 %    \begin{macrocode}
          \bool_if:NF \l_@@_resume_bool
            {
              \int_gset:cn{ c@ \@listctr }
                  { \l_@@_counter_start_int - 1 }
            } 
-       } 
-%    \end{macrocode}
-%    If \cs{@listctr} is not set then we have definitely an unnumbered list.
-%    \begin{macrocode}
-       { \@nmbrlistfalse } 
+        }
     }
 %    \end{macrocode}
 %    If a counter is set in the list instance we use that
