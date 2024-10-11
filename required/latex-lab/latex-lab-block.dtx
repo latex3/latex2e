@@ -9,8 +9,8 @@
 %
 %    https://www.latex-project.org/lppl.txt
 %
-\def\ltlabblockdate{2024-09-10}
-\def\ltlabblockversion{0.8r}
+\def\ltlabblockdate{2024-10-11}
+\def\ltlabblockversion{0.8v}
 %<*driver>
 \documentclass[kernel]{l3doc}
 \usepackage{amstext}
@@ -331,6 +331,8 @@
 %  \TemplateKey{par-skip}{skip}{}{\cs{parsep}}
 %  \TemplateKey{end-skip}{skip}{}{\valuefrom{beginsep}}
 %  \TemplateKey{end-par-skip}{skip}{}{\valuefrom{begin-par-skip}}
+%  \TemplateKey{item-skip}{skip}{The space in front of an item if the
+%    block is a list; if not the setting has no effect}{\cs{itemsep}}
 %  \TemplateKey{beginpenalty}{integer}{}{\cs{@beginparpenalty}}
 %  \TemplateKey{endpenalty}{integer}{}{\cs{@endparpenalty}}
 %  \TemplateKey{leftmargin}{length}{}{\cs{leftmargin}}
@@ -390,7 +392,7 @@
 %              {Instance of type \texttt{item} to be used to format
 %               the label string}{basic}
 %  \TemplateKey{item-skip}{skip}{The space in front of an item in the
-%               list.\fmi{May need to be on a different template level}}{\cs{itemsep}}
+%               list. If not specified the value specified in the block template instance is used}{}
 %  \TemplateKey{item-indent}{length}{Horizontal displacement of the item.}{0pt}
 %  \TemplateKey{item-penalty}{integer}
 %              {Penalty for breaking before an
@@ -756,8 +758,9 @@
 %
 %
 %
-%  \begin{macro}{\@doendpe}
+%  \begin{macro}{\@doendpe,\__kernel_displayblock_doendpe:}
 %    The original \LaTeXe{} command is augmented to allow for tagging.
+%    TODO: use sockets for this and move to the kernel eventually.
 %    \begin{macrocode}
 \def\@doendpe{\@endpetrue
   \def\par
@@ -792,59 +795,9 @@
 %    \begin{macrocode}
 \cs_new_eq:NN \__kernel_displayblock_doendpe: \prg_do_nothing:
 %    \end{macrocode}
-%    The flag itself should be set globally not locally.\fmi{verify
-%    that this claim is actually correct!}
-%    \begin{macrocode}
-\def\@endpetrue {%
-  \global\let\if@endpe\iftrue
-% if called inside a group propagate to the outside   
-   \ifnum\currentgrouplevel>\z@
-      \aftergroup\propagate@doendpe
-   \fi
-}
-%    \end{macrocode}
-%    
-%    If \cs{if@endpe} is still true run \cs{@doendpe}
-%    that in turn runs another \cs{@endpetrue} (besides other things),
-%    thus propagating further, if necessary
-%    However, if the endpe situation got resolved nothing further happens
-%    \begin{macrocode}
-\def\propagate@doendpe{%
-  \if@endpe
-     \@@_debug_typeout:n{run~ (another)~ @doendpe~ at~
-       group~ level~ \the\currentgrouplevel}%
-    \@doendpe
-  \else
-     \@@_debug_typeout:n{do~ not~ run~ (another)~ @doendpe}%
-  \fi
-}
-%    \end{macrocode}
-%    
-%    With the above approach we do not  need the propagation in
-%    \cs{end...} any longer 
-%    (since this is now handled by
-%    \cs{aftergroup}\cs{propagate@doendpe}) so
-%    here a simple \cs{endgroup} is enough. This replaces the
-%    definition in ...:
-%    \begin{macrocode}
-\@namedef{end }#1{%
-  \romannumeral
-    \IfHookEmptyTF{env/#1/end}%
-        {\expandafter\z@}%
-        {\z@\UseHook{env/#1/end}}%
-    \csname end#1\endcsname\@checkend{#1}%
-%    \expandafter\endgroup\if@endpe\@doendpe\fi
-    \endgroup
-    \UseHook{env/#1/after}%
-    \if@ignore\@ignorefalse\ignorespaces\fi
-}
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-\def\@endpefalse{\global\let\if@endpe\iffalse}
-%    \end{macrocode}
-%  \end{macro}
 %
+%
+% \end{macro}
 %
 %
 % \subsection{Object and template interfaces}
@@ -892,6 +845,7 @@
 %
 %  \begin{template}{block display}
 %    
+%  \changes{v0.8s}{2024/10/03}{Offer item-skip key also on block templates}
 %    \begin{macrocode}
 \DeclareTemplateInterface{block}{display}{1}    
 {
@@ -901,6 +855,7 @@
   par-skip       : skip = \parsep ,
   end-skip       : skip = \KeyValue{beginsep} ,                % conflict with name below
   end-par-skip   : skip = \KeyValue{begin-par-skip} ,
+  item-skip      : skip = \itemsep ,
   beginpenalty   : integer = \UseName{@beginparpenalty} ,
   endpenalty     : integer = \UseName{@endparpenalty} ,
   leftmargin     : length = \leftmargin ,
@@ -1314,9 +1269,15 @@
 %    We do this by storing them away and then call the list
 %    instance. Inside this instance the \texttt{setup-code} key
 %    contains \cs{legacylistsetupcode}, which makes use of the stored values.
+%  \changes{v0.8v}{2024/10/11}{Update \cs{@itemlabel} in
+%    \cs{l_@@_legacy_env_params_tl} and not at the start of the
+%    environment (tagging/730)}
 %    \begin{macrocode}
-      \tl_set:Nn \@itemlabel {#2}
-      \tl_set:Nn \l_@@_legacy_env_params_tl {#3}
+      \tl_set:Nn \l_@@_legacy_env_params_tl
+         {
+           \tl_set:Nn \@itemlabel {#2}
+           #3
+         }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -1329,14 +1290,6 @@
 % \end{environment}
 %
 %
-%
-% \begin{variable}{\l_@@_env_params_tl}
-%    Declare the variable for the parameter argument; \cs{@itemlabel}
-%    is already declared in \LaTeXe{}.
-%    \begin{macrocode}
-\tl_new:N \l_@@_env_params_tl
-%    \end{macrocode}
-% \end{variable}
 %
 %
 %  \begin{macro}{\legacylistsetupcode}
@@ -1353,10 +1306,14 @@
     \dim_zero:N \itemindent
 %    \end{macrocode}
 %    
-%    By default a \env{list} environment is not numbered:
+%    By default a \env{list} environment is not numbered, but this
+%    happens already in the block template.
+%  \changes{v0.8v}{2024/10/11}{Set the defaults for \cs{@itemlabel},
+%    \cs{@listctr} and \texttt{@nmbrlist} early in the block code
+%    before the setup code gets executed (tagging/730)}
 %    \begin{macrocode}
-    \tl_set:Nn \@listctr {}
-    \legacy_if_set_false:n { @nmbrlist } % needed if lists are nested
+%    \tl_set:Nn \@listctr {}
+%    \legacy_if_set_false:n { @nmbrlist } % needed if lists are nested
 %    \end{macrocode}
 %    By default there is a simple definition for \cs{makelabel}. It can be
 %    overwritten in the second mandatory argument to the list
@@ -1668,6 +1625,23 @@
 %    \begin{macrocode}
   \tag_if_active:T { \use:c { @@_recipe_ \l_@@_tagging_recipe_tl : } }
 %    \end{macrocode}
+%    The default for \env{list} environments is that they have an
+%    empty label and are not numbered (something that is then
+%    overwritting by the setup of a specific list). We ensure
+%    this here even for non-lists, because we need a defined state
+%    that then can be overwritting by the legacy setup code for
+%    the \env{list} environment in \cs{l_@@_setup_code_tl}.
+%    This is needed in case lists are nested as they otherwise would
+%    inherit outer values (and suddenly an \env{itemize} would start
+%    incrementing an outer \env{enumerate} counter, etc. 
+%  \changes{v0.8v}{2024/10/11}{Set the defaults for \cs{@itemlabel},
+%    \cs{@listctr} and \texttt{@nmbrlist} early in the block code
+%    before the setup code gets executed (tagging/730)}
+%    \begin{macrocode}
+  \tl_clear:N \@itemlabel
+  \tl_clear:N \@listctr
+  \legacy_if_set_false:n { @nmbrlist } 
+%    \end{macrocode}
 %    Then run the setup code if any is given in the instance.
 %    \begin{macrocode}
   \l_@@_setup_code_tl
@@ -1941,6 +1915,7 @@
 %
 % \begin{template}{block display}
 %    
+%  \changes{v0.8s}{2024/10/03}{Offer item-skip key also on block templates}
 %    \begin{macrocode}
 \DeclareTemplateCode{block}{display}{1}
 {
@@ -1950,6 +1925,7 @@
   par-skip        = \parsep ,
   end-skip        = \l_@@_botsep_skip ,
   end-par-skip    = \l_@@_parbotsep_skip ,
+  item-skip       = \itemsep ,
   beginpenalty    = \@beginparpenalty ,
   endpenalty      = \@endparpenalty ,
   rightmargin     = \rightmargin ,
@@ -2149,6 +2125,40 @@
 %
 %
 %
+%  \begin{macro}{\@@_evaluate_saved_user_keys:nn}
+%    Keys set on individual list environments may be intended to alter
+%    the behavior of the template instance that defines the \cs{item}
+%    command. If meant to alter only a single \cs{item} command one
+%    would specify them in the optional argument of the \cs{item}, but
+%    if they should alter all items the right place would be the list
+%    environment. For this reason we need to store the values and then
+%    set them inside the \cs{item} template code using
+%    \cs{SetTemplateKeys} in the appropriate context (template type
+%    and template name). This is done in
+%    \cs{@@_evaluate_saved_user_keys:nn}. The context is provided in
+%    the two arguments (because different list environments may use
+%    different \cs{item} instances based on different templates. By
+%    default the command does
+%    nothing because most environments do not have user key settings.
+%  \changes{v0.8s}{2024/10/03}{Pass user keys on list to \cs{item} for
+%    evaluation}
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_evaluate_saved_user_keys:nn \use_none:nn
+%    \end{macrocode}
+%    Maybe something like this should become a public function, but
+%    for now this is a one-off for the \cs{item} command and therefore
+%    coded inline and internal to the block code.
+%    \begin{macrocode}
+%\cs_new:Npn \@@_save_user_keys:n #1 {
+%  \tl_if_empty:nTF {#1}
+%     { \cs_set_eq:NN \@@_evaluate_saved_user_keys:nn \use_none:nn }
+%     {
+%       \cs_set:Npe \@@_evaluate_saved_user_keys:nn ##1##2
+%          { \SetTemplateKeys{##1}{##2}{ \exp_not:n{#1} } }
+%     }
+%}
+%    \end{macrocode}
+%  \end{macro}
 %
 %
 % \begin{template}{list std}
@@ -2174,36 +2184,48 @@
 {
   \@@_debug_typeout:n{template:list:std}
 %
-  \tl_if_empty:nF {#1} { \SetTemplateKeys{list}{std}{#1} }
+%    \end{macrocode}
+%    We start by looking at the user supplied keys in \texttt{\#1}. If
+%    there aren't any we reset \cs{@@_evaluate_saved_user_keys:nn} to
+%    do nothing. Otherwise we evaluate and set the keys in the contect
+%    of the current list template. In addition we prepare
+%    \cs{@@_evaluate_saved_user_keys:nn} for execution in the
+%    template for \cs{item}.
+%  \changes{v0.8s}{2024/10/03}{Prepare \cs{@@_evaluate_saved_user_keys:nn}
+%            for use in \cs{item}}
+%    \begin{macrocode}
+  \tl_if_empty:nTF {#1}
+     { \cs_set_eq:NN \@@_evaluate_saved_user_keys:nn \use_none:nn }
+     {
+       \SetTemplateKeys{list}{std}{#1}
+       \cs_set:Npe \@@_evaluate_saved_user_keys:nn ##1##2
+          { \SetTemplateKeys{##1}{##2}{ \exp_not:n{#1} } }
+     }
 %    \end{macrocode}
 %    Has this list a counter name defined in the instance?
 %    \begin{macrocode}
   \tl_if_empty:NTF \l_@@_counter_tl
     {                                
 %    \end{macrocode}
-%    If not we check if \cs{@listctr} has a non-empty value to be used
-%    for the list counter.      
-%
-%    We better test for blank not empty in case somebody had defined
-%    \cs{@listctr} using \cs{renewcommand} or \cs{cs_set:Npn}.
+%    If not we check if \cs{@nmbrlist} is true which may be the case
+%    in legacy environments that used \cs{usecounter} in the argument
+%    to the \env{list} environment.
+%  \changes{v0.8v}{2024/10/11}{Correct logic for setting up the list
+%    counter  (tagging/730)}
 %    \begin{macrocode}
-     \tl_if_blank:oF \@listctr
-       {
+    \legacy_if:nT { @nmbrlist }
+        {
 %    \end{macrocode}
-%    In that case \texttt{@nmbrlist} should have been set too, for
-%    example, through \cs{usecounter}, so we do not set it
-%    explicitly. However, we check if we should resume a previous list.
+%    In that case we only check if we should resume a previous list
+%    (\cs{@listctr} should be set in that case through the legacy
+%    method as well so we should be able to use it).
 %    \begin{macrocode}
          \bool_if:NF \l_@@_resume_bool
            {
              \int_gset:cn{ c@ \@listctr }
                  { \l_@@_counter_start_int - 1 }
            } 
-       } 
-%    \end{macrocode}
-%    If \cs{@listctr} is not set then we have definitely an unnumbered list.
-%    \begin{macrocode}
-       { \@nmbrlistfalse } 
+        }
     }
 %    \end{macrocode}
 %    If a counter is set in the list instance we use that
@@ -2343,6 +2365,16 @@
 %    was given.
 %    \begin{macrocode}
     \tl_set_eq:NN \l_@@_label_given_tl \c_novalue_tl
+%    \end{macrocode}
+%    First we evaluate and set any keys specified on the list
+%    environment by calling
+%    \cs{@@_evaluate_saved_user_keys:nn}. Then we do the same
+%    with all keys specified on this \cs{item} command (which may
+%    overwrite one or the other setting just made).
+%  \changes{v0.8s}{2024/10/03}{Use \cs{@@_evaluate_saved_user_keys:nn}
+%            to make use of user keys on the list level}
+%    \begin{macrocode}
+    \@@_evaluate_saved_user_keys:nn {item}{std} 
     \tl_if_empty:nF{#1}{ \SetTemplateKeys{item}{std}{#1} }
 %    \end{macrocode}
 %    
