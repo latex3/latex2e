@@ -39,7 +39,7 @@
 %    \begin{macrocode}
 %<+package>\NeedsTeXFormat{LaTeX2e}[2024/06/01]
 %<+package>\ProvidesPackage{array}
-%<+package>         [2024/09/17 v2.6f Tabular extension package (FMi)]
+%<+package>         [2024/10/12 v2.6g Tabular extension package (FMi)]
 %
 % \fi
 %
@@ -1373,6 +1373,7 @@ Bug reports can be opened (category \texttt{#1}) at\\%
 % \begin{macro}{\insert@column}
 % \begin{macro}{\@sharp}
 % \begin{macro}{\textonly@unskip}
+% \begin{macro}{\@protected@firstofone}
 %    We now define the macro =\insert@column= which will do
 %    this work for us.
 %    \begin{macrocode}
@@ -1388,11 +1389,34 @@ Bug reports can be opened (category \texttt{#1}) at\\%
 %    Here, we assume that the \textsf{count} register
 %    =\@tempcnta= has saved the value $=\count@= - 1$.
 %
-%    We end with \cs{relax} to stop any parsing for optional
-%    arguments out of \verb=>{...}= at this point. 
+%    To keep \TeX{} happy if there is a look ahead in the tabular preamble
+%    which uses the Appendix~D trick (for example anything with a trailing
+%    optional argument defined by \pkg{ltcmd}), we wrap everything here in
+%    a protected version of \cs{@firstofone}.\footnote{The reason this
+%    works is not really clear: almost certainly there is a bug in \TeX{}
+%    here that we are simply avoiding, but as the master counter doesn't
+%    show up in a trace, a full understanding likely means working through
+%    the code that implements \cs{halign}!}
+%    \TeX{} otherwise can get
+%    confused about the value of the master counter, and we get some
+%    strange errors. (Quite possibly the underlying issue is a \TeX{}
+%    bug, but rather than try to fix in 2024 we accept it's there and
+%    work-around.) As an example, without this approach, something
+%    like
+%    \begin{verbatim}
+%\NewDocumentCommand\foo{o}{x}
+%\begin{tabular}{>{\foo}l}
+%  Foo 
+%\end{tabular}
+%    \end{verbatim}
+%    will fail; that can be fixed by adding a \cs{relax} after the \cs{@tempcnta},
+%    but that then leads to issues if you are collecting whole cells (tagging code
+%    or \\pkg{collcell}), where you can no longer alter the meaning of \cs{cr}
+%    as the master counter goes wrong.
 % \changes{v2.6f}{2024/09/13}{Stop parsing for optional argument (gh/1468)}
+% \changes{v2.6g}{2024/10/12}{Further work to support optional args in preamble (gh/1468)}
 %    \begin{macrocode}
-   \the@toks \the \@tempcnta \relax
+   \@protected@firstofone { \the@toks \the \@tempcnta \ignorespaces }
 %    \end{macrocode}
 %    Next follows the =#= sign which specifies the place
 %    where the text of the column shall be inserted. To avoid
@@ -1400,14 +1424,16 @@ Bug reports can be opened (category \texttt{#1}) at\\%
 %    =\@addtopreamble= we hide this sign in the command
 %    =\@sharp= which is temporarily occupied with
 %    =\relax= during the build-up of the preamble.
-%    To remove unwanted spaces before and after the column text, we set
-%    an =\ignorespaces=  in front and a =\unskip= afterwards.
+%    To remove unwanted spaces before and after the column in text mode,
+%    we set an =\ignorespaces=  in front (see above) and a =\unskip=
+%    afterwards; in math mode, the latter is suppressed while the
+%    \cs{ignorespaces} makes no difference.
 % \changes{v2.0e}{1991/02/07}{Added \{\} around \cs{@sharp} for new ftsel}
 % \changes{v2.0h}{1992/06/22}{Removed \{\} again in favour of
 %                             \cs{d@llarbegin}}
 % \changes{v2.6b}{2024/04/08}{Do not \cs{unskip} if in math mode (gh/1323)}
 %    \begin{macrocode}
-   \ignorespaces \@sharp \textonly@unskip
+   \@sharp \textonly@unskip
 %    \end{macrocode}
 %    Then the second \textsf{token} register follows whose number should
 %    be saved in =\count@=.
@@ -1432,10 +1458,15 @@ Bug reports can be opened (category \texttt{#1}) at\\%
 %    \begin{macrocode}
 \protected\def\textonly@unskip{\ifhmode\unskip\fi}
 %    \end{macrocode}
+% \changes{v2.6g}{2024/10/12}{Further work to support optional args in preamble (gh/1468)}
+%  We need an engine-protected function that is just \cs{@firstofone}:
+%    \begin{macrocode}
+\protected\def\@protected@firstofone#1{#1}
+%    \end{macrocode}
 % \end{macro}
 % \end{macro}
 % \end{macro}
-%
+% \end{macro}
 %
 %  \begin{macro}{\insert@pcolumn}
 %    Handling pcolumn-cells needs slightly different handling when
