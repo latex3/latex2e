@@ -10,5 +10,7 @@ REM l3build save -c config-title title-008 title-004 title-005 title-007 title-0
 REM l3build save -c config-firstaid test-ltugboat test-amsart-title
 REM l3build save -c config-toc -e luatex toc-ex-article-hyperref-2 toc-ex-book-tocdepth toc-ex-article-no-hyperref toc-ex-article-hyperref-3 toc-ex-book-no-hyperref toc-ex-article-hyperref-1 toc-ex-book-hyperref-1 toc-manual-addcontentsline toc-debug
 REM l3build save -c config-title -e luatex title-003 title-009 title-007 title-005 title-006 title-004 title-008 title-002
-l3build save -c config-bib -e luatex bib-009 bib-008-natbib bib-006 bib-007-natbib bib-005 bib-010-natbib
-l3build check --show-saves -c config-OR memoir-001 scrartcl-001
+
+l3build save -c config-block -e luatex blocks-hyperref-01
+l3build save -c config-block blocks-000
+ l3build check --show-saves -c config-block blocks-000 
