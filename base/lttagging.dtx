@@ -33,7 +33,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{lttagging.dtx}
-             [2024/10/11 v1.0j LaTeX Kernel (tagging support)]
+             [2024/10/21 v1.0k LaTeX Kernel (tagging support)]
 % \iffalse
 \documentclass{l3doc}
 \GetFileInfo{lttagging.dtx}
@@ -78,7 +78,7 @@
 %  \DescribeMacro\tag_suspend:n
 %  \DescribeMacro\tag_resume:n
 
-%  
+%
 %  The are places in code where it is import top stop any tagging
 %  activities, e.g., when we are doing trial typesetting that it is
 %  done several times. In such a case one must tag only the final
@@ -107,46 +107,51 @@
 % \DescribeMacro\UseTaggingSocket
 % \DescribeMacro\tag_socket_use:n
 % \DescribeMacro\tag_socket_use:nn
-%  To support tagging in packages we use sockets with names starting
-%  with \texttt{tagsupport/}. Usually, these sockets have exactly two
-%  plugs defined:
-%  \plug{noop} (when no tagging is requested or tagging is not wanted
-%  for some reason) and a second plug that enables the tagging. There
-%  may be more, e.g., tagging with special debugging, etc., but right
-%  now it is usually just on or off.
-%
-%  Given that we sometimes have to suspend tagging, it would be fairly
-%  inefficient to put different plugs into these sockets whenever that
-%  happens. We therefore offer \cs{UseTaggingSocket} which is like
-%  \cs{UseSocket} except that the socket name is specified without
-%  \texttt{tagsupport/}, i.e.,
+% \DescribeMacro\tag_socket_use:nnn
+% Given that we sometimes have to suspend tagging, it would be fairly
+% inefficient to put different plugs into these sockets whenever that
+% happens. We therefore offer \cs{UseTaggingSocket} which is like
+% \cs{UseSocket} except that is expects a socket starting with
+% \texttt{tagsupport/} but the socket name is specified without
+% this prefix, i.e.,
 % \begin{quote}
 %   \verb=\UseTaggingSocket{foo}=      $\to$
 %   \verb=\UseSocket{tagsupport/foo}=
-% \end{quote}
-%  Beside being slightly shorter, the big advantage is that this way
-%  we can change \cs{UseTaggingSocket} to do nothing when tagging is
-%  suspended with \cs{SuspendTagging} instead of changing the plugs of
-%  the tagging support sockets back and forth.
+% \end{quote}.
 %
-%  This means that with \cs{SuspendTagging} in force all socket
-%  arguments are ignored (including the case when there is a single
-%  one), i.e., all sockets used with \cs{UseTaggingSocket} behave as
-%  if the \text{noop} plug is assigned.
+% Beside being slightly shorter, the big advantage is that this way
+% we can change \cs{UseTaggingSocket} to do nothing by switching a boolean
+% instead of changing the plugs of the tagging support sockets back and forth.
 %
-%  It is possible to use the tagging support sockets with
-%  \cs{UseSocket} instead of \cs{UseTaggingSocket}, but in this case
-%  the socket remains active if \cs{SuspendTagging} is in force. There
-%  may be reasons for doing that, but in general we expect to always
-%  use \cs{UseTaggingSocket}.
+% Usually, these sockets have (beside the default plug defined for every socket)
+% one additional plug defined and directly assigned. This plug is used when
+% tagging is active.
+% There may be more plugs, e.g., tagging with special debugging or special behaviour
+% depending on the class or PDF version etc., but right now it is usually just on or off.
 %
-%  The L3 programming layer versions \cs{tag_socket_use:n} and
-%  \cs{tag_socket_use:nn} are slightly more efficient than
+% When tagging is suspended they all have the same predefined behaviour:
+% The sockets with zero arguments do nothing. The sockets with one argument
+% gobble their argument. The sockets with two arguments
+% will drop their first argument and pass the second unchanged.
+%
+% It is possible to use the tagging support sockets with
+% \cs{UseSocket} directly, but in this case the socket remains active
+% if \cs{SuspendTagging} is in force. There may be reasons for doing
+% that but in general we expect to always use \cs{UseTaggingSocket}.
+%
+% \DescribeMacro\UseExpandableTaggingSocket
+% \DescribeMacro\tag_socket_use_expandable:n
+%  For special cases like in some \cs{halign} contexts we need a fully expandable
+%  version of the commend. For these cases, \cs{UseExpandableTaggingSocket} can be
+%  used. To allow being expandable, it does not output any debugging information
+%  if \cs{DebugSocketsOn} is in effect and therefore should be avoided whenever possible.
+%
+%  The L3 programming layer versions \cs{tag_socket_use_expandable:n},
+%  \cs{tag_socket_use:n}, \cs{tag_socket_use:nn}, and \cs{tag_socket_use:nnn}
+%  are slightly more efficient than
 %  \cs{UseTaggingSocket} because they do not have to determine how
-%  many arguments the socket takes when disabling it, so in code that
-%  is using the L3 programming layer we recommend to use them instead
-%  of the CamelCase command.
-%                
+%  many arguments the socket takes when disabling it.
+%
 %
 % \MaybeStop{}
 %
@@ -156,12 +161,12 @@
 %
 %
 %  \begin{macro}{\tag_suspend:n,\tag_resume:n,\SuspendTagging,\ResumeTagging}
-%    
+%
 %    In the kernel, these commands get dummy definitions so that
 %    they can be used without harm in packages. The real definition is
 %    used when tagging gets enabled.
 %    \begin{macrocode}
-\cs_new_eq:NN \tag_suspend:n \use_none:n  
+\cs_new_eq:NN \tag_suspend:n \use_none:n
 \cs_new_eq:NN \tag_resume:n  \use_none:n
 \cs_new_protected:Npn \SuspendTagging #1 { \tag_suspend:n {#1} }
 \cs_new_protected:Npn \ResumeTagging #1  { \tag_resume:n {#1} }
@@ -170,7 +175,10 @@
 %
 %  \begin{macro}{\tag_socket_use:n,
 %                \tag_socket_use:nn,
+%                \tag_socket_use:nnn,
+%                \tag_socket_use_expandable:n,
 %                \UseTaggingSocket,
+%                \UseExpandableTaggingSocket,
 %               }
 %    Again this is not the final definition for the kernel; it is just
 %    a version to get going while some parts of the kernel support are
@@ -187,23 +195,38 @@
 %
 %    Dummy definitions in the kernel.
 %    These definitions will get updated in \pkg{tagpdf}.
+%    The default in the kernel is just to get rid of the first argument, the second is preserved if present:
+% \changes{v1.0k}{2024/10/21}{Changed behavior of two argument tagging sockets when disabled.}
+% \changes{v1.0k}{2024/10/21}{Added expandable variants}
 %    \begin{macrocode}
+\cs_new:Npn \tag_socket_use_expandable:n #1 { }
 \cs_new_protected:Npn \tag_socket_use:n #1 { }
 \cs_new_protected:Npn \tag_socket_use:nn #1#2 { }
-%    \end{macrocode}
-%    The default in the kernel is just to get rid of the argument:
-%    \begin{macrocode}
+\cs_new_protected:Npn \tag_socket_use:nnn #1#2#3 { #3 }
 \cs_new_protected:Npn \UseTaggingSocket #1 {
   \int_case:nnF
       { \int_use:c { c__socket_tagsupport/#1_args_int } }
          {
            0 \prg_do_nothing:
            1 \use_none:n
-           2 \use_none:nn
+           2 \use_ii:nn
 %    \end{macrocode}
 %    We do not expect tagging sockets with more than one or two
 %    arguments, so for now we only provide those.
 %    \begin{macrocode}
+         }
+         \ERRORusetaggingsocket  % that should get a proper error message
+}
+%    \end{macrocode}
+%    The same as an expandable command:
+%    \begin{macrocode}
+\cs_new:Npn \UseExpandableTaggingSocket #1 {
+  \int_case:nnF
+      { \int_use:c { c__socket_tagsupport/#1_args_int } }
+         {
+           0 \prg_do_nothing:
+           1 \use_none:n
+           2 \use_ii:nn
          }
          \ERRORusetaggingsocket  % that should get a proper error message
 }
@@ -213,10 +236,10 @@
 %
 % \subsection{Tagging sockets}
 % This collects tagging sockets that should be generally available
-% so that they can also be used even if the tagging code is not loaded. 
-% 
+% so that they can also be used even if the tagging code is not loaded.
+%
 % \subsubsection{Tagging support for paragraph setup}
-% 
+%
 % Paragraphs are tagged through the code in the para/hooks. This code is sometimes
 % adjusted, e.g. to produce a \enquote{flattened} paragraph or to use a different tag.
 % Sockets related to such code parts are collected here.
@@ -225,22 +248,22 @@
 %    The block code needs to know if they are nested blockenvs inside
 %    a flattened environment. For this it uses a counter. Inside some contexts,
 %    e.g. at the begin of a minipage or a footnote this counter must be reset.
-%    We therefore define the counter here so that we can use it in the following 
-%    socket. 
+%    We therefore define the counter here so that we can use it in the following
+%    socket.
 %    \begin{macrocode}
 \int_new:N \l__tag_block_flattened_level_int
 %    \end{macrocode}
 %  \end{macro}
-%  
+%
 % \begin{socketdecl}{tagsupport/para/restore}
 % This socket restores the para related settings to their default. It
 % should be used in places where ``normal'' paragraph tagging must be ensured, for example
-% at the begin of a footnote. 
+% at the begin of a footnote.
 %    \begin{macrocode}
 \NewSocket{tagsupport/para/restore}{0}
 %    \end{macrocode}
 % \end{socketdecl}
-% 
+%
 % \begin{plugdecl}{default}
 % \changes{v1.0i}{2024/10/10}{Restore also paratagging (tagging/723)}
 %    \begin{macrocode}
@@ -255,7 +278,7 @@
 \AssignSocketPlug{tagsupport/para/restore}{default}
 %    \end{macrocode}
 % \end{plugdecl}
-% 
+%
 % \begin{socketdecl}{tagsupport/para/begin,tagsupport/para/end}
 % These sockets are currently defined in tagpdf. They overwrite
 % definitions in the latex-lab-block code. There is also a simpler
@@ -273,22 +296,22 @@
 \NewSocket{tagsupport/recordtarget}{0}
 %    \end{macrocode}
 % \end{socketdecl}
-% 
+%
 % \begin{plugdecl}{kernel (tagsupport/recordtarget)}
 %    \begin{macrocode}
-% 
+%
 \NewSocketPlug{tagsupport/recordtarget}{kernel}
   {
     \tl_if_blank:VF \@currentHref
     {
-      \prop_gput:Nee 
-        \g__tag_struct_dest_num_prop 
+      \prop_gput:Nee
+        \g__tag_struct_dest_num_prop
         {\@currentHref}
-        {\tag_get:n{struct_num}}      
+        {\tag_get:n{struct_num}}
     }
   }
-\AssignSocketPlug{tagsupport/recordtarget}{kernel} 
-\ExplSyntaxOff 
+\AssignSocketPlug{tagsupport/recordtarget}{kernel}
+\ExplSyntaxOff
 %    \end{macrocode}
 % \end{plugdecl}
 % \subsubsection{Tagging sockets for toc}
@@ -307,28 +330,28 @@
 % \begin{socketdecl}{tagsupport/toc/starttoc/before,
 %                    tagsupport/toc/starttoc/after}
 % Tagging sockets for the begin and end of start of \cs{@starttoc}.
-% They take one argument, the extension.                   
+% They take one argument, the extension.
 %    \begin{macrocode}
 \NewSocket{tagsupport/toc/starttoc/before}{1}
 \NewSocket{tagsupport/toc/starttoc/after}{1}
 %    \end{macrocode}
 % \end{socketdecl}
-% 
+%
 % \begin{socketdecl}{tagsupport/toc/leaders/before,
 %                    tagsupport/toc/leaders/after}
 % Tagging sockets to make the dot leaders an artifact.
-% They do not take an argument.                    
+% They do not take an argument.
 %    \begin{macrocode}
 \NewSocket{tagsupport/toc/leaders/before}{0}
 \NewSocket{tagsupport/toc/leaders/after}{0}
 %    \end{macrocode}
 % \end{socketdecl}
-% 
+%
 % \subsubsection{Tagging support for table/tabular packages}
 %
 % The code uses a number of sockets to inject the tagging
 % commands. These can be easily set to a noop-plug in case the
-% automated tagging is not wanted. 
+% automated tagging is not wanted.
 %
 % \begin{socketdecl}{tagsupport/tbl/cell/begin,
 %                    tagsupport/tbl/cell/end,
@@ -463,10 +486,10 @@
 % \end{socketdecl}
 %
 % \subsubsection{Tagging Support for floats}
-% 
+%
 % \begin{socketdecl}{tagsupport/float/hmode/begin,
 %                    tagsupport/float/hmode/end}
-%  These sockets are used if the float is called in 
+%  These sockets are used if the float is called in
 %  hmode.
 % \changes{v1.0h}{2024/09/13}{Sockets for floats added}
 %    \begin{macrocode}
@@ -484,38 +507,38 @@
 %    \end{macrocode}
 % \end{socketdecl}
 %
-% 
+%
 % \begin{socketdecl}{tagsupport/caption/begin,
 %                    tagsupport/caption/end}
 %  These sockets are used in \cs{@makecaption}.
 %  They open and close the \texttt{Caption} structure.
-%  Their default plugs assume that they are used in 
+%  Their default plugs assume that they are used in
 %  vmode. The argument of the begin socket is
 %  the structure number of the parent float. If it is
-%  empty the current structure number is used. 
+%  empty the current structure number is used.
 %    \begin{macrocode}
 \NewSocket{tagsupport/caption/begin}{1}
 \NewSocket{tagsupport/caption/end}{0}
 %    \end{macrocode}
 % \end{socketdecl}
-% 
+%
 % \begin{socketdecl}{tagsupport/caption/label/begin,
 %                    tagsupport/caption/label/end}
 %  These sockets are used in \cs{@makecaption} around the
-%  label. Their default plugs ensure that 
-%  the label is outside the paragraph and that 
+%  label. Their default plugs ensure that
+%  the label is outside the paragraph and that
 %  the rest of the caption uses flattened para mode. If the
-%  caption is not in a hbox, the \texttt{para/begin} 
-%  socket should follow to properly start the paragraph. 
+%  caption is not in a hbox, the \texttt{para/begin}
+%  socket should follow to properly start the paragraph.
 %    \begin{macrocode}
 \NewSocket{tagsupport/caption/label/begin}{0}
-\NewSocket{tagsupport/caption/label/end}{0} 
+\NewSocket{tagsupport/caption/label/end}{0}
 %    \end{macrocode}
 % \end{socketdecl}
-% 
+%
 % \section{For lttab.dtx parked here for now}
 %
-%    
+%
 %    \begin{macrocode}
 %<@@=tbl>
 \ExplSyntaxOn
@@ -536,7 +559,7 @@
 %     \g_@@_row_int,
 %     \g_@@_span_tl,
 %     \g_@@_table_cols_tl}
-%    
+%
 %    \cs{g_@@_row_int} holds the current row number in the table. The
 %    value \texttt{0} means we haven't yet processed the table
 %    preamble (or in case of longtable are just in front of the next
@@ -606,14 +629,14 @@
 % \subsection{Tracing/debugging}
 %
 %  \begin{macro}{\DebugTablesOn,\DebugTablesOff}
-%    
+%
 %    \begin{macrocode}
 \def\DebugTablesOn{
   \cs_set_eq:NN \@@_trace:n \typeout
-}  
+}
 \def\DebugTablesOff{
   \cs_set_eq:NN \@@_trace:n \use_none:n
-}  
+}
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -663,7 +686,7 @@
 %
 %
 %  \begin{macro}{\l_@@_tmpa_seq}
-%    
+%
 %    \begin{macrocode}
 \seq_new:N \l_@@_tmpa_seq
 %    \end{macrocode}
@@ -672,7 +695,7 @@
 %
 %
 %  \begin{macro}{\tbl_count_missing_cells:n}
-%    
+%
 %    We might have the situation that some table package has not
 %    implemented the \cs{tbl_count_table_cols:} in which case
 %    \cs{g_@@_table_cols_tl} would always be zero and we would get an
@@ -708,7 +731,7 @@
 %
 %
 %  \begin{macro}{\tbl_save_outer_table_cols:}
-%    
+%
 %    \begin{macrocode}
 \cs_new_protected:Npn \tbl_save_outer_table_cols: {
   \tl_set_eq:NN \l_@@_saved_table_cols_tl  \g_@@_table_cols_tl
@@ -718,7 +741,7 @@
 %
 %
 %  \begin{macro}{\tbl_init_cell_data_for_table:}
-%    
+%
 %    \begin{macrocode}
 \cs_new_protected:Npn \tbl_init_cell_data_for_table: {
   \tl_set:No \l_@@_saved_col_tl {\int_use:N \g_@@_col_int }
@@ -832,14 +855,14 @@
 %
 %
 %  \begin{macro}{\tbl_restore_outer_cell_data:}
-%    
+%
 %    \begin{macrocode}
 \cs_new_protected:Npn \tbl_restore_outer_cell_data: {
   \int_gset:Nn \g_@@_col_int { \l_@@_saved_col_tl }
   \int_gset:Nn \g_@@_row_int { \l_@@_saved_row_tl }
   \tl_gset_eq:NN \g_@@_span_tl \l_@@_saved_span_tl
   \tl_gset_eq:NN \g_@@_table_cols_tl   \l_@@_saved_table_cols_tl
-  \UseTaggingSocket{tbl/restore/celldata} 
+  \UseTaggingSocket{tbl/restore/celldata}
   \@@_trace:n { ==>~ restored~cell~data:~
                 \int_use:N \g_@@_row_int,
                 \int_use:N \g_@@_col_int,
@@ -901,7 +924,7 @@
 %    the macro \cs{tbl_count_missing_cells:n} is executed and
 %    then the row is finished with a final \cs{cr}.
 %    \begin{macrocode}
-\cs_new:Npn \tbl_crcr:n #1 {  
+\cs_new:Npn \tbl_crcr:n #1 {
     \int_compare:nNnT \g_@@_col_int > 0
         {
           \tbl_count_missing_cells:n {#1}
@@ -928,7 +951,7 @@
 % \changes{v1.0h}{2024/09/20}{moved \cs{@kernel@refstepcounter} into ltxref}
 %    This is needed for \pkg{longtable} because \cs{refstepcounter} is
 %    setting up a target when \pkg{hyperref} is loaded and we don't
-%    want that in \pkg{longtable}.%%    
+%    want that in \pkg{longtable}.%%
 %    Prevent longtable patching by hyperref until hyperref does so automatically:
 %    \begin{macrocode}
 \def\hyper@nopatch@longtable{}
