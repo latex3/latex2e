@@ -13,9 +13,27 @@ local function escape_string(str)
   return str
 end
 
+local ltx
+local function get_ltx()
+  if not ltx then
+    ltx = _ENV.ltx
+    if not ltx then
+      tex.error("LaTeX PDF support not loaded", {"Maybe try adding \\DocumentMetadata."})
+      ltx = {pdf = {object_id = function() return 0 end}}
+    end
+  end
+  return ltx
+end
+
 local mathml_ns_obj
 local function get_mathml_ns_obj()
-  mathml_ns_obj = mathml_ns_obj or token.create'c__pdf_backend_object_tag/NS/mathml_int'.index
+  if not mathml_ns_obj then
+    mathml_ns_obj = get_ltx().pdf.object_id'tag/NS/mathml'
+    if not mathml_ns_obj then
+      tex.error("Failed to find MathML namespace", {"The PDF support does not know the mathml namespace"})
+      mathml_ns_obj = 0
+    end
+  end
   return mathml_ns_obj
 end
 

@@ -58,7 +58,7 @@ end
 
 local function store_tag(xml)
   local mml_row = store_get_row()
-  mml_row[0] = 'mlabeledtr'
+  xml.intent = ':equationlabel'
   table.insert(mml_row, 1, xml)
   last_tag = nil
 end
