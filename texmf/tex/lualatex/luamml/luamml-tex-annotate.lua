@@ -6,6 +6,15 @@ local mark_environment = {
   data = {
   },
 }
+do
+  local _ENV = mark_environment
+  function consume_label(label, fn)
+    local mathml = data.mathml[label]
+    data.mathml[label] = nil
+    if fn then fn(mathml) end
+    return mathml
+  end
+end
 
 local function annotate()
   local annotation, err = load( 'return {'
@@ -59,10 +68,10 @@ local function annotate()
         props = {}
         properties[marked] = props
       end
-      if annotation.core then
+      if annotation.core ~= nil then
         props.mathml_core = annotation.core
       end
-      if annotation.struct then
+      if annotation.struct ~= nil then
         local saved = props.mathml_filter
         local struct = annotation.struct
         function props.mathml_filter(mml, core)

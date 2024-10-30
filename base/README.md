@@ -1,7 +1,7 @@
 The LaTeX kernel
 ================
 
-Release 2024-11-01 pre-release 3
+Release 2024-11-01 pre-release 4
 
 Overview
 --------
