@@ -31,7 +31,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltlists.dtx}
-             [2023/05/17 v1.0t LaTeX Kernel (List Environments)]
+             [2024/06/23 v1.0u LaTeX Kernel (List Environments)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltlists.dtx}
@@ -428,13 +428,13 @@
 %
 % DEFINE \dimen's and \count
 % \end{oldcomments}
-% \begin{macro}{\topskip}
+% \begin{macro}{\topsep}
 % \begin{macro}{\partopsep}
 % \begin{macro}{\itemsep}
 % \begin{macro}{\parsep}
 % \begin{macro}{\@topsep}
 % \begin{macro}{\@topsepadd}
-% \begin{macro}{\outerparskip}
+% \begin{macro}{\@outerparskip}
 %    \begin{macrocode}
 %<*2ekernel>
 \newskip\topsep
@@ -450,6 +450,7 @@
 % \begin{macro}{\leftmargin}\begin{macro}{\rightmargin}
 % \begin{macro}{\listparindent}\begin{macro}{\itemindent}
 % \begin{macro}{\labelwidth}\begin{macro}{\labelsep}
+% \begin{macro}{\linewidth}
 % \begin{macro}{\@totalleftmargin}
 %    \begin{macrocode}
 \newdimen\leftmargin
@@ -462,7 +463,7 @@
 \newdimen\@totalleftmargin \@totalleftmargin=\z@
 %    \end{macrocode}
 % \end{macro}\end{macro}\end{macro}\end{macro}\end{macro}
-% \end{macro}\end{macro}
+% \end{macro}\end{macro}\end{macro}
 %
 % \begin{macro}{\leftmargini}
 % \begin{macro}{\leftmarginii}
@@ -715,6 +716,66 @@
 %
 % This allows paragraph-making environments to work right when called
 % by other environments. (Changed 27 Oct 86)
+%
+% In 2024 this logic was partially replaced with a new algorithm:
+% \begin{itemize}
+% \item
+%   \cs{if@endpe} is now set globally to \texttt{true} or \texttt{false}.
+% \item
+%    In addition \cs{@endpetrue} initiates an \cs{aftergroup} call
+%    to \cs{propagate@doendpe} if it is used inside a group.
+% \item
+%    \cs{propagate@doendpe} in turn checks the status of \cs{if@endpe}
+%    and if that is \texttt{true} it calls \cs{@doendpe} otherwise it
+%    does nothing.
+% \item
+%    \cs{@doendpe} in turn calls \cs{@endpetrue} and also makes the
+%    necessary changes to
+%    \cs{par} and \cs{everypar} so that they handle as before any
+%    empty line that follows the environment.
+% \item
+%    Because of the \cs{@endpetrue} we get another \cs{aftergroup}, so the
+%    mechanisnm slowly migrates out of several groups if those follow
+%    immediately after the end of the environment. If, however, there is a new
+%    paragraph started or an explicit \cs{par} before the next group ends then this will
+%    result in a call to \cs{@endpefalse} and the migration stops
+%    (note that \cs{propagate@doendpe} is still called once after the group but does nothing).
+% \item
+%    Using this approach something like
+%\begin{verbatim}
+% {%  some customization here
+%  \begin{equation}
+%    x=y
+%  \end{equation}}
+% some text
+%\end{verbatim}
+%    is still correctly identified as a paragraph continuation so that
+%    there is no indentation before \texttt{some text}.
+% \item
+%    We can get away with using global settings of \cs{if@endpe} even
+%    in nested situations (without keeping track of the status in a
+%    stack), because the switch change is made only at
+%    the very end of such environments, basically directly before the
+%    \cs{endgroup} in \cs{end}, and it is later set back to \texttt{false} by
+%    the next \cs{everypar} or the next \cs{par}. Even if the
+%    environment is called without using \cs{begin} \cs{end}, the
+%    situation doesn't change (or rather cause a problem).
+% \item
+%    However, there is one scenario where the new approach would
+%    change the behavior. If a box is being built, e.g., with
+%    \cs{setbox}, we have now the case that a \cs{@endpetrue}
+%    inside would migrate out into a context in which it should not be
+%    true (because the box might get used elsewhere, e.g., a float).
+%    In the past, due to local switch changes, that didn't happen, i.e.,
+%    \cs{if@endpe} would revert to \texttt{false} at the end of the box
+%    definition.
+% \item
+%    Thus, to avoid that one has to explicitly set it back to false at
+%    the end of such constructions, just as  we also need to prevent
+%    colors from
+%    migrating out. Thus the correct  place to do this is
+%    in \cs{color@endgroup} because that is always called at that point.
+% \end{itemize}
 %    \begin{macrocode}
 \def\@endparenv{%
   \addpenalty\@endparpenalty\addvspace\@topsepadd\@endpetrue}
@@ -732,9 +793,12 @@
 %   |\clubpenalty| back to its default.
 % \changes{v1.0t}{2015/05/10}{Explicitly reset \cs{clubpenalty} before
 %  clearing \cs{everypar}; see also pr/0462 and pr/4065}
+% \changes{v1.0u}{2024/06/23}{Set \cs{if@endpe} to \texttt{false}
+%    before calling \cs{par} (needed for tagging)}
 %    \begin{macrocode}
               \clubpenalty\@clubpenalty
-              \everypar{}\par\@endpefalse}\everypar
+              \@endpefalse
+              \everypar{}\par}%
 %    \end{macrocode}
 %
 %    Use |\setbox0=\lastbox| instead of   |\hskip -\parindent|
@@ -743,8 +807,9 @@
 % \changes{v1.0k}{1995/11/07}{Enclosed \cs{setbox0} assignment by a
 % group so that it leaves the contents of box $0$ intact.}
 %    \begin{macrocode}
-               {{\setbox\z@\lastbox}%
-                \everypar{}\@endpefalse}}
+     \everypar
+         {{\setbox\z@\lastbox}%
+          \everypar{}\@endpefalse}}
 %<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 %
@@ -761,12 +826,60 @@
 %
 % \begin{macro}{\if@endpe}
 % \begin{macro}{\@endpefalse}
-% \begin{macro}{\@endpeltrue}
+% \begin{macro}{\@endpetrue}
+% \begin{macro}{\propagate@doendpe}
+%    As outlined above these are no longer simple switches, but we
+%    keep the name because it is used all over the place.
 %    \begin{macrocode}
 \newif\if@endpe
-\@endpefalse
 %    \end{macrocode}
-% \end{macro}\end{macro}\end{macro}
+%    
+% \changes{v1.0u}{2024/06/23}{Set \cs{if@endpe} globally and also set
+%    up migration to the outside}
+%    \begin{macrocode}
+%</2ekernel>
+%<*2ekernel|latexrelease>
+%<latexrelease>\IncludeInRelease{2024/11/01}%
+%<latexrelease>                 {\@endpetrue}{New @endpe handling}%
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\def\@endpefalse{\global\let\if@endpe\iffalse}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\def\@endpetrue {%
+  \global\let\if@endpe\iftrue
+%    \end{macrocode}
+%    If we are inside a group then propagate to the outside:   
+%    \begin{macrocode}
+   \ifnum\currentgrouplevel>\z@
+      \aftergroup\propagate@doendpe
+   \fi
+}
+%    \end{macrocode}
+%    If \cs{if@endpe} is still true after the group ends, we run \cs{@doendpe}
+%    that in turn runs another \cs{@endpetrue} (besides other things),
+%    thus propagating further if necessary.
+%    However, if the endpe situation got resolved and \cs{if@endpe} is \texttt{false}
+%    then nothing further happens.
+%    \begin{macrocode}
+\def\propagate@doendpe{\if@endpe \@doendpe \fi}
+%    \end{macrocode}
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{0000/00/00}%
+%<latexrelease>                 {\@endpetrue}{New @endpe handling}%
+%<latexrelease>
+%<latexrelease>
+%<latexrelease>\def\@endpefalse{\let\if@endpe\iffalse}
+%<latexrelease>\def\@endpetrue{\let\if@endpe\iftrue}
+%<latexrelease>
+%<latexrelease>\EndIncludeInRelease
+%<*2ekernel>
+%    \end{macrocode}
+% \end{macro}\end{macro}\end{macro}\end{macro}
 %
 %
 % \begin{macro}{\@mklab}

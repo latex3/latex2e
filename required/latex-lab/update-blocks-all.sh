@@ -4,6 +4,9 @@
 
 l3build save -cconfig-block -epdftex,luatex \
 	blocks-item-01 \
+	blocks-item-02 \
+	blocks-item-03 \
+	blocks-item-04 \
 	blocks-000 \
 	blocks-enumerate-01 \
 	blocks-enumerate-01b \
@@ -24,6 +27,7 @@ l3build save -cconfig-block -epdftex,luatex \
 	blocks-description-02b \
 	blocks-description-03 \
 	blocks-hyperref-01 \
+	blocks-minipage-gh544 \
 	blocks-theorem-01 \
 	blocks-theorem-02 \
 	blocks-theorem-03 \
@@ -38,7 +42,10 @@ l3build save -cconfig-block -epdftex,luatex \
         ptag-001 \
         problem-blocks-tabbing \
         gallery-III \
-        gallery-III-with-sec
+        gallery-III-with-sec \
+	tagging-0097 \
+	tagging-0097b \
+	tagging-0730
 
 
 exit

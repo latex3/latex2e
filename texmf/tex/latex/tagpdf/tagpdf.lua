@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.99b",       --TAGVERSION
-    date          = "2024-04-12", --TAGDATE
+    version       = "0.99g",       --TAGVERSION
+    date          = "2024-10-27", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -53,8 +53,8 @@ ltx.__tag.page   will contain page data
 ltx.__tag.tables contains also data from mc and struct (from older code). This needs cleaning up.
              There are certainly dublettes, but I don't dare yet ...
 ltx.__tag.func   will contain (public) functions.
-ltx.__tag.trace  will contain tracing/loging functions.
-local funktions starts with __
+ltx.__tag.trace  will contain tracing/logging functions.
+local functions starts with __
 functions meant for users will be in ltx.tag
 
 functions
@@ -67,7 +67,7 @@ functions
  ltx.__tag.func.store_mc_kid (mcnum,kid,page): stores the mc-kids of mcnum on page page
  ltx.__tag.func.store_mc_in_page(mcnum,mcpagecnt,page): stores in the page table the number of mcnum on this page
  ltx.__tag.func.store_struct_mcabs (structnum,mcnum): stores relations structnum<->mcnum (abs)
- ltx.__tag.func.mc_insert_kids (mcnum): inserts the /K entries for mcnum by wandering throught the [kids] table
+ ltx.__tag.func.mc_insert_kids (mcnum): inserts the /K entries for mcnum by wandering through the [kids] table
  ltx.__tag.func.mark_page_elements(box,mcpagecnt,mccntprev,mcopen,name,mctypeprev) : the main function
  ltx.__tag.func.mark_shipout (): a wrapper around the core function which inserts the last EMC
  ltx.__tag.func.fill_parent_tree_line (page): outputs the entries of the parenttree for this page
@@ -90,6 +90,8 @@ local iwspaceattributeid = luatexbase.new_attribute ("g__tag_interwordspace_attr
 local iwfontattributeid  = luatexbase.new_attribute ("g__tag_interwordfont_attr")
 local tagunmarkedbool= token.create("g__tag_tagunmarked_bool")
 local truebool       = token.create("c_true_bool")
+local softhyphenbool = token.create("g__tag_softhyphen_bool")
+
 local catlatex       = luatexbase.registernumber("catcodetable@latex")
 local tableinsert    = table.insert
 local nodeid           = node.id
@@ -121,6 +123,9 @@ local KERN           = node.id("kern")
 local PENALTY        = node.id("penalty")
 local LOCAL_PAR      = node.id("local_par")
 local MATH           = node.id("math")
+
+local explicit_disc = 1
+local regular_disc = 3
 ltx             = ltx        or { }
 ltx.__tag          = ltx.__tag        or { }
 ltx.__tag.mc       = ltx.__tag.mc     or  { } -- mc data
@@ -825,6 +830,54 @@ function ltx.__tag.func.output_parenttree (abspage)
   line = ltx.__tag.func.fill_parent_tree_line (i) .. "^^J"
   tex.sprint(catlatex,line)
  end
+end
+do
+  local properties = node.get_properties_table()
+  local is_soft_hyphen_prop = 'tagpdf.rewrite-softhyphen.is_soft_hyphen'
+  local hyphen_char = 0x2D
+  local soft_hyphen_char = 0xAD
+  local softhyphen_fonts = setmetatable({}, {__index = function(t, fid)
+    local fdir = identifiers[fid]
+    local format = fdir and fdir.format
+    local result = (format == 'opentype' or format == 'truetype')
+    local characters = fdir and fdir.characters
+    result = result and (characters and characters[soft_hyphen_char]) ~= nil
+    t[fid] = result
+    return result
+  end})
+  local function process_softhyphen_pre(head, _context, _dir)
+    if softhyphenbool.mode ~= truebool.mode then return true end
+    for disc, sub in node.traverse_id(DISC, head) do
+      if sub == explicit_disc or sub == regular_disc then
+        for n, _ch, _f in node.traverse_char(disc.pre) do
+          local props = properties[n]
+          if not props then
+            props = {}
+            properties[n] = props
+          end
+          props[is_soft_hyphen_prop] = true
+        end
+      end
+    end
+    return true
+  end
+
+  local function process_softhyphen_post(head, _context, _dir)
+    if softhyphenbool.mode ~= truebool.mode then return true end
+    for disc, sub in node.traverse_id(DISC, head) do
+      for n, ch, fid in node.traverse_glyph(disc.pre) do
+        local props = properties[n]
+        if softhyphen_fonts[fid] and ch == hyphen_char and props and props[is_soft_hyphen_prop] then
+          n.char = soft_hyphen_char
+          props.glyph_info = nil
+        end
+      end
+    end
+    return true
+  end
+
+  luatexbase.add_to_callback('pre_shaping_filter', process_softhyphen_pre, 'tagpdf.rewrite-softhyphen')
+  luatexbase.add_to_callback('post_shaping_filter', process_softhyphen_post, 'tagpdf.rewrite-softhyphen')
 end
 -- 
 --  End of File `tagpdf.lua'.

@@ -9,8 +9,8 @@
 %
 %    https://www.latex-project.org/lppl.txt
 %
-\def\ltlabblockdate{2024-03-23}
-\def\ltlabblockversion{0.8n}
+\def\ltlabblockdate{2024-10-11}
+\def\ltlabblockversion{0.8v}
 %<*driver>
 \documentclass[kernel]{l3doc}
 \usepackage{amstext}
@@ -331,6 +331,8 @@
 %  \TemplateKey{par-skip}{skip}{}{\cs{parsep}}
 %  \TemplateKey{end-skip}{skip}{}{\valuefrom{beginsep}}
 %  \TemplateKey{end-par-skip}{skip}{}{\valuefrom{begin-par-skip}}
+%  \TemplateKey{item-skip}{skip}{The space in front of an item if the
+%    block is a list; if not the setting has no effect}{\cs{itemsep}}
 %  \TemplateKey{beginpenalty}{integer}{}{\cs{@beginparpenalty}}
 %  \TemplateKey{endpenalty}{integer}{}{\cs{@endparpenalty}}
 %  \TemplateKey{leftmargin}{length}{}{\cs{leftmargin}}
@@ -341,7 +343,7 @@
 %
 %    The idea of a \key{heading} key needs some further
 %    thoughts. Maybe instead the object type should accept a second
-%    argument and receive input for such a headding from the document
+%    argument and receive input for such a heading from the document
 %    level instead.
 %
 %    The names of the keys need further thoughts and some
@@ -390,7 +392,7 @@
 %              {Instance of type \texttt{item} to be used to format
 %               the label string}{basic}
 %  \TemplateKey{item-skip}{skip}{The space in front of an item in the
-%               list.\fmi{May need to be on a different template level}}{\cs{itemsep}}
+%               list. If not specified the value specified in the block template instance is used}{}
 %  \TemplateKey{item-indent}{length}{Horizontal displacement of the item.}{0pt}
 %  \TemplateKey{item-penalty}{integer}
 %              {Penalty for breaking before an
@@ -474,7 +476,7 @@
 %    \>\>\> The paragraph text before the display element \ldots\\
 %    \>\>   \struct{/text}\\
 %    \>\>   \struct{display element structure}\\
-%    \>\>\>  Content of the display structure possiblly involving inner \struct{text-unit} tags\\
+%    \>\>\>  Content of the display structure possibly involving inner \struct{text-unit} tags\\
 %    \>\>   \struct{/display element structure}\\
 %    \>\>   \struct{text}\\
 %    \>\>\> \ldots{} continuing the outer paragraph text\\
@@ -722,7 +724,7 @@
                             blockenv implementation]
 %    \end{macrocode}
 %
-%   Generell kernel changes, also loaded by the sec and toc code.
+%   General kernel changes, also loaded by the sec and toc code.
 %    \begin{macrocode}
 \RequirePackage{latex-lab-kernel-changes}
 %    \end{macrocode}
@@ -756,8 +758,9 @@
 %
 %
 %
-%  \begin{macro}{\@doendpe}
+%  \begin{macro}{\@doendpe,\__kernel_displayblock_doendpe:}
 %    The original \LaTeXe{} command is augmented to allow for tagging.
+%    TODO: use sockets for this and move to the kernel eventually.
 %    \begin{macrocode}
 \def\@doendpe{\@endpetrue
   \def\par
@@ -792,14 +795,9 @@
 %    \begin{macrocode}
 \cs_new_eq:NN \__kernel_displayblock_doendpe: \prg_do_nothing:
 %    \end{macrocode}
-%    The flag itself should be set globally not locally.\fmi{verify
-%    that this claim is actually correct!}
-%    \begin{macrocode}
-\def\@endpetrue {\global\let\if@endpe\iftrue}
-\def\@endpefalse{\global\let\if@endpe\iffalse}
-%    \end{macrocode}
-%  \end{macro}
 %
+%
+% \end{macro}
 %
 %
 % \subsection{Object and template interfaces}
@@ -847,6 +845,7 @@
 %
 %  \begin{template}{block display}
 %    
+%  \changes{v0.8s}{2024/10/03}{Offer item-skip key also on block templates}
 %    \begin{macrocode}
 \DeclareTemplateInterface{block}{display}{1}    
 {
@@ -856,6 +855,7 @@
   par-skip       : skip = \parsep ,
   end-skip       : skip = \KeyValue{beginsep} ,                % conflict with name below
   end-par-skip   : skip = \KeyValue{begin-par-skip} ,
+  item-skip      : skip = \itemsep ,
   beginpenalty   : integer = \UseName{@beginparpenalty} ,
   endpenalty     : integer = \UseName{@endparpenalty} ,
   leftmargin     : length = \leftmargin ,
@@ -1269,9 +1269,15 @@
 %    We do this by storing them away and then call the list
 %    instance. Inside this instance the \texttt{setup-code} key
 %    contains \cs{legacylistsetupcode}, which makes use of the stored values.
+%  \changes{v0.8v}{2024/10/11}{Update \cs{@itemlabel} in
+%    \cs{l_@@_legacy_env_params_tl} and not at the start of the
+%    environment (tagging/730)}
 %    \begin{macrocode}
-      \tl_set:Nn \@itemlabel {#2}
-      \tl_set:Nn \l_@@_legacy_env_params_tl {#3}
+      \tl_set:Nn \l_@@_legacy_env_params_tl
+         {
+           \tl_set:Nn \@itemlabel {#2}
+           #3
+         }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -1284,14 +1290,6 @@
 % \end{environment}
 %
 %
-%
-% \begin{variable}{\l_@@_env_params_tl}
-%    Declare the variable for the parameter argument; \cs{@itemlabel}
-%    is already declared in \LaTeXe{}.
-%    \begin{macrocode}
-\tl_new:N \l_@@_env_params_tl
-%    \end{macrocode}
-% \end{variable}
 %
 %
 %  \begin{macro}{\legacylistsetupcode}
@@ -1308,10 +1306,14 @@
     \dim_zero:N \itemindent
 %    \end{macrocode}
 %    
-%    By default a \env{list} environment is not numbered:
+%    By default a \env{list} environment is not numbered, but this
+%    happens already in the block template.
+%  \changes{v0.8v}{2024/10/11}{Set the defaults for \cs{@itemlabel},
+%    \cs{@listctr} and \texttt{@nmbrlist} early in the block code
+%    before the setup code gets executed (tagging/730)}
 %    \begin{macrocode}
-    \tl_set:Nn \@listctr {}
-    \legacy_if_set_false:n { @nmbrlist } % needed if lists are nested
+%    \tl_set:Nn \@listctr {}
+%    \legacy_if_set_false:n { @nmbrlist } % needed if lists are nested
 %    \end{macrocode}
 %    By default there is a simple definition for \cs{makelabel}. It can be
 %    overwritten in the second mandatory argument to the list
@@ -1569,7 +1571,7 @@
 %    \end{macrocode}
 %    We need to know later if we have nested blockenvs inside
 %    a flattened environment. Whenever we  start a new blockenv we
-%    increment \cs{\l_@@_flattened_level_int} if it is already
+%    increment \cs{l__tag_block_flattened_level_int} if it is already
 %    different from zero. If it is zero we increment it if flattening
 %    is requested.
 %    Thus a value of \texttt{0} means no flattening requested so far
@@ -1578,14 +1580,14 @@
 %    is surrounded by a \texttt{text-unit} tag, while for any value above
 %    \texttt{1} we have to omit the \texttt{text-unit}.
   %    \begin{macrocode}
-  \int_compare:nNnTF \l_@@_flattened_level_int > 0
+  \int_compare:nNnTF \l__tag_block_flattened_level_int > 0
       {
-        \int_incr:N \l_@@_flattened_level_int
+        \int_incr:N \l__tag_block_flattened_level_int
       }
       {
         \bool_if:NT \l__tag_para_flattened_bool
              {
-               \int_incr:N \l_@@_flattened_level_int
+               \int_incr:N \l__tag_block_flattened_level_int
              }
       }
 %
@@ -1622,6 +1624,23 @@
 %    tagging structures.
 %    \begin{macrocode}
   \tag_if_active:T { \use:c { @@_recipe_ \l_@@_tagging_recipe_tl : } }
+%    \end{macrocode}
+%    The default for \env{list} environments is that they have an
+%    empty label and are not numbered (something that is then
+%    overwritting by the setup of a specific list). We ensure
+%    this here even for non-lists, because we need a defined state
+%    that then can be overwritting by the legacy setup code for
+%    the \env{list} environment in \cs{l_@@_setup_code_tl}.
+%    This is needed in case lists are nested as they otherwise would
+%    inherit outer values (and suddenly an \env{itemize} would start
+%    incrementing an outer \env{enumerate} counter, etc. 
+%  \changes{v0.8v}{2024/10/11}{Set the defaults for \cs{@itemlabel},
+%    \cs{@listctr} and \texttt{@nmbrlist} early in the block code
+%    before the setup code gets executed (tagging/730)}
+%    \begin{macrocode}
+  \tl_clear:N \@itemlabel
+  \tl_clear:N \@listctr
+  \legacy_if_set_false:n { @nmbrlist } 
 %    \end{macrocode}
 %    Then run the setup code if any is given in the instance.
 %    \begin{macrocode}
@@ -1681,11 +1700,15 @@
 %  \end{template}
 %
 %
-%  \begin{macro}{\l_@@_flattened_level_int}
+%  \begin{macro}{\l__tag_block_flattened_level_int}
 %    Count the levels of nested blockenvs starting with the first that
-%    is \enquote{flattened}.
+%    is \enquote{flattened}. The counter is defined in lttagging.dtx,
+%    but until the next release 11/24 we set it up here too
 %    \begin{macrocode}
-\int_new:N \l_@@_flattened_level_int
+\int_if_exist:NF \l__tag_block_flattened_level_int
+  {
+    \int_new:N \l__tag_block_flattened_level_int
+  }
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -1725,15 +1748,19 @@
       \legacy_if_gset_false:n { @inlabel }
     }
 %    \end{macrocode}
-%    In a pure ``displayblock'' scenario \texttt{@newlist} will be
-%    always false and the code bypassed, but we may have an outer list
-%    followed immediately by a displayblock (with the \cs{item} missing)
+%    If we are ending a list environment and we have not seen any
+%    \cs{item}, i.e., \texttt{@newlist} is still true, we raise an
+%    error. In basic a ``displayblock'' scenario \texttt{@newlist} will
+%    always be false, but if such an environment appears inside an outer
+%    list then \cs{noitemerr} could still be triggered and that is undesirable
+%    (as the missing item will be detected at the wrong point and again later,
+%    during the outer list processing). We
+%    therefore run it only if the current environment is a list.
+%  \changes{v0.8q}{2024/09/03}{Raise a \cs{@noitemerr} if appropriate}
 %    \begin{macrocode}
-  \legacy_if:nT { @newlist }
-    {
-      \@noitemerr
-      \legacy_if_gset_false:n { @newlist }
-    }
+  \@@_if_list:T { \legacy_if:nT { @newlist } { \@noitemerr } }
+%    \end{macrocode}
+%    \begin{macrocode}
   \mode_if_horizontal:TF
        { \@@_skip_remove_last: \@@_skip_remove_last: \par }
        { \@inmatherr{\end{\@currenvir}} }
@@ -1742,6 +1769,13 @@
 %    closing tagging structure(s), if we are doing tagging.
 %    \begin{macrocode}
   \__kernel_displayblock_end:
+%    \end{macrocode}
+%    Resetting the \texttt{@newlist} switch is also only done if the
+%    current enviornment is a list and not unconditionally.
+%  \changes{v0.8q}{2024/09/03}{Setting \texttt{@newlist} to false
+%    moved after tagging code if in a list}
+%    \begin{macrocode}
+  \@@_if_list:T { \legacy_if_gset_false:n { @newlist } }
 %    \end{macrocode}
 %    What to do in terms of vertical spacing  in different situations
 %    is still somewhat open to debate, right now this is more or less
@@ -1789,6 +1823,19 @@
 %  \end{macro}
 %
 %
+%  \begin{macro}{\@@_if_list:T}
+%    The following code may need some redesigning, as there is no good test for \enquote{is
+%    this environment a \enquote{list} that has \cs{item}s}. For now
+%    this here does the trick well enough.\fmi{revisit}
+%  \changes{v0.8q}{2024/09/03}{Provide a test for: Am I in a list?}
+%    \begin{macrocode}
+\cs_new:Npn \@@_if_list:T
+   { \tl_if_eq:NnT \l_@@_block_instance_tl {list} }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%      
 %  \begin{macro}{\__kernel_displayblock_end:}
 %    The kernel hook for tagging at the end of the block.
 %    \begin{macrocode}
@@ -1814,9 +1861,13 @@
 %    and should not inherit the setting from the outer environment.
 %    \begin{macrocode}
 \socket_new_plug:nnn{tagsupport/block-endpe}{on}
-                    { \legacy_if_gset_true:n  { @endpe } }
+%    \end{macrocode}
+%    We can't use \cs{legacy_if_gset_true:n} because this is now doing
+%    more than setting the legacy switch
+%    \begin{macrocode}
+                    { \@endpetrue }
 \socket_new_plug:nnn{tagsupport/block-endpe}{off}
-                    { \legacy_if_gset_false:n { @endpe } }
+                    { \@endpefalse }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -1864,6 +1915,7 @@
 %
 % \begin{template}{block display}
 %    
+%  \changes{v0.8s}{2024/10/03}{Offer item-skip key also on block templates}
 %    \begin{macrocode}
 \DeclareTemplateCode{block}{display}{1}
 {
@@ -1873,6 +1925,7 @@
   par-skip        = \parsep ,
   end-skip        = \l_@@_botsep_skip ,
   end-par-skip    = \l_@@_parbotsep_skip ,
+  item-skip       = \itemsep ,
   beginpenalty    = \@beginparpenalty ,
   endpenalty      = \@endparpenalty ,
   rightmargin     = \rightmargin ,
@@ -1981,7 +2034,7 @@
 %    \cs{parskip} and some other housekeeping, unless this block is inside a list and the list
 %    \cs{item} has not yet placed. In that case the vertical
 %    space and penalty us suppressed. This
-%    is controled through the legacy switches \texttt{@noparitem},
+%    is controlled through the legacy switches \texttt{@noparitem},
 %    \texttt{minipage}, and \texttt{@nobreak}.
 %    \begin{macrocode}
     \legacy_if:nTF { @noparitem }
@@ -2028,7 +2081,6 @@
 % \end{template}
 %
 %
-%
 %  \begin{macro}{\__kernel_displayblock_begin:,
 %                \__kernel_displayblock_beginpar_hmode:w,
 %                \__kernel_displayblock_beginpar_vmode:}
@@ -2073,6 +2125,40 @@
 %
 %
 %
+%  \begin{macro}{\@@_evaluate_saved_user_keys:nn}
+%    Keys set on individual list environments may be intended to alter
+%    the behavior of the template instance that defines the \cs{item}
+%    command. If meant to alter only a single \cs{item} command one
+%    would specify them in the optional argument of the \cs{item}, but
+%    if they should alter all items the right place would be the list
+%    environment. For this reason we need to store the values and then
+%    set them inside the \cs{item} template code using
+%    \cs{SetTemplateKeys} in the appropriate context (template type
+%    and template name). This is done in
+%    \cs{@@_evaluate_saved_user_keys:nn}. The context is provided in
+%    the two arguments (because different list environments may use
+%    different \cs{item} instances based on different templates. By
+%    default the command does
+%    nothing because most environments do not have user key settings.
+%  \changes{v0.8s}{2024/10/03}{Pass user keys on list to \cs{item} for
+%    evaluation}
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_evaluate_saved_user_keys:nn \use_none:nn
+%    \end{macrocode}
+%    Maybe something like this should become a public function, but
+%    for now this is a one-off for the \cs{item} command and therefore
+%    coded inline and internal to the block code.
+%    \begin{macrocode}
+%\cs_new:Npn \@@_save_user_keys:n #1 {
+%  \tl_if_empty:nTF {#1}
+%     { \cs_set_eq:NN \@@_evaluate_saved_user_keys:nn \use_none:nn }
+%     {
+%       \cs_set:Npe \@@_evaluate_saved_user_keys:nn ##1##2
+%          { \SetTemplateKeys{##1}{##2}{ \exp_not:n{#1} } }
+%     }
+%}
+%    \end{macrocode}
+%  \end{macro}
 %
 %
 % \begin{template}{list std}
@@ -2098,36 +2184,48 @@
 {
   \@@_debug_typeout:n{template:list:std}
 %
-  \tl_if_empty:nF {#1} { \SetTemplateKeys{list}{std}{#1} }
+%    \end{macrocode}
+%    We start by looking at the user supplied keys in \texttt{\#1}. If
+%    there aren't any we reset \cs{@@_evaluate_saved_user_keys:nn} to
+%    do nothing. Otherwise we evaluate and set the keys in the contect
+%    of the current list template. In addition we prepare
+%    \cs{@@_evaluate_saved_user_keys:nn} for execution in the
+%    template for \cs{item}.
+%  \changes{v0.8s}{2024/10/03}{Prepare \cs{@@_evaluate_saved_user_keys:nn}
+%            for use in \cs{item}}
+%    \begin{macrocode}
+  \tl_if_empty:nTF {#1}
+     { \cs_set_eq:NN \@@_evaluate_saved_user_keys:nn \use_none:nn }
+     {
+       \SetTemplateKeys{list}{std}{#1}
+       \cs_set:Npe \@@_evaluate_saved_user_keys:nn ##1##2
+          { \SetTemplateKeys{##1}{##2}{ \exp_not:n{#1} } }
+     }
 %    \end{macrocode}
 %    Has this list a counter name defined in the instance?
 %    \begin{macrocode}
   \tl_if_empty:NTF \l_@@_counter_tl
     {                                
 %    \end{macrocode}
-%    If not we check if \cs{@listctr} has a non-empty value to be used
-%    for the list counter.      
-%
-%    We better test for blank not empty in case somebody had defined
-%    \cs{@listctr} using \cs{renewcommand} or \cs{cs_set:Npn}.
+%    If not we check if \cs{@nmbrlist} is true which may be the case
+%    in legacy environments that used \cs{usecounter} in the argument
+%    to the \env{list} environment.
+%  \changes{v0.8v}{2024/10/11}{Correct logic for setting up the list
+%    counter  (tagging/730)}
 %    \begin{macrocode}
-     \tl_if_blank:oF \@listctr
-       {
+    \legacy_if:nT { @nmbrlist }
+        {
 %    \end{macrocode}
-%    In that case \texttt{@nmbrlist} should have been set too, for
-%    example, through \cs{usecounter}, so we do not set it
-%    explicitly. However, we check if we should resume a previous list.
+%    In that case we only check if we should resume a previous list
+%    (\cs{@listctr} should be set in that case through the legacy
+%    method as well so we should be able to use it).
 %    \begin{macrocode}
          \bool_if:NF \l_@@_resume_bool
            {
              \int_gset:cn{ c@ \@listctr }
                  { \l_@@_counter_start_int - 1 }
            } 
-       } 
-%    \end{macrocode}
-%    If \cs{@listctr} is not set then we have definitely an unnumbered list.
-%    \begin{macrocode}
-       { \@nmbrlistfalse } 
+        }
     }
 %    \end{macrocode}
 %    If a counter is set in the list instance we use that
@@ -2157,11 +2255,27 @@
       \tl_set_eq:NN \@itemlabel \l_@@_item_label_tl
     }
 %    \end{macrocode}
-%    finally, we signal that we are at the start of a new list (which
-%    effects how the first \cs{item} is handled and how \cs{par}
+%    Finally, we signal that we are at the start of a new list (which
+%    affects how the first \cs{item} is handled and how \cs{par}
 %    commands are interpreted.
 %    \begin{macrocode}
     \legacy_if_gset_true:n { @newlist }
+%    \end{macrocode}
+%    If we encounter horizontal material before the first \cs{item} we
+%    do want a \cs{@noitemerr} straight away, because afterwards we
+%    end up with tagging structure faults whose cause is the
+%    missing \cs{item}. So we setup up \cs{@@_item_everypar:} to test
+%    for this; when the first \cs{item} is encountered this will get
+%    reset. This is only relevant for vertical lists, when dealing with
+%    inline lists one would need to test for something else to
+%    identify that there is horizontal material between the start of the list and
+%    the first \cs{item} (maybe some \cs{spacefactor} trick could be
+%    used then, or the material is boxed first and the width is
+%    inspected as suggested by Joseph).\fmi{Think about a better
+%    implementation at some point.}
+%  \changes{v0.8q}{2024/09/02}{}
+%    \begin{macrocode}
+    \cs_set_eq:NN \@@_item_everypar: \@@_item_everypar_first:
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
@@ -2251,8 +2365,19 @@
 %    was given.
 %    \begin{macrocode}
     \tl_set_eq:NN \l_@@_label_given_tl \c_novalue_tl
+%    \end{macrocode}
+%    First we evaluate and set any keys specified on the list
+%    environment by calling
+%    \cs{@@_evaluate_saved_user_keys:nn}. Then we do the same
+%    with all keys specified on this \cs{item} command (which may
+%    overwrite one or the other setting just made).
+%  \changes{v0.8s}{2024/10/03}{Use \cs{@@_evaluate_saved_user_keys:nn}
+%            to make use of user keys on the list level}
+%    \begin{macrocode}
+    \@@_evaluate_saved_user_keys:nn {item}{std} 
     \tl_if_empty:nF{#1}{ \SetTemplateKeys{item}{std}{#1} }
 %    \end{macrocode}
+%    
 %    If no optional argument was given then \cs{l_@@_label_given_tl}
 %    is still equal to \cs{c_novalue_tl} and so we can distinuish
 %    that from \verb=\item[]=.
@@ -2404,16 +2529,16 @@
 %
 %
 %
-% \begin{macro}{\@@_item_everypar:, \@@_item_everypar_std:}
+% \begin{macro}{\@@_item_everypar:, \@@_item_everypar_std:, \@@_item_everypar_first:}
 %    The \cs{@@_item_everypar:} command is executed as part of \hook{para/begin}
 %    but most of the time does nothing, i.e., it has the following
-%    default definition.
+%    default definition outside of lists (and most of the time within lists).
 %    \begin{macrocode}
 \cs_new_eq:NN \@@_item_everypar: \prg_do_nothing:
 %    \end{macrocode}
-%
+%    
 %    \begin{macrocode}
-\AddToHook{para/begin}[lists]{\@@_item_everypar:}
+\AddToHook{para/begin}[items]{\@@_item_everypar:}
 %    \end{macrocode}
 %
 %    Note that we have to make sure that the above code is executed
@@ -2421,9 +2546,9 @@
 %    \texttt{@inlabel} to make a decision.
 %
 %    By the end of the day both should probably move into the kernel
-%    hook instead!
+%    hook instead or, better, into sockets.
 %    \begin{macrocode}
-\DeclareHookRule{para/begin}{lists}{after}{tagpdf}
+\DeclareHookRule{para/begin}{items}{after}{tagpdf}
 %    \end{macrocode}
 %
 %
@@ -2475,6 +2600,16 @@
 }
 %    \end{macrocode}
 %
+%    This is the definition of \cs{@@_item_everypar:} before the first
+%    \cs{item} is encountered.
+%  \changes{v0.8q}{2024/09/02}{Call \cs{@noitemerr} if hmode is
+%    started before the first item}
+%    \begin{macrocode}
+\cs_new:Npn \@@_item_everypar_first: {
+  \legacy_if:nT { @newlist }  { \@noitemerr }
+}
+%    \end{macrocode}
+%
 % \end{macro}
 %
 %
@@ -2520,7 +2655,7 @@
 %
 % \begin{macro}{\item}
 %   Here we already have all the building blocks.  Complain in math
-%   mode.  Distingusih between first item (do necessary tagging) and
+%   mode.  Distinguish between first item (do necessary tagging) and
 %    later items \cs{@@_inter_item:} to
 %   cleanly close what's before, then call \cs{@@_item_instance:n} (which
 %   calls \cs{UseInstance}\{item\}\marg{instance}) to prepare the
@@ -2541,8 +2676,16 @@
         }
         {
           \legacy_if:nTF { @newlist }
-            { \__kernel_list_item_begin: }
-            { \@@_inter_item:            }
+            {
+              \__kernel_list_item_begin:
+%    \end{macrocode}
+%    The first item of a list also has to change the \texttt{@newlist} switch.
+%  \changes{v0.8q}{2024/09/02}{Set \texttt{@newlist} to false after
+%    the first \cs{item}}
+%    \begin{macrocode}
+              \legacy_if_gset_false:n { @newlist }
+            }
+            { \@@_inter_item: }
 %    \end{macrocode}
 %    To avoid unnecessary key/val processing we make a quick check if
 %    there was an optional argument.
@@ -2751,7 +2894,7 @@
   \socket_assign_plug:nn{tagsupport/block-endpe}{on}
 %    \end{macrocode}
 %
-%    Handle the tag name and attribute classess using the key values
+%    Handle the tag name and attribute classes using the key values
 %    from the current list instance.
 %    \begin{macrocode}
   \tl_if_empty:NTF \l_@@_tag_name_tl
@@ -2994,6 +3137,7 @@
   block-instance = verbatimblock ,
   inner-instance = ,
   final-code     = \legacyverbatimsetup ,
+  para-instance  = justify
 }
 %    \end{macrocode}
 %  \end{instance}
@@ -3173,7 +3317,7 @@
 %                   block quoteblock-4,
 %                   block quoteblock-5,
 %                   block quoteblock-6 }
-%    Default layout is to indent equaly from both side.
+%    Default layout is to indent equally from both sides.
 %    \begin{macrocode}
 \DeclareInstance{block}{quoteblock-1}{display}
   { rightmargin = \KeyValue{leftmargin} }
@@ -3468,7 +3612,7 @@
 %    then have to avoid adding another \texttt{text-unit}.
 %    \begin{macrocode}
       {
-        \int_compare:nNnT \l_@@_flattened_level_int < 2
+        \int_compare:nNnT \l__tag_block_flattened_level_int < 2
             {
               \__tag_gincr_para_main_begin_int:
               \tag_struct_begin:n
@@ -3917,15 +4061,37 @@
 %    Finally, at the list end we have to close the open
 %    \texttt{LBody}, \texttt{LI}, \texttt{L}, and possibly a
 %    \struct{text} if the last item ends with a list.
+%    However, if the user forgot to add an \cs{item} then there will be no
+%    \texttt{LI} and \texttt{LBody} open, so we check for the status
+%    of \texttt{@newlist}. The corresponding no-item error was
+%    generated earlier outside the tagging code.
+%
+%    One could argue that it doesn't matter if the tagging is wrong
+%    after a \cs{@noitemerr} was issued. However, there is one case
+%    where it isn't an error: In the \texttt{thebibliography}
+%    environment (which is internally a list) it is often the case
+%    that documents start out with an empty environment, not
+%    containing any \cs{bibitem}s. For that reason \cs{@noitemerr} is
+%    redefined inside that environment to only produce a warning;
+%    hence we have to produce correct tag structures in that case.
+%  \changes{v0.8q}{2024/09/02}{Do not close LI and LBody if they
+%    never were opened.}
 %    \begin{macrocode}
 \cs_set:Npn \@@_list_end: {
-  \legacy_if:nT { @endpe }
+%    \end{macrocode}
+%    If \texttt{@newlist} is true (i.e., when we have an error or warning
+%    situation) there is not much to close.
+%    \begin{macrocode}
+  \legacy_if:nF { @newlist }
     {
-      \__tag_gincr_para_main_end_int:
-      \tagstructend                       % text-unit
-      \@@_debug_typeout:n{Structure-end~ P~ at~ list-end \on@line }
+      \legacy_if:nT { @endpe }
+        {
+          \__tag_gincr_para_main_end_int:
+          \tagstructend                       % text-unit
+          \@@_debug_typeout:n{Structure-end~ P~ at~ list-end \on@line }
+        }
+      \tagstructend\tagstructend  % end LBody, LI
     }
-  \tagstructend\tagstructend  % end LBody, LI
   \tagstructend               % end L
 }
 %    \end{macrocode}

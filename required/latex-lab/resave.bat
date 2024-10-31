@@ -1,9 +1,16 @@
+REM l3build save -c config-OR memoir-001 scrartcl-001
+REM l3build save -c config-OR-luatex scrartcl-001 test8 test10 test1 test9 test7 memoir-001 test5 test6 test4 test2 test-minipage test3 test-tnote-setup test11-series
+REM l3build save -c config-toc toc-ex-article-no-hyperref toc-ex-book-tocdepth toc-ex-article-hyperref-3 toc-manual-addcontentsline toc-debug toc-ex-article-hyperref-1 toc-ex-book-no-hyperref toc-ex-article-hyperref-2 toc-ex-book-hyperref-1
+REM l3build save -c config-block -e luatex blocks-quote-02 blocks-theorem-01 blocks-verbatim-01 tagging-0097 blocks-hyperref-01 blocks-theorem-02
+REM l3build save -c config-minipage -e luatex minipage-004-hyperref
+REM l3build save -c config-float -e luatex float-001 float-005-double float-004 float-003 float-002
+REM l3build save -c config-bib bib-010-natbib bib-005 bib-007-natbib bib-009 bib-004 bib-006 bib-008-natbib bib-003
+REM l3build save -c config-table-luatex table-007-longtable table-005 table-004-tabularx
+REM l3build save -c config-title title-008 title-004 title-005 title-007 title-002 title-009 title-006 title-003
+REM l3build save -c config-firstaid test-ltugboat test-amsart-title
+REM l3build save -c config-toc -e luatex toc-ex-article-hyperref-2 toc-ex-book-tocdepth toc-ex-article-no-hyperref toc-ex-article-hyperref-3 toc-ex-book-no-hyperref toc-ex-article-hyperref-1 toc-ex-book-hyperref-1 toc-manual-addcontentsline toc-debug
+REM l3build save -c config-title -e luatex title-003 title-009 title-007 title-005 title-006 title-004 title-008 title-002
 
-
- l3build save -e luatex tagging-gh34
-  l3build save -c config-sec -e luatex test-article-1 test-book-2 test-stop-sect-pdf test-faulty-nesting test-suppress-sect test-book-1 test-stop-sect
-  l3build save -c config-toc -e luatex toc-debug toc-ex-article-no-hyperref toc-ex-article-hyperref-1 toc-ex-article-hyperref-2 toc-math-leaders toc-manual-addcontentsline toc-ex-book-tocdepth toc-ex-book-hyperref-1 toc-ex-book-no-hyperref toc-ex-article-hyperref-3
-  l3build save -c config-block -e luatex blocks-quote-02 blocks-trivlist-01 blocks-verbatim-01 ptag-001 blocks-description-01b blocks-list-01 blocks-quote-01 problem-blocks-tabbing blocks-description-02b gallery-III-with-sec blocks-enumerate-02b blocks-enumerate-01b blocks-list-02b blocks-list-01b blocks-hyperref-01 blocks-theorem-02 gallery-III blocks-itemize-01b blocks-theorem-04 blocks-itemize-01 blocks-itemize-02 blocks-description-03 blocks-theorem-03 blocks-verbatim-02 blocks-item-01 blocks-trivlist-02 blocks-theorem-01 blocks-list-03b
-  l3build save -c config-graphic -e luatex graphic-005-trim graphic-008-alt graphic-faults graphic-012-scale graphic-013-draft graphic-009-rotatebox graphic-001 graphic-004-angle graphic-003 graphic-010-actualtext graphic-006-width graphic-011-picture graphic-007-corr graphic-002
-  l3build save -c config-minipage -e luatex minipage-004-hyperref minipage-002-todo minipage-001 minipage-005-footnote minipage-003-todo
-  l3build save -c config-float -e luatex marginpar-03 marginpar-01 float-002 float-001 float-010-outside float-007-gh55 float-004 float-006-spacing float-005-double float-003
+l3build save -c config-block -e luatex blocks-hyperref-01
+l3build save -c config-block blocks-000
+ l3build check --show-saves -c config-block blocks-000 

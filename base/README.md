@@ -29,8 +29,7 @@ Documentation
 Full documentation of the LaTeX system is provided by
 
 - _LaTeX: A Document Preparation System_; Lamport, Addison-Wesley
-- _The LaTeX Companion_, 2ed; Mittelbach and Goossens with Braams, Carlisle
-  and Rowley, Addison-Wesley
+- _The LaTeX Companion_, 3ed; Mittelbach and Fischer, Addison-Wesley
 - _Guide to LaTeX_, 4ed; Kopka and Daly, Addison-Wesley
 
 The distribution is described in files ending `.txt` or `.md`; briefly,
@@ -56,7 +55,7 @@ The following files contain further information:
 - `ltx3info.tex` gives you some historical information about the LaTeX3
    project
 - `lamport-manual.err` lists errata in _LaTeX: A Document Preparation System_ (Lamport)
-- `tlc2.err` lists errata in _The LaTeX Companion_ (Mittelbach et al.)
+- `tlc3.err` lists errata in _The LaTeX Companion, 3rd edition_  (Mittelbach and Fischer)
 
 The files `ltnews*.tex` (part of the `doc` bundle) contain the LaTeX
 newsletters, the highest number being the most recent.
@@ -87,6 +86,6 @@ version 1.3c or later.
 
 -----
 
-<p>Copyright (C) 1989-2023 The LaTeX Project <br />
+<p>Copyright (C) 1989-2024 The LaTeX Project <br />
 <a href="http://latex-project.org/">http://latex-project.org/</a> <br />
 All rights reserved.</p>
