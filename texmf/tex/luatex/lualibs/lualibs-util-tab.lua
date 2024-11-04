@@ -432,7 +432,7 @@ else
                 local v = t[0]
                 if v then
                     m = m + 1
-                    r[m] = "[0]='"
+                    r[m] = "[0]="
                     if type(v) == "table" then
                         fastserialize(v)
                     else

@@ -1,7 +1,7 @@
 % \iffalse meta-comment
 %
-%% File: ltcmdhooks.dtx
-%% Copyright (C) 2020-2023
+%% From File: ltcmdhooks.dtx
+%% Copyright (C) 2020-2024
 %% Frank Mittelbach, Phelype Oleinik, The LaTeX Project
 %
 % It may be distributed and/or modified under the conditions of the
@@ -12,16 +12,20 @@
 %    https://www.latex-project.org/lppl.txt
 %
 %
-%%% From File: ltcmdhooks.dtx
+% \fi
 %
-\def\ltcmdhooksversion{v1.0i}
-\def\ltcmdhooksdate{2023/11/28}
-%
-%
+% \iffalse
+%%% From File: lthooks.dtx
 %
 %<*driver>
+% \fi
+\ProvidesFile{ltcmdhooks.dtx}
+             [2024/10/22 v1.0j LaTeX Kernel (Command hooks)]
+% \iffalse
+%
 \documentclass{l3doc}
-%\usepackage{ltcmdhooks}
+\GetFileInfo{ltcmdhooks.dtx}
+% \usepackage{ltcmdhooks}
 \EnableCrossrefs
 \CodelineIndex
 \begin{document}
@@ -38,7 +42,7 @@
 % \providecommand\phoinline[1]{\begin{quote}\itshape\footnotesize PhO: #1\end{quote}}
 %
 % \title{The \texttt{ltcmdhooks} module\thanks{This file has version
-%    \ltcmdhooksversion\ dated \ltcmdhooksdate, \copyright\ \LaTeX\
+%    \fileversion\ dated \filedate, \copyright\ \LaTeX\
 %    Project.}}
 % \author{Frank Mittelbach \and Phelype Oleinik}
 %
@@ -64,7 +68,15 @@
 %    supported
 %    for all types of commands, see section~\ref{sec:look-ahead} for
 %    the restrictions that apply and what happens if one tries to use
-%    this with commands for which this is not supported.}  These are:
+%    this with commands for which this is not supported.}
+%
+%    However, this is only true \enquote{in theory}. In practice there
+%    are a number of restrictions that makes it impossible to use such
+%    generic command hooks in a number of cases, so please read all
+%    of section~\ref{sec:restrictions} to understand what may prevent
+%    you from using them successfully.
+%
+%    The generic command hooks are:
 %    \begin{description}
 %    \item[\hook{cmd/\meta{name}/before}]
 %
@@ -125,8 +137,8 @@
 %    \item
 %
 %      that code can be prepended or appended (i.e., added to the
-%      hooks) even if the command itself is not defined, because the
-%      defining package has not yet been loaded;
+%      hooks) even if the command itself is not (yet) defined, because the
+%      defining package has not been loaded at this point;
 %
 %    \item
 %
@@ -148,7 +160,55 @@
 % and \TeX{} doesn't have a reliable way to see that, so some guesswork
 % has to be employed.
 %
-% \subsection{Patching}
+% We can do this in most cases when commands are defined using
+% \cs{NewDocumentCommand} or \cs{newcommand} (with a few exceptions).
+% For commands defined with \tn{def} the situation is less good.
+% Common cases where the command hooks will not work are:
+% \begin{itemize}
+% \item
+%
+%   Commands that use special catcode settings within their
+%   definition. In that case it is usually not possible to augment the
+%   definition (see~\ref{sec:patching}).
+%
+% \item
+%
+%   If a command is defined while \cs{ExplSyntaxOn} is in force
+%   \textbf{and} the command contains \verb=~= characters to represent
+%   spaces, then it can't be patched to include the command hooks. In
+%   fact in some very special circumstances you might even get a
+%   low-level error rather than the information that the command can't
+%   be patched (see,  for example,
+%   \url{https://github.com/latex3/latex2e/issues/1430}.
+%
+% \item
+%
+%   Commands that have arguments as far as the user is concerned
+%   (e.g., \cs{section} or \cs{caption}), but are defined in a way that these
+%   arguments are not read by the user level command but only later
+%   during the processing. In that case the \texttt{after} hook
+%   doesn't work at all.  The \text{before} hook only works with
+%   \cs{AddToHook} but not with \cs{AddToHookWithArguments} because the
+%   arguments haven't been read at that point where the hook is
+%   patched in. See
+%   section~\ref{sec:look-ahead}.
+%
+%
+% \item
+%   Adding a specific  generic command hook is only attempted once per
+%   command, thus after redefining a command such hooks will no longer
+%   be there and will also not being re-added, see section~\ref{sec:timing}.
+%
+% \end{itemize}
+% All this means that you have to have a good understanding of how
+% commands are defined when you attempt to make use of such hooks and
+% something goes wrong.
+% What can help in that case is to turn on \cs{DebugHooksOn} in which
+% case you get much more (low-level) details on why something fails and
+% what was tried to enable the hooks.
+%
+%
+% \subsection{Patching}\label{sec:patching}
 %
 % The code here tries to find out if a command was defined with
 % \tn{newcommand} or \tn{DeclareRobustCommand} or
@@ -168,7 +228,7 @@
 % catcode settings are not the same as the ones at the time of command's
 % definition, so not always adding a hook to a command will work.
 %
-% \subsubsection{Timing}
+% \subsubsection{Timing}\label{sec:timing}
 %
 % When \cs{AddToHook} (or its \pkg{expl3} equivalent) is called with
 % a generic |cmd| hook, say, \hook{cmd/foo/before}, for the first time
@@ -207,13 +267,23 @@
 % hooks attached to them.
 %
 % One good example is the \tn{section} command.  You can add something
-% to the \hook{cmd/section/before} hook, but if you try to add something
-% to the \hook{cmd/section/after} hook, \tn{section} will no longer
-% work.  That happens because the \tn{section} macro takes no argument,
-% but instead calls a few internal \LaTeX{} macros to look for the
-% optional and mandatory arguments.  By adding code to the
-% \hook{cmd/section/after} hook, you get in the way of that scanning.
+% to the \hook{cmd/section/before} hook (but only with \cs{AddToHook}
+% not \cs{AddToHookWithArguments}),
+% but if you try to add anything to the \hook{cmd/section/after}
+% hook, \tn{section} will no longer work at all.  That happens because the
+% \tn{section} macro takes no argument, but instead calls a few
+% internal \LaTeX{} macros to look for the optional and mandatory
+% arguments.  By adding code to the \hook{cmd/section/after} hook, you
+% get in the way of that scanning.
 %
+% In such a case, where it is known that a specific generic command
+% hook does not work if code is added to it, the package author can
+% add a \cs{DisableGenericHook}\footnote{Please use
+% \cs{DisableGenericHook} if at all, only on hooks that you
+% \enquote{own}, i.e., for commands your package or class defines and
+% not second guess whether or not hooks of other packages should get
+% disabled!} declaration to prevent this from happening in user
+% documents and thereby avoiding obscure errors.
 %
 %
 % \section{Package Author Interface}
@@ -394,6 +464,8 @@
 %    \end{macrocode}
 %
 % \changes{v1.0b}{2021/05/24}{Use \cs{msg_...} instead of \cs{__kernel_msg...}}
+% \changes{v1.0j}{2024/04/17}{Use \cs{__kernel_cs_parameter_spec:N} instead
+%   of \cs{cs_argument_spec:N}/\cs{cs_parameter_spec:N}}
 %
 %    \begin{macrocode}
 %<*2ekernel|latexrelease>
@@ -838,14 +910,14 @@
     \@@_patch_debug:x { ++~command~can~be~patched~without~rescanning }
 %    \end{macrocode}
 %   We'll start by counting the number of arguments in the command by
-%   counting the number of characters in the \cs{cs_argument_spec:N} of
+%   counting the number of characters in the \cs{cs_parameter_spec:N} of
 %   the macro, divided by two, and subtracting one if the command has an
 %   optional argument (that is, an extra |[]| in its
 %   \meta{parameter text}).
 %    \begin{macrocode}
     \int_set:Nn \l_@@_patch_num_args_int
       {
-        \exp_args:Nf \str_count:n { \cs_argument_spec:N #2 } / 2
+        \exp_args:Nf \str_count:n { \__kernel_cs_parameter_spec:N #2 } / 2
         \bool_if:NT #1 { -1 }
       }
 %    \end{macrocode}
@@ -998,7 +1070,7 @@
 %<latexrelease>    \@@_patch_debug:x { ++~command~can~be~patched~without~rescanning }
 %<latexrelease>    \int_set:Nn \l_@@_patch_num_args_int
 %<latexrelease>      {
-%<latexrelease>        \exp_args:Nf \str_count:n { \cs_argument_spec:N #2 } / 2
+%<latexrelease>        \exp_args:Nf \str_count:n { \__kernel_cs_parameter_spec:N #2 } / 2
 %<latexrelease>        \bool_if:NT #1 { -1 }
 %<latexrelease>      }
 %<latexrelease>    \int_compare:nNnTF { \l_@@_patch_num_args_int } > { \c_zero_int }
@@ -1248,12 +1320,12 @@
 %   top-level macro with no arguments, so testing this first would
 %   short-circuit \tn{robust@command@act} and the top-level macros would
 %   be incorrectly patched.  In that case, we just check if the
-%   \cs{cs_argument_spec:N} is empty, and call
+%   \cs{cs_parameter_spec:N} is empty, and call
 %   \cs{@@_patch_expand_redefine:NNnn}.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_retokenize_patch:Nnn #1 #2 #3
   {
-    \str_if_eq:eeTF { \cs_argument_spec:N #1 } { }
+    \str_if_eq:eeTF { \__kernel_cs_parameter_spec:N #1 } { }
       { \@@_patch_expand_redefine:NNnn \c_false_bool #1 {#2} {#3} }
       {
         \@@_patch_debug:x { ..~command~can~only~be~patched~by~rescanning }
@@ -1516,6 +1588,7 @@
 %<latexrelease>                 {cmd~hooks~with~args}
 \cs_new_protected:Npn \@@_patch_retokenize:Nnnn #1 #2 #3 #4
   {
+%    \end{macrocode}
 %   Here, when patching by retokenization, we can only guess the number
 %   of arguments of the macro.
 % \changes{v1.0h}{2023/05/21}

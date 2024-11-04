@@ -54,10 +54,8 @@ local chardata            = characters and characters.data
 local otffeatures         = fonts.constructors.features.otf
 local registerotffeature  = otffeatures.register
 
---[[ldx--
-<p>Analyzers run per script and/or language and are needed in order to
-process features right.</p>
---ldx]]--
+-- Analyzers run per script and/or language and are needed in order to process
+-- features right.
 
 local setstate = nuts.setstate
 local getstate = nuts.getstate

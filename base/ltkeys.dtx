@@ -33,7 +33,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltkeys.dtx}
-             [2024/01/13 v1.0m LaTeX Kernel (Keyval options)]
+             [2024/06/20 v1.0o LaTeX Kernel (Keyval options)]
 % \iffalse
 \documentclass{l3doc}
 \GetFileInfo{ltkeys.dtx}
@@ -73,6 +73,9 @@
 %    \item \texttt{.code} --- execute arbitrary code
 %     \item \texttt{.if} --- sets a \TeX{} \cs{if...} switch
 %     \item \texttt{.ifnot} --- sets an inverted \TeX{} \cs{if...} switch
+%     \item \texttt{.pass-to-packages} --- for class options, this specifies
+%       whether the option should be treated \enquote{global} (read by packages
+%       from the global list); for package options this property has no effect
 %     \item \texttt{.store} --- stores a value in a macro
 %     \item \texttt{.usage} -- defines whether the option can be given only
 %       when loading (\texttt{load}), in the preamble (\texttt{preamble}) or
@@ -100,7 +103,7 @@
 %   \texttt{second-name} can be given anywhere, and will save its value in
 %   \cs{@mypkg@other@name}.
 %
-%   Keys created \emph{before} the use of \cs{ProcessKeyOptions}act as
+%   Keys created \emph{before} the use of \cs{ProcessKeyOptions} act as
 %   package options.
 % \end{function}
 %
@@ -182,11 +185,73 @@
 %    \end{macrocode}
 % \end{macro}
 %
+% \begin{macro}{.pass-to-packages}
+% \changes{v1.0n}{2024/06/19}{New key property}
+% \begin{macro}{\@@_scope:n}
+% \changes{v1.0n}{2024/06/19}{New function}
+% \begin{macro}{\@@_scope:N}
+% \changes{v1.0n}{2024/06/19}{New function}
+% \changes{v1.0o}{2024/06/20}{Ensure only key name is stored}
+%   Used to force options to be global: as this property (uniquely) has
+%   an \emph{optional} value, there is a bit of work to do.
+%    \begin{macrocode}
+\cs_new_protected:cpn { \c_@@_props_root_str .pass-to-packages }
+  {
+    \bool_if:NTF \l_@@_no_value_bool
+      { \@@_scope:n { true } }
+      { \@@_scope:n }
+  }
+\cs_new_protected:Npn \@@_scope:n #1
+  {
+    \str_case:nnF {#1}
+      {
+        { true }
+          { \@@_scope:N \clist_put_right:NV }
+        { false }
+          { \@@_scope:N \clist_remove_all:NV }
+      }
+      {
+        \msg_error:nnnn { keys }
+          { choice-unknown }
+          { .pass-to-packages }
+          {#1}
+      }
+  }
+\cs_new_protected:Npn \@@_scope:N #1
+  {
+    \exp_after:wN \@@_find_key_module:wNN
+      \l_keys_path_str \s_@@_stop
+        \l_keys_key_tl \l_keys_key_str
+    #1 \l_@@_forced_global_clist \l_keys_key_str
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
 % \subsection{Main mechanism}
 % 
 %    \begin{macrocode}
+\cs_generate_variant:Nn \clist_if_in:NnT { Ne }
+\cs_generate_variant:Nn \clist_if_in:NnTF { Ne }
 \cs_generate_variant:Nn \clist_put_right:Nn { Nv }
 %    \end{macrocode}
+%
+% \begin{macro}{\l_@@_class_only_clist}
+% \changes{v1.0n}{2024/06/19}{New variable}
+%   Used to track class-only options.
+%    \begin{macrocode}
+\clist_new:N \l_@@_class_only_clist
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\l_@@_forced_global_clist}
+% \changes{v1.0n}{2024/06/19}{New variable}
+%   Used to force options to be global.
+%    \begin{macrocode}
+\clist_new:N \l_@@_forced_global_clist
+%    \end{macrocode}
+% \end{macro}
 %
 % \begin{macro}{\l_@@_options_clist}
 %   A single list is used for all options, into which they are collected
@@ -295,33 +360,34 @@
 % \changes{v1.0h}{2022/06/19}{Further work on handling of option removal}
 % \changes{v1.0h}{2022/06/20}{Use raw options data}
 % \changes{v1.0m}{2024/01/13}{Trim spaces off key names}
+% \changes{v1.0n}{2024/06/19}{Refactor function}
 % \begin{macro}{\@@_options_class:nnn}
 % \changes{v1.0h}{2022/06/20}{New function}
 % \changes{v1.0i}{2022/07/05}{Correct naming of raw class options storage}
 % \changes{v1.0l}{2022/10/22}{Correct handling of unused option list}
+% \changes{v1.0n}{2024/06/19}{Refactor function}
+% \changes{v1.0n}{2024/06/19}{Track options used by classes}
+% \begin{macro}{\@@_options_class:nn}
+% \changes{v1.0n}{2024/06/19}{New function}
 %   For classes, each option (stripped of any content after |=|)
 %   is checked for existence as a key. If found, the option is added to
 %   the combined list for processing. On the other hand, unused options
-%   are stored up in \cs{@unusedoptionlist}. Before any of that, though,
-%   there is a simple check to see if there is an |unknown| key. If there
-%   is, then \emph{everything} will match and the mapping can be skipped.
+%   are stored up in \cs{@unusedoptionlist}. An earlier version of
+%   this code checked for the \texttt{unknown} key just once and
+%   if found short-cutted the loop: that though makes handling more
+%   complex situations harder, so we take the performance hit instead.
+%   Options used by classes are tracked but the catch-all \texttt{unknown}
+%   is excluded (hence not using a lazy evaluation for the key testing).
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_options_class:n #1
   {
     \cs_if_free:cF { @raw@opt@ \@currname . \@currext }
       {
-        \keys_if_exist:nnTF {#1} { unknown }
+        \clist_map_inline:cn { @raw@opt@ \@currname . \@currext }
           {
-            \clist_put_right:Nv \l_@@_options_clist
-              { @raw@opt@ \@currname . \@currext }
-          }
-          {
-            \clist_map_inline:cn { @raw@opt@ \@currname . \@currext }
-              {
-                \exp_args:Ne \@@_options_class:nnn
-                  { \tl_trim_spaces:e { \@@_remove_equals:n {##1} } }
-                  {##1} {#1}
-              }
+            \exp_args:Ne \@@_options_class:nnn
+              { \tl_trim_spaces:e { \@@_remove_equals:n {##1} } }
+                {##1} {#1}
           }
       }
   }
@@ -329,15 +395,25 @@
   {
     \keys_if_exist:nnTF {#3} {#1}
       {
-        \clist_put_right:Nn \l_@@_options_clist {#2}
-        \clist_remove_all:Nn \@unusedoptionlist {#1}
+        \@@_options_class:nn {#1} {#2}
+        \clist_put_right:Ne \l_@@_class_only_clist { \tl_to_str:n {#1} }
       }
       {
-        \clist_if_in:NnF \@unusedoptionlist {#1}
-          { \clist_put_right:Nn \@unusedoptionlist {#1} }
+        \keys_if_exist:nnTF {#3} { unknown }
+          { \@@_options_class:nn {#1} {#2} }
+          {
+            \clist_if_in:NnF \@unusedoptionlist {#1}
+              { \clist_put_right:Nn \@unusedoptionlist {#1} }
+          }
       }
   }
+\cs_new_protected:Npn \@@_options_class:nn #1#2
+  {
+    \clist_remove_all:Nn \@unusedoptionlist {#1}
+    \clist_put_right:Nn \l_@@_options_clist {#2}
+  }
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 %
@@ -348,6 +424,9 @@
 % \changes{v1.0m}{2024/01/13}{Trim spaces off key names}
 % \begin{macro}{\@@_options_package:nnn}
 % \changes{v1.0h}{2022/06/19}{New function}
+% \changes{v1.0n}{2024/06/19}{Skip options given to packages}
+% \begin{macro}{\@@_options_package:nn}
+% \changes{v1.0n}{2024/06/19}{New functions}
 %   For global options when processing a package, the tasks are slightly
 %   different from those for a class. The check is the same, but here
 %   there is nothing to do if the option is not applicable. Each valid
@@ -362,15 +441,29 @@
           {##1} {#1}
       }
   }
+%    \end{macrocode}
+%   The forced-global test here needs to use \cs{tl_to_str:n} as the data come
+%   from a key name, which is always a string.
+%    \begin{macrocode}
 \cs_new_protected:Npn \@@_options_package:nnn #1#2#3
   {
     \keys_if_exist:nnT {#3} {#1}
       {
-        \clist_put_right:Nn \l_@@_options_clist {#2}
-        \clist_remove_all:Nn \@unusedoptionlist {#1}
+        \clist_if_in:NeTF \l_@@_class_only_clist { \tl_to_str:n {#1} }
+          {
+            \clist_if_in:NeT \l_@@_forced_global_clist { \tl_to_str:n {#1} }
+              { \@@_options_package:nn {#1} {#2} }
+          }
+          { \@@_options_package:nn {#1} {#2} }
       }
    }
+\cs_new_protected:Npn \@@_options_package:nn #1#2
+  {
+    \clist_put_right:Nn \l_@@_options_clist {#2}
+    \clist_remove_all:Nn \@unusedoptionlist {#1}
+  }
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 %

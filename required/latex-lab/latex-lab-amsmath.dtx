@@ -2,7 +2,7 @@
 %
 %% File: latex-lab-amsmath.dtx
 %
-% Copyright (C) 2022,2023 The LaTeX Project
+% Copyright (C) 2022-2024 The LaTeX Project
 %
 % It may be distributed and/or modified under the conditions of the
 % LaTeX Project Public License (LPPL), either version 1.3c of this
@@ -66,7 +66,7 @@
 % \subsection{File declaration}
 %    \begin{macrocode}
 \ProvidesFile{latex-lab-amsmath.ltx}
-        [2023-01-05 v0.1a amsmath adaptions]
+        [2024-09-18 v0.1c amsmath adaptions]
 %    \end{macrocode}
 % \subsection{Tagpdf support}
 % To make the code independent from tagging being loaded and active
@@ -90,12 +90,16 @@
       \def\intertext##1{%
         \ifvmode\else\\\@empty\fi
         \noalign{%
-          \penalty\postdisplaypenalty\vskip\belowdisplayskip
+%    \end{macrocode}
+% we have to flip the sign and use a negative \cs{belowdisplayskip}
+% as we flipped the sign at the outside.
+%    \begin{macrocode}
+          \penalty\postdisplaypenalty\vskip-\belowdisplayskip
           \vbox{
 %    \end{macrocode}
 % Stop tagging when measuring:
 %    \begin{macrocode}
-           \ifmeasuring@\tag_stop:\fi
+           \ifmeasuring@\tag_suspend:n{\measuring}\fi
            \normalbaselines
             \ifdim\linewidth=\columnwidth
             \else \parshape\@ne \@totalleftmargin \linewidth
@@ -105,9 +109,13 @@
 %    \begin{macrocode}
             \tag_mc_end_push:
 %    \end{macrocode}
-% We are already in a par so we change now to Span:
+% We are already in a par so we change now to text:
 %    \begin{macrocode}
-            \tagpdfsetup{paratag=Span}%
+            \tagpdfsetup{para/tag=P}% 
+%    \end{macrocode}
+% TODO why \cs{tagpdfparaOn} needed? 
+%    \begin{macrocode}
+            \tagpdfparaOn
             \noindent\ignorespaces##1\par
 %    \end{macrocode}
 % Restart the MC
@@ -119,6 +127,110 @@
   }      
 %    \end{macrocode}
 %
+% \subsection{\cs{text}}
+% 
+% The \cs{text} command uses \cs{mathchoice} which \enquote{typesets} the argument
+% four times. This makes it quite problematic for tagging. Without precautions 
+% structure objects would be created four times and would get MC-chunks as kids 
+% that doesn't really exist. amsmath contains a switch that allows to execute code
+% only in the first (displaymath) branch, but that isn't usable here. At first because
+% we don't know if the first branch creates the same structure as the one that is
+% actually used. At second because the engines executes some commands like \cs{label}
+% and \cs{pdfannot} only at shipout from the branch that really was used. So we would
+% get structure data from one \cs{mathchoice}-branch and MC-labels and links from another 
+% one and that gets very messy. 
+% 
+% We therefore have to avoid that tagging is active in unused branches. In pdflatex it
+% is not possible to detect the mathstyle before, so we use a label. With lualatex is
+% is possible to redefine \cs{text} not to use \cs{mathchoice}
+% 
+%    \begin{macrocode}
+\AddToHook{package/amstext/after}
+ {
+%    \end{macrocode}
+% currently amsmath is loaded in a begindocument hook, so this
+% test is fine. If amstext is loaded earlier (in the kernel), this needs perhaps a change.
+%    \begin{macrocode}
+   \tag_if_active:T
+    {
+      \sys_if_engine_luatex:TF
+       {
+         \def\text@#1{{%
+           \ifcase\mathstyle
+           \hbox{{#1}}\or
+           \hbox{{#1}}\or
+           \hbox{{#1}}\or
+           \hbox{{#1}}\or
+           \hbox{{\let\f@size\sf@size\selectfont#1}}\or
+           \hbox{{\let\f@size\sf@size\selectfont#1}}\or
+           \hbox{{\let\f@size\ssf@size\selectfont#1}}\or
+           \hbox{{\let\f@size\ssf@size\selectfont#1}}\or
+           \ERROR
+           \fi
+           \check@mathfonts
+         }}       
+       }
+       {
+         \def\text@#1
+          {{
+           \int_gincr:N\g__math_mathchoice_int
+           \tag_suspend:n{\text@}
+           \mathchoice
+            {
+             \@@_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{0}
+             \textdef@\displaystyle\f@size{#1}
+            }
+            {
+             \@@_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{2}
+             \textdef@\textstyle\f@size{\firstchoice@false #1}
+            }
+            {
+             \@@_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{4}
+             \textdef@\textstyle\sf@size{\firstchoice@false #1}
+            }
+            {
+              \@@_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{6}
+              \textdef@\textstyle \ssf@size{\firstchoice@false #1}
+            }
+            \check@mathfonts
+          }}     
+       }
+    }
+ }
+%    \end{macrocode}
+%
+% \subsection{\cs{pmb}}
+% \cs{pmb} prints its argument three times. For tagging we must mark
+% two of occurrences as artifact.
+% For luatex the attributes in the box must be reset, for this
+% we switch to expl3-boxes.
+%    \begin{macrocode}
+\AddToHook{package/amsbsy/after}
+ {
+   \def\pmb@@@@#1#2#3{\leavevmode\hbox_set:Nn\l_@@_tmpa_box{xxx#3}
+      \dimen@-\box_wd:N\l_@@_tmpa_box
+      \kern-.5\ex@\box_use:N\l_@@_tmpa_box      
+      \tag_mc_end:\tag_mc_begin:n{artifact}
+      \tag_mc_reset_box:N\l_@@_tmpa_box
+      \kern\dimen@\kern.25\ex@\raise.4\ex@\box_use:N\l_@@_tmpa_box
+      \kern\dimen@\kern.25\ex@\box_use_drop:N\l_@@_tmpa_box
+      \tag_mc_end:\tag_mc_begin:n{}
+    }
+   \def\pmb@#1#2{\hbox_set:Nn\l_@@_tmpa_box{$\m@th#1{#2}$}
+     \setboxz@h{$\m@th#1\mkern.5mu$}\pmbraise@\wdz@
+     \binrel@{#2}
+     \dimen@-\box_wd:N\l_@@_tmpa_box
+     \binrel@@@@{
+       \mkern-.8mu\box_use:N\l_@@_tmpa_box
+       \tag_mc_end:\tag_mc_begin:n{artifact}
+       \tag_mc_reset_box:N\l_@@_tmpa_box
+       \kern\dimen@\mkern.4mu\raise\pmbraise@\box_use:N\l_@@_tmpa_box
+       \kern\dimen@\mkern.4mu\box_use_drop:N\l_@@_tmpa_box
+       \tag_mc_end:\tag_mc_begin:n{}
+       }
+    }
+  }
+%    \end{macrocode}
 %    \begin{macrocode}
 \ExplSyntaxOff
 %    \end{macrocode}

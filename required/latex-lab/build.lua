@@ -38,6 +38,7 @@ checkengines = { "pdftex", "luatex" }
 checkdeps =
   {
     maindir .. "/base",
+    maindir .. "/required/firstaid",
     maindir .. "/required/amsmath",
     maindir .. "/required/graphics",
     maindir .. "/required/tools"
@@ -63,7 +64,7 @@ checksearch  = true
 
 checkconfigs = 
  {"build","config-TU","config-OR",
-  "config-math",
+  "config-math","config-math-luatex",
   "config-OR-luatex",
   "config-sec",
   "config-toc",
@@ -74,7 +75,9 @@ checkconfigs =
   "config-bib",
   "config-LM-tagging",
   "config-table-pdftex",
-  "config-table-luatex"
+  "config-table-luatex",
+  "config-title",
+  "config-firstaid"
  }
 
 

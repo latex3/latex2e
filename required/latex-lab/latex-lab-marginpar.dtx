@@ -1,0 +1,284 @@
+% \iffalse meta-comment
+%
+%% File: latex-lab-marginpar.dtx 
+%% 
+% Copyright (C) 2024 LaTeX Project
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+%
+% The development version of the bundle can be found below
+%
+%    https://github.com/latex3/latex2e/required/latex-lab
+%
+% for those people who are interested or want to report an issue.
+%
+\def\ltlabmarginpardate{2024-09-18}
+\def\ltlabmarginparversion{0.85d}
+
+%<*driver>
+\documentclass[kernel]{l3doc}
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{latex-lab-marginpar.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+% \title{The \textsf{latex-lab-marginpar} package\\
+% Changes related to the tagging of margin notes}
+% \author{\LaTeX{} Project\thanks{Initial implementation done by Ulrike Fischer}}
+% \date{v\ltlabmarginparversion\ \ltlabmarginpardate}
+%
+% \maketitle
+%
+% \newcommand{\xt}[1]{\textsl{\textsf{#1}}}
+% \newcommand{\TODO}[1]{\textbf{[TODO:} #1\textbf{]}}
+% \newcommand{\docclass}{document class \marginpar{\raggedright document class
+% customizations}}
+%
+% \providecommand\hook[1]{\texttt{#1\DescribeHook[noprint]{#1}}}
+% \providecommand\socket[1]{\texttt{#1\DescribeSocket[noprint]{#1}}}
+% \providecommand\plug[1]{\texttt{#1\DescribePlug[noprint]{#1}}}
+%
+% \NewDocElement[printtype=\textit{socket},idxtype=socket,idxgroup=Sockets]{Socket}{socketdecl}
+% \NewDocElement[printtype=\textit{hook},idxtype=hook,idxgroup=Hooks]{Hook}{hookdecl}
+% \NewDocElement[printtype=\textit{plug},idxtype=plug,idxgroup=Plugs]{Plug}{plugdecl}
+%
+% \begin{abstract}
+% \end{abstract}
+%
+% \section{Introduction}
+%
+% This module contains changes to improve the tagging (in the standard classes) of
+% margin notes created with the \cs{marginpar} command. 
+%
+% Such margin notes are rather small but nevertheless tagging is not trivial and poses
+% a number of interesting problems both regarding the structure and the implementation.
+% 
+% \subsection{Structure}
+% \cs{marginpar} creates small boxes in the margin of a page. 
+% While they are technically floats they also typically 
+% relate to the paragraph beside them, so their structure element should be placed near 
+% such a paragraph.
+%
+% They can be tagged either as artifacts (if they are merely distracting decoration),
+% as small headings before the paragraph, or as |Aside|. Unlike the PDF 1.7 fallback |Note|
+% the structure |Aside| is not allowed inside |P|,
+% so if |Aside| is used, it must be placed before or after the current |P| in the surrounding |text-unit|, 
+% or it must split the |P|. Splitting is probably not so good as 
+% |\marginpar| is often used somewhere in the middle of sentence. 
+% The best default is probably to use |Aside|, find the parent |text-unit| and add it there. 
+%
+% \subsection{Implementation}
+%
+% |marginpar| has an optional argument which allows to define a different content 
+% on left/right margins for odd/even pages (depending on twoside and \cs{reversemarginpar}).
+%
+% The current implementation stores *both* arguments in boxes and 
+% decides in the output routine which
+% one to use. This is quite problematic for tagging, as the unused box produces 
+% structure objects, literals, labels, MCID numbers, 
+% and perhaps OBJR-objects from links
+% which must be later thrown away again (or are thrown away by the engine).
+% While it is theoretically not impossible to create
+% both boxes while taging is active but to keep everything on hold and insert
+% the real structure only when the box is used it is in practice quite difficult,
+% slow and error prone. 
+% 
+% There are a number of options to avoid this hassle.
+%
+% \begin{description}
+% \item[Minimal tagging] One option is to disable tagging when the boxes 
+% are built and when the box is used to surround them with a simple Aside.
+% 
+% \begin{description}
+% \item[Pro:] easy to implement
+% \item[Contra:] 
+% Content that perhaps needed tagging (|\LaTeX| logo with /ActualText, images, links) is not tagged.
+% \end{description}
+%
+% \item[Remaking the box]
+% Tagging is deactivated when the boxes are created. 
+% The arguments are stored and when the box should be used in the output routine
+% (and when it is known which one will be used) the box is (re)created, now with proper tagging.
+% 
+% Contra: The content can change e.g. if it uses counters or macros that are redefine later before the
+% output routine is called. As tagging is done later, it is not trivial to insert the 
+% |Aside| in the right place in the paragraph structure.
+%
+% \item[Two pass compilation]
+% A label is used to detect which argument/boxed is used and 
+% tagging is activated only for this one.
+% 
+% Contra: costs a |label| and requires a two pass compilation (which is needed anyway). 
+% This should be ok. |\marginnote| uses a label too, and the same
+% label could also be used to resolve problems if a margin note 
+% moves to a new page (and so replace the mparhack package). 
+% \end{description}
+% 
+% The last option seems the best and is therefore implemented. 
+%   
+% 
+% \section{Implementation}
+%    \begin{macrocode}
+%<*package>
+%<@@=tag>
+%    \end{macrocode}
+%    \begin{macrocode}
+\ProvidesExplPackage {latex-lab-testphase-marginpar} {\ltlabmarginpardate} {\ltlabmarginparversion}
+  {Changes related to the tagging of the margin notes}
+%    \end{macrocode}
+% \subsection{Variables}
+% We need a variable to make the label unique. 
+% Todo: Not sure about the name.
+% \begin{macro}{\g__kernel_marginpar_int}
+%    \begin{macrocode}
+\int_new:N \g__kernel_marginpar_int
+%    \end{macrocode}
+% \end{macro}
+% 
+% \subsection{Tagging sockets}
+% 
+% \begin{socketdecl}{tagsupport/marginpar/begin,tagsupport/marginpar/end}
+%    \begin{macrocode}
+\socket_new:nn {tagsupport/marginpar/begin}{0}
+\socket_new:nn {tagsupport/marginpar/end}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+% 
+% \begin{macro}{\@@_get_marginpar_parent:N,\@@_get_marginpar_parent_aux:nn}
+% In a paragraph we must retrieve 
+% the structure number of the surrounding Part structure
+% TODO: if this is needed in more places this should 
+% go into tagpdf.
+%    \begin{macrocode}
+\cs_new_protected:Npn\@@_get_marginpar_parent_aux:nn #1 #2  
+ { 
+   \str_if_eq:eeT{\use_ii:nn #1}{Part}{\seq_put_right:Nn\l_@@_tmpa_seq {#2}}
+ }
+\cs_new_protected:Npn \@@_get_marginpar_parent:N #1
+ {
+   \seq_clear:N\l_@@_tmpa_seq
+   \seq_map_pairwise_function:NNN
+     \g_@@_struct_tag_stack_seq
+     \g_@@_struct_stack_seq
+     \@@_get_marginpar_parent_aux:nn
+   \seq_put_right:Nn\l_@@_tmpa_seq {2}
+   \seq_get_left:NN \l_@@_tmpa_seq #1 
+ }
+\cs_generate_variant:Nn \tag_struct_begin:n {e}
+%    \end{macrocode}
+% \end{macro}
+% \begin{plugdecl}{tagsupport/marginpar/begin,tagsupport/marginpar/end}
+%    \begin{macrocode}
+\socket_new_plug:nnn {tagsupport/marginpar/begin}{default}
+  {
+   \if_mode_horizontal:
+    \tag_mc_end:
+    \@@_get_marginpar_parent:N \l_@@_tmpa_tl
+    \tag_struct_begin:e{tag=Aside,parent=\l_@@_tmpa_tl}%
+   \else: 
+    \tag_struct_begin:n{tag=Aside}%
+   \fi:
+  }
+\socket_new_plug:nnn {tagsupport/marginpar/end}{default}
+  {
+    \tag_struct_end:   
+    \if_mode_horizontal: \tag_mc_begin:n{} \fi:
+  }
+\socket_assign_plug:nn {tagsupport/marginpar/begin}{default}  
+\socket_assign_plug:nn {tagsupport/marginpar/end}{default} 
+%    \end{macrocode}
+% \end{plugdecl}
+
+% \subsection{Kernel command changes}
+% \begin{macro}{\@savemarbox }
+% We add sockets that add a tagging structure Aside:
+%    \begin{macrocode}
+\long\def \@savemarbox #1#2{%
+  \UseTaggingSocket{marginpar/begin}
+  \global\setbox #1%
+    \color@vbox
+      \vtop{%
+        \hsize\marginparwidth
+        \@parboxrestore
+        \@marginparreset
+        #2\par
+        \@minipagefalse
+        \outer@nobreak
+        }%
+    \color@endbox
+   \UseTaggingSocket{marginpar/end}
+}
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\@ympar}
+% We must avoid that \cs{@xympar} creates tagging structure:
+%    \begin{macrocode}
+\long\def\@ympar#1{%
+  \@savemarbox\@marbox{#1}%
+  \global\setbox\@currbox\copy\@marbox
+  \tag_suspend:n{\@ympar}
+  \@xympar
+  \tag_resume:n{\@ympar}}
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\@xmpar}
+% \cs{@xmpar} is the command used if an optional argument is present.
+% In this case we must stop tagging for \cs{@xympar} as above
+% but also decide which of the two @savemarbox should have tagging active.
+% We add a label to \cs{@marbox}. If that exist tagging is activated for this
+% box else for the other one.
+%    \begin{macrocode}
+\long\def\@xmpar[#1]#2{%
+  \int_gincr:N\g__kernel_marginpar_int
+  \property_if_recorded:eTF { tag_marginpar-opt-\int_use:N\g__kernel_marginpar_int }
+    { 
+     \@savemarbox\@marbox {#1
+       \property_record:ee 
+         { tag_marginpar-opt-\int_use:N\g__kernel_marginpar_int }{page} 
+       }%
+     \tag_suspend:n{\@xmpar}
+     \@savemarbox\@currbox{#2}%
+     \tag_resume:n{\@xmpar}
+    }
+%    \end{macrocode}
+% order matters! the tagged box should be first so that it can pick up 
+% the correct text-unit number.
+%    \begin{macrocode}
+    {
+     \@savemarbox\@currbox{#2}%         
+     \tag_suspend:n{\@xmpar}
+     \@savemarbox\@marbox{#1
+       \property_record:ee 
+         { tag_marginpar-opt-\int_use:N\g__kernel_marginpar_int }{page}}
+     \tag_resume:n{\@xmpar}
+    } 
+  \tag_suspend:n{\@xmpar}
+  \@xympar
+  \tag_resume:n{\@xmpar}
+  }
+%</package>
+%    \end{macrocode}
+% \end{macro}
+%
+%    \begin{macrocode}
+%<*latex-lab>
+\ProvidesFile{marginpar-latex-lab-testphase.ltx}
+        [\ltlabmarginpardate\space v\ltlabmarginparversion\space
+         Changes related to the tagging of the margin notes]
+
+\RequirePackage{latex-lab-testphase-marginpar}
+
+%</latex-lab>
+%    \end{macrocode}

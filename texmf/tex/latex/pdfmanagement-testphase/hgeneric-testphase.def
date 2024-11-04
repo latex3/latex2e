@@ -19,7 +19,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: hyperref-generic.dtx
-\ProvidesFile{hgeneric-testphase.def}[2023-12-09 v0.96d %
+\ProvidesFile{hgeneric-testphase.def}[2024-10-27 v0.96n %
   generic Hyperref driver for the LaTeX PDF management testphase bundle]
 
 \RequirePackage{etoolbox} %why?
@@ -399,7 +399,7 @@
     %\tl_set:cn {@#1}{#2}
     \AddToDocumentProperties[hyperref]{#1}{#2}
   }
-\cs_generate_variant:Nn \__hyp_store_metadata:nn {en,ne,ee}
+\cs_generate_variant:Nn \__hyp_store_metadata:nn {en,ne,ee,no,eo}
 \hook_new:n{hyp/link/cite}
 \keys_define:nn { hyp }
   {
@@ -437,19 +437,26 @@
  {
    \define@key{BKM}{color}
      {
-       \__hyp_color_set:ne {__hyp/tmpa}{#1}
-       \color_export:nVN
-         {__hyp/tmpa}
-         \g__hyp_bordercolormodel_str
-         \BKM@color
+      \tl_if_blank:nTF {#1}
+        { \cs_set_eq:NN\BKM@color\@empty }
+        {
+          \__hyp_color_set:ne {__hyp/tmpa}{#1}
+          \color_export:nVN
+            {__hyp/tmpa}
+            \g__hyp_bordercolormodel_str
+            \BKM@color
+        }
      }
  }
-\legacy_if:nT { Hy@bookmarks }
+\legacy_if:nTF { Hy@bookmarks }
   {
     \AddToHook{begindocument/before}[hyperref/bookmark]
      {
        \RequirePackage{bookmark}
      }
+  }
+  {
+    \AddToHook{begindocument/before}[hyperref/bookmark]{}
   }
 \legacy_if:nT {Hy@draft}
   {
@@ -464,6 +471,7 @@
 \cs_generate_variant:Nn \__hyp_property_record:nn {ee}
 \box_new:N \l__hyp_tmpa_box
 \tl_new:N  \l__hyp_tmpa_tl
+\tl_new:N  \l__hyp_tmpb_tl
 \seq_new:N \l__hyp_tmpa_seq
 \int_new:N \l__hyp_tmpa_int
 \str_new:N \l__hyp_tmpa_str
@@ -509,6 +517,25 @@
 \tl_set:Nn \l__hyp_text_enc_dest_print_tl {utf8/string}
 \tl_set:Nn \l__hyp_text_enc_file_print_tl {utf8/string}
 \tl_set:Nn \l__hyp_text_enc_para_print_tl {utf8/string}
+\tl_new:N\l__hyp_link_Contents_tl
+\socket_new:nn {hyp/link/GoTo/Contents}{2}
+\socket_new:nn {hyp/link/URI/Contents}{1}
+\socket_new_plug:nnn {hyp/link/GoTo/Contents}{default}
+  {
+    \__hyp_text_pdfstring:eoN
+      { Go~to~destination~#1  }
+      { \l__hyp_text_enc_info_print_tl }
+      \l__hyp_link_Contents_tl
+  }
+\socket_new_plug:nnn {hyp/link/URI/Contents}{default}
+  {
+    \__hyp_text_pdfstring:eoN
+      { #1  }
+      { \l__hyp_text_enc_info_print_tl }
+      \l__hyp_link_Contents_tl
+  }
+\socket_assign_plug:nn{hyp/link/GoTo/Contents}{default}
+\socket_assign_plug:nn{hyp/link/URI/Contents}{default}
 \tl_new:N  \l__hyp_dest_pdfview_tl
 \str_new:N \g__hyp_bordercolormodel_str
 \seq_map_inline:Nn \c__hyp_annot_types_seq
@@ -574,6 +601,7 @@
   {
     \__hyp_text_pdfstring:noN  { #1 }{ \l__hyp_text_enc_info_print_tl } #2
   }
+\cs_generate_variant:Nn \__hyp_text_pdfstring_info:nN {eN,oN}
 \cs_new_protected:Npn\__hyp_PageLabels_gpush:
   {
     \pdfmanagement_add:nne {Catalog} {PageLabels}{<</Nums[\HyPL@Labels]>>}
@@ -697,6 +725,9 @@
             \Hy@VerboseLinkStart{#1}{#2}
             \group_begin:
             \tl_set:Nn \l_hyp_current_dest_name_tl {#2}
+            \socket_use:nnn{hyp/link/GoTo/Contents}{#2}{#3}
+            \pdfannot_dict_put:nne {link/GoTo}{Contents}
+              {\l__hyp_link_Contents_tl}
             \hook_use:n {hyp/link/#1}
             \__hyp_link_goto_begin:nw {#2}#3\Hy@xspace@end
             \__hyp_link_goto_end:
@@ -766,6 +797,8 @@
               {
                \pdfdict_put:nnn{l_hyp/annot/A/URI}{IsMap}{true}
               }
+            \socket_use:nn{hyp/link/URI/Contents}{#2}
+            \pdfannot_dict_put:nne {link/URI}{Contents}{\l__hyp_link_Contents_tl}
             \cs_set_eq:NN \# \c_hash_str
             \cs_set_eq:NN \% \c_percent_str
             \Hy@safe@activestrue
@@ -1023,10 +1056,19 @@
   }
 \keys_define:nn { hyp }
   {
-    ,colorlinks .meta:n =
+    ,colorlinks .choice:
+    ,colorlinks / true  .meta:n =
       {
         ,pdfborder={0~0~0}
         ,pdfborderstyle=
+        ,colorurl  =#1
+        ,colorlink =#1
+        ,colorrun  =#1
+        ,colormenu =#1
+        ,colorfile =#1
+        }
+    ,colorlinks / false  .meta:n =
+      {
         ,colorurl  =#1
         ,colorlink =#1
         ,colorrun  =#1
@@ -1384,7 +1426,7 @@
         ,#1highlight / unknown .code:n =
           {
            \msg_warning:nneee { hyp } { unknown-choice+empty }
-             { pdfhighlight }
+             { #1highlight }
              { /I~(inverse), /N~(no effect), /O~(outline), /P~(inset) }
              { \exp_not:n {##1} }
           }
@@ -2173,13 +2215,16 @@
    }
 \regex_new:N\l__hyp_optlang_regex
 \regex_set:Nn\l__hyp_optlang_regex {\A\[([A-Za-z\-]+)\](.*)}
+\cs_generate_variant:Nn\clist_item:nn{on}
 \cs_new_protected:Npn \__hyp_setup_info_key:nn #1 #2
   {
     \keys_define:nn { hyp }
       {
         pdf#1  .code:n =
           {
-            \tl_if_blank:nTF {##1}
+            \tl_set:Ne\l__hyp_tmpa_tl {\text_expand:n{##1}}
+            \__hyp_store_metadata:no {pdf#1}{\l__hyp_tmpa_tl}
+            \tl_if_empty:NTF \l__hyp_tmpa_tl
               {
                 \str_case:nnF { #1 }
                  {
@@ -2199,45 +2244,44 @@
                  }
               }
               {
-                \tl_set:Ne\l__hyp_tmpa_tl {\clist_item:nn{##1}{1}}
+                \tl_set:Ne\l__hyp_tmpb_tl {\clist_item:on{\l__hyp_tmpa_tl}{1}}
                 \exp_args:NNV
-                 \regex_extract_once:NnN \l__hyp_optlang_regex \l__hyp_tmpa_tl\l__hyp_tmpa_seq
+                 \regex_extract_once:NnN \l__hyp_optlang_regex \l__hyp_tmpb_tl\l__hyp_tmpa_seq
                 \seq_if_empty:NTF\l__hyp_tmpa_seq
                  {
-                   \__hyp_text_pdfstring_info:nN {##1}\l__hyp_tmpa_str
+                   \__hyp_text_pdfstring_info:oN {\l__hyp_tmpa_tl}\l__hyp_tmpa_str
                  }
                  {
-                   \exp_args:Ne
-                   \__hyp_text_pdfstring_info:nN {\seq_item:Nn \l__hyp_tmpa_seq{3}}\l__hyp_tmpa_str
+                   \__hyp_text_pdfstring_info:eN {\seq_item:Nn \l__hyp_tmpa_seq{3}}\l__hyp_tmpa_str
                  }
                 \str_if_eq:VnF\l__hyp_tmpa_str{<FEFF>}
                   {
                     \pdfmanagement_add:nne {Info}{#2}{\l__hyp_tmpa_str}
                   }
               }
-             \__hyp_store_metadata:nn {pdf#1}{##1}
           }
       }
     \keys_define:nn { hyp / info }
       {
         #2  .code:n =
           {
+            \tl_set:Ne\l__hyp_tmpa_tl {\text_expand:n{##1}}
+            \__hyp_store_metadata:eo {pdf\str_lowercase:n{#1}}{\l__hyp_tmpa_tl}
             \tl_if_blank:nTF {##1}
               {
                 \pdfmanagement_remove:nn {Info}{#2}
               }
               {
-                \__hyp_text_pdfstring_info:nN {##1}\l__hyp_tmpa_str
+                \__hyp_text_pdfstring_info:oN {\l__hyp_tmpa_tl}\l__hyp_tmpa_str
                 \str_if_eq:VnF\l__hyp_tmpa_str{<FEFF>}
                   {
                     \pdfmanagement_add:nne {Info}{#2}{\l__hyp_tmpa_str}
                   }
               }
-            \exp_args:Ne \__hyp_store_metadata:nn {pdf\str_lowercase:n{#1}}{##1}
           }
         ,unknown .code:n =
          {
-            \__hyp_text_pdfstring_info:nN {##1}\l__hyp_tmpa_str
+            \__hyp_text_pdfstring_info:eN {##1}\l__hyp_tmpa_str
             \str_if_eq:VnF\l__hyp_tmpa_str{<FEFF>}
               {
                 \exp_args:Nno

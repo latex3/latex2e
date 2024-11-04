@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-% Copyright (C) 1993-2023
+% Copyright (C) 1993-2024
 %
 % The LaTeX Project and any individual authors listed elsewhere
 % in this file.
@@ -27,8 +27,9 @@
           \ProvidesFile{longtable.dtx}
 %</dtx>
 %<package>\NeedsTeXFormat{LaTeX2e}[1995/06/01]
-%<package>\providecommand\DeclareRelease[3]{}
-%<package>\providecommand\DeclareCurrentRelease[2]{}
+%<package>
+% Try the 2020 version for any rollback before that date:
+%<package>\DeclareRelease{}{1994-06-01}{longtable-2020-01-07.sty}
 %<package>
 %<package>\DeclareRelease{v4.13}{2020-01-02}{longtable-2020-01-07.sty}
 %<package>\DeclareCurrentRelease{}{2020-02-07}
@@ -37,7 +38,7 @@
 %<driver> \ProvidesFile{longtable.drv}
 % \fi
 %         \ProvidesFile{longtable.dtx}
-          [2023-11-01 v4.19 Multi-page Table package (DPC)]
+          [2024-10-27 v4.22 Multi-page Table package (DPC)]
 %
 % \iffalse
 %<*driver>
@@ -178,7 +179,7 @@
 % \env{longtable}, which has most of the features of the \env{tabular}
 % environment, but produces tables which may be broken by \TeX's
 % standard page-breaking algorithm. It also shares some features with
-% the \env{table} environment. In particular it uses the same counter,
+% the \env{table} environment. In particular it uses by default the same counter,
 % \texttt{table}, and has a similar "\caption" command. Also, the
 % standard "\listoftables" command lists tables produced by either the
 % \env{table} or \env{longtable} environments.
@@ -333,6 +334,29 @@
 % \end{tabular}
 % \caption{A floating table}
 % \end{table}
+%
+% \section{Counter and Caption Types}
+%
+% As mentioned in the introduction \env{longtable} uses and updates by default
+% the \texttt{table} counter, the "\caption" command creates a table caption
+% which is added to the list of tables.
+% Packages like \pkg{ltcaption} added more flexibility here by adding the
+% command "\LTcaptype" which allowed to change the type, e.g. to a listing.
+% Starting with version 4.21 \pkg{longtable} supports this command directly.
+% \DescribeMacro{\LTcaptype}%
+% By redefining this command it is possible to change the counter and caption type.
+% After "\renewcommand\LTcaptype{"\meta{counter}"}" \env{longtable} will update
+% the counter \meta{counter}, use "\fnum@"\meta{counter} in the caption (which
+% typically will make use of "\"\meta{counter}"name" and "\the"\meta{counter}), and
+% write content line entries into the file with the extension stored in the
+% command "\ext@"\meta{counter}. When \pkg{hyperref} is loaded the name of
+% the anchor will use \meta{counter} too. Packages or documents that change
+% "\LTcaptype" to some nonstandard value must ensure that the counter
+% \meta{counter} and the commands "\fnum@"\meta{counter}
+% and "\ext@"\meta{counter} exist and do not error.
+% If "\LTcaptype" is empty no counter is advanced and "\"\meta{counter}"name" in
+% the caption is suppressed.
+%
 %
 % \section{Captions and Headings}
 %
@@ -906,6 +930,15 @@
 %    \end{macrocode}
 % \end{macro}
 %
+% \begin{macro}{\LTcaptype}
+% The name used as counter, in caption, "\addcontentsline" and in targets.
+% "\providecommand" is used for compability with \pkg{ltcaption}
+% \changes{v4.21}{2024/07/04}
+%    {Added \cs{LTcaptype} to support other types beside table.}
+%    \begin{macrocode}
+\providecommand\LTcaptype{table}
+%    \end{macrocode}
+% \end{macro}
 % \subsection{Internal Parameters}
 %
 % \begin{macro}{\LT@head}
@@ -956,8 +989,11 @@
 % are preserved correctly when "\includeonly" is used. In the rest of
 % the file "\LT@tables" has been replaced by "\c@LT@tables" without
 % further comment.
+% \changes{v4.21}{2024/07/04}
+%    {Provide a \cs{theH}-representation for targets.}
 %    \begin{macrocode}
 \newcounter{LT@tables}
+\providecommand\theHLT@tables{\theLT@tables}
 %    \end{macrocode}
 % \end{macro}
 %
@@ -1048,6 +1084,14 @@
   \if@twocolumn
     \LT@err{longtable not in 1-column mode}\@ehc
   \fi
+%    \end{macrocode}
+%
+% \changes{v4.19}{2023/12/16}{Support for tagged PDF}
+%    \begin{macrocode}
+  \UseTaggingSocket{tbl/vmode/begin}%
+%    \end{macrocode}
+%
+%    \begin{macrocode}
   \begingroup
 %    \end{macrocode}
 % Check for an optional argument.
@@ -1056,7 +1100,14 @@
 %    \end{macrocode}
 % \end{macro}
 %
+%
+%
 % \begin{macro}{\LT@array}
+%    \begin{macrocode}
+%<@@=tbl>
+\ExplSyntaxOn
+%    \end{macrocode}
+%
 % Start setting the alignment.
 % Based on "\@array" from the \LaTeX\ kernel
 % and the \package{array} package.
@@ -1064,9 +1115,54 @@
 % Since Version 3.02, \package{longtable} has used the internal counter
 % "\c@LT@tables". The \LaTeX\ counter "table" is still incremented
 % so that "\caption" works correctly.
+% \changes{v4.21}{2024/07/04}
+%    {Use \cs{LTcaptype} instead of \texttt{table} in various places
+%     to support other types beside table.}
 %    \begin{macrocode}
 \def\LT@array[#1]#2{%
-  \refstepcounter{table}\stepcounter{LT@tables}%
+%    \end{macrocode}
+%
+%    With respect to tagging we have a complicated situation with
+%    longtable. When at the begin the \cs{endhead},
+%    \cs{endfirsthead}, \cs{endfoot} and \cs{endlastfoot} are used to
+%    setup head and foot they create each a structure subtree with one or
+%    more rows. From these structures we want to keep at most two (head
+%    and foot) and move the foot to the end of the table. When the head
+%    and foot boxes are (re)inserted on following pages we want to mark
+%    them up as artifact with the exception of the head at the begin and
+%    the foot box at the end.
+%
+%    TODO: When a line is killed the structure subtree is there already
+%    too and must be removed. If hard to do, then maybe at first warn if the
+%    construction is used.
+%
+%    \cs{LT@array} is executed in a group, so we can disable para-tagging here.
+% \changes{v4.19}{2023/12/16}{Support for tagged PDF}
+%    \begin{macrocode}
+  \UseTaggingSocket{tbl/init}
+  \tl_if_empty:eTF { \LTcaptype }
+    {
+      \tl_gset:Ne \@currentHref {LT@tables.\theHLT@tables}
+    }
+    {
+      \@kernel@refstepcounter{\LTcaptype}\stepcounter{LT@tables}
+%    \end{macrocode}
+% The target is created rather late and a \cs{label} can come earlier,
+% so we have to define \cs{@currentHref} explicitly. We can't currently
+% assume that \cs{theHtable} is defined always.
+%    \begin{macrocode}
+      \tl_gset:Ne \@currentHref {\LTcaptype.\cs_if_exist_use:c {theH\LTcaptype}}
+    }
+%    \end{macrocode}
+%
+% \changes{v4.19}{2023/12/16}{Managing cell indexes}
+%    \begin{macrocode}
+  \tbl_gzero_row_count:
+%    \end{macrocode}
+%
+% \changes{v4.19}{2023/12/16}{Support for tagged PDF}
+%    \begin{macrocode}
+  \UseTaggingSocket{tbl/longtable/init}
 %    \end{macrocode}
 % Set up the glue around the table if an optional argument given.
 %    \begin{macrocode}
@@ -1101,17 +1197,18 @@
 % here so that you can load the \package{array} package before or after
 % \package{longtable}.
 %    \begin{macrocode}
-  \let\LT@@tabarray\@tabarray
-  \let\LT@@hl\hline
+  \let\LT@@@@tabarray\@tabarray
+  \let\LT@@@@hl\hline
   \def\@tabarray{%
-    \let\hline\LT@@hl
+    \let\hline\LT@@@@hl
 %    \end{macrocode}
 %\begin{verbatim}
 %    \let\multicolumn\LT@mcol
 %\end{verbatim}
 %    \begin{macrocode}
-    \LT@@tabarray}%
-  \let\\\LT@tabularcr\let\tabularnewline\\%
+    \LT@@@@tabarray}%
+  \let\\\LT@tabularcr
+  \let\tabularnewline\\%
   \def\newpage{\noalign{\break}}%
 %    \end{macrocode}
 % \changes{v4.05}{1996/11/12}
@@ -1128,8 +1225,8 @@
 %    \end{macrocode}
 %
 % \changes{v4.08}{1998/01/20}
-%      {Move \cs{@endpbox} definition earlier and define \cs{@@endpbox}
-%      and \cs{@@startpbox} for non-array case. tools/2736}
+%      {Move \cs{@endpbox} definition earlier and define \cs{@@@@endpbox}
+%      and \cs{@@@@startpbox} for non-array case. tools/2736}
 %    \begin{macrocode}
   \let\@endpbox\LT@endpbox
 %    \end{macrocode}
@@ -1142,8 +1239,8 @@
     \let\@acol\@tabacol
     \let\@classz\@tabclassz \let\@classiv\@tabclassiv
     \def\@startpbox{\vtop\LT@startpbox}%
-    \let\@@startpbox\@startpbox
-    \let\@@endpbox\@endpbox
+    \let\@@@@startpbox\@startpbox
+    \let\@@@@endpbox\@endpbox
     \let\LT@LL@FM@cr\@tabularcr
   \else
 %    \end{macrocode}
@@ -1172,6 +1269,11 @@
    \begingroup
     \@mkpream{#2}%
 %    \end{macrocode}
+%
+% \changes{v4.19}{2023/12/16}{Managing cell indexes}
+%    \begin{macrocode}
+    \tbl_count_table_cols:
+%    \end{macrocode}
 % We need to rename "\@preamble" here as F.M.'s scheme uses
 % "\global", and we may need to nest "\@mkpream", eg for
 % "\multicolumn"
@@ -1179,6 +1281,11 @@
 % We do not need to worry about nested \env{longtable}s though!
 %    \begin{macrocode}
     \xdef\LT@bchunk{%
+%    \end{macrocode}
+%    We aren't inside any row when a chunk starts.
+% \changes{v4.19}{2023/12/16}{Managing cell indexes}
+%    \begin{macrocode}
+      \tbl_inbetween_rows:
 %    \end{macrocode}
 % \changes{v4.00}{1996/04/08}
 %      {(DK) Increment Chunk counter}
@@ -1205,7 +1312,21 @@
 %    \begin{macrocode}
        \tabskip\LTleft \noexpand\halign to\hsize\bgroup
 %       \tabskip\LTleft\halign to\hsize\bgroup
-      \tabskip\z@ \@arstrut \@preamble \tabskip\LTright \cr}%
+       \tabskip\z@ \@arstrut
+%    \end{macrocode}
+%    Insert the tagging socket to start the row and initialize the cell
+%    data for the row.
+% \changes{v4.19}{2023/12/16}{Support for tagged PDF}
+%    \begin{macrocode}
+       \UseTaggingSocket{tbl/row/begin}%
+%    \end{macrocode}
+%
+% \changes{v4.19}{2023/12/16}{Managing cell indexes}
+%    \begin{macrocode}
+       \tbl_init_cell_data_for_row:
+%    \end{macrocode}
+%    \begin{macrocode}
+       \@preamble \tabskip\LTright \cr}%
   \endgroup
 %    \end{macrocode}
 % Find out how many columns we have (store in "\LT@cols").
@@ -1220,11 +1341,57 @@
 % A few more internal commands for \env{longtable}.
 %    \begin{macrocode}
   \m@th\let\par\@empty
-  \everycr{}\lineskip\z@\baselineskip\z@
+%    \end{macrocode}
+% Tagging socket and conditional
+%    \begin{macrocode}
+  \everycr{%
+    \noalign{%
+%    \end{macrocode}
+%    In \pkg{longtable} we have a bunch of extra \cs{cr}s that are
+%    executed whenever a chunk ends. In that case they should not
+%    increment the main row counter, sigh.
+%
+%    TODO: At the moment this tracing still exposes the internal row counter!
+%    \begin{macrocode}
+      \@@_trace:n {--longtable-->~chunk~row:~ \the\LT@rows \space
+                   row:~ \the\g_@@_row_int   \space
+                   column:~ \the\g_@@_col_int
+      }
+%    \end{macrocode}
+%
+% \changes{v4.19}{2023/12/16}{Support for tagged PDF}
+%    \begin{macrocode}
+      \tbl_if_row_was_started:T
+          {
+            \UseTaggingSocket{tbl/row/end}
+%    \end{macrocode}
+%    The next setting prevents any of the additional \cs{cr}s at the end of the
+%    chunk to add another /TR. Then once we really start a new chunk
+%    it gets incremented so\ldots
+% \changes{v4.19}{2023/12/16}{Managing cell indexes}
+%    \begin{macrocode}
+            \tbl_inbetween_rows:
+          }
+%    \end{macrocode}
+%    And for the same reason such \cs{cr}s should not increment the
+%    main row counter (but it has to be incremented after the preamble
+%    of a chunk), so here we test against \cs{LT@rows} which is
+%    \cs{LTchunksize} at the end of a chunk.
+% \changes{v4.19}{2023/12/16}{Managing cell indexes}
+%    \begin{macrocode}
+      \int_compare:nNnT \LT@rows < \LTchunksize
+         { \tbl_gincr_row_count: }   % next is row about to start
+    }%
+  }%
+%    \end{macrocode}
+%    \begin{macrocode}
+  \lineskip\z@\baselineskip\z@
 %    \end{macrocode}
 % Start the first chunk.
 %    \begin{macrocode}
   \LT@bchunk}
+\ExplSyntaxOff
+%<@@=>
 %    \end{macrocode}
 % \end{macro}
 %
@@ -1251,6 +1418,11 @@
 % force the page-breaker to wake up. The second "\endgraf" is there so
 % that "\pagetotal" is updated and so takes "\LTpre" into account.
 %    \begin{macrocode}
+%<@@=tbl>
+\ExplSyntaxOn
+%    \end{macrocode}
+%
+%    \begin{macrocode}
 \def\LT@start{%
   \let\LT@start\endgraf
   \endgraf\penalty\z@\vskip\LTpre\endgraf
@@ -1271,7 +1443,7 @@
 % We also have to make sure that this breakpoint doesn't affect how the next
 % page is broken, so we make the penalty 9999 (10000 is infinite and thus not
 % a legal breakpoint) and cancel out the "\kern" with a new "\kern".
-% 
+%
 % I don't think this is the \emph{right} solution to the problem (that would be
 % that the standard output routine has a feature for syncronizing with
 % typesetting, as part of the preparations for switching output routine), but
@@ -1334,7 +1506,7 @@
 % \changes{v3.14}{1995/05/02}
 %      {Set \cs{@colroom}, for tools/1584}
 %    \begin{macrocode}
-      \global\@colroom\@colht
+ \global\@colroom\@colht
 %    \end{macrocode}
 % If the foot is non empty, reduce the "\vsize" and "\@colroom"
 % accordingly.
@@ -1342,12 +1514,23 @@
 %      {Rearrange vertical space tests for tools/3512 (floats on same page)}
 %    \begin{macrocode}
   \ifvoid\LT@foot\else
-%    \advance\vsize-\ht\LT@foot
     \global\advance\vsize-\ht\LT@foot
     \global\advance\@colroom-\ht\LT@foot
     \dimen@\pagegoal\advance\dimen@-\ht\LT@foot\pagegoal\dimen@
     \maxdepth\z@
   \fi
+%    \end{macrocode}
+% \changes{v4.21}{2024/07/04}
+%    {Use \cs{LTcaptype} to support other types beside table and handle
+%     the case if it is empty.}
+%    \begin{macrocode}
+  \tl_if_empty:eTF{\LTcaptype}
+    {
+      \MakeLinkTarget{LT@tables}
+    }
+    {
+      \MakeLinkTarget{\LTcaptype}
+    }
 %    \end{macrocode}
 % Put the table head on the page, and then switch to the new output
 % routine.
@@ -1355,11 +1538,30 @@
 %      {\cs{nobreak}, for tools/3484}
 %    \begin{macrocode}
   \ifvoid\LT@firsthead\copy\LT@head\else\box\LT@firsthead\fi\nobreak
+%    \end{macrocode}
+%
+% \changes{v4.19}{2023/12/16}{Support for tagged PDF}
+%    \begin{macrocode}
+  \UseTaggingSocket{tbl/longtable/head}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
   \output{\LT@output}}
+\ExplSyntaxOff
+%<@@=>
 %    \end{macrocode}
 % \end{macro}
 %
+%
+%
+%
 % \begin{macro}{\endlongtable}
+%
+%    \begin{macrocode}
+%<@@=tbl>
+\ExplSyntaxOn
+%    \end{macrocode}
+%
 % Called by "\end{longtable}".
 %    \begin{macrocode}
 \def\endlongtable{%
@@ -1370,11 +1572,23 @@
 % been shortened, or the table numbering has gone awry). In that case
 % we at least start collecting valid new information with the last
 % chunk of this table, by removing the width constraint.
+% \changes{v4.19}{2023/12/16}{Support for tagged PDF}
+%    \begin{macrocode}
+  \tbl_crcr:n {endlongtable}
+%    \end{macrocode}
+%
 % \changes{v4.01}{1996/04/11}
 %      {(DPC) use \cs{noalign} to sneak in \cs{LT@entry@chop}}
 %    \begin{macrocode}
-  \crcr
   \noalign{%
+%    \end{macrocode}
+%
+% \changes{v4.19}{2023/12/16}{Support for tagged PDF}
+%    \begin{macrocode}
+    \UseTaggingSocket{tbl/longtable/finalize}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
     \let\LT@entry\LT@entry@chop
     \xdef\LT@save@row{\LT@save@row}}%
   \LT@echunk
@@ -1414,22 +1628,31 @@
 % \changes{v4.04}{1996/05/24}
 %      {Use \cs{LT@final@warn}}
 %    \begin{macrocode}
-  \ifx\LT@save@row\LT@@save@row
+  \ifx\LT@save@row\LT@@@@save@row
   \else
-    \LT@warn{Column \@width s have changed\MessageBreak
-             in table \thetable}%
+    \LT@warn{Column~ widths~ have~ changed\MessageBreak
+             in~
+               \tl_if_empty:eTF{\LTcaptype}
+                 {longtable~ \theLT@tables}
+                 {\LTcaptype\c_space_tl\use:c{the\LTcaptype}}
+             }
     \LT@final@warn
   \fi
 %    \end{macrocode}
-% Force one more go with the \env{longtable} output routine.
+%   Force one more go with the \env{longtable} output routine.
+% Guard the special start of page value of "\pagegoal".
 % \changes{v4.14}{2020/02/07}
 %      {Rearrange vertical space tests for tools/3512 (floats on same page)}
+% \changes{v4.22}{2024/10/27}
+%    {Keep \cs{pagegoal} below \cs{maxdimen} gh1495}
 %    \begin{macrocode}
   \endgraf\penalty -\LT@end@pen
   \ifvoid\LT@foot\else
     \global\advance\vsize\ht\LT@foot
     \global\advance\@colroom\ht\LT@foot
-    \dimen@\pagegoal\advance\dimen@\ht\LT@foot\pagegoal\dimen@
+    \ifdim\pagegoal<\maxdimen
+      \dimen@\pagegoal\advance\dimen@\ht\LT@foot\pagegoal\dimen@
+    \fi
   \fi
 %    \end{macrocode}
 % Now close the group to return to the standard routine.
@@ -1449,7 +1672,15 @@
 %    \end{macrocode}
 % Footnotes. As done in  the \package{multicol} package.
 %    \begin{macrocode}
-  \ifvoid\footins\else\insert\footins{}\fi}
+  \ifvoid\footins\else\insert\footins{}\fi
+%    \end{macrocode}
+%
+% \changes{v4.19}{2023/12/16}{Support for tagged PDF}
+%    \begin{macrocode}
+  \UseTaggingSocket{tbl/vmode/end}%
+}
+\ExplSyntaxOff
+%<@@=>
 %    \end{macrocode}
 % \end{macro}
 %
@@ -1518,6 +1749,10 @@
 \protected\def\LT@tabularcr{%
   \relax\iffalse{\fi\ifnum0=`}\fi
   \@ifstar
+%    \end{macrocode}
+%    TODO: as we replace crcr later in one case, we probably have to
+%    implement some further logic there!
+%    \begin{macrocode}
     {\def\crcr{\LT@crcr\noalign{\nobreak}}\let\cr\crcr
      \LT@t@bularcr}%
     {\LT@t@bularcr}}
@@ -1544,8 +1779,13 @@
 %    \end{macrocode}
 % \end{macro}
 %
+%
+%
+%
 % \begin{macro}{\LT@t@bularcr}
 %    \begin{macrocode}
+%<@@=tbl>
+\ExplSyntaxOn
 \def\LT@t@bularcr{%
 %    \end{macrocode}
 % Increment the counter, and do  \env{tabular}'s "\\" or finish the
@@ -1555,6 +1795,13 @@
 %    \begin{macrocode}
   \global\advance\LT@rows\@ne
   \ifnum\LT@rows=\LTchunksize
+%    \end{macrocode}
+%    At the end of the chunk \verb=\\= is doing something special and
+%    so we lose \verb=\tbl_count_missing_cells:n=. Below is about the
+%    right place to add it do this code branch.
+% \changes{v4.19}{2023/12/16}{Managing cell indexes}
+%    \begin{macrocode}
+    \tbl_count_missing_cells:n {echunk}
     \gdef\LT@setprevdepth{%
       \prevdepth\z@
       \global\let\LT@setprevdepth\relax}%
@@ -1563,6 +1810,8 @@
     \ifnum0=`{}\fi
     \expandafter\LT@LL@FM@cr
   \fi}
+\ExplSyntaxOff
+%<@@=>
 %    \end{macrocode}
 % \end{macro}
 %
@@ -1943,7 +2192,9 @@
 % This code is based on "\cline". Two copies of the line are produced,
 % as described above.
 %    \begin{macrocode}
-\def\LT@@hline{%
+%<@@=tbl>
+\ExplSyntaxOn
+\def\LT@@@@hline{%
   \ifx\@let@token\hline
     \global\let\@gtempa\@gobble
     \gdef\LT@sep{\penalty-\@medpenalty\vskip\doublerulesep}%
@@ -1954,11 +2205,24 @@
   \ifnum0=`{\fi}%
   \multispan\LT@cols
      \unskip\leaders\hrule\@height\arrayrulewidth\hfill\cr
-  \noalign{\LT@sep}%
+%    \end{macrocode}
+%    Don't update the row counter, or rather undo the update done in \cs{everycr}:
+% \changes{v4.19}{2023/12/16}{Managing cell indexes}
+%    \begin{macrocode}
+  \noalign{
+    \tbl_gdecr_row_count:
+    \LT@sep}
   \multispan\LT@cols
      \unskip\leaders\hrule\@height\arrayrulewidth\hfill\cr
-  \noalign{\penalty\@M}%
+%    \end{macrocode}
+%    Same here.
+% \changes{v4.19}{2023/12/16}{Managing cell indexes}
+%    \begin{macrocode}
+  \noalign{
+    \tbl_gdecr_row_count:
+    \penalty\@M}
   \@gtempa}
+%<@@=>
 %    \end{macrocode}
 % \end{macro}
 %
@@ -1983,14 +2247,22 @@
 %      {Add new control argument}
 % \changes{v4.16}{2021/05/07}
 %      {use \cs{ext@table} gh/561}
+% \changes{v4.21}{2024/07/04}
+%    {Use \cs{LTcaptype} to support other types beside table.}
 %    \begin{macrocode}
-\def\LT@c@ption#1[#2]#3{%
-  \LT@makecaption#1\fnum@table{#3}%
-  \def\@tempa{#2}%
-  \ifx\@tempa\@empty\else
-     {\let\\\space
-     \addcontentsline{\ext@table}{table}{\protect\numberline{\thetable}{#2}}}%
-  \fi}
+\def\LT@c@ption#1[#2]#3{
+  \tl_if_empty:eTF{\LTcaptype}
+    {\LT@makecaption\@gobble{}{#3}}
+    {\LT@makecaption#1{\csname fnum@\LTcaptype\endcsname}{#3}
+    \def\@tempa{#2}
+    \ifx\@tempa\@empty\else
+      {\let\\\space
+      \addcontentsline
+        {\@nameuse{ext@\LTcaptype}}
+        {\LTcaptype}
+        {\protect\numberline{\@nameuse{the\LTcaptype}}{#2}}}
+    \fi}}
+\ExplSyntaxOff
 %    \end{macrocode}
 % \end{macro}
 %
@@ -2049,13 +2321,15 @@
 % \begin{macro}{\LT@output}
 %     Actually this is not so bad, with FM leading the way.
 %    \begin{macrocode}
+%<@@=tbl>
+\ExplSyntaxOn
 \def\LT@output{%
   \ifnum\outputpenalty <-\@Mi
     \ifnum\outputpenalty > -\LT@end@pen
 %    \end{macrocode}
 %     If this was a float or a marginpar we complain.
 %    \begin{macrocode}
-      \LT@err{floats and marginpars not allowed in a longtable}\@ehc
+      \LT@err{floats~ and~ marginpars~ not~ allowed~ in~ a~ longtable}\@ehc
     \else
 %    \end{macrocode}
 % We have reached the end of the table, on the scroll at least,
@@ -2103,6 +2377,13 @@
 %    \begin{macrocode}
         \unvbox\z@\box\ifvoid\LT@lastfoot\LT@foot\else\LT@lastfoot\fi
 %    \end{macrocode}
+%    Handle foot box when tagging:
+%
+% \changes{v4.19}{2023/12/16}{Support for tagged PDF}
+%    \begin{macrocode}
+        \UseTaggingSocket{tbl/longtable/foot}
+%    \end{macrocode}
+%
 % End of "\ifnum\outputpenalty > -\LT@end@pen".
 %    \begin{macrocode}
     \fi
@@ -2114,6 +2395,15 @@
 % If we have not reached the end of the table,
 %    \begin{macrocode}
     \setbox\@cclv\vbox{\unvbox\@cclv\copy\LT@foot\vss}%
+%    \end{macrocode}
+%
+%    Handle foot box when tagging:
+% \changes{v4.19}{2023/12/16}{Support for tagged PDF}
+%    \begin{macrocode}
+    \UseTaggingSocket{tbl/longtable/foot}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
     \@makecol
     \@outputpage
 %    \end{macrocode}
@@ -2133,7 +2423,14 @@
 %    \begin{macrocode}
   \fi}
 %    \end{macrocode}
+%
+%    \begin{macrocode}
+\ExplSyntaxOff
+%<@@=>
+%    \end{macrocode}
 % \end{macro}
+%
+%
 %
 % \subsection{Commands for the table head and foot}
 %
@@ -2142,19 +2439,94 @@
 % box specified by "#1". Issue an error if the table has already
 % started. Then start a new chunk.
 %    \begin{macrocode}
+%<@@=tbl>
+\ExplSyntaxOn
 \def\LT@end@hd@ft#1{%
+%    \end{macrocode}
+%
+%    This command is used to store the head and foot boxes.
+%    We need to retrieve and store the row so that we can clean
+%    up the structure in the finalize code.
+%
+%    To handle missing columns in the header we need this:
+% \changes{v4.19}{2023/12/16}{Managing cell indexes}
+%    \begin{macrocode}
+  \tbl_if_row_was_started:TF
+     {
+%    \end{macrocode}
+%    TODO: This is exposing internal counters, so it should be encapsulated
+%    in some interface command (but I'm not sure what that should be
+%    called, so not done yet.
+% \changes{v4.19}{2023/12/16}{Managing cell indexes}
+%    \begin{macrocode}
+       \tbl_count_missing_cells:n {head/foot}
+       \int_step_inline:nn
+         { \LT@rows + 1 }
+         {
+           \seq_gput_left:ce
+             {g_@@_\cs_to_str:N #1 _rows_seq }
+             { \int_eval:n {\g_@@_row_int + 1 - ##1 } }
+         }
+%    \end{macrocode}
+%    We also have to set the chunk rows to its max value before
+%    calling \cs{LTechunk} so that we don't get extra increments of
+%    the main row counter due to \cs{everycr}.
+%    \begin{macrocode}
+       \int_gset:Nn \LT@rows { \LTchunksize }
+     }
+%    \end{macrocode}
+
+%    If  we are still in column zero then we had an empty \cs{endhead}
+%    and so making any assignment, etc., would start a row --- something we don't want.
+%    To get out of this trap we  run \cs{crcr} (which would normally
+%    come inside \cs{LT@echunk}. That will then trigger \cs{everycr}
+%    and update row counter unnecessarily, but now we have a defined state, so
+%    we can use \cs{noalign} to undo that.
+%    We also change \cs{LT@rows} so that further \cs{cr}s do not do
+%    any harm (as explained above.
+%
+%    The \cs{crcr} inside \cs{LT@echunk} will be bypassed in that case
+%    as we have just executed a \cs{crcr} and are still in scanning modus for
+%    \cs{omit} or \cs{noalign}.
+%    \begin{macrocode}
+     {
+       \crcr
+       \noalign{
+%    \end{macrocode}
+% \changes{v4.22}{2024/08/13}{Store header row numbers}
+%    \begin{macrocode}
+       \int_step_inline:nn
+         { \LT@rows }
+         {
+           \seq_gput_left:ce
+             {g_@@_\cs_to_str:N #1 _rows_seq }
+             { \int_eval:n {\g_@@_row_int - ##1 } }
+         }
+%    \end{macrocode}
+% \changes{v4.19}{2023/12/16}{Managing cell indexes}
+%    \begin{macrocode}
+         \tbl_gdecr_row_count:         % undo the increment
+         \int_gset:Nn \LT@rows { \LTchunksize }
+       }
+     }
   \LT@echunk
 %    \end{macrocode}
 % Changed from "\relax" to "\endgraf" at V3.04, see "\LT@start".
 %    \begin{macrocode}
   \ifx\LT@start\endgraf
     \LT@err
-     {Longtable head or foot not at start of table}%
-     {Increase LTchunksize}%
+     {Longtable~ head~ or~ foot~ not~ at~ start~ of~ table}%
+     {Increase~ LTchunksize}%
   \fi
   \setbox#1\box\z@
+  \@@_trace:n {-->>~ Saving~\noexpand#1}
   \LT@get@widths
   \LT@bchunk}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\ExplSyntaxOff
+%<@@=>
 %    \end{macrocode}
 % \end{macro}
 %
@@ -2206,7 +2578,7 @@
   \bgroup
 %    \end{macrocode}
 % \changes{v4.12}{2019/02/06}{Color group to match array package}
-% \changes{v4.18}{2023/08/25}{Use \cs{everypar} to match array package, github 1128}% 
+% \changes{v4.18}{2023/08/25}{Use \cs{everypar} to match array package, github 1128}
 %    \begin{macrocode}
     \color@begingroup
     \let\@footnotetext\LT@p@ftntext
@@ -2214,7 +2586,7 @@
     \@arrayparboxrestore
     \everypar{%
       \vrule \@height \ht\@arstrutbox \@width \z@
-      \everypar{}}%    
+      \everypar{}}%
     }
 %    \end{macrocode}
 % \end{macro}
@@ -2254,6 +2626,24 @@
   \global\LT@p@ftn\expandafter{\@tempa{#1}}}%
 %    \end{macrocode}
 % \end{macro}
+%
+%
+%
+%
+%
+%    Some variables need for the tagging support.
+%    \begin{macrocode}
+%<@@=tbl>
+\ExplSyntaxOn
+   \seq_new:N \g_@@_LT@firsthead_rows_seq
+   \seq_new:N \g_@@_LT@head_rows_seq
+   \seq_new:N \g_@@_LT@lastfoot_rows_seq
+   \seq_new:N \g_@@_LT@foot_rows_seq
+\ExplSyntaxOff
+%<@@=>
+%    \end{macrocode}
+%
+%
 %
 %    \begin{macrocode}
 %</package>

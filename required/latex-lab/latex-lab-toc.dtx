@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-%% File: latex-lab-toc.dtx (C) Copyright 2022-2023 LaTeX Project
+%% File: latex-lab-toc.dtx (C) Copyright 2022-2024 LaTeX Project
 %
 % It may be distributed and/or modified under the conditions of the
 % LaTeX Project Public License (LPPL), either version 1.3c of this
@@ -16,8 +16,8 @@
 %
 % for those people who are interested or want to report an issue.
 %
-\def\ltlabtocdate{2023-10-16}
-\def\ltlabtocversion{0.85b}
+\def\ltlabtocdate{2024-09-26}
+\def\ltlabtocversion{0.85e}
 %<*driver>
 \documentclass{l3doc}
 \EnableCrossrefs
@@ -42,7 +42,10 @@
 % \newcommand{\docclass}{document class \marginpar{\raggedright document class
 % customizations}}
 %
-% \providecommand\hook[1]{\texttt{#1}}
+%
+% \ProvideDocElement[printtype=\textit{socket},idxtype=socket,idxgroup=Sockets]{Socket}{socketdecl}
+% \ProvideDocElement[printtype=\textit{hook},idxtype=hook,idxgroup=Hooks]{Hook}{hookdecl}
+% \ProvideDocElement[printtype=\textit{plug},idxtype=plug,idxgroup=Plugs]{Plug}{plugdecl} 
 %
 % \begin{abstract}
 % \end{abstract}
@@ -111,66 +114,32 @@
 % Defined by tagpdf.
 % \end{variable}
 %
-% \cs{refstepcounter} doesn't use \cs{MakeLinkTarget} (yet) so
-% we have to patch it too to store the relation between
-% destination names/\cs{@currentHref} and structure numbers
+% We have to to store the relation between
+% destination names/\cs{@currentHref} and structure numbers.
+% With a current kernel this is done in \cs{refstepcounter} 
+% through the |recordtarget| socket. If that doesn't exist yet
+% we patch:
 %
-% The property is set up in tagpdf-test so that one
-% doesn't has to check if the prop exists or not.
+% TODO remove after release 2024/11
 %    \begin{macrocode}
-\AddToHook{cmd/refstepcounter/after}
- {
-   \tl_if_blank:VF \@currentHref
-    {
-      \prop_gput:Nee \g_@@_struct_dest_num_prop {\@currentHref}{\tag_get:n{struct_num}}      
-    }
- }
-\AddToHook{cmd/H@refstepcounter/after}
- {
-   \tl_if_blank:VF \@currentHref
-    {
-      \prop_gput:Nee \g_@@_struct_dest_num_prop {\@currentHref}{\tag_get:n{struct_num}}
-    }
- }
-%    \end{macrocode}
-% \begin{variable}{\g_@@_struct_ref_by_dest_prop}
-% This variable contains structures whose Ref key should be updated
-% at the end to point to structured related with this destination.
-% As this is probably need in other places too, it is not only a toc-variable.
-% Moved into tagpdf!
-% \end{variable}
-%
-% \begin{macro}{\g_@@_struct_ref_by_dest:}
-%  This command is executed and update the Ref keys
-%  of the structures listed in |\g_@@_struct_ref_by_dest_prop|.
-%  It is currently only relevant for the |TOCI|. But other structures
-%  could need that later too.
-%  The command is executed in the |tagpdf/finish/before| hook.
-%    \begin{macrocode}
-\msg_new:nnn { tag } {struct-dest-unknown}
- {
-   Destination~#1~has~no~related~structure.\\
-   /Ref~for~structure~#2~not~updated
- }
-
-\cs_new_protected:Npn \g_@@_struct_ref_by_dest:
+\str_if_exist:cF { l__socket_tagsupport/recordtarget_plug_str }
   {
-    \prop_map_inline:Nn\g_@@_struct_ref_by_dest_prop
-      {
-        \prop_get:NnNTF \g_@@_struct_dest_num_prop {##2} \l_@@_tmpa_tl
-          {
-            \@@_struct_gput_data_ref:ee
-              { ##1 }
-              { \tag_struct_object_ref:e{ \l_@@_tmpa_tl }}
-          }
-          {
-            \msg_warning:nnnn {tag}{struct-dest-unknown}{##2}{ ##1}
-          }
-      }
-  }
-\hook_gput_code:nnn {tagpdf/finish/before}{tagpdf/struct/Ref}{\g_@@_struct_ref_by_dest:}
+    \AddToHook{cmd/refstepcounter/after}
+     {
+       \tl_if_blank:VF \@currentHref
+        {
+          \prop_gput:Nee \g_@@_struct_dest_num_prop {\@currentHref}{\tag_get:n{struct_num}}      
+        }
+     }
+    \AddToHook{cmd/H@refstepcounter/after}
+     {
+       \tl_if_blank:VF \@currentHref
+        {
+          \prop_gput:Nee \g_@@_struct_dest_num_prop {\@currentHref}{\tag_get:n{struct_num}}
+        }
+     }
+   }  
 %    \end{macrocode}
-% \end{macro}
 %
 % \section{Toc code}
 % \begin{variable}{\g_@@_toc_level_int,\g_@@_toc_stack_seq}
@@ -196,14 +165,17 @@
     \tag_struct_begin:n{tag=TOC,title=#1}
  }
 %    \end{macrocode}
-% Now map it into the config point:
-%    \begin{macrocode}
-\cs_set_protected:Npn\@starttoc@cfgpoint@before#1
-  {
-    \@@_toc_starttoc_init:n{#1}
-  }
-%    \end{macrocode}
 % \end{macro}
+% Now define the tagging plug and assign it to the socket.
+% \begin{plugdecl}{default}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/toc/starttoc/before}{default}
+ {
+   \@@_toc_starttoc_init:n{#1}
+ }
+\AssignSocketPlug{tagsupport/toc/starttoc/before}{default}
+%    \end{macrocode}
+% \end{plugdecl}
 % \begin{macro}{\@@_toc_starttoc_finalize:}
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_toc_starttoc_finalize:
@@ -215,15 +187,18 @@
     \seq_gclear:N \g_@@_toc_stack_seq
  }
 %    \end{macrocode}
-% Now map it into the config point:
-%    \begin{macrocode}
-\cs_set_protected:Npn\@starttoc@cfgpoint@after#1
-  {
-    \@@_toc_starttoc_finalize:
-  }
-%    \end{macrocode}
 % \end{macro}
-
+% Now define the tagging plug and assign it to the socket.
+% \begin{plugdecl}{default}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/toc/starttoc/after}{default}
+ {
+   \@@_toc_starttoc_finalize:
+ }
+\AssignSocketPlug{tagsupport/toc/starttoc/after}{default}
+%    \end{macrocode}
+% \end{plugdecl}
+%
 % \begin{macro}{\@@_toc_end:n}
 % This commands ends all TOC on the stack with a level higher than the argument
 %    \begin{macrocode}
@@ -249,10 +224,11 @@
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{\@@_toc_contentsline_begin:nnn}
+% \begin{macro}{\@@_toc_contentsline_begin:nnnn}
 % This is main command executed at the begin of a |\contentsline|.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_toc_contentsline_begin:nnn #1 #2 #3 %#1 level, #2 content, #3 destination
+\cs_new_protected:Npn \@@_toc_contentsline_begin:nnnn #1 #2 #3 #4 
+  %#1 level, #2 content, #3 page number (unused) #4 destination
   {
    \tag_if_active:T
      {
@@ -271,7 +247,7 @@
             { \int_compare_p:nNn { \g_@@_toc_level_int } > {-100} }
             { \int_compare_p:nNn { \use:c{toclevel@#1} }   > { \g_@@_toc_level_int } }
             {
-              \seq_gpush:Nx \g_@@_toc_stack_seq {{TOC}\use:c{toclevel@#1}}
+              \seq_gpush:Ne \g_@@_toc_stack_seq {{TOC}\use:c{toclevel@#1}}
               \tag_struct_begin:n{tag=TOC}
             }
 %    \end{macrocode}
@@ -298,40 +274,44 @@
 %    \begin{macrocode}
           \group_begin:
            \text_declare_expand_equivalent:Nn \numberline \use_none:n
-           \exp_args:Nx \tag_struct_begin:n{tag=TOCI,title={\text_purify:n {#2}}}
+           \exp_args:Ne 
+           \tag_struct_begin:n{tag=TOCI,title={\text_purify:n {#2}}}           
 %    \end{macrocode}
-% The TOCI structure should get a /Ref, so we put a request with its destination
-% name into the prop.
+% The TOCI structure should get a /Ref, we use a destination
+% to retrieve it.
 % \begin{NOTE}{UF}
 % This only works with hyperref currently. Without hyperref we
 % need to store fake names.
 % \end{NOTE}
 %    \begin{macrocode}
-           \prop_gput:Nxx \g_@@_struct_ref_by_dest_prop
-             { \tag_get:n {struct_num} }{#3}
-           \seq_gpush:Nx \g_@@_toc_stack_seq {{TOCI}\use:c{toclevel@#1}}
+           \tag_struct_gput:nnn { \tag_get:n {struct_num} }{ref_dest}{#4}
+           \seq_gpush:Ne \g_@@_toc_stack_seq {{TOCI}\use:c{toclevel@#1}}
           \group_end:
        }
     }
   }
 %    \end{macrocode}
-% Now map it into the config point:
-%    \begin{macrocode}
-\cs_set_protected:Npn\@contentsline@cfgpoint@before#1#2#3#4
-  {
-    \@@_toc_contentsline_begin:nnn {#1}{#2}{#4}
-  }
-%    \end{macrocode}
 % \end{macro}
+% Now define the tagging plug and assign it to the socket.
+% \begin{plugdecl}{default}
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/toc/contentsline/before}{default}
+  {
+    \@@_toc_contentsline_begin:nnnn #1
+  }  
+\AssignSocketPlug{tagsupport/toc/contentsline/before}{default}
+%    \end{macrocode}
+% \end{plugdecl}
 %
-% \begin{macro}{\@@_toc_contentsline_end:n}
+% \begin{macro}{\@@_toc_contentsline_end:nnnn}
 % This is the closing code of a |\contentsline|.
 % If the contentsline was actually printed, the code has to
 % close the TOCI structure and to update the stack.
 %    \begin{macrocode}
 \msg_new:nnn {tag}{toc-no-TOCI}{Missing~TOCI~structure~on~toc~stack}
 
-\cs_new_protected:Npn \@@_toc_contentsline_end:n #1 %#1 level name
+\cs_new_protected:Npn \@@_toc_contentsline_end:nnnn #1 #2 #3 #4 
+% #1 level, #2 content (unused), #3 page number (unused) #4 destination (unused)
   {
     \int_compare:nNnF { \use:c{toclevel@#1} } > {\use:c{c@tocdepth}}
       {
@@ -348,14 +328,17 @@
       }
   }
 %    \end{macrocode}
-% Now we map it to the config point
-%    \begin{macrocode}
-\cs_set_protected:Npn \@contentsline@cfgpoint@after #1#2#3#4
- {
-   \@@_toc_contentsline_end:n {#1}
- }
-%    \end{macrocode}
 % \end{macro}
+% Now define the tagging plug and assign it to the socket.
+% \begin{plugdecl}{default} 
+%    \begin{macrocode}
+\NewSocketPlug{tagsupport/toc/contentsline/after}{default}
+  {
+    \@@_toc_contentsline_end:nnnn #1
+  }  
+\AssignSocketPlug{tagsupport/toc/contentsline/after}{default}
+%    \end{macrocode}
+% \end{plugdecl}
 %
 % \subsection{Tagging of the content}
 % This need discussion.
@@ -380,12 +363,16 @@
   \tag_struct_end:
   \tag_mc_begin:n{tag=Reference}}
 %    \end{macrocode}
-%
+% \begin{plugdecl}{artifact}
 %    \begin{macrocode}
-\def\@dottedtocline@cfgpoint@leaders#1{%
- \tag_mc_begin:n{artifact}\tag_stop:n{leaders}\nobreak#1\nobreak\tag_start:n{leaders}\tag_mc_end:}
+\NewSocketPlug{tagsupport/toc/leaders/before}{artifact}
+ {\tag_mc_begin:n{artifact}\nobreak}
+\NewSocketPlug{tagsupport/toc/leaders/after}{artifact}
+ {\nobreak\tag_mc_end:}
+\AssignSocketPlug{tagsupport/toc/leaders/before}{artifact}
+\AssignSocketPlug{tagsupport/toc/leaders/after}{artifact}
 %    \end{macrocode}
-
+% \end{plugdecl}
 %
 %    \begin{macrocode}
 %</package>

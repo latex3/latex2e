@@ -898,26 +898,42 @@ local function unifyglyphs(fontdata,usenames)
         end
     end
     --
-    for index=1,nofglyphs do
-        local math = glyphs[index].math
-        if math then
-            local list = math.vparts
-            if list then
-                for i=1,#list do local l = list[i] l.glyph = indices[l.glyph] end
+    if LUATEXENGINE == "luametatex" then
+        for index=1,nofglyphs do
+            local math = glyphs[index].math
+            if math then
+                local list = math.parts
+                if list then
+                    for i=1,#list do local l = list[i] l.glyph = indices[l.glyph] end
+                end
+                local list = math.variants
+                if list then
+                    for i=1,#list do list[i] = indices[list[i]] end
+                end
             end
-            local list = math.hparts
-            if list then
-                for i=1,#list do local l = list[i] l.glyph = indices[l.glyph] end
-            end
-            local list = math.vvariants
-            if list then
-             -- for i=1,#list do local l = list[i] l.glyph = indices[l.glyph] end
-                for i=1,#list do list[i] = indices[list[i]] end
-            end
-            local list = math.hvariants
-            if list then
-             -- for i=1,#list do local l = list[i] l.glyph = indices[l.glyph] end
-                for i=1,#list do list[i] = indices[list[i]] end
+        end
+    else
+        for index=1,nofglyphs do
+            local math = glyphs[index].math
+            if math then
+                local list = math.vparts
+                if list then
+                    for i=1,#list do local l = list[i] l.glyph = indices[l.glyph] end
+                end
+                local list = math.hparts
+                if list then
+                    for i=1,#list do local l = list[i] l.glyph = indices[l.glyph] end
+                end
+                local list = math.vvariants
+                if list then
+                 -- for i=1,#list do local l = list[i] l.glyph = indices[l.glyph] end
+                    for i=1,#list do list[i] = indices[list[i]] end
+                end
+                local list = math.hvariants
+                if list then
+                 -- for i=1,#list do local l = list[i] l.glyph = indices[l.glyph] end
+                    for i=1,#list do list[i] = indices[list[i]] end
+                end
             end
         end
     end
@@ -929,7 +945,9 @@ local function unifyglyphs(fontdata,usenames)
             if colors then
                 for i=1,#colors do
                     local c = colors[i]
-                    c.slot = indices[c.slot]
+                    if c then -- safeguard
+                        c.slot = indices[c.slot]
+                    end
                 end
             end
         end
@@ -946,7 +964,6 @@ local function unifyglyphs(fontdata,usenames)
 end
 
 local stripredundant  do
-
 
     local p_hex   = R("af","AF","09")
     local p_digit = R("09")

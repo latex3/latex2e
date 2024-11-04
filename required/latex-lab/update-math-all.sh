@@ -11,12 +11,19 @@ l3build save -cconfig-math \
 	mathcapture-011 \
 	mathcapture-012 \
 	mathcapture-014 \
+	mathcapture-015 \
+	mathcapture-016 \
+	mathcapture-017 \
+	mathcapture-018 \
+	mathcapture-019 \
 	mtag-001 \
 	mtag-002 \
 	mtag-tlc3 \
         mathcapture-tag-001 \
 	mtag-003 \
-	mtag-004
+	mtag-004 \
+	mtag-005-intertext
+
 
 exit
 

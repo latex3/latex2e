@@ -28,8 +28,33 @@ checkdeps =
 
 checkruns = 3  -- some tests need 3 runs to settle!
 
+typesetdeps =
+  {
+    maindir .. "/required/amsmath"    -- for l3doc.cls :-(
+  }
+
 -- Allow for TU and other tests test
 checkconfigs = {"build","config-TU","config-legacy","config-search"}
 
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
+
+-- special code to handle .tex
+oldbundleunpack=bundleunpack
+function bundleunpack(sourcedirs, sources)
+  errorlevel = oldbundleunpack(sourcedirs, sources)
+  if errorlevel ~= 0 then
+    return errorlevel
+  end
+  if module == "tools" then
+    print(" * Renaming rename-to-empty-base.tex to .tex")
+    errorlevel = ren(unpackdir,"rename-to-empty-base.tex",".tex")
+    if errorlevel ~= 0 then
+      return errorlevel
+    end
+  end
+  return 0
+end
+
+-- update function binding
+target_list.bundleunpack.func = bundleunpack

@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-%% File: latex-lab-sec.dtx (C) Copyright 2022-2023 LaTeX Project
+%% File: latex-lab-sec.dtx (C) Copyright 2022-2024 LaTeX Project
 %
 % It may be distributed and/or modified under the conditions of the
 % LaTeX Project Public License (LPPL), either version 1.3c of this
@@ -16,10 +16,10 @@
 %
 % for those people who are interested or want to report an issue.
 %
-\def\ltlabsecdate{2023-10-16}
-\def\ltlabsecversion{0.84b}
+\def\ltlabsecdate{2024-10-04}
+\def\ltlabsecversion{0.84f}
 %<*driver>
-\documentclass{l3doc}
+\documentclass[kernel]{l3doc}
 \EnableCrossrefs
 \CodelineIndex
 \begin{document}
@@ -121,7 +121,7 @@
 %  commands must be at the right grouping level.
 %  \end{itemize}
 %  
-%  \subsection{Funktions and keys}
+%  \subsection{Functions and keys}
 %
 % \begin{function}{\tag_tool:n,\tagtool}
 % 
@@ -138,7 +138,7 @@
 %     to allow e.g. to put an epigraph or similar in front.
 %     
 %  \item The number in \cs{part} and  \cs{chapter} is currently not correctly 
-%  tagged as a \texttt{Lbl} as this requires to redefine the internal (class dependant)
+%  tagged as a \texttt{Lbl} as this requires to redefine the internal (class dependent)
 %  commands too.
 %     
 %  \end{itemize}
@@ -198,28 +198,31 @@
 % We  must ensure that manual targets (e.g. in unnumbered sections)
 % correctly update \cs{@currentHref}. For this we extend the kernel definition of
 % \cs{MakeLinkTarget} 
-% 
+% TODO: remove after release 2024/11
 %    \begin{macrocode}
 %<*kernelchange>
 \ExplSyntaxOn
-\int_new:N\g__kernel_target_int
-\RenewDocumentCommand\MakeLinkTarget{sO{}m}
- {%
-  \ifvmode
-    \special{}%
-  \else
-    \@savsf\spacefactor
-    \smash{}%
-    \spacefactor\@savsf
-  \fi
-  \IfBooleanTF {#1}
-   {
-     \tl_gset:Nx \@currentHref {#3}
+\str_if_exist:cF { l__socket_tagsupport/recordtarget_plug_str }
+ {
+  \int_new:N\g__kernel_target_int
+  \RenewDocumentCommand\MakeLinkTarget{sO{}m}
+   {%
+    \ifvmode
+      \special{}%
+    \else
+      \@savsf\spacefactor
+      \smash{}%
+      \spacefactor\@savsf
+    \fi
+    \IfBooleanTF {#1}
+     {
+       \tl_gset:Ne \@currentHref {#3}
+     }
+     {
+       \int_gincr:N\g__kernel_target_int
+       \tl_gset:Ne \@currentHref {target*.\int_use:N\g__kernel_target_int}
+     }  
    }
-   {
-     \int_gincr:N\g__kernel_target_int
-     \tl_gset:Nx \@currentHref {target*.\int_use:N\g__kernel_target_int}
-   }  
  }
 \ExplSyntaxOff 
 %</kernelchange> 
@@ -227,45 +230,56 @@
 %
 %    \begin{macrocode}
 %<*package>
+%<@@=tag>
 %    \end{macrocode}
 % \subsubsection{Tagging commands}
 %
 %
-% \begin{variable}{\g__tag_sec_stack_seq}
-% The stack holds the tag and the level.
+% \begin{variable}{\g_@@_sec_stack_seq}
+% The stack holds the tag, the level and the structure number.
 %    \begin{macrocode}
-\seq_new:N   \g__tag_sec_stack_seq
-\seq_gpush:Nn\g__tag_sec_stack_seq {{Document}{-100}}
+\seq_new:N   \g_@@_sec_stack_seq
+\seq_gpush:Nn\g_@@_sec_stack_seq {{Document}{-100}{2}}
 %    \end{macrocode}
 % \end{variable}
 % 
-% \begin{variable}{\l__tag_sec_Sect_bool}
+% \begin{macro}{\@@_get_data_current_Sect:}
+% This allows to retrieve the number of the current Sect structure (or
+% Document if we are outside any Sect) with |\tag_get:n{current_Sect}|
+%    \begin{macrocode}
+\cs_new:Npn \@@_get_data_current_Sect:
+ {
+   \exp_last_unbraced:Ne\use_iii:nnn{\seq_item:Nn\g_@@_sec_stack_seq{1}}
+ }
+%    \end{macrocode}
+% \end{macro}
+% \begin{variable}{\l_@@_sec_Sect_bool}
 % This boolean controls if a Sect structure is opened. 
 %    \begin{macrocode}
-\bool_new:N     \l__tag_sec_Sect_bool
-\bool_set_true:N\l__tag_sec_Sect_bool
+\bool_new:N     \l_@@_sec_Sect_bool
+\bool_set_true:N\l_@@_sec_Sect_bool
 %    \end{macrocode}
 % \end{variable}
- 
-% 
-% \begin{macro}{\__tag_sec_begin:nn}
+%
+% \begin{macro}{\@@_sec_begin:nn}
 % This starts a sectioning structure. 
 % Currently the tag is fix, either Sect or Part, depending on the level,
 % but this will perhaps change. The second argument is currently unused.
 %    \begin{macrocode}
-\cs_new_protected:Npn\__tag_sec_begin:nn #1 #2 %#1 level #2 keyval
+\cs_new_protected:Npn\@@_sec_begin:nn #1 #2 %#1 level #2 keyval
   {
     \tag_struct_begin:n 
       {
          tag= {\int_compare:nNnTF {#1}={-1}{Part}{Sect}}
         ,#2
       } 
-    \seq_gpush:Nx \g__tag_sec_stack_seq {{\g__tag_struct_tag_tl}{\int_eval:n{#1}}}    
+    \seq_gpush:Ne \g_@@_sec_stack_seq 
+      {{\g_@@_struct_tag_tl}{\int_eval:n{#1}}{\g_@@_struct_stack_current_tl}}    
   }
 %    \end{macrocode}
 % \end{macro}
 % 
-% \begin{macro}{\__tag_sec_end:n}
+% \begin{macro}{\@@_sec_end:n}
 %    \begin{macrocode}
 \msg_new:nnn { tag } {wrong-sect-nesting}
   {
@@ -273,65 +287,65 @@
     It~is~not~equal~to~the~current~structure~#2~on~the~main~stack
   }
 
-\cs_new_protected:Npn\__tag_sec_end:n #1 % #1 level
+\cs_new_protected:Npn\@@_sec_end:n #1 % #1 level
   {
-    \seq_get:NN \g__tag_sec_stack_seq \l__tag_tmpa_tl
-    \int_compare:nNnT {#1}<{\exp_last_unbraced:NV\use_ii:nn\l__tag_tmpa_tl+1}
+    \seq_get:NN \g_@@_sec_stack_seq \l_@@_tmpa_tl
+    \int_compare:nNnT {#1}<{\exp_last_unbraced:NV\use_ii:nnn\l_@@_tmpa_tl+1}
       {
-        \seq_get:NN\g__tag_struct_tag_stack_seq \l__tag_tmpb_tl
+        \seq_get:NN\g_@@_struct_tag_stack_seq \l_@@_tmpb_tl
         \exp_args:Nee
           \tl_if_eq:nnTF 
-            {\exp_last_unbraced:NV\use_i:nn\l__tag_tmpa_tl}
-            {\exp_last_unbraced:NV\use_i:nn\l__tag_tmpb_tl}
+            {\exp_last_unbraced:NV\use_i:nnn\l_@@_tmpa_tl}
+            {\exp_last_unbraced:NV\use_i:nn\l_@@_tmpb_tl}
             {
-              \seq_gpop:NN \g__tag_sec_stack_seq \l__tag_tmpa_tl
+              \seq_gpop:NN \g_@@_sec_stack_seq \l_@@_tmpa_tl
               \tag_struct_end:
-              \__tag_sec_end:n {#1}        
+              \@@_sec_end:n {#1}        
             }
             { 
-              \msg_warning:nnxx {tag}{wrong-sect-nesting}
-               { \exp_last_unbraced:NV\use_i:nn \l__tag_tmpa_tl }
-               { \exp_last_unbraced:NV\use_i:nn \l__tag_tmpb_tl } 
+              \msg_warning:nnee {tag}{wrong-sect-nesting}
+               { \exp_last_unbraced:NV\use_i:nnn \l_@@_tmpa_tl }
+               { \exp_last_unbraced:NV\use_i:nn \l_@@_tmpb_tl } 
             }
       }  
   } 
 %    \end{macrocode}
 % \end{macro}
 
-% \begin{macro}{\__tag_tool_para_split:}
+% \begin{macro}{\@@_tool_para_split:}
 % Runin-sectioning command must separate the heading from the following text. 
 % 
 %    \begin{macrocode}
-\cs_new_protected:Npn \__tag_tool_para_split:
+\cs_new_protected:Npn \@@_tool_para_split:
   {
     \tag_mc_end:
     \tag_struct_end:        
-    \tag_struct_begin:n{tag=\l__tag_para_tag_default_tl}
+    \tag_struct_begin:n{tag=\l_@@_para_tag_default_tl}
     \tag_mc_begin:n{}
-    \__tag_setup_restore_para_default:
+    \@@_setup_restore_para_default:
   }
 %    \end{macrocode}
 % \end{macro}
 
-% \begin{macro}{\__tag_setup_restore_para_default:}
+% \begin{macro}{\@@_setup_restore_para_default:}
 % We change the para tagging in the sectioning code.
 % This here restores the default. Currently it only resets the 
 % the tag, but perhaps more will be needed later. 
 %    \begin{macrocode}
-\cs_new_protected:Npn \__tag_setup_restore_para_default:
+\cs_new_protected:Npn \@@_setup_restore_para_default:
   {
-    \tl_set:Nn \l__tag_para_main_tag_tl {text-unit}
-    \tl_set_eq:NN\l__tag_para_tag_tl\l__tag_para_tag_default_tl
+    \tl_set:Nn \l_@@_para_main_tag_tl {text-unit}
+    \tl_set_eq:NN\l_@@_para_tag_tl\l_@@_para_tag_default_tl
   }
 %    \end{macrocode}
 % \end{macro}
 % 
-% \begin{macro}{\__tag_sec_end_display:}
+% \begin{macro}{\@@_sec_end_display:}
 %    \begin{macrocode}
-\cs_new_protected:Npn \__tag_sec_end_display:
+\cs_new_protected:Npn \@@_sec_end_display:
   {
     \tag_struct_end: %P = Hn
-    \__tag_setup_restore_para_default:
+    \@@_setup_restore_para_default:
   }
 %    \end{macrocode}
 % \end{macro}
@@ -339,17 +353,17 @@
 % Open sec structures should be closed at the end of the document. This should
 % be done before tagpdf closes the Document structure.
 %    \begin{macrocode}
-\hook_gput_code:nnn{tagpdf/finish/before}{tagpdf/sec}{\__tag_sec_end:n{-10}}
+\hook_gput_code:nnn{tagpdf/finish/before}{tagpdf/sec}{\@@_sec_end:n{-10}}
 \hook_gset_rule:nnnn {tagpdf/finish/before}{tagpdf/sec}{before}{tagpdf}  
 %    \end{macrocode}
 %
 % The commands \cs{mainmatter}, \cs{backmatter}, \cs{frontmatter} and
 % \cs{appendix} close all \texttt{Sect} and \texttt{Part} structures.
 %    \begin{macrocode}
-\AddToHook{cmd/frontmatter/before}{\__tag_sec_end:n{-10}}
-\AddToHook{cmd/mainmatter/before} {\__tag_sec_end:n{-10}}
-\AddToHook{cmd/backmatter/before} {\__tag_sec_end:n{-10}}
-\AddToHook{cmd/appendix/before}   {\__tag_sec_end:n{-10}}
+\AddToHook{cmd/frontmatter/before}{\@@_sec_end:n{-10}}
+\AddToHook{cmd/mainmatter/before} {\@@_sec_end:n{-10}}
+\AddToHook{cmd/backmatter/before} {\@@_sec_end:n{-10}}
+\AddToHook{cmd/appendix/before}   {\@@_sec_end:n{-10}}
 %    \end{macrocode}
 %
 % \subsection{Tagging tools}
@@ -368,57 +382,57 @@
   {
     ,sec-start-part .code:n = 
       {
-        \bool_if:NT\l__tag_sec_Sect_bool
+        \bool_if:NT\l_@@_sec_Sect_bool
           {
-            \__tag_sec_end:n   {-1} 
-            \__tag_sec_begin:nn{-1}{tag=Part}
+            \@@_sec_end:n   {-1} 
+            \@@_sec_begin:nn{-1}{tag=Part}
           }  
          \tag_struct_begin:n{tag=part,title=#1}
 %    \end{macrocode}
 % We remap here the text-unit from the paragraph to NonStruct.
-% It would be better to suppress it completly as with the other
+% It would be better to suppress it completely as with the other
 % sectioning commands, but this would require to redefine \cs{@spart}
 % and \cs{@part}, as there is the grouping, and these commands are
 % all slightly different in the standard classes. So this is delayed 
 % to the time when sectioning commands are redefined with templates.
 %    \begin{macrocode}
-         \tl_set:Nn\l__tag_para_main_tag_tl {NonStruct}
-         \tl_set:Nn\l__tag_para_tag_tl {Span}
+         \tl_set:Nn\l_@@_para_main_tag_tl {NonStruct}
+         \tl_set:Nn\l_@@_para_tag_tl {Span}
       }
-    ,sec-stop-part .code:n = {\__tag_sec_end_display:}
+    ,sec-stop-part .code:n = {\@@_sec_end_display:}
     ,sec-start-chapter .code:n =
      {
-       \bool_if:NT\l__tag_sec_Sect_bool
+       \bool_if:NT\l_@@_sec_Sect_bool
          {
-           \__tag_sec_end:n   {0} 
-           \__tag_sec_begin:nn{0}{tag=Sect}
+           \@@_sec_end:n   {0} 
+           \@@_sec_begin:nn{0}{tag=Sect}
          }  
         \tag_struct_begin:n{tag=chapter,title=#1}
 %    \end{macrocode}
 % similar to part we remap to NonStruct for now ...
 %    \begin{macrocode}
-        \tl_set:Nn\l__tag_para_main_tag_tl {NonStruct}
-        \tl_set:Nn\l__tag_para_tag_tl {Span}
+        \tl_set:Nn\l_@@_para_main_tag_tl {NonStruct}
+        \tl_set:Nn\l_@@_para_tag_tl {Span}
      }
     ,sec-stop-chapter .meta:n = { sec-stop-part}  
     ,sec-start .code:n = % #1 is a name like "section" 
       {        
-        \bool_if:NT\l__tag_sec_Sect_bool
+        \bool_if:NT\l_@@_sec_Sect_bool
           {       
-            \__tag_sec_end:n    {\cs_if_exist_use:c{toclevel@#1}+0} 
-            \__tag_sec_begin:nn {\cs_if_exist_use:c{toclevel@#1}+0}{tag=Sect}
+            \@@_sec_end:n    {\cs_if_exist_use:c{toclevel@#1}+0} 
+            \@@_sec_begin:nn {\cs_if_exist_use:c{toclevel@#1}+0}{tag=Sect}
           }  
-        \tl_set:Nn\l__tag_para_tag_tl{#1}
+        \tl_set:Nn\l_@@_para_tag_tl{#1}
       } 
     ,sec-start .value_required:n = true     
-    ,sec-split-para .code:n = {\__tag_tool_para_split:}
-    ,restore-para .code:n = {\__tag_setup_restore_para_default:}
+    ,sec-split-para .code:n = {\@@_tool_para_split:}
+    ,restore-para .code:n = {\@@_setup_restore_para_default:}
     ,sec-stop .code:n = 
       {
-        \par\__tag_sec_end:n   {\cs_if_exist_use:c{toclevel@#1}+0}
+        \par\@@_sec_end:n   {\cs_if_exist_use:c{toclevel@#1}+0}
       }
     ,sec-stop .value_required:n = true  
-    ,sec-add-grouping .bool_set:N = \l__tag_sec_Sect_bool
+    ,sec-add-grouping .bool_set:N = \l_@@_sec_Sect_bool
   } 
 %    \end{macrocode}
 %
@@ -433,6 +447,7 @@
 % The tagging inside relies on the para tagging.
 % We do not yet use keyval in the optional argument, as this requires latex-dev
 % and the naming of the keys and their key family is unclear.
+% \changes{v0.84f}{2024/10/04}{Added braces around optional arg (tagging/725)}
 %    \begin{macrocode}
 \AddToHook{class/after}
  {
@@ -476,7 +491,7 @@
           \IfBooleanTF 
             {#1}
             { \@spart {#3} }
-            { \@part [#2]{#3} }
+            { \@part [{#2}]{#3} }
 %    \end{macrocode}
 % and now the closing command for the tagging of the title.
 %    \begin{macrocode}
@@ -528,7 +543,7 @@
         \IfBooleanTF 
           {#1}
           { \@schapter {#3} }
-          { \@chapter [#2]{#3} }
+          { \@chapter [{#2}]{#3} }
 %    \end{macrocode}
 % and now the closing command for the tagging of the title.
 %    \begin{macrocode}          
@@ -583,7 +598,7 @@
         \IfBooleanTF 
           {#1}
           { \@spart {#3} }
-          { \@part [#2]{#3} }
+          { \@part [{#2}]{#3} }
 %    \end{macrocode}
 % and now the closing command for the tagging of the title.
 %    \begin{macrocode}          
@@ -669,7 +684,8 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@kernel@tag@hangfrom #1
   {
-     \tagstructbegin{tag=\l__tag_para_tag_tl}
+     \tagstructbegin{tag=\l_@@_para_tag_tl}
+     \cs_if_exist_use:N \@@_gincr_para_begin_int:
      \tagstructbegin{tag=Lbl}
      \setbox\@tempboxa
        \hbox
@@ -679,7 +695,7 @@
 %    \begin{macrocode}
            \bool_lazy_and:nnT
             {\tag_if_active_p:}
-            {\g__tag_mode_lua_bool}
+            {\g_@@_mode_lua_bool}
             {\tagmcbegin{tag=Lbl}}
            {#1}
          }
@@ -688,12 +704,12 @@
 % the paratagging. We do not disable paratagging completely, to 
 % avoid that the numbering goes wrong.
 %    \begin{macrocode}
-   \tag_stop:n{hangfrom}
+   \tag_suspend:n{hangfrom}
    \hangindent \wd\@tempboxa\noindent
 %    \end{macrocode}
 % Restart tagging and insert the box.
 %    \begin{macrocode}
-   \tag_start:n{hangfrom}
+   \tag_resume:n{hangfrom}
    \tagmcbegin{}\box\@tempboxa\tagmcend\tagstructend\tagmcbegin{}}
 %    \end{macrocode}
 % This command is used to tag the numbers of runin. We do not try
@@ -714,6 +730,7 @@
 % \cs{@sect} is only changed to replace the hyperref patches
 % and to use the new \cs{@kernel@tag@hangfrom} and \cs{@kernel@tag@svsec}
 %    \begin{macrocode}
+%<@@=>
 \def\@sect#1#2#3#4#5#6[#7]#8{%  
   \ifnum #2>\c@secnumdepth
     \def\@svsec{\@hyp@section@target@nnn{[section]}{}{#3}}
@@ -726,7 +743,7 @@
   \@tempskipa #5\relax
   \ifdim \@tempskipa>\z@
     \begingroup
-    \tagtool{para-flattened=true} % or \bool_set_true\l__tag_para_flattened_bool
+    \tagtool{para-flattened=true} % or \bool_set_true\l_@@_para_flattened_bool
       #6{%
          \ifnum #2>\c@secnumdepth
           \@hangfrom {\hskip #3\relax\@svsec}%
