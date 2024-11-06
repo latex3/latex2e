@@ -7,5 +7,6 @@ l3build save -epdftex \
     tlb-multicol-006 \
     tlb-multicol-007 \
     tlb-multicol-eisuke \
-    tlb-multicol-rowland
+    tlb-multicol-rowland \
+    tlb-multicol-marks
 	

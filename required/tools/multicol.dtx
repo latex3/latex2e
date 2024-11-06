@@ -98,7 +98,7 @@
 %<driver> \ProvidesFile{multicol.drv}
 % \fi
 %         \ProvidesFile{multicol.dtx}
-          [2024/09/14 v1.9i  multicolumn formatting (FMi)]
+          [2024/11/05 v2.0a  multicolumn formatting (FMi)]
 %
 %
 %
@@ -746,15 +746,7 @@
 %     |\mult@firstbox|, the next
 %     in register |\mult@firstbox|${}+2$, \ldots,
 %     only the last one as an exception in
-%     register |\mult@grightbox|. Furthermore it has to set up
-%     the two macros
-%     |\kept@firstmark| and |\kept@botmark| to hold the values for the
-%     first and bottom mark as found in the individual columns. There
-%     are some helper functions defined in section \ref{sec:v14} which
-%     may be used for this. Getting the marks right ``by hand'' is
-%     non-trivial and it may pay off to first take a look at the
-%     documentation and implementation of |\balance@columns| below
-%     before trying anew.
+%     register |\mult@grightbox|.
 %    \end{multicols}
 %    \end{quote}
 %    \vspace*{-3ex}
@@ -976,6 +968,21 @@
 %    v... multicolumn formatting]
 %    \end{macrocode}
 %
+%    \begin{macrocode}
+\ExplSyntaxOn
+\let \get@marks@for@reinsertion@@nNN     \__mark_get_marks_for_reinsertion:nNN
+\let \update@structure@from@material@@nn \__mark_update_structure_from_material:nn
+\let \update@structure@alias@@nn         \__mark_update_structure_alias:nn
+\let \mark@status@@n                     \__mark_status:n
+\let \mark@class@status@@nn              \__mark_class_status:nn
+\let \tl@gput@right@@No           \tl_gput_right:No
+\ExplSyntaxOff
+
+\def\col@first{}
+\def\col@last{}
+\def\page@sofar@all{}
+%    \end{macrocode}
+%
 %^^A \subsection{Option processing}
 %
 %    Next we declare options supported by \mc{}. Two-column mode
@@ -1044,14 +1051,6 @@
 %
 %
 %
-%  \begin{macro}{}
-%    
-%    \begin{macrocode}
-\NewMarkClass{multicols}
-\AddToHook{para/begin}{\InsertMark{multicols}{\the\col@number}}
-\AddToHook{para/end}{\InsertMark{multicols}{-\the\col@number}}
-%    \end{macrocode}
-%  \end{macro}
 %
 % \begin{macro}{\multicols}
 %    As mentioned before, the \mc{} environment has one mandatory
@@ -1403,10 +1402,6 @@
 %
 %    \begin{macrocode}
   \if@boxedmulticols
-    \let\l@kept@firstmark\kept@firstmark
-    \let\l@kept@botmark\kept@botmark
-    \global\let\kept@firstmark\@empty
-    \global\let\kept@botmark\@empty
   \else
 %    \end{macrocode}
 %    We add an empty box to the main vertical list to ensure that we
@@ -1467,30 +1462,7 @@
          \unvbox\@cclv
          \global\setbox\last@line\lastbox
         }%
-%    \end{macrocode}
-%    Finally we need to record the marks that are present within the
-%    |\partial@page| so that we can construct correct first and bottom
-%    marks later on. This is done by the following code.
-% \changes{v1.4a}{1992/02/14}{kept marks initiated}
-%    \begin{macrocode}
-           \prep@keptmarks
-%    \end{macrocode}
-%    Finally we have to initialize |\kept@topmark| which should
-%    ideally be initialized with the mark that is current on ``top''
-%    of this page. Unfortunately we can't use |\topmark| because this
-%    register will not always contain what its name promises because
-%    \LaTeX{} sometimes calls the output routine for float
-%    management.\footnote{During such a call the \cs{botmark}
-%    gets globally copied to \cs{topmark} by the \TeX{}
-%    program.} Therefore we use the second best solution by
-%    initializing it with |\firstmark|. In fact, for our purpose this
-%    doesn't matter as we use |\kept@topmark| only to initialize
-%    |\firstmark| and |\botmark| of a following page if we don't find
-%    any marks on the current one.
-% \changes{v1.4i}{1992/06/18}{\cs{kept@topmark} initialized.}
-%    \begin{macrocode}
-           \global\let\kept@topmark\firstmark
-          }\eject
+    }\eject
 %    \end{macrocode}
 %    The next thing to do is to assign a new value to |\vsize|.
 %    \LaTeX{} maintains the free room on the page (i.e.\ the page
@@ -1781,14 +1753,7 @@
     \balance@columns
 %    \end{macrocode}
 %    After balancing the result has to be returned by the command
-%    |\page@sofar|. But before we do this we reinsert any marks found
-%    in box |\mult@box|.
-%    \begin{macrocode}
-    \return@nonemptymark{first}%
-                 \kept@firstmark
-    \return@nonemptymark{bot}%
-                  \kept@botmark
-%    \end{macrocode}
+%    |\page@sofar|.
 %    When the boxed multicol is returned to the page it can happen
 %    that it doesn't fit onto it and \LaTeX{} therefore breaks
 %    earlier. The problem in that case is that during the generation
@@ -1800,22 +1765,9 @@
 % \changes{v1.9e}{2023/02/25}{Delay returning boxed multicols (gh/1002)}
 %    \begin{macrocode}
     \global\setbox\mc@boxedresult\vbox{%    
+\typeout{--> endmulticols (boxed)}%
       \page@sofar
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-      \global\let\kept@firstmark
-                 \l@kept@firstmark
-      \global\let\kept@botmark
-                 \l@kept@botmark
     }%
-%<*marktrace>
-    \mult@info\tw@
-      {Restore kept marks to\MessageBreak
-       first: \meaning\kept@firstmark
-       \MessageBreak bot\space\space:
-              \meaning\kept@botmark }%
-%</marktrace>
 %    \end{macrocode}
 %    This finishes the code for the ``boxed'' case.
 %    \begin{macrocode}
@@ -1880,17 +1832,7 @@
 %    \begin{macrocode}
     \ifvbox\partial@page
          \unvbox\partial@page\fi
-%    \end{macrocode}
-%    After the output routine has acted we restore
-%    the kept marks to their initial value.
-%    \begin{macrocode}
-     \global\let\kept@firstmark\@empty
-     \global\let\kept@botmark\@empty
-%<*marktrace>
-     \mult@info\tw@
-       {Make kept marks empty}%
-%</marktrace>
-  \fi
+    \fi
 %    \end{macrocode}
 %    The output routine above will take care of the |\vsize| and
 %    reinsert the balanced columns, etc. But it can't reinsert the
@@ -2189,6 +2131,10 @@
        \rlap{\phantom \multicolmindepthstring}%
     }%
 %    \end{macrocode}
+%    
+%    \begin{macrocode}
+   \page@sofar@all
+%    \end{macrocode}
 %    The processed material might consist of a last line with a
 %    descender in which case the |\prevdepth| will be
 %    non-zero. However, this material is getting reformatted now so
@@ -2397,9 +2343,19 @@
         \setbox\count@
             \vsplit\@cclv to\dimen@
 %    \end{macrocode}
-%    After splitting we update the kept marks.
+%    
 %    \begin{macrocode}
-            \set@keptmarks
+        \ifnum \count@ =\mult@firstbox
+          \update@structure@from@material@@nn
+              {column}%
+              {\unvcopy\partial@page
+               \unvcopy\mult@firstbox}%
+          \update@structure@alias@@nn{first-column}{column}%         
+        \else
+          \update@structure@from@material@@nn
+              {column}%
+              {\unvcopy\count@}%
+        \fi
 %    \end{macrocode}
 %    If |\raggedcolumns| is in force we add a |vfill| at the bottom by
 %    unboxing the split box.
@@ -2433,7 +2389,18 @@
 %    \begin{macrocode}
    \setbox\mult@rightbox
        \vsplit\@cclv to\dimen@
-   \set@keptmarks
+   \update@structure@from@material@@nn
+       {page}%
+       {\unvcopy\partial@page
+        \process@cols\mult@firstbox{\unvcopy\count@}%
+        \unvcopy\mult@rightbox}%
+   \update@structure@from@material@@nn
+       {column}%
+       {\unvcopy\mult@rightbox}%
+   \update@structure@alias@@nn{last-column}{column}%         
+%   \mark@class@status@@nn{in OR (multicols)}{DictMark}%
+   \mark@status@@n{in OR (multicols)}%
+%
    \setbox\mult@rightbox\vbox to\dimen@
           {\unvbox\mult@rightbox
            \ifshr@nking\vfilmaxdepth\fi}%
@@ -2473,48 +2440,6 @@
                     \hrule\allowbreak \fi
    \fi
 %    \end{macrocode}
-%    To get a correct marks for the current page we have to (locally)
-%    redefine |\firstmark| and |\botmark|.
-%    If |\kept@firstmark| is non-empty then |\kept@botmark| must be
-%    non-empty too so we can use their values. Otherwise we use the
-%    value of |\kept@topmark| which was first initialized when we
-%    gathered the |\partial@page| and later on was updated to the
-%    |\botmark| for the preceding page.
-%
-% \changes{v1.4a}{1992/02/14}{\cs{botmark} set to \cs{splitbotmark}}
-%    \begin{macrocode}
-   \ifx\@empty\kept@firstmark
-      \let\firstmark\kept@topmark
-      \let\botmark\kept@topmark
-   \else
-      \let\firstmark\kept@firstmark
-      \let\botmark\kept@botmark
-   \fi
-%    \end{macrocode}
-%    We also initialize |\topmark| with |\kept@topmark|. This will make
-%    this mark okay for all middle pages of the \mc{} environment.
-% \changes{v1.5d}{1993/09/15}{reinit \cs{topmark}}
-%    \begin{macrocode}
-   \let\topmark\kept@topmark
-%<*marktrace>
-   \mult@info\tw@
-        {Use kept top mark:\MessageBreak
-          \meaning\kept@topmark
-         \MessageBreak
-         Use kept first mark:\MessageBreak
-          \meaning\kept@firstmark
-        \MessageBreak
-         Use kept bot mark:\MessageBreak
-          \meaning\kept@botmark
-        \MessageBreak
-         Produce first mark:\MessageBreak
-          \meaning\firstmark
-        \MessageBreak
-        Produce bot mark:\MessageBreak
-          \meaning\botmark
-         \@gobbletwo}%
-%</marktrace>
-%    \end{macrocode}
 %    With a little more effort we could have done better. If we had,
 %    for example, recorded the shrinkage of the material in
 %    |\partial@page| it would be now possible to try higher
@@ -2536,6 +2461,7 @@
 %    \begin{macrocode}
    \boxmaxdepth\maxdimen
    \setbox\@cclv\vbox{\unvbox\partial@page
+ \typeout{--> multicolout}%
                       \page@sofar}%
 %    \end{macrocode}
 %    The macro |\@makecol| adds all floats assigned for the current
@@ -2544,24 +2470,6 @@
 %    if we do not allow any inside a \mc{} environment.
 %    \begin{macrocode}
    \@makecol\@outputpage
-%    \end{macrocode}
-%    After the page is shipped out we have to prepare the kept marks
-%    for the following page. |\kept@firstmark| and |\kept@botmark|
-%    reinitialized by setting them to |\@empty|.  The value of
-%    |\botmark| is then assigned to |\kept@topmark|.
-% \changes{v1.4g}{1992/06/03}{Only change \cs{kept@topmark} if
-%                            \cs{kept@botmark} non-empty}
-% \changes{v1.4i}{1992/06/18}{Set \cs{kept@topmark} to \cs{botmark}}
-%    \begin{macrocode}
-     \global\let\kept@topmark\botmark
-     \global\let\kept@firstmark\@empty
-     \global\let\kept@botmark\@empty
-%<*marktrace>
-     \mult@info\tw@
-        {(Re)Init top mark:\MessageBreak
-         \meaning\kept@topmark
-         \@gobbletwo}%
-%</marktrace>
 %    \end{macrocode}
 %    Now we reset |\@colroom| to |\@colht| which is \LaTeX's
 %    saved value of |\textheight|.
@@ -2921,12 +2829,10 @@
 %    \begin{macrocode}
      \unvbox\partial@page
 %    \end{macrocode}
-%    Then we return the first and bottom mark and the gathered
+%    Then we return the gathered
 %    material to the main vertical list.
 %    \begin{macrocode}
-     \return@nonemptymark{first}%
-                         \kept@firstmark
-     \return@nonemptymark{bot}\kept@botmark
+     \typeout{--> balancecolumnout}%
      \page@sofar
 %    \end{macrocode}
 %    
@@ -2956,21 +2862,7 @@
 %    \begin{macrocode}
 \def\balance@columns{%
 %    \end{macrocode}
-%    We start by setting the kept marks by updating them with any
-%    marks from this box. This has to be done \emph{before} we add a
-%    penalty of $-10000$ to the top of the box, otherwise only an
-%    empty box will be considered. But even that is not enough: the box
-%    may contain \cs{columnbreak}s in which case doing some artificial
-%    splitting to get the marks out still fails to see all marks
-%    unless we take some special precaution in \cs{get@keptmarks}
-%    (which is now done).
-% \changes{v1.5h}{1994/08/26}{Get kept marks first}
-%    \begin{macrocode}
-   \get@keptmarks\mult@box
-%    \end{macrocode}
-%    We then continue by resetting trying to remove any discardable
-%    stuff at the end of |\mult@box|. This is rather experimental.  We
-%    also add a forced break point at the very beginning, so that we
+%    We start by adding a forced break point at the very beginning, so that we
 %    can split the box to height zero later on, thereby adding a known
 %    |\splittopskip| glue at the beginning.
 % \changes{v1.8k}{2015/03/21}{\cs{remove@discardable@items} removed}
@@ -3691,238 +3583,6 @@
 %
 % \end{multicols}
 %
-% \begin{multicols}{2}[\subsection{Maintaining the mark registers}]
-% \label{sec:v14}
-%
-% This section contains the routines that set the marks so that they
-% will be handled correctly. They have been introduced with version~1.4.
-%
-%  \begin{macro}{\kept@topmark}
-% \changes{v1.4h}{1992/06/04}{Init to double brace pair}
-%  \begin{macro}{\kept@firstmark}
-%  \begin{macro}{\kept@botmark}
-%    First thing we do is to reserve three macro names to hold the
-%    replacement text for \TeX's primitives |\firstmark|, |\botmark| and
-%    |\topmark|. We initialize the first two to be empty and
-%    |\kept@topmark| to contain  two empty pair of braces. This is
-%    necessary since |\kept@topmark| is supposed to contain the last
-%    mark from a preceding page and in \LaTeX{} any ``real'' mark must
-%    contain two parts representing left and right mark information.
-%    \begin{macrocode}
-\def\kept@topmark{{}{}}
-\let\kept@firstmark\@empty
-\let\kept@botmark\@empty
-%    \end{macrocode}
-%  \end{macro}
-%  \end{macro}
-%  \end{macro}
-%
-%
-%  \begin{macro}{\return@nonemptymark}
-%    Sometimes we want to return the value of a ``kept'' mark into a
-%    |\mark| node on the main vertical list. This is done by the
-%    function |\return@nonemptymark|. As the name suggests it only acts
-%    if the replacement text of the kept mark is non-empty. This is done
-%    to avoid adding an empty mark when no mark was actually present. If
-%    we would nevertheless add such a mark it would be regarded as a
-%    valid |\firstmark| later on.
-%    \begin{macrocode}
-\def\return@nonemptymark#1#2{%
-  \ifx#2\@empty
-  \else
-%    \end{macrocode}
-%    For debugging purposes we take a look at the value of the kept mark
-%    that we are about to return. This code will get stripped out for
-%    production.
-%    \begin{macrocode}
-%<*marktrace>
-    \mult@info\tw@
-      {Returned #1 mark:\MessageBreak
-       \meaning#2}%
-%      \nobreak
-%    \fi
-%</marktrace>
-%    \end{macrocode}
-%    Since the contents of the mark may be arbitrary \LaTeX{} code we
-%    better make sure that it doesn't get expanded any further. (Some
-%    expansion have been done already during the execution of
-%    |\markright| or |\markboth|.) We therefore use the usual mechanism
-%    of a toks register to prohibit expansion.\footnote{Due to the
-%    current definition of \cs{markright} etc.\ it wouldn't
-%    help to define the \cs{protect} command to prohibit
-%    expansion as any \cs{protect} has already vanished due to
-%    earlier expansions.}
-% \changes{v1.4n}{1992/09/10}{Make marks robust}
-% \changes{v1.5t}{1999/03/22}{re-add \cs{mark} command which was commented out
-%       by mistake at some point in 1998 (pr/2978)}
-%    \begin{macrocode}
-    \toks@\expandafter{#2}%
-    \mark{\the\toks@}%
-%    \end{macrocode}
-%    We don't want any breakpoint between such a returned mark and the
-%    following material (which is usually just the box where the mark
-%    came from).
-%    \begin{macrocode}
-    \nobreak
-  \fi}
-%    \end{macrocode}
-%  \end{macro}
-%
-%
-%  \begin{macro}{\get@keptmarks}
-%    If we have some material in a box register we may want to get the
-%    first and the last mark out of this box. This can be done with
-%    |\get@keptmarks| which takes one argument: the box register number
-%    or its nick name defined by |\newbox|.
-%    \begin{macrocode}
-\def\get@keptmarks#1{%
-%    \end{macrocode}
-%    For debugging purposes we take a look at the current dimensions
-%    of the box since in earlier versions of the code I made some
-%    mistakes in this area.
-%    \begin{macrocode}
-%<*debug>
-      \typeout{Mark box #1 before:
-               ht \the\ht#1, dp \the\dp#1}%
-%</debug>
-%    \end{macrocode}
-%    Now we open a new group and locally copy the box to itself. As a
-%    result any operation, i.e.\ |\vsplit|, will only have a local
-%    effect. Without this trick the box content would get lost up to
-%    the level where the last assignment to the box register was done.
-%    \begin{macrocode}
-  \begingroup
-   \vbadness\@M
-   \setbox#1\copy#1%
-%    \end{macrocode}
-%    Now we split the box to the maximal possible dimension. This
-%    should split off the full contents of the box so that effectively
-%    everything is split off. As a result |\splitfirstmark| and
-%    |\splitbotmark| will contain the first and last mark in the box
-%    respectively.
-%
-%    Unfortunately, a simple \cs{vsplit} is not enough if the material
-%    contains forced breaks in that case we first have to get rid of
-%    those which is why we do this work in a separate macro that can
-%    call itself recursively.
-% \changes{v1.9g}{2023/11/10}{Get rid of forced breaks for mark
-%      extraction (gh/1130)}
-%    \begin{macrocode}
-   \mc@get@all@box@marks #1%
-%    \end{macrocode}
-%    Therefore we can now set the kept marks which is a global
-%    operation and afterwards close the group. This will restore the
-%    original box contents.
-%    \begin{macrocode}
-   \set@keptmarks
- \endgroup
-%    \end{macrocode}
-%    For debugging we take again a look at the box dimension which
-%    shouldn't have changed.
-%    \begin{macrocode}
-%<*debug>
-    \typeout{Mark box #1 \space after:
-             ht \the\ht#1, dp \the\dp#1}%
-%</debug>
-}
-%    \end{macrocode}
-%  \end{macro}
-%
-%
-%  \begin{macro}{\mc@get@all@box@marks}
-%    This macro splits a box to \cs{maxdimen} in order to get at the
-%    marks inside. If it turns out that we have a remainder after the
-%    split (e.g., if there was a \cs{columnbreak} in the material) we
-%    stitch the two parts together again (which omits the forced
-%    break) and recurse. Eventually, everything is split off and the
-%    split marks will then have the appropriate values.
-% \changes{v1.9g}{2023/11/10}{Get rid of forced breaks for mark
-%      extraction (gh/1130)}
-%    \begin{macrocode}
-\def\mc@get@all@box@marks #1{%
-  \setbox\@tempboxa\vsplit#1to\maxdimen
-  \ifvoid#1\else
-    \setbox#1\vbox{\unvbox\@tempboxa \unvbox#1}%
-    \mc@get@all@box@marks #1%
-  \fi
-}
-%    \end{macrocode}
-%  \end{macro}
-%
-%
-%
-%
-%  \begin{macro}{\set@keptmarks}
-%    The macro |\set@keptmarks| is responsible for setting
-%    |\kept@firstmark| and |\kept@botmark|, by checking the current
-%    values for |\splitfirstmark| and |\splitbotmark|.
-%    \begin{macrocode}
-\def\set@keptmarks{%
-%    \end{macrocode}
-%    If |\kept@firstmark| is empty we assume that it isn't set. This
-%    is strictly speaking not correct as we loose the ability to have
-%    marks that are explicitly empty, but for standard \LaTeX{}
-%    application it is sufficient. If it is non-empty we don't change
-%    the value---within the output routines it will then be restored
-%    to |\@empty|.
-%    \begin{macrocode}
-   \ifx\kept@firstmark\@empty
-%    \end{macrocode}
-%    We now put the contents of |\splitfirstmark| into
-%    |\kept@firstmark|. In the case that there wasn't any mark at all
-%    |\kept@firstmark| will not change by that operation.
-%    \begin{macrocode}
-     \expandafter\gdef\expandafter
-        \kept@firstmark
-        \expandafter{\splitfirstmark}%
-%    \end{macrocode}
-%    When debugging we show the assignment but only when something
-%    actually happened.
-%    \begin{macrocode}
-%<*marktrace>
-     \ifx\kept@firstmark\@empty\else
-       \mult@info\tw@
-         {Set kept first mark:\MessageBreak
-          \meaning\kept@firstmark%
-          \@gobbletwo}%
-     \fi
-%</marktrace>
-   \fi
-%    \end{macrocode}
-%    We always try to set the bottom mark to the |\splitbotmark| but
-%    of course only when there has been a |\splitbotmark| at all.
-%    Again, we assume that an empty |\splitbotmark| means that the
-%    split off box part didn't contain any marks at all.
-%    \begin{macrocode}
-   \expandafter\def\expandafter\@tempa
-      \expandafter{\splitbotmark}%
-   \ifx\@tempa\@empty\else
-      \global\let\kept@botmark\@tempa
-%<*marktrace>
-      \mult@info\tw@
-        {Set kept bot mark:\MessageBreak
-         \meaning\kept@botmark%
-         \@gobbletwo}%
-%</marktrace>
-   \fi}%
-%    \end{macrocode}
-%  \end{macro}
-%
-%
-%  \begin{macro}{\prep@keptmarks}
-%    The |\prep@keptmarks| function is used to initialize the kept
-%    marks from the contents of  |\partial@page|, i.e.\ the box that
-%    holds everything from the top of the current page prior to
-%    starting the \mc{} environment. However, such a box is only
-%    available if we are not producing a boxed \mc{}.
-%    \begin{macrocode}
-\def\prep@keptmarks{%
-   \if@boxedmulticols \else
-     \get@keptmarks\partial@page
-   \fi}
-%    \end{macrocode}
-%  \end{macro}
-%
 %
 %  \begin{macro}{\remove@discardable@items}
 %    There are situations when we may have some space at the end of a
@@ -4308,6 +3968,7 @@
 %    rules and the columns automatically get into the right positions.
 %    \begin{macrocode}
 \def\LR@column@boxes{%
+   \global\let\page@sofar@all\@empty
 %    \end{macrocode}
 %    We loop through the columns with |\process@cols|
 %    \begin{macrocode}
@@ -4326,6 +3987,12 @@
 % \changes{v1.8e}{2014/04/23}{Support \cs{docolaction}}
 %    \begin{macrocode}
        \mc@col@status@write
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+       \get@marks@for@reinsertion@@nNN {\unvcopy\count@}\col@first\col@last
+       \tl@gput@right@@No \page@sofar@all \col@first
+       \tl@gput@right@@No \page@sofar@all \col@last
 %    \end{macrocode}
 %    The typeset box followed by the column rule material
 %    \begin{macrocode}
@@ -4351,6 +4018,12 @@
 % \changes{v1.8e}{2014/04/23}{Support \cs{docolaction}}
 %    \begin{macrocode}
      \mc@lastcol@status@write
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+     \get@marks@for@reinsertion@@nNN {\unvcopy\mult@rightbox}\col@first\col@last
+     \tl@gput@right@@No \page@sofar@all \col@first
+     \tl@gput@right@@No \page@sofar@all \col@last
      \box\mult@rightbox
 }
 %    \end{macrocode}
