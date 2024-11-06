@@ -794,6 +794,8 @@
   \@@_init_region:nn {last-column}{#1}
 %    \end{macrocode}
 %    \begin{macrocode}
+  \@@_init_region:nn {column-1}{#1}
+  \@@_init_region:nn {column-2}{#1}
 }
 %    \end{macrocode}
 % \end{macro}
@@ -1296,7 +1298,7 @@
                        mark~ for~ class~ '##1'~ =~  \g_@@_tmp_tl } }
 %</trace>
                   \tl_gput_right:Ne \g_@@_last_marks_tl
-                     { \mark_insert:nn {##1} { \g_@@_tmp_tl } }
+                     { \mark_insert:nn {##1} { \@@_drop_id:o { \g_@@_tmp_tl } } }
 %    \end{macrocode}
 %    Because we had a last mark we also have a first mark (which might
 %    be the same, but might not be), so we pick that up and add it to
@@ -1314,8 +1316,14 @@
                   \tl_gput_right:Ne \g_@@_first_marks_tl
                      { \mark_insert:nn {##1}
                        {
-                         \tex_splitfirstmarks:D
-                         \use:c { c_@@_class_##1_mark }
+%    \end{macrocode}
+%    We better drop the id from the returned value otherwise they
+%    accumulate in the marks when reinserted.
+%    \begin{macrocode}
+                          \@@_drop_id:o {
+                            \tex_splitfirstmarks:D
+                            \use:c { c_@@_class_##1_mark }
+                          }
                        }
                      }
                 }
@@ -1360,14 +1368,15 @@
 %
 %
 %  \begin{macro}{\@@_update_structure_to_err:n,\@@_error:n}
-%    A slight variation is to install a fixed error message as the value.
+%    A slight variation is to install a fixed error message as the
+%    value.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_update_structure_to_err:n #1 {
   \seq_map_inline:Nn \g_@@_classes_seq
       {
-        \tl_gset:cn { g_@@_ #1 _top_   ##1 _tl } { \@@_error:n {#1} }
-        \tl_gset:cn { g_@@_ #1 _first_ ##1 _tl } { \@@_error:n {#1} }
-        \tl_gset:cn { g_@@_ #1 _last_  ##1 _tl } { \@@_error:n {#1} }
+        \tl_gset:ce { g_@@_ #1 _top_   ##1 _tl } { \@@_id:n{?} \@@_error:n {#1} }
+        \tl_gset:ce { g_@@_ #1 _first_ ##1 _tl } { \@@_id:n{?} \@@_error:n {#1} }
+        \tl_gset:ce { g_@@_ #1 _last_  ##1 _tl } { \@@_id:n{?} \@@_error:n {#1} }
       }
 }
 %    \end{macrocode}
@@ -1375,6 +1384,9 @@
 %    argument which would be a bit more compact, but who knows,
 %    perhaps we end up with another reason to use this error command
 %    elsewhere, so for now we keep the argument.
+%
+%    This is not protected so that it expands, for example in a
+%    \cs{typeout} to the next level.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_error:n #1 {
   \msg_error:nnn { mark } { invalid-use } {#1}
@@ -1522,22 +1534,33 @@
 %    in output routines and only after \cs{@@_update_structure_from_material:nn} has acted,
 %    otherwise their value will be wrong.
 %
-%    If used with an unknown class or region they generate an error
-%    (fairly low-level because we are in an expandable context).
+%    \begin{macrocode}
+\cs_new:Npn \mark_use_first:nn #1#2 { \@@_use_check:nn { g_@@_#1_first_#2_tl } { #1 } }
+\cs_new:Npn \mark_use_last:nn #1#2 { \@@_use_check:nn { g_@@_#1_last_#2_tl } { #1 } }
+\cs_new:Npn \mark_use_top:nn #1#2 { \@@_use_check:nn { g_@@_#1_top_#2_tl } { #1 } }
+%    \end{macrocode}
 %
+%    If used with an unknown class or region they generate an error.
+%    If that happens in an expandable context, e.g., in a \cs{typeout}
+%    you only see something like
+%    \verb=\__mark_error:n{page}=.
+%    Not that great but better than low-level errors, I guess.
+%    \begin{macrocode}
+\cs_new:Npn \@@_use_check:nn #1#2 {
+  \tl_if_eq:cNTF {#1} \relax
+     { \@@_error:n {#2} }
+     { \@@_drop_id:v {#1} }
+}     
+%    \end{macrocode}
+%    
 %    Each mark starts with an id and while the id does not print it is
 %    nevertheless better to remove it when returning the mark, so that
 %    downstream manipulation of the data doesn't have to deal with it.
 % \changes{v1.0g}{2024/05/31}{Remove the id when returning the mark value (gh/1359)}
-%    \begin{macrocode}
-\cs_new:Npn \mark_use_first:nn #1#2 { \@@_use:v { g_@@_#1_first_#2_tl } }
-\cs_new:Npn \mark_use_last:nn #1#2  { \@@_use:v { g_@@_#1_last_#2_tl }  }
-\cs_new:Npn \mark_use_top:nn #1#2   { \@@_use:v { g_@@_#1_top_#2_tl }   }
-%    \end{macrocode}
 %    This is what the \cs{use_none:nn} accomplishes.
 %    \begin{macrocode}
-\cs_new:Npn \@@_use:n #1 { \exp_not:o { \use_none:nn #1 } }
-\cs_generate_variant:Nn \@@_use:n { v }
+\cs_new:Npn \@@_drop_id:n #1 { \exp_not:o { \use_none:nn #1 } }
+\cs_generate_variant:Nn \@@_drop_id:n { o, v }
 %    \end{macrocode}
 % \end{macro}
 %
@@ -1605,15 +1628,17 @@
   }
 %    \end{macrocode}
 %
-%
+%    Next error can also happen if the mark class is unknown, so this
+%    should probably be separated into two different errors.
 %    \begin{macrocode}
-
 \msg_new:nnnn { mark } { invalid-use }
-  { Mark~region~'#1'~not ~usable }
+  { Mark~region~'#1'~not~usable~or~class~unknown }
   {
     \c__msg_coding_error_text_tl
-    The~region~'#1'~can~only~be~used~after~
-    all~columns~have~been~assembled.
+    The~region~'#1'~is~either~not~known~or~data~for~it~
+    still~needs~to~be~assembled,~e.g.,~last-column~
+    while~building~thefirst-column.~
+    Also~possible:~the~class~is~misspelled.
     \c__msg_return_text_tl
   }
 %    \end{macrocode}
@@ -1678,14 +1703,13 @@
 %
 %
 %
-%  \begin{macro}{\@@_class_status:nn}
+%  \begin{macro}{\@@_class_status:nn,\@@_region_status:nnn}
 %    Shows the mark values across all regions for one mark class
 %    (\verb=#2=). The first argument gives some \meta{info} to help
 %    identifying where the command was called.
 %    \begin{macrocode}
 %<*trace>
-\cs_new_protected:Npn \@@_class_status:nn #1#2
-   {
+\cs_new_protected:Npn \@@_class_status:nn #1#2 {
      \typeout{ Marks:~#2~ #1:}
      \@@_region_status:nnn  {#2}{ page~ (current)~ }  { page }
      \@@_region_status:nnn  {#2}{ page~ (previous) } { previous-page }
@@ -1693,18 +1717,26 @@
      \@@_region_status:nnn  {#2}{ column~ (previous) }{ previous-column }
      \@@_region_status:nnn  {#2}{ column~ (first) }   { first-column }
      \@@_region_status:nnn  {#2}{ column~ (last)~ }   { last-column }
+     \@@_region_status:nnn  {#2}{ column~ (1)~ }   { column-1 }
+     \@@_region_status:nnn  {#2}{ column~ (2)~ }   { column-2 }
+     \@@_region_status:nnn  {#2}{ column~ (3)~ }   { column-3 }
+     \@@_region_status:nnn  {#2}{ column~ (4)~ }   { column-4 }
 }
 %    \end{macrocode}
-%    
-   %    \begin{macrocode}
+%    Display, top, first, and last mark of a region unless none of them exist.
+%    \begin{macrocode}
 \cs_new_protected:Npn \@@_region_status:nnn #1#2#3 {
-  \typeout{\@spaces #2 =
-     \tl_if_eq:cNF { g_@@_#3_last_ #1 _tl } \c_@@_empty_tl
-       { ~|~ \exp_not:v { g_@@_#3_top_ #1 _tl }    ~|~ 
-             \exp_not:v { g_@@_#3_first_ #1 _tl }  ~|~
-             \exp_not:v { g_@@_#3_last_ #1 _tl }   ~|
-       }
-  }
+  \tl_if_exist:cT  { g_@@_#3_last_ #1 _tl }   
+     {
+       \tl_if_eq:cNF { g_@@_#3_last_ #1 _tl } \c_@@_empty_tl
+          {
+            \typeout{\@spaces #2 =
+               ~|~ \exp_not:v { g_@@_#3_top_ #1 _tl }    ~|~ 
+                   \exp_not:v { g_@@_#3_first_ #1 _tl }  ~|~
+                   \exp_not:v { g_@@_#3_last_ #1 _tl }   ~|
+            }
+          }
+     }
 }  
    %    \end{macrocode}
 %  \end{macro}
