@@ -92,13 +92,14 @@
 %
 %<package>\DeclareRelease{}{2017-04-11}{multicol-2017-04-11.sty}
 %<package>\DeclareRelease{v1.8}{2019-10-01}{multicol-2019-10-01.sty}
+%<package>\DeclareRelease{v1.9}{2021-11-15}{multicol-2024-05-23.sty}
 %<package>\DeclareCurrentRelease{}{2021-11-15}
 %<package>
 %<package>\ProvidesPackage{multicol}
 %<driver> \ProvidesFile{multicol.drv}
 % \fi
 %         \ProvidesFile{multicol.dtx}
-          [2024/11/05 v2.0a  multicolumn formatting (FMi)]
+          [2024/11/09 v2.0a  multicolumn formatting (FMi)]
 %
 %
 %
@@ -968,20 +969,6 @@
 %    v... multicolumn formatting]
 %    \end{macrocode}
 %
-%    \begin{macrocode}
-\ExplSyntaxOn
-\let \get@marks@for@reinsertion@@nNN     \__mark_get_marks_for_reinsertion:nNN
-\let \update@structure@from@material@@nn \__mark_update_structure_from_material:nn
-\let \update@structure@alias@@nn         \__mark_update_structure_alias:nn
-\let \update@structure@to@err@@n         \__mark_update_structure_to_err:n
-\let \mark@status@@n                     \__mark_status:n
-%%fmi\let \mark@class@status@@nn              \__mark_class_status:nn
-%%fmi\let \tl@gput@right@@No                  \tl_gput_right:No
-\ExplSyntaxOff
-
-\def\mc@first@box@mark{}
-\def\mc@last@box@mark{}
-%    \end{macrocode}
 %
 %^^A \subsection{Option processing}
 %
@@ -1006,7 +993,9 @@
 \DeclareOption{balancingshow}
     {\c@tracingmulticols\tw@}
 \DeclareOption{markshow}
-    {\c@tracingmulticols\thr@@}
+              {\c@tracingmulticols\thr@@
+               \DebugMarksOn
+              }
 \DeclareOption{debugshow}
     {\c@tracingmulticols5\relax}
 %    \end{macrocode}
@@ -1764,14 +1753,12 @@
 %    until we have left the group below.
 % \changes{v1.9e}{2023/02/25}{Delay returning boxed multicols (gh/1002)}
 %    \begin{macrocode}
-    \global\setbox\mc@boxedresult\vbox{%    
-\typeout{--> endmulticols (boxed)}%
-    \@expl@@@mark@update@mc@structures@@
-    \mark@status@@n{multicol (boxed)}%
-    %
-    \mc@prepare@reinsert@marks
-    \page@sofar
-    \mc@first@box@mark\mc@last@box@mark
+    \global\setbox\mc@boxedresult\vbox{%
+      \mc@handle@marks@and@reinserts
+          {endmulticols}%
+          {multicol~ (boxed)}%
+      \page@sofar
+      \mc@reinsert@marks
     }%
 %    \end{macrocode}
 %    This finishes the code for the ``boxed'' case.
@@ -2178,29 +2165,6 @@
 % \end{macro}
 %
 %
-%  \begin{macro}{}
-%    
-%    \begin{macrocode}
-%
-\def\mc@update@page@structure{%
-  \typeout{--->>> multicol update page structure}%
-  \update@structure@from@material@@nn
-      {page}%
-      {\unvcopy\partial@page
-       \process@cols\mult@firstbox{\unvcopy\count@}%
-       \unvcopy\mult@rightbox}%
-}
-
-\def\mc@prepare@reinsert@marks{%
-  \typeout{--->>> multicol prepare reinsert marks}%
-  \get@marks@for@reinsertion@@nNN
-      {\process@cols\mult@firstbox{\unvcopy\count@}%
-        \unvcopy\mult@rightbox}%
-      \mc@first@box@mark\mc@last@box@mark
-}
-%    \end{macrocode}
-%  \end{macro}
-%
 %
 %  \begin{macro}{\multicolmindepthstring}
 %    The default minimum depth of each column corresponds to the depth
@@ -2461,15 +2425,12 @@
 % \changes{v1.8p}{2016/04/07}{Reset \cs{boxmaxdepth}}
 %    \begin{macrocode}
    \boxmaxdepth\maxdimen
-   \setbox\@cclv\vbox{%
-                      \typeout{--> multicolout}%
-                      \@expl@@@mark@update@mc@structures@@
-                      \mc@update@page@structure
-                      %
-                      \mark@status@@n{multicol (full page)}%
-                      %
-                      \unvbox\partial@page
-                      \page@sofar}%
+   \setbox\@cclv\vbox
+       {\mc@handle@col@andpage@marks
+         {multicolout}%
+         {multicol (full page)}%
+       \unvbox\partial@page
+       \page@sofar}%
 %    \end{macrocode}
 %    The macro |\@makecol| adds all floats assigned for the current
 %    page to this page.  |\@outputpage| ships out the resulting box.
@@ -2838,15 +2799,12 @@
 %    \end{macrocode}
 %    Then we return the gathered
 %    material to the main vertical list.
-%    \begin{macrocode}
-     \typeout{--> balancecolumnout}%
-     \@expl@@@mark@update@mc@structures@@
-     %
-     \mark@status@@n{multicol (finish)}%
-     %
-     \mc@prepare@reinsert@marks
+     %    \begin{macrocode}
+     \mc@handle@marks@and@reinserts
+         {balancecolumnout}%
+         {multicol (finish)}%
      \page@sofar
-     \mc@first@box@mark\mc@last@box@mark
+     \mc@reinsert@marks
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
@@ -4328,6 +4286,161 @@
 \mc@firstcoltrue
 %    \end{macrocode}
 %  \end{macro}
+%
+%
+% \subsection{Supporting the new mark mechanism}
+%
+%
+%    \begin{macrocode}
+\ExplSyntaxOn
+%<@@=mark>
+%    \end{macrocode}
+%
+%
+%
+%  \begin{macro}{\g_@@_curr_col_int}
+%    
+%    \begin{macrocode}
+\int_new:N \g_@@_curr_col_int
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\__mc_update_col_structures:}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \__mc_update_col_structures: {
+  \@@_debug:n
+     {
+       \typeout{--->>>~ multicol~ update~ col~ structure}
+     }
+  \int_while_do:nNnn \g_@@_curr_col_int > 2
+      {
+        \@@_update_structure_to_err:n
+           { mcol - \int_use:N\g_@@_curr_col_int }
+        \int_gdecr:N \g_@@_curr_col_int
+      }%
+  \int_gset:Nn \g_@@_curr_col_int {1}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \process@cols\mult@firstbox
+      {
+        \@@_update_structure_from_material:nn
+             {mcol}
+             {\unvcopy\count@} 
+        \@@_update_structure_alias:nn
+             {mcol - \int_use:N\g_@@_curr_col_int}
+             {mcol}
+        \int_gincr:N \g_@@_curr_col_int
+      }
+  \@@_update_structure_from_material:nn
+     {mcol}
+     {\unvcopy\mult@rightbox}
+  \@@_update_structure_alias:nn
+     { mcol - \int_use:N\g_@@_curr_col_int }
+     {mcol}
+  \@@_update_structure_alias:nn{first-column}{mcol-1}
+  \@@_update_structure_alias:nn{last-column} {mcol}
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+
+
+%  \begin{macro}{\__mc_update_page_structures:}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \__mc_update_page_structures: {
+  \@@_debug:n
+     {
+       \typeout{--->>>~ multicol~ update~ page~ structure}
+     }
+  \@@_update_structure_from_material:nn
+      {page}
+      {
+        \unvcopy\partial@page
+        \process@cols \mult@firstbox { \unvcopy\count@ }
+        \unvcopy\mult@rightbox
+      }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+
+%  \begin{macro}{\__mc_prepare_mark_reinserts:}
+%    
+%    \begin{macrocode}
+\tl_new:N \l__mc_first_marks_tl
+\tl_new:N \l__mc_last_marks_tl
+
+\cs_new_protected:Npn \__mc_prepare_mark_reinserts: {
+  \@@_debug:n
+     {
+       \typeout{--->>>~ multicol~ prepare~ reinsert~ marks}
+     }
+  \@@_get_marks_for_reinsertion:nNN
+     {
+       \process@cols \mult@firstbox { \unvcopy\count@ }
+       \unvcopy\mult@rightbox
+     }
+     \l__mc_first_marks_tl
+     \l__mc_last_marks_tl
+}
+%    \end{macrocode}
+%  \end{macro}
+
+
+%
+%
+%  \begin{macro}{\mc@handle@marks@and@reinserts}
+%    
+%    \begin{macrocode}
+\def \mc@handle@marks@and@reinserts #1 #2 {
+  \@@_debug:n { \typeout{-->~ #1} }
+  \__mc_update_col_structures:
+  \@@_debug:n { \@@_status:n {#2} }
+  %
+  \__mc_prepare_mark_reinserts:
+}
+
+\def\mc@reinsert@marks{\l__mc_first_marks_tl\l__mc_last_marks_tl}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\mc@handle@col@andpage@marks}
+%    
+%    \begin{macrocode}
+\def \mc@handle@col@andpage@marks #1 #2 {
+  \@@_debug:n { \typeout{-->~ #1} }
+  \__mc_update_col_structures:
+  \__mc_update_page_structures:
+  \@@_debug:n { \@@_status:n {#2} }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%
+%    \begin{macrocode}
+%<@@=>
+%    \end{macrocode}
+%
+
+%
+%    \begin{macrocode}
+\ExplSyntaxOff
+%    \end{macrocode}
+%
+%
+%    \begin{macrocode}
+%    \end{macrocode}
+%
 % \end{multicols*}
 %
 % \Finale
