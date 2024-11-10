@@ -10,3 +10,7 @@ l3build save -epdftex \
     tlb-multicol-rowland \
     tlb-multicol-marks
 	
+
+
+l3build save -epdftex,luatex \
+    sx411758
