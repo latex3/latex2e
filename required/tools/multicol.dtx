@@ -920,7 +920,7 @@
 %
 %    The following redefinitions have to be moved until after the
 %    preamble because version 3 of \pkg{doc} resets them after the
-%    premable (this is tmp, because \pkg{hypdoc} is not yet
+%    preamble (this is tmp, because \pkg{hypdoc} is not yet
 %    integrated, but as we all know, tmp solutions have a tendency to
 %    survive for a long time\ldots).
 %    \begin{macrocode}
@@ -3883,8 +3883,8 @@
     \else
 %    \end{macrocode}
 %    Increasingly lower penalty based on argument value. This is like
-%    \cs{pagebreak} but we use other penalty values are the \LaTeX{}
-%    defaults aree rather pointless for pagination.
+%    \cs{pagebreak} but we use other penalty values as the \LaTeX{}
+%    defaults are rather useless for pagination.
 %    \begin{macrocode}
     \edef\mc@break@pen
 	{-\ifcase#1\@m\or 3333\or 6666\or 9999\else\@Mv\fi\relax}%
@@ -4132,7 +4132,9 @@
 %
 %    The \verb=\docolaction= scans for a star and optional argument
 %    and 3 mandatory ones, but we do this in chunks (not having xparse
-%    available).
+%    available).\footnote{We can do better now, as
+%    \cs{NewDocumentCommand} is part of the kernel. So this should be
+%    cleaned up one day.}
 %
 % \changes{v1.8u}{2018/11/09}{Support star with \cs{docolaction}}
 %    \begin{macrocode}
@@ -4307,11 +4309,12 @@
 %
 % \subsection{Using the new mark mechanism}
 %
+% \subsubsection{Helpers}
 %
-% \changes{v2.0a}{2024/11/10}{}
+% \changes{v2.0a}{2024/11/10}{Using the new mark mechanism}
 %    \begin{macrocode}
 \ExplSyntaxOn
-%<@@=mark>
+%<@@=mc>
 %    \end{macrocode}
 %
 %
@@ -4328,111 +4331,196 @@
 %
 %
 %
-%  \begin{macro}{\__mc_update_col_structures:}
-%    
+%  \begin{macro}{\@@_debug_marks:n}
+%    For now we reuse the internal debugging interface of ltmarks,
+%    this will probably change
 %    \begin{macrocode}
-\cs_new_protected:Npn \__mc_update_col_structures: {
-  \@@_debug:n
-     {
-       \typeout{Marks:~ update~ mcol~ structures~ (multicol)}
-     }
-  \int_step_inline:nnn {3} { \g_mc_curr_col_int }
-      { \@@_update_structure_to_err:n { mcol - ##1 } }
+\cs_new:Npn \@@_debug_marks:n #1 { \__mark_debug:n {#1} }
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\@@_update_mcol_structures:}
+%
+%    Helper function to update the \texttt{mcol-...} regions when we
+%    finish a page while within a \mc{} environment or when we finish
+%    the \mc{} and return the balanced columns back to the galley.
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_update_mcol_structures: {
+  \@@_debug_marks:n
+     { \typeout{Marks:~ update~ mcol~ structures~ (multicol)} }
+%    \end{macrocode}
+%    It might be possible that there was a previous \mc{} (either
+%    before the current one, or a boxed one inside) and that one might
+%    had more columns than the current one. If so we should make these
+%    column structures am error as they are no longer valid (or at
+%    least empty them, not sure what is better).
+%    \begin{macrocode}
+  \int_step_inline:nnn {\col@number + 1} { \g_mc_curr_col_int }
+             { \__mark_set_structure_to_err:n { mcol - ##1 } }
+%    \end{macrocode}
+%
+%    There is no need to do anything to \texttt{mcol-1} up to
+%    \texttt{mcol-\meta{\cs{col@number}}} because those regions get
+%    new data in a second.
+%
+%    Once we have done this we reset the column counter for further
+%    processing.
+%    \begin{macrocode}
   \int_gset:Nn \g_mc_curr_col_int {1}
 %    \end{macrocode}
-%    
+%    Now we loop through all the assembled column material, using the
+%    \texttt{column} and \texttt{previous-column} regions as an
+%    intermediate holding area.
 %    \begin{macrocode}
   \process@cols\mult@firstbox
       {
-        \@@_update_structure_from_material:nn
+        \__mark_update_structure_from_material:nn
 %fmi             {mcol}
              {column}
              {\unvcopy\count@} 
-        \@@_update_alias_structure:nn
-             {mcol - \int_use:N\g_mc_curr_col_int}
+%    \end{macrocode}
+%    Once the \texttt{column} region got updated we copy it to
+%    \texttt{mcol-\meta{\cs{\detokenize{g_mc_curr_col_int}}}} and then increment
+%    the counter.
+%    \begin{macrocode}
+        \__mark_copy_structure:nn
+             {mcol - \int_use:N\g_mc_curr_col_int }
 %fmi             {mcol}
              {column}
         \int_gincr:N \g_mc_curr_col_int
       }
-  \@@_update_structure_from_material:nn
+%    \end{macrocode}
+%    The above loop takes care of all columns, except for the last one
+%    (which is stored in \cs{mult@rightbox}. So we have to do that separately.
+%    \begin{macrocode}
+  \__mark_update_structure_from_material:nn
 %fmi     {mcol}
      {column}
      {\unvcopy\mult@rightbox}
-  \@@_update_alias_structure:nn
+  \__mark_copy_structure:nn
      { mcol - \int_use:N\g_mc_curr_col_int }
 %fmi     {mcol}
      {column}
-  \@@_update_alias_structure:nn{first-column}{mcol-1}
-%fmi  \@@_update_alias_structure:nn{last-column} {mcol}
-  \@@_update_alias_structure:nn{last-column} {column}
+%    \end{macrocode}
+%    Two more aliases to take care of: \texttt{first-column} and
+%    \texttt{last-column} and we are done:
+%    \begin{macrocode}
+  \__mark_copy_structure:nn{first-column}{mcol-1}
+%fmi  \__mark_copy_structure:nn{last-column} {mcol}
+  \__mark_copy_structure:nn{last-column} {column}
 }
 %    \end{macrocode}
 %  \end{macro}
 %
 
 
-%  \begin{macro}{\__mc_update_page_structures:}
-%    
+%  \begin{macro}{\@@_update_page_structures:}
+%    If we are making a page while inside a \mc{} environment, we also
+%    have to take care of the page region.
 %    \begin{macrocode}
-\cs_new_protected:Npn \__mc_update_page_structures: {
-  \@@_debug:n
+\cs_new_protected:Npn \@@_update_page_structures: {
+  \@@_debug_marks:n
      {
        \typeout{Marks:~ update~ page~ structure~ (multicol)}
      }
-  \@@_update_structure_from_material:nn
+%    \end{macrocode}
+%    Since for the \texttt{page} region we are only interested in the
+%    top, first, and last marks on the whole page regardless in which
+%    column they appear, we simply string together all columns in a big
+%    box and update the structure from that.
+%    \begin{macrocode}
+  \__mark_update_structure_from_material:nn
       {page}
       {
+%    \end{macrocode}
+%    And we better not forget the \cs{partial@page} in case this is
+%    the first page of the \mc{} (on later pages this box will be void).
+%    \begin{macrocode}
         \unvcopy\partial@page
         \process@cols \mult@firstbox { \unvcopy\count@ }
         \unvcopy\mult@rightbox
       }
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-%  \@@_update_alias_structure:nn {column}{page}
-%  \@@_update_alias_structure:nn {first-column}{page}
-%  \@@_update_alias_structure:nn {last-column}{page}
 }
 %    \end{macrocode}
 %  \end{macro}
 %
 
-%  \begin{macro}{\__mc_prepare_mark_reinserts:}
+%  \begin{macro}{\@@_prepare_mark_reinserts:}
 %    
+%    When finishing a \mc{} environment, we have to return marks (in
+%    then boxed columns) to the current page so that they are
+%    available when that page is produced.
+%    This is what this helper does.
 %    \begin{macrocode}
-\tl_new:N \l__mc_first_marks_tl
-\tl_new:N \l__mc_last_marks_tl
-
-\cs_new_protected:Npn \__mc_prepare_mark_reinserts: {
-  \@@_debug:n
-     {
-       \typeout{Marks:~ prepare~ for~ reinserting~ marks~ (multicol)}
-     }
-  \@@_get_marks_for_reinsertion:nNN
+\cs_new_protected:Npn \@@_prepare_mark_reinserts: {
+  \@@_debug_marks:n
+     { \typeout{Marks:~ prepare~ for~ reinserting~ marks~ (multicol)} }
+%    \end{macrocode}
+%    We are only interested in the top, first, and last marks of each
+%    class regardless in which column they appeared, so we can copy
+%    all column boxes together and process them in one go. The result
+%    is returned in \cs{l_@@_first_marks_tl} and
+%    \cs{l_@@_last_marks_tl} in form of \cs{mark_insert:nn} statements
+%    so we can later execute such token lists directly (and if there
+%    were no marks they will be empty).
+%    \begin{macrocode}
+  \__mark_get_marks_for_reinsertion:nNN
      {
        \process@cols \mult@firstbox { \unvcopy\count@ }
        \unvcopy\mult@rightbox
      }
-     \l__mc_first_marks_tl
-     \l__mc_last_marks_tl
+     \l_@@_first_marks_tl
+     \l_@@_last_marks_tl
+}
+%    \end{macrocode}
+%    And here are the token lists used above.
+%    \begin{macrocode}
+\tl_new:N \l_@@_first_marks_tl
+\tl_new:N \l_@@_last_marks_tl
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  \begin{macro}{mc@reinsert@marks}
+%    So reinserting it just means executing the token lists (with some
+%    surrounding debugging statements).
+%    \begin{macrocode}
+\def\mc@reinsert@marks{
+  \@@_debug_marks:n
+     { \typeout{Marks:~ --~ reinsert~ marks~ (multicol)} }
+     \l_@@_first_marks_tl \l_@@_last_marks_tl
+  \@@_debug_marks:n
+     { \typeout{Marks:~ --~ finished~ reinserting~ marks~ (multicol)} }
 }
 %    \end{macrocode}
 %  \end{macro}
 %
 %
+% \subsubsection{Interfaces used in the \mc{} code and its output routines}
+%
 %
 %  \begin{macro}{\mc@prepare@mark@regions}
-%    
+%    When a \mc{} environment starts we need to clear the column
+%    region as it it may contain quite old data. Otherwise, that data
+%    would be used to generate the top marks and that would be
+%    obviously wrong for the first column.
 %    \begin{macrocode}
 \def \mc@prepare@mark@regions {
-  \@@_debug:n
-     {
-       \typeout{Marks:~ empty~ mcol~ regions~ (multicol)}
-     }
+%    \end{macrocode}
+%    However, before we do this we need to save away the current
+%    column data in case this is a boxed multicol, because when that
+%    finishes we need to restore the previous state --- this is not
+%    necessary for a normal \mc{} environment, because there the
+%    \texttt{column} region is overwritten in the standard output
+%    routine by copying the \texttt{page} region.
+%    \begin{macrocode}
   \if@boxedmulticols
-    \@@_update_alias_structure:nn{saved-column}{column}
+    \__mark_copy_structure:nn{saved-column}{column}
   \fi
-  \@@_clear_structure:n {column}
+  \@@_debug_marks:n
+     { \typeout{Marks:~ empty~ mcol~ regions~ (multicol)} }
+  \__mark_clear_structure:n {column}
 }  
 %    \end{macrocode}
 %  \end{macro}
@@ -4440,62 +4528,69 @@
 %
 %
 %  \begin{macro}{\mc@handle@marks@and@reinserts}
-%    
+%
+%    If a \mc{} ends the columns are balanced and then returned to the
+%    galley. in that situation we do have to prepare the
+%    \texttt{mcol-...}  regions and also do this reinsertion.
 %    \begin{macrocode}
 \def \mc@handle@marks@and@reinserts #1 {
-  \__mc_update_col_structures:
-  \@@_debug:n { \@@_status:nn {#1} {\the\col@number} }
-  %
-  \__mc_prepare_mark_reinserts:
+  \@@_update_mcol_structures:
+%    \end{macrocode}
+%    Show the current region status when debugging:
+%    \begin{macrocode}
+  \@@_debug_marks:n { \__mark_status:nn {#1} {\the\col@number} }
+%    \end{macrocode}
+%    Then prepare for reinserting the marks:
+%    \begin{macrocode}
+  \@@_prepare_mark_reinserts:
+%    \end{macrocode}
+%    Finally, we restore the \texttt{column} region in case this was a
+%    boxed \mc{} environment.
+%    \begin{macrocode}
   \if@boxedmulticols
-    \@@_update_alias_structure:nn {column}{saved-column}
+    \__mark_copy_structure:nn {column}{saved-column}
   \fi
 }
 
-\def\mc@reinsert@marks{
-  \@@_debug:n
-     {
-       \typeout{Marks:~ --~ reinsert~ marks~ (multicol)}
-     }
-     \l__mc_first_marks_tl \l__mc_last_marks_tl
-  \@@_debug:n
-     {
-       \typeout{Marks:~ --~ finished~ reinserting~ marks~ (multicol)}
-     }
-}
 %    \end{macrocode}
 %  \end{macro}
 %
 %
 %
 %  \begin{macro}{\mc@handle@col@andpage@marks}
-%    
+%    If a page is generated while we are processing a \mc{} then we
+%    have to update the \texttt{mcol-...} regions but also the
+%    \texttt{page} region.
 %    \begin{macrocode}
 \def \mc@handle@col@andpage@marks #1 {
-  \__mc_update_col_structures:
-  \__mc_update_page_structures:
-  \@@_debug:n { \@@_status:nn {#1} {\the\col@number} }
+  \@@_update_mcol_structures:
+  \@@_update_page_structures:
+%    \end{macrocode}
+%    Once done we display the current status of the marks.
+%    \begin{macrocode}
+  \@@_debug_marks:n { \__mark_status:nn {#1} {\the\col@number} }
 }
 %    \end{macrocode}
 %  \end{macro}
 %
 %
 %
-%
-%    \begin{macrocode}
-%<@@=>
-%    \end{macrocode}
-%
-%
-%
 %  \begin{macro}{\leftmark,\rightmark}
-%    
-% \changes{v2.0a}{2024/11/10}{}
+%    We change the legacy \cs{leftmark} and \cs{rightmark} to the use
+%    the new mark mechanism. For now we do this only if pkg{multicol}
+%    is loaded, but eventually this will move to the kernel which then
+%    also simplifies the definitions for \cs{markboth} and friends.
+%
+%    \changes{v2.0a}{2024/11/10}{Use the new mark mechanism}
 %    \begin{macrocode}
 \def\leftmark{\mark_use_last:nn{page}{2e-left}}
 \def\rightmark{\mark_use_first:nn{page}{2e-right}}
 %    \end{macrocode}
 %  \end{macro}
+%
+%    \begin{macrocode}
+%<@@=>
+%    \end{macrocode}
 %
 %    \begin{macrocode}
 \ExplSyntaxOff
