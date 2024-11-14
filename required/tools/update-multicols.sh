@@ -7,10 +7,10 @@ l3build save -epdftex \
     tlb-multicol-006 \
     tlb-multicol-007 \
     tlb-multicol-eisuke \
-    tlb-multicol-rowland \
-    tlb-multicol-marks
+    tlb-multicol-rowland
 	
 
 
 l3build save -epdftex,luatex \
+    tlb-multicol-marks \
     sx411758
