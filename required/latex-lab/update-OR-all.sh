@@ -58,6 +58,7 @@ l3build save -cconfig-OR \
 	github-001 \
 	memoir-001 \
 	scrartcl-001 \
+	tlb-multicol-marks-tagged \
 	tagging-001
 
 l3build save -cconfig-OR-luatex \
