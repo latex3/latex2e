@@ -1,4 +1,7 @@
 
+l3build save -epdftex,luatex \
+   github-0962b
+
 l3build save -cconfig-lthooks2 \
    lthooks2-002 \
    lthooks2-004 \
