@@ -2,7 +2,7 @@
 
 
 l3build save -cconfig-block -epdftex \
-        github-tagging-0767
+        tagging-0767
 
 
 l3build save -cconfig-block -epdftex,luatex \
@@ -41,6 +41,7 @@ l3build save -cconfig-block -epdftex,luatex \
 	blocks-trivlist-02 \
 	blocks-verbatim-01 \
 	blocks-verbatim-02 \
+	blocks-verse-01 \
 	hyperref-target \
         ptag-001 \
         problem-blocks-tabbing \
