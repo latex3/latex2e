@@ -54,7 +54,7 @@ end
 
 local saved_array
 
-funcid = luatexbase.new_luafunction'__luamml_array_finalize_array:'
+funcid = luatexbase.new_luafunction'__luamml_array_save_array:'
 token.set_lua('__luamml_array_save_array:', funcid)
 lua.get_functions_table()[funcid] = function()
   -- TODO: Error handling etc.
