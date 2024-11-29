@@ -1,5 +1,6 @@
 local struct_begin = token.create'tag_struct_begin:n'
 local struct_use = token.create'tag_struct_use:n'
+local struct_use_num = token.create'tag_struct_use_num:n'
 local struct_end = token.create'tag_struct_end:'
 
 local mc_begin = token.create'tag_mc_begin:n'
@@ -65,6 +66,11 @@ local function write_elem(tree, stash)
       return tex.sprint(struct_use, '{', tree[':struct'], '}')
     end)
   end
+  if tree[':structnum'] then
+    return tex.runtoks(function()
+      return tex.sprint(struct_use_num, '{', tree[':structnum'], '}')
+    end)
+  end  
   if not tree[0] then print('ERR', require'inspect'(tree)) end
   local i = 0
   for attr, val in next, tree do if type(attr) == 'string' and not string.find(attr, ':') and attr ~= 'xmlns' then
@@ -75,10 +81,8 @@ local function write_elem(tree, stash)
   table.sort(attrs)
 
   if stash then
-    stash_cnt = stash_cnt + 1
-    stash = '__luamml_stashed_' .. stash_cnt
-    tree[':struct'] = stash
-    stash = ', stash, label = ' .. stash
+    tree[':structnum'] = get_ltx().tag.get_struct_num_next() 
+    stash = ', stash, '
   end
 
   local attr_flag = i ~= 0 and ', attribute=' .. attributes[table.concat(attrs)]
