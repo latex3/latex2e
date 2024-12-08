@@ -1,0 +1,184 @@
+\DocumentMetadata{ testphase = { phase-III, math }}
+  
+\documentclass{article}
+
+\input{regression-test}
+
+\usepackage{amsmath}
+
+
+\parskip=77pt
+
+\begin{document}
+\START
+Some Text
+$$A$$           % not really supported but ...
+%
+More
+
+WWW
+$$B$$
+
+XXX
+
+\showoutput
+
+AAAA
+\begin{align}
+ a& =b
+\end{align}
+BBBB
+\begin{align}
+ x& =y
+\end{align}
+
+abc
+\begin{itemize}
+\item A
+\end{itemize}
+def
+\begin{itemize}
+\item B
+\end{itemize}
+
+xyz
+
+\newpage
+\OMIT
+\end{document}
+
+
+%%%% Some notes on the approach ...
+
+
+\ExplSyntaxOn
+\makeatletter
+
+%    Its a bit complicated, at least I wasn't able to figure out a
+%    simpler approach. strategy 1 changes the parskip (which makes
+%    perhaps a bit better tracing output). strategy 2 uses a negative
+%    skip up front and if necessary cancels that again so if the real
+%    parskip comes along it survives.
+%
+%    Both use a boolean to do this, so it makes all \@doendpe a tiny
+%    bit slower. Alternative would be  to implement 1 or 2 in a
+%    separate macro but then this needs to also have its own recursion
+%    out of any grouping, not  sure that is worth it.
+
+\newif\if@domathendpe
+\def\@domathendpefalse{\global\let\if@domathendpe\iffalse}
+\def\@domathendpetrue {\global\let\if@domathendpe\iftrue}
+
+\def\@doendpe{\@endpetrue
+%  \if@domathendpe
+%    \saved@parskip\parskip
+%    \typeout{------->~ saving~ parskip:~ \the\parskip}
+%    \parskip \z@
+%  \fi
+  \def\par
+    {
+%
+%   strategy 1
+%      \if@domathendpe
+%        \parskip \saved@parskip
+%        \typeout{------->~ restoring~ parskip~in~par:~ \the\parskip}
+%        \@domathendpefalse
+%      \fi
+%
+%  strategy 2
+      \if@domathendpe
+        \typeout{------->~ cancel~ the~ negatice~ parskip~(so~
+                 upcoming~ parskip~ takes~ effect):~ \the\parskip }
+        \skip_vertical:n { \tex_parskip:D }
+        \@domathendpefalse
+      \fi
+      \@restorepar
+      \clubpenalty\@clubpenalty
+%    \end{macrocode}
+%    At this point we add the tagging code that closes an open
+%    \struct{text-unit}, \struct{text} tag combination,
+%    if necessary:
+%    \begin{macrocode}
+      \__kernel_displayblock_doendpe:
+%    \end{macrocode}
+%
+%    The standard \cs{par} command (\cs{par_end:}) acts on
+%    \texttt{@endpe} and attempts to close a still open \texttt{text-unit}
+%    and this would be wrong if it was already closed above. So we
+%    have to reset the switch to false first.      
+%    \begin{macrocode}
+      \@endpefalse
+      \everypar{}
+      \par
+    }
+  \everypar{{\setbox\z@\lastbox}
+            \everypar{}
+            \@endpefalse
+%
+%   strategy 1
+%            \if@domathendpe
+%              \parskip \saved@parskip
+%              \typeout{------->~ restoring~ parskip~in~everypar:~ \the\parskip}
+%              \@domathendpefalse
+%            \fi
+%
+%   strategy 2
+            \if@domathendpe
+              \@domathendpefalse
+            \fi
+  }
+}
+
+
+\cs_set_protected:Npn \__math_tag_dollardollar_display_end:
+  {
+    %  \typeout{== tag dollarldollar display end}
+    %  \ShowTagging{struct-stack}
+    \para_raw_end:
+%    \end{macrocode}
+% TODO why is that needed? where is para-tagging disabled?
+%    \begin{macrocode}
+    \tagpdfparaOn
+%    \end{macrocode}
+%    The \cs{postdisplaypenalty} was temporarily set to 10000 inside
+%    the display and the \cs{belowdisplayskip} and the
+%    \cs{belowdisplayshortskip} was negated, so whatever was inserted
+%    it should have been a negative skip. Whatever skip was added we
+%    pick it ups value up here, so that we can correct the spacing
+%    after the tagging code was inserted.
+%    \begin{macrocode}
+    \l__math_tmpa_skip \lastskip
+    \tag_socket_use:n{math/display/formula/end}
+%    \end{macrocode}
+%    Now we add a skip without indroducing a page break possibility,
+%    that should bring the current vertical position back to the point
+%    where \TeX{} would add the penalty and the \enquote{below skip}.
+% \changes{v0.6f}{2024-09-30}{Correct logic for inserting below skips
+%                             after displays (tagging/721)}
+%    \begin{macrocode}
+    \nobreak
+    \skip_vertical:n { -\l__math_tmpa_skip  } % remove the negative belowdisplayskip
+%    \end{macrocode}
+%    Then we finally add the real stuff:
+%    \begin{macrocode}
+    \penalty \postdisplaypenalty
+    \skip_vertical:n { -\l__math_tmpa_skip  } % insert the correct skip
+%    
+%    \begin{macrocode}
+%
+%   strategy 1
+%    \@domathendpetrue
+%
+%
+%   strategy 2
+    \@domathendpetrue
+    \skip_vertical:n { -\tex_parskip:D }
+    \typeout{------->~ negative~ parskip~(to~ cancel~ upcoming~ one)}
+    \@doendpe             % this has no \end{...} to take care of it
+}
+
+
+\newskip \saved@parskip
+
+\makeatother
+\ExplSyntaxOff
