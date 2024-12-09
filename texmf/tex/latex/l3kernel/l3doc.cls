@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{calc}
-\ProvidesExplClass{l3doc}{2024-11-02}{}
+\ProvidesExplClass{l3doc}{2024-12-09}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -439,8 +439,7 @@
 \raggedbottom
 \bool_if:NT \g__codedoc_lmodern_bool
   {
-    \bool_lazy_or:nnTF
-      { \sys_if_engine_luatex_p: }{ \sys_if_engine_xetex_p: }
+    \sys_if_engine_opentype:TF
       {
         \group_begin:
           \ttfamily
@@ -1720,7 +1719,7 @@
 \AddToHook{env/variable/begin}{\def\footnote{\__codedoc_fn_footnote:nn{variable}}}
 \newenvironment{TemplateInterfaceDescription}[1]
   {
-    \subsection{The~object~type~`#1'}
+    \subsection{The~template~type~`#1'}
     \begingroup
     \@beginparpenalty\@M
     \description
@@ -1736,7 +1735,7 @@
   }
 \newenvironment{TemplateDescription}[2]
   {
-    \subsection{The~template~`#2'~(object~type~#1)}
+    \subsection{The~template~`#2'~(template~type~#1)}
     \subsubsection*{Attributes:}
     \begingroup
     \@beginparpenalty\@M
