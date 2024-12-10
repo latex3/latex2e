@@ -6,17 +6,13 @@
 --       AUTHOR:  Hans Hagen, Khaled Hosny, Elie Roux, David Carlisle
 -----------------------------------------------------------------------
 
-local ProvidesLuaModule = { 
+assert(luaotfload_module, "This is a part of luaotfload and should not be loaded independently") { 
     name          = "luaotfload-loaders",
-    version       = "3.00",       --TAGVERSION
-    date          = "2019-09-13", --TAGDATE
+    version       = "3.28",       --TAGVERSION
+    date          = "2024-02-14", --TAGDATE
     description   = "luaotfload submodule / callback handling",
     license       = "GPL v2.0"
 }
-
-if luatexbase and luatexbase.provides_module then
-  luatexbase.provides_module (ProvidesLuaModule)
-end  
 -----------------------------------------------------------------------
 
 
@@ -26,37 +22,28 @@ if not luaotfload then error "this module requires Luaotfload" end
 
 local logreport = luaotfload.log and luaotfload.log.report or print
 
-local lua_reader = function (specification)
-  local fullname = specification.filename or ""
-  if fullname == "" then
-    local forced = specification.forced or ""
-    if forced ~= "" then
-      fullname = specification.name .. "." .. forced
-    else
-      fullname = specification.name
-    end
-  end
-  local fullname = resolvers.findfile (fullname) or ""
-  if fullname ~= "" then
+local function lua_reader (specification)
+  local fullname = specification.resolved
+  if fullname then
     local loader = loadfile (fullname)
     loader = loader and loader ()
     return loader and loader (specification)
   end
 end
 
-local eval_reader = function (specification)
+local function eval_reader (specification)
   local eval = specification.eval
   if not eval or type (eval) ~= "function" then return nil end
   logreport ("both", 0, "loaders",
-             "eval: found tfmdata for “%s”, injecting.",
+             "eval: found tfmdata for %q, injecting.",
              specification.name)
   return eval ()
 end
 
-local unsupported_reader = function (format)
+local function unsupported_reader (format)
   return function (specification)
     logreport ("both", 4, "loaders",
-               "font format “%s” unsupported; cannot load %s.",
+               "font format %q unsupported; cannot load %s.",
                format, tostring (specification.name))
   end
 end
@@ -64,7 +51,7 @@ end
 local type1_reader = fonts.readers.afm
 local tfm_reader   = fonts.readers.tfm
 
-local install_formats = function ()
+local function install_formats ()
   local fonts = fonts
   if not fonts then return false end
 
@@ -74,17 +61,17 @@ local install_formats = function ()
   local formats   = fonts.formats
   if not readers or not formats then return false end
 
-  local aux = function (which, reader)
+  local function aux (which, reader)
     if   not which  or type (which) ~= "string"
       or not reader or type (reader) ~= "function" then
-      logreport ("both", 2, "loaders", "Error installing reader for “%s”.", which)
+      logreport ("both", 2, "loaders", "Error installing reader for %q.", which)
       return false
     end
     formats  [which] = "type1"
     readers  [which] = reader
     if not seqset [which] then
       logreport ("both", 3, "loaders",
-                 "Extending reader sequence for “%s”.", which)
+                 "Extending reader sequence for %q.", which)
       sequence [#sequence + 1] = which
       seqset   [which]         = true
     end
@@ -101,7 +88,7 @@ local install_formats = function ()
      and aux ("dfont", unsupported_reader "dfont")
 end
 
-local not_found_msg = function (specification, size, id)
+local function not_found_msg (specification, size, id)
   logreport ("both", 0, "loaders", "")
   logreport ("both", 0, "loaders",
              "--------------------------------------------------------")
@@ -117,22 +104,80 @@ local not_found_msg = function (specification, size, id)
   logreport ("both", 0, "loaders",
              "--------------------------------------------------------")
 end
---[[doc--
-
-    \subsection{\CONTEXT override}
-    \label{define-font}
-    We provide a simplified version of the original font definition
-    callback.
-
---doc]]--
-
 
 local definers --- (string, spec -> size -> id -> tmfdata) hash_t
 do
-  local read = fonts.definers.read
+  local hashed_cache = {}
+  local fontdata_cache = fonts.hashes.identifiers
+  local function register(fontdata, id)
+    if fontdata and id then
+      local hash = fontdata.properties.hash
+      if not hash then
+        logreport('both', 2, 'loaders', "Registering font %s with id %s with missing hash.", id, fontdata.properties.filename or "unknown")
+      elseif not hashed_cache[hash] then
+        hashed_cache[hash] = id
+        logreport('both', 4, 'loaders', "Registering font %s with id %s and hash %s.", id, fontdata.properties.filename or "unknown", hash)
+      end
+      fontdata_cache[id] = fontdata
+    end
+  end
+  function registered(hash)
+   local id = hashed_cache[hash]
+   return id, fontdata_cache[id]
+  end
+  fonts.definers.register = register
+  fonts.definers.registered = registered
 
-  local patch = function (specification, size, id)
-    local fontdata = read (specification, size, id)
+  local extra_hash_funcs = {}
+
+  local function ltx_read(spec, size, id)
+    spec = type(spec) == 'string' and fonts.definers.analyze(spec, size) or spec
+    spec = fonts.definers.resolve(spec)
+
+    local hash = fonts.constructors.hashinstance(spec)
+
+    -- extra_hash_func allows the loader to determine additional hash parts
+    -- depending on the actual font. This is used e.g. for variable fonts which
+    -- should be hashed based on their designsize / modifiers too.
+    local extra_hash_func = extra_hash_funcs[hash]
+    if extra_hash_func then
+      hash = hash .. ' @ ' .. table.join(extra_hash_func(spec), ' @ ')
+    end
+
+    local cached = registered(hash)
+    if cached then return cached end -- already loaded
+
+    local fontdata = fonts.definers.loadfont(spec)
+    if not fontdata then
+      logreport('both', 2, 'loaders', 'Failed to load font ' .. spec.name)
+      return
+    end
+
+    -- If extra_hash_func was already set then the hash is already extended.
+    -- Otherwise we have to do it now if requested.
+    if not extra_hash_func then
+      extra_hash_func = fontdata.properties.extra_hash_func
+      if extra_hash_func then
+        hash = hash .. ' @ ' .. table.join(extra_hash_func(spec), ' @ ')
+      end
+    end
+    fontdata.properties.hash = hash
+    register(fontdata, id)
+    return fontdata
+  end
+
+  local function read(specification, size, id)
+    local fontdata = ltx_read(specification, size, id)
+    if not fontdata or id or tonumber(fontdata) then
+      return fontdata
+    end
+    id = font.define(fontdata)
+    register(fontdata, id)
+    return id
+  end
+
+  local function patch (specification, size, id)
+    local fontdata = ltx_read (specification, size, id)
 ----if not fontdata then not_found_msg (specification, size, id) end
     if type (fontdata) == "table" and fontdata.encodingbytes == 2 then
       --- We need to test for `encodingbytes` to avoid passing
@@ -142,10 +187,15 @@ do
     else
       luatexbase.call_callback ("luaotfload.patch_font_unsafe", fontdata, specification, id)
     end
-    return fontdata
+    if not fontdata or id or tonumber(fontdata) then
+      return fontdata
+    end
+    id = font.define(fontdata)
+    register(fontdata, id)
+    return id
   end
 
-  local mk_info = function (name)
+  local function mk_info (name)
     local definer = name == "patch" and patch or read
     return function (specification, size, id)
       logreport ("both", 0, "loaders", "defining font no. %d", id)
@@ -193,7 +243,7 @@ end
 
 --doc]]--
 
-local purge_define_font = function ()
+local function purge_define_font ()
   local cdesc = luatexbase.callback_descriptions "define_font"
   --- define_font is an “exclusive” callback, meaning that there can
   --- only ever be one entry. Everything beyond that would indicate
@@ -204,10 +254,10 @@ local purge_define_font = function ()
     if d2 then --> issue warning
       logreport ("both", 0, "loaders",
                  "Callback table for define_font contains multiple entries: \z
-                  { [%d] = “%s” } -- seems fishy.", i, d2)
+                  { [%d] = %q } -- seems fishy.", i, d2)
     end
     logreport ("log", 0, "loaders",
-               "Entry ``%s`` present in define_font callback; overriding.", d)
+               "Entry %q present in define_font callback; overriding.", d)
     luatexbase.remove_from_callback ("define_font", d)
   end
 end
@@ -218,9 +268,11 @@ local install_callbacks = function ()
   create_callback ("luaotfload.patch_font",        "simple", dummy_function)
   create_callback ("luaotfload.patch_font_unsafe", "simple", dummy_function)
   purge_define_font ()
-  local definer = config.luaotfload.run.definer
+  local definer = config.luaotfload.run.definer or "patch"
+  local selected_definer = definers[definer]
+  luaotfload.define_font = selected_definer
   luatexbase.add_to_callback ("define_font",
-                              definers[definer or "patch"],
+                              selected_definer,
                               "luaotfload.define_font",
                               1)
   return true

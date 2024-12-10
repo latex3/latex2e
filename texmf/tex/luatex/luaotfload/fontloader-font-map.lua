@@ -1,5 +1,6 @@
 if not modules then modules = { } end modules ['font-map'] = {
     version   = 1.001,
+    optimize  = true,
     comment   = "companion to font-ini.mkiv",
     author    = "Hans Hagen, PRAGMA-ADE, Hasselt NL",
     copyright = "PRAGMA ADE / ConTeXt Development Team",
@@ -12,7 +13,7 @@ local match, format, find, concat, gsub, lower = string.match, string.format, st
 local P, R, S, C, Ct, Cc, lpegmatch = lpeg.P, lpeg.R, lpeg.S, lpeg.C, lpeg.Ct, lpeg.Cc, lpeg.match
 local formatters = string.formatters
 local sortedhash, sortedkeys = table.sortedhash, table.sortedkeys
-local rshift = bit32.rshift
+local idiv = number.idiv
 
 local trace_loading = false  trackers.register("fonts.loading", function(v) trace_loading = v end)
 local trace_mapping = false  trackers.register("fonts.mapping", function(v) trace_mapping = v end)
@@ -23,44 +24,23 @@ local report_fonts  = logs.reporter("fonts","loading") -- not otf only
 
 local force_ligatures = false  directives.register("fonts.mapping.forceligatures",function(v) force_ligatures = v end)
 
-local fonts         = fonts or { }
-local mappings      = fonts.mappings or { }
-fonts.mappings      = mappings
+local fonts    = fonts or { }
+local mappings = fonts.mappings or { }
+fonts.mappings = mappings
 
-local allocate      = utilities.storage.allocate
+local allocate = utilities.storage.allocate
 
---[[ldx--
-<p>Eventually this code will disappear because map files are kind
-of obsolete. Some code may move to runtime or auxiliary modules.</p>
-<p>The name to unciode related code will stay of course.</p>
---ldx]]--
+local hex      = R("AF","af","09")
+local hexfour  = (hex*hex*hex^-2) / function(s) return tonumber(s,16) end
+local hexsix   = (hex*hex*hex^-4) / function(s) return tonumber(s,16) end
+local dec      = (R("09")^1) / tonumber
+local period   = P(".")
+local unicode  = (P("uni") + P("UNI")) * (hexfour * (period + P(-1)) * Cc(false) + Ct(hexfour^1) * Cc(true)) -- base planes
+local ucode    = (P("u")   + P("U")  ) * (hexsix  * (period + P(-1)) * Cc(false) + Ct(hexsix ^1) * Cc(true)) -- extended
+local index    = P("index") * dec * Cc(false)
 
--- local function loadlumtable(filename) -- will move to font goodies
---     local lumname = file.replacesuffix(file.basename(filename),"lum")
---     local lumfile = resolvers.findfile(lumname,"map") or ""
---     if lumfile ~= "" and lfs.isfile(lumfile) then
---         if trace_loading or trace_mapping then
---             report_fonts("loading map table %a",lumfile)
---         end
---         lumunic = dofile(lumfile)
---         return lumunic, lumfile
---     end
--- end
-
-local hex     = R("AF","af","09")
------ hexfour = (hex*hex*hex*hex)         / function(s) return tonumber(s,16) end
------ hexsix  = (hex*hex*hex*hex*hex*hex) / function(s) return tonumber(s,16) end
-local hexfour = (hex*hex*hex^-2) / function(s) return tonumber(s,16) end
-local hexsix  = (hex*hex*hex^-4) / function(s) return tonumber(s,16) end
-local dec     = (R("09")^1) / tonumber
-local period  = P(".")
-local unicode = (P("uni") + P("UNI")) * (hexfour * (period + P(-1)) * Cc(false) + Ct(hexfour^1) * Cc(true)) -- base planes
-local ucode   = (P("u")   + P("U")  ) * (hexsix  * (period + P(-1)) * Cc(false) + Ct(hexsix ^1) * Cc(true)) -- extended
-local index   = P("index") * dec * Cc(false)
-
-local parser  = unicode + ucode + index
-
-local parsers = { }
+local parser   = unicode + ucode + index
+local parsers  = { }
 
 local function makenameparser(str)
     if not str or str == "" then
@@ -75,82 +55,24 @@ local function makenameparser(str)
     end
 end
 
-local f_single = formatters["%04X"]
-local f_double = formatters["%04X%04X"]
-
--- floor(x/256)  => rshift(x, 8)
--- floor(x/1024) => rshift(x,10)
-
--- 0.684 0.661 0,672 0.650 : cache at lua end (more mem)
--- 0.682 0,672 0.698 0.657 : no cache (moderate mem i.e. lua strings)
--- 0.644 0.647 0.655 0.645 : convert in c (less mem in theory)
-
--- local tounicodes = table.setmetatableindex(function(t,unicode)
---     local s
---     if unicode < 0xD7FF or (unicode > 0xDFFF and unicode <= 0xFFFF) then
---         s = f_single(unicode)
---     else
---         unicode = unicode - 0x10000
---         s = f_double(rshift(unicode,10)+0xD800,unicode%1024+0xDC00)
---     end
---     t[unicode] = s
---     return s
--- end)
---
--- local function tounicode16(unicode,name)
---     local s = tounicodes[unicode]
---     if s then
---         return s
---     else
---         report_fonts("can't convert %a in %a into tounicode",unicode,name)
---     end
--- end
---
--- local function tounicode16sequence(unicodes,name)
---     local t = { }
---     for l=1,#unicodes do
---         local u = unicodes[l]
---         local s = tounicodes[u]
---         if s then
---             t[l] = s
---         else
---             report_fonts ("can't convert %a in %a into tounicode",u,name)
---             return
---         end
---     end
---     return concat(t)
--- end
---
--- local function tounicode(unicode,name)
---     if type(unicode) == "table" then
---         local t = { }
---         for l=1,#unicode do
---             local u = unicode[l]
---             local s = tounicodes[u]
---             if s then
---                 t[l] = s
---             else
---                 report_fonts ("can't convert %a in %a into tounicode",u,name)
---                 return
---             end
---         end
---         return concat(t)
---     else
---         local s = tounicodes[unicode]
---         if s then
---             return s
---         else
---             report_fonts("can't convert %a in %a into tounicode",unicode,name)
---         end
---     end
--- end
+local f_single  = formatters["%04X"]
+local f_double  = formatters["%04X%04X"]
+local s_unknown = "FFFD"
 
 local function tounicode16(unicode)
     if unicode < 0xD7FF or (unicode > 0xDFFF and unicode <= 0xFFFF) then
         return f_single(unicode)
+    elseif unicode >= 0x00E000 and unicode <= 0x00F8FF then
+        return s_unknown
+    elseif unicode >= 0x0F0000 and unicode <= 0x0FFFFF then
+        return s_unknown
+    elseif unicode >= 0x100000 and unicode <= 0x10FFFF then
+        return s_unknown
+    elseif unicode >= 0x00D800 and unicode <= 0x00DFFF then
+        return s_unknown
     else
         unicode = unicode - 0x10000
-        return f_double(rshift(unicode,10)+0xD800,unicode%1024+0xDC00)
+        return f_double(idiv(unicode,0x400)+0xD800,unicode%0x400+0xDC00)
     end
 end
 
@@ -160,132 +82,34 @@ local function tounicode16sequence(unicodes)
         local u = unicodes[l]
         if u < 0xD7FF or (u > 0xDFFF and u <= 0xFFFF) then
             t[l] = f_single(u)
+        elseif unicode >= 0x00E000 and unicode <= 0x00F8FF then
+            t[l] = s_unknown
+        elseif unicode >= 0x0F0000 and unicode <= 0x0FFFFF then
+            t[l] = s_unknown
+        elseif unicode >= 0x100000 and unicode <= 0x10FFFF then
+            t[l] = s_unknown
+     -- elseif unicode >= 0x00D800 and unicode <= 0x00DFFF then
+        elseif unicode >= 0x00D7FF and unicode <= 0x00DFFF then
+            t[l] = s_unknown
         else
             u = u - 0x10000
-            t[l] = f_double(rshift(u,10)+0xD800,u%1024+0xDC00)
+            t[l] = f_double(idiv(u,0x400)+0xD800,u%0x400+0xDC00)
         end
     end
     return concat(t)
 end
 
--- local function tounicode(unicode)
---     if type(unicode) == "table" then
---         local t = { }
---         for l=1,#unicode do
---             local u = unicode[l]
---             if u < 0xD7FF or (u > 0xDFFF and u <= 0xFFFF) then
---                 t[l] = f_single(u)
---             else
---                 u = u - 0x10000
---                 t[l] = f_double(rshift(u,10)+0xD800,u%1024+0xDC00)
---             end
---         end
---         return concat(t)
---     else
---         if unicode < 0xD7FF or (unicode > 0xDFFF and unicode <= 0xFFFF) then
---             return f_single(unicode)
---         else
---             unicode = unicode - 0x10000
---             return f_double(rshift(unicode,10)+0xD800,unicode%1024+0xDC00)
---         end
---     end
--- end
-
-local unknown = f_single(0xFFFD)
-
--- local function tounicode(unicode)
---     if type(unicode) == "table" then
---         local t = { }
---         for l=1,#unicode do
---             t[l] = tounicode(unicode[l])
---         end
---         return concat(t)
---     elseif unicode >= 0x00E000 and unicode <= 0x00F8FF then
---         return unknown
---     elseif unicode >= 0x0F0000 and unicode <= 0x0FFFFF then
---         return unknown
---     elseif unicode >= 0x100000 and unicode <=  0x10FFFF then
---         return unknown
---     elseif unicode < 0xD7FF or (unicode > 0xDFFF and unicode <= 0xFFFF) then
---         return f_single(unicode)
---     else
---         unicode = unicode - 0x10000
---         return f_double(rshift(unicode,10)+0xD800,unicode%1024+0xDC00)
---     end
--- end
-
--- local hash = table.setmetatableindex(function(t,k)
---     local v
---     if k >= 0x00E000 and k <= 0x00F8FF then
---         v = unknown
---     elseif k >= 0x0F0000 and k <= 0x0FFFFF then
---         v = unknown
---     elseif k >= 0x100000 and k <= 0x10FFFF then
---         v = unknown
---     elseif k < 0xD7FF or (k > 0xDFFF and k <= 0xFFFF) then
---         v = f_single(k)
---     else
---         local k = k - 0x10000
---         v = f_double(rshift(k,10)+0xD800,k%1024+0xDC00)
---     end
---     t[k] = v
---     return v
--- end)
---
--- table.makeweak(hash)
---
--- local function tounicode(unicode)
---     if type(unicode) == "table" then
---         local t = { }
---         for l=1,#unicode do
---             t[l] = hash[unicode[l]]
---         end
---         return concat(t)
---     else
---         return hash[unicode]
---     end
--- end
 
 local hash = { }
 local conc = { }
 
--- table.makeweak(hash)
-
--- table.setmetatableindex(hash,function(t,k)
---     if type(k) == "table" then
---         local n = #k
---         for l=1,n do
---             conc[l] = hash[k[l]]
---         end
---         return concat(conc,"",1,n)
---     end
---     local v
---     if k >= 0x00E000 and k <= 0x00F8FF then
---         v = unknown
---     elseif k >= 0x0F0000 and k <= 0x0FFFFF then
---         v = unknown
---     elseif k >= 0x100000 and k <= 0x10FFFF then
---         v = unknown
---     elseif k < 0xD7FF or (k > 0xDFFF and k <= 0xFFFF) then
---         v = f_single(k)
---     else
---         local k = k - 0x10000
---         v = f_double(rshift(k,10)+0xD800,k%1024+0xDC00)
---     end
---     t[k] = v
---     return v
--- end)
---
--- local function tounicode(unicode)
---     return hash[unicode]
--- end
-
 table.setmetatableindex(hash,function(t,k)
+    local v
     if k < 0xD7FF or (k > 0xDFFF and k <= 0xFFFF) then
         v = f_single(k)
     else
         local k = k - 0x10000
-        v = f_double(rshift(k,10)+0xD800,k%1024+0xDC00)
+        v = f_double(idiv(k,0x400)+0xD800,k%0x400+0xDC00)
     end
     t[k] = v
     return v
@@ -299,11 +123,14 @@ local function tounicode(k)
         end
         return concat(conc,"",1,n)
     elseif k >= 0x00E000 and k <= 0x00F8FF then
-        return unknown
+        return s_unknown
     elseif k >= 0x0F0000 and k <= 0x0FFFFF then
-        return unknown
+        return s_unknown
     elseif k >= 0x100000 and k <= 0x10FFFF then
-        return unknown
+        return s_unknown
+ -- elseif k >= 0x00D800 and k <= 0x00DFFF then
+    elseif k >= 0x00D7FF and k <= 0x00DFFF then
+        return s_unknown
     else
         return hash[k]
     end
@@ -314,7 +141,6 @@ local function fromunicode16(str)
         return tonumber(str,16)
     else
         local l, r = match(str,"(....)(....)")
-     -- return (tonumber(l,16))*0x400  + tonumber(r,16) - 0xDC00
         return 0x10000 + (tonumber(l,16)-0xD800)*0x400  + tonumber(r,16) - 0xDC00
     end
 end
@@ -427,9 +253,9 @@ function mappings.addtounicode(data,filename,checklookups,forceligatures)
     local usedmap       = cidinfo and fonts.cid.getmap(cidinfo)
     local uparser       = makenameparser() -- hm, every time?
     if usedmap then
-          oparser  = usedmap and makenameparser(cidinfo.ordering)
-          cidnames = usedmap.names
-          cidcodes = usedmap.unicodes
+        oparser  = usedmap and makenameparser(cidinfo.ordering)
+        cidnames = usedmap.names
+        cidcodes = usedmap.unicodes
     end
     local ns = 0
     local nl = 0

@@ -1,0 +1,190 @@
+% \iffalse meta-comment
+%
+%% File: latex-lab-new-or-1.dtx (C) Copyright 2020-2024 Frank Mittelbach
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+\def\ltlabneworIdate{2024-11-12}
+\def\ltlabneworIversion{0.85b}
+%<*driver>
+\documentclass{l3doc}
+
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{latex-lab-new-or-1.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+% \providecommand\hook[1]{\texttt{#1}}
+%
+%
+%
+% \title{Temporary output patches for tagging and better link support}
+% \author{Frank Mittelbach \and Ulrike Fischer}
+% \date{v\ltlabneworIversion\ \ltlabneworIdate}
+% 
+% \maketitle
+%
+% \section{Introduction}
+%
+%    This file contains a few patches of internal \LaTeX{} commands
+%    to support paragraph tagging across
+%    page boundaries (in \pdfTeX) and improve the behaviour of links across page breaks.
+%
+%    Until this get properly integrated with the kernel code this has
+%    to be taken as a prototype and code, interfaces as well as
+%    behavior may change without notice and certainly without any
+%    backwards compatibility!
+%
+%
+% \StopEventually{\setlength\IndexMin{200pt}  \PrintIndex  }
+%
+%
+% \section{The Implementation}
+%    \begin{macrocode}
+%<*package>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\ProvidesPackage{latex-lab-testphase-new-or-1}
+        [\ltlabneworIdate\space v\ltlabneworIversion\space 
+         Temporary output patches for tagging and better link support]
+\RequirePackage{etoolbox}
+%    \end{macrocode}
+%
+%
+%  \subsection{Patching the OR}
+%  This adds hooks around header and footer, in \cs{@makecol} and in multicol.
+%  At first initialize some of the hooks. We use providecommand to avoid problems if
+%  the kernel changes here and provides them directly.
+%    \begin{macrocode}
+\providecommand\@kernel@before@head{}
+\providecommand\@kernel@before@foot{}
+\providecommand\@kernel@after@head{}
+\providecommand\@kernel@after@foot{}
+\providecommand\@mult@ptagging@hook{}%  should be replaced with a socket, eventually
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+
+\patchcmd\@outputpage
+ {\vfil\color@hbox\normalcolor\hb@xt@\textwidth{\@thehead}\color@endbox}
+ {\vfil\@kernel@before@head\color@hbox\normalcolor\hb@xt@\textwidth{\@thehead}\color@endbox\@kernel@after@head}
+ {\typeout{Patching header in \string\@outputpage}}{\PATCHerror }
+
+
+\patchcmd\@outputpage
+ {\color@hbox\normalcolor\hb@xt@\textwidth{\@thefoot}\color@endbox}
+ {\@kernel@before@foot\color@hbox\normalcolor\hb@xt@\textwidth{\@thefoot}\color@endbox\@kernel@after@foot}
+ {\typeout{Patching footer in \string\@outputpage}}{\PATCHerror }
+%    \end{macrocode}
+%
+%  \begin{macro}{\@makecol}
+%    We have to patch \cs{@makecol} in two places:
+%    \begin{itemize}
+%    \item
+%      update 255 up front to add missing tmb/tme if necessary
+%    \item
+%      update the \cs{footins} stream if that one got split
+%    \end{itemize}
+%
+%   We patch \cs{@makecol}, if new-or-2 is loaded too it will overwrite that again.
+%    \begin{macrocode}
+\providecommand\@kernel@before@footins{}
+\providecommand\@kernel@tagsupport@@makecol{}  
+
+\patchcmd\@makecol
+  {\vskip\skip\footins}
+  {\vskip\skip\footins\@kernel@before@footins}
+  {\typeout{Patching \string\@makecol\space for tagging}}{\PATCHerror }
+
+\patchcmd\@makecol
+  {\let\@elt\relax}
+  {\@kernel@tagsupport@@makecol\let\@elt\relax}
+  {\typeout{Patching \string\@makecol\space for tagging}}{\PATCHerror }
+
+\AddToHook{package/footmisc/after}
+ {%
+  \def\@makecol{%
+  \setbox\@outputbox \box\@cclv
+  \@outputbox@removebskip
+  \@kernel@tagsupport@@makecol
+  \let\@elt\relax
+  \xdef\@freelist{\@freelist\@midlist}%
+  \global \let \@midlist \@empty
+  \@makecol@appendblocks
+  \ifvbox\@kludgeins
+     \@makespecialcolbox
+  \else
+     \@makenormalcolbox
+  \fi
+  \global \maxdepth \@maxdepth}
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+% \subsection{\pkg{multicol} adjustments}
+%
+%    The patches for pkg{multicol} are fairly minimal:
+%    \begin{itemize}
+%    \item At the start of the environment anything already on the
+%    page is picked up and stored in \cs{partial@page}, we may need to add
+%    a TMB to that (it should have a proper TME). This has to happen
+%    in the \enquote{main} stream context.
+%    \item
+%    \item
+%    \end{itemize}
+%
+% This is now directly provided in \pkg{multicol} so the patch below is no longer necessary.  
+%
+%    \begin{macrocode}
+%\AddToHook{package/multicol/after}
+%    {% multicol needs later loading
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%  \patchcmd\page@sofar
+%      {\global\dimen\tw@\dp\z@}%
+%      {%
+%        \global\dimen\tw@\dp\z@
+%        \@mult@ptagging@hook
+%      }%
+%      {\typeout{Patching \string\page@sofar\space for tagging}}{\PATCHerror}%
+%}
+%    \end{macrocode}
+%
+% \subsection{Interrupt hooks}
+% This requires the l3pdfannot module!
+% We add the code here and not in hyperref, as it should also work with links
+% created directly with the l3pdfannot commands. The file is only
+% loaded by the pdfmanagement, so no need to test if the commands exist.
+%    \begin{macrocode}
+\ExplSyntaxOn
+\def\@kernel@before@head{\pdfannot_link_off:}
+\def\@kernel@before@foot{\pdfannot_link_off:}
+\def\@kernel@after@head {\pdfannot_link_on:}
+\def\@kernel@after@foot {\pdfannot_link_on:}
+\ExplSyntaxOff
+%    \end{macrocode}
+%    \begin{macrocode}
+%</package>
+%    \end{macrocode}
+%    \begin{macrocode}
+%<*latex-lab> 
+\ProvidesFile{new-or-1-latex-lab-testphase.ltx}
+              [\ltlabneworIdate\space v\ltlabneworIversion\space  
+               latex-lab wrapper new-or-1]
+\RequirePackage{latex-lab-testphase-new-or-1}              
+%</latex-lab>
+%    \end{macrocode}
+%
+% \Finale
+%

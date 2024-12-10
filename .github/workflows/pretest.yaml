@@ -1,0 +1,186 @@
+name: Automated testing with TeX Live pretest
+
+# We only run when manually triggered
+on:
+  workflow_dispatch:
+
+jobs:
+  # Update the TeX Live tree if necessary
+  texlive-cache:
+    runs-on: ubuntu-latest
+    name: Update TeX Live
+    outputs:
+      cache_key: ${{ steps.texlive.outputs.cache_key }}
+    steps:
+      # Boilerplate
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install TeX Live
+        id: texlive
+        uses: zauguin/install-texlive@v3
+        with:
+          # List the required TeX Live packages in a separate file to allow reuse in
+          # different workflows.
+          package_file: .github/tl_packages
+          repository: https://pretest.math.hamburg/
+          cache_version: 0-pretest
+  # The l3build job contains the actual work. We misuse the matrix mechanism to
+  # create three jobs which only differ in minimal elements.
+  # For tags we do not run this since we run the release job instead.
+  l3build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # include indicates that we want to set explicitly these combinations
+        # and don't want full matrix testing.
+        include:
+          - module: base
+            config: build
+            engine: pdftex
+          - module: base
+            config: build
+            engine: xetex
+          - module: base
+            config: build
+            engine: luatex
+            extra_command: kpsewhich -mktex=tfm -must-exist ecssdc10.tfm
+          - module: base
+            config: config-1run
+          - module: base
+            config: config-TU
+          - module: base
+            config: config-doc
+          - module: base
+            config: config-legacy
+          - module: base
+            config: config-ltcmd
+          - module: base
+            config: config-lthooks
+          - module: base
+            config: config-lthooks2
+          - module: base
+            config: config-ltmarks
+          - module: base
+            config: config-lttemplates
+          - module: required/amsmath
+          - module: required/cyrillic
+          - module: required/firstaid
+          - module: required/graphics
+          - module: required/latex-lab
+            config: build
+          - module: required/latex-lab
+            config: config-OR
+          - module: required/latex-lab
+            config: config-math
+          - module: required/latex-lab
+            config: config-OR-luatex
+          - module: required/latex-lab
+            config: config-sec
+          - module: required/latex-lab
+            config: config-toc
+          - module: required/latex-lab
+            config: config-block
+          - module: required/latex-lab
+            config: config-LM-tagging
+          - module: required/latex-lab
+            config: config-graphic
+          - module: required/latex-lab
+            config: config-minipage
+          - module: required/latex-lab
+            config: config-float
+          - module: required/latex-lab
+            config: config-bib
+          - module: required/latex-lab
+            config: config-table-pdftex
+          - module: required/latex-lab
+            config: config-table-luatex
+          - module: required/latex-lab
+            config: config-title
+          - module: required/tools
+    name: "Tests: ${{ matrix.module }}${{ matrix.config && format(' - {0}', matrix.config) || ''}}${{ matrix.engine && format(' - {0}', matrix.engine) || ''}}"
+    needs: texlive-cache
+    continue-on-error: true
+    steps:
+      # Boilerplate
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      # We need Ghostscript for dvips and XeTeX tests.
+      - run: sudo apt-get update && sudo apt-get install ghostscript
+      - name: Restore TeX Live from cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/texlive
+          key: ${{ needs.texlive-cache.outputs.cache_key }}
+          fail-on-cache-miss: true
+      - run: echo $HOME/texlive/bin/x86_64-linux >> $GITHUB_PATH
+      - if: ${{ matrix.extra_command }}
+        run: ${{ matrix.extra_command }}
+      - name: Run l3build
+        working-directory: ${{ matrix.module }}
+        run: "l3build check -q${{ matrix.config && format(' -c {0}', matrix.config) || ''}}${{ matrix.engine && format(' -e {0}', matrix.engine) || ''}}"
+      # "/" is one of invalid characters in artifact names
+      # see https://github.com/actions/toolkit/blob/ef77c9d60bdb03700d7758b0d04b88446e72a896/packages/artifact/src/internal/upload/path-and-artifact-name-validation.ts
+      - name: Sanitize artifact name
+        if: ${{ always() }}
+        run: |
+          name="testfiles-${{ matrix.module }}${{ matrix.config && format('-{0}', matrix.config)  || ''}}${{ matrix.engine && format('-{0}', matrix.engine) || ''}}"
+          # replace all "/" with "_"
+          echo "artifact_name=${name//\//_}" >> "$GITHUB_ENV"
+      # Now we create the artifacts for the logs of failed tests
+      - name: Archive failed test output
+        if: ${{ always() }}
+        uses: zauguin/l3build-failure-artifacts@v1
+        with:
+          # example names:
+          # - "testfiles-base-build-pdflatex"
+          # - "testfiles-base-config-1run"
+          # - "testfiles-required_amsmath"
+          name: ${{ env.artifact_name }}
+          # Decide how long to keep the test output artifact:
+          retention-days: 3
+  docs:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - module: base
+            environment: LTX_DOC_COMPONENT=1
+          - module: base
+            environment: LTX_DOC_COMPONENT=2
+          - module: base
+            environment: LTX_DOC_COMPONENT=3
+          - module: required
+    name: "Documentation: ${{ matrix.module }}"
+    needs: texlive-cache
+    continue-on-error: true
+    steps:
+      # Boilerplate
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      # We need Ghostscript for dvips and XeTeX tests.
+      - run: sudo apt-get update && sudo apt-get install ghostscript
+      - name: Restore TeX Live from cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/texlive
+          key: ${{ needs.texlive-cache.outputs.cache_key }}
+          fail-on-cache-miss: true
+      - run: echo $HOME/texlive/bin/x86_64-linux >> $GITHUB_PATH
+      - if: ${{ matrix.environment }}
+        run: echo "${{ matrix.environment }}" >> $GITHUB_ENV
+      - name: Run l3build
+        working-directory: ${{ matrix.module }}
+        run: l3build doc -q -H --show-log-on-error
+      # Now we create the artifacts for the generated documentation
+      - name: Archive documentation
+        uses: actions/upload-artifact@v4
+        with:
+          # example names: "Documentation-base-1", "Documentation-required"
+          name: Documentation-${{ matrix.module }}${{ matrix.environment && format('-{0}', env.LTX_DOC_COMPONENT) || ''}}
+          path: |
+            **/*.pdf
+            !build
+            !texmf
+            !**/testfiles*
+          # Decide how long to keep the test output artifact:
+          retention-days: 21

@@ -76,17 +76,27 @@ local P, R, S, C, Cs, Cp, Cc, Ct = lpeg.P, lpeg.R, lpeg.S, lpeg.C, lpeg.Cs, lpeg
 local attributes = lfs.attributes
 
 function lfs.isdir(name)
-    return attributes(name,"mode") == "directory"
+    if name then
+        return attributes(name,"mode") == "directory"
+    end
 end
 
 function lfs.isfile(name)
-    local a = attributes(name,"mode")
-    return a == "file" or a == "link" or nil
+    if name then
+        local a = attributes(name,"mode")
+        return a == "file" or a == "link" or nil
+    end
 end
 
 function lfs.isfound(name)
-    local a = attributes(name,"mode")
-    return (a == "file" or a == "link") and name or nil
+    if name then
+        local a = attributes(name,"mode")
+        return (a == "file" or a == "link") and name or nil
+    end
+end
+
+function lfs.modification(name)
+    return name and attributes(name,"modification") or nil
 end
 
 if sandbox then
@@ -446,7 +456,7 @@ function file.join(one, two, three, ...)
     if not two then
         return one == "" and one or lpegmatch(reslasher,one)
     end
-    if one == "" then
+    if not one or one == "" then
         return lpegmatch(stripper,three and concat({ two, three, ... },"/") or two)
     end
     if lpegmatch(isnetwork,one) then
@@ -731,8 +741,24 @@ end
 
 -- not used in context but was in luatex once:
 
-local symlinkattributes = lfs.symlinkattributes
+do
 
-function lfs.readlink(name)
-    return symlinkattributes(name,"target") or nil
+    local symlinktarget     = lfs.symlinktarget     -- luametatex (always returns string)
+    local symlinkattributes = lfs.symlinkattributes -- luatex     (can return nil)
+
+    if symlinktarget then
+        function lfs.readlink(name)
+            local target = symlinktarget(name)
+            return name ~= target and name or nil
+        end
+    elseif symlinkattributes then
+        function lfs.readlink(name)
+            return symlinkattributes(name,"target") or nil
+        end
+    else
+        function lfs.readlink(name)
+            return nil
+        end
+    end
+
 end

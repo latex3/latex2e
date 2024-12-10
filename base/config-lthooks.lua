@@ -1,6 +1,6 @@
 -- Tests for lthooks
 
-checkengines = {"etex"}
+checkengines = {"pdftex"}
 checksearch  = false
 testfiledir  = "testfiles-lthooks"
 

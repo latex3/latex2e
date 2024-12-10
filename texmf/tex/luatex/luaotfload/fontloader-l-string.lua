@@ -7,7 +7,7 @@ if not modules then modules = { } end modules ['l-string'] = {
 }
 
 local string = string
-local sub, gmatch, format, char, byte, rep, lower = string.sub, string.gmatch, string.format, string.char, string.byte, string.rep, string.lower
+local sub, gmatch, format, char, byte, rep, lower, find = string.sub, string.gmatch, string.format, string.char, string.byte, string.rep, string.lower, string.find
 local lpegmatch, patterns = lpeg.match, lpeg.patterns
 local P, S, C, Ct, Cc, Cs = lpeg.P, lpeg.S, lpeg.C, lpeg.Ct, lpeg.Cc, lpeg.Cs
 
@@ -52,10 +52,26 @@ function string.quoted(str)
     return format("%q",str) -- always double quote
 end
 
-function string.count(str,pattern) -- variant 3
+-- function string.count(str,pattern) -- variant 3
+--     local n = 0
+--     for _ in gmatch(str,pattern) do -- not for utf
+--         n = n + 1
+--     end
+--     return n
+-- end
+
+function string.count(str,pattern)
     local n = 0
-    for _ in gmatch(str,pattern) do -- not for utf
-        n = n + 1
+    local i = 1
+    local l = #pattern
+    while true do
+        i = find(str,pattern,i)
+        if i then
+            n = n + 1
+            i = i + l
+        else
+            break
+        end
     end
     return n
 end

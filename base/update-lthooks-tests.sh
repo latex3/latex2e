@@ -1,4 +1,7 @@
 
+l3build save -epdftex,luatex \
+   github-0962b
+
 l3build save -cconfig-lthooks2 \
    lthooks2-002 \
    lthooks2-004 \
@@ -85,11 +88,16 @@ l3build save -cconfig-lthooks \
    lthooks-029 \
    lthooks-029-deprecated \
    lthooks-030 \
+   lthooks-031 \
+   lthooks-032 \
+   lthooks-033 \
+   lthooks-034 \
    lthooks-errors \
    lthooks-errors-deprecated \
    lthooks-etoolbox \
    lthooks-legacy \
    lthooks-doc-examples \
+   lthooks-rollback-args \
    shipout-000 \
    shipout-002 \
    shipout-004 \
@@ -101,7 +109,9 @@ l3build save -cconfig-lthooks \
    github-0565 \
    github-0606 \
    github-0648 \
-   github-0648b 
+   github-0648b \
+   github-0818 \
+   github-1459
 
 
 

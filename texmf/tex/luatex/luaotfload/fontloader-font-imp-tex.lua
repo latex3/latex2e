@@ -13,36 +13,31 @@ local otf                = fonts.handlers.otf
 local registerotffeature = otf.features.register
 local addotffeature      = otf.addfeature
 
--- tlig (we need numbers for some fonts so ...)
+-- We provide a few old and obsolete compatibility input features. We need numbers
+-- for some fonts so no names here. Do we also need them for afm fonts?
 
-local specification = {
+local tlig = {
     type     = "ligature",
     order    = { "tlig" },
     prepend  = true,
     data     = {
-     -- endash        = "hyphen hyphen",
-     -- emdash        = "hyphen hyphen hyphen",
-        [0x2013]      = { 0x002D, 0x002D },
-        [0x2014]      = { 0x002D, 0x002D, 0x002D },
-     -- quotedblleft  = "quoteleft quoteleft",
-     -- quotedblright = "quoteright quoteright",
-     -- quotedblleft  = "grave grave",
-     -- quotedblright = "quotesingle quotesingle",
-     -- quotedblbase  = "comma comma",
+        [0x2013] = { 0x002D, 0x002D },
+        [0x2014] = { 0x002D, 0x002D, 0x002D },
     },
 }
 
-addotffeature("tlig",specification)
-
-registerotffeature {
-    -- this makes it a known feature (in tables)
-    name        = "tlig",
-    description = "tex ligatures",
+local tquo = {
+    type     = "ligature",
+    order    = { "tquo" },
+    prepend  = true,
+    data     = {
+        [0x201C] = { 0x0060, 0x0060 },
+        [0x201D] = { 0x0027, 0x0027 },
+        [0x201E] = { 0x002C, 0x002C },
+    },
 }
 
--- trep
-
-local specification = {
+local trep = {
     type      = "substitution",
     order     = { "trep" },
     prepend   = true,
@@ -53,13 +48,13 @@ local specification = {
     },
 }
 
-addotffeature("trep",specification)
+addotffeature("trep",trep) -- last
+addotffeature("tlig",tlig)
+addotffeature("tquo",tquo) -- first
 
-registerotffeature {
-    -- this makes it a known feature (in tables)
-    name        = "trep",
-    description = "tex replacements",
-}
+registerotffeature { name = "tlig", description = "tex ligatures" }
+registerotffeature { name = "tquo", description = "tex quotes" }
+registerotffeature { name = "trep", description = "tex replacements" }
 
 -- some day this will be moved to font-imp-scripts.lua
 

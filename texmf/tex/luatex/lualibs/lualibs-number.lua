@@ -1,67 +1,19 @@
 if not modules then modules = { } end modules ['l-number'] = {
     version   = 1.001,
-    comment   = "companion to luat-lib.mkiv",
+    comment   = "companion to luat-lib.mkxl",
     author    = "Hans Hagen, PRAGMA-ADE, Hasselt NL",
     copyright = "PRAGMA ADE / ConTeXt Development Team",
     license   = "see context related readme files"
 }
 
--- this module will be replaced when we have the bit library .. the number based sets
--- might go away
-
 local tostring, tonumber = tostring, tonumber
-local format, floor, match, rep = string.format, math.floor, string.match, string.rep
+local format, match, rep = string.format, string.match, string.rep
 local concat, insert = table.concat, table.insert
 local lpegmatch = lpeg.match
 local floor = math.floor
 
 number       = number or { }
 local number = number
-
--- begin obsolete code --
-
--- if bit32 then
---
---     local btest, bor = bit32.btest, bit32.bor
---
---     function number.bit(p)
---         return 2 ^ (p - 1) -- 1-based indexing
---     end
---
---     number.hasbit = btest
---     number.setbit = bor
---
---     function number.setbit(x,p) -- why not bor?
---         return btest(x,p) and x or x + p
---     end
---
---     function number.clearbit(x,p)
---         return btest(x,p) and x - p or x
---     end
---
--- else
---
---     -- http://ricilake.blogspot.com/2007/10/iterating-bits-in-lua.html
---
---     function number.bit(p)
---         return 2 ^ (p - 1) -- 1-based indexing
---     end
---
---     function number.hasbit(x, p) -- typical call: if hasbit(x, bit(3)) then ...
---         return x % (p + p) >= p
---     end
---
---     function number.setbit(x, p)
---         return (x % (p + p) >= p) and x or x + p
---     end
---
---     function number.clearbit(x, p)
---         return (x % (p + p) >= p) and x - p or x
---     end
---
--- end
-
--- end obsolete code --
 
 -- print(number.tobitstring(8))
 -- print(number.tobitstring(14))

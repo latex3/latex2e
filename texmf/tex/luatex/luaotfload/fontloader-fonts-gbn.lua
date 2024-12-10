@@ -17,27 +17,27 @@ local next = next
 local fonts = fonts
 local nodes = nodes
 
-local nuts        = nodes.nuts -- context abstraction of direct nodes
+local nuts       = nodes.nuts -- context abstraction of direct nodes
 
-local traverse_id = nuts.traverse_id
-local flush_node  = nuts.flush_node
+local traverseid = nuts.traverseid
+local flushnode  = nuts.flushnode
 
-local glyph_code  = nodes.nodecodes.glyph
-local disc_code   = nodes.nodecodes.disc
+local glyph_code = nodes.nodecodes.glyph
+local disc_code  = nodes.nodecodes.disc
 
-local tonode      = nuts.tonode
-local tonut       = nuts.tonut
+local tonode     = nuts.tonode
+local tonut      = nuts.tonut
 
-local getfont     = nuts.getfont
-local getchar     = nuts.getchar
-local getid       = nuts.getid
-local getboth     = nuts.getboth
-local getprev     = nuts.getprev
-local getnext     = nuts.getnext
-local getdisc     = nuts.getdisc
-local setchar     = nuts.setchar
-local setlink     = nuts.setlink
-local setprev     = nuts.setprev
+local getfont    = nuts.getfont
+local getchar    = nuts.getchar
+local getid      = nuts.getid
+local getboth    = nuts.getboth
+local getprev    = nuts.getprev
+local getnext    = nuts.getnext
+local getdisc    = nuts.getdisc
+local setchar    = nuts.setchar
+local setlink    = nuts.setlink
+local setprev    = nuts.setprev
 
 -- from now on we apply ligaturing and kerning here because it might interfere with complex
 -- opentype discretionary handling where the base ligature pass expect some weird extra
@@ -99,7 +99,7 @@ local function nodepass(head,groupcode,size,packtype,direction)
         local variants  = nil
         local redundant = nil
         local nofused   = 0
-        for n in traverse_id(glyph_code,head) do
+        for n in traverseid(glyph_code,head) do
             local font = getfont(n)
             if font ~= prevfont then
                 if basefont then
@@ -178,13 +178,13 @@ local function nodepass(head,groupcode,size,packtype,direction)
                         end
                     end
                 end
-                flush_node(r)
+                flushnode(r)
             end
         end
-        for d in traverse_id(disc_code,head) do
+        for d in traverseid(disc_code,head) do
             local _, _, r = getdisc(d)
             if r then
-                for n in traverse_id(glyph_code,r) do
+                for n in traverseid(glyph_code,r) do
                     local font = getfont(n)
                     if font ~= prevfont then
                         prevfont = font
@@ -254,7 +254,7 @@ local function basepass(head)
     return head
 end
 
-local protectpass = node.direct.protect_glyphs
+local protectpass = node.direct.protectglyphs or node.direct.protect_glyphs
 local injectpass  = nodes.injections.handler
 
 -- This is the only official public interface and this one can be hooked into a callback (chain) and

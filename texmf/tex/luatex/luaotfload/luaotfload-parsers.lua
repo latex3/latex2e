@@ -5,18 +5,13 @@
 --       AUTHOR:  Philipp Gesang (Phg), <phg@phi-gamma.net>, Marcel Krüger
 -------------------------------------------------------------------------------
 
-local ProvidesLuaModule = { 
+assert(luaotfload_module, "This is a part of luaotfload and should not be loaded independently") { 
     name          = "luaotfload-parsers",
-    version       = "3.00",       --TAGVERSION
-    date          = "2019-09-13", --TAGDATE
-    description   = "luaotfload submodule / filelist",
+    version       = "3.28",       --TAGVERSION
+    date          = "2024-02-14", --TAGDATE
+    description   = "luaotfload submodule / parsers",
     license       = "GPL v2.0"
 }
-
-if luatexbase and luatexbase.provides_module then
-  luatexbase.provides_module (ProvidesLuaModule)
-end  
-
 
 local traversal_maxdepth  = 42 --- prevent stack overflows
 
@@ -147,7 +142,7 @@ local xml_attr_list     = Cf(Ct"" * xml_attr^1, rawset)
       scan_node creates a parser for a given xml tag.
 --doc]]--
 --- string -> bool -> lpeg_t
-local scan_node = function (tag)
+local function scan_node (tag)
   --- Node attributes go into a table with the index “attributes”
   --- (relevant for “prefix="xdg"” and the likes).
   local p_tag = P(tag)
@@ -192,7 +187,7 @@ local p_cheapxml          = header * root
       of the nodes it managed to extract from the file.
 --doc]]--
 --- string -> path list
-local fonts_conf_scanner = function (path)
+local function fonts_conf_scanner (path)
   logreport("both", 5, "db", "Read fontconfig file %s.", path)
   local fh = ioopen(path, "r")
   if not fh then
@@ -218,7 +213,7 @@ end
 local p_conf   = P".conf" * P(-1)
 local p_filter = (1 - p_conf)^1 * p_conf
 
-local conf_filter = function (path)
+local function conf_filter (path)
   if lpegmatch (p_filter, path) then
     return true
   end
@@ -248,18 +243,16 @@ end
 ---     -> string list -> string list -> string list
 ---     -> (string -> fun option -> string list)
 ---     -> tab * tab * tab
-local read_fonts_conf_indeed
--- MK Made basedir an explicit parameter to fix relative paths
-read_fonts_conf_indeed = function (depth,
-                                   start,
-                                   home,
-                                   xdg_config_home,
-                                   xdg_data_home,
-                                   acc,
-                                   done,
-                                   dirs_done,
-                                   find_files,
-                                   basedir)
+local function read_fonts_conf_indeed (depth,
+                                       start,
+                                       home,
+                                       xdg_config_home,
+                                       xdg_data_home,
+                                       acc,
+                                       done,
+                                       dirs_done,
+                                       find_files,
+                                       basedir)
 
   logreport ("both", 4, "db",
              "Fontconfig scanner processing path %s.",
@@ -371,7 +364,6 @@ read_fonts_conf_indeed = function (depth,
   --inspect(done)
   return acc, done, dirs_done
 end --- read_fonts_conf_indeed()
--- /MK
 
 --[[doc--
       read_fonts_conf() sets up an accumulator and two sets
@@ -386,7 +378,7 @@ end --- read_fonts_conf_indeed()
 
 --- list -> (string -> function option -> string list) -> list
 
-local read_fonts_conf = function (path_list, find_files)
+local function read_fonts_conf (path_list, find_files)
   local home      = kpseexpand_path"~" --- could be os.getenv"HOME"
   local xdg_config_home  = kpseexpand_path"$XDG_CONFIG_HOME"
   if xdg_config_home == "" then xdg_config_home = filejoin(home, ".config") end
@@ -502,29 +494,8 @@ local splitcomma        = Ct((C(noncomma^1) + comma)^1)
 
 --doc]]--
 
-local handle_xetex_option = function (val)
+local function handle_xetex_option (val)
   return tostring(1 + tonumber(val))
-end
-
---[[doc--
-
-    Dirty test if a file: request is actually a path: lookup; don’t
-    ask! Note this fails on Windows-style absolute paths. These will
-    *really* have to use the correct request.
-
---doc]]--
-
-local check_garbage = function (_,i, garbage)
-  if stringfind(garbage, "/") then
-    logreport("log", 0, "load",  --- ffs use path!
-              "warning: path in file: lookups is deprecated; ")
-    logreport("log", 0, "load", "use bracket syntax instead!")
-    logreport("log", 0, "load",
-              "position: %d; full match: %q",
-              i, garbage)
-    return true
-  end
-  return false
 end
 
 local featuresep = comma + semicolon
@@ -536,7 +507,7 @@ local featuresep = comma + semicolon
     we only support the shorthands for italic / bold / bold italic
     shapes, as well as setting optical size, the rest is ignored.
 --doc]]--
-local style_modifier    = (P"BI" + P"IB" + P"bi" + P"ib" + S"biBI")
+local style_modifier    = (S'bB' * S'iI'^-1 + S'iI' * S'bB'^-1 + S'rR')
                         / stringlower
 local size_modifier     = S"Ss" * P"="    --- optical size
                         * Cc"optsize" * C(decimal)
@@ -603,11 +574,15 @@ local combolist         = Ct(combodef1 * (comborowsep * combodef)^1)
 --- Note to self: subfonts apparently start at index 0. Tested with
 --- Cambria.ttc that includes “Cambria Math” at 0 and “Cambria” at 1.
 --- Other values cause luatex to segfault.
-local subfont           = P"(" * Cg((1 - S"()")^1, "sub") * P")"
+local subfont           = P"(" * Cg(R'09'^1 / function (s)
+                            return tonumber(s) + 1
+                          end + (1 - S"()")^1, "sub") * P")"
+-- An optional subfont shouldn't use subfont^-1 to ensure that parens
+-- at the subfont location are never interpreted in different ways.
+local maybe_subfont     = subfont + #(1 - P"(" + -1)
 
 --- lookups -----------------------------------------------------------
 local fontname          = C((1-S":(/")^1)  --- like luatex-fonts
-local unsupported       = Cmt((1-S":(")^1, check_garbage)
 local combo             = Cg(P"combo", "lookup") * colon * ws
                           * Cg(combolist, "name")
 --- initially we intended file: to emulate the behavior of
@@ -616,10 +591,10 @@ local combo             = Cg(P"combo", "lookup") * colon * ws
 --- turns out fontspec and other widely used packages rely on file:
 --- with paths already, so we’ll add a less strict rule here.  anyways,
 --- we’ll emit a warning.
-local prefixed          = P"file:" * ws * Cg(Cc"path", "lookup")
-                          * Cg(unsupported, "name")
-                        + Cg(P"name" + "file" + "kpse" + "my", "lookup")
+local prefixed          = Cg(P"name" + "file" + "kpse" + "my", "lookup")
                           * colon * ws * Cg(fontname, "name")
+                        + Cg(P"id", "lookup")
+                          * colon * ws * Cg(R'09'^1 / tonumber, "id")
 local unprefixed        = Cg(Cc"anon", "lookup") * Cg(fontname, "name")
 --- Bracketed “path” lookups: These may contain any character except
 --- for unbalanced brackets. A backslash escapes any following
@@ -634,7 +609,6 @@ local path_balanced     = { (path_content + V(2))^1
                           , lbrk * V(1)^-1 * rbrk }
 local path_lookup       = Cg(Cc"path", "lookup")
                           * lbrk * Cg(Cs(path_balanced), "name") * rbrk
-                          * subfont^-1
 
 --- features ----------------------------------------------------------
 local balanced_braces   = P{((1 - S'{}') + '{' * V(1) * '}')^0}
@@ -661,12 +635,11 @@ local feature_list      = Cf(Ct""
 --- top-level rules ---------------------------------------------------
 --- \font\foo=<specification>:<features>
 local features          = Cg(feature_list, "features")
-local specification     = (prefixed + unprefixed)
-                        * subfont^-1
+local specification     = (path_lookup + prefixed + unprefixed)
+                        * maybe_subfont
                         * modifier_list
-local font_request      = Ct(path_lookup   * (colon^-1 * features)^-1
-                           + combo --> TODO: feature list needed?
-                           + specification * (colon    * features)^-1)
+local font_request      = Ct(combo --> TODO: feature list needed?
+                           + specification * (colon^-1 * features)^-1)
 
 --  lpeg.print(font_request)
 --- v2.5 parser: 1065 rules
@@ -695,7 +668,7 @@ local truth_ids = {
   off       = false,
 }
 
-local maybe_cast = function (var)
+local function maybe_cast (var)
   local bool = truth_ids[var]
   if bool ~= nil then
     return bool
@@ -703,7 +676,7 @@ local maybe_cast = function (var)
   return tonumber (var) or var
 end
 
-local escape = function (chr, repl)
+local function escape (chr, repl)
   return (backslash * P(chr) / (repl or chr))
 end
 
@@ -780,19 +753,20 @@ local parse_config      = Ct (ini_sections)
 
 --doc]=]--
 
+luaotfload.parsers = {
+  --- parameters
+  traversal_maxdepth    = traversal_maxdepth,
+  --- main parsers
+  read_fonts_conf       = read_fonts_conf,
+  font_request          = font_request,
+  config                = parse_config,
+  --- common patterns
+  stripslashes          = stripslashes,
+  splitcomma            = splitcomma,
+}
+
 return function ()
   logreport = luaotfload.log.report
-  luaotfload.parsers = {
-    --- parameters
-    traversal_maxdepth    = traversal_maxdepth,
-    --- main parsers
-    read_fonts_conf       = read_fonts_conf,
-    font_request          = font_request,
-    config                = parse_config,
-    --- common patterns
-    stripslashes          = stripslashes,
-    splitcomma            = splitcomma,
-  }
   return true
 end
 

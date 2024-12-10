@@ -1,6 +1,6 @@
 -- Tests for non Unicode engines
 
-checkengines = {"etex"}
+checkengines = {"pdftex"}
 checksearch  = false
 checkdeps    = {maindir .. "/required/cyrillic"}
 testfiledir  = "testfiles-legacy"

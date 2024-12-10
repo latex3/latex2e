@@ -6,10 +6,13 @@ if not modules then modules = { } end modules ['font-oto'] = { -- original tex
     license   = "see context related readme files"
 }
 
+-- Todo: Enable fixes from the lmt to here. Also in font-con.lua wrt the changed
+-- assignments. (Around texlive 2024 in order not to disturb generic.)
+
 local concat, unpack = table.concat, table.unpack
 local insert, remove = table.insert, table.remove
 local format, gmatch, gsub, find, match, lower, strip = string.format, string.gmatch, string.gsub, string.find, string.match, string.lower, string.strip
-local type, next, tonumber, tostring, rawget = type, next, tonumber, tostring, rawget
+local type, next, tonumber, tostring = type, next, tonumber, tostring
 
 local trace_baseinit         = false  trackers.register("otf.baseinit",     function(v) trace_baseinit     = v end)
 local trace_singles          = false  trackers.register("otf.singles",      function(v) trace_singles      = v end)
@@ -67,7 +70,7 @@ local function gref(descriptions,n)
 end
 
 local function cref(feature,sequence)
-    return formatters["feature %a, type %a, chain lookup %a"](feature,sequence.type,sequence.name)
+    return formatters["feature %a, type %a, (chain) lookup %a"](feature,sequence.type,sequence.name)
 end
 
 local function report_substitution(feature,sequence,descriptions,unicode,substitution)
@@ -170,7 +173,7 @@ end
 local function makefake(tfmdata,name,present)
     local private   = getprivate(tfmdata)
     local character = { intermediate = true, ligatures = { } }
-    resources.unicodes[name] = private
+    tfmdata.resources.unicodes[name] = private
     tfmdata.characters[private] = character
     tfmdata.descriptions[private] = { name = name }
     present[name] = private
@@ -178,43 +181,55 @@ local function makefake(tfmdata,name,present)
 end
 
 local function make_1(present,tree,name)
-    for k, v in next, tree do
-        if k == "ligature" then
-            present[name] = v
+    if tonumber(tree) then
+        present[name] = v
+    else
+        for k, v in next, tree do
+            if k == "ligature" then
+                present[name] = v
+            else
+                make_1(present,v,name .. "_" .. k)
+            end
+        end
+    end
+end
+
+local function make_3(present,tfmdata,characters,tree,name,preceding,unicode,done,v)
+    local character = characters[preceding]
+    if not character then
+        if trace_baseinit then
+            report_prepare("weird ligature in lookup %a, current %C, preceding %C",sequence.name,v,preceding)
+        end
+        character = makefake(tfmdata,name,present)
+    end
+    local ligatures = character.ligatures
+    if ligatures then
+        ligatures[unicode] = { char = v }
+    else
+        character.ligatures = { [unicode] = { char = v } }
+    end
+    if done then
+        local d = done[name]
+        if not d then
+            done[name] = { "dummy", v }
         else
-            make_1(present,v,name .. "_" .. k)
+            d[#d+1] = v
         end
     end
 end
 
 local function make_2(present,tfmdata,characters,tree,name,preceding,unicode,done)
-    for k, v in next, tree do
-        if k == "ligature" then
-            local character = characters[preceding]
-            if not character then
-                if trace_baseinit then
-                    report_prepare("weird ligature in lookup %a, current %C, preceding %C",sequence.name,v,preceding)
-                end
-                character = makefake(tfmdata,name,present)
-            end
-            local ligatures = character.ligatures
-            if ligatures then
-                ligatures[unicode] = { char = v }
+    if tonumber(tree) then
+        make_3(present,tfmdata,characters,tree,name,preceding,unicode,done,tree)
+    else
+        for k, v in next, tree do
+            if k == "ligature" then
+                make_3(present,tfmdata,characters,tree,name,preceding,unicode,done,v)
             else
-                character.ligatures = { [unicode] = { char = v } }
+                local code = present[name] or unicode
+                local name = name .. "_" .. k
+                make_2(present,tfmdata,characters,v,name,code,k,done)
             end
-            if done then
-                local d = done[name]
-                if not d then
-                    done[name] = { "dummy", v }
-                else
-                    d[#d+1] = v
-                end
-            end
-        else
-            local code = present[name] or unicode
-            local name = name .. "_" .. k
-            make_2(present,tfmdata,characters,v,name,code,k,done)
         end
     end
 end
@@ -228,12 +243,11 @@ local function preparesubstitutions(tfmdata,feature,value,validlookups,lookuplis
     local ligatures    = { }
     local alternate    = tonumber(value) or true and 1
     local defaultalt   = otf.defaultbasealternate
-
     local trace_singles      = trace_baseinit and trace_singles
     local trace_alternatives = trace_baseinit and trace_alternatives
     local trace_ligatures    = trace_baseinit and trace_ligatures
 
-    -- A chain of changes is handled in font-con which is clesner because
+    -- A chain of changes is handled in font-con which is cleaner because
     -- we can have shared changes and such.
 
     if not changed then
@@ -249,7 +263,7 @@ local function preparesubstitutions(tfmdata,feature,value,validlookups,lookuplis
             for i=1,#steps do
                 for unicode, data in next, steps[i].coverage do
                     if unicode ~= data then
-                        changed[unicode] = data
+                        changed[unicode] = changed[unicode] or data
                     end
                     if trace_singles then
                         report_substitution(feature,sequence,descriptions,unicode,data)
@@ -262,7 +276,7 @@ local function preparesubstitutions(tfmdata,feature,value,validlookups,lookuplis
                     local replacement = data[alternate]
                     if replacement then
                         if unicode ~= replacement then
-                            changed[unicode] = replacement
+                            changed[unicode] = changed[unicode] or replacement
                         end
                         if trace_alternatives then
                             report_alternate(feature,sequence,descriptions,unicode,replacement,value,"normal")
@@ -270,7 +284,7 @@ local function preparesubstitutions(tfmdata,feature,value,validlookups,lookuplis
                     elseif defaultalt == "first" then
                         replacement = data[1]
                         if unicode ~= replacement then
-                            changed[unicode] = replacement
+                            changed[unicode] = changed[unicode] or replacement
                         end
                         if trace_alternatives then
                             report_alternate(feature,sequence,descriptions,unicode,replacement,value,defaultalt)
@@ -278,7 +292,7 @@ local function preparesubstitutions(tfmdata,feature,value,validlookups,lookuplis
                     elseif defaultalt == "last" then
                         replacement = data[#data]
                         if unicode ~= replacement then
-                            changed[unicode] = replacement
+                            changed[unicode] = changed[unicode] or replacement
                         end
                         if trace_alternatives then
                             report_alternate(feature,sequence,descriptions,unicode,replacement,value,defaultalt)
@@ -493,6 +507,9 @@ local function featuresinitializer(tfmdata,value)
                                 local value = features[feature]
                                 if value then
                                     local validlookups, lookuplist = collectlookups(rawdata,feature,script,language)
+-- if not validlookups and not lookuplist and script == "math" then
+--     validlookups, lookuplist = collectlookups(rawdata,feature,"dflt","dflt")
+-- end
                                     if not validlookups then
                                         -- skip
                                     elseif basesubstitutions and basesubstitutions[feature] then

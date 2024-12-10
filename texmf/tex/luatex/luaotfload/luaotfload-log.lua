@@ -4,20 +4,15 @@
 -------------------------------------------------------------------------------
 
 
-local ProvidesLuaModule = { 
+assert(luaotfload_module, "This is a part of luaotfload and should not be loaded independently") { 
     name          = "luaotfload-log",
-    version       = "3.00",       --TAGVERSION
-    date          = "2019-09-13", --TAGDATE
+    version       = "3.28",       --TAGVERSION
+    date          = "2024-02-14", --TAGDATE
     description   = "luaotfload submodule / logging",
     license       = "GPL v2.0",
     author        = "Khaled Hosny, Elie Roux, Philipp Gesang",
     copyright     = "Luaotfload Development Team",  
 }
-
-if luatexbase and luatexbase.provides_module then
-  luatexbase.provides_module (ProvidesLuaModule)
-end  
-
 
 --[[doc--
 The logging system is slow in general, as we always have the function
@@ -60,7 +55,7 @@ local loglevel = 0 --- default
 local logout   = "log"
 
 --- int -> bool
-local set_loglevel = function (n)
+local function set_loglevel (n)
     if type(n) == "number" then
         loglevel = n
     end
@@ -69,7 +64,7 @@ end
 log.set_loglevel   = set_loglevel
 
 --- unit -> int
-local get_loglevel = function ( )
+local function get_loglevel ( )
     return loglevel
 end
 log.get_loglevel   = get_loglevel
@@ -85,7 +80,7 @@ to monitor the progress run "tail -f %s" in another terminal
 
 local tmppath = os.getenv "TMPDIR" or "/tmp"
 
-local choose_logfile = function ( )
+local function choose_logfile ( )
     if lfsisdir (tmppath) then
         local fname
         repeat --- ensure that file of that name doesn’t exist
@@ -98,7 +93,7 @@ local choose_logfile = function ( )
     return false
 end
 
-local set_logout = function (s, finalizers)
+local function set_logout (s, finalizers)
     if s == "stdout" then
         logout = "redirect"
     elseif s == "file" then --- inject custom logger
@@ -149,14 +144,14 @@ log.set_logout = set_logout
 local format_error_handler
 if debug then
     local debugtraceback = debug.traceback
-    format_error_handler = function (err)
+    function format_error_handler (err)
         print ""
         print (stringformat ("luaotfload error: %q", err))
         print (stringformat ("Lua interpreter %s", debugtraceback ()))
         print ""
     end
 else
-    format_error_handler = function (err)
+    function format_error_handler (err)
         print ""
         print (stringformat ("luaotfload error: %q", err))
         print "Lua debug module not available; please enable for a backtrace"
@@ -164,7 +159,7 @@ else
     end
 end
 
-local basic_logger = function (category, fmt, ...)
+local function basic_logger (category, fmt, ...)
     local res = { module_name, "|", category or "UNKNOWN", ":" }
     if fmt then
         local ok, val = xpcall (stringformat, format_error_handler, fmt, ...)
@@ -195,11 +190,11 @@ local kill_line = "\r\x1b[K"
 
 if texjob == true then
     --- We imitate the texio.* functions so the output is consistent.
-    writeln = function (str)
+    function writeln (str)
         iowrite "\n"
         iowrite(str)
     end
-    statusln = function (str)
+    function statusln (str)
         if first_status == false then
             iowrite (kill_line)
         else
@@ -208,11 +203,11 @@ if texjob == true then
         iowrite (str)
     end
 else
-    writeln = function (str)
+    function writeln (str)
         iowrite(str)
         iowrite "\n"
     end
-    statusln = function (str)
+    function statusln (str)
         if first_status == false then
             iowrite (kill_line)
         end
@@ -220,16 +215,16 @@ else
     end
 end
 
-stdout = function (writer, category, ...)
+local function stdout (writer, category, ...)
     local res = { module_name, "|", category, ":" }
     local nargs = select("#", ...)
     if nargs == 0 then
         --writeln tableconcat(res, " ")
         --return
     elseif nargs == 1 then
-        res[#res+1] = select(1, ...) -- around 30% faster than unpack()
+        res[5] = ... -- around 30% faster than unpack()
     else
-        res[#res+1] = stringformat(...)
+        res[5] = stringformat(...)
     end
     writer (tableconcat(res, " "))
 end
@@ -331,7 +326,7 @@ local status_writer
 local status_low  = 99
 local status_high = 99
 
-local status_start = function (low, high)
+local function status_start (low, high)
     first_status = true
     status_low   = low
     status_high  = high
@@ -386,7 +381,7 @@ log.names_status_stop  = status_stop
 
 --doc]]--
 
-local texioreporter = function (message)
+local function texioreporter (message)
     report ("log", 2, message)
 end
 

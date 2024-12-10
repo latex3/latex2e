@@ -1,6 +1,6 @@
 -- merged file : lualibs-basic-merged.lua
 -- parent file : lualibs-basic.lua
--- merge date  : Tue Aug 13 20:13:08 2019
+-- merge date  : 2023-07-13 12:55
 
 do -- begin closure to overcome local limits and interference
 
@@ -99,9 +99,6 @@ function optionalrequire(...)
   return result
  end
 end
-if lua then
- lua.mask=load([[τεχ = 1]]) and "utf" or "ascii"
-end
 local flush=io.flush
 if flush then
  local execute=os.execute if execute then function os.execute(...) flush() return execute(...) end end
@@ -136,7 +133,7 @@ if not modules then modules={} end modules ['l-package']={
  copyright="PRAGMA ADE / ConTeXt Development Team",
  license="see context related readme files"
 }
-local type=type
+local type,unpack=type,unpack
 local gsub,format,find=string.gsub,string.format,string.find
 local insert,remove=table.insert,table.remove
 local P,S,Cs,lpegmatch=lpeg.P,lpeg.S,lpeg.Cs,lpeg.match
@@ -166,6 +163,7 @@ local helpers=package.helpers or {
  },
  methods={},
  sequence={
+  "reset loaded",
   "already loaded",
   "preload table",
   "qualified path",
@@ -182,6 +180,7 @@ local methods=helpers.methods
 local builtin=helpers.builtin
 local extraluapaths={}
 local extralibpaths={}
+local checkedfiles={}
 local luapaths=nil 
 local libpaths=nil 
 local oldluapath=nil
@@ -315,10 +314,16 @@ end
 local function loadedaslib(resolved,rawname) 
  local base=gsub(rawname,"%.","_")
  local init="luaopen_"..gsub(base,"%.","_")
+ local data={ resolved,init,"" }
+ checkedfiles[#checkedfiles+1]=data
  if helpers.trace then
   helpers.report("calling loadlib with '%s' with init '%s'",resolved,init)
  end
- return package.loadlib(resolved,init)
+ local a,b,c=package.loadlib(resolved,init)
+ if not a and type(b)=="string" then
+  data[3]=string.fullstrip(b or "unknown error")
+ end
+ return a,b,c 
 end
 helpers.loadedaslib=loadedaslib
 local function loadedbypath(name,rawname,paths,islib,what)
@@ -357,11 +362,18 @@ local function loadedbyname(name,rawname)
  end
 end
 helpers.loadedbyname=loadedbyname
+methods["reset loaded"]=function(name)
+ checkedfiles={}
+ return false
+end
 methods["already loaded"]=function(name)
  return package.loaded[name]
 end
 methods["preload table"]=function(name)
- return builtin["preload table"](name)
+ local f=builtin["preload table"]
+ if f then
+  return f(name)
+ end
 end
 methods["qualified path"]=function(name)
   return loadedbyname(addsuffix(lualibfile(name),"lua"),name)
@@ -373,19 +385,31 @@ methods["lib extra list"]=function(name)
  return loadedbypath(addsuffix(lualibfile(name),os.libsuffix),name,getextralibpaths(),true,"lib")
 end
 methods["path specification"]=function(name)
- getluapaths() 
- return builtin["path specification"](name)
+ local f=builtin["path specification"]
+ if f then
+  getluapaths() 
+  return f(name)
+ end
 end
 methods["cpath specification"]=function(name)
- getlibpaths() 
- return builtin["cpath specification"](name)
+ local f=builtin["cpath specification"]
+ if f then
+  getlibpaths() 
+  return f(name)
+ end
 end
 methods["all in one fallback"]=function(name)
- return builtin["all in one fallback"](name)
+ local f=builtin["all in one fallback"]
+ if f then
+  return f(name)
+ end
 end
 methods["not loaded"]=function(name)
  if helpers.trace then
   helpers.report("unable to locate '%s'",name or "?")
+  for i=1,#checkedfiles do
+   helpers.report("checked file '%s', initializer '%s', message '%s'",unpack(checkedfiles[i]))
+  end
  end
  return nil
 end
@@ -397,19 +421,22 @@ function helpers.loaded(name)
  level=level+1
  for i=1,#sequence do
   local method=sequence[i]
-  if helpers.trace then
-   helpers.report("%s, level '%s', method '%s', name '%s'","locating",level,method,name)
-  end
-  local result,rest=methods[method](name)
-  if type(result)=="function" then
+  local lookup=method and methods[method]
+  if type(lookup)=="function" then
    if helpers.trace then
-    helpers.report("%s, level '%s', method '%s', name '%s'","found",level,method,name)
+    helpers.report("%s, level '%s', method '%s', name '%s'","locating",level,method,name)
    end
-   if helpers.traceused then
-    used[#used+1]={ level=level,name=name }
+   local result,rest=lookup(name)
+   if type(result)=="function" then
+    if helpers.trace then
+     helpers.report("%s, level '%s', method '%s', name '%s'","found",level,method,name)
+    end
+    if helpers.traceused then
+     used[#used+1]={ level=level,name=name }
+    end
+    level=level-1
+    return result,rest
    end
-   level=level-1
-   return result,rest
   end
  end
  level=level-1
@@ -542,11 +569,13 @@ local fullstripper=whitespace^0*C((whitespace^0*nonwhitespace^1)^0)
 local collapser=Cs(spacer^0/""*nonspacer^0*((spacer^0/" "*nonspacer^1)^0))
 local nospacer=Cs((whitespace^1/""+nonwhitespace^1)^0)
 local b_collapser=Cs(whitespace^0/""*(nonwhitespace^1+whitespace^1/" ")^0)
-local e_collapser=Cs((whitespace^1*endofstring/""+nonwhitespace^1+whitespace^1/" ")^0)
 local m_collapser=Cs((nonwhitespace^1+whitespace^1/" ")^0)
+local e_collapser=Cs((whitespace^1*endofstring/""+nonwhitespace^1+whitespace^1/" ")^0)
+local x_collapser=Cs((nonwhitespace^1+whitespace^1/"" )^0)
 local b_stripper=Cs(spacer^0/""*(nonspacer^1+spacer^1/" ")^0)
-local e_stripper=Cs((spacer^1*endofstring/""+nonspacer^1+spacer^1/" ")^0)
 local m_stripper=Cs((nonspacer^1+spacer^1/" ")^0)
+local e_stripper=Cs((spacer^1*endofstring/""+nonspacer^1+spacer^1/" ")^0)
+local x_stripper=Cs((nonspacer^1+spacer^1/"" )^0)
 patterns.stripper=stripper
 patterns.fullstripper=fullstripper
 patterns.collapser=collapser
@@ -554,9 +583,11 @@ patterns.nospacer=nospacer
 patterns.b_collapser=b_collapser
 patterns.m_collapser=m_collapser
 patterns.e_collapser=e_collapser
+patterns.x_collapser=x_collapser
 patterns.b_stripper=b_stripper
 patterns.m_stripper=m_stripper
 patterns.e_stripper=e_stripper
+patterns.x_stripper=x_stripper
 patterns.lowercase=lowercase
 patterns.uppercase=uppercase
 patterns.letter=patterns.lowercase+patterns.uppercase
@@ -613,7 +644,7 @@ patterns.propername=(uppercase+lowercase+underscore)*(uppercase+lowercase+unders
 patterns.somecontent=(anything-newline-space)^1 
 patterns.beginline=#(1-newline)
 patterns.longtostring=Cs(whitespace^0/""*((patterns.quoted+nonwhitespace^1+whitespace^1/""*(endofstring+Cc(" ")))^0))
-function anywhere(pattern) 
+local function anywhere(pattern) 
  return (1-P(pattern))^0*P(pattern)
 end
 lpeg.anywhere=anywhere
@@ -1243,7 +1274,7 @@ if not modules then modules={} end modules ['l-string']={
  license="see context related readme files"
 }
 local string=string
-local sub,gmatch,format,char,byte,rep,lower=string.sub,string.gmatch,string.format,string.char,string.byte,string.rep,string.lower
+local sub,gmatch,format,char,byte,rep,lower,find=string.sub,string.gmatch,string.format,string.char,string.byte,string.rep,string.lower,string.find
 local lpegmatch,patterns=lpeg.match,lpeg.patterns
 local P,S,C,Ct,Cc,Cs=lpeg.P,lpeg.S,lpeg.C,lpeg.Ct,lpeg.Cc,lpeg.Cs
 local unquoted=patterns.squote*C(patterns.nosquote)*patterns.squote+patterns.dquote*C(patterns.nodquote)*patterns.dquote
@@ -1253,10 +1284,18 @@ end
 function string.quoted(str)
  return format("%q",str) 
 end
-function string.count(str,pattern) 
+function string.count(str,pattern)
  local n=0
- for _ in gmatch(str,pattern) do 
-  n=n+1
+ local i=1
+ local l=#pattern
+ while true do
+  i=find(str,pattern,i)
+  if i then
+   n=n+1
+   i=i+l
+  else
+   break
+  end
  end
  return n
 end
@@ -1366,7 +1405,7 @@ if not modules then modules={} end modules ['l-table']={
  copyright="PRAGMA ADE / ConTeXt Development Team",
  license="see context related readme files"
 }
-local type,next,tostring,tonumber,select=type,next,tostring,tonumber,select
+local type,next,tostring,tonumber,select,rawget=type,next,tostring,tonumber,select,rawget
 local table,string=table,string
 local concat,sort=table.concat,table.sort
 local format,lower,dump=string.format,string.lower,string.dump
@@ -1700,13 +1739,13 @@ function table.fromhash(t)
  end
  return hsh
 end
-local noquotes,hexify,handle,compact,inline,functions,metacheck
+local noquotes,hexify,handle,compact,inline,functions,metacheck,accurate
 local reserved=table.tohash { 
  'and','break','do','else','elseif','end','false','for','function','if',
  'in','local','nil','not','or','repeat','return','then','true','until','while',
- 'NaN','goto',
+ 'NaN','goto','const',
 }
-local function is_simple_table(t,hexify) 
+local function is_simple_table(t,hexify,accurate) 
  local nt=#t
  if nt>0 then
   local n=0
@@ -1725,6 +1764,8 @@ local function is_simple_table(t,hexify)
     if tv=="number" then
      if hexify then
       tt[i]=format("0x%X",v)
+     elseif accurate then
+      tt[i]=format("%q",v)
      else
       tt[i]=v 
      end
@@ -1745,6 +1786,8 @@ local function is_simple_table(t,hexify)
     if tv=="number" then
      if hexify then
       tt[i+1]=format("0x%X",v)
+     elseif accurate then
+      tt[i+1]=format("%q",v)
      else
       tt[i+1]=v 
      end
@@ -1816,6 +1859,8 @@ local function do_serialize(root,name,depth,level,indexed)
     if tv=="number" then
      if hexify then
       handle(format("%s 0x%X,",depth,v))
+     elseif accurate then
+      handle(format("%s %q,",depth,v))
      else
       handle(format("%s %s,",depth,v)) 
      end
@@ -1825,7 +1870,7 @@ local function do_serialize(root,name,depth,level,indexed)
      if next(v)==nil then
       handle(format("%s {},",depth))
      elseif inline then 
-      local st=is_simple_table(v,hexify)
+      local st=is_simple_table(v,hexify,accurate)
       if st then
        handle(format("%s { %s },",depth,concat(st,", ")))
       else
@@ -1853,12 +1898,16 @@ local function do_serialize(root,name,depth,level,indexed)
     if tk=="number" then
      if hexify then
       handle(format("%s [0x%X]=0x%X,",depth,k,v))
+     elseif accurate then
+      handle(format("%s [%s]=%q,",depth,k,v))
      else
       handle(format("%s [%s]=%s,",depth,k,v)) 
      end
     elseif tk=="boolean" then
      if hexify then
       handle(format("%s [%s]=0x%X,",depth,k and "true" or "false",v))
+     elseif accurate then
+      handle(format("%s [%s]=%q,",depth,k and "true" or "false",v))
      else
       handle(format("%s [%s]=%s,",depth,k and "true" or "false",v)) 
      end
@@ -1866,12 +1915,16 @@ local function do_serialize(root,name,depth,level,indexed)
     elseif noquotes and not reserved[k] and lpegmatch(propername,k) then
      if hexify then
       handle(format("%s %s=0x%X,",depth,k,v))
+     elseif accurate then
+      handle(format("%s %s=%q,",depth,k,v))
      else
       handle(format("%s %s=%s,",depth,k,v)) 
      end
     else
      if hexify then
       handle(format("%s [%q]=0x%X,",depth,k,v))
+     elseif accurate then
+      handle(format("%s [%q]=%q,",depth,k,v))
      else
       handle(format("%s [%q]=%s,",depth,k,v)) 
      end
@@ -1880,6 +1933,8 @@ local function do_serialize(root,name,depth,level,indexed)
     if tk=="number" then
      if hexify then
       handle(format("%s [0x%X]=%q,",depth,k,v))
+     elseif accurate then
+      handle(format("%s [%q]=%q,",depth,k,v))
      else
       handle(format("%s [%s]=%q,",depth,k,v))
      end
@@ -1896,6 +1951,8 @@ local function do_serialize(root,name,depth,level,indexed)
      if tk=="number" then
       if hexify then
        handle(format("%s [0x%X]={},",depth,k))
+      elseif accurate then
+       handle(format("%s [%q]={},",depth,k))
       else
        handle(format("%s [%s]={},",depth,k))
       end
@@ -1908,11 +1965,13 @@ local function do_serialize(root,name,depth,level,indexed)
       handle(format("%s [%q]={},",depth,k))
      end
     elseif inline then
-     local st=is_simple_table(v,hexify)
+     local st=is_simple_table(v,hexify,accurate)
      if st then
       if tk=="number" then
        if hexify then
         handle(format("%s [0x%X]={ %s },",depth,k,concat(st,", ")))
+       elseif accurate then
+        handle(format("%s [%q]={ %s },",depth,k,concat(st,", ")))
        else
         handle(format("%s [%s]={ %s },",depth,k,concat(st,", ")))
        end
@@ -1934,6 +1993,8 @@ local function do_serialize(root,name,depth,level,indexed)
     if tk=="number" then
      if hexify then
       handle(format("%s [0x%X]=%s,",depth,k,v and "true" or "false"))
+     elseif accurate then
+      handle(format("%s [%q]=%s,",depth,k,v and "true" or "false"))
      else
       handle(format("%s [%s]=%s,",depth,k,v and "true" or "false"))
      end
@@ -1953,6 +2014,8 @@ local function do_serialize(root,name,depth,level,indexed)
       if tk=="number" then
        if hexify then
         handle(format("%s [0x%X]=load(%q),",depth,k,f))
+       elseif accurate then
+        handle(format("%s [%q]=load(%q),",depth,k,f))
        else
         handle(format("%s [%s]=load(%q),",depth,k,f))
        end
@@ -1970,6 +2033,8 @@ local function do_serialize(root,name,depth,level,indexed)
     if tk=="number" then
      if hexify then
       handle(format("%s [0x%X]=%q,",depth,k,tostring(v)))
+     elseif accurate then
+      handle(format("%s [%q]=%q,",depth,k,tostring(v)))
      else
       handle(format("%s [%s]=%q,",depth,k,tostring(v)))
      end
@@ -1993,6 +2058,7 @@ local function serialize(_handle,root,name,specification)
  if type(specification)=="table" then
   noquotes=specification.noquotes
   hexify=specification.hexify
+  accurate=specification.accurate
   handle=_handle or specification.handle or print
   functions=specification.functions
   compact=specification.compact
@@ -2548,13 +2614,13 @@ do -- begin closure to overcome local limits and interference
 
 if not modules then modules={} end modules ['l-number']={
  version=1.001,
- comment="companion to luat-lib.mkiv",
+ comment="companion to luat-lib.mkxl",
  author="Hans Hagen, PRAGMA-ADE, Hasselt NL",
  copyright="PRAGMA ADE / ConTeXt Development Team",
  license="see context related readme files"
 }
 local tostring,tonumber=tostring,tonumber
-local format,floor,match,rep=string.format,math.floor,string.match,string.rep
+local format,match,rep=string.format,string.match,string.rep
 local concat,insert=table.concat,table.insert
 local lpegmatch=lpeg.match
 local floor=math.floor
@@ -2679,8 +2745,14 @@ if not math.ceiling then
  math.ceiling=math.ceil
 end
 if not math.round then
- local floor=math.floor
- function math.round(x) return floor(x+0.5) end
+ if xmath then
+  math.round=xmath.round
+ else
+  local floor=math.floor
+  function math.round(x)
+   return x<0 and -floor(-x+0.5) or floor(x+0.5)
+  end
+ end
 end
 if not math.div then
  local floor=math.floor
@@ -2750,7 +2822,7 @@ if not math.tointeger then
 end
 if not math.ult then
  local floor=math.floor
- function math.tointeger(m,n)
+ function math.ult(m,n)
   return floor(m)<floor(n) 
  end
 end
@@ -2771,7 +2843,7 @@ local open,flush,write,read=io.open,io.flush,io.write,io.read
 local byte,find,gsub,format=string.byte,string.find,string.gsub,string.format
 local concat=table.concat
 local type=type
-if string.find(os.getenv("PATH"),";",1,true) then
+if string.find(os.getenv("PATH") or "",";",1,true) then
  io.fileseparator,io.pathseparator="\\",";"
 else
  io.fileseparator,io.pathseparator="/",":"
@@ -2824,9 +2896,12 @@ function io.copydata(source,target,action)
   flush()
  end
 end
-function io.savedata(filename,data,joiner)
- local f=open(filename,"wb")
+function io.savedata(filename,data,joiner,append)
+ local f=open(filename,append and "ab" or "wb")
  if f then
+  if append and joiner and f:seek("end")>0 then
+   f:write(joiner)
+  end
   if type(data)=="table" then
    f:write(concat(data,joiner or ""))
   elseif type(data)=="function" then
@@ -3114,11 +3189,11 @@ if not modules then modules={} end modules ['l-os']={
  license="see context related readme files"
 }
 local os=os
-local date,time=os.date,os.time
+local date,time,difftime=os.date,os.time,os.difftime
 local find,format,gsub,upper,gmatch=string.find,string.format,string.gsub,string.upper,string.gmatch
 local concat=table.concat
-local random,ceil,randomseed=math.random,math.ceil,math.randomseed
-local rawget,rawset,type,getmetatable,setmetatable,tonumber,tostring=rawget,rawset,type,getmetatable,setmetatable,tonumber,tostring
+local random,ceil,randomseed,modf=math.random,math.ceil,math.randomseed,math.modf
+local type,setmetatable,tonumber,tostring=type,setmetatable,tonumber,tostring
 do
  local selfdir=os.selfdir
  if selfdir=="" then
@@ -3215,7 +3290,7 @@ if not os.__getenv__ then
    osenv[K]=v
   end
   function os.getenv(k)
-   local K=upper(k)
+   local K=upper(k) 
    local v=osenv[K] or osgetenv(K) or osgetenv(k)
    if v=="" then
     return nil
@@ -3233,22 +3308,6 @@ if not os.__getenv__ then
   setmetatable(os.env,{ __index=__index,__newindex=__newindex } )
  end
 end
-local execute=os.execute
-local iopopen=io.popen
-local function resultof(command)
- local handle=iopopen(command,"r") 
- if handle then
-  local result=handle:read("*all") or ""
-  handle:close()
-  return result
- else
-  return ""
- end
-end
-os.resultof=resultof
-function os.pipeto(command)
- return iopopen(command,"w") 
-end
 if not io.fileseparator then
  if find(os.getenv("PATH"),";",1,true) then
   io.fileseparator,io.pathseparator,os.type="\\",";",os.type or "windows"
@@ -3263,226 +3322,231 @@ if os.type=="windows" then
 else
  os.libsuffix,os.binsuffix,os.binsuffixes='so','',{ '' }
 end
-local launchers={
- windows="start %s",
- macosx="open %s",
- unix="xdg-open %s &> /dev/null &",
-}
-function os.launch(str)
- local command=format(launchers[os.name] or launchers.unix,str)
- execute(command)
-end
-local gettimeofday=os.gettimeofday or os.clock
-os.gettimeofday=gettimeofday
-local startuptime=gettimeofday()
-function os.runtime()
- return gettimeofday()-startuptime
-end
-local resolvers=os.resolvers or {}
-os.resolvers=resolvers
-setmetatable(os,{ __index=function(t,k)
- local r=resolvers[k]
- return r and r(t,k) or nil 
-end })
-local name,platform=os.name or "linux",os.getenv("MTX_PLATFORM") or ""
-if platform~="" then
- os.platform=platform
-elseif os.type=="windows" then
- function resolvers.platform(t,k)
-  local architecture=os.getenv("PROCESSOR_ARCHITECTURE") or ""
-  local platform=""
-  if find(architecture,"AMD64",1,true) then
-   platform="win64"
+do
+ local execute=os.execute
+ local iopopen=io.popen
+ local ostype=os.type
+ local function resultof(command)
+  local handle=iopopen(command,ostype=="windows" and "rb" or "r")
+  if handle then
+   local result=handle:read("*all") or ""
+   handle:close()
+   return result
   else
-   platform="mswin"
+   return ""
   end
-  os.setenv("MTX_PLATFORM",platform)
-  os.platform=platform
-  return platform
  end
-elseif name=="linux" then
- function resolvers.platform(t,k)
-  local architecture=os.getenv("HOSTTYPE") or resultof("uname -m") or ""
-  local platform=os.getenv("MTX_PLATFORM") or ""
+ os.resultof=resultof
+ function os.pipeto(command)
+  return iopopen(command,"w") 
+ end
+ local launchers={
+  windows="start %s",
+  macosx="open %s",
+  unix="xdg-open %s &> /dev/null &",
+ }
+ function os.launch(str)
+  local command=format(launchers[os.name] or launchers.unix,str)
+  execute(command)
+ end
+end
+do
+ local gettimeofday=os.gettimeofday or os.clock
+ os.gettimeofday=gettimeofday
+ local startuptime=gettimeofday()
+ function os.runtime()
+  return gettimeofday()-startuptime
+ end
+end
+do
+ local name=os.name or "linux"
+ local platform=os.getenv("MTX_PLATFORM") or ""
+ local architecture=os.uname and os.uname().machine 
+ local bits=os.getenv("MTX_BITS") or find(platform,"64") and 64 or 32
+ if platform~="" then
+ elseif os.type=="windows" then
+  architecture=string.lower(architecture or os.getenv("PROCESSOR_ARCHITECTURE") or "")
+  if architecture=="x86_64" then
+   bits,platform=64,"win64"
+  elseif find(architecture,"amd64") then
+   bits,platform=64,"win64"
+  elseif find(architecture,"arm64") then
+   bits,platform=64,"windows-arm64"
+  elseif find(architecture,"arm32") then
+   bits,platform=32,"windows-arm32"
+  else
+   bits,platform=32,"mswin"
+  end
+ elseif name=="linux" then
+  architecture=architecture or os.getenv("HOSTTYPE") or resultof("uname -m") or ""
   local musl=find(os.selfdir or "","linuxmusl")
-  if platform~="" then
-  elseif find(architecture,"x86_64",1,true) then
-   platform=musl and "linuxmusl" or "linux-64"
-  elseif find(architecture,"ppc",1,true) then
-   platform="linux-ppc"
+  if find(architecture,"x86_64") then
+   bits,platform=64,musl and "linuxmusl" or "linux-64"
+  elseif find(architecture,"ppc") then
+   bits,platform=32,"linux-ppc" 
   else
-   platform=musl and "linuxmusl" or "linux"
+   bits,platform=32,musl and "linuxmusl" or "linux"
   end
-  os.setenv("MTX_PLATFORM",platform)
-  os.platform=platform
-  return platform
- end
-elseif name=="macosx" then
- function resolvers.platform(t,k)
-  local architecture=resultof("echo $HOSTTYPE") or ""
-  local platform=""
+ elseif name=="macosx" then
+  architecture=architecture or resultof("echo $HOSTTYPE") or ""
   if architecture=="" then
-   platform="osx-intel"
-  elseif find(architecture,"i386",1,true) then
-   platform="osx-intel"
-  elseif find(architecture,"x86_64",1,true) then
-   platform="osx-64"
+   bits,platform=64,"osx-intel"
+  elseif find(architecture,"i386") then
+   bits,platform=64,"osx-intel"
+  elseif find(architecture,"x86_64") then
+   bits,platform=64,"osx-64"
+  elseif find(architecture,"arm64") then
+   bits,platform=64,"osx-arm"
   else
-   platform="osx-ppc"
+   bits,platform=32,"osx-ppc"
   end
-  os.setenv("MTX_PLATFORM",platform)
-  os.platform=platform
-  return platform
- end
-elseif name=="sunos" then
- function resolvers.platform(t,k)
-  local architecture=resultof("uname -m") or ""
-  local platform=""
-  if find(architecture,"sparc",1,true) then
-   platform="solaris-sparc"
+ elseif name=="sunos" then
+  architecture=architecture or resultof("uname -m") or ""
+  if find(architecture,"sparc") then
+   bits,platform=32,"solaris-sparc"
   else 
-   platform="solaris-intel"
+   bits,platform=32,"solaris-intel"
   end
-  os.setenv("MTX_PLATFORM",platform)
-  os.platform=platform
-  return platform
- end
-elseif name=="freebsd" then
- function resolvers.platform(t,k)
-  local architecture=resultof("uname -m") or ""
-  local platform=""
-  if find(architecture,"amd64",1,true) then
-   platform="freebsd-amd64"
+ elseif name=="freebsd" then
+  architecture=architecture or os.getenv("MACHTYPE") or resultof("uname -m") or ""
+  if find(architecture,"amd64") or find(architecture,"AMD64") then
+   bits,platform=64,"freebsd-amd64"
   else
-   platform="freebsd"
+   bits,platform=32,"freebsd"
   end
-  os.setenv("MTX_PLATFORM",platform)
-  os.platform=platform
-  return platform
- end
-elseif name=="kfreebsd" then
- function resolvers.platform(t,k)
-  local architecture=os.getenv("HOSTTYPE") or resultof("uname -m") or ""
-  local platform=""
-  if find(architecture,"x86_64",1,true) then
-   platform="kfreebsd-amd64"
+ elseif name=="kfreebsd" then
+  architecture=architecture or os.getenv("HOSTTYPE") or resultof("uname -m") or ""
+  if architecture=="x86_64" then
+   bits,platform=64,"kfreebsd-amd64"
   else
-   platform="kfreebsd-i386"
+   bits,platform=32,"kfreebsd-i386"
   end
-  os.setenv("MTX_PLATFORM",platform)
-  os.platform=platform
-  return platform
+ else
+  architecture=architecture or resultof("uname -m") or ""
+  if find(architecture,"aarch64") then
+   bits,platform="linux-aarch64"
+  elseif find(architecture,"armv7l") then
+   bits,platform=32,"linux-armhf"
+  elseif find(architecture,"mips64") or find(architecture,"mips64el") then
+   bits,platform=64,"linux-mipsel"
+  elseif find(architecture,"mipsel") or find(architecture,"mips") then
+   bits,platform=32,"linux-mipsel"
+  else
+   bits,platform=64,"linux-64" 
+  end
  end
-else
- function resolvers.platform(t,k)
-  local platform="linux"
-  os.setenv("MTX_PLATFORM",platform)
-  os.platform=platform
-  return platform
- end
-end
-os.newline=name=="windows" and "\013\010" or "\010" 
-function resolvers.bits(t,k)
- local bits=find(os.platform,"64",1,true) and 64 or 32
+ os.setenv("MTX_PLATFORM",platform)
+ os.setenv("MTX_BITS",bits)
+ os.platform=platform
  os.bits=bits
- return bits
+ os.newline=name=="windows" and "\013\010" or "\010" 
 end
-local t={ 8,9,"a","b" }
-function os.uuid()
- return format("%04x%04x-4%03x-%s%03x-%04x-%04x%04x%04x",
-  random(0xFFFF),random(0xFFFF),
-  random(0x0FFF),
-  t[ceil(random(4))] or 8,random(0x0FFF),
-  random(0xFFFF),
-  random(0xFFFF),random(0xFFFF),random(0xFFFF)
- )
+do
+ local t={ 8,9,"a","b" }
+ function os.uuid()
+  return format("%04x%04x-4%03x-%s%03x-%04x-%04x%04x%04x",
+   random(0xFFFF),random(0xFFFF),
+   random(0x0FFF),
+   t[ceil(random(4))] or 8,random(0x0FFF),
+   random(0xFFFF),
+   random(0xFFFF),random(0xFFFF),random(0xFFFF)
+  )
+ end
 end
-local d
-function os.timezone(delta)
- d=d or tonumber(tonumber(date("%H")-date("!%H")))
- if delta then
-  if d>0 then
-   return format("+%02i:00",d)
-  else
-   return format("-%02i:00",-d)
+do
+ local hour,min
+ function os.timezone(difference)
+  if not hour then
+   local current=time()
+   local utcdate=date("!*t",current)
+   local localdate=date("*t",current)
+   localdate.isdst=false
+   local timediff=difftime(time(localdate),time(utcdate))
+   hour,min=modf(timediff/3600)
+   min=min*60
   end
- else
-  return 1
+  if difference then
+   return hour,min
+  else
+   return format("%+03d:%02d",hour,min) 
+  end
+ end
+ local timeformat=format("%%s%s",os.timezone())
+ local dateformat="%Y-%m-%d %H:%M:%S"
+ local lasttime=nil
+ local lastdate=nil
+ function os.fulltime(t,default)
+  t=t and tonumber(t) or 0
+  if t>0 then
+  elseif default then
+   return default
+  else
+   t=time()
+  end
+  if t~=lasttime then
+   lasttime=t
+   lastdate=format(timeformat,date(dateformat))
+  end
+  return lastdate
+ end
+ local dateformat="%Y-%m-%d %H:%M:%S"
+ local lasttime=nil
+ local lastdate=nil
+ function os.localtime(t,default)
+  t=t and tonumber(t) or 0
+  if t>0 then
+  elseif default then
+   return default
+  else
+   t=time()
+  end
+  if t~=lasttime then
+   lasttime=t
+   lastdate=date(dateformat,t)
+  end
+  return lastdate
+ end
+ function os.converttime(t,default)
+  local t=tonumber(t)
+  if t and t>0 then
+   return date(dateformat,t)
+  else
+   return default or "-"
+  end
+ end
+ function os.today()
+  return date("!*t")
+ end
+ function os.now()
+  return date("!%Y-%m-%d %H:%M:%S")
  end
 end
-local timeformat=format("%%s%s",os.timezone(true))
-local dateformat="!%Y-%m-%d %H:%M:%S"
-local lasttime=nil
-local lastdate=nil
-function os.fulltime(t,default)
- t=t and tonumber(t) or 0
- if t>0 then
- elseif default then
-  return default
- else
-  t=time()
- end
- if t~=lasttime then
-  lasttime=t
-  lastdate=format(timeformat,date(dateformat))
- end
- return lastdate
-end
-local dateformat="%Y-%m-%d %H:%M:%S"
-local lasttime=nil
-local lastdate=nil
-function os.localtime(t,default)
- t=t and tonumber(t) or 0
- if t>0 then
- elseif default then
-  return default
- else
-  t=time()
- end
- if t~=lasttime then
-  lasttime=t
-  lastdate=date(dateformat,t)
- end
- return lastdate
-end
-function os.converttime(t,default)
- local t=tonumber(t)
- if t and t>0 then
-  return date(dateformat,t)
- else
-  return default or "-"
- end
-end
-local memory={}
-local function which(filename)
- local fullname=memory[filename]
- if fullname==nil then
-  local suffix=file.suffix(filename)
-  local suffixes=suffix=="" and os.binsuffixes or { suffix }
-  for directory in gmatch(os.getenv("PATH"),"[^"..io.pathseparator.."]+") do
-   local df=file.join(directory,filename)
-   for i=1,#suffixes do
-    local dfs=file.addsuffix(df,suffixes[i])
-    if io.exists(dfs) then
-     fullname=dfs
-     break
+do
+ local cache={}
+ local function which(filename)
+  local fullname=cache[filename]
+  if fullname==nil then
+   local suffix=file.suffix(filename)
+   local suffixes=suffix=="" and os.binsuffixes or { suffix }
+   for directory in gmatch(os.getenv("PATH"),"[^"..io.pathseparator.."]+") do
+    local df=file.join(directory,filename)
+    for i=1,#suffixes do
+     local dfs=file.addsuffix(df,suffixes[i])
+     if io.exists(dfs) then
+      fullname=dfs
+      break
+     end
     end
    end
+   if not fullname then
+    fullname=false
+   end
+   cache[filename]=fullname
   end
-  if not fullname then
-   fullname=false
-  end
-  memory[filename]=fullname
+  return fullname
  end
- return fullname
-end
-os.which=which
-os.where=which
-function os.today()
- return date("!*t") 
-end
-function os.now()
- return date("!%Y-%m-%d %H:%M:%S") 
+ os.which=which
+ os.where=which
 end
 if not os.sleep then
  local socket=socket
@@ -3493,51 +3557,69 @@ if not os.sleep then
   socket.sleep(n)
  end
 end
-local function isleapyear(year)
- return (year%4==0) and (year%100~=0 or year%400==0)
-end
-os.isleapyear=isleapyear
-local days={ 31,28,31,30,31,30,31,31,30,31,30,31 }
-local function nofdays(year,month)
- if not month then
-  return isleapyear(year) and 365 or 364
- else
-  return month==2 and isleapyear(year) and 29 or days[month]
+do
+ local function isleapyear(year)
+  return (year%4==0) and (year%100~=0 or year%400==0)
  end
-end
-os.nofdays=nofdays
-function os.weekday(day,month,year)
- return date("%w",time { year=year,month=month,day=day })+1
-end
-function os.validdate(year,month,day)
- if month<1 then
-  month=1
- elseif month>12 then
-  month=12
- end
- if day<1 then
-  day=1
- else
-  local max=nofdays(year,month)
-  if day>max then
-   day=max
+ os.isleapyear=isleapyear
+ local days={ 31,28,31,30,31,30,31,31,30,31,30,31 }
+ local function nofdays(year,month,day)
+  if not month then
+   return isleapyear(year) and 365 or 364
+  elseif not day then
+   return month==2 and isleapyear(year) and 29 or days[month]
+  else
+   for i=1,month-1 do
+    day=day+days[i]
+   end
+   if month>2 and isleapyear(year) then
+    day=day+1
+   end
+   return day
   end
  end
- return year,month,day
-end
-local osexit=os.exit
-local exitcode=nil
-function os.setexitcode(code)
- exitcode=code
-end
-function os.exit(c)
- if exitcode~=nil then
-  return osexit(exitcode)
+ os.nofdays=nofdays
+ function os.weekday(day,month,year)
+  return date("%w",time { year=year,month=month,day=day })+1
  end
- if c~=nil then
-  return osexit(c)
+ function os.validdate(year,month,day)
+  if month<1 then
+   month=1
+  elseif month>12 then
+   month=12
+  end
+  if day<1 then
+   day=1
+  else
+   local max=nofdays(year,month)
+   if day>max then
+    day=max
+   end
+  end
+  return year,month,day
  end
- return osexit()
+ function os.date(fmt,...)
+  if not fmt then
+   fmt="%Y-%m-%d %H:%M"
+  end
+  return date(fmt,...)
+ end
+end
+do
+ local osexit=os.exit
+ local exitcode=nil
+ function os.setexitcode(code)
+  exitcode=code
+ end
+ function os.exit(c)
+  if exitcode~=nil then
+   return osexit(exitcode)
+  end
+  if c~=nil then
+   return osexit(c)
+  end
+  return osexit()
+ end
 end
 
 end -- closure
@@ -3564,15 +3646,24 @@ local checkedsplit=string.checkedsplit
 local P,R,S,C,Cs,Cp,Cc,Ct=lpeg.P,lpeg.R,lpeg.S,lpeg.C,lpeg.Cs,lpeg.Cp,lpeg.Cc,lpeg.Ct
 local attributes=lfs.attributes
 function lfs.isdir(name)
- return attributes(name,"mode")=="directory"
+ if name then
+  return attributes(name,"mode")=="directory"
+ end
 end
 function lfs.isfile(name)
- local a=attributes(name,"mode")
- return a=="file" or a=="link" or nil
+ if name then
+  local a=attributes(name,"mode")
+  return a=="file" or a=="link" or nil
+ end
 end
 function lfs.isfound(name)
- local a=attributes(name,"mode")
- return (a=="file" or a=="link") and name or nil
+ if name then
+  local a=attributes(name,"mode")
+  return (a=="file" or a=="link") and name or nil
+ end
+end
+function lfs.modification(name)
+ return name and attributes(name,"modification") or nil
 end
 if sandbox then
  sandbox.redefine(lfs.isfile,"lfs.isfile")
@@ -3789,7 +3880,7 @@ function file.join(one,two,three,...)
  if not two then
   return one=="" and one or lpegmatch(reslasher,one)
  end
- if one=="" then
+ if not one or one=="" then
   return lpegmatch(stripper,three and concat({ two,three,... },"/") or two)
  end
  if lpegmatch(isnetwork,one) then
@@ -3939,58 +4030,23 @@ function file.withinbase(path)
  end
  return true
 end
-local symlinkattributes=lfs.symlinkattributes
-function lfs.readlink(name)
- return symlinkattributes(name,"target") or nil
-end
-
-end -- closure
-
-do -- begin closure to overcome local limits and interference
-
-if not modules then modules={} end modules ['l-gzip']={
- version=1.001,
- author="Hans Hagen, PRAGMA-ADE, Hasselt NL",
- copyright="PRAGMA ADE / ConTeXt Development Team",
- license="see context related readme files"
-}
-if not gzip then
- return
-end
-local suffix,suffixes=file.suffix,file.suffixes
-function gzip.load(filename)
- local f=io.open(filename,"rb")
- if not f then
- elseif suffix(filename)=="gz" then
-  f:close()
-  local g=gzip.open(filename,"rb")
-  if g then
-   local str=g:read("*all")
-   g:close()
-   return str
+do
+ local symlinktarget=lfs.symlinktarget  
+ local symlinkattributes=lfs.symlinkattributes 
+ if symlinktarget then
+  function lfs.readlink(name)
+   local target=symlinktarget(name)
+   return name~=target and name or nil
+  end
+ elseif symlinkattributes then
+  function lfs.readlink(name)
+   return symlinkattributes(name,"target") or nil
   end
  else
-  local str=f:read("*all")
-  f:close()
-  return str
+  function lfs.readlink(name)
+   return nil
+  end
  end
-end
-function gzip.save(filename,data)
- if suffix(filename)~="gz" then
-  filename=filename..".gz"
- end
- local f=io.open(filename,"wb")
- if f then
-  local s=zlib.compress(data or "",9,nil,15+16)
-  f:write(s)
-  f:close()
-  return #s
- end
-end
-function gzip.suffix(filename)
- local suffix,extra=suffixes(filename)
- local gzipped=extra=="gz"
- return suffix,gzipped
 end
 
 end -- closure
@@ -4014,6 +4070,8 @@ if not md5 then
 end
 local md5,file=md5,file
 local gsub=string.gsub
+local modification,isfile,touch=lfs.modification,lfs.isfile,lfs.touch
+local loaddata,savedata=io.loaddata,io.savedata
 do
  local patterns=lpeg and lpeg.patterns
  if patterns then
@@ -4029,10 +4087,11 @@ do
   md5.sumHEXA=md5.HEX
  end
 end
+local md5HEX=md5.HEX
 function file.needsupdating(oldname,newname,threshold) 
- local oldtime=lfs.attributes(oldname,"modification")
+ local oldtime=modification(oldname)
  if oldtime then
-  local newtime=lfs.attributes(newname,"modification")
+  local newtime=modification(newname)
   if not newtime then
    return true 
   elseif newtime>=oldtime then
@@ -4048,31 +4107,32 @@ function file.needsupdating(oldname,newname,threshold)
 end
 file.needs_updating=file.needsupdating
 function file.syncmtimes(oldname,newname)
- local oldtime=lfs.attributes(oldname,"modification")
- if oldtime and lfs.isfile(newname) then
-  lfs.touch(newname,oldtime,oldtime)
+ local oldtime=modification(oldname)
+ if oldtime and isfile(newname) then
+  touch(newname,oldtime,oldtime)
  end
 end
-function file.checksum(name)
+local function checksum(name)
  if md5 then
-  local data=io.loaddata(name)
+  local data=loaddata(name)
   if data then
-   return md5.HEX(data)
+   return md5HEX(data)
   end
  end
  return nil
 end
+file.checksum=checksum
 function file.loadchecksum(name)
  if md5 then
-  local data=io.loaddata(name..".md5")
+  local data=loaddata(name..".md5")
   return data and (gsub(data,"%s",""))
  end
  return nil
 end
 function file.savechecksum(name,checksum)
- if not checksum then checksum=file.checksum(name) end
+ if not checksum then checksum=checksum(name) end
  if checksum then
-  io.savedata(name..".md5",checksum)
+  savedata(name..".md5",checksum)
   return checksum
  end
  return nil
@@ -4098,7 +4158,7 @@ dir=dir or {}
 local dir=dir
 local lfs=lfs
 local attributes=lfs.attributes
-local walkdir=lfs.dir
+local scandir=lfs.dir
 local isdir=lfs.isdir  
 local isfile=lfs.isfile 
 local currentdir=lfs.currentdir
@@ -4129,6 +4189,15 @@ else
  lfs.isdir=isdir
  lfs.isfile=isfile
 end
+local isreadable=file.isreadable
+local walkdir=function(p,...)
+ if isreadable(p.."/.") then
+  return scandir(p,...)
+ else
+  return function() end
+ end
+end
+lfs.walkdir=walkdir
 function dir.current()
  return (gsub(currentdir(),"\\","/"))
 end
@@ -4270,15 +4339,15 @@ local separator,pattern
 if onwindows then 
  local slash=S("/\\")/"/"
  pattern={
-  [1]=(Cs(P(".")+slash^1)+Cs(R("az","AZ")*P(":")*slash^0)+Cc("./"))*V(2)*V(3),
-  [2]=Cs(((1-S("*?/\\"))^0*slash)^0),
-  [3]=Cs(P(1)^0)
+  (Cs(P(".")+slash^1)+Cs(R("az","AZ")*P(":")*slash^0)+Cc("./"))*V(2)*V(3),
+  Cs(((1-S("*?/\\"))^0*slash)^0),
+  Cs(P(1)^0)
  }
 else
  pattern={
-  [1]=(C(P(".")+P("/")^1)+Cc("./"))*V(2)*V(3),
-  [2]=C(((1-S("*?/"))^0*P("/"))^0),
-  [3]=C(P(1)^0)
+  (C(P(".")+P("/")^1)+Cc("./"))*V(2)*V(3),
+  C(((1-S("*?/"))^0*P("/"))^0),
+  C(P(1)^0)
  }
 end
 local filter=Cs ((
@@ -4544,6 +4613,23 @@ do
    return str
   end
  end
+ function dir.expandlink(dir,report)
+  local curdir=currentdir()
+  local trace=type(report)=="function"
+  if chdir(dir) then
+   local newdir=currentdir()
+   if newdir~=dir and trace then
+    report("following symlink %a to %a",dir,newdir)
+   end
+   chdir(curdir)
+   return newdir
+  else
+   if trace then
+    report("unable to check path %a",dir)
+   end
+   return dir
+  end
+ end
 end
 file.expandname=dir.expandname 
 local stack={}
@@ -4587,6 +4673,7 @@ do -- begin closure to overcome local limits and interference
 
 if not modules then modules={} end modules ['l-unicode']={
  version=1.001,
+ optimize=true,
  comment="companion to luat-lib.mkiv",
  author="Hans Hagen, PRAGMA-ADE, Hasselt NL",
  copyright="PRAGMA ADE / ConTeXt Development Team",
@@ -5097,49 +5184,52 @@ end
 function utf.utf32_to_utf8_t(t,endian)
  return endian and utf32_to_utf8_be_t(t) or utf32_to_utf8_le_t(t) or t
 end
-local function little(b)
- if b<0x10000 then
-  return char(b%256,rshift(b,8))
- else
-  b=b-0x10000
-  local b1=rshift(b,10)+0xD800
-  local b2=b%1024+0xDC00
-  return char(b1%256,rshift(b1,8),b2%256,rshift(b2,8))
+if bit32 then
+ local rshift=bit32.rshift
+ local function little(b)
+  if b<0x10000 then
+   return char(b%256,rshift(b,8))
+  else
+   b=b-0x10000
+   local b1=rshift(b,10)+0xD800
+   local b2=b%1024+0xDC00
+   return char(b1%256,rshift(b1,8),b2%256,rshift(b2,8))
+  end
  end
-end
-local function big(b)
- if b<0x10000 then
-  return char(rshift(b,8),b%256)
- else
-  b=b-0x10000
-  local b1=rshift(b,10)+0xD800
-  local b2=b%1024+0xDC00
-  return char(rshift(b1,8),b1%256,rshift(b2,8),b2%256)
+ local function big(b)
+  if b<0x10000 then
+   return char(rshift(b,8),b%256)
+  else
+   b=b-0x10000
+   local b1=rshift(b,10)+0xD800
+   local b2=b%1024+0xDC00
+   return char(rshift(b1,8),b1%256,rshift(b2,8),b2%256)
+  end
  end
-end
-local l_remap=Cs((p_utf8byte/little+P(1)/"")^0)
-local b_remap=Cs((p_utf8byte/big+P(1)/"")^0)
-local function utf8_to_utf16_be(str,nobom)
- if nobom then
-  return lpegmatch(b_remap,str)
- else
-  return char(254,255)..lpegmatch(b_remap,str)
+ local l_remap=Cs((p_utf8byte/little+P(1)/"")^0)
+ local b_remap=Cs((p_utf8byte/big+P(1)/"")^0)
+ local function utf8_to_utf16_be(str,nobom)
+  if nobom then
+   return lpegmatch(b_remap,str)
+  else
+   return char(254,255)..lpegmatch(b_remap,str)
+  end
  end
-end
-local function utf8_to_utf16_le(str,nobom)
- if nobom then
-  return lpegmatch(l_remap,str)
- else
-  return char(255,254)..lpegmatch(l_remap,str)
+ local function utf8_to_utf16_le(str,nobom)
+  if nobom then
+   return lpegmatch(l_remap,str)
+  else
+   return char(255,254)..lpegmatch(l_remap,str)
+  end
  end
-end
-utf.utf8_to_utf16_be=utf8_to_utf16_be
-utf.utf8_to_utf16_le=utf8_to_utf16_le
-function utf.utf8_to_utf16(str,littleendian,nobom)
- if littleendian then
-  return utf8_to_utf16_le(str,nobom)
- else
-  return utf8_to_utf16_be(str,nobom)
+ utf.utf8_to_utf16_be=utf8_to_utf16_be
+ utf.utf8_to_utf16_le=utf8_to_utf16_le
+ function utf.utf8_to_utf16(str,littleendian,nobom)
+  if littleendian then
+   return utf8_to_utf16_le(str,nobom)
+  else
+   return utf8_to_utf16_be(str,nobom)
+  end
  end
 end
 local pattern=Cs (

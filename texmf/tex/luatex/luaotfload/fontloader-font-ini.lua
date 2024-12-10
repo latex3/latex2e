@@ -6,9 +6,7 @@ if not modules then modules = { } end modules ['font-ini'] = {
     license   = "see context related readme files"
 }
 
---[[ldx--
-<p>Not much is happening here.</p>
---ldx]]--
+-- Not much is happening here.
 
 local allocate    = utilities.storage.allocate
 local sortedhash  = table.sortedhash
@@ -52,3 +50,7 @@ fonts.privateoffsets = {
     mathbase      = 0xFF000, -- used for hidden (virtual math)
     keepnames     = false,   -- when set to true names are always kept (not for context)
 }
+
+if node and not tex.getfontoffamily then
+    tex.getfontoffamily = node.family_font -- we moved this
+end

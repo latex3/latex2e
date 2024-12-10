@@ -1,7 +1,8 @@
 % \iffalse meta-comment
 %
-%% File: ltpara.dtx (C) Copyright 2020-2021
-%       Frank Mittelbach, LaTeX Team
+%% File: ltpara.dtx
+%% Copyright (C) 2020-2024
+%% Frank Mittelbach, The LaTeX Project
 %
 % It may be distributed and/or modified under the conditions of the
 % LaTeX Project Public License (LPPL), either version 1.3c of this
@@ -13,21 +14,14 @@
 %
 %%% From File: ltpara.dtx
 %
-%    \begin{macrocode}
-\def\ltparaversion{v1.0k}
-\def\ltparadate{2021/11/11}
-%    \end{macrocode}
 %<*driver>
+% \fi
+\ProvidesFile{ltpara.dtx}
+             [2024/06/29 v1.0n LaTeX Kernel (paragraph hooks)]
+% \iffalse
+%
 \documentclass{l3doc}
-
-%\usepackage{ltpara}
-
-% Fixing footnotes in  functions and variables: this should be in l3doc!
-
-\newcommand\fixfootnote[2]{\footnotemark
-  \AddToHookNext{env/#1/after}{\footnotetext{#2}}}
-\AddToHook{env/function/begin}{\def\footnote{\fixfootnote{function}}}
-\AddToHook{env/variable/begin}{\def\footnote{\fixfootnote{variable}}}
+\GetFileInfo{ltpara.dtx}
 
 \EnableCrossrefs
 \CodelineIndex
@@ -44,7 +38,7 @@
 %
 %
 % \title{The \texttt{ltpara.dtx} code\thanks{This file has version
-%    \ltparaversion\ dated \ltparadate, \copyright\ \LaTeX\
+%    \fileversion\ dated \filedate, \copyright\ \LaTeX\
 %    Project.}}
 % \author{Frank Mittelbach}
 %
@@ -484,9 +478,9 @@
 %
 %    To avoid issues a paragraph started by them should always be
 %    ended by \cs{RawParEnd}\footnote{Technical note for those who
-%    know their \textit{\TeX book\/}: the \cs{RawParEnd} comand
+%    know their \textit{\TeX book\/}: the \cs{RawParEnd} command
 %    invokes the original \TeX{} engine definition of \cs{par} that
-%    (soley) triggers the paragraph builder in \TeX{} when found
+%    (solely) triggers the paragraph builder in \TeX{} when found
 %    inside unrestricted horizontal mode and does nothing in other
 %    processing modes.}
 %    and not by \cs{par} (or a blank line), because the latter will execute
@@ -640,7 +634,7 @@
 % \glue(\parskip) 0.0 plus 1.0
 % \glue(\baselineskip) 5.16669
 %\end{verbatim}
-%   but now there is anothe \cs{parskip} glue (that is always 0pt):
+%   but now there is another \cs{parskip} glue (that is always 0pt):
 %\begin{verbatim}
 % \glue(\parskip) 0.0 plus 1.0
 % \glue(\parskip) 0.0
@@ -729,6 +723,8 @@
 %    for error recovery and so altering \cs{tex_everypar:D}  all the
 %    time should be a tiny bit faster.
 %    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2023/06/01}
+%<latexrelease>       {\g_@@_standard_everypar_tl}{minipage~ fix}
 \tl_new:N \g_@@_standard_everypar_tl
 %    \end{macrocode}
 %    Here is now its definition:
@@ -769,7 +765,28 @@
 %    \begin{macrocode}
   \group_begin:
     \tex_everypar:D {}
-    \skip_zero:N \tex_parskip:D
+%    \end{macrocode}
+%    There has been a long-standing problem with \LaTeX's minipages in
+%    that invisible material at the beginning of a minipage (such as a
+%    \cs{color} setting) would result in \cs{parskip} being added in
+%    front of the first paragraph---something that is not done by
+%    \TeX{} if a vertical list is completely empty. As this is
+%    happening on a very low-level in the engine it wasn't really
+%    possible to find out if this \cs{parskip} was added or if a space
+%    we see in front of the current point is legitimate. However, with
+%    the new paragraph handling we are in a better position: while we
+%    still don't know if there is such a space or not, we do know
+%    if we have just created an empty paragraph. Thus, if we now set
+%    \cs{parskip} to \texttt{-}\cs{parskip} the two will cancel each other
+%    if present and if the first was ignored because the vertical list
+%    was empty, then the second will be ignored too because it is
+%    still empty. Of course, we don't want to cancel always but only
+%    at the start of a minipage and that is signaled with the
+%    \texttt{@minipage} switch.
+% \changes{v1.0l}{2023/01/30}{Backout \cs{parskip} at top of minipage (gh/989)}
+%    \begin{macrocode}
+    \skip_set:Nn \tex_parskip:D
+         { \if@minipage -\tex_parskip:D \else: \c_zero_skip \fi: }
     \tex_noindent:D
   \group_end:
 %    \end{macrocode}
@@ -787,9 +804,11 @@
   \hook_use:n {para/begin}
 %    \end{macrocode}
 %    If we aren't in horizontal mode any longer the hooks above misbehaved.
+% \changes{v1.0m}{2023/11/16}{Correct error message: hook
+%          left horizontal not vertical mode (gh/1182)}
 %    \begin{macrocode}
   \if_mode_horizontal: \else:
-    \msg_error:nnnn { hooks }{ para-mode }{begin}{vertical} \fi:
+    \msg_error:nnnn { hooks }{ para-mode }{begin}{horizontal} \fi:
 %    \end{macrocode}
 %    Finally we reinsert the indentation box (unless suppressed) and
 %    then call \cs{everypar} the way legacy \LaTeX\ code expects it.
@@ -800,6 +819,55 @@
   \@@_handle_indent:
 % \the \everypar           % <--- done differently below
 }
+%    \end{macrocode}
+% \changes{v1.0n}{2024/06/23}
+%         {Append \cs{everypar} toks to \cs{g_@@_standard_everypar_tl},
+%          rollback 2023/06/01 (gh/1386)}
+%    \begin{macrocode}
+%<latexrelease>\cs_set:Npn \@@_tmp:w #1#2#3#4#5 { }
+%<latexrelease>\tl_gput_right:Nx \g_@@_standard_everypar_tl {
+%<latexrelease>  \exp_not:N \the
+%<latexrelease>  \exp_not:N \toks
+%<latexrelease>  \exp_after:wN \@@_tmp:w \token_to_meaning:N \everypar
+%<latexrelease>  \c_space_tl
+%<latexrelease>}
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{2021/06/01}
+%<latexrelease>       {\g_@@_standard_everypar_tl}{minipage~ fix}
+%<latexrelease>
+%<latexrelease>\tl_gset:Nn \g_@@_standard_everypar_tl {
+%<latexrelease>  \box_gset_to_last:N \g_para_indent_box
+%<latexrelease>  \group_begin:
+%<latexrelease>    \tex_par:D
+%<latexrelease>  \group_end:
+%<latexrelease>  \tex_everypar:D { \msg_error:nnnn { hooks }{ para-mode }{before}{vertical} }
+%<latexrelease>  \@kernel@before@para@before
+%<latexrelease>  \hook_use:n {para/before}
+%<latexrelease>  \group_begin:
+%<latexrelease>    \tex_everypar:D {}
+%<latexrelease>    \skip_zero:N \tex_parskip:D
+%<latexrelease>    \tex_noindent:D
+%<latexrelease>  \group_end:
+%<latexrelease>  \tex_everypar:D{\g_@@_standard_everypar_tl}
+%<latexrelease>  \@kernel@before@para@begin
+%<latexrelease>  \hook_use:n {para/begin}
+%<latexrelease>  \if_mode_horizontal: \else:
+%<latexrelease>    \msg_error:nnnn { hooks }{ para-mode }{begin}{horizontal} \fi:
+%<latexrelease>  \@@_handle_indent:
+%<latexrelease>}
+%    \end{macrocode}
+%    We also have to add the \cs{everypar} toks register at the
+%    end. In case of rollback this is already allocated and we have to
+%    find out the correct number (hope this is correctly done)
+%    \begin{macrocode}
+%<latexrelease>\cs_set:Npn \@@_tmp:w #1#2#3#4#5 { }
+%<latexrelease>\tl_gput_right:Nx \g_@@_standard_everypar_tl {
+%<latexrelease>    \exp_not:N \the
+%<latexrelease>    \exp_not:N \toks
+%<latexrelease>    \exp_after:wN \@@_tmp:w \token_to_meaning:N \everypar
+%<latexrelease>    \c_space_tl
+%<latexrelease>}
+%<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -861,10 +929,10 @@
 %    the paragraph text starts.
 %    \begin{macrocode}
 \tl_gput_right:Nx \g_@@_standard_everypar_tl {
-    \exp_not:N \the
-    \exp_not:N \toks
-    \the \allocationnumber
-    \c_space_tl
+  \exp_not:N \the
+  \exp_not:N \toks
+  \the \allocationnumber
+  \c_space_tl
 }
 %    \end{macrocode}
 %  \end{macro}
@@ -1019,7 +1087,7 @@
 %    it should get removed before the hook code gets added so we have
 %    to arrange for this removal.  
 %
-%    As in other simular cases, it maybe best to add here 
+%    As in other similar cases, it may be best to add here 
 %    a \cs{nobreak} in case the hook itself adds glue and thus 
 %    creates a non-explicit and unwanted potential breakpoont.  
 %    On the other hand (as has been argued) the code in the hook 
@@ -1200,7 +1268,7 @@
 %    redo the \cs{everypar} setting from the kernel, otherwise that
 %    gets lost (as it happens before that file is loaded).
 %    \begin{macrocode}
-\everypar{\@nodocument} %% To get an error if text appears before the
+\everypar{\@nodocument} %% To get an error if text appears before the \document
 %    \end{macrocode}
 %
 %

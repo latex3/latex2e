@@ -1,0 +1,417 @@
+\ProvidesExplPackage {luamml-patches-amsmath} {2024-10-30} {0.2.0}
+  {Feel free to add a description here}
+
+\lua_now:n { require'luamml-amsmath' }
+
+% For all of these changes, the redefinitions appear huge.
+% But they are almost identical to the original and only
+% add luamml commands in appropriate places, so they would
+% mostly disappear if there were enough hooks in amsmath.
+
+% aligned and friends
+\cs_set:Npn \start@aligned #1#2 {
+  \RIfM@
+  \else
+    \nonmatherr@ { \begin { \@currenvir } }
+  \fi
+  \savecolumn@ % Assumption: called inside a group
+  \luamml_annotate:en {
+    core = false
+  } {
+    \alignedspace@left
+  }
+  \ams@start@box {#1} \bgroup
+    \maxfields@ #2 \relax
+    \ifnum \maxfields@ > \m@ne
+      \multiply \maxfields@ \tw@
+      \let \math@cr@@@ \math@cr@@@alignedat
+      \alignsep@ \z@skip
+    \else
+      \let \math@cr@@@ \math@cr@@@aligned
+      \alignsep@ \minalignsep
+    \fi
+    \Let@ \chardef \dspbrk@context \@ne
+    \default@tag
+    \spread@equation % no-op if already called
+    \global \column@ \z@
+    \ialign \bgroup
+      & \column@plus
+        \hfil
+        \strut@
+        $
+          \m@th
+          \displaystyle
+          {##}
+          \luamml_save:nNn {} \displaystyle {mtd}
+        $
+        \__luamml_amsmath_add_last_to_row:
+        \tabskip \z@skip
+      & \column@plus
+        $
+          \m@th
+          \displaystyle
+          {
+            {}
+            ##
+          }
+          \luamml_save:nNn {} \displaystyle {mtd}
+        $
+        \__luamml_amsmath_add_last_to_row:
+        \hfil
+        \tabskip\alignsep@
+      \crcr
+      \ams@return@opt@arg
+}
+
+\renewcommand \gathered [1] [c] {
+  \RIfM@
+  \else
+    \nonmatherr@ { \begin {gathered} }
+  \fi
+  \luamml_annotate:en {
+    core = false
+  } {
+    \alignedspace@left
+  }
+  \ams@start@box {#1} \bgroup
+    \Let@
+    \chardef \dspbrk@context \@ne
+    \restore@math@cr
+    \spread@equation
+    \ialign \bgroup
+        \hfil
+        \strut@
+        $
+          \m@th
+          \displaystyle
+          ##
+          \luamml_save:nNn {} \displaystyle {mtd}
+        $
+        \__luamml_amsmath_add_last_to_row:
+        \hfil
+      \crcr
+        \ams@return@opt@arg
+}
+
+\cs_set:Npn \endaligned {
+      \crcr
+      \__luamml_amsmath_save_inner_table:n \@currenvir
+    \egroup
+    \restorecolumn@
+  \egroup
+  \__luamml_amsmath_finalize_inner_table:
+}
+
+% gather
+\cs_set:Npn \gather@ #1 {
+  \ingather@true
+  \let \split \insplit@
+  \let \tag \tag@in@align
+  \let \label \label@in@display
+  \chardef \dspbrk@context \z@
+  \intertext@ \displ@y@ \Let@
+  \let \math@cr@@@ \math@cr@@@gather
+  \gmeasure@ {#1}
+  \global \shifttag@false
+  \tabskip \z@skip
+  \global \row@ \@ne
+  \halign to \displaywidth \bgroup
+      \strut@
+      \setboxz@h {
+        $
+          \m@th
+          \displaystyle
+          {##}
+          \luamml_save:nNn {} \displaystyle {mtd}
+        $
+      }
+      \__luamml_amsmath_add_box_to_row:
+      \calc@shift@gather
+      \set@gather@field
+      \tabskip\@centering
+    &
+      \setboxz@h {
+        \strut@
+        {##}
+      }
+      \dim_compare:nNnF {0pt} = {
+        \box_wd:N \c_zero_int
+      } {
+        \__luamml_amsmath_set_tag:
+      }
+      \place@tag@gather
+      \tabskip \iftagsleft@
+        \gdisplaywidth@
+      \else
+        \z@skip
+      \span \fi
+      \crcr
+      #1
+}
+
+\cs_new_eq:NN \__luamml_amsmath_original_gmeasure:n \gmeasure@
+\cs_set:Npn \gmeasure@ #1 {
+  \exp_last_unbraced:Nno
+    \use_ii_i:nn
+    { \luamml_ignore: }
+    { \__luamml_amsmath_original_gmeasure:n {#1} }
+}
+
+\cs_set:Npn \endgather {
+      \math@cr
+      \black@ \totwidth@
+      \__luamml_amsmath_finalize_table:n {gather}
+  \egroup
+  $$
+  \ignorespacesafterend
+}
+
+% align and friends
+\cs_set:Npn \align@preamble {
+  &
+    \hfil
+    \strut@
+    \setboxz@h {
+      \@lign
+      $
+        \m@th
+        \displaystyle
+        {##}
+        \ifmeasuring@
+          \luamml_ignore:
+        \else
+          \luamml_save:nNn {} \displaystyle {mtd}
+        \fi
+      $
+    }
+    \ifmeasuring@
+      \savefieldlength@
+    \else
+      \__luamml_amsmath_add_box_to_row:
+    \fi
+    \set@field
+    \tabskip\z@skip
+  &
+    \setboxz@h {
+      \@lign
+      $
+      \m@th
+      \displaystyle
+      {
+        {}
+        ##
+      }
+      \ifmeasuring@
+        \luamml_ignore:
+      \else
+        \luamml_save:nNn {} \displaystyle {mtd}
+      \fi
+      $
+    }
+    \ifmeasuring@
+      \savefieldlength@
+    \else
+      \__luamml_amsmath_add_box_to_row:
+    \fi
+    \set@field
+    \hfil
+    \tabskip\alignsep@
+}
+
+\cs_set:Npn \math@cr@@@align {
+  \ifst@rred
+    \nonumber
+  \fi
+  \if@eqnsw
+    \global \tag@true
+  \fi
+  \global \advance \row@ \@ne
+  \add@amps \maxfields@
+  \omit
+  \kern -\alignsep@
+  \iftag@
+    \setboxz@h { 
+      \@lign
+      \strut@
+      { \make@display@tag }
+    }
+    \place@tag
+    \__luamml_amsmath_set_tag:
+  \fi
+  \ifst@rred
+  \else
+    \global \@eqnswtrue
+  \fi
+  \global \lineht@ \z@
+  \cr
+}
+
+\cs_set:Npn \maketag@@@ #1 {
+  \hbox {
+    \m@th
+    \normalfont
+    #1
+    \__luamml_amsmath_save_tag:
+  }
+}
+
+\cs_set:Npn \endalign {
+  \math@cr
+  \black@ \totwidth@
+  \__luamml_amsmath_finalize_table:n {align}
+  \egroup
+  \ifingather@
+    \restorealignstate@
+    \egroup
+    \nonumber
+    \ifnum0=`{\fi\iffalse}\fi
+  \else
+    $$
+  \fi
+  \ignorespacesafterend
+}
+
+% For a more interesting one, let's consider multline:
+\cs_new_eq:NN \__luamml_amsmath_original_multline:n \multline@
+\cs_set:Npn \multline@ #1 {
+  \__luamml_amsmath_original_multline:n {
+    \ifmeasuring@ \else
+      \__luamml_amsmath_set_row_columnalign:n {left}
+    \fi
+    #1
+    \ifmeasuring@ \else
+      \__luamml_amsmath_set_row_columnalign:n {right}
+    \fi
+  }
+}
+
+\cs_new_eq:NN \__luamml_amsmath_original_mmeasure:n \mmeasure@
+\cs_set:Npn \mmeasure@ #1 {
+  \exp_last_unbraced:Nno
+    \use_ii_i:nn
+    { \luamml_ignore: }
+    { \__luamml_amsmath_original_mmeasure:n {#1} }
+}
+
+% Luckily, {multline} uses \endmultline@math in exactly
+% the spot where we have to set the flag.
+% Less luckily, \endmultline@math sometimes get overwritten for the last line.
+% But that isn't a problem since we want special behavior there anyway.
+\cs_set:Npn \endmultline@math {
+  \luamml_save:nNn {} \displaystyle {mtd}
+  $
+  \__luamml_amsmath_add_last_to_row:
+}
+
+\cs_set:Npn \rendmultline@ {
+    \iftag@
+      \luamml_save:nNn {} \displaystyle {mtd}
+      $
+      \__luamml_amsmath_add_last_to_row:
+      \let \endmultline@math \relax
+      \ifshifttag@
+        \hskip \multlinegap
+        \llap {
+          \vtop {
+            \raise@tag
+            \normalbaselines
+            \setbox \@ne \null
+            \dp \@ne \lineht@
+            \box \@ne
+            \hbox {
+              \strut@
+              \make@display@tag
+            }
+          }
+        }
+      \else
+        \hskip \multlinetaggap
+        \make@display@tag
+      \fi
+      \__luamml_amsmath_set_tag:
+    \else
+      \hskip \multlinegap
+    \fi
+    \hfilneg
+    \math@cr
+    \__luamml_amsmath_finalize_table:n {multline}
+  \egroup
+  $$
+}
+
+\cs_set:Npn \lendmultline@ {
+    \hfilneg
+    \hskip\multlinegap
+    \math@cr
+    \__luamml_amsmath_finalize_table:n {multline}
+  \egroup
+  $$
+}
+
+% Finally some slightly different stuff.
+% While {matrix} is covered by {array}, we still have {smallmatrix}:
+\renewenvironment {smallmatrix} {
+  \luamml_annotate:en {
+    core = false
+  } {
+    \null
+    \,
+  }
+  \vcenter \bgroup
+    \Let@
+    \restore@math@cr
+    \default@tag
+    \baselineskip 6 \ex@
+    \lineskip 1.5 \ex@
+    \lineskiplimit \lineskip
+    \ialign \bgroup
+        \hfil
+        $
+        \m@th
+        \scriptstyle
+        ##
+        \luamml_save:nn {} {mtd} % No \scriptsize here since we want to add the mstyle nodes
+        $
+        \__luamml_amsmath_add_last_to_row:
+        \hfil
+      &&
+        \thickspace
+        \hfil
+        $
+        \m@th
+        \scriptstyle
+        ##
+        \luamml_save:nn {} {mtd} % No \scriptsize here since we want to add the mstyle nodes
+        $
+        \__luamml_amsmath_add_last_to_row:
+        \hfil
+      \crcr
+}{%
+      \crcr
+      \__luamml_amsmath_save_smallmatrix:
+    \egroup
+  \egroup
+  \__luamml_amsmath_finalize_inner_table:
+  \luamml_annotate:en {
+    core = false
+  } {
+    \,
+  }
+}
+
+% {cases} is defined by the kernel, but we patch the overwritten version by amsmath.
+\cs_set:Npn \env@cases {
+  \let \@ifnextchar \new@ifnextchar
+  \left \lbrace
+    \def \arraystretch {1.2}
+    \array {@{}l@{\quad \luamml_ignore:}l@{}}
+}
+
+
+\cs_set:Npn \bBigg@ #1 #2 {
+  {
+    \ensuremath {
+      \Uvextensible height~#1 \big@size axis~exact~#2
+    }
+  }
+}

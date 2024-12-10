@@ -1,23 +1,22 @@
 if not modules then modules = { } end modules ['font-one'] = {
     version   = 1.001,
+    optimize  = true,
     comment   = "companion to font-ini.mkiv",
     author    = "Hans Hagen, PRAGMA-ADE, Hasselt NL",
     copyright = "PRAGMA ADE / ConTeXt Development Team",
     license   = "see context related readme files"
 }
 
---[[ldx--
-<p>Some code may look a bit obscure but this has to do with the fact that we also use
-this code for testing and much code evolved in the transition from <l n='tfm'/> to
-<l n='afm'/> to <l n='otf'/>.</p>
-
-<p>The following code still has traces of intermediate font support where we handles
-font encodings. Eventually font encoding went away but we kept some code around in
-other modules.</p>
-
-<p>This version implements a node mode approach so that users can also more easily
-add features.</p>
---ldx]]--
+-- Some code may look a bit obscure but this has to do with the fact that we also
+-- use this code for testing and much code evolved in the transition from TFM to AFM
+-- to OTF.
+--
+-- The following code still has traces of intermediate font support where we handles
+-- font encodings. Eventually font encoding went away but we kept some code around
+-- in other modules.
+--
+-- This version implements a node mode approach so that users can also more easily
+-- add features.
 
 local fonts, logs, trackers, containers, resolvers = fonts, logs, trackers, containers, resolvers
 
@@ -70,15 +69,13 @@ local overloads           = fonts.mappings.overloads
 
 local applyruntimefixes   = fonts.treatments and fonts.treatments.applyfixes
 
---[[ldx--
-<p>We cache files. Caching is taken care of in the loader. We cheat a bit by adding
-ligatures and kern information to the afm derived data. That way we can set them faster
-when defining a font.</p>
-
-<p>We still keep the loading two phased: first we load the data in a traditional
-fashion and later we transform it to sequences. Then we apply some methods also
-used in opentype fonts (like <t>tlig</t>).</p>
---ldx]]--
+-- We cache files. Caching is taken care of in the loader. We cheat a bit by adding
+-- ligatures and kern information to the afm derived data. That way we can set them
+-- faster when defining a font.
+--
+-- We still keep the loading two phased: first we load the data in a traditional
+-- fashion and later we transform it to sequences. Then we apply some methods also
+-- used in opentype fonts (like tlig).
 
 function afm.load(filename)
     filename = resolvers.findfile(filename,'afm') or ""
@@ -311,10 +308,8 @@ local function enhance_fix_names(data)
     end
 end
 
---[[ldx--
-<p>These helpers extend the basic table with extra ligatures, texligatures
-and extra kerns. This saves quite some lookups later.</p>
---ldx]]--
+-- These helpers extend the basic table with extra ligatures, texligatures and extra
+-- kerns. This saves quite some lookups later.
 
 local addthem = function(rawdata,ligatures)
     if ligatures then
@@ -348,17 +343,14 @@ local function enhance_add_ligatures(rawdata)
     addthem(rawdata,afm.helpdata.ligatures)
 end
 
---[[ldx--
-<p>We keep the extra kerns in separate kerning tables so that we can use
-them selectively.</p>
---ldx]]--
-
--- This is rather old code (from the beginning when we had only tfm). If
--- we unify the afm data (now we have names all over the place) then
--- we can use shcodes but there will be many more looping then. But we
--- could get rid of the tables in char-cmp then. Als, in the generic version
--- we don't use the character database. (Ok, we can have a context specific
--- variant).
+-- We keep the extra kerns in separate kerning tables so that we can use them
+-- selectively.
+--
+-- This is rather old code (from the beginning when we had only tfm). If we unify
+-- the afm data (now we have names all over the place) then we can use shcodes but
+-- there will be many more looping then. But we could get rid of the tables in
+-- char-cmp then. Als, in the generic version we don't use the character database.
+-- (Ok, we can have a context specific variant).
 
 local function enhance_add_extra_kerns(rawdata) -- using shcodes is not robust here
     local descriptions = rawdata.descriptions
@@ -439,9 +431,7 @@ local function enhance_add_extra_kerns(rawdata) -- using shcodes is not robust h
     do_it_copy(afm.helpdata.rightkerned)
 end
 
---[[ldx--
-<p>The copying routine looks messy (and is indeed a bit messy).</p>
---ldx]]--
+-- The copying routine looks messy (and is indeed a bit messy).
 
 local function adddimensions(data) -- we need to normalize afm to otf i.e. indexed table instead of name
     if data then
@@ -591,15 +581,18 @@ local function copytotfm(data)
         parameters.descender  = abs(metadata.descender or 0)
         parameters.units      = 1000
         --
-        properties.spacer        = spacer
+        properties.spacer   = spacer
+        properties.format   = fonts.formats[filename] or "type1"
+        properties.filename = filename
+        properties.fontname = fontname
+        properties.fullname = fullname
+        properties.psname   = fullname
+        properties.name     = filename or fullname or fontname
+        properties.private  = properties.private or data.private or privateoffset
+        --
+if not CONTEXTLMTXMODE or CONTEXTLMTXMODE == 0 then
         properties.encodingbytes = 2
-        properties.format        = fonts.formats[filename] or "type1"
-        properties.filename      = filename
-        properties.fontname      = fontname
-        properties.fullname      = fullname
-        properties.psname        = fullname
-        properties.name          = filename or fullname or fontname
-        properties.private       = properties.private or data.private or privateoffset
+end
         --
         if next(characters) then
             return {
@@ -615,11 +608,9 @@ local function copytotfm(data)
     return nil
 end
 
---[[ldx--
-<p>Originally we had features kind of hard coded for <l n='afm'/> files but since I
-expect to support more font formats, I decided to treat this fontformat like any
-other and handle features in a more configurable way.</p>
---ldx]]--
+-- Originally we had features kind of hard coded for AFM files but since I expect to
+-- support more font formats, I decided to treat this fontformat like any other and
+-- handle features in a more configurable way.
 
 function afm.setfeatures(tfmdata,features)
     local okay = constructors.initializefeatures("afm",tfmdata,features,trace_features,report_afm)
@@ -711,18 +702,16 @@ local function afmtotfm(specification)
     end
 end
 
---[[ldx--
-<p>As soon as we could intercept the <l n='tfm'/> reader, I implemented an
-<l n='afm'/> reader. Since traditional <l n='pdftex'/> could use <l n='opentype'/>
-fonts with <l n='afm'/> companions, the following method also could handle
-those cases, but now that we can handle <l n='opentype'/> directly we no longer
-need this features.</p>
---ldx]]--
+-- As soon as we could intercept the TFM reader, I implemented an AFM reader. Since
+-- traditional pdfTeX could use OpenType fonts with AFM companions, the following
+-- method also could handle those cases, but now that we can handle OpenType
+-- directly we no longer need this features.
 
 local function read_from_afm(specification)
     local tfmdata = afmtotfm(specification)
     if tfmdata then
         tfmdata.properties.name = specification.name
+        tfmdata.properties.id   = specification.id
         tfmdata = constructors.scale(tfmdata, specification)
         local allfeatures = tfmdata.shared.features or specification.features.normal
         constructors.applymanipulators("afm",tfmdata,allfeatures,trace_features,report_afm)
@@ -731,9 +720,7 @@ local function read_from_afm(specification)
     return tfmdata
 end
 
---[[ldx--
-<p>We have the usual two modes and related features initializers and processors.</p>
---ldx]]--
+-- We have the usual two modes and related features initializers and processors.
 
 registerafmfeature {
     name         = "mode",

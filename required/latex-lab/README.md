@@ -1,6 +1,6 @@
 # LaTeX laboratory
 
-Release 2022-06-01 pre-release 2
+Release 2025-06-01 pre-release 1
 
 ## Overview
 
@@ -38,5 +38,5 @@ The license is LPPL 1.3c.
 
 This README file is
 
-Copyright (C) 2021-2022
+Copyright (C) 2021-2024
 The LaTeX Project

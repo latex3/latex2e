@@ -21,7 +21,8 @@ local dir = dir
 local lfs = lfs
 
 local attributes = lfs.attributes
-local walkdir    = lfs.dir
+----- walkdir    = lfs.dir
+local scandir    = lfs.dir
 local isdir      = lfs.isdir  -- not robust, will be overloaded anyway
 local isfile     = lfs.isfile -- not robust, will be overloaded anyway
 local currentdir = lfs.currentdir
@@ -68,6 +69,20 @@ else
     lfs.isfile = isfile
 
 end
+
+-- safeguard
+
+local isreadable = file.isreadable
+
+local walkdir = function(p,...)
+    if isreadable(p.."/.") then
+        return scandir(p,...)
+    else
+        return function() end
+    end
+end
+
+lfs.walkdir = walkdir
 
 -- handy
 
@@ -197,7 +212,7 @@ local function collectpattern(path,patt,recurse,result)
         if not find(path,"/$") then
             path = path .. '/'
         end
-        for name in scanner, first do -- cna be optimized
+        for name in scanner, first do -- can be optimized
             if name == "." then
                 -- skip
             elseif name == ".." then
@@ -230,18 +245,18 @@ if onwindows then -- we could sanitize here
 
 --     pattern = Ct {
     pattern = {
-        [1] = (Cs(P(".") + slash^1) + Cs(R("az","AZ") * P(":") * slash^0) + Cc("./")) * V(2) * V(3),
-        [2] = Cs(((1-S("*?/\\"))^0 * slash)^0),
-        [3] = Cs(P(1)^0)
+        (Cs(P(".") + slash^1) + Cs(R("az","AZ") * P(":") * slash^0) + Cc("./")) * V(2) * V(3),
+        Cs(((1-S("*?/\\"))^0 * slash)^0),
+        Cs(P(1)^0)
     }
 
 else -- assume unix
 
 --     pattern = Ct {
     pattern = {
-        [1] = (C(P(".") + P("/")^1) + Cc("./")) * V(2) * V(3),
-        [2] = C(((1-S("*?/"))^0 * P("/"))^0),
-        [3] = C(P(1)^0)
+        (C(P(".") + P("/")^1) + Cc("./")) * V(2) * V(3),
+        C(((1-S("*?/"))^0 * P("/"))^0),
+        C(P(1)^0)
     }
 
 end
@@ -594,6 +609,27 @@ do
             return str
         end
 
+    end
+
+    -- This go there anc check works okay in tricky situation as we encounter
+    -- on osx, where tex installations use rather complex chains of links.
+
+    function dir.expandlink(dir,report)
+        local curdir = currentdir()
+        local trace  = type(report) == "function"
+        if chdir(dir) then
+            local newdir = currentdir()
+            if newdir ~= dir and trace then
+                report("following symlink %a to %a",dir,newdir)
+            end
+            chdir(curdir)
+            return newdir
+        else
+            if trace then
+                report("unable to check path %a",dir)
+            end
+            return dir
+        end
     end
 
 end

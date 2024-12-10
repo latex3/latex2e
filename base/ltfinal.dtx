@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-% Copyright (C) 1993-2022
+% Copyright (C) 1993-2024
 % The LaTeX Project and any individual authors listed elsewhere
 % in this file.
 %
@@ -33,7 +33,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltfinal.dtx}
-             [2022/04/21 v2.2t LaTeX Kernel (Final Settings)]
+             [2024/11/12 v2.3d LaTeX Kernel (Final Settings)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltfinal.dtx}
@@ -275,7 +275,7 @@
 %
 % \begin{macro}{trace_stack_levels}
 %   Now define the Lua function to emulate \cs{tracingstacklevels} and
-%   install it in the \texttt{input_level_string} callback.
+%   install it in the |input_level_string| callback.
 %    \begin{macrocode}
 %</2ekernel>
 %<*2ekernel|latexrelease>
@@ -930,7 +930,7 @@
 %
 %    \begin{macrocode}
 %<*2ekernel>
-%    \begin{macrocode}
+%    \end{macrocode}
 %
 % We temporarily define |\reserved@a| to apply |\reserved@c| to all the
 % numbers in the range of its arguments.
@@ -1062,11 +1062,36 @@
 \fi % End of reset block for 8-bit engines
 %    \end{macrocode}
 %
+% \begin{macro}{\BCPdata}
+% \changes{v2.3a}{2023/04/16}{Command added}
+%   A stub for use by \pkg{babel}, \pkg{polyglossia}, etc.
+%    \begin{macrocode}
+\ExplSyntaxOn
+\newcommand*\BCPdata[1]{
+  \str_case:nn {#1}
+    {
+      { language } { en }
+      { region }   { US }
+      { script }   { Latn }
+      { tag }      { en-US }
+    }
+}
+\ExplSyntaxOff
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Case changing}
+%
 % \begin{macro}{\MakeUppercase}
-% \begin{macro}{\MakeUppercase}
-% \begin{macro}{\@uclclist}
-% \begin{macro}{\@expl@text@lowercase@@n}
-% \begin{macro}{\@expl@text@uppercase@@n}
+% \begin{macro}{\MakeLowercase}
+% \begin{macro}{\MakeTitlecase}
+% \begin{macro}{\NoCaseChange}
+% \begin{macro}{\AddToNoCaseChangeList}
+% \begin{macro}{\CaseSwitch}
+% \begin{macro}{\DeclareCaseChangeEquivalent}
+% \begin{macro}{\DeclareLowercaseMapping}
+% \begin{macro}{\DeclareTitlecaseMapping}
+% \begin{macro}{\DeclareUppercaseMapping}
 % \begin{macro}{\@uclclist}
 %
 %
@@ -1076,45 +1101,156 @@
 %    And whilst we're doing things with uc/lc tables, here are two
 %    commands to upper- and lower-case a string.
 %
-%    \emph{Note} that this implementation is subject to change!  At
-%    the moment we're not providing any way to extend the list of
-%    uc/lc commands, since finding a good interface is difficult.
-%    These commands have some nasty features, such as uppercasing
-%    mathematics, environment names, labels, etc.  A much better
-%    long-term solution is to use all-caps fonts, but these aren't
-%    generally available.
 %
-% Two wrappers around the L3 case changing functions.
-% |\protected| to make them mostly safe as replacements for |uppercase|
-% and |\lowercase|.  
-%    \begin{macrocode}
-\ExplSyntaxOn
-\protected\def\@expl@text@lowercase@@n{\text_lowercase:n}
-\protected\def\@expl@text@uppercase@@n{\text_uppercase:n}
-\ExplSyntaxOff
-%    \end{macrocode}
-
-%%    \begin{macrocode}
-\DeclareRobustCommand{\MakeUppercase}[1]{{%
-      \def\i{I}\def\j{J}%
-      \def\reserved@a##1##2{\let##1##2\reserved@a}%
-      \expandafter\reserved@a\@uclclist\reserved@b{\reserved@b\@gobble}%
-%    \end{macrocode}
-%    Tell UTF-8 processing to process chars even though we are in an \cs{protected@edef}.
 % \changes{v2.1h}{2019/09/14}{Expand UTF8 chars when case changing (github/177)}
 % \changes{v2.2r}{2022/02/20}
 %                {Use \cs{@expl@text@uppercase@@n}, removing local redefinition of \cs{UTF@two@octets@noexpand}}%
 % \changes{v2.2t}{2022/04/21}{Support \cs{noexpand} in argument of \cs{@expl@text@uppercase@@n}}
+% \changes{v2.2v}{2022/06/30}{Just use \cs{text_lowercase:n} without \cs{protectd@edf} gh/881x}%
+% \changes{v2.2w}{2022/07/04}{Introduced \cs{CaseSwitch}, \cs{DeclareCaseChangeEquivalent} and \cs{MakeTitlecase} to support hooking into case changing gh/889}%
+% \changes{v2.2x}{2022/10/26}{Introduce optional argument for case-changing commands}
+% \changes{v2.2x}{2022/10/26}{Make case changing commands language-aware}
+% \changes{v2.2x}{2022/10/26}{Auto-detect \pkg{babel} locale}
+% \changes{v2.3a}{2023/04/11}{Use new generic mechanism to detect locale}
+% \changes{v2.3d}{2024/11/12}{Use updated titlecase-first function in \pkg{expl3}}
+% \changes{v2.3d}{2024/11/12}{Add option to titlecase first or all words}
+% Wrappers around the L3 case changing functions.
+% |\protected| to make them mostly safe as replacements for |uppercase|
+% and |\lowercase|.  
+%
+% In
+%\begin{verbatim}
+%    \markboth{\MakeUppercase\contentsname}
+%             {\MakeUppercase\contentsname}
+%\end{verbatim}
+%    then the uppercasing is only done to the first letter of the
+%    contents name, since the mark expands out to:
+%\begin{verbatim}
+%    \mark{\MakeUppercase Table of Contents}
+%         {\MakeUppercase Table of Contents}
+%\end{verbatim}
+%    In order to get round this, we redefine |\MakeUppercase| and
+% |\MakeLowercase| to grab their argument and brace it. 
+%
+% Earlier versions needed to process |\@uclclist| in an |\edef|
+% to handle legacy input encodings, but recent (2022) expl3 versions
+% handle non-UTF8 text natively so we simply call the |\text_...case:n|
+% functions.
 %    \begin{macrocode}
-      \protected@edef\reserved@a{\@expl@text@uppercase@@n{\noexpand\unexpanded{#1}}}%
-      \reserved@a
-   }}
-\DeclareRobustCommand{\MakeLowercase}[1]{{%
-      \def\reserved@a##1##2{\let##2##1\reserved@a}%
-      \expandafter\reserved@a\@uclclist\reserved@b{\reserved@b\@gobble}%
-      \protected@edef\reserved@a{\@expl@text@lowercase@@n{\noexpand\unexpanded{#1}}}%
-      \reserved@a
-   }}
+\ExplSyntaxOn
+\keys_define:nn { __kernel }
+  {
+    lang   .str_set:N = \reserved@a ,
+    locale .str_set:N = \reserved@a ,
+    words .choices:nn =
+      { all , first }
+      { \str_set:Nn \reserved@b {#1} }
+  }
+\cs_new_protected:Npn \@@text@case@aux #1#2#3
+  {
+    \cs_set_nopar:Npn \reserved@a { }
+    \cs_set_nopar:Npn \reserved@b { }
+    \tl_if_blank:nTF {#2}
+      {
+        \str_set:Nx \reserved@a
+          { \BCPdata { casing } }
+        \str_if_empty:NT \reserved@a
+          {
+            \str_set:Nx \reserved@a
+              { \BCPdata { language } }
+          }
+      }
+      { \keys_set:nn { __kernel } {#2} }
+    \use:c { text_ #1 :Vn } \reserved@a {#3}
+  }
+%    \end{macrocode}
+% The odd use of \emph{three} spaces here is needed as \pkg{ltcmd} uses the
+% name with one and two spaces to give a `friendly' error message for a runaway
+% argument: that means we can't use it here.
+%    \begin{macrocode}
+\exp_args_generate:n { cnx }
+\cs_set_protected:Npn \reserved@a #1
+  {
+    \cs_generate_variant:cn { text_ \str_lowercase:n {#1} case:nn } { V }
+    \ExpandArgs { cnx } \NewExpandableDocumentCommand
+       { Make#1case }
+       { O{} +m }
+       { \exp_not:c { Make#1case \c_space_tl \c_space_tl \c_space_tl } [####1] {####2} }
+  }
+\reserved@a { Upper }
+\reserved@a { Lower }
+\reserved@a { Title }
+%    \end{macrocode}
+%   These don't get covered above so we do them manually.
+%    \begin{macrocode}
+\cs_generate_variant:Nn \text_titlecase_all:nn { V }
+\cs_generate_variant:Nn \text_titlecase_first:nn { V }
+%    \end{macrocode}
+% \changes{v2.2y}{2022/11/30}{Set \cs{oe}/\cs{OE} equal to act as a marker for \pkg{babel}}
+% \changes{v2.2z}{2023/03/28}{Use groups for gh/1021}
+% Currently, \pkg{babel} uses the equivalence of \cs{oe} and \cs{OE} to force casing of
+% some material, most notably in \cs{today}. To enable that to work, we have to set those
+% commands equal even though the current case changing code does not work using this
+% approach.
+%    \begin{macrocode}
+\cs_new_protected:cpn { MakeLowercase \c_space_tl \c_space_tl \c_space_tl } [#1] #2
+  {{
+    \let \OE \oe
+    \@@text@case@aux { lowercase } {#1} {#2}
+  }}
+\cs_new_protected:cpn { MakeUppercase \c_space_tl \c_space_tl \c_space_tl } [#1] #2
+  {{
+    \let \oe \OE
+    \@@text@case@aux { uppercase } {#1} {#2}
+  }}
+\cs_new_protected:cpn { MakeTitlecase \c_space_tl \c_space_tl \c_space_tl } [#1] #2
+  {{
+    \let \oe \OE
+    \@@text@case@aux { titlecase_ \reserved@b } {#1} {#2}
+  }}
+%    \end{macrocode}
+%
+% \changes{v2.2u}{2022/06/02}{Add \cs{NoCaseChange}}
+% \changes{v2.2u}{2022/06/30}{Add \cs{AddToNoCaseChangeList}}
+% \changes{v2.3b}{2023/04/19}{Add \cs{DeclareLowercaseMapping},
+%   \cs{DeclareTitlecaseMapping} and \cs{DeclareUppercaseMapping}}
+% \changes{v2.3c}{2023/05/30}{Fix a typo in implementation of
+%   \cs{DeclareLowercaseMapping}, etc.}
+% |\NoCaseChange| protects its argument from the case change functions.
+%
+% |\AddToNoCaseChangeList| Allows new commands to protect their arguments, eg
+% |AddToNoCaseChangeList{\eqref}| would protect the argument of |\eqref|
+% in the same way as the argument of |\ref|.
+%    \begin{macrocode}
+\cs_new_protected_nopar:Npn\AddToNoCaseChangeList
+         {\tl_put_right:Nn \l_text_case_exclude_arg_tl}
+\AddToNoCaseChangeList{ \NoCaseChange }
+\cs_new_protected:Npn \NoCaseChange #1 {#1}
+\cs_new_eq:NN \CaseSwitch \text_case_switch:nnnn
+\cs_new_eq:NN \DeclareCaseChangeEquivalent
+  \text_declare_case_equivalent:Nn
+\NewDocumentCommand \DeclareLowercaseMapping { o m m }
+  {
+    \IfNoValueTF {#1}
+      { \text_declare_lowercase_mapping:nn }
+      { \text_declare_lowercase_mapping:nnn {#1} }
+        {#2} {#3}
+  }
+\NewDocumentCommand \DeclareTitlecaseMapping { o m m }
+  {
+    \IfNoValueTF {#1}
+      { \text_declare_titlecase_mapping:nn }
+      { \text_declare_titlecase_mapping:nnn {#1} }
+        {#2} {#3}
+  }
+\NewDocumentCommand \DeclareUppercaseMapping { o m m }
+  {
+    \IfNoValueTF {#1}
+      { \text_declare_uppercase_mapping:nn }
+      { \text_declare_uppercase_mapping:nnn {#1} }
+        {#2} {#3}
+  }
+\ExplSyntaxOff
 %    \end{macrocode}
 %
 % \changes{v2.2q}{2021/09/06}{Correctly upper and lowercase
@@ -1123,28 +1259,12 @@
 \def\@uclclist{\oe\OE\o\O\ae\AE
       \dh\DH\dj\DJ\l\L\ng\NG\ss\SS\ij\IJ\th\TH}
 %    \end{macrocode}
-%    The above code works, but has the nasty side-effect that if you
-%    say something like:
-%\begin{verbatim}
-%    \markboth{\MakeUppercase\contentsname}
-%             {\MakeUppercase\contentsname}
-%\end{verbatim}
-%    then the uppercasing is only done to the first letter of the
-%    contents name, since the mark expands out to:
-%\begin{verbatim}
-%    \mark{\protect\MakeUppercase Table of Contents}
-%         {\protect\MakeUppercase Table of Contents}
-%\end{verbatim}
-%    In order to get round this, we redefine |\MakeUppercase| and
-%    |\MakeLowercase| to grab their argument and brace it.  This is a
-%    very low-level hack, and is \emph{not} recommended practice!
-%    This is an instance of a general problem that makes it unsafe to
-%    grab arguments unbraced, and probably needs a more general
-%    solution.  For the moment though, this hack will do:
-%    \begin{macrocode}
-\protected@edef\MakeUppercase#1{\MakeUppercase{#1}}
-\protected@edef\MakeLowercase#1{\MakeLowercase{#1}}
-%    \end{macrocode}
+%
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 % \end{macro}
@@ -1277,7 +1397,7 @@
 % \end{macro}
 %
 % \begin{macro}{\@filelist}
-% \changes{v1.0w}{1995/10/19}{Move after \cs{reserved@a} setting:-)}
+% \changes{v1.0w}{1995/10/19}{Move after \cs{reserved@a} setting}
 % \begin{macro}{\@addtofilelist}
 % Reset |\@filelist| so files input while making the format are not
 % listed. The list built up so far may take up a lot of memory and so

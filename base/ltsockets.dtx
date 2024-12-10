@@ -1,0 +1,1097 @@
+% \iffalse meta-comment
+%
+% Copyright (C) 2023-2024
+%       Frank Mittelbach, The LaTeX Project
+%
+% This file is part of the LaTeX base system.
+% -------------------------------------------
+%
+% It may be distributed and/or modified under the
+% conditions of the LaTeX Project Public License, either version 1.3c
+% of this license or (at your option) any later version.
+% The latest version of this license is in
+%    https://www.latex-project.org/lppl.txt
+% and version 1.3c or later is part of all distributions of LaTeX
+% version 2008 or later.
+%
+% This file has the LPPL maintenance status "maintained".
+%
+% The list of all files belonging to the LaTeX base distribution is
+% given in the file `manifest.txt'. See also `legal.txt' for additional
+% information.
+%
+% The list of derived (unpacked) files belonging to the distribution
+% and covered by LPPL is defined by the unpacking scripts (with
+% extension .ins) which are part of the distribution.
+%
+% \fi
+%
+% \iffalse
+%
+%%% From File: ltsockets.dtx
+%
+%<*driver> 
+% \fi
+\ProvidesFile{ltsockets.dtx}
+             [2024/10/27 v0.9b LaTeX Kernel (Sockets)]
+% \iffalse
+%
+\documentclass{l3doc}
+\GetFileInfo{ltsockets.dtx}
+
+\providecommand\InternalDetectionOff{}
+\providecommand\InternalDetectionOn{}
+
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{ltsockets.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+%
+%
+%
+% \title{\LaTeX{}'s socket management\thanks{This module has version
+%    \fileversion\ dated \filedate, \copyright\ \LaTeX\
+%    Project.}}
+%
+% \author{Frank Mittelbach}
+%
+% \maketitle
+%
+% ^^A this needs some cleanup:
+% \long\def\fmi#1{\begin{quote} TODO: \itshape #1\end{quote}}
+%
+% \providecommand\pkg[1]{\texttt{#1}}
+% \providecommand\hook[1]{\texttt{#1}}
+% \providecommand\env[1]{\texttt{#1}}
+% \providecommand\plug[1]{\texttt{#1}}
+% \providecommand\socket[1]{\texttt{#1}}
+%
+%
+% \begin{abstract}
+%    This code implements sockets which are places in the code into
+%    which predeclared chunks of code (plugs) can be placed. Both the sockets
+%    and the plugs are \enquote{named} and each socket is
+%    assigned exactly one plug at any given time.
+% \end{abstract}
+%
+% \tableofcontents
+%
+% \section{Introduction}
+%
+% A \LaTeX{} source file is transformed into a typeset document by
+% executing code for each command or environment in the document
+% source. Through various steps this code transforms the input and
+% eventually generates typeset output appearing in a \enquote{galley}
+% from which individual pages are cut off in an asynchronous way. This
+% page generating process is normally not directly associated with
+% commands in the input\footnote{Excepts for directives such as
+%   \cs{newpage}.} but is triggered whenever the galley has received
+% enough material to form another page (giving current settings).
+% 
+% As part of this transformation input data may get stored in some form
+% and later reused, for example, as part of the output routine
+% processing.
+% 
+% \section{Configuration of the transformation process}
+% 
+% There are three different major methods offered by \LaTeX{} to
+% configure the transformation process:
+% \begin{itemize}
+% \item through the template mechanism,
+% \item through the hook mechanism, or
+% \item through sockets and plugs.
+% \end{itemize}
+% They offer different possibilities (with different features and
+% limitations) and are intended for specific use cases, though it is
+% possible to combine them.
+% 
+% \subsection{The template mechanism}
+% 
+% The template mechanism is intended for more complex document-level
+% elements (e.g., headings such as \verb=\section= or environments like
+% \env{itemize}). The template code implements the overall processing
+% logic for such an element and offers a set of parameters to influence
+% the final result.
+% 
+% The document element is then implemented by (a) selecting a suitable
+% template (there may be more than one available for the kind of
+% document element) and (b) by setting its parameters to desired
+% values. This then forms a so-called instance which is executed when
+% the document element is found in the source.
+% 
+% By altering the parameter values (in a document class or in the
+% document preamble) or, if more drastic layout changes are desired, by
+% selecting a different template and then adjusting its parameters, a
+% wide variety of layouts can be realized through simple configuration
+% setups without the need to develop new code.
+% 
+% The target audience of this method are therefore document class
+% developers or users who wish to alter an existing layout (implemented
+% by a document class) in certain (minor) ways.
+% 
+% The template mechanism is currently documented as part of the
+% \pkg{xtemplate} package and one more elaborate implementation can be
+% found as part of the \texttt{latex-lab} code for lists (to be
+% documented further).
+% 
+% \subsection{The hook mechanism}
+% 
+% Hooks are places in the kernel code (or in packages) that offer
+% packages the possibility to inject additional code at specific
+% points in the processing in a controlled way without the need to
+% replace the existing code block (and thereby overwriting
+% modifications/extensions made by other packages). The target
+% audience is therefore mainly package developers, even though some
+% hooks can be useful for document authors.
+% 
+% Obviously, what can reasonably be added into a hook depends on the
+% individual hook (hopefully documented as part of the hook
+% documentation), but in general the idea behind hooks is that more
+% than one package could add code into the hook at the same
+% time. Perhaps the most famous hook (that \LaTeX{} had for a very
+% long time) is \hook{begindocument} into which many packages add code
+% to through \cs{AtBeginDocument}\marg{code} (which is nowadays
+% implemented as a shorthand for
+% \cs{AddToHook}\texttt{\{\hook{begindocument}\}}\marg{code}). To
+% resolve possible conflicts between injections by different packages
+% there is a rule mechanism by which code chunks in a hook can be
+% ordered in a certain way and by which incompatible packages can be
+% detected if a resolution is impossible.
+% 
+% In contrast to template code, there is no standard configuration
+% method through parameters for hooks, i.e., the code added to a hook
+% \enquote{is} the configuration. If it wants to provide for
+% configuration through parameters it has to also provide its own
+% method to set such parameters in some way. However, in that case it
+% is likely that using a hook is not the right approach and the
+% developer better calls a template instance instead which then offers
+% configuration through a key/value interface.
+% 
+% In most cases, hooks do not take any arguments as input. Instead, the data
+% that they can (and are allowed to) access depends on the surrounding
+% context.
+% 
+% For example, the various hooks available during the page shipout
+% process in \LaTeX's output routine can (and have to) access the
+% accumulated page material stored in a box named
+% \verb=\ShipoutBox=. This way, code added to, say, the
+% \hook{shipout/before} hook could access the page content, alter it,
+% and then write it back into \verb=\ShipoutBox= and any other code
+% added to this hook could then operate on the modified content.  Of
+% course, for such a scheme to work the code prior to executing the hook
+% would need to setup up data in appropriate places and the hook
+% documentation would need to document what kind of storage can be
+% accessed (and possibly altered) by the hook.
+% 
+% There are also hooks that take arguments (typically portions of
+% document data) and in that case the hook code can access these
+% arguments through \verb=#1=, \verb=#2=, etc.
+% 
+% The hook mechanism is documented in \texttt{lthooks-doc.pdf}.
+%
+%
+%
+% \subsection{The socket mechanism}
+% 
+% In some cases there is code that implements a certain programming
+% logic (for example, combining footnotes, floats, and the text for the
+% current page to be shipped out) and if this logic should change (e.g.,
+% footnotes to be placed above bottom floats instead of below) then this
+% whole code block needs to be replaced with different code.
+% 
+% In theory, this could be implemented with templates, i.e., the code
+% simply calls some instance that implements the logic and that instance
+% is altered by selecting a different templates and/or adjusting their
+% parameters. However, in many cases customization through parameters is
+% overkill in such a case (or otherwise awkward, because parameterization
+% is better done on a higher level instead of individually for small
+% blocks of code) and using the template mechanism just to replace one
+% block of code with a different one results in a fairly high
+% performance hit. It is therefore usually not a good choice.
+% 
+% In theory, it would also be possible to use a hook, but again that is
+% basically a misuse of the concept, because in this use case there should
+% never be more than one block of code inside the hook; thus, to alter
+% the processing logic one would need to set up rules that replace code
+% rather than (as intended) execute all code added to the hook.
+% 
+% 
+% 
+% For this reason \LaTeX{} now offers a third mechanism:
+% \enquote{sockets} into which one can place exactly one code block
+%   --- a \enquote{plug}.
+%
+% In a nutshell: instead of having a fixed code block somewhere as part
+% of the code, implementing a certain programming logic there is a
+% reference to a named socket at this point.
+% This is done by first declaring the named socket with:
+% \begin{quote}
+% \cs{NewSocket}\marg{socket-name}\marg{number-of-inputs}
+% \end{quote}
+% This is then referenced at the point where the replaceable code block
+% should be executed with:
+% \begin{quote}
+%  \cs{UseSocket}\marg{socket-name}
+% \end{quote}
+% or, if the socket should take a number of inputs (additional
+%    arguments beside the name) with
+% \begin{quote}
+%   \cs{UseSocket}\marg{socket-name}\marg{arg\textsubscript{1}}\ldots
+%   \marg{arg\textsubscript{\meta{number-of-inputs}}}
+% \end{quote}
+% 
+% In addition, several code blocks (a.k.a.\ plugs) implementing different logic for this
+% socket are set up, each with a declaration of the form:
+% \begin{quote}
+%   \cs{NewSocketPlug}\marg{socket-name}\marg{socket-plug-name}\marg{code}
+% \end{quote}
+% Finally,
+% one of them is assigned to the socket:
+% \begin{quote}
+% \cs{AssignSocketPlug}\marg{socket-name}\marg{socket-plug-name}
+% \end{quote}
+% If the programming logic should change, then all that is necessary is
+% to make a new assignment with \cs{AssignSocketPlug} to a different
+% \marg{socket-plug-name}. This assignment obeys scope so that an
+% environment can alter a socket without the need to restore the
+% previous  setting manually.
+% 
+% If the socket takes inputs, then those need to be provided to
+% \cs{UseSocket} and in that case they can be referenced in the \meta{code}
+% argument of \cs{NewSocketPlug} with \verb=#1=, \verb=#2=, etc.
+% 
+% In most cases a named socket is used only in a single place, but there
+% is, of course, nothing wrong with using it in several places, as long
+% as the code in all places is supposed to change in the same way.
+% 
+% 
+% 
+% 
+% 
+% \subsubsection{Examples}
+% 
+% 
+% We start by declaring a new socket named \socket{foo} that expects
+% two inputs:
+%\begin{verbatim}
+%      \NewSocket{foo}{2}
+%\end{verbatim}
+% \NewSocket{foo}{2}
+% 
+% Such a declaration has do be unique across the whole \LaTeX{}
+% run. Thus, if another package attempts to use the same name
+% (regardless of the number of inputs) it will generate an error:
+%\begin{verbatim}
+%      \NewSocket{foo}{2}
+%      \NewSocket{foo}{1}
+% \end{verbatim}
+% Both declarations would therefore produce:
+% \begin{verbatim}
+%      ! LaTeX socket Error: Socket 'foo' already declared!
+%\end{verbatim}
+% 
+% You also get an error if you attempt to declare some socket plug and
+% the socket name is not yet declared, e.g.,
+%\begin{verbatim}
+%      \NewSocketPlug{baz}{undeclared}{some code}
+%\end{verbatim}
+% generates
+%\begin{verbatim}
+%      ! LaTeX socket Error: Socket 'baz' undeclared!
+%\end{verbatim}
+% 
+% 
+% Setting up plugs for the socket is done like this:
+%\begin{verbatim}
+%      \NewSocketPlug{foo}{plug-A}
+%         {\begin{quote}\itshape foo-A: #1!#2\end{quote}}
+%      \NewSocketPlug{foo}{plug-B}
+%         {\begin{quote}\sffamily foo-B: #2\textsuperscript{2}\end{quote}}
+%\end{verbatim}
+% This will set up the plugs \texttt{plug-A} and \texttt{plug-B} for
+% this socket.
+% 
+%\NewSocketPlug{foo}{plug-A}{\begin{quote}\itshape foo-A: #1!#2\end{quote}}
+%\NewSocketPlug{foo}{plug-B}{\begin{quote}\sffamily foo-B: #2\textsuperscript{2}\end{quote}}
+% 
+% We still have to assign one or the other to the socket, thus without
+% doing that the line
+% \begin{verbatim}
+%      \UseSocket{foo}{hello}{world}
+% \end{verbatim}
+% produces nothing because the default plug for sockets with 2 inputs
+% is \plug{noop} (which grabs the additional arguments and throws them
+%   away).\footnote{If socket \socket{foo} would have been a socket with one
+%   input, then the default plug would be \plug{identity}, in which case
+%   the socket input would remain without braces and gets typeset!}
+% 
+% \UseSocket{foo}{hello}{world}     ^^A nothing happens
+% 
+% So let's do the assignment
+% \begin{verbatim}
+%      \AssignSocketPlug{foo}{plug-A}
+% \end{verbatim}
+% and then
+% \begin{verbatim}
+%      \UseSocket{foo}{hello}{world}
+% \end{verbatim}
+% will properly typeset
+% \AssignSocketPlug{foo}{plug-A}\UseSocket{foo}{hello}{world}
+% and after
+% \begin{verbatim}
+%      \AssignSocketPlug{foo}{plug-B}
+% \end{verbatim}
+% and another call to
+% \begin{verbatim}
+%      \UseSocket{foo}{hello}{world}
+% \end{verbatim}
+% we get
+% \AssignSocketPlug{foo}{plug-B}\UseSocket{foo}{hello}{world}
+% 
+% If we attempt to assign a plug that was not defined, e.g.,
+% \begin{verbatim}
+%      \AssignSocketPlug{foo}{plug-C}
+% \end{verbatim}
+% then we get an error during the assignment
+% \begin{verbatim}
+%      ! LaTeX socket Error: Plug 'plug-C' for socket 'foo' undeclared!
+% \end{verbatim}
+% and the previous assignment remains in place.
+% 
+% To see what is known about a socket and its plugs you can use
+% \cs{ShowSocket} or \cs{LogSocket} which displays information similar
+%   to this on the terminal or in the transcript file:
+% \begin{verbatim}
+%     Socket foo:
+%         number of inputs = 2
+%         available plugs = noop, plug-A, plug-B
+%         current plug = plug-B
+%         definition = \long macro:#1#2->\begin {quote}\sffamily
+%     foo-B: #2\textsuperscript {2}\end {quote}
+% \end{verbatim}
+% \LogSocket{foo}
+% 
+%
+% \subsubsection{Details and semantics}
+% 
+% In this section we collect some normative statements.
+% 
+% \begin{itemize}
+% 
+% \item
+%  From a functional point of view sockets are like simple \TeX{} macros,
+%   i.e., they expect 0 to 9 mandatory arguments (the socket inputs) and get replaced by
+%   their \enquote{expansion}
+% 
+% \item
+%   A socket is \enquote{named} and the name consists of ASCII letters
+%   \texttt{[a-z]},
+%   \texttt{[A-Z]}, \texttt{[0-9]}, \texttt{[-/@]} only
+% 
+% \item
+%   Socket names have to be unique, i.e., there can be only one socket
+%   named \meta{name}. This is ensured by declaring each socket with
+%   \cs{NewSocket}.
+%
+%   However, there is no requirement that sockets and
+%   hook names have to be different. In fact, if a certain action that
+%   could otherwise be specified as hook code has to be executed always
+%   last (or first) one could ensure this by placing a socket (single
+%   action) after a hook (or vice versa) and using the same name to
+%   indicate the relationship, e.g., 
+%\begin{verbatim}
+%  \UseHook{foo}        % different package can add code here
+%  \UseSocket{foo}      % only one package can assign a plug
+%\end{verbatim}
+%   This avoids the need to order the hook code to ensure that
+%   something is always last.
+% 
+% \item
+%  Best practice naming conventions are \ldots\ \emph{to be documented}
+% 
+% \item
+%    A socket has documented inputs which are
+% 
+%     \begin{itemize}
+%     \item
+%       the positional arguments (if any) with a description of what
+%       they contain when used
+%     
+%     \item
+%       implicit data (registers and other 2e/expl3 data stores) that
+%       the socket is allowed to make use of, with a documented description
+%       of what they contain (if relevant for the task at hand---no need to
+%       describe the whole \LaTeX{} universe)
+% 
+%     \item
+%        information about the state of the \TeX{} engine (again when
+%       relevant), e.g. is called in mmode or vmode or in the output routine or \ldots
+%       
+%     \item
+%       \ldots\ \empty{anything missing?}
+%     \end{itemize}
+% 
+%       
+% \item
+%     A socket has documented results/outputs which can be
+% 
+%     \begin{itemize}
+%     \item
+%        what kind of data it should write to the current list (if that
+%        is part of its task)
+% 
+%     \item
+%        what kind of registers and other 2e/expl3 data stores it should
+%        modify and in what way
+% 
+%     \item
+%        what kind of state changes it should do (if any)
+% 
+%     \item
+%        \emph{\ldots\ anything else?}
+%     \end{itemize}
+% 
+% \item
+%
+%   At any time a socket has one block of code (a plug \iffalse(\fi:-)\,)
+%   associated with it. Such code is itself named and the association
+%   is done by linking the socket name to the code name (putting a
+%   plug into the socket).
+% 
+% \item
+%
+%   The name of a plug consists of ASCII letters \texttt{[a-z]},
+%   \texttt{[A-Z]}, \texttt{[0-9]}, \texttt{[-/@]} only.
+%
+% \item
+%   Socket plug names have to be unique within on a per socket basis,
+%   but it is perfectly allowed (and sensible in some cases) to use
+%   the same plug name with different sockets (where based on the
+%   sockets' purposes, different actions may be associated with the plug
+%   name). For example \plug{noop} is a plug name declared for every
+%   socket, yet it action \enquote{grab the socket inputs and throw
+%   them away} obviously differs depending on how many inputs the
+%   socket has.
+%
+% \item
+%
+%   When declaring a plug it is stated for which socket it is meant
+%   (i.e., its code can only be used with that socket). This means
+%   that the same plug name can be used with different sockets
+%   referring to different code in each case.
+% 
+% \item
+%   Configuration of  a socket can only be done by
+%   linking different code to it. Nevertheless the code linked to it can
+%   provide its own means of configuration (but this is outside of the
+%   spec).
+% 
+% \item
+%   Technically execution of a socket (\cs{UseSocket}) involves
+% 
+%     \begin{itemize}
+%     \item
+%        doing any house keeping (like writing debugging info, \ldots);
+% 
+%     \item
+%        looking up the current code association (what plug is in the socket);
+%     
+%     \item
+%       executing this code which will pick up the mandatory arguments
+%       (happens at this point, not
+%        before), i.e., it is like calling a csname defined with
+% \begin{verbatim}      
+%   \def\foo#1#2...{...#1...#2...}
+% \end{verbatim}
+% 
+%     \item
+%       do some further house keeping (if needed).
+%     \end{itemize}
+% 
+% \item
+%   A socket is typically only used in one place in code, but this is not
+%   a requirement, i.e., if the same operation with the same inputs need
+%   to be carried out in several places the same named socket can be used.
+% 
+% \end{itemize}
+% 
+% 
+%
+%
+%
+% \subsubsection{Command syntax}
+%
+% We give both the \LaTeXe{} and the L3 programming layer command names.
+% 
+% \begin{function}{\NewSocket,\socket_new:nn}
+% \begin{syntax}
+% \cs{NewSocket}     \Arg{socket-name} \Arg{number-of-inputs}
+% \cs{socket_new:nn} \Arg{socket-name} \Arg{number-of-inputs}
+% \end{syntax}
+%   Declares a new socket with name \meta{socket-name} having
+%   \meta{number-of-inputs} inputs. There is automatically a
+%   plug \plug{noop} declared for it, which does nothing, i.e., it gobbles
+%   the socket inputs (if any). This is made the default plug except for
+%   sockets with one input which additionally define the plug
+%   \plug{identity} and assign that as their default.
+%
+%   This \plug{identity} plug simply returns the socket input without
+%   its outer braces.
+%   The use case for this plug are situations like this:
+%   \begin{quote}
+%      \cs{UseSocket}\verb={tagsupport/footnote}=\Arg{code}
+%   \end{quote}
+%   If tagging is not active and the socket contains the plug \plug{identity}
+%   then this returns \meta{code} without the outer braces and to
+%   activate tagging all that is necessary is to change the plug to
+%   say \plug{tagpdf} so
+%   that it surrounds \meta{code} by some tagging magic.
+%   This is the most common use case for sockets with one input, which
+%   is why they have this special default.
+%
+%   The socket documentation should describe its purpose, its inputs and the
+%   expected results as discussed above.
+%
+%   The declaration is only allowed at top-level, i.e., not inside a group.
+% \end{function}
+%
+% 
+% \begin{function}{\NewSocketPlug,\socket_new_plug:nnn,\socket_set_plug:nnn}
+% \begin{syntax}
+% \cs{NewSocketPlug}       \Arg{socket-name} \Arg{socket-plug-name} \Arg{code}
+% \cs{socket_new_plug:nnn} \Arg{socket-name} \Arg{socket-plug-name} \Arg{code}
+% \cs{socket_set_plug:nnn} \Arg{socket-name} \Arg{socket-plug-name} \Arg{code}
+% \end{syntax}
+%   Declares a new plug for socket \meta{socket-name} that runs
+%   \meta{code} when executing. It complains if the plug was already
+%   declared previously.
+%
+%   The form \cs{socket_set_plug:nnn} changes an existing plug. As
+%   this should normally not be necessary, we currently have only an L3
+%   layer name for the few cases it might be useful.
+%
+%   The declarations can be made inside a group and obey scope, i.e.,
+%   they vanish if the group ends.
+% \end{function}
+%
+% 
+% \begin{function}{\AssignSocketPlug,\socket_assign_plug:nn}
+% \begin{syntax}
+% \cs{AssignSocketPlug}      \Arg{socket-name} \Arg{socket-plug-name}
+% \cs{socket_assign_plug:nn} \Arg{socket-name} \Arg{socket-plug-name}
+% \end{syntax}
+%   Assigns the plug \meta{socket-plug-name} to the socket
+%   \meta{socket-name}. It errors if either socket or plug is not
+%   defined.
+%
+%   The assignment is local, i.e., it obeys scope.
+% \end{function}
+%
+% 
+% \begin{function}{\UseSocket,\socket_use:nw,\socket_use:n,\socket_use:nn,\socket_use:nnn,\socket_use:nnnn}
+% \begin{syntax}
+% \cs{UseSocket}      \Arg{socket-name}
+% \cs{socket_use:nnn} \Arg{socket-name} \Arg{socket-arg\textsubscript{1}} \Arg{socket-arg\textsubscript{2}}
+% \end{syntax}
+%   Executes the socket \meta{socket-name} by retrieving the
+%   \meta{code} of the current plug assigned to the socket. This is
+%   the only command that would appear inside macro code in packages.
+%
+%   For performance reasons there is no explicit check that the socket
+%   was declared!
+%
+%   The different L3 programming layer commands are really doing the
+%   same thing: they grab as many arguments as defined as inputs for the socket
+%   and then pass them to the plug. The different names are only there
+%   to make the code more readable, i.e., to indicate how many
+%   arguments are grabbed in total (note that no runtime check is made to
+%   verify that this is actually true).  We only provide them for
+%   sockets with up to 3 inputs (most likely those with zero or one input would
+%   have been sufficient). If you happen to have a socket with more
+%   inputs, use \cs{socket_use:nw}.
+% \end{function}
+%
+% 
+% \begin{function}[EXP]{\socket_use_expandable:nw,\socket_use_expandable:n}
+% \begin{syntax}
+% \cs{socket_use_expandable:n} \Arg{socket-name}
+% \end{syntax}
+%   Fully expandable variant of \cs{socket_use:n}. This can be used in macro code
+%   to retrieve code from sockets which need to appear in an expandable context.
+%
+%   This usually requires the plug to only contain expandable code and should therefore
+%   only be used for sockets which are clearly documented to be used in an expandable context.
+%   This command does not print any debugging info when \cs{DebugSocketsOn} is active
+%   and should therefore be avoided whenever possible.
+%
+%   For performance reasons there is no explicit check that the socket was declared!
+% \end{function}
+%
+%
+% \begin{function}{\ShowSocket,\LogSocket,\socket_show:n,\socket_log:n}
+% \begin{syntax}
+% \cs{ShowSocket}    \Arg{socket-name}
+% \cs{socket_show:n} \Arg{socket-name}
+% \end{syntax}
+%   Displays information about the socket \meta{socket-name} and its
+%   state then stops and waits for further instructions --- at the
+%   moment some what rudimentary.
+%
+%   \cs{LogSocket} and \cs{socket_log:n} only differ in that they don't stop.
+% \end{function}
+%
+% 
+% \begin{function}{\DebugSocketsOn,\DebugSocketsOff,
+%                  \socket_debug_on:,\socket_debug_off:}
+% \begin{syntax}
+% \cs{DebugSocketsOn} \ldots\ \cs{DebugSocketsOff}
+% \end{syntax}
+%   Turns debugging of sockets on or off.
+% \end{function}
+%
+% \subsubsection{Rationale for error handling}
+% 
+% The errors during the declarations are produced to help with
+% typos---after all, such declarations might be part of a document
+% preamble (not that likely, but possible). However, \cs{UseSocket} is
+% not doing much checking, e.g.,
+% \begin{verbatim}
+%   \UseSocket{mispelled-socket}{hello}{world}
+% \end{verbatim}
+% will generate a rather low-level error and then typesets
+% ``{hello}{world}'' because there is no dedicated runtime check if
+% \texttt{mispelled-socket} is a known socket.
+% 
+% The reason is that if the misspelling is in the code, then this is a
+% programming error in the package and for speed reasons \LaTeX{} does
+% not repeately make runtime checks for coding errors unless they can or
+% are likely to be user introduced.
+% 
+%
+% \MaybeStop{\setlength\IndexMin{200pt}  \PrintIndex  }
+%
+%
+% \section{The Implementation}
+%
+%    The implementation of the socket mechanism should be (partially)
+%    redone and we should probably store the different code chunks in
+%    a property list so that we can have a decent \cs{ShowSocket}
+%    command that shows the available alternatives.\fmi{implement?}
+%
+%    \begin{macrocode}
+%<*2ekernel|latexrelease>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\ExplSyntaxOn
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<@@=socket>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<latexrelease>\NewModuleRelease{2023/11/01}{ltsockets}
+%<latexrelease>                 {The~socket~management~system}
+%    \end{macrocode}
+%
+%
+%
+% \subsection{Debugging the socket structures}
+%
+%  Code and commands in this section are not final, it needs more
+%  experimentation to see what kind of tracing information is going to
+%  be useful in practice. For now the tracing is mainly meant to be used
+%  for code testing and not so much for application testing.
+%
+%  It is quite likely that the
+%  commands and the behavior of the tracing might change in the
+%  future once we gained some experience with it.
+%
+%  \begin{macro}{\g_@@_debug_bool}
+%    Holds the current debugging state.
+%    \begin{macrocode}
+\bool_new:N \g_@@_debug_bool
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\socket_debug_on:,\socket_debug_off:}
+%  \begin{macro}{\@@_debug:n, \@@_debug_term:n}
+%  \begin{macro}{\@@_debug_gset:}
+%    Turns debugging on and off by redefining \cs{@@_debug:n} and
+%    \cs{@@_debug_term:n}. By default they do nothing.
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_debug:n \use_none:n
+\cs_new_eq:NN \@@_debug_term:n \use_none:n
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \socket_debug_on:
+  {
+    \bool_gset_true:N \g_@@_debug_bool
+    \@@_debug_gset:
+  }
+\cs_new_protected:Npn \socket_debug_off:
+  {
+    \bool_gset_false:N \g_@@_debug_bool
+    \@@_debug_gset:
+  }
+\cs_new_protected:Npn \@@_debug_gset:
+  {
+    \cs_gset_protected:Npx \@@_debug:n ##1
+      { \bool_if:NT \g_@@_debug_bool {##1} }
+    \cs_gset_protected:Npx \@@_debug_term:n ##1
+      { \bool_if:NT \g_@@_debug_bool
+        { \iow_term:x { ^^J [Sockets]~ ==>~ ##1} } }
+  }
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
+%  \end{macro}
+%
+%
+% \subsection{The L3 layer commands}
+%
+%  \begin{macro}{\socket_new:nn}
+%    
+%    Declaring a socket creates a str to hold the name (a pointer) to the
+%    code that should be used when the socket is executed, and an integer to
+%    hold the number of inputs of that socket.  Initially, an
+%    ``empty'' code chunk is created and assigned so the socket
+%    does nothing by default other than swallowing its inputs (if any).
+%    \begin{macrocode}
+\cs_new_protected:Npn \socket_new:nn #1 #2 {
+  \str_if_exist:cTF { l_@@_#1_plug_str }
+      {
+        \msg_error:nnn { socket } { already-declared } {#1}
+      }
+      {
+%    \end{macrocode}
+%    We only support declarations on top-level.
+%    \begin{macrocode}
+        \int_if_zero:nTF \tex_currentgrouplevel:D
+          {
+            \str_new:c { l_@@_#1_plug_str }
+            \seq_new:c { l_@@_#1_plugs_seq }
+            \int_const:cn { c_@@_#1_args_int } {#2}
+            \socket_new_plug:nnn {#1} { noop } {}
+            \int_compare:nNnTF {#2} = 1
+              {
+                \socket_new_plug:nnn {#1} { identity } {##1}
+                \socket_assign_plug:nn {#1} { identity }
+              }
+              { \socket_assign_plug:nn {#1} { noop } }
+            \@@_debug_term:n
+              { Socket~ '#1'~ declared~ with~ #2~ input(s) }
+          }
+          {
+            \msg_error:nn { socket } { not-top-level }
+          }
+      }
+}
+%    \end{macrocode}
+%  \end{macro}
+%  
+%  
+%  \begin{macro}{\socket_log:n,\socket_show:n}
+%    Show the current state of the socket --- for now this is just a
+%    quick draft and should be redone and extended.
+%    \begin{macrocode}
+\cs_new_protected:Npn \socket_log:n #1 {
+  \typeout{ Socket~ #1:}
+  \str_if_exist:cTF { l_@@_#1_plug_str }
+      {
+        \typeout{ \@spaces number~ of~ inputs~ =~
+                  \int_use:c { c_@@_#1_args_int } }
+        \typeout{ \@spaces available~plugs~ =~
+                  \seq_use:cnnn { l_@@_#1_plugs_seq }{,~}{,~}{,~} }
+        \typeout{ \@spaces current~ plug~ =~
+                  \str_use:c { l_@@_#1_plug_str } }
+        \typeout{ \@spaces definition~ =~
+                  \cs_meaning:c
+                    { @@_#1_plug_ \str_use:c { l_@@_#1_plug_str } :w } }
+        \typeout{}
+      }
+      {
+%    \end{macrocode}
+%    If we are showing a socket it is not an error if it doesn't exist.
+%    \begin{macrocode}
+        \typeout { Socket~ is~ not~ declared! }
+      }
+}
+%    \end{macrocode}
+%    And here the version that stops:
+%    \begin{macrocode}
+\cs_new_protected:Npn \socket_show:n #1 {\socket_log:n {#1} \errmessage{}}
+%    \end{macrocode}
+%  \end{macro}
+%  
+%  
+%  
+%  
+%  
+%  \begin{macro}{\socket_new_plug:nnn,\socket_set_plug:nnn}
+%    \changes{v0.9b}{2024/10/27}{Make plug definition non-protected}
+%    
+%    Declaring a code for a socket is just making a definition, taking
+%    the number of arguments from the saved int.
+%    \begin{macrocode}
+\cs_new_protected:Npn \socket_new_plug:nnn #1#2#3 {
+  \str_if_exist:cTF { l_@@_#1_plug_str }
+      {
+        \cs_if_exist:cTF { @@_#1_plug_#2:w }
+          {
+            \msg_error:nnnn { socket } { plug-already-declared } {#1} {#2}
+          }
+          {
+            \cs_generate_from_arg_count:cNnn
+              { @@_#1_plug_#2:w }
+              \cs_new:Npn
+              { \int_use:c { c_@@_#1_args_int } }
+              {#3}
+%    \end{macrocode}
+%    This is a new declaration so we add the name to a seq for the
+%    debugging info.
+%    \begin{macrocode}
+            \seq_put_right:cn { l_@@_#1_plugs_seq } {#2}
+            \@@_debug_term:n
+              { Plug~ '#2'~ for~ socket~ '#1'~ declared. }
+          }
+      }
+      {
+        \msg_error:nnn { socket } { undeclared } {#1}
+      }
+}
+%    \end{macrocode}
+%    Changing the plug of an existing socket is rather similar, except
+%    that we don't have to deal with adding it to the debugging
+%    sequence.
+%    \begin{macrocode}
+\cs_new_protected:Npn \socket_set_plug:nnn #1#2#3 {
+  \str_if_exist:cTF { l_@@_#1_plug_str }
+      {
+        \cs_if_exist:cTF { @@_#1_plug_#2:w }
+          {
+            \cs_generate_from_arg_count:cNnn
+              { @@_#1_plug_#2:w }
+              \cs_set:Npn
+              { \int_use:c { c_@@_#1_args_int } }
+              {#3}
+            \@@_debug_term:n
+              {  Plug~ '#2'~ for~ socket~ '#1'~ changed. }
+          }
+          {
+            \msg_error:nnnn { socket } { plug-undeclared } {#1} {#2}
+          }
+      }
+      {
+        \msg_error:nnn { socket } { undeclared } {#1}
+      }
+}
+%    \end{macrocode}
+%  \end{macro}
+%  
+%  
+%  
+%  \begin{macro}{\socket_assign_plug:nn}
+%    
+%    Assigning a plug to a socket just changes the name in
+%    the socket string. The assignment is local to the current group.
+%    \begin{macrocode}
+\cs_new_protected:Npn \socket_assign_plug:nn #1 #2 {
+  \str_if_exist:cTF { l_@@_#1_plug_str }
+      {
+        \cs_if_exist:cTF { @@_#1_plug_#2:w }
+          {
+            \@@_debug_term:n
+              { Replacing~ plug~ '\str_use:c { l_@@_#1_plug_str }'~
+                with~ '#2'~ in~ socket~ '#1'. }
+            \str_set:cn { l_@@_#1_plug_str } {#2}
+          }
+          {
+            \msg_error:nnnn { socket } { plug-undeclared } {#1} {#2}
+          }
+      }
+      { \msg_error:nnn { socket } { undeclared } {#1} }
+}
+%    \end{macrocode}
+%  \end{macro}
+%  
+%  
+%  \begin{macro}{\socket_use:nw,\socket_use:n,\socket_use:nn,\socket_use:nnn,\socket_use:nnnn}
+%    
+%    And using it is more or less a \cs{use:c} so very lightweight. We do not
+%    add a runtime check for speed reasons!
+%
+%    This command is named
+%    \cs{socket_use:nw} because we don't know how many inputs the
+%    socket has until we have looked at the socket name (in argument \verb=#1=).
+%    But, of course, the developer knows so we also offer a few aliases
+%    \cs{socket_use:nn}, etc.\ so that one can indicate the correct number of
+%    arguments (socket inputs plus one) in the L3 layer code.
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \socket_use:nw #1 {
+  \@@_debug_term:n
+    { Socket~ '#1'~ containing~ plug~
+      '\str_use:c { l_@@_#1_plug_str }'~ used. }
+  \use:c { @@_#1_plug_ \str_use:c { l_@@_#1_plug_str } :w }
+}
+%    \end{macrocode}
+%    To make code a bit more readable we also define functions that
+%    indicate how many arguments are picked up. However, this is just for
+%    code documentation: internally they all do the same and the number
+%    of arguments isn't checked by default.
+%    \begin{macrocode}
+\cs_new_eq:NN  \socket_use:n \socket_use:nw     % socket with no inputs
+\cs_new_eq:NN  \socket_use:nn \socket_use:nw    % socket with one input
+\cs_new_eq:NN  \socket_use:nnn \socket_use:nw   % socket with two inputs
+\cs_new_eq:NN  \socket_use:nnnn \socket_use:nw  % socket with three inputs
+%    \end{macrocode}
+%    The above commands could be changed to check  how many inputs
+%    the socket is declared with (for example, when checking is in
+%    force).
+%    \fmi{Implement?} 
+%  \end{macro}
+%
+%  \begin{macro}{\socket_use_expandable:nw,\socket_use_expandable:n}
+%    \changes{v0.9b}{2024/10/27}{Added \cs{socket_use_expandable:n}}
+%    The same as the non-expandable code, except for the missing debug output.
+%    \begin{macrocode}
+\cs_new:Npn \socket_use_expandable:nw #1 {
+  \use:c { @@_#1_plug_ \str_use:c { l_@@_#1_plug_str } :w }
+}
+\cs_new_eq:NN  \socket_use_expandable:n \socket_use_expandable:nw     % socket with no inputs
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%
+%
+%  
+% \subsection{Error messages}
+%
+
+%    
+%    \begin{macrocode}
+\msg_new:nnnn { socket } { already-declared }
+    { Socket~ '#1'~ already~ declared! }
+    { A~ socket~ can~ only~ be~ declared~ once.~ The~ name~ '#1'~ is~
+      already~ taken.~ Use~ \ShowSocket{#1}~ to~ see~ its~ definition. }
+      
+\msg_new:nnnn { socket } { undeclared }
+    { Socket~ '#1'~ undeclared! }
+    { You~ tried~ to~ use~ a~ socket~ that~ was~ not~ declared~ before. }
+
+\msg_new:nnnn { socket } { not-top-level }
+    { Sockets~ can~ only~ be~ declared~ at~ top-level! }
+    { It~ is~ not~ allowed~ to~ declare~ sockets~ inside~ a~
+      group.~ Move~ the~ declaration~ to~ the~ top-level. }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\msg_new:nnnn { socket } { plug-already-declared }
+    { Plug~ '#2'~ for~ socket~ '#1'~ already~ declared! }
+    { You~ can't~ change~ an~ existing~ plug~ with~ \NewSocketPlug~ and~ it~
+      is~ normally~ not~ sensible~ to~ do~ so.~ Use~ the~ L3~ programming~
+      layer~ function~ \socket_set_plug:nnn~ if~ you~ really~ have~ to. }
+    
+\msg_new:nnnn { socket } { plug-undeclared }
+    { Plug~ '#2'~ for~ socket~ '#1'~ undeclared! }
+    { The~ plug~ name~ is~ unknown.~ Is~ the~ name~ misspelled~ or~ did~ you~
+      intend~ to~ assign~ it~ to~ a~ different~ socket? }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\prop_gput:Nnn \g_msg_module_type_prop { socket } { LaTeX }
+%    \end{macrocode}
+%
+%
+%
+%  
+% \subsection{The \LaTeXe{} interface commands}
+%
+%  \begin{macro}{\NewSocket,\NewSocketPlug,
+%                \ShowSocket,\LogSocket,
+%                \AssignSocketPlug,\UseSocket,
+%                \DebugSocketsOn,\DebugSocketsOff}
+%    As we expect that there are existing \LaTeXe{} packages that may
+%   want to make use of the socket mechanism, we provide 2e names for
+%   most of the commands.
+%    \begin{macrocode}
+\cs_new_eq:NN \NewSocket         \socket_new:nn 
+\cs_new_eq:NN \ShowSocket        \socket_show:n 
+\cs_new_eq:NN \LogSocket         \socket_log:n 
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_eq:NN \NewSocketPlug     \socket_new_plug:nnn
+\cs_new_eq:NN \AssignSocketPlug  \socket_assign_plug:nn
+\cs_new_eq:NN \UseSocket         \socket_use:nw
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\cs_new_eq:NN \DebugSocketsOn    \socket_debug_on:
+\cs_new_eq:NN \DebugSocketsOff   \socket_debug_off:
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%  
+%    \begin{macrocode}
+%
+%<latexrelease>\IncludeInRelease{0000/00/00}{ltsockets}
+%<latexrelease>                 {The~socket~management~(undo)}%
+%<latexrelease>
+%<latexrelease>\let \NewSocket  \@undefined
+%<latexrelease>\let \ShowSocket \@undefined
+%<latexrelease>\let \LogSocket  \@undefined
+%<latexrelease>
+%<latexrelease>\let \NewSocketPlug    \@undefined
+%<latexrelease>\let \AssignSocketPlug \@undefined
+%<latexrelease>\let \UseSocket        \@undefined
+%<latexrelease>
+%<latexrelease>\let \DebugSocketsOn  \@undefined
+%<latexrelease>\let \DebugSocketsOff \@undefined
+%<latexrelease>
+%<latexrelease>\EndModuleRelease
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\ExplSyntaxOff
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%</2ekernel|latexrelease>
+%    \end{macrocode}
+%
+%    Reset module prefix:
+%    \begin{macrocode}
+%<@@=>
+%    \end{macrocode}
+%
+%
+% \Finale
+%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\endinput
+
+
+
+^^A  Needed for emacs
+^^A
+^^A  Local Variables: 
+^^A  mode: latex
+^^A  coding: utf-8-unix
+^^A  End: 
+
+
+

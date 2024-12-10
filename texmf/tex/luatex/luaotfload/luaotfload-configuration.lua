@@ -5,17 +5,13 @@
 --       AUTHOR:  Dohyun Kim <nomosnomos@gmail.com>
 -------------------------------------------------------------------------------
 
-local ProvidesLuaModule = { 
+assert(luaotfload_module, "This is a part of luaotfload and should not be loaded independently") { 
     name          = "luaotfload-configuration",
-    version       = "3.00",       --TAGVERSION
-    date          = "2019-09-13", --TAGDATE
+    version       = "3.28",       --TAGVERSION
+    date          = "2024-02-14", --TAGDATE
     description   = "luaotfload submodule / config file reader",
     license       = "GPL v2.0"
 }
-
-if luatexbase and luatexbase.provides_module then
-  luatexbase.provides_module (ProvidesLuaModule)
-end  
 
 ------------------------------
 
@@ -62,7 +58,7 @@ local filejoin                = file.join
 local filereplacesuffix       = file.replacesuffix
 
 local logreport               = print -- overloaded later
-local getwritablepath         = caches.getwritablepath
+local getwritablepath         = luaotfload.fontloader.caches.getwritablepath
 
 
 local config_parser -- set later during init
@@ -95,6 +91,13 @@ local valid_formats = tabletohash {
   "otf", "ttc", "ttf", "afm", "pfb"
 }
 
+local default_location_precedence = {
+  "system", "texmf", "local"
+}
+local valid_locations = tabletohash {
+  "system", "texmf", "local"
+}
+
 local default_anon_sequence = {
   "tex", "path", "name"
 }
@@ -103,30 +106,31 @@ local valid_resolvers = tabletohash {
   "tex", "path", "name", "file", "my"
 }
 
+local base_features = tabletohash {
+  -- Adopt the generic default from HarfBuzz.
+  -- The first line is generally enabled there,
+  -- the second only for horizontal text.
+  -- The third line is luaotfload specific
+  "abvm", "blwm", "ccmp", "locl", "mark", "mkmk", "rlig",
+  "calt", "clig", "curs", "dist", "kern", "liga", "rclt",
+  "itlc",
+}
 local feature_presets = {
-  arab = tabletohash {
-    "ccmp", "locl", "isol", "fina", "fin2",
-    "fin3", "medi", "med2", "init", "rlig",
-    "calt", "liga", "cswh", "mset", "curs",
-    "kern", "mark", "mkmk",
-  },
-  deva = tabletohash {
-    "ccmp", "locl", "init", "nukt", "akhn",
-    "rphf", "blwf", "half", "pstf", "vatu",
-    "pres", "blws", "abvs", "psts", "haln",
-    "calt", "blwm", "abvm", "dist", "kern",
-    "mark", "mkmk",
-  },
-  khmr = tabletohash {
-    "ccmp", "locl", "pref", "blwf", "abvf",
-    "pstf", "pres", "blws", "abvs", "psts",
-    "clig", "calt", "blwm", "abvm", "dist",
-    "kern", "mark", "mkmk",
-  },
-  thai = tabletohash {
-    "ccmp", "locl", "liga", "kern", "mark",
-    "mkmk",
-  },
+  arab = table.merged( tabletohash {
+    "isol", "fina", "fin2", "fin3", "medi", "med2", "init",
+    "cswh", "mset",
+  }, base_features),
+  deva = table.merged( tabletohash {
+    "init", "nukt", "akhn", "rphf", "blwf", "half", "pstf",
+    "vatu", "pres", "blws", "abvs", "psts", "haln",
+  }, base_features),
+  khmr = table.merged( tabletohash {
+    "pref", "blwf", "abvf", "pstf", "pres", "blws", "abvs",
+    "psts",
+  }, base_features),
+  hang = table.merged( tabletohash {
+    "ccmp", "ljmo", "vjmo", "tjmo",
+  }, base_features),
 }
 
 --[[doc--
@@ -137,7 +141,7 @@ local feature_presets = {
 
 --doc]]--
 
-local default_fontloader = function ()
+local function default_fontloader ()
   return luaotfloadstatus and luaotfloadstatus.notes.loader or "reference"
 end
 
@@ -148,10 +152,10 @@ local registered_loaders = {
   context    = "context",
 }
 
-local pick_fontloader = function (s)
+local function pick_fontloader (s)
   local ldr = registered_loaders[s]
   if ldr ~= nil and type (ldr) == "string" then
-    logreport ("log", 2, "conf", "Using predefined fontloader \"%s\".", ldr)
+    logreport ("log", 2, "conf", "Using predefined fontloader %q.", ldr)
     return ldr
   end
   local idx = stringfind (s, ":")
@@ -159,17 +163,17 @@ local pick_fontloader = function (s)
     if stringsub (s, 1, idx - 1) == "context" then
       local pth = stringsub (s, idx + 1)
       pth = stringstrip (pth)
-      logreport ("log", 2, "conf", "Context base path specified at \"%s\".", pth)
+      logreport ("log", 2, "conf", "Context base path specified at %q.", pth)
       if lfsisdir (pth) then
-        logreport ("log", 5, "conf", "Context base path exists at \"%s\".", pth)
+        logreport ("log", 5, "conf", "Context base path exists at %q.", pth)
         return pth
       end
       pth = kpseexpand_path (pth)
       if lfsisdir (pth) then
-        logreport ("log", 5, "conf", "Context base path exists at \"%s\".", pth)
+        logreport ("log", 5, "conf", "Context base path exists at %q.", pth)
         return pth
       end
-      logreport ("both", 0, "conf", "Context base path not found at \"%s\".", pth)
+      logreport ("both", 0, "conf", "Context base path not found at %q.", pth)
     end
   end
   return nil
@@ -192,6 +196,10 @@ local permissible_color_callbacks = {
   pre_output_filter     = "pre_output_filter",
 }
 
+local known_dvi_drivers = {
+  xdvipsk = 'xdvipsk',
+  dvisvgm = 'dvisvgm',
+}
 
 -------------------------------------------------------------------------------
 ---                                DEFAULTS
@@ -199,28 +207,31 @@ local permissible_color_callbacks = {
 
 local default_config = {
   db = {
-    formats         = "otf,ttf,ttc",
-    scan_local      = false,
-    skip_read       = false,
-    strip           = true,
-    update_live     = true,
-    compress        = true,
-    max_fonts       = 2^51,
-    designsize_dimen= "bp",
+    location_precedence = default_location_precedence,
+    formats             = "otf,ttf,ttc",
+    scan_local          = false,
+    skip_read           = false,
+    strip               = true,
+    update_live         = true,
+    compress            = true,
+    max_fonts           = 2^51,
+    designsize_dimen    = "bp",
   },
   run = {
-    anon_sequence  = default_anon_sequence,
-    resolver       = "cached",
-    definer        = "patch",
-    log_level      = 0,
-    color_callback = "post_linebreak_filter",
-    fontloader     = default_fontloader (),
+    anon_sequence      = default_anon_sequence,
+    resolver           = "cached",
+    definer            = "patch",
+    log_level          = 0,
+    color_callback     = "post_linebreak_filter",
+    fontloader         = default_fontloader (),
+    default_dvi_driver = "dvisvgm"
   },
   misc = {
     bisect         = false,
     version        = luaotfload.version,
     statistics     = false,
     termwidth      = nil,
+    keepnames      = true,
   },
   paths = {
     names_dir           = "names",
@@ -234,10 +245,7 @@ local default_config = {
   },
   default_features = {
     global = { mode = "node" },
-    dflt = tabletohash {
-      "ccmp", "locl", "rlig", "liga", "clig",
-      "kern", "mark", "mkmk", 'itlc',
-    },
+    dflt = base_features,
 
     arab = feature_presets.arab,
     syrc = feature_presets.arab,
@@ -260,7 +268,7 @@ local default_config = {
     thai = feature_presets.thai,
     lao  = feature_presets.thai,
 
-    hang = tabletohash { "ccmp", "ljmo", "vjmo", "tjmo", },
+    hang = feature_presets.hang,
   },
 }
 
@@ -281,7 +289,7 @@ local min_terminal_width = 40
 --- The “termwidth” value is only considered when printing
 --- short status messages, e.g. when building the database
 --- online.
-local check_termwidth = function ()
+local function check_termwidth ()
   if config.luaotfload.misc.termwidth == nil then
       local tw = 79
       if not (   os.type == "windows" --- Assume broken terminal.
@@ -306,7 +314,7 @@ local check_termwidth = function ()
   return true
 end
 
-local set_font_filter = function ()
+local function set_font_filter ()
   local names = fonts.names
   if names and names.set_font_filter then
     local formats = config.luaotfload.db.formats
@@ -318,7 +326,19 @@ local set_font_filter = function ()
   return true
 end
 
-local set_size_dimension = function ()
+local function set_location_precedence_list ()
+  local names = fonts.names
+  if names and names.set_location_precedence then
+    local locations = config.luaotfload.db.location_precedence
+    if not locations or locations == "" then
+      locations = default_config.db.location_precedence
+    end
+    fonts.names.set_location_precedence (locations)
+  end
+  return true
+end
+
+local function set_size_dimension ()
   local names = fonts.names
   if names and names.set_size_dimension then
     local dim = config.luaotfload.db.designsize_dimen
@@ -330,7 +350,7 @@ local set_size_dimension = function ()
   return true
 end
 
-local set_name_resolver = function ()
+local function set_name_resolver ()
   local names = fonts.names
   if names and names.resolve_cached then
     --- replace the resolver from luatex-fonts
@@ -344,7 +364,7 @@ local set_name_resolver = function ()
   return true
 end
 
-local set_loglevel = function ()
+local function set_loglevel ()
   if luaotfload then
     luaotfload.log.set_loglevel (config.luaotfload.run.log_level)
     return true
@@ -352,7 +372,7 @@ local set_loglevel = function ()
   return false
 end
 
-local build_cache_paths = function ()
+local function build_cache_paths ()
   local paths  = config.luaotfload.paths
   local prefix = getwritablepath (paths.names_dir, "")
 
@@ -362,7 +382,7 @@ local build_cache_paths = function ()
   end
 
   prefix = lpegmatch (stripslashes, prefix)
-  logreport ("log", 0, "conf", "Root cache directory is %s.", prefix)
+  logreport ("log", 0, "conf", "Root cache directory is %q.", prefix)
 
   local index_file      = filejoin (prefix, paths.index_file)
   local lookups_file    = filejoin (prefix, paths.lookups_file)
@@ -376,13 +396,13 @@ local build_cache_paths = function ()
 end
 
 
-local set_default_features = function ()
+local function set_default_features ()
   local default_features = config.luaotfload.default_features
   luaotfload.features    = luaotfload.features or {
                              global   = { },
                              defaults = { },
                            }
-  current_features       = luaotfload.features
+  local current_features = luaotfload.features
   for var, val in next, default_features do
     if var == "global" then
       current_features.global = val
@@ -401,6 +421,7 @@ reconf_tasks = {
   { "Set design size dimension" , set_size_dimension   },
   { "Install font name resolver", set_name_resolver    },
   { "Set default features"      , set_default_features },
+  { "Set location precedence"   , set_location_precedence_list },
 }
 
 -------------------------------------------------------------------------------
@@ -413,14 +434,14 @@ local number_t    = "number"
 local boolean_t   = "boolean"
 local function_t  = "function"
 
-local tointeger = function (n)
+local function tointeger (n)
   n = tonumber (n)
   if n then
     return mathfloor (n + 0.5)
   end
 end
 
-local toarray = function (s)
+local function toarray (s)
   local fields = { lpegmatch (commasplitter, s) }
   local ret    = { }
   for i = 1, #fields do
@@ -432,7 +453,7 @@ local toarray = function (s)
   return ret
 end
 
-local tohash = function (s)
+local function tohash (s)
   local result = { }
   local fields = toarray (s)
   for _, field in next, fields do
@@ -487,6 +508,44 @@ local option_spec = {
           return nil
         end
         return tableconcat (result, ",")
+      end
+    },
+    location_precedence = {
+      in_t      = string_t,
+      out_t     = table_t,
+      transform = function (s)
+        local bits = { lpegmatch (commasplitter, s) }
+        if next (bits) then
+          local seq = { }
+          local done = { }
+          for i = 1, #bits do
+            local bit = bits [i]
+            if valid_locations [bit] then
+              if not done [bit] then
+                done [bit] = true
+                seq [#seq + 1] = bit
+              else
+                logreport ("both", 0, "conf",
+                           "ignoring duplicate location %s at position %d \z
+                            in precedence list",
+                           bit, i)
+              end
+            else
+              logreport ("both", 0, "conf",
+                         "location precedence list contains invalid item %s \z
+                          at position %d.",
+                         bit, i)
+            end
+          end
+          if next (seq) then
+            logreport ("both", 2, "conf",
+                       "overriding anon lookup sequence %s.",
+                       tableconcat (seq, ","))
+            return seq
+          end
+        end
+        logreport ("both", 0, "conf", "no lookup locations enabled, falling back to default precedence list")
+        return default_location_precedence
       end
     },
     scan_local   = { in_t = boolean_t, },
@@ -571,7 +630,7 @@ local option_spec = {
           return ldr
         end
         logreport ("log", 0, "conf",
-                    "Requested fontloader \"%s\" not defined, "
+                    "Requested fontloader %q not defined, "
                     .. "use at your own risk.",
                     id)
         return id
@@ -590,15 +649,33 @@ local option_spec = {
         local cb = permissible_color_callbacks[cb_spec]
         if cb then
           logreport ("log", 3, "conf",
-                     "Using callback \"%s\" for font colorization.",
+                     "Using callback %q for font colorization.",
                      cb)
           return cb
         end
         logreport ("log", 0, "conf",
-                    "Requested callback identifier \"%s\" invalid, "
+                    "Requested callback identifier %q invalid, "
                     .. "falling back to default.",
                     cb_spec)
         return permissible_color_callbacks.default
+      end,
+    },
+    default_dvi_driver = {
+      in_t      = string_t,
+      out_t     = string_t,
+      transform = function (driver)
+        local mapped = known_dvi_drivers[driver]
+        if mapped then
+          logreport ("log", 5, "conf",
+                     "Using default DVI driver %q if used in DVI mode.",
+                     mapped)
+          return mapped
+        end
+        logreport ("log", 0, "conf",
+                    "Requested default DVI driver %q invalid, "
+                    .. "falling back to dvisvgm.",
+                    driver)
+        return known_dvi_drivers.dvisvgm
       end,
     },
   },
@@ -617,6 +694,7 @@ local option_spec = {
         return w
       end,
     },
+    keepnames       = { in_t = boolean_t, },
   },
   paths = {
     names_dir           = { in_t = string_t, },
@@ -637,32 +715,32 @@ local option_spec = {
 ---                               FORMATTERS
 -------------------------------------------------------------------------------
 
-local commented = function (str)
+local function commented (str)
   return ";" .. str
 end
 
 local underscore_replacer = lpeg.replacer ("_", "-", true)
 
-local dashed = function (var)
+local function dashed (var)
   --- INI spec dictates that dashes are valid in variable names, not
   --- underscores.
   return underscore_replacer (var) or var
 end
 
 local indent = "  "
-local format_string = function (var, val)
+local function format_string (var, val)
   return stringformat (indent .. "%s = %s", var, val)
 end
 
-local format_integer = function (var, val)
+local function format_integer (var, val)
   return stringformat (indent .. "%s = %d", var, val)
 end
 
-local format_boolean = function (var, val)
+local function format_boolean (var, val)
   return stringformat (indent .. "%s = %s", var, val == true and "true" or "false")
 end
 
-local format_keyval = function (var, val)
+local function format_keyval (var, val)
   local list = { }
   local keys = table.sortedkeys (val)
   for i = 1, #keys do
@@ -681,7 +759,7 @@ local format_keyval = function (var, val)
   end
 end
 
-local format_list = function (var, val)
+local function format_list (var, val)
   local elts = { }
   for i = 1, #val do elts [i] = val [i] end
   if next (elts) then
@@ -690,7 +768,7 @@ local format_list = function (var, val)
   end
 end
 
-local format_section = function (title)
+local function format_section (title)
   return stringformat ("[%s]", dashed (title))
 end
 
@@ -744,12 +822,13 @@ local formatters = {
     lookups_file = { false, format_string },
   },
   run = {
-    anon_sequence   = { false, format_list    },
-    color_callback  = { false, format_string  },
-    definer         = { false, format_string  },
-    fontloader      = { false, format_string  },
-    log_level       = { false, format_integer },
-    resolver        = { false, format_string  },
+    anon_sequence      = { false, format_list    },
+    color_callback     = { false, format_string  },
+    definer            = { false, format_string  },
+    fontloader         = { true,  format_string  },
+    log_level          = { false, format_integer },
+    resolver           = { false, format_string  },
+    default_dvi_driver = { false, format_string  },
   },
 }
 
@@ -764,7 +843,7 @@ local formatters = {
 
 --doc]]--
 
-local tilde_expand = function (p)
+local function tilde_expand (p)
   if #p > 2 then
     if stringsub (p, 1, 2) == "~/" then
       local homedir = osgetenv "HOME"
@@ -776,7 +855,7 @@ local tilde_expand = function (p)
   return p
 end
 
-local resolve_config_path = function ()
+local function resolve_config_path ()
   for i = 1, #config_paths do
     local t, p = unpack (config_paths[i])
     local fullname
@@ -799,7 +878,7 @@ local resolve_config_path = function ()
   return false
 end
 
-local add_config_paths = function (t)
+local function add_config_paths (t)
   if not next (t) then
     return
   end
@@ -887,8 +966,7 @@ local process_options = function (opts)
   return new
 end
 
-local apply
-apply = function (old, new)
+local function apply (old, new)
   if not new then
     if not old then
       return false
@@ -916,7 +994,7 @@ apply = function (old, new)
   return result
 end
 
-local reconfigure = function ()
+local function reconfigure()
   for i = 1, #reconf_tasks do
     local name, task = unpack (reconf_tasks[i])
     logreport ("both", 3, "conf", "Launch post-configuration task %q.", name)
@@ -928,7 +1006,7 @@ local reconfigure = function ()
   return true
 end
 
-local read = function (extra)
+local function read (extra)
   if extra then
     add_config_paths (extra)
   end
@@ -960,7 +1038,7 @@ local read = function (extra)
   return ret
 end
 
-local apply_defaults = function ()
+local function apply_defaults ()
   local defaults      = default_config
   local vars          = read ()
   --- Side-effects galore ...
@@ -968,7 +1046,7 @@ local apply_defaults = function ()
   return reconfigure ()
 end
 
-local dump = function ()
+local function dump ()
   local sections = table.sortedkeys (config.luaotfload)
   local confdata = { }
   for i = 1, #sections do
@@ -1001,7 +1079,7 @@ local dump = function ()
   end
   if next(confdata) then
     iowrite (stringformat (conf_header,
-                           osdate ("%Y-%m-d %H:%M:%S", os.time ())))
+                           osdate ("%Y-%m-%d %H:%M:%S", os.time ())))
     iowrite (tableconcat (confdata, "\n"))
     iowrite (conf_footer)
   end

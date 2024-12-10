@@ -26,7 +26,7 @@ if not modules then modules = { } end modules ['font-otl'] = {
 local lower = string.lower
 local type, next, tonumber, tostring, unpack = type, next, tonumber, tostring, unpack
 local abs = math.abs
-local derivetable = table.derive
+local derivetable, sortedhash = table.derive, table.sortedhash
 local formatters = string.formatters
 
 local setmetatableindex   = table.setmetatableindex
@@ -52,11 +52,12 @@ local report_otf          = logs.reporter("fonts","otf loading")
 local fonts               = fonts
 local otf                 = fonts.handlers.otf
 
-otf.version               = 3.109 -- beware: also sync font-mis.lua and in mtx-fonts
+otf.version               = 3.134 -- beware: also sync font-mis.lua and in mtx-fonts
 otf.cache                 = containers.define("fonts", "otl", otf.version, true)
 otf.svgcache              = containers.define("fonts", "svg", otf.version, true)
 otf.pngcache              = containers.define("fonts", "png", otf.version, true)
 otf.pdfcache              = containers.define("fonts", "pdf", otf.version, true)
+otf.mpscache              = containers.define("fonts", "mps", otf.version, true)
 
 otf.svgenabled            = false
 otf.pngenabled            = false
@@ -217,6 +218,9 @@ function otf.load(filename,sub,instance)
             if cleanup == 0 then
                 checkmemory(used,threshold,tracememory)
             end
+            if context then
+                otfreaders.condense(data)
+            end
             otfreaders.pack(data)
             report_otf("loading done")
             report_otf("saving %a in cache",filename)
@@ -313,7 +317,7 @@ local function copytotfm(data,cache_id)
         local properties     = derivetable(data.properties)
         local descriptions   = derivetable(data.descriptions)
         local goodies        = derivetable(data.goodies)
-        local characters     = { }
+        local characters     = { } -- newtable if we knwo how many
         local parameters     = { }
         local mathparameters = { }
         --
@@ -485,23 +489,47 @@ local function copytotfm(data,cache_id)
             end
         end
         --
-        parameters.designsize    = (designsize/10)*65536
-        parameters.minsize       = (minsize   /10)*65536
-        parameters.maxsize       = (maxsize   /10)*65536
-        parameters.ascender      = abs(metadata.ascender  or 0)
-        parameters.descender     = abs(metadata.descender or 0)
-        parameters.units         = units
-        parameters.vheight       = metadata.defaultvheight
+        parameters.designsize = (designsize/10)*65536
+        parameters.minsize    = (minsize   /10)*65536
+        parameters.maxsize    = (maxsize   /10)*65536
+        parameters.ascender   = abs(metadata.ascender  or 0)
+        parameters.descender  = abs(metadata.descender or 0)
+        parameters.units      = units
+        parameters.vheight    = metadata.defaultvheight
         --
-        properties.space         = spacer
-        properties.encodingbytes = 2
-        properties.format        = data.format or formats.otf
-        properties.filename      = filename
-        properties.fontname      = fontname
-        properties.fullname      = fullname
-        properties.psname        = psname
-        properties.name          = filename or fullname
-        properties.subfont       = subfont
+        properties.space      = spacer
+        properties.format     = data.format or formats.otf
+        properties.filename   = filename
+        properties.fontname   = fontname
+        properties.fullname   = fullname
+        properties.psname     = psname
+        properties.name       = filename or fullname
+        properties.subfont    = subfont
+        --
+if not CONTEXTLMTXMODE or CONTEXTLMTXMODE == 0 then
+    --
+    properties.encodingbytes = 2
+elseif CONTEXTLMTXMODE then
+    local duplicates = resources and resources.duplicates
+    if duplicates then
+        local maxindex = data.nofglyphs or metadata.nofglyphs
+        if maxindex then
+            for u, d in sortedhash(duplicates) do
+                local du = descriptions[u]
+                if du then
+                    for uu in sortedhash(d) do
+                        maxindex = maxindex + 1
+                        descriptions[uu].dupindex = du.index
+                        descriptions[uu].index    = maxindex
+                    end
+                else
+                 -- report_otf("no %U in font %a, duplicates ignored",u,filename)
+                end
+            end
+        end
+    end
+    --
+end
         --
      -- properties.name          = specification.name
      -- properties.sub           = specification.sub
@@ -532,6 +560,9 @@ local converters = {
         action    = otf.readers.woff2otf,
     }
 }
+
+-- We can get differences between daylight saving etc ... but it makes no sense to
+-- mess with trickery .. so be it when you use a different binary.
 
 local function checkconversion(specification)
     local filename  = specification.filename
@@ -601,6 +632,7 @@ local function read_from_otf(specification)
         -- this late ? .. needs checking
         tfmdata.properties.name = specification.name
         tfmdata.properties.sub  = specification.sub
+        tfmdata.properties.id   = specification.id
         --
         tfmdata = constructors.scale(tfmdata,specification)
         local allfeatures = tfmdata.shared.features or specification.features.normal
@@ -611,25 +643,33 @@ local function read_from_otf(specification)
     return tfmdata
 end
 
-local function checkmathsize(tfmdata,mathsize)
-    local mathdata = tfmdata.shared.rawdata.metadata.math
-    local mathsize = tonumber(mathsize)
-    if mathdata then -- we cannot use mathparameters as luatex will complain
-        local parameters = tfmdata.parameters
-        parameters.scriptpercentage       = mathdata.ScriptPercentScaleDown
-        parameters.scriptscriptpercentage = mathdata.ScriptScriptPercentScaleDown
-        parameters.mathsize               = mathsize -- only when a number !
-    end
-end
-
-registerotffeature {
-    name         = "mathsize",
-    description  = "apply mathsize specified in the font",
-    initializers = {
-        base = checkmathsize,
-        node = checkmathsize,
-    }
-}
+-- if context then
+--
+--     -- so the next will go to some generic module instead
+--
+-- else
+--
+--     local function checkmathsize(tfmdata,mathsize)
+--         local mathdata = tfmdata.shared.rawdata.metadata.math
+--         local mathsize = tonumber(mathsize)
+--         if mathdata then -- we cannot use mathparameters as luatex will complain
+--             local parameters = tfmdata.parameters
+--             parameters.scriptpercentage       = mathdata.ScriptPercentScaleDown
+--             parameters.scriptscriptpercentage = mathdata.ScriptScriptPercentScaleDown
+--             parameters.mathsize               = mathsize -- only when a number !
+--         end
+--     end
+--
+--     registerotffeature {
+--         name         = "mathsize",
+--         description  = "apply mathsize specified in the font",
+--         initializers = {
+--             base = checkmathsize,
+--             node = checkmathsize,
+--         }
+--     }
+--
+-- end
 
 -- readers
 

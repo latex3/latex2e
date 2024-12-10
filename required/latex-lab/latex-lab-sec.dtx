@@ -1,0 +1,833 @@
+% \iffalse meta-comment
+%
+%% File: latex-lab-sec.dtx (C) Copyright 2022-2024 LaTeX Project
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+%
+% The development version of the bundle can be found below
+%
+%    https://github.com/latex3/latex2e/required/latex-lab
+%
+% for those people who are interested or want to report an issue.
+%
+\def\ltlabsecdate{2024-10-04}
+\def\ltlabsecversion{0.84f}
+%<*driver>
+\documentclass[kernel]{l3doc}
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{latex-lab-sec.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+%
+% \title{The \textsf{latex-lab-sec} package\\
+% Changes related to the tagging of sectioning commands}
+% \author{\LaTeX{} Project\thanks{Initial implementation done by Ulrike Fischer}}
+% \date{v\ltlabsecversion\ \ltlabsecdate}
+%
+% \maketitle
+%
+% \newcommand{\xt}[1]{\textsl{\textsf{#1}}}
+% \newcommand{\TODO}[1]{\textbf{[TODO:} #1\textbf{]}}
+% \newcommand{\docclass}{document class \marginpar{\raggedright document class
+% customizations}}
+%
+% \providecommand\hook[1]{\texttt{#1}}
+%
+% \begin{abstract}
+% The following code implements a first draft for the tagging of sectioning commands.
+% \end{abstract}
+% 
+% \section{Limitations}
+% 
+% Sectioning commands are in not defined by the format but by the classes. 
+% Their implementation vary: some are defined with the help of \cs{@startsection}, 
+% some are like \cs{chapter} handcrafted, 
+% some build with the help of extension packages or as in the KOMA classes 
+% with class code that extends the \cs{@startsection} functionality.
+% 
+% The following code can therefore currently be used \emph{only} with the standard classes
+% or with classes which do not overwrite the changed definitions.
+% 
+% 
+% 
+% \section{Introduction}
+% 
+%  Tagging of sectioning commands consist of two parts:
+% 
+% \begin{itemize}
+%  \item The heading/title text of the section should be surrounded by a 
+%  heading tag, typically \texttt{Hn} with some value of \texttt{n}.
+%  The number of the section command can optionally be put in a \texttt{Lbl}. 
+%  The number of the \texttt{Hn} tag should reflect the \enquote{natural} level. 
+%  So in an article \cs{section} will use  \texttt{H1}, in a book \cs{chapter} will use
+%  \texttt{H1} and \cs{section} \texttt{H2}. 
+%  Titles of \cs{part} are a bit out of this system as they are normally
+%  not part of the hierarchy: often only some chapters are grouped under a part.
+%  Their title is therefore tagged as \texttt{Title}. 
+%  \item 
+%  The whole section should normally be surrounded by
+%  a \texttt{Sect} tag. Parts should be surrounded by \texttt{Part}. 
+%  It is a bit unclear if the headings should be inside or outside of these 
+%  structures---the best practice guide puts them outside---but on the whole 
+%  it sounds more logical to group the heading with the text inside the \texttt{Sect}.
+%  For the part this is actually required, as there can be only one \texttt{Title}
+%  in a structure, so the part title can't be at the same level as the 
+%  document \texttt{Title}.
+%  
+%  Starting such an enclosing \texttt{Sect} structure is rather easy, 
+%  but closing it requires code in various place, 
+%  for example the commands \cs{mainmatter}, \cs{backmatter}, 
+%  \cs{frontmatter} and \cs{appendix} should typically close everything. 
+%  Following sectioning commands should close all previous structures 
+%  with a level equal or higher than their own level.
+%  \end{itemize}
+%  
+%  \section{Technical details and problems}
+%  
+%  The implementation has to take care of various details.
+%  
+%  \begin{itemize}
+%  
+%  \item As sections in \LaTeX{} are not environments, the 
+%  \texttt{<Sect>} structures can be wrongly nested with other structures. For example
+%  if a document puts a sectioning command into a list or a trivlist or 
+%  a minipage then it can no longer close previous \texttt{<Sect>} structures correctly.
+%  The problem can be detected by checking the structure stack 
+%  and a warning can be issued, but the author then has to close the structures
+%  manually before the list or minipage. 
+%  
+%  Thus there have to be user interfaces to handle such cases.
+%  It should also be possible not to create all the \texttt{<Sect>} structures
+%  automatically but to tag only the headings so that the author can handle special
+%  cases manually. 
+%  
+%  \item If hyperref is used, targets for links should be inserted, either with
+%  \cs{refstepcounter} or manually with \cs{MakeLinkTarget}. These targets must be
+%  in the correct structure for the structure destinations. They replace some
+%  of the current patches in hyperref.
+%  
+%  \item With lualatex the mc-commands set attributes \emph{locally}, so the 
+%  commands must be at the right grouping level.
+%  \end{itemize}
+%  
+%  \subsection{Functions and keys}
+%
+% \begin{function}{\tag_tool:n,\tagtool}
+% 
+% \end{function}
+%  
+%  \subsection{TODO}
+%  
+%  \begin{itemize}
+%   \item A dedicated command to close a sectioning unit should be provided. 
+%    
+%   \item A dedicated command to open a sectioning unit should be provided too. 
+%   
+%   \item It should also be possible to suppress the sectioning unit in sectioning commands
+%     to allow e.g. to put an epigraph or similar in front.
+%     
+%  \item The number in \cs{part} and  \cs{chapter} is currently not correctly 
+%  tagged as a \texttt{Lbl} as this requires to redefine the internal (class dependent)
+%  commands too.
+%     
+%  \end{itemize}
+%
+%    \begin{macrocode}
+%<*package>
+%    \end{macrocode}
+%
+% \section{Implementation}
+%    \begin{macrocode}
+\ProvidesExplPackage {latex-lab-testphase-sec} {\ltlabsecdate} {\ltlabsecversion}
+  {Code related to the tagging of sectioning commands}
+%    \end{macrocode}
+%  
+% \subsection{Surrounding by \texttt{Sect} structures} 
+%  We use a stack to record the levels of the open \texttt{Sect}. The first item
+%  has level -100. A sectioning command will take a record from the stack. If its level is
+%  greater or equal it closes this structure and takes the next record from the stack.
+%  If the record has a smaller level then it puts it back and stops.
+%  The stack is compared with the main structure stack, if they don't match 
+%  it means we can't safely close the \texttt{Sect} and so we issue a warning 
+%  and do nothing. 
+%    
+% \subsubsection{Loading general kernel changes}
+% [kernel?]
+%  Also loaded in the toc-tagging code.
+%    \begin{macrocode}
+\RequirePackage{latex-lab-kernel-changes}
+%    \end{macrocode}
+%    \begin{macrocode}
+%</package>
+%    \end{macrocode}
+% \subsubsection{Glyphtounicode improvements}
+% 
+% As lualatex runs with legacy encodings in the test files, we enable and
+% load glyphtounicode. For the math we load additional definitions.
+% 
+%    \begin{macrocode}
+%<*kernelchange>
+\ifdefined\directlua
+ \ifnum\outputmode > 0  
+   \pdfvariable gentounicode =1
+   \protected\def\pdfglyphtounicode {\pdfextension glyphtounicode }
+   \protected\edef\pdfgentounicode  {\pdfvariable gentounicode} 
+   \input{glyphtounicode}
+ \fi
+\fi
+\ifdefined\pdfglyphtounicode
+ \input{glyphtounicode-cmex}
+\fi 
+%</kernelchange>
+%    \end{macrocode}
+%
+% \subsubsection{updating \cs{@currentHref}}
+% [kernel?]
+%
+% We  must ensure that manual targets (e.g. in unnumbered sections)
+% correctly update \cs{@currentHref}. For this we extend the kernel definition of
+% \cs{MakeLinkTarget} 
+% TODO: remove after release 2024/11
+%    \begin{macrocode}
+%<*kernelchange>
+\ExplSyntaxOn
+\str_if_exist:cF { l__socket_tagsupport/recordtarget_plug_str }
+ {
+  \int_new:N\g__kernel_target_int
+  \RenewDocumentCommand\MakeLinkTarget{sO{}m}
+   {%
+    \ifvmode
+      \special{}%
+    \else
+      \@savsf\spacefactor
+      \smash{}%
+      \spacefactor\@savsf
+    \fi
+    \IfBooleanTF {#1}
+     {
+       \tl_gset:Ne \@currentHref {#3}
+     }
+     {
+       \int_gincr:N\g__kernel_target_int
+       \tl_gset:Ne \@currentHref {target*.\int_use:N\g__kernel_target_int}
+     }  
+   }
+ }
+\ExplSyntaxOff 
+%</kernelchange> 
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<*package>
+%<@@=tag>
+%    \end{macrocode}
+% \subsubsection{Tagging commands}
+%
+%
+% \begin{variable}{\g_@@_sec_stack_seq}
+% The stack holds the tag, the level and the structure number.
+%    \begin{macrocode}
+\seq_new:N   \g_@@_sec_stack_seq
+\seq_gpush:Nn\g_@@_sec_stack_seq {{Document}{-100}{2}}
+%    \end{macrocode}
+% \end{variable}
+% 
+% \begin{macro}{\@@_get_data_current_Sect:}
+% This allows to retrieve the number of the current Sect structure (or
+% Document if we are outside any Sect) with |\tag_get:n{current_Sect}|
+%    \begin{macrocode}
+\cs_new:Npn \@@_get_data_current_Sect:
+ {
+   \exp_last_unbraced:Ne\use_iii:nnn{\seq_item:Nn\g_@@_sec_stack_seq{1}}
+ }
+%    \end{macrocode}
+% \end{macro}
+% \begin{variable}{\l_@@_sec_Sect_bool}
+% This boolean controls if a Sect structure is opened. 
+%    \begin{macrocode}
+\bool_new:N     \l_@@_sec_Sect_bool
+\bool_set_true:N\l_@@_sec_Sect_bool
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{macro}{\@@_sec_begin:nn}
+% This starts a sectioning structure. 
+% Currently the tag is fix, either Sect or Part, depending on the level,
+% but this will perhaps change. The second argument is currently unused.
+%    \begin{macrocode}
+\cs_new_protected:Npn\@@_sec_begin:nn #1 #2 %#1 level #2 keyval
+  {
+    \tag_struct_begin:n 
+      {
+         tag= {\int_compare:nNnTF {#1}={-1}{Part}{Sect}}
+        ,#2
+      } 
+    \seq_gpush:Ne \g_@@_sec_stack_seq 
+      {{\g_@@_struct_tag_tl}{\int_eval:n{#1}}{\g_@@_struct_stack_current_tl}}    
+  }
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\@@_sec_end:n}
+%    \begin{macrocode}
+\msg_new:nnn { tag } {wrong-sect-nesting}
+  {
+    The~structure~#1~can~not~be~closed.\\
+    It~is~not~equal~to~the~current~structure~#2~on~the~main~stack
+  }
+
+\cs_new_protected:Npn\@@_sec_end:n #1 % #1 level
+  {
+    \seq_get:NN \g_@@_sec_stack_seq \l_@@_tmpa_tl
+    \int_compare:nNnT {#1}<{\exp_last_unbraced:NV\use_ii:nnn\l_@@_tmpa_tl+1}
+      {
+        \seq_get:NN\g_@@_struct_tag_stack_seq \l_@@_tmpb_tl
+        \exp_args:Nee
+          \tl_if_eq:nnTF 
+            {\exp_last_unbraced:NV\use_i:nnn\l_@@_tmpa_tl}
+            {\exp_last_unbraced:NV\use_i:nn\l_@@_tmpb_tl}
+            {
+              \seq_gpop:NN \g_@@_sec_stack_seq \l_@@_tmpa_tl
+              \tag_struct_end:
+              \@@_sec_end:n {#1}        
+            }
+            { 
+              \msg_warning:nnee {tag}{wrong-sect-nesting}
+               { \exp_last_unbraced:NV\use_i:nnn \l_@@_tmpa_tl }
+               { \exp_last_unbraced:NV\use_i:nn \l_@@_tmpb_tl } 
+            }
+      }  
+  } 
+%    \end{macrocode}
+% \end{macro}
+
+% \begin{macro}{\@@_tool_para_split:}
+% Runin-sectioning command must separate the heading from the following text. 
+% 
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_tool_para_split:
+  {
+    \tag_mc_end:
+    \tag_struct_end:        
+    \tag_struct_begin:n{tag=\l_@@_para_tag_default_tl}
+    \tag_mc_begin:n{}
+    \@@_setup_restore_para_default:
+  }
+%    \end{macrocode}
+% \end{macro}
+
+% \begin{macro}{\@@_setup_restore_para_default:}
+% We change the para tagging in the sectioning code.
+% This here restores the default. Currently it only resets the 
+% the tag, but perhaps more will be needed later. 
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_setup_restore_para_default:
+  {
+    \tl_set:Nn \l_@@_para_main_tag_tl {text-unit}
+    \tl_set_eq:NN\l_@@_para_tag_tl\l_@@_para_tag_default_tl
+  }
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\@@_sec_end_display:}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_sec_end_display:
+  {
+    \tag_struct_end: %P = Hn
+    \@@_setup_restore_para_default:
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% Open sec structures should be closed at the end of the document. This should
+% be done before tagpdf closes the Document structure.
+%    \begin{macrocode}
+\hook_gput_code:nnn{tagpdf/finish/before}{tagpdf/sec}{\@@_sec_end:n{-10}}
+\hook_gset_rule:nnnn {tagpdf/finish/before}{tagpdf/sec}{before}{tagpdf}  
+%    \end{macrocode}
+%
+% The commands \cs{mainmatter}, \cs{backmatter}, \cs{frontmatter} and
+% \cs{appendix} close all \texttt{Sect} and \texttt{Part} structures.
+%    \begin{macrocode}
+\AddToHook{cmd/frontmatter/before}{\@@_sec_end:n{-10}}
+\AddToHook{cmd/mainmatter/before} {\@@_sec_end:n{-10}}
+\AddToHook{cmd/backmatter/before} {\@@_sec_end:n{-10}}
+\AddToHook{cmd/appendix/before}   {\@@_sec_end:n{-10}}
+%    \end{macrocode}
+%
+% \subsection{Tagging tools}
+% We need to provide user and package level commands
+% 
+%    \begin{macrocode}
+\cs_if_free:NT \tag_tool:n
+ {
+   \cs_new_protected:Npn \tag_tool:n #1
+    {
+      \tag_if_active:T { \keys_set:nn {tag / tool}{#1} }
+    }
+   \cs_set_eq:NN\tagtool\tag_tool:n   
+ }   
+\keys_define:nn { tag / tool} 
+  {
+    ,sec-start-part .code:n = 
+      {
+        \bool_if:NT\l_@@_sec_Sect_bool
+          {
+            \@@_sec_end:n   {-1} 
+            \@@_sec_begin:nn{-1}{tag=Part}
+          }  
+         \tag_struct_begin:n{tag=part,title=#1}
+%    \end{macrocode}
+% We remap here the text-unit from the paragraph to NonStruct.
+% It would be better to suppress it completely as with the other
+% sectioning commands, but this would require to redefine \cs{@spart}
+% and \cs{@part}, as there is the grouping, and these commands are
+% all slightly different in the standard classes. So this is delayed 
+% to the time when sectioning commands are redefined with templates.
+%    \begin{macrocode}
+         \tl_set:Nn\l_@@_para_main_tag_tl {NonStruct}
+         \tl_set:Nn\l_@@_para_tag_tl {Span}
+      }
+    ,sec-stop-part .code:n = {\@@_sec_end_display:}
+    ,sec-start-chapter .code:n =
+     {
+       \bool_if:NT\l_@@_sec_Sect_bool
+         {
+           \@@_sec_end:n   {0} 
+           \@@_sec_begin:nn{0}{tag=Sect}
+         }  
+        \tag_struct_begin:n{tag=chapter,title=#1}
+%    \end{macrocode}
+% similar to part we remap to NonStruct for now ...
+%    \begin{macrocode}
+        \tl_set:Nn\l_@@_para_main_tag_tl {NonStruct}
+        \tl_set:Nn\l_@@_para_tag_tl {Span}
+     }
+    ,sec-stop-chapter .meta:n = { sec-stop-part}  
+    ,sec-start .code:n = % #1 is a name like "section" 
+      {        
+        \bool_if:NT\l_@@_sec_Sect_bool
+          {       
+            \@@_sec_end:n    {\cs_if_exist_use:c{toclevel@#1}+0} 
+            \@@_sec_begin:nn {\cs_if_exist_use:c{toclevel@#1}+0}{tag=Sect}
+          }  
+        \tl_set:Nn\l_@@_para_tag_tl{#1}
+      } 
+    ,sec-start .value_required:n = true     
+    ,sec-split-para .code:n = {\@@_tool_para_split:}
+    ,restore-para .code:n = {\@@_setup_restore_para_default:}
+    ,sec-stop .code:n = 
+      {
+        \par\@@_sec_end:n   {\cs_if_exist_use:c{toclevel@#1}+0}
+      }
+    ,sec-stop .value_required:n = true  
+    ,sec-add-grouping .bool_set:N = \l_@@_sec_Sect_bool
+  } 
+%    \end{macrocode}
+%
+%
+% \section{Sectioning commands}
+% 
+% \subsection{\cs{part} and \cs{chapter}}
+%
+% \cs{part} and \cs{chapter} are defined by the classes. 
+% To tag them we redefine the user commands. 
+% This will probably break with various classes and with titlesec.
+% The tagging inside relies on the para tagging.
+% We do not yet use keyval in the optional argument, as this requires latex-dev
+% and the naming of the keys and their key family is unclear.
+% \changes{v0.84f}{2024/10/04}{Added braces around optional arg (tagging/725)}
+%    \begin{macrocode}
+\AddToHook{class/after}
+ {
+  \@ifundefined{chapter}
+    {
+%    \end{macrocode}
+% This redefines \cs{part} in article class.
+%    \begin{macrocode}
+     \@ifundefined{part}{}
+      {
+        \RenewDocumentCommand\part{ s O{#3} m }
+         {
+           \if@noskipsec \leavevmode \fi
+           \par
+           \addvspace{4ex}%
+           \@afterindentfalse
+%    \end{macrocode}
+% This are the tagging commands needed at the begin. They open a Part structure
+% and the structure for the title of the heading.
+%    \begin{macrocode}
+        % tagging start commands
+          \tag_tool:n {sec-start-part=#2}
+        % end tagging start commands
+%    \end{macrocode}
+% This adds a  manual target if the part is unnumbered or starred.
+% It replaces the hyperref patches.
+%    \begin{macrocode}
+           \bool_lazy_any:nT  
+            {
+              { #1 } 
+              { 
+                \int_compare_p:nNn {\c@secnumdepth}<{-1} 
+              } 
+            }  
+            {
+              \MakeLinkTarget[part]{}
+            }
+%    \end{macrocode}
+% The main call to the underlying commands. 
+%    \begin{macrocode}
+          \IfBooleanTF 
+            {#1}
+            { \@spart {#3} }
+            { \@part [{#2}]{#3} }
+%    \end{macrocode}
+% and now the closing command for the tagging of the title.
+%    \begin{macrocode}
+         \tag_tool:n {sec-stop-part} 
+         }
+       }    
+    }
+%    \end{macrocode}
+% Redefinitions for book and report
+%    \begin{macrocode}
+    {  
+     \RenewDocumentCommand\chapter{ s O{#3} m }
+      {
+        \if@openright\cleardoublepage\else\clearpage\fi
+        \thispagestyle{plain}%
+        \global\@topnum\z@
+        \@afterindentfalse
+%    \end{macrocode}
+% This are the tagging commands needed at the begin. They open a Sect structure
+% and the structure for the title of the heading.
+%    \begin{macrocode}  
+        \tag_tool:n { sec-start-chapter= #2 }      
+%    \end{macrocode}
+% This adds a  manual target if the chapter is unnumbered or starred.
+% It replaces the hyperref patches.
+%    \begin{macrocode}        
+        \bool_lazy_any:nT  
+          {
+            { #1 } 
+            { 
+              \int_compare_p:nNn {\c@secnumdepth}<{0} 
+            } 
+            {
+              %in book target also needed in frontmatter
+              \bool_lazy_and_p:nn 
+                { \cs_if_exist_p:c { @mainmattertrue } } 
+                { ! \legacy_if_p:n { @mainmatter } }
+            }
+          }  
+          {
+%    \end{macrocode}
+% The relation target-struct is stored internally by the MakeLinkTarget commands
+%    \begin{macrocode}
+            \MakeLinkTarget[chapter]{}
+          }   
+%    \end{macrocode}
+% The main call to the underlying commands. 
+%    \begin{macrocode}               
+        \IfBooleanTF 
+          {#1}
+          { \@schapter {#3} }
+          { \@chapter [{#2}]{#3} }
+%    \end{macrocode}
+% and now the closing command for the tagging of the title.
+%    \begin{macrocode}          
+        \tag_tool:n {sec-stop-chapter} 
+      }
+%    \end{macrocode}
+% and similar for \cs{part}
+%    \begin{macrocode}
+     \RenewDocumentCommand\part{ s O{#3} m }
+      {
+        \if@openright
+          \cleardoublepage
+        \else
+          \clearpage
+        \fi
+        \thispagestyle{plain}%
+        \if@twocolumn
+          \onecolumn
+          \@tempswatrue
+        \else
+          \@tempswafalse
+        \fi
+        \null\vfil
+%    \end{macrocode}
+% This are the tagging commands needed at the begin. They open a Part structure
+% and the structure for the title of the heading.
+%    \begin{macrocode}     
+       \tag_tool:n {sec-start-part=#2}   
+%    \end{macrocode}
+% This adds a  manual target if the part is unnumbered or starred.
+% It replaces the hyperref patches.
+%    \begin{macrocode}        
+        \bool_lazy_any:nT  
+          {
+            { #1 } 
+            { 
+              \int_compare_p:nNn {\c@secnumdepth}<{-1} 
+            } 
+            {
+              %in book target also needed in frontmatter
+              \bool_lazy_and_p:nn 
+                { \cs_if_exist_p:c { @mainmattertrue } } 
+                { ! \legacy_if_p:n { @mainmatter } }
+            }
+          }  
+          {
+            \MakeLinkTarget[part]{}
+          }
+%    \end{macrocode}
+% The main call to the underlying commands. 
+%    \begin{macrocode}          
+        \IfBooleanTF 
+          {#1}
+          { \@spart {#3} }
+          { \@part [{#2}]{#3} }
+%    \end{macrocode}
+% and now the closing command for the tagging of the title.
+%    \begin{macrocode}          
+        \tag_tool:n{sec-stop-part}  
+      }    
+    }
+ }        
+%    \end{macrocode}
+%
+% \subsection{Sectioning commands based on \cs{@startsection}}
+% 
+% The tagging relies again on the para tagging: 
+% we simply exchange the tag name by the one given as \#1.
+% This assumes that a tag with the name of the sectioning type is defined.
+% We don't try to pass the title, this will be done together with 
+% the new keyval handling in the user command.
+% 
+% \subsubsection{Hyperref code}
+% hyperref has to insert anchors. If the sectioning is numbered this is done by 
+% \cs{refstepcounter} (and so in vmode). For unnumbered section hyperref 
+% injects the anchor in hmode before the text, it also inserts a 
+% kern to compensate the indent. 
+% 
+% This means that the target of numbered and unnumbered sectioning commands
+% differ, both regarding the location and in relation to the 
+% tagging structure: The anchor from the \cs{refstepcounter} is outside of
+% the structure created by the heading title if the para tags are used,
+% while the other anchors are inside and so the structure destinations are different.    
+% 
+% We unify this by suppressing the anchor from the refstepcounter.
+% Also we only go back if the indent is positive.
+% 
+% At first suppress all hyperref patches related to sectioning:
+%    \begin{macrocode}
+\def\hyper@nopatch@sectioning{}
+%    \end{macrocode}
+%
+% \begin{macro}{\@hyp@section@target@nnn}
+% A simple internal command. There is no need for something public,
+% as packages defining their own version of \cs{@startsection} will 
+% probably need something slightly different based on \cs{MakeLinkTarget}. 
+%    \begin{macrocode}
+\cs_new_protected:Npn \@hyp@section@target@nnn #1 #2 #3 %#1 optarg #2 name/counter, #3 indent
+  {
+    \makebox[0pt][l]
+     { 
+       \skip_set:Nn \@tempskipa {#3}
+       \dim_compare:nNnF {\@tempskipa}<{0pt}{\kern-\@tempskipa}
+       \MakeLinkTarget#1{#2}
+     }
+  }
+%    \end{macrocode}
+% \end{macro}
+% 
+% \subsection{Adaption of the heading commands}
+% We add to \cs{@startsection} the commands to open the \texttt{Sect}
+% structure and to change the para tag.
+%
+%    \begin{macrocode}
+\def\@startsection#1#2#3#4#5#6{%
+  \if@noskipsec \leavevmode \fi
+  \par
+  \@tempskipa #4\relax
+  \@afterindenttrue
+  \ifdim \@tempskipa <\z@
+    \@tempskipa -\@tempskipa \@afterindentfalse
+  \fi
+  \if@nobreak
+    \everypar{}%
+  \else
+    \addpenalty\@secpenalty\addvspace\@tempskipa
+  \fi
+  \tag_tool:n { sec-start=#1}%new
+  \@ifstar
+    {\@ssect{#3}{#4}{#5}{#6}}%
+    {\@dblarg{\@sect{#1}{#2}{#3}{#4}{#5}{#6}}}}  
+%    \end{macrocode}
+% To be able to correctly tag the number we need a special 
+% \cs{@hangfrom} variant. This is a bit tricky:
+% As the paragraph starts after the \cs{setbox} luatex attributes 
+% are not set yet and numbers are unmarked if one doesn't pay attention.
+% The code assumes that we are in vmode!
+%    \begin{macrocode}
+\cs_new_protected:Npn \@kernel@tag@hangfrom #1
+  {
+     \tagstructbegin{tag=\l_@@_para_tag_tl}
+     \cs_if_exist_use:N \@@_gincr_para_begin_int:
+     \tagstructbegin{tag=Lbl}
+     \setbox\@tempboxa
+       \hbox
+         {
+%    \end{macrocode}
+% In lua mode we have to set the attributes inside the box!
+%    \begin{macrocode}
+           \bool_lazy_and:nnT
+            {\tag_if_active_p:}
+            {\g_@@_mode_lua_bool}
+            {\tagmcbegin{tag=Lbl}}
+           {#1}
+         }
+%    \end{macrocode}
+% We stop tagging now, to avoid that the \cs{noindent} triggers
+% the paratagging. We do not disable paratagging completely, to 
+% avoid that the numbering goes wrong.
+%    \begin{macrocode}
+   \tag_suspend:n{hangfrom}
+   \hangindent \wd\@tempboxa\noindent
+%    \end{macrocode}
+% Restart tagging and insert the box.
+%    \begin{macrocode}
+   \tag_resume:n{hangfrom}
+   \tagmcbegin{}\box\@tempboxa\tagmcend\tagstructend\tagmcbegin{}}
+%    \end{macrocode}
+% This command is used to tag the numbers of runin. We do not try
+% to avoid the empty container from the paratagging, this would require
+% more changes. 
+%    \begin{macrocode}
+\cs_new_protected:Npn \@kernel@tag@svsec
+  {
+    \tag_mc_end_push:      
+    \tag_struct_begin:n{tag=Lbl}    
+    \tag_mc_begin:n{}      
+    \@svsec
+    \tag_mc_end:
+    \tag_struct_end:
+    \tag_mc_begin_pop:n{}
+  }  
+%    \end{macrocode}
+% \cs{@sect} is only changed to replace the hyperref patches
+% and to use the new \cs{@kernel@tag@hangfrom} and \cs{@kernel@tag@svsec}
+%    \begin{macrocode}
+%<@@=>
+\def\@sect#1#2#3#4#5#6[#7]#8{%  
+  \ifnum #2>\c@secnumdepth
+    \def\@svsec{\@hyp@section@target@nnn{[section]}{}{#3}}
+  \else
+    \LinkTargetOff
+    \refstepcounter{#1}%
+    \LinkTargetOn
+    \protected@edef\@svsec{\@hyp@section@target@nnn{}{#1}{#3}\@seccntformat{#1}\relax}%
+  \fi
+  \@tempskipa #5\relax
+  \ifdim \@tempskipa>\z@
+    \begingroup
+    \tagtool{para-flattened=true} % or \bool_set_true\l_@@_para_flattened_bool
+      #6{%
+         \ifnum #2>\c@secnumdepth
+          \@hangfrom {\hskip #3\relax\@svsec}%
+         \else 
+          \@kernel@tag@hangfrom{\hskip #3\relax\@svsec}%
+         \fi 
+          \interlinepenalty \@M #8\@@par}%
+    \endgroup
+    \csname #1mark\endcsname{#7}%
+    \addcontentsline{toc}{#1}{%
+      \ifnum #2>\c@secnumdepth \else
+        \protect\numberline{\csname the#1\endcsname}%
+      \fi
+      #7}%
+  \else
+    \def\@svsechd{%
+      #6{\hskip #3\relax
+      \ifnum #2>\c@secnumdepth
+       \@svsec
+      \else 
+       \@kernel@tag@svsec
+      \fi  #8}%
+      \csname #1mark\endcsname{#7}%
+      \addcontentsline{toc}{#1}{%
+        \ifnum #2>\c@secnumdepth \else
+          \protect\numberline{\csname the#1\endcsname}%
+        \fi
+        #7}}%
+  \fi
+  \@xsect{#5}}
+%    \end{macrocode}
+% similar for \cs{@ssect}
+%    \begin{macrocode}
+\def\@ssect#1#2#3#4#5{%
+  \@tempskipa #3\relax
+  \ifdim \@tempskipa>\z@
+    \begingroup
+    \tagtool{para-flattened=true}
+      #4{%
+        \@hangfrom{\hskip #1\relax\@hyp@section@target@nnn{[section]}{}{#1}}%
+          \interlinepenalty \@M #5\@@par}%
+    \endgroup
+  \else
+    \def\@svsechd{#4{\hskip #1\relax\@hyp@section@target@nnn{[section]}{}{#3}\relax #5}}%
+  \fi
+  \@xsect{#3}}  
+%    \end{macrocode}
+% At last \cs{@xsect} needs code in two places. For display headings it has to
+% restore the default para code, for run in headings it has to separated the 
+% heading from the following text.
+%    \begin{macrocode}
+\def\@xsect#1{%
+  \@tempskipa #1\relax
+  \ifdim \@tempskipa>\z@
+    \par \nobreak
+    \vskip \@tempskipa
+    \tag_tool:n {restore-para}
+    \@afterheading
+  \else
+    \@nobreakfalse
+    \global\@noskipsectrue
+    \everypar{%
+      \if@noskipsec
+        \global\@noskipsecfalse
+       {\setbox\z@\lastbox}%
+        \clubpenalty\@M
+        \begingroup \@svsechd \endgroup
+        \unskip
+        \tag_tool:n {sec-split-para}
+        \@tempskipa #1\relax
+        \hskip -\@tempskipa
+      \else
+        \clubpenalty \@clubpenalty
+        \everypar{}%
+      \fi}%
+  \fi
+  \ignorespaces}    
+%</package>  
+%    \end{macrocode}
+
+%    \begin{macrocode}
+%<*latex-lab>
+\ProvidesFile{sec-latex-lab-testphase.ltx}
+        [\ltlabsecdate\space v\ltlabsecversion\space latex-lab wrapper sec]        
+\RequirePackage{latex-lab-testphase-sec}
+%</latex-lab>
+%    \end{macrocode}

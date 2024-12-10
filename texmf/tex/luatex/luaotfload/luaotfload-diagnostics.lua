@@ -5,18 +5,13 @@
 --       AUTHOR:  Philipp Gesang <phg@phi-gamma.net>
 -----------------------------------------------------------------------
 
-local ProvidesLuaModule = { 
+assert(luaotfload_module, "This is a part of luaotfload and should not be loaded independently") { 
     name          = "luaotfload-diagnostics",
-    version       = "3.00",       --TAGVERSION
-    date          = "2019-09-13", --TAGDATE
+    version       = "3.28",       --TAGVERSION
+    date          = "2024-02-14", --TAGDATE
     description   = "luaotfload-tool submodule / diagnostics",
     license       = "GPL v2.0"
 }
-
-if luatexbase and luatexbase.provides_module then
-  luatexbase.provides_module (ProvidesLuaModule)
-end  
-
 
 local names                    = fonts.names
 
@@ -58,7 +53,7 @@ local C, Cg, Ct                = lpeg.C, lpeg.Cg, lpeg.Ct
 local lpegmatch                = lpeg.match
 
 local report                   = luaotfload.log.report
-local out = function (...)
+local function out (...)
     report (false, 0, "diagnose", ...)
 end
 
@@ -66,7 +61,7 @@ local parsers                  = luaotfload.parsers
 local stripslashes             = parsers.stripslashes
 local splitcomma               = parsers.splitcomma
 
-local check_index = function (errcnt)
+local function check_index (errcnt)
 
     out "================= font names =================="
     local namedata = names.data()
@@ -107,7 +102,7 @@ local check_index = function (errcnt)
     return errcnt
 end
 
-local verify_files = function (errcnt)
+local function verify_files (errcnt)
     out "================ verify files ================="
     local status = config.luaotfload.status
     local hashes = status.hashes
@@ -157,7 +152,7 @@ local verify_files = function (errcnt)
     return errcnt
 end
 
-local get_tentative_attributes = function (file)
+local function get_tentative_attributes (file)
     if not lfsisfile (file) then
         local chan = ioopen (file, "w")
         if chan then
@@ -173,11 +168,11 @@ local p_permissions = Ct(Cg(Ct(C(1) * C(1) * C(1)), "u")
                        * Cg(Ct(C(1) * C(1) * C(1)), "g")
                        * Cg(Ct(C(1) * C(1) * C(1)), "o"))
 
-local analyze_permissions = function (raw)
+local function analyze_permissions (raw)
     return lpegmatch (p_permissions, raw)
 end
 
-local get_permissions = function (t, location)
+local function get_permissions (t, location)
     if stringsub (location, #location) == "/" then
         --- strip trailing slashes (lfs idiosyncrasy on Win)
         location = lpegmatch (stripslashes, location)
@@ -219,7 +214,7 @@ local get_permissions = function (t, location)
     }
 end
 
-local check_conformance = function (spec, permissions, errcnt)
+local function check_conformance (spec, permissions, errcnt)
     local uid = permissions.attributes.uid
     local gid = permissions.attributes.gid
     local raw = permissions.attributes.permissions
@@ -255,7 +250,7 @@ local check_conformance = function (spec, permissions, errcnt)
     return errcnt
 end
 
-local init_desired_permissions = function ()
+local function init_desired_permissions ()
     local paths = config.luaotfload.paths
     return {
         { "d", {"r","w"}, function () return caches.getwritablepath ("", "") end },
@@ -267,7 +262,7 @@ local init_desired_permissions = function ()
     }
 end
 
-local check_permissions = function (errcnt)
+local function check_permissions (errcnt)
     out [[=============== file permissions ==============]]
     local desired_permissions = init_desired_permissions ()
     for i = 1, #desired_permissions do
@@ -294,7 +289,7 @@ end
 local check_upstream
 
 if kpsefind_file ("https.lua", "lua") == nil then
-    check_upstream = function (errcnt)
+    function check_upstream (errcnt)
         out       [[============= upstream repository =============
                     WARNING: Cannot retrieve repository data.
                     Github API access requires the luasec library.
@@ -307,16 +302,16 @@ else
     local https = require "ssl.https"
 
     local gh_api_root     = [[https://api.github.com]]
-    local release_url     = [[https://github.com/lualatex/luaotfload/releases]]
-    local luaotfload_repo = [[lualatex/luaotfload]]
-    local user_agent      = [[lualatex/luaotfload integrity check]]
+    local release_url     = [[https://github.com/latex3/luaotfload/releases]]
+    local luaotfload_repo = [[latex3/luaotfload]]
+    local user_agent      = [[latex3/luaotfload integrity check]]
     local shortbytes = 8
 
-    local gh_shortrevision = function (rev)
+    local function gh_shortrevision (rev)
         return stringsub (rev, 1, shortbytes)
     end
 
-    local gh_encode_parameters = function (parameters)
+    local function gh_encode_parameters (parameters)
         local acc = {}
         for field, value in next, parameters do
             --- unsafe, non-urlencoded coz it’s all ascii chars
@@ -325,7 +320,7 @@ else
         return "?" .. tableconcat (acc, "&")
     end
 
-    local gh_make_url = function (components, parameters)
+    local function gh_make_url (components, parameters)
         local url = tableconcat ({ gh_api_root,
                                    unpack (components) },
                                  "/")
@@ -337,7 +332,7 @@ else
 
     local alright = [[HTTP/1.1 200 OK]]
 
-    local gh_api_request = function (...)
+    local function gh_api_request (...)
         local args    = {...}
         local nargs   = #args
         local final   = args[nargs]
@@ -361,7 +356,7 @@ else
         return response
     end
 
-    local gh_api_checklimit = function (headers)
+    local function gh_api_checklimit (headers)
         local rawlimit  = gh_api_request "rate_limit"
         local limitdata = lua_of_json (rawlimit)
         if not limitdata and limitdata.rate then
@@ -381,13 +376,13 @@ else
                 out ("Try again later at %s.", osdate ("%F %T", reset))
             else --- windows doesn’t C99
                 out ("Try again later at %s.",
-                     osdate ("%Y-%m-d %H:%M:%S", reset))
+                     osdate ("%Y-%m-%d %H:%M:%S", reset))
             end
         end
         return true
     end
 
-    local gh_tags = function ()
+    local function gh_tags ()
         out "Fetching tags from repository, please stand by."
         local rawtags = gh_api_request ("repos",
                                         luaotfload_repo,
@@ -407,7 +402,7 @@ else
         return latest
     end
 
-    local gh_compare = function (head, base)
+    local function gh_compare (head, base)
         if base == nil then
             base = "HEAD"
         end
@@ -428,7 +423,7 @@ else
         return status
     end
 
-    local gh_news = function (since)
+    local function gh_news (since)
         local compared  = gh_compare (since)
         if not compared then
             return false
@@ -452,7 +447,7 @@ else
         return false
     end
 
-    local gh_catchup = function (current, latest)
+    local function gh_catchup (current, latest)
         local compared = gh_compare (latest, current)
         local ahead_by = tonumber (compared.ahead_by)
         if ahead_by > 0 then
@@ -472,7 +467,7 @@ else
         return false
     end
 
-    check_upstream = function (current)
+    function check_upstream (current)
         out "============= upstream repository ============="
         local _succ  = gh_api_checklimit ()
         local behind = gh_news (current)
@@ -491,7 +486,7 @@ else
 end
 --- github api stuff end
 
-local print_envvar = function (var)
+local function print_envvar (var)
     local val = osgetenv (var)
     if val then
         out ("%20s: %q", stringformat ("$%s", var), val)
@@ -501,7 +496,7 @@ local print_envvar = function (var)
     end
 end
 
-local print_path = function (var)
+local function print_path (var)
     local val = osgetenv (var)
     if val then
         local paths = filesplitpath (val)
@@ -523,7 +518,7 @@ local print_path = function (var)
     end
 end
 
-local print_kpsevar = function (var)
+local function print_kpsevar (var)
     var = "$" .. var
     local val = kpseexpand_var (var)
     if val and val ~= var then
@@ -534,7 +529,7 @@ local print_kpsevar = function (var)
     end
 end
 
-local print_kpsepath = function (var)
+local function print_kpsepath (var)
     var = "$" .. var
     local val = kpseexpand_path (var)
     if val and val ~= "" then
@@ -562,7 +557,7 @@ end
 --- return the empty string both if the variable is unset and if
 --- the directory does not exist
 
-local print_kpsepathvar = function (var)
+local function print_kpsepathvar (var)
     local vvar = "$" .. var
     local val = kpseexpand_var (vvar)
     if val and val ~= vvar then
@@ -573,7 +568,7 @@ local print_kpsepathvar = function (var)
     end
 end
 
-local check_environment = function (errcnt)
+local function check_environment (errcnt)
     out "============ environment settings ============="
     out ("system: %s/%s", ostype, osname)
     if ostype == "unix" and io.popen then
@@ -623,7 +618,7 @@ local anamneses   = {
     "permissions"
 }
 
-local diagnose = function (job)
+local function diagnose (job)
     local errcnt = 0
     local asked  = job.asked_diagnostics
     if asked == "all" or asked == "thorough" then
@@ -681,7 +676,7 @@ local diagnose = function (job)
                         github:
 
                             × http://www.ctan.org/pkg/luaotfload 
-                            × https://github.com/lualatex/luaotfload/releases
+                            × https://github.com/latex3/luaotfload/releases
 
                         If you are uncertain as to how to proceed, then
                         ask on the lualatex mailing list:

@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-% Copyright (C) 2015-2022
+% Copyright (C) 2015-2024
 % The LaTeX Project and any individual authors listed elsewhere
 % in this file.
 %
@@ -23,16 +23,22 @@
 %<tex>  \ProvidesFile\undefined\begingroup\def\ProvidesFile
 %<tex>  #1#2[#3]{\endgroup\immediate\write-1{File: #1 #3}}
 %<tex>\fi
-%<plain>\ProvidesFile{ltluatex.tex}%
-%<*driver>
+%<*dtx>
 \ProvidesFile{ltluatex.dtx}
-%</driver>
-%<*tex>
-[2021/12/27 v1.1x
-%</tex>
-%<plain>  LuaTeX support for plain TeX (core)
-%<*tex>
+%</dtx>
+%<plain>\ProvidesFile{ltluatex.tex}
+%<*plain>
+% \fi
+% \ProvidesFile{ltluatex.dtx}
+[2024/08/16 v1.2e
+% LaTeX Kernel (LuaTeX support)^^A
+%\iffalse
+%<plain>   LuaTeX support for plain TeX (core)%
+%\fi
 ]
+% \iffalse
+%</plain>  
+%<*tex>
 \edef\etatcatcode{\the\catcode`\@}
 \catcode`\@=11
 %</tex>
@@ -324,6 +330,8 @@
 % field |date| in the usual \LaTeX{} format |yyyy/mm/dd|. Optional fields
 % |version| (a string) and |description| may be used if present. This
 % information will be recorded in the log. Other fields are ignored.
+% If the |version| begins with a digit, a \texttt{v} will be added at the
+% start in the log.
 %
 % \noindent
 % \DescribeMacro{module_info}
@@ -380,7 +388,7 @@
 %
 % \noindent
 % \DescribeMacro{create_callback}
-% |luatexbase.create_callback(|\meta{name},meta{type},\meta{default}|)|
+% |luatexbase.create_callback(|\meta{name},\meta{type},\meta{default}|)|
 % Defines a user defined callback. The last argument is a default
 % function or |false|.
 %
@@ -388,6 +396,34 @@
 % \DescribeMacro{call_callback}
 % |luatexbase.call_callback(|\meta{name},\ldots|)|
 % Calls a user defined callback with the supplied arguments.
+%
+% \noindent
+% \DescribeMacro{declare_callback_rule}
+% |luatexbase.declare_callback_rule(|\meta{name}, \meta{first}, \meta{relation}, \meta{second}|)|
+% Adds an ordering constraint between two callback functions for callback \meta{name}.
+%
+% The kind of constraint added depends on \meta{relation}:
+% \begin{description}
+%   \item[before] The callback function with description \meta{first} will be
+%     executed before the function with description \meta{second}.
+%   \item[after] The callback function with description \meta{first} will be
+%     executed after the function with description \meta{second}.
+%   \item[incompatible-warning] When both a callback function with description \meta{first}
+%     and with description \meta{second} is registered, then a warning is printed when
+%     the callback is executed.
+%   \item[incompatible-error] When both a callback function with description \meta{first}
+%     and with description \meta{second} is registered, then an error is printed when
+%     the callback is executed.
+%   \item[unrelated] Any previously declared callback rule between \meta{first}
+%     and \meta{second} gets disabled.
+% \end{description}
+% Every call to \texttt{declare_callback_rule} with a specific callback \meta{name}
+% and descriptions \meta{first} and \meta{second} overwrites all previous calls with
+% same callback and descriptions.
+%
+% The callback functions do not have to be registered yet when the functions is called.
+% Only the constraints for which both callback descriptions refer to callbacks
+% registered at the time the callback is called will have an effect.
 %
 % \endgroup
 %
@@ -513,9 +549,9 @@
                 \csname globbox\endcsname
 %    \end{macrocode}
 %
-% Define|\e@alloc| as in latex (the existing macros in |etex.src|
+% Define|\e@alloc| as in \LaTeX{} (the existing macros in |etex.src| are
 % hard to extend to further register types as they assume specific
-% 26x and 27x count range. For compatibility the existing register
+% 26x and 27x count range). For compatibility the existing register
 % allocation is not changed.
 %
 %    \begin{macrocode}
@@ -940,10 +976,10 @@ local luatexbase = luatexbase
 %
 % Some Lua best practice: use local versions of functions where possible.
 % \changes{v1.1u}{2021/08/11}{Define missing local function}
+% \changes{v1.2b}{2023/01/19}{Remove unused local variable tex_setattribute}
 %    \begin{macrocode}
 local string_gsub      = string.gsub
 local tex_count        = tex.count
-local tex_setattribute = tex.setattribute
 local tex_setcount     = tex.setcount
 local texio_write_nl   = texio.write_nl
 local flush_list       = node.flush_list
@@ -970,6 +1006,8 @@ local modules = modules or { }
 % \begin{macro}{provides_module}
 % \changes{v1.0a}{2015/09/24}{Function added}
 % \changes{v1.0f}{2015/10/03}{use luatexbase\_log}
+% \changes{v1.2d}{2024/06/04}{Add \texttt{v} to version string if required (gh/1364)}
+% \changes{v1.2e}{2024/08/16}{Support missing version string (gh/1443)}
 % Local function to write to the log.
 %    \begin{macrocode}
 local function luatexbase_log(text)
@@ -990,7 +1028,7 @@ local function provides_module(info)
   luatexbase_log(
     "Lua module: " .. info.name
       .. spaced(info.date)
-      .. spaced(info.version)
+      .. spaced(info.version and string_gsub(info.version or "","^(%d)","v%1"))
       .. spaced(info.description)
   )
   modules[info.name] = info
@@ -1256,6 +1294,7 @@ luatexbase.new_chunkname = new_chunkname
 %
 % \begin{macro}{new_luafunction}
 % \changes{v1.1i}{2018/10/21}{Function added}
+% \changes{v1.2c}{2023/07/02}{Ensure existing table entries not overwritten gh/1100}
 % Much the same as for attribute allocation in Lua.
 % The optional \meta{name} argument is used in the log if given.
 %    \begin{macrocode}
@@ -1263,7 +1302,11 @@ local luafunction_count_name =
                          luafunction_count_name or "e@alloc@luafunction@count"
 local function new_luafunction(name)
   tex_setcount("global", luafunction_count_name,
-                         tex_count[luafunction_count_name] + 1)
+                         math.max(
+                           #(lua.get_functions_table()),
+                           tex_count[luafunction_count_name])
+                          + 1)
+  lua.get_functions_table()[tex_count[luafunction_count_name]] = false
   if tex_count[luafunction_count_name] > 65534 then
     luatexbase_error("No room for a new luafunction register")
   end
@@ -1288,8 +1331,120 @@ luatexbase.new_luafunction = new_luafunction
 % actual function as |func| and the identifying description as |description|.
 % Only callbacks with a non-empty list of functions have an entry in this
 % list.
+%
+% Actually there are two tables: |realcallbacklist| directly contains the entries
+% as described above while |callbacklist| only directly contains the already sorted
+% entries. Other entries can be queried through |callbacklist| too which triggers a
+% resort.
+%
+% Additionally |callbackrules| describes the ordering constraints: It contains two
+% element tables with the descriptions of the constrained callback implementations.
+% It can additionally contain a |type| entry indicating the kind of rule. A missing
+% value indicates a normal ordering constraint.
+%
+% \changes{v1.2a}{2022/10/03}{Add rules for callback ordering}
 %    \begin{macrocode}
-local callbacklist = callbacklist or { }
+local realcallbacklist = {}
+local callbackrules = {}
+local callbacklist = setmetatable({}, {
+  __index = function(t, name)
+    local list = realcallbacklist[name]
+    local rules = callbackrules[name]
+    if list and rules then
+      local meta = {}
+      for i, entry in ipairs(list) do
+        local t = {value = entry, count = 0, pos = i}
+        meta[entry.description], list[i] = t, t
+      end
+      local count = #list
+      local pos = count
+      for i, rule in ipairs(rules) do
+        local rule = rules[i]
+        local pre, post = meta[rule[1]], meta[rule[2]]
+        if pre and post then
+          if rule.type then
+            if not rule.hidden then
+              assert(rule.type == 'incompatible-warning' and luatexbase_warning
+                or rule.type == 'incompatible-error' and luatexbase_error)(
+                  "Incompatible functions \"" .. rule[1] .. "\" and \"" .. rule[2]
+                  .. "\" specified for callback \"" .. name .. "\".")
+              rule.hidden = true
+            end
+          else
+            local post_count = post.count
+            post.count = post_count+1
+            if post_count == 0 then
+              local post_pos = post.pos
+              if post_pos ~= pos then
+                local new_post_pos = list[pos]
+                new_post_pos.pos = post_pos
+                list[post_pos] = new_post_pos
+              end
+              list[pos] = nil
+              pos = pos - 1
+            end
+            pre[#pre+1] = post
+          end
+        end
+      end
+      for i=1, count do -- The actual sort begins
+        local current = list[i]
+        if current then
+          meta[current.value.description] = nil
+          for j, cur in ipairs(current) do
+            local count = cur.count
+            if count == 1 then
+              pos = pos + 1
+              list[pos] = cur
+            else
+              cur.count = count - 1
+            end
+          end
+          list[i] = current.value
+        else
+          -- Cycle occurred. TODO: Show cycle for debugging
+          -- list[i] = ...
+          local remaining = {}
+          for name, entry in next, meta do
+            local value = entry.value
+            list[#list + 1] = entry.value
+            remaining[#remaining + 1] = name
+          end
+          table.sort(remaining)
+          local first_name = remaining[1]
+          for j, name in ipairs(remaining) do
+            local entry = meta[name]
+            list[i + j - 1] = entry.value
+            for _, post_entry in ipairs(entry) do
+              local post_name = post_entry.value.description
+              if not remaining[post_name] then
+                remaining[post_name] = name
+              end
+            end
+          end
+          local cycle = {first_name}
+          local index = 1
+          local last_name = first_name
+          repeat
+            cycle[last_name] = index
+            last_name = remaining[last_name]
+            index = index + 1
+            cycle[index] = last_name
+          until cycle[last_name]
+          local length = index - cycle[last_name] + 1
+          table.move(cycle, cycle[last_name], index, 1)
+          for i=2, length//2 do
+            cycle[i], cycle[length + 1 - i] = cycle[length + 1 - i], cycle[i]
+          end
+          error('Cycle occurred at ' .. table.concat(cycle, ' -> ', 1, length))
+        end
+      end
+    end
+    realcallbacklist[name] = list
+    t[name] = list
+    return list
+  end
+})
 %    \end{macrocode}
 %
 % Numerical codes for callback types, and name-to-value association (the
@@ -1398,9 +1553,7 @@ local callbacktypes = callbacktypes or {
   ligaturing             = simple,
   kerning                = simple,
   insert_local_par       = simple,
-  pre_mlist_to_hlist_filter = list,
-  mlist_to_hlist         = exclusive,
-  post_mlist_to_hlist_filter = reverselist,
+% mlist_to_hlist         = exclusive,
   new_graf               = exclusive,
 %    \end{macrocode}
 % Section 8.5: information reporting callbacks.
@@ -1459,6 +1612,30 @@ local callbacktypes = callbacktypes or {
 %    \begin{macrocode}
 }
 luatexbase.callbacktypes=callbacktypes
+%    \end{macrocode}
+%
+% \changes{v1.1y}{2022/08/13}{shared\_callbacks added}
+% Sometimes multiple callbacks correspond to a single underlying engine level callback.
+% Then the engine level callback should be registered as long as at least one of these
+% callbacks is in use. This is implemented though a shared table which counts how many
+% of the involved callbacks are currently in use. The enging level callback is registered
+% iff this count is not 0.
+%
+% We add |mlist_to_hlist| directly to the list to demonstrate this, but the handler gets
+% added later when it is actually defined.
+%
+% All callbacks in this list are treated as user defined callbacks.
+%
+%    \begin{macrocode}
+local shared_callbacks = {
+  mlist_to_hlist = {
+    callback = "mlist_to_hlist",
+    count = 0,
+    handler = nil,
+  },
+}
+shared_callbacks.pre_mlist_to_hlist_filter = shared_callbacks.mlist_to_hlist
+shared_callbacks.post_mlist_to_hlist_filter = shared_callbacks.mlist_to_hlist
 %    \end{macrocode}
 %
 % \begin{macro}{callback.register}
@@ -1639,11 +1816,7 @@ local defaults = {
 % If a default function is not required, it may be declared as |false|.
 % First we need a list of user callbacks.
 %    \begin{macrocode}
-local user_callbacks_defaults = {
-  pre_mlist_to_hlist_filter = list_handler_default,
-  mlist_to_hlist = node.mlist_to_hlist,
-  post_mlist_to_hlist_filter = list_handler_default,
-}
+local user_callbacks_defaults = {}
 %    \end{macrocode}
 %
 % \begin{macro}{create_callback}
@@ -1713,6 +1886,7 @@ luatexbase.call_callback=call_callback
 % \changes{v1.0a}{2015/09/24}{Function added}
 %   Add a function to a callback. First check arguments.
 % \changes{v1.0k}{2015/12/02}{Give more specific error messages (PHG)}
+% \changes{v1.2a}{2022/10/03}{Add rules for callback ordering}
 %    \begin{macrocode}
 local function add_to_callback(name, func, description)
   if not name or name == "" then
@@ -1733,18 +1907,29 @@ local function add_to_callback(name, func, description)
 %   Then test if this callback is already in use. If not, initialise its list
 %   and register the proper handler.
 %    \begin{macrocode}
-  local l = callbacklist[name]
+  local l = realcallbacklist[name]
   if l == nil then
     l = { }
-    callbacklist[name] = l
+    realcallbacklist[name] = l
+%    \end{macrocode}
+% \changes{v1.1y}{2022/08/13}{Adapted code for shared\_callbacks}
+% Handle count for shared engine callbacks.
+%    \begin{macrocode}
+    local shared = shared_callbacks[name]
+    if shared then
+      shared.count = shared.count + 1
+      if shared.count == 1 then
+        callback_register(shared.callback, shared.handler)
+      end
 %    \end{macrocode}
 % If it is not a user defined callback use the primitive callback register.
 %    \begin{macrocode}
-    if user_callbacks_defaults[name] == nil then
+    elseif user_callbacks_defaults[name] == nil then
       callback_register(name, handlers[callbacktypes[name]](name))
     end
   end
 %    \end{macrocode}
+% \changes{v1.2a}{2022/10/03}{Add rules for callback ordering}
 %  Actually register the function and give an error if more than one
 %  |exclusive| one is registered.
 %    \begin{macrocode}
@@ -1752,7 +1937,6 @@ local function add_to_callback(name, func, description)
     func        = func,
     description = description,
   }
-  local priority = #l + 1
   if callbacktypes[name] == exclusive then
     if #l == 1 then
       luatexbase_error(
@@ -1760,16 +1944,66 @@ local function add_to_callback(name, func, description)
         name .. "'")
     end
   end
-  table.insert(l, priority, f)
+  table.insert(l, f)
+  callbacklist[name] = nil
 %    \end{macrocode}
 %  Keep user informed.
 %    \begin{macrocode}
   luatexbase_log(
-    "Inserting `" .. description .. "' at position "
-      .. priority .. " in `" .. name .. "'."
+    "Inserting `" .. description .. "' in `" .. name .. "'."
   )
 end
 luatexbase.add_to_callback = add_to_callback
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{declare_callback_rule}
+%   \changes{v1.2a}{2022/10/03}{Add function}
+%   Add an ordering constraint between two callback implementations
+%    \begin{macrocode}
+local function declare_callback_rule(name, desc1, relation, desc2)
+  if not callbacktypes[name] or
+    not desc1 or not desc2 or
+    desc1 == "" or desc2 == "" then
+    luatexbase_error(
+      "Unable to create ordering constraint. "
+        .. "Correct usage:\n"
+        .. "declare_callback_rule(<callback>, <description_a>, <description_b>)"
+    )
+  end
+  if relation == 'before' then
+    relation = nil
+  elseif relation == 'after' then
+    desc2, desc1 = desc1, desc2
+    relation = nil
+  elseif relation == 'incompatible-warning' or relation == 'incompatible-error' then
+  elseif relation == 'unrelated' then
+  else
+    luatexbase_error(
+      "Unknown relation type in declare_callback_rule"
+    )
+  end
+  callbacklist[name] = nil
+  local rules = callbackrules[name]
+  if rules then
+    for i, rule in ipairs(rules) do
+      if rule[1] == desc1 and rule[2] == desc2 or rule[1] == desc2 and rule[2] == desc1 then
+        if relation == 'unrelated' then
+          table.remove(rules, i)
+        else
+          rule[1], rule[2], rule.type = desc1, desc2, relation
+        end
+        return
+      end
+    end
+    if relation ~= 'unrelated' then
+      rules[#rules + 1] = {desc1, desc2, type = relation}
+    end
+  elseif relation ~= 'unrelated' then
+    callbackrules[name] = {{desc1, desc2, type = relation}}
+  end
+end
+luatexbase.declare_callback_rule = declare_callback_rule
 %    \end{macrocode}
 % \end{macro}
 %
@@ -1778,6 +2012,8 @@ luatexbase.add_to_callback = add_to_callback
 % \changes{v1.0k}{2015/12/02}{adjust initialization of cb local (PHG)}
 % \changes{v1.0k}{2015/12/02}{Give more specific error messages (PHG)}
 % \changes{v1.1m}{2020/03/07}{Do not call callback.register for user-defined callbacks}
+% \changes{v1.1y}{2022/08/13}{Adapted code for shared\_callbacks}
+% \changes{v1.2a}{2022/10/03}{Add rules for callback ordering}
 %   Remove a function from a callback. First check arguments.
 %    \begin{macrocode}
 local function remove_from_callback(name, description)
@@ -1794,7 +2030,7 @@ local function remove_from_callback(name, description)
         .. "remove_from_callback(<callback>, <description>)"
     )
   end
-  local l = callbacklist[name]
+  local l = realcallbacklist[name]
   if not l then
     luatexbase_error(
       "No callback list for `" .. name .. "'\n")
@@ -1822,8 +2058,15 @@ local function remove_from_callback(name, description)
     "Removing  `" .. description .. "' from `" .. name .. "'."
   )
   if #l == 0 then
+    realcallbacklist[name] = nil
     callbacklist[name] = nil
-    if user_callbacks_defaults[name] == nil then
+    local shared = shared_callbacks[name]
+    if shared then
+      shared.count = shared.count - 1
+      if shared.count == 0 then
+        callback_register(shared.callback, nil)
+      end
+    elseif user_callbacks_defaults[name] == nil then
       callback_register(name, nil)
     end
   end
@@ -1841,12 +2084,12 @@ luatexbase.remove_from_callback = remove_from_callback
 local function in_callback(name, description)
   if not name
     or name == ""
-    or not callbacklist[name]
+    or not realcallbacklist[name]
     or not callbacktypes[name]
     or not description then
       return false
   end
-  for _, i in pairs(callbacklist[name]) do
+  for _, i in pairs(realcallbacklist[name]) do
     if i.description == description then
       return true
     end
@@ -1863,7 +2106,7 @@ luatexbase.in_callback = in_callback
 %   this functionality.
 %    \begin{macrocode}
 local function disable_callback(name)
-  if(callbacklist[name] == nil) then
+  if(realcallbacklist[name] == nil) then
     callback_register(name, false)
   else
     luatexbase_error("Callback list for " .. name .. " not empty")
@@ -1877,12 +2120,13 @@ luatexbase.disable_callback = disable_callback
 % \changes{v1.0a}{2015/09/24}{Function added}
 % \changes{v1.0h}{2015/11/27}{Match test in in-callback latex/4445}
 %   List the descriptions of functions registered for the given callback.
+%   This will sort the list if necessary.
 %    \begin{macrocode}
 local function callback_descriptions (name)
   local d = {}
   if not name
     or name == ""
-    or not callbacklist[name]
+    or not realcallbacklist[name]
     or not callbacktypes[name]
     then
     return d
@@ -1917,10 +2161,15 @@ luatexbase.uninstall = uninstall
 % \end{macro}
 % \begin{macro}{mlist_to_hlist}
 % \changes{v1.1l}{2020/02/02}{|pre/post_mlist_to_hlist| added}
+% \changes{v1.1y}{2022/08/13}{Use shared\_callback system for pre/post/mlist_to_hlist}
+% \changes{v1.2c}{2023/08/03}{Fix callback type of post_mlist_to_hlist_callback}
 %   To emulate these callbacks, the ``real'' |mlist_to_hlist| is replaced by a
 %   wrapper calling the wrappers before and after.
 %    \begin{macrocode}
-callback_register("mlist_to_hlist", function(head, display_type, need_penalties)
+create_callback('pre_mlist_to_hlist_filter', 'list')
+create_callback('mlist_to_hlist', 'exclusive', node.mlist_to_hlist)
+create_callback('post_mlist_to_hlist_filter', 'reverselist')
+function shared_callbacks.mlist_to_hlist.handler(head, display_type, need_penalties)
   local current = call_callback("pre_mlist_to_hlist_filter", head, display_type, need_penalties)
   if current == false then
     flush_list(head)
@@ -1933,7 +2182,7 @@ callback_register("mlist_to_hlist", function(head, display_type, need_penalties)
     return nil
   end
   return post
-end)
+end
 %    \end{macrocode}
 % \end{macro}
 % \endgroup

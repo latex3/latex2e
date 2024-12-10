@@ -13,13 +13,11 @@ unpackdeps  = unpackdeps  or {maindir .. "/base"}
 
 -- We really need 4 on most files (toc + references + index (which needs two runs))
 typesetruns  = 4
-maxprintline = 9999
 
 -- Set up the check system to work in 'stand-alone' mode
 -- This relies on a format being built by the 'base' dependency
-asciiengines   = asciiengines       or {"etex"}
-checkformat    = checkformat        or "latex"
-checkengines   = checkengines       or {"etex", "xetex", "luatex"}
+asciiengines   = asciiengines       or {"etex", "pdftex"}
+checkengines   = checkengines       or {"pdftex", "xetex", "luatex"}
 checkruns      = checkruns          or  2
 checksuppfiles = checksuppfiles     or
   {
@@ -39,15 +37,14 @@ checksuppfiles = checksuppfiles     or
     "luaotfload*.lua",
     "fixup_mathaxis.lua",
   }
-stdengine      = stdengine          or "etex"
 tagfiles       = tagfiles or {"*.dtx","*.ins","*.tex","README.md"}
 typesetsuppfiles = typesetsuppfiles or
   {"color.cfg", "graphics.cfg", "ltxdoc.cfg", "ltxguide.cfg"}
 
 -- Ensure the local format file is used
 function tex(file,dir,mode)
-  local dir = dir or "."
-  local mode = mode or "nonstopmode"
+  dir = dir or "."
+  mode = mode or "nonstopmode"
   return runcmd(
     'pdftex -fmt=pdflatex -interaction=' .. mode .. ' -jobname="' ..
       string.match(file,"^[^.]*") .. '" "\\input ' .. file .. '"',
@@ -118,20 +115,14 @@ function update_tag(file,content,tagname,tagdate)
   if not tag then
     tag = tagname
   end
-  local patch_level = ""
-  if main_branch then
-    if rev then
+  local patch_level = "0"
+  if rev and tonumber(rev) ~= 0 then
+    if main_branch then
       tag = tag .. " patch level " .. rev
       patch_level = rev
     else
-      patch_level = "0"
-    end
-  else
-    if rev and rev ~= 0 then
       tag = tag .. " pre-release " .. rev
       patch_level = "-" .. rev
-    else
-      patch_level = "0"
     end
   end
   if file == "README.md" then
@@ -172,7 +163,7 @@ function update_tag_ltx(file,content,tagname,tagdate)
     tag = tagname
   end
   if main_branch then
-    if rev then
+    if rev and tonumber(rev) ~= 0 then
       tag = tag .. " patch level " .. rev
     end
   else
@@ -192,10 +183,9 @@ local function fmt(engines,dest)
 
   local function mkfmt(engine)
     -- Use .ini files if available
-    local src = "latex.ltx"
-    local ini = string.gsub(engine,"tex","") .. "latex.ini"
-    if fileexists(supportdir .. "/" .. ini) then
-      src = ini
+    local ini = string.gsub(engine,"tex","") .. "latex"
+    if ini == "elatex" then
+        ini = "latex"
     end
     local cmd = engine
     if engine == "luatex" then cmd = "luahbtex" end
@@ -207,17 +197,11 @@ local function fmt(engines,dest)
       os_setenv .. " LUAINPUTS=" .. unpackdir .. os_pathsep .. localdir
       .. os_pathsep .. texmfdir .. "//" .. (fmtsearch and os_pathsep or "")
       .. os_concat .. cmd .. " -etex -ini -output-directory=" .. unpackdir
-      .. " " .. src 
+      .. " " .. ini .. ".ini"
       .. (hide and (" > " .. os_null) or ""))
     if errorlevel ~= 0 then return errorlevel end
 
-    local engname = string.match(src,"^[^.]*") .. ".fmt"
-    local fmtname = string.gsub(engine,"tex$","") .. "latex.fmt"
-    if engine == "etex" then fmtname = "latex.fmt" end
-    if engname ~= fmtname then
-      ren(unpackdir,engname,fmtname)
-    end
-    cp(fmtname,unpackdir,dest)
+    cp(ini .. ".fmt",unpackdir,dest)
 
     return 0
   end

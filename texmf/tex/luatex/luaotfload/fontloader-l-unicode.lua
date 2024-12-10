@@ -1,5 +1,6 @@
 if not modules then modules = { } end modules ['l-unicode'] = {
     version   = 1.001,
+    optimize  = true,
     comment   = "companion to luat-lib.mkiv",
     author    = "Hans Hagen, PRAGMA-ADE, Hasselt NL",
     copyright = "PRAGMA ADE / ConTeXt Development Team",
@@ -1081,56 +1082,62 @@ function utf.utf32_to_utf8_t(t,endian)
     return endian and utf32_to_utf8_be_t(t) or utf32_to_utf8_le_t(t) or t
 end
 
-local function little(b)
-    if b < 0x10000 then
-        return char(b%256,rshift(b,8))
-    else
-        b = b - 0x10000
-        local b1 = rshift(b,10) + 0xD800
-        local b2 = b%1024 + 0xDC00
-        return char(b1%256,rshift(b1,8),b2%256,rshift(b2,8))
+if bit32 then
+
+    local rshift  = bit32.rshift
+
+    local function little(b)
+        if b < 0x10000 then
+            return char(b%256,rshift(b,8))
+        else
+            b = b - 0x10000
+            local b1 = rshift(b,10) + 0xD800
+            local b2 = b%1024 + 0xDC00
+            return char(b1%256,rshift(b1,8),b2%256,rshift(b2,8))
+        end
     end
-end
 
-local function big(b)
-    if b < 0x10000 then
-        return char(rshift(b,8),b%256)
-    else
-        b = b - 0x10000
-        local b1 = rshift(b,10) + 0xD800
-        local b2 = b%1024 + 0xDC00
-        return char(rshift(b1,8),b1%256,rshift(b2,8),b2%256)
+    local function big(b)
+        if b < 0x10000 then
+            return char(rshift(b,8),b%256)
+        else
+            b = b - 0x10000
+            local b1 = rshift(b,10) + 0xD800
+            local b2 = b%1024 + 0xDC00
+            return char(rshift(b1,8),b1%256,rshift(b2,8),b2%256)
+        end
     end
-end
 
-local l_remap = Cs((p_utf8byte/little+P(1)/"")^0)
-local b_remap = Cs((p_utf8byte/big   +P(1)/"")^0)
+    local l_remap = Cs((p_utf8byte/little+P(1)/"")^0)
+    local b_remap = Cs((p_utf8byte/big   +P(1)/"")^0)
 
-local function utf8_to_utf16_be(str,nobom)
-    if nobom then
-        return lpegmatch(b_remap,str)
-    else
-        return char(254,255) .. lpegmatch(b_remap,str)
+    local function utf8_to_utf16_be(str,nobom)
+        if nobom then
+            return lpegmatch(b_remap,str)
+        else
+            return char(254,255) .. lpegmatch(b_remap,str)
+        end
     end
-end
 
-local function utf8_to_utf16_le(str,nobom)
-    if nobom then
-        return lpegmatch(l_remap,str)
-    else
-        return char(255,254) .. lpegmatch(l_remap,str)
+    local function utf8_to_utf16_le(str,nobom)
+        if nobom then
+            return lpegmatch(l_remap,str)
+        else
+            return char(255,254) .. lpegmatch(l_remap,str)
+        end
     end
-end
 
-utf.utf8_to_utf16_be = utf8_to_utf16_be
-utf.utf8_to_utf16_le = utf8_to_utf16_le
+    utf.utf8_to_utf16_be = utf8_to_utf16_be
+    utf.utf8_to_utf16_le = utf8_to_utf16_le
 
-function utf.utf8_to_utf16(str,littleendian,nobom)
-    if littleendian then
-        return utf8_to_utf16_le(str,nobom)
-    else
-        return utf8_to_utf16_be(str,nobom)
+    function utf.utf8_to_utf16(str,littleendian,nobom)
+        if littleendian then
+            return utf8_to_utf16_le(str,nobom)
+        else
+            return utf8_to_utf16_be(str,nobom)
+        end
     end
+
 end
 
 local pattern = Cs (

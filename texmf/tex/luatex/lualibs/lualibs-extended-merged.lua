@@ -1,6 +1,511 @@
 -- merged file : lualibs-extended-merged.lua
 -- parent file : lualibs-extended.lua
--- merge date  : Tue Aug 13 20:12:59 2019
+-- merge date  : 2023-07-13 12:55
+
+do -- begin closure to overcome local limits and interference
+
+if not modules then modules={} end modules ['util-sac']={
+ version=1.001,
+ optimize=true,
+ comment="companion to luat-lib.mkiv",
+ author="Hans Hagen, PRAGMA-ADE, Hasselt NL",
+ copyright="PRAGMA ADE / ConTeXt Development Team",
+ license="see context related readme files"
+}
+local byte,sub=string.byte,string.sub
+local tonumber=tonumber
+utilities=utilities or {}
+local streams={}
+utilities.streams=streams
+function streams.open(filename,zerobased)
+ local f=filename and io.loaddata(filename)
+ if f then
+  return { f,1,#f,zerobased or false }
+ end
+end
+function streams.openstring(f,zerobased)
+ if f then
+  return { f,1,#f,zerobased or false }
+ end
+end
+function streams.getstring(f)
+ if f then
+  return f[1]
+ end
+end
+function streams.close()
+end
+function streams.size(f)
+ return f and f[3] or 0
+end
+streams.getsize=streams.size
+function streams.setposition(f,i)
+ if f[4] then
+  if i<=0 then
+   f[2]=1
+  else
+   f[2]=i+1
+  end
+ else
+  if i<=1 then
+   f[2]=1
+  else
+   f[2]=i
+  end
+ end
+end
+function streams.getposition(f)
+ if f[4] then
+  return f[2]-1
+ else
+  return f[2]
+ end
+end
+function streams.look(f,n,chars)
+ local b=f[2]
+ local e=b+n-1
+ if chars then
+  return sub(f[1],b,e)
+ else
+  return byte(f[1],b,e)
+ end
+end
+function streams.skip(f,n)
+ f[2]=f[2]+n
+end
+function streams.readbyte(f)
+ local i=f[2]
+ f[2]=i+1
+ return byte(f[1],i)
+end
+function streams.readbytes(f,n)
+ local i=f[2]
+ local j=i+n
+ f[2]=j
+ return byte(f[1],i,j-1)
+end
+function streams.readbytetable(f,n)
+ local i=f[2]
+ local j=i+n
+ f[2]=j
+ return { byte(f[1],i,j-1) }
+end
+function streams.skipbytes(f,n)
+ f[2]=f[2]+n
+end
+function streams.readchar(f)
+ local i=f[2]
+ f[2]=i+1
+ return sub(f[1],i,i)
+end
+function streams.readstring(f,n)
+ local i=f[2]
+ local j=i+n
+ f[2]=j
+ return sub(f[1],i,j-1)
+end
+function streams.readinteger1(f)  
+ local i=f[2]
+ f[2]=i+1
+ local n=byte(f[1],i)
+ if n>=0x80 then
+  return n-0x100
+ else
+  return n
+ end
+end
+streams.readcardinal1=streams.readbyte  
+streams.readcardinal=streams.readcardinal1
+streams.readinteger=streams.readinteger1
+function streams.readcardinal2(f)
+ local i=f[2]
+ local j=i+1
+ f[2]=j+1
+ local a,b=byte(f[1],i,j)
+ return 0x100*a+b
+end
+function streams.readcardinal2le(f)
+ local i=f[2]
+ local j=i+1
+ f[2]=j+1
+ local b,a=byte(f[1],i,j)
+ return 0x100*a+b
+end
+function streams.readinteger2(f)
+ local i=f[2]
+ local j=i+1
+ f[2]=j+1
+ local a,b=byte(f[1],i,j)
+ if a>=0x80 then
+  return 0x100*a+b-0x10000
+ else
+  return 0x100*a+b
+ end
+end
+function streams.readinteger2le(f)
+ local i=f[2]
+ local j=i+1
+ f[2]=j+1
+ local b,a=byte(f[1],i,j)
+ if a>=0x80 then
+  return 0x100*a+b-0x10000
+ else
+  return 0x100*a+b
+ end
+end
+function streams.readcardinal3(f)
+ local i=f[2]
+ local j=i+2
+ f[2]=j+1
+ local a,b,c=byte(f[1],i,j)
+ return 0x10000*a+0x100*b+c
+end
+function streams.readcardinal3le(f)
+ local i=f[2]
+ local j=i+2
+ f[2]=j+1
+ local c,b,a=byte(f[1],i,j)
+ return 0x10000*a+0x100*b+c
+end
+function streams.readinteger3(f)
+ local i=f[2]
+ local j=i+3
+ f[2]=j+1
+ local a,b,c=byte(f[1],i,j)
+ if a>=0x80 then
+  return 0x10000*a+0x100*b+c-0x1000000
+ else
+  return 0x10000*a+0x100*b+c
+ end
+end
+function streams.readinteger3le(f)
+ local i=f[2]
+ local j=i+3
+ f[2]=j+1
+ local c,b,a=byte(f[1],i,j)
+ if a>=0x80 then
+  return 0x10000*a+0x100*b+c-0x1000000
+ else
+  return 0x10000*a+0x100*b+c
+ end
+end
+function streams.readcardinal4(f)
+ local i=f[2]
+ local j=i+3
+ f[2]=j+1
+ local a,b,c,d=byte(f[1],i,j)
+ return 0x1000000*a+0x10000*b+0x100*c+d
+end
+function streams.readcardinal4le(f)
+ local i=f[2]
+ local j=i+3
+ f[2]=j+1
+ local d,c,b,a=byte(f[1],i,j)
+ return 0x1000000*a+0x10000*b+0x100*c+d
+end
+function streams.readinteger4(f)
+ local i=f[2]
+ local j=i+3
+ f[2]=j+1
+ local a,b,c,d=byte(f[1],i,j)
+ if a>=0x80 then
+  return 0x1000000*a+0x10000*b+0x100*c+d-0x100000000
+ else
+  return 0x1000000*a+0x10000*b+0x100*c+d
+ end
+end
+function streams.readinteger4le(f)
+ local i=f[2]
+ local j=i+3
+ f[2]=j+1
+ local d,c,b,a=byte(f[1],i,j)
+ if a>=0x80 then
+  return 0x1000000*a+0x10000*b+0x100*c+d-0x100000000
+ else
+  return 0x1000000*a+0x10000*b+0x100*c+d
+ end
+end
+function streams.readfixed2(f)
+ local i=f[2]
+ local j=i+1
+ f[2]=j+1
+ local n1,n2=byte(f[1],i,j)
+ if n1>=0x80 then
+  n1=n1-0x100
+ end
+ return n1+n2/0xFF
+end
+function streams.readfixed4(f)
+ local i=f[2]
+ local j=i+3
+ f[2]=j+1
+ local a,b,c,d=byte(f[1],i,j)
+ local n1=0x100*a+b
+ local n2=0x100*c+d
+ if n1>=0x8000 then
+  n1=n1-0x10000
+ end
+ return n1+n2/0xFFFF
+end
+if bit32 then
+ local extract=bit32.extract
+ local band=bit32.band
+ function streams.read2dot14(f)
+  local i=f[2]
+  local j=i+1
+  f[2]=j+1
+  local a,b=byte(f[1],i,j)
+  if a>=0x80 then
+   local n=-(0x100*a+b)
+   return-(extract(n,14,2)+(band(n,0x3FFF)/16384.0))
+  else
+   local n=0x100*a+b
+   return   (extract(n,14,2)+(band(n,0x3FFF)/16384.0))
+  end
+ end
+end
+function streams.skipshort(f,n)
+ f[2]=f[2]+2*(n or 1)
+end
+function streams.skiplong(f,n)
+ f[2]=f[2]+4*(n or 1)
+end
+if sio and sio.readcardinal2 then
+ local readcardinal1=sio.readcardinal1
+ local readcardinal2=sio.readcardinal2
+ local readcardinal3=sio.readcardinal3
+ local readcardinal4=sio.readcardinal4
+ local readinteger1=sio.readinteger1
+ local readinteger2=sio.readinteger2
+ local readinteger3=sio.readinteger3
+ local readinteger4=sio.readinteger4
+ local readfixed2=sio.readfixed2
+ local readfixed4=sio.readfixed4
+ local read2dot14=sio.read2dot14
+ local readbytes=sio.readbytes
+ local readbytetable=sio.readbytetable
+ function streams.readcardinal1(f)
+  local i=f[2]
+  f[2]=i+1
+  return readcardinal1(f[1],i)
+ end
+ function streams.readcardinal2(f)
+  local i=f[2]
+  f[2]=i+2
+  return readcardinal2(f[1],i)
+ end
+ function streams.readcardinal3(f)
+  local i=f[2]
+  f[2]=i+3
+  return readcardinal3(f[1],i)
+ end
+ function streams.readcardinal4(f)
+  local i=f[2]
+  f[2]=i+4
+  return readcardinal4(f[1],i)
+ end
+ function streams.readinteger1(f)
+  local i=f[2]
+  f[2]=i+1
+  return readinteger1(f[1],i)
+ end
+ function streams.readinteger2(f)
+  local i=f[2]
+  f[2]=i+2
+  return readinteger2(f[1],i)
+ end
+ function streams.readinteger3(f)
+  local i=f[2]
+  f[2]=i+3
+  return readinteger3(f[1],i)
+ end
+ function streams.readinteger4(f)
+  local i=f[2]
+  f[2]=i+4
+  return readinteger4(f[1],i)
+ end
+ function streams.readfixed2(f) 
+  local i=f[2]
+  f[2]=i+2
+  return readfixed2(f[1],i)
+ end
+ function streams.readfixed4(f) 
+  local i=f[2]
+  f[2]=i+4
+  return readfixed4(f[1],i)
+ end
+ function streams.read2dot14(f)
+  local i=f[2]
+  f[2]=i+2
+  return read2dot14(f[1],i)
+ end
+ function streams.readbytes(f,n)
+  local i=f[2]
+  local s=f[3]
+  local p=i+n
+  if p>s then
+   f[2]=s+1
+  else
+   f[2]=p
+  end
+  return readbytes(f[1],i,n)
+ end
+ function streams.readbytetable(f,n)
+  local i=f[2]
+  local s=f[3]
+  local p=i+n
+  if p>s then
+   f[2]=s+1
+  else
+   f[2]=p
+  end
+  return readbytetable(f[1],i,n)
+ end
+ streams.readbyte=streams.readcardinal1
+ streams.readsignedbyte=streams.readinteger1
+ streams.readcardinal=streams.readcardinal1
+ streams.readinteger=streams.readinteger1
+end
+if sio and sio.readcardinaltable then
+ local readcardinaltable=sio.readcardinaltable
+ local readintegertable=sio.readintegertable
+ function utilities.streams.readcardinaltable(f,n,b)
+  local i=f[2]
+  local s=f[3]
+  local p=i+n*b
+  if p>s then
+   f[2]=s+1
+  else
+   f[2]=p
+  end
+  return readcardinaltable(f[1],i,n,b)
+ end
+ function utilities.streams.readintegertable(f,n,b)
+  local i=f[2]
+  local s=f[3]
+  local p=i+n*b
+  if p>s then
+   f[2]=s+1
+  else
+   f[2]=p
+  end
+  return readintegertable(f[1],i,n,b)
+ end
+else
+ local readcardinal1=streams.readcardinal1
+ local readcardinal2=streams.readcardinal2
+ local readcardinal3=streams.readcardinal3
+ local readcardinal4=streams.readcardinal4
+ function streams.readcardinaltable(f,n,b)
+  local i=f[2]
+  local s=f[3]
+  local p=i+n*b
+  if p>s then
+   f[2]=s+1
+  else
+   f[2]=p
+  end
+  local t={}
+   if b==1 then for i=1,n do t[i]=readcardinal1(f[1],i) end
+  elseif b==2 then for i=1,n do t[i]=readcardinal2(f[1],i) end
+  elseif b==3 then for i=1,n do t[i]=readcardinal3(f[1],i) end
+  elseif b==4 then for i=1,n do t[i]=readcardinal4(f[1],i) end end
+  return t
+ end
+ local readinteger1=streams.readinteger1
+ local readinteger2=streams.readinteger2
+ local readinteger3=streams.readinteger3
+ local readinteger4=streams.readinteger4
+ function streams.readintegertable(f,n,b)
+  local i=f[2]
+  local s=f[3]
+  local p=i+n*b
+  if p>s then
+   f[2]=s+1
+  else
+   f[2]=p
+  end
+  local t={}
+   if b==1 then for i=1,n do t[i]=readinteger1(f[1],i) end
+  elseif b==2 then for i=1,n do t[i]=readinteger2(f[1],i) end
+  elseif b==3 then for i=1,n do t[i]=readinteger3(f[1],i) end
+  elseif b==4 then for i=1,n do t[i]=readinteger4(f[1],i) end end
+  return t
+ end
+end
+do
+ local files=utilities.files
+ if files then
+  local openfile=files.open
+  local openstream=streams.open
+  local openstring=streams.openstring
+  local setmetatable=setmetatable
+  function io.newreader(str,method)
+   local f,m
+   if method=="string" then
+    f=openstring(str,true)
+    m=streams
+   elseif method=="stream" then
+    f=openstream(str,true)
+    m=streams
+   else
+    f=openfile(str,"rb")
+    m=files
+   end
+   if f then
+    local t={}
+    setmetatable(t,{
+     __index=function(t,k)
+      local r=m[k]
+      if k=="close" then
+       if f then
+        m.close(f)
+        f=nil
+       end
+       return function() end
+      elseif r then
+       local v=function(_,a,b) return r(f,a,b) end
+       t[k]=v
+       return v
+      else
+       print("unknown key",k)
+      end
+     end
+    } )
+    return t
+   end
+  end
+ end
+end
+if bit32 and not streams.tocardinal1 then
+ local extract=bit32.extract
+ local char=string.char
+    streams.tocardinal1=char
+ function streams.tocardinal2(n)   return char(extract(n,8,8),extract(n,0,8)) end
+ function streams.tocardinal3(n)   return char(extract(n,16,8),extract(n,8,8),extract(n,0,8)) end
+ function streams.tocardinal4(n)   return char(extract(n,24,8),extract(n,16,8),extract(n,8,8),extract(n,0,8)) end
+    streams.tocardinal1le=char
+ function streams.tocardinal2le(n) return char(extract(n,0,8),extract(n,8,8)) end
+ function streams.tocardinal3le(n) return char(extract(n,0,8),extract(n,8,8),extract(n,16,8)) end
+ function streams.tocardinal4le(n) return char(extract(n,0,8),extract(n,8,8),extract(n,16,8),extract(n,24,8)) end
+end
+if not streams.readcstring then
+ local readchar=streams.readchar
+ local concat=table.concat
+ function streams.readcstring(f)
+  local t={}
+  while true do
+   local c=readchar(f)
+   if c and c~="\0" then
+    t[#t+1]=c
+   else
+    return concat(t)
+   end
+  end
+ end
+end
+
+end -- closure
 
 do -- begin closure to overcome local limits and interference
 
@@ -14,12 +519,13 @@ if not modules then modules={} end modules ['util-str']={
 utilities=utilities or {}
 utilities.strings=utilities.strings or {}
 local strings=utilities.strings
-local format,gsub,rep,sub,find=string.format,string.gsub,string.rep,string.sub,string.find
+local format,gsub,rep,sub,find,char=string.format,string.gsub,string.rep,string.sub,string.find,string.char
 local load,dump=load,string.dump
 local tonumber,type,tostring,next,setmetatable=tonumber,type,tostring,next,setmetatable
 local unpack,concat=table.unpack,table.concat
 local P,V,C,S,R,Ct,Cs,Cp,Carg,Cc=lpeg.P,lpeg.V,lpeg.C,lpeg.S,lpeg.R,lpeg.Ct,lpeg.Cs,lpeg.Cp,lpeg.Carg,lpeg.Cc
 local patterns,lpegmatch=lpeg.patterns,lpeg.match
+local tsplitat=lpeg.tsplitat
 local utfchar,utfbyte,utflen=utf.char,utf.byte,utf.len
 local loadstripped=function(str,shortcuts)
  if shortcuts then
@@ -54,25 +560,59 @@ local function points(n)
  n=n*ptf
  if n%1==0 then
   return format("%ipt",n)
+ else
+  return lpegmatch(stripzeros,format("%.5fpt",n)) 
  end
- return lpegmatch(stripzeros,format("%.5fpt",n)) 
 end
-local function basepoints(n)
+local function nupoints(n)
  if n==0 then
-  return "0pt"
+  return "0"
  end
  n=tonumber(n)
  if not n or n==0 then
-  return "0pt"
+  return "0"
+ end
+ n=n*ptf
+ if n%1==0 then
+  return format("%i",n)
+ else
+  return format("%.5f",n) 
+ end
+end
+local function basepoints(n)
+ if n==0 then
+  return "0bp"
+ end
+ n=tonumber(n)
+ if not n or n==0 then
+  return "0bp"
  end
  n=n*bpf
  if n%1==0 then
   return format("%ibp",n)
+ else
+  return lpegmatch(stripzeros,format("%.5fbp",n)) 
  end
- return lpegmatch(stripzeros,format("%.5fbp",n)) 
+end
+local function nubasepoints(n)
+ if n==0 then
+  return "0"
+ end
+ n=tonumber(n)
+ if not n or n==0 then
+  return "0"
+ end
+ n=n*bpf
+ if n%1==0 then
+  return format("%i",n)
+ else
+  return format("%.5f",n) 
+ end
 end
 number.points=points
+number.nupoints=nupoints
 number.basepoints=basepoints
+number.nubasepoints=nubasepoints
 local rubish=spaceortab^0*newline
 local anyrubish=spaceortab+newline
 local stripped=(spaceortab^1/"")*newline
@@ -161,6 +701,7 @@ local p_prune_intospace=Cs (noleading*(notrailing+intospace+1     )^0 )
 local p_retain_normal=Cs ((normalline+normalempty )^0 )
 local p_retain_collapse=Cs ((normalline+doubleempty )^0 )
 local p_retain_noempty=Cs ((normalline+singleempty )^0 )
+local p_collapse_all=Cs (stripstart*(stripend+((whitespace+newline)^1/" ")+1)^0 )
 local striplinepatterns={
  ["prune"]=p_prune_normal,
  ["prune and collapse"]=p_prune_collapse,
@@ -169,6 +710,7 @@ local striplinepatterns={
  ["retain"]=p_retain_normal,
  ["retain and collapse"]=p_retain_collapse,
  ["retain and no empty"]=p_retain_noempty,
+ ["collapse all"]=p_collapse_all,
  ["collapse"]=patterns.collapser,
 }
 setmetatable(striplinepatterns,{ __index=function(t,k) return p_prune_collapse end })
@@ -339,6 +881,14 @@ patterns.escapedquotes=pattern
 function string.escapedquotes(s)
  return lpegmatch(pattern,s)
 end
+local pattern=(1-P("\\"))^1;pattern=Cs (
+ pattern*((P("\\")/""*(digit^-3/function(s) return char(tonumber(s)) end))+pattern )^1
+)
+patterns.unescapedquotes=pattern
+function string.unescapedquotes(s)
+ return lpegmatch(pattern,s) or s
+end
+string.texnewlines=lpeg.replacer(patterns.newline,"\r",true)
 local preamble=""
 local environment={
  global=global or _G,
@@ -350,7 +900,9 @@ local environment={
  concat=table.concat,
  signed=number.signed,
  points=number.points,
+ nupoints=number.nupoints,
  basepoints=number.basepoints,
+ nubasepoints=number.nubasepoints,
  utfchar=utf.char,
  utfbyte=utf.byte,
  lpegmatch=lpeg.match,
@@ -366,7 +918,7 @@ local environment={
  stripzero=patterns.stripzero,
  stripzeros=patterns.stripzeros,
  escapedquotes=string.escapedquotes,
- FORMAT=string.f9,
+ FORMAT=string.f6,
 }
 local arguments={ "a1" } 
 setmetatable(arguments,{ __index=function(t,k)
@@ -417,9 +969,12 @@ local format_left=function(f)
   return format("a%s..utfpadding(a%s,%i)",n,n,-f)
  end
 end
-local format_q=function()
+local format_q=JITSUPPORTED and function()
  n=n+1
  return format("(a%s ~= nil and format('%%q',tostring(a%s)) or '')",n,n)
+end or function()
+ n=n+1
+ return format("(a%s ~= nil and format('%%q',a%s) or '')",n,n)
 end
 local format_Q=function() 
  n=n+1
@@ -542,9 +1097,17 @@ local format_p=function()
  n=n+1
  return format("points(a%s)",n)
 end
+local format_P=function()
+ n=n+1
+ return format("nupoints(a%s)",n)
+end
 local format_b=function()
  n=n+1
  return format("basepoints(a%s)",n)
+end
+local format_B=function()
+ n=n+1
+ return format("nubasepoints(a%s)",n)
 end
 local format_t=function(f)
  n=n+1
@@ -574,12 +1137,25 @@ local format_n=function()
  n=n+1
  return format("((a%s %% 1 == 0) and format('%%i',a%s) or tostring(a%s))",n,n,n)
 end
-local format_N=function(f) 
- n=n+1
- if not f or f=="" then
-  f=".9"
- end 
- return format("(((a%s %% 1 == 0) and format('%%i',a%s)) or lpegmatch(stripzero,format('%%%sf',a%s)))",n,n,f,n)
+local format_N  if environment.FORMAT then
+ format_N=function(f)
+  n=n+1
+  if not f or f=="" then
+   return format("FORMAT(a%s,'%%.9f')",n)
+  elseif f==".6" or f=="0.6" then
+   return format("FORMAT(a%s)",n)
+  else
+   return format("FORMAT(a%s,'%%%sf')",n,f)
+  end
+ end
+else
+ format_N=function(f) 
+  n=n+1
+  if not f or f=="" then
+   f=".9"
+  end 
+  return format("(((a%s %% 1 == 0) and format('%%i',a%s)) or lpegmatch(stripzero,format('%%%sf',a%s)))",n,n,f,n)
+ end
 end
 local format_a=function(f)
  n=n+1
@@ -642,33 +1218,36 @@ local format_extension=function(extensions,f,name)
  local extension=extensions[name] or "tostring(%s)"
  local f=tonumber(f) or 1
  local w=find(extension,"%.%.%.")
- if w then
-  if f==0 then
+ if f==0 then
+  if w then
+   extension=gsub(extension,"%.%.%.","")
+  end
+  return extension
+ elseif f==1 then
+  if w then
+   extension=gsub(extension,"%.%.%.","%%s")
+  end
+  n=n+1
+  local a="a"..n
+  return format(extension,a,a) 
+ elseif f<0 then
+  if w then
    extension=gsub(extension,"%.%.%.","")
    return extension
-  elseif f==1 then
-   extension=gsub(extension,"%.%.%.","%%s")
-   n=n+1
-   local a="a"..n
-   return format(extension,a,a) 
-  elseif f<0 then
+  else
    local a="a"..(n+f+1)
    return format(extension,a,a)
-  else
-   extension=gsub(extension,"%.%.%.",rep("%%s,",f-1).."%%s")
-   local t={}
-   for i=1,f do
-    n=n+1
-    t[i]="a"..n
-   end
-   return format(extension,unpack(t))
   end
  else
-  extension=gsub(extension,"%%s",function()
+  if w then
+   extension=gsub(extension,"%.%.%.",rep("%%s,",f-1).."%%s")
+  end
+  local t={}
+  for i=1,f do
    n=n+1
-   return "a"..n
-  end)
-  return extension
+   t[i]="a"..n
+  end
+  return format(extension,unpack(t))
  end
 end
 local builder=Cs { "start",
@@ -682,7 +1261,7 @@ local builder=Cs { "start",
 +V("n") 
 +V("N") 
 +V("k")
-+V("r")+V("h")+V("H")+V("u")+V("U")+V("p")+V("b")+V("t")+V("T")+V("l")+V("L")+V("I")+V("w") 
++V("r")+V("h")+V("H")+V("u")+V("U")+V("p")+V("P")+V("b")+V("B")+V("t")+V("T")+V("l")+V("L")+V("I")+V("w") 
 +V("W") 
 +V("a") 
 +V("A") 
@@ -720,7 +1299,9 @@ local builder=Cs { "start",
  ["u"]=(prefix_any*P("u"))/format_u,
  ["U"]=(prefix_any*P("U"))/format_U,
  ["p"]=(prefix_any*P("p"))/format_p,
+ ["P"]=(prefix_any*P("P"))/format_P,
  ["b"]=(prefix_any*P("b"))/format_b,
+ ["B"]=(prefix_any*P("B"))/format_B,
  ["t"]=(prefix_tab*P("t"))/format_t,
  ["T"]=(prefix_tab*P("T"))/format_T,
  ["l"]=(prefix_any*P("l"))/format_l,
@@ -843,7 +1424,6 @@ function number.to16dot16(n)
  return f_16_16(n/65536.0)
 end
 if not string.explode then
- local tsplitat=lpeg.tsplitat
  local p_utf=patterns.utf8character
  local p_check=C(p_utf)*(P("+")*Cc(true))^0
  local p_split=Ct(C(p_utf)^0)
@@ -861,6 +1441,20 @@ if not string.explode then
   else
    return lpegmatch(p_space,str)
   end
+ end
+end
+do
+ local p_whitespace=patterns.whitespace^1
+ local cache=setmetatable({},{ __index=function(t,k)
+  local p=tsplitat(p_whitespace*P(k)*p_whitespace)
+  local v=function(s)
+   return lpegmatch(p,s)
+  end
+  t[k]=v
+  return v
+ end })
+ function string.wordsplitter(s)
+  return cache[s]
  end
 end
 
@@ -1397,78 +1991,157 @@ function tables.encapsulate(core,capsule,protect)
   } )
  end
 end
-local f_hashed_string=formatters["[%Q]=%Q,"]
-local f_hashed_number=formatters["[%Q]=%s,"]
-local f_hashed_boolean=formatters["[%Q]=%l,"]
-local f_hashed_table=formatters["[%Q]="]
-local f_indexed_string=formatters["[%s]=%Q,"]
-local f_indexed_number=formatters["[%s]=%s,"]
-local f_indexed_boolean=formatters["[%s]=%l,"]
-local f_indexed_table=formatters["[%s]="]
-local f_ordered_string=formatters["%Q,"]
-local f_ordered_number=formatters["%s,"]
-local f_ordered_boolean=formatters["%l,"]
-function table.fastserialize(t,prefix)
- local r={ type(prefix)=="string" and prefix or "return" }
- local m=1
- local function fastserialize(t,outer) 
-  local n=#t
-  m=m+1
-  r[m]="{"
-  if n>0 then
-   for i=0,n do
-    local v=t[i]
-    local tv=type(v)
-    if tv=="string" then
-     m=m+1 r[m]=f_ordered_string(v)
-    elseif tv=="number" then
-     m=m+1 r[m]=f_ordered_number(v)
-    elseif tv=="table" then
-     fastserialize(v)
-    elseif tv=="boolean" then
-     m=m+1 r[m]=f_ordered_boolean(v)
-    end
-   end
-  end
-  for k,v in next,t do
-   local tk=type(k)
-   if tk=="number" then
-    if k>n or k<0 then
+if JITSUPPORTED then
+ local f_hashed_string=formatters["[%Q]=%Q,"]
+ local f_hashed_number=formatters["[%Q]=%s,"]
+ local f_hashed_boolean=formatters["[%Q]=%l,"]
+ local f_hashed_table=formatters["[%Q]="]
+ local f_indexed_string=formatters["[%s]=%Q,"]
+ local f_indexed_number=formatters["[%s]=%s,"]
+ local f_indexed_boolean=formatters["[%s]=%l,"]
+ local f_indexed_table=formatters["[%s]="]
+ local f_ordered_string=formatters["%Q,"]
+ local f_ordered_number=formatters["%s,"]
+ local f_ordered_boolean=formatters["%l,"]
+ function table.fastserialize(t,prefix)
+  local r={ type(prefix)=="string" and prefix or "return" }
+  local m=1
+  local function fastserialize(t,outer) 
+   local n=#t
+   m=m+1
+   r[m]="{"
+   if n>0 then
+    local v=t[0]
+    if v then
      local tv=type(v)
      if tv=="string" then
-      m=m+1 r[m]=f_indexed_string(k,v)
+      m=m+1 r[m]=f_indexed_string(0,v)
      elseif tv=="number" then
-      m=m+1 r[m]=f_indexed_number(k,v)
+      m=m+1 r[m]=f_indexed_number(0,v)
      elseif tv=="table" then
-      m=m+1 r[m]=f_indexed_table(k)
+      m=m+1 r[m]=f_indexed_table(0)
       fastserialize(v)
+      m=m+1 r[m]=f_indexed_table(0)
      elseif tv=="boolean" then
-      m=m+1 r[m]=f_indexed_boolean(k,v)
+      m=m+1 r[m]=f_indexed_boolean(0,v)
      end
     end
-   else
-    local tv=type(v)
-    if tv=="string" then
-     m=m+1 r[m]=f_hashed_string(k,v)
-    elseif tv=="number" then
-     m=m+1 r[m]=f_hashed_number(k,v)
-    elseif tv=="table" then
-     m=m+1 r[m]=f_hashed_table(k)
-     fastserialize(v)
-    elseif tv=="boolean" then
-     m=m+1 r[m]=f_hashed_boolean(k,v)
+    for i=1,n do
+     local v=t[i]
+     local tv=type(v)
+     if tv=="string" then
+      m=m+1 r[m]=f_ordered_string(v)
+     elseif tv=="number" then
+      m=m+1 r[m]=f_ordered_number(v)
+     elseif tv=="table" then
+      fastserialize(v)
+     elseif tv=="boolean" then
+      m=m+1 r[m]=f_ordered_boolean(v)
+     end
     end
    end
+   for k,v in next,t do
+    local tk=type(k)
+    if tk=="number" then
+     if k>n or k<0 then
+      local tv=type(v)
+      if tv=="string" then
+       m=m+1 r[m]=f_indexed_string(k,v)
+      elseif tv=="number" then
+       m=m+1 r[m]=f_indexed_number(k,v)
+      elseif tv=="table" then
+       m=m+1 r[m]=f_indexed_table(k)
+       fastserialize(v)
+      elseif tv=="boolean" then
+       m=m+1 r[m]=f_indexed_boolean(k,v)
+      end
+     end
+    else
+     local tv=type(v)
+     if tv=="string" then
+      m=m+1 r[m]=f_hashed_string(k,v)
+     elseif tv=="number" then
+      m=m+1 r[m]=f_hashed_number(k,v)
+     elseif tv=="table" then
+      m=m+1 r[m]=f_hashed_table(k)
+      fastserialize(v)
+     elseif tv=="boolean" then
+      m=m+1 r[m]=f_hashed_boolean(k,v)
+     end
+    end
+   end
+   m=m+1
+   if outer then
+    r[m]="}"
+   else
+    r[m]="},"
+   end
+   return r
   end
-  m=m+1
-  if outer then
-   r[m]="}"
-  else
-   r[m]="},"
-  end
-  return r
+  return concat(fastserialize(t,true))
  end
- return concat(fastserialize(t,true))
+else
+ function table.fastserialize(t,prefix) 
+  local r={ type(prefix)=="string" and prefix or "return" }
+  local m=1
+  local function fastserialize(t,outer) 
+   local n=#t
+   m=m+1
+   r[m]="{"
+   if n>0 then
+    local v=t[0]
+    if v then
+     m=m+1
+     r[m]="[0]="
+     if type(v)=="table" then
+      fastserialize(v)
+     else
+      r[m]=format("%q,",v)
+     end
+    end
+    for i=1,n do
+     local v=t[i]
+     m=m+1
+     if type(v)=="table" then
+      r[m]=format("[%i]=",i)
+      fastserialize(v)
+     else
+      r[m]=format("[%i]=%q,",i,v)
+     end
+    end
+   end
+   for k,v in next,t do
+    local tk=type(k)
+    if tk=="number" then
+     if k>n or k<0 then
+      m=m+1
+      if type(v)=="table" then
+       r[m]=format("[%i]=",k)
+       fastserialize(v)
+      else
+       r[m]=format("[%i]=%q,",k,v)
+      end
+     end
+    else
+     m=m+1
+     if type(v)=="table" then
+      r[m]=format("[%q]=",k)
+      fastserialize(v)
+     else
+      r[m]=format("[%q]=%q,",k,v)
+     end
+    end
+   end
+   m=m+1
+   if outer then
+    r[m]="}"
+   else
+    r[m]="},"
+   end
+   return r
+  end
+  return concat(fastserialize(t,true))
+ end
 end
 function table.deserialize(str)
  if not str or str=="" then
@@ -1562,27 +2235,27 @@ function table.twowaymapper(t)
  return t
 end
 local f_start_key_idx=formatters["%w{"]
-local f_start_key_num=formatters["%w[%s]={"]
+local f_start_key_num=JITSUPPORTED and formatters["%w[%s]={"] or formatters["%w[%q]={"]
 local f_start_key_str=formatters["%w[%q]={"]
 local f_start_key_boo=formatters["%w[%l]={"]
 local f_start_key_nop=formatters["%w{"]
 local f_stop=formatters["%w},"]
-local f_key_num_value_num=formatters["%w[%s]=%s,"]
-local f_key_str_value_num=formatters["%w[%Q]=%s,"]
-local f_key_boo_value_num=formatters["%w[%l]=%s,"]
-local f_key_num_value_str=formatters["%w[%s]=%Q,"]
+local f_key_num_value_num=JITSUPPORTED and formatters["%w[%s]=%s,"] or formatters["%w[%s]=%q,"]
+local f_key_str_value_num=JITSUPPORTED and formatters["%w[%Q]=%s,"] or formatters["%w[%Q]=%q,"]
+local f_key_boo_value_num=JITSUPPORTED and formatters["%w[%l]=%s,"] or formatters["%w[%l]=%q,"]
+local f_key_num_value_str=JITSUPPORTED and formatters["%w[%s]=%Q,"] or formatters["%w[%q]=%Q,"]
 local f_key_str_value_str=formatters["%w[%Q]=%Q,"]
 local f_key_boo_value_str=formatters["%w[%l]=%Q,"]
-local f_key_num_value_boo=formatters["%w[%s]=%l,"]
+local f_key_num_value_boo=JITSUPPORTED and formatters["%w[%s]=%l,"] or formatters["%w[%q]=%l,"]
 local f_key_str_value_boo=formatters["%w[%Q]=%l,"]
 local f_key_boo_value_boo=formatters["%w[%l]=%l,"]
-local f_key_num_value_not=formatters["%w[%s]={},"]
+local f_key_num_value_not=JITSUPPORTED and formatters["%w[%s]={},"] or formatters["%w[%q]={},"]
 local f_key_str_value_not=formatters["%w[%Q]={},"]
 local f_key_boo_value_not=formatters["%w[%l]={},"]
-local f_key_num_value_seq=formatters["%w[%s]={ %, t },"]
+local f_key_num_value_seq=JITSUPPORTED and formatters["%w[%s]={ %, t },"] or formatters["%w[%q]={ %, t },"]
 local f_key_str_value_seq=formatters["%w[%Q]={ %, t },"]
 local f_key_boo_value_seq=formatters["%w[%l]={ %, t },"]
-local f_val_num=formatters["%w%s,"]
+local f_val_num=JITSUPPORTED and formatters["%w%s,"] or formatters["%w%q,"]
 local f_val_str=formatters["%w%Q,"]
 local f_val_boo=formatters["%w%l,"]
 local f_val_not=formatters["%w{},"]
@@ -1816,6 +2489,21 @@ function table.ordered(t)
   return function() end
  end
 end
+function combine(target,source)
+ if target then
+  for k,v in next,source do
+   if type(v)=="table" then
+      target[k]=combine(target[k],source[k])
+   else
+      target[k]=v
+   end
+  end
+  return target
+ else
+  return source
+ end
+end
+table.combine=combine
 
 end -- closure
 
@@ -1998,7 +2686,7 @@ local lpeg,table,string=lpeg,table,string
 local P,R,V,S,C,Ct,Cs,Carg,Cc,Cg,Cf,Cp=lpeg.P,lpeg.R,lpeg.V,lpeg.S,lpeg.C,lpeg.Ct,lpeg.Cs,lpeg.Carg,lpeg.Cc,lpeg.Cg,lpeg.Cf,lpeg.Cp
 local lpegmatch,lpegpatterns=lpeg.match,lpeg.patterns
 local concat,gmatch,find=table.concat,string.gmatch,string.find
-local tostring,type,next,rawset=tostring,type,next,rawset
+local tonumber,tostring,type,next,rawset=tonumber,tostring,type,next,rawset
 local mod,div=math.mod,math.div
 utilities=utilities or {}
 local parsers=utilities.parsers or {}
@@ -2034,8 +2722,8 @@ local noparent=1-(lparent+rparent)
 local nobracket=1-(lbracket+rbracket)
 local escape,left,right=P("\\"),P('{'),P('}')
 lpegpatterns.balanced=P {
- [1]=((escape*(left+right))+(1-(left+right))+V(2))^0,
- [2]=left*V(1)*right
+ ((escape*(left+right))+(1-(left+right))+V(2))^0,
+ left*V(1)*right
 }
 local nestedbraces=P { lbrace*(nobrace+V(1))^0*rbrace }
 local nestedparents=P { lparent*(noparent+V(1))^0*rparent }
@@ -2043,11 +2731,12 @@ local nestedbrackets=P { lbracket*(nobracket+V(1))^0*rbracket }
 local spaces=space^0
 local argument=Cs((lbrace/"")*((nobrace+nestedbraces)^0)*(rbrace/""))
 local content=(1-endofstring)^0
-lpegpatterns.nestedbraces=nestedbraces  
-lpegpatterns.nestedparents=nestedparents 
-lpegpatterns.nested=nestedbraces  
-lpegpatterns.argument=argument   
-lpegpatterns.content=content    
+lpegpatterns.nestedbraces=nestedbraces   
+lpegpatterns.nestedparents=nestedparents  
+lpegpatterns.nestedbrackets=nestedbrackets 
+lpegpatterns.nested=nestedbraces   
+lpegpatterns.argument=argument    
+lpegpatterns.content=content  
 local value=lbrace*C((nobrace+nestedbraces)^0)*rbrace+C((nestedbraces+(1-comma))^0)
 local key=C((1-equal-comma)^1)
 local pattern_a=(space+comma)^0*(key*equal*value+key*C(""))
@@ -2192,7 +2881,9 @@ function parsers.groupedsplitat(symbol,withaction)
  if not pattern then
   local symbols=S(symbol)
   local separator=space^0*symbols*space^0
-  local value=lbrace*C((nobrace+nestedbraces)^0)*rbrace+C((nestedbraces+(1-(space^0*(symbols+P(-1)))))^0)
+  local value=lbrace*C((nobrace+nestedbraces)^0)
+*(rbrace*(#symbols+P(-1))) 
++C((nestedbraces+(1-(space^0*(symbols+P(-1)))))^0)
   if withaction then
    local withvalue=Carg(1)*value/function(f,s) return f(s) end
    pattern=spaces*withvalue*(separator*withvalue)^0
@@ -2278,7 +2969,17 @@ hashes.settings_to_set=table.setmetatableindex(function(t,k)
  t[k]=v
  return v
 end)
-getmetatable(hashes.settings_to_set).__mode="kv" 
+function parsers.settings_to_set(str)
+ return str and lpegmatch(pattern,str) or {}
+end
+local pattern=Ct((C((1-S(", "))^1)*S(", ")^0)^1)
+hashes.settings_to_list=table.setmetatableindex(function(t,k) 
+ local v=k and lpegmatch(pattern,k) or {}
+ t[k]=v
+ return v
+end)
+getmetatable(hashes.settings_to_set ).__mode="kv" 
+getmetatable(hashes.settings_to_list).__mode="kv" 
 function parsers.simple_hash_to_string(h,separator)
  local t={}
  local tn=0
@@ -2390,13 +3091,15 @@ function parsers.csvsplitter(specification)
  specification=specification and setmetatableindex(specification,defaultspecification) or defaultspecification
  local separator=specification.separator
  local quotechar=specification.quote
+ local numbers=specification.numbers
  local separator=S(separator~="" and separator or ",")
  local whatever=C((1-separator-newline)^0)
  if quotechar and quotechar~="" then
   local quotedata=nil
   for chr in gmatch(quotechar,".") do
    local quotechar=P(chr)
-   local quoteword=quotechar*C((1-quotechar)^0)*quotechar
+   local quoteitem=(1-quotechar)^0
+   local quoteword=quotechar*(numbers and (quoteitem/tonumber) or C(quoteitem))*quotechar
    if quotedata then
     quotedata=quotedata+quoteword
    else
@@ -2412,12 +3115,14 @@ function parsers.csvsplitter(specification)
 end
 function parsers.rfc4180splitter(specification)
  specification=specification and setmetatableindex(specification,defaultspecification) or defaultspecification
+ local numbers=specification.numbers
  local separator=specification.separator 
  local quotechar=P(specification.quote)  
  local dquotechar=quotechar*quotechar   
 /specification.quote
  local separator=S(separator~="" and separator or ",")
- local escaped=quotechar*Cs((dquotechar+(1-quotechar))^0)*quotechar
+ local whatever=(dquotechar+(1-quotechar))^0
+ local escaped=quotechar*(numbers and (whatever/tonumber) or Cs(whatever))*quotechar
  local non_escaped=C((1-quotechar-newline-separator)^1)
  local field=escaped+non_escaped+Cc("")
  local record=Ct(field*(separator*field)^1)
@@ -2449,15 +3154,24 @@ local function ranger(first,last,n,action)
   action(first)
  end
 end
-local cardinal=lpegpatterns.cardinal/tonumber
+local cardinal=(lpegpatterns.hexadecimal+lpegpatterns.cardinal)/tonumber
 local spacers=lpegpatterns.spacer^0
 local endofstring=lpegpatterns.endofstring
 local stepper=spacers*(cardinal*(spacers*S(":-")*spacers*(cardinal+Cc(true) )+Cc(false) )*Carg(1)*Carg(2)/ranger*S(", ")^0 )^1
 local stepper=spacers*(cardinal*(spacers*S(":-")*spacers*(cardinal+(P("*")+endofstring)*Cc(true) )+Cc(false) )*Carg(1)*Carg(2)/ranger*S(", ")^0 )^1*endofstring 
 function parsers.stepper(str,n,action)
+ local ts=type(str)
  if type(n)=="function" then
-  lpegmatch(stepper,str,1,false,n or print)
- else
+  if ts=="number" then
+   n(str)
+  elseif ts=="table" then
+   for i=1,#str do
+    n(str[i])
+   end
+  else
+   lpegmatch(stepper,str,1,false,n or print)
+  end
+ elseif ts=="string" then
   lpegmatch(stepper,str,1,n,action or print)
  end
 end
@@ -2475,7 +3189,7 @@ local cache={}
 local spaces=lpegpatterns.space^0
 local dummy=function() end
 setmetatableindex(cache,function(t,k)
- local separator=P(k)
+ local separator=S(k) 
  local value=(1-separator)^0
  local pattern=spaces*C(value)*separator^0*Cp()
  t[k]=pattern
@@ -2555,8 +3269,11 @@ local p_year=lpegpatterns.digit^4/tonumber
 local pattern=Cf(Ct("")*(
   (Cg(Cc("year")*p_year)*S("-/")*Cg(Cc("month")*cardinal)*S("-/")*Cg(Cc("day")*cardinal)
   )+(Cg(Cc("day")*cardinal)*S("-/")*Cg(Cc("month")*cardinal)*S("-/")*Cg(Cc("year")*p_year)
+  )+(Cg(Cc("year")*p_year)*S("-/")*Cg(Cc("month")*cardinal)
+  )+(Cg(Cc("month")*cardinal)*S("-/")*Cg(Cc("year")*p_year)
   )
- )*P(" ")*Cg(Cc("hour")*cardinal)*P(":")*Cg(Cc("min")*cardinal)*(P(":")*Cg(Cc("sec")*cardinal))^-1
+ )*(
+   P(" ")*Cg(Cc("hour")*cardinal)*P(":")*Cg(Cc("min")*cardinal)*(P(":")*Cg(Cc("sec")*cardinal))^-1+P(-1) )
 ,rawset)
 lpegpatterns.splittime=pattern
 function parsers.totime(str)
@@ -2595,8 +3312,8 @@ local dimenfactors=allocate {
  ["pc"]=(1/12)/65536,
  ["dd"]=(1157/1238)/65536,
  ["cc"]=(1157/14856)/65536,
- ["nd"]=(20320/21681)/65536,
- ["nc"]=(5080/65043)/65536
+ ["es"]=(9176/129)/65536,
+ ["ts"]=(4588/645)/65536,
 }
 local f_none=formatters["%s%s"]
 local f_true=formatters["%0.5F%s"]
@@ -2622,14 +3339,13 @@ function number.topoints   (n,fmt) return numbertodimen(n,"pt",fmt) end
 function number.toinches   (n,fmt) return numbertodimen(n,"in",fmt) end
 function number.tocentimeters (n,fmt) return numbertodimen(n,"cm",fmt) end
 function number.tomillimeters (n,fmt) return numbertodimen(n,"mm",fmt) end
-function number.toscaledpoints(n,fmt) return numbertodimen(n,"sp",fmt) end
 function number.toscaledpoints(n)  return   n.."sp"   end
 function number.tobasepoints  (n,fmt) return numbertodimen(n,"bp",fmt) end
 function number.topicas    (n,fmt) return numbertodimen(n "pc",fmt) end
 function number.todidots   (n,fmt) return numbertodimen(n,"dd",fmt) end
 function number.tociceros  (n,fmt) return numbertodimen(n,"cc",fmt) end
-function number.tonewdidots   (n,fmt) return numbertodimen(n,"nd",fmt) end
-function number.tonewciceros  (n,fmt) return numbertodimen(n,"nc",fmt) end
+function number.toediths   (n,fmt) return numbertodimen(n,"es",fmt) end
+function number.totoves    (n,fmt) return numbertodimen(n,"ts",fmt) end
 local amount=(S("+-")^0*R("09")^0*P(".")^0*R("09")^0)+Cc("0")
 local unit=R("az")^1+P("%")
 local dimenpair=amount/tonumber*(unit^1/dimenfactors+Cc(1)) 
@@ -2643,7 +3359,7 @@ setmetatableindex(dimenfactors,function(t,s)
 end)
 local stringtodimen 
 local amount=S("+-")^0*R("09")^0*S(".,")^0*R("09")^0
-local unit=P("pt")+P("cm")+P("mm")+P("sp")+P("bp")+P("in")+P("pc")+P("dd")+P("cc")+P("nd")+P("nc")
+local unit=P("pt")+P("cm")+P("mm")+P("sp")+P("bp")+P("es")+P("ts")+P("pc")+P("dd")+P("cc")+P("in")
 local validdimen=amount*unit
 lpeg.patterns.validdimen=validdimen
 local dimensions={}
@@ -2693,8 +3409,9 @@ function dimensions.__index(tab,key)
  end
  return 1/d
 end
-   dimenfactors["ex"]=4*1/65536 
-   dimenfactors["em"]=10*1/65536
+   dimenfactors["ex"]=4/65536 
+   dimenfactors["em"]=10/65536
+   dimenfactors["eu"]=(9176/129)/65536
 local known={} setmetatable(known,{ __mode="v" })
 function dimen(a)
  if a then
@@ -2767,6 +3484,9 @@ if not modules then modules={} end modules ['util-jsn']={
  copyright="PRAGMA ADE / ConTeXt Development Team",
  license="see context related readme files"
 }
+if utilities and utilities.json then
+ return json
+end
 local P,V,R,S,C,Cc,Cs,Ct,Cf,Cg=lpeg.P,lpeg.V,lpeg.R,lpeg.S,lpeg.C,lpeg.Cc,lpeg.Cs,lpeg.Ct,lpeg.Cf,lpeg.Cg
 local lpegmatch=lpeg.match
 local format,gsub=string.format,string.gsub
@@ -2971,6 +3691,8 @@ do
        k=lpegmatch(escaper,k) or k
        v=lpegmatch(escaper,v) or v
        n=n+1 t[n]=f_key_val_str(depth,k,v)
+      elseif i>1 then
+       n=n-1
       end
      elseif tv=="table" then
       local l=#v
@@ -2986,6 +3708,8 @@ do
        end
       elseif next(v) then
        tojsonpp(v,k,depth,level+1,0)
+      elseif i>1 then
+       n=n-1
       end
      elseif tv=="boolean" then
       if tk=="number" then
@@ -3003,6 +3727,8 @@ do
        else
         t[n]=f_key_val_nop(depth,k)
        end
+      elseif i>1 then
+       n=n-1
       end
      else
       if tk=="number" then
@@ -3012,6 +3738,8 @@ do
        k=lpegmatch(escaper,k) or k
        n=n+1
        t[n]=f_key_val_null(depth,k)
+      elseif i>1 then
+       n=n-1
       end
      end
     end
@@ -3113,7 +3841,6 @@ do
   return jsontostring(value,true)
  end
 end
-return json
 
 end -- closure
 
@@ -3151,6 +3878,37 @@ local function resettiming(instance)
 end
 local ticks=clock
 local seconds=function(n) return n or 0 end
+if os.type~="windows" then
+elseif lua.getpreciseticks then
+ ticks=lua.getpreciseticks
+ seconds=lua.getpreciseseconds
+elseif FFISUPPORTED then
+ local okay,kernel=pcall(ffi.load,"kernel32")
+ if kernel then
+  local tonumber=ffi.number or tonumber
+  ffi.cdef[[
+            int QueryPerformanceFrequency(int64_t *lpFrequency);
+            int QueryPerformanceCounter(int64_t *lpPerformanceCount);
+        ]]
+  local target=ffi.new("__int64[1]")
+  ticks=function()
+   if kernel.QueryPerformanceCounter(target)==1 then
+    return tonumber(target[0])
+   else
+    return 0
+   end
+  end
+  local target=ffi.new("__int64[1]")
+  seconds=function(ticks)
+   if kernel.QueryPerformanceFrequency(target)==1 then
+    return ticks/tonumber(target[0])
+   else
+    return 0
+   end
+  end
+ end
+else
+end
 local function starttiming(instance,reset)
  local timer=timers[instance or "notimer"]
  local it=timer.timing
@@ -3180,10 +3938,8 @@ local function stoptiming(instance)
    timer.loadtime=timer.loadtime+loadtime
    timer.timing=0
    timer.starttime=0
-   return loadtime
   end
  end
- return 0
 end
 local function benchmarktimer(instance)
  local timer=timers[instance or "notimer"]
@@ -3260,22 +4016,15 @@ function statistics.show()
    return format("%s, type: %s, binary subtree: %s",
     os.platform or "unknown",os.type or "unknown",environment.texos or "unknown")
   end)
-  if LUATEXENGINE=="luametatex" then
-   register("used engine",function()
-    return format("%s version %s, functionality level %s, format id %s",
-     LUATEXENGINE,LUATEXVERSION,LUATEXFUNCTIONALITY,LUATEXFORMATID)
-   end)
-  else
-   register("used engine",function()
-    return format("%s version %s with functionality level %s, banner: %s",
-     LUATEXENGINE,LUATEXVERSION,LUATEXFUNCTIONALITY,lower(status.banner))
-   end)
-  end
-  register("control sequences",function()
+  register("used engine",function()
+   return format("%s version: %s, functionality level: %s, banner: %s",
+    LUATEXENGINE,LUATEXVERSION,LUATEXFUNCTIONALITY,lower(status.banner))
+  end)
+  register("used hash slots",function()
    return format("%s of %s + %s",status.cs_count,status.hash_size,status.hash_extra)
   end)
   register("callbacks",statistics.callbacks)
-  if TEXENGINE=="luajittex" and JITSUPPORTED then
+  if JITSUPPORTED then
    local jitstatus=jit.status
    if jitstatus then
     local jitstatus={ jitstatus() }
@@ -3285,15 +4034,10 @@ function statistics.show()
    end
   end
   register("lua properties",function()
-   local hashchar=tonumber(status.luatex_hashchars)
-   local mask=lua.mask or "ascii"
+   local hash=2^status.luatex_hashchars
+   local mask=load([[τεχ = 1]]) and "utf" or "ascii"
    return format("engine: %s %s, used memory: %s, hash chars: min(%i,40), symbol mask: %s (%s)",
-    jit and "luajit" or "lua",
-    LUAVERSION,
-    statistics.memused(),
-    hashchar and 2^hashchar or "unknown",
-    mask,
-    mask=="utf" and "τεχ" or "tex")
+    jit and "luajit" or "lua",LUAVERSION,statistics.memused(),hash,mask,mask=="utf" and "τεχ" or "tex")
   end)
   register("runtime",statistics.runtime)
   logs.newline() 
@@ -3309,7 +4053,7 @@ function statistics.show()
 end
 function statistics.memused() 
  local round=math.round or math.floor
- return format("%s MB, ctx: %s MB, max: %s MB)",
+ return format("%s MB, ctx: %s MB, max: %s MB",
   round(collectgarbage("count")/1000),
   round(status.luastate_bytes/1000000),
   status.luastate_bytes_max and round(status.luastate_bytes_max/1000000) or "unknown"
@@ -3349,6 +4093,13 @@ function statistics.tracefunction(base,tag,...)
   statistics.register(formatters["%s.%s"](tag,name),function() return serialize(stat,"calls") end)
  end
 end
+function status.getreadstate()
+ return {
+  filename=status.filename   or "?",
+  linenumber=status.linenumber or 0,
+  iocode=status.inputid or 0,
+ }
+end
 
 end -- closure
 
@@ -3377,6 +4128,11 @@ luautilities.nofstrippedchunks=0
 luautilities.nofstrippedbytes=0
 local strippedchunks={} 
 luautilities.strippedchunks=strippedchunks
+if not LUATEXENGINE then
+ LUATEXENGINE=status.luatex_engine and string.lower(status.luatex_engine)
+ JITSUPPORTED=LUATEXENGINE=="luajittex" or jit
+ CONTEXTLMTXMODE=CONTEXTLMTXMODE or (LUATEXENGINE=="luametatex" and 1) or 0
+end
 luautilities.suffixes={
  tma="tma",
  tmc=(CONTEXTLMTXMODE and CONTEXTLMTXMODE>0 and "tmd") or (jit and "tmb") or "tmc",
@@ -3386,7 +4142,7 @@ luautilities.suffixes={
  luv="luv",
  luj="luj",
  tua="tua",
- tuc="tuc",
+ tuc=(CONTEXTLMTXMODE and CONTEXTLMTXMODE>0 and "tud") or (jit and "tub") or "tuc",
 }
 local function register(name) 
  if tracestripping then
@@ -3814,6 +4570,22 @@ local function showtraceback(rep)
  end
 end
 debugger.showtraceback=showtraceback
+if luac then
+ local show,dump=luac.print,string.dump
+ function luac.inspect(v)
+  if type(v)=="function" then
+   local ok,str=xpcall(dump,function() end,v)
+   if ok then
+    v=str
+   end
+  end
+  if type(v)=="string" then
+   show(v,true)
+  else
+   print(v)
+  end
+ end
+end
 
 end -- closure
 
@@ -3833,6 +4605,7 @@ local report_template=logs.reporter("template")
 local tostring,next=tostring,next
 local format,sub,byte=string.format,string.sub,string.byte
 local P,C,R,Cs,Cc,Carg,lpegmatch,lpegpatterns=lpeg.P,lpeg.C,lpeg.R,lpeg.Cs,lpeg.Cc,lpeg.Carg,lpeg.match,lpeg.patterns
+local formatters=string.formatters
 local replacer
 local function replacekey(k,t,how,recursive)
  local v=t[k]
@@ -3901,6 +4674,10 @@ local function replaceoptional(l,m,r,t,how,recurse)
  local v=t[l]
  return v and v~="" and lpegmatch(replacer,r,1,t,how or "lua",recurse or false) or ""
 end
+local function replaceformatted(l,m,r,t,how,recurse)
+ local v=t[r]
+ return v and formatters[l](v)
+end
 local single=P("%")  
 local double=P("%%") 
 local lquoted=P("%[") 
@@ -3914,16 +4691,19 @@ local nolquoted=lquoted/''
 local norquoted=rquoted/''
 local nolquotedq=lquotedq/''
 local norquotedq=rquotedq/''
+local nolformatted=P(":")/"%%"
+local norformatted=P(":")/""
 local noloptional=P("%?")/''
 local noroptional=P("?%")/''
 local nomoptional=P(":")/''
 local args=Carg(1)*Carg(2)*Carg(3)
-local key=nosingle*((C((1-nosingle   )^1)*args)/replacekey  )*nosingle
-local quoted=nolquotedq*((C((1-norquotedq )^1)*args)/replacekeyquoted  )*norquotedq
-local unquoted=nolquoted*((C((1-norquoted  )^1)*args)/replacekeyunquoted)*norquoted
+local key=nosingle*((C((1-nosingle)^1)*args)/replacekey)*nosingle
+local quoted=nolquotedq*((C((1-norquotedq)^1)*args)/replacekeyquoted)*norquotedq
+local unquoted=nolquoted*((C((1-norquoted)^1)*args)/replacekeyunquoted)*norquoted
 local optional=noloptional*((C((1-nomoptional)^1)*nomoptional*C((1-noroptional)^1)*args)/replaceoptional)*noroptional
+local formatted=nosingle*((Cs(nolformatted*(1-norformatted )^1)*norformatted*C((1-nosingle)^1)*args)/replaceformatted)*nosingle
 local any=P(1)
-   replacer=Cs((unquoted+quoted+escape+optional+key+any)^0)
+   replacer=Cs((unquoted+quoted+formatted+escape+optional+key+any)^0)
 local function replace(str,mapping,how,recurse)
  if mapping and str then
   return lpegmatch(replacer,str,1,mapping,how or "lua",recurse or false) or str
@@ -4094,8 +4874,11 @@ function stacker.new(name)
   insert(tops,top)
  end
  local function resolve_step(ti)
+  if not top then
+   return
+  end
   local result=nil
-  local noftop=top and #top or 0
+  local noftop=#top
   if ti>0 then
    local current=list[ti]
    if current then
@@ -4189,6 +4972,628 @@ function stacker.new(name)
   resolve_reset=resolve_reset,
  }
  return s 
+end
+
+end -- closure
+
+do -- begin closure to overcome local limits and interference
+
+if not modules then modules={} end modules ['util-zip']={
+ version=1.001,
+ author="Hans Hagen, PRAGMA-ADE, Hasselt NL",
+ copyright="PRAGMA ADE / ConTeXt Development Team",
+ license="see context related readme files"
+}
+local type,tostring,tonumber=type,tostring,tonumber
+local sort,concat=table.sort,table.concat
+local find,format,sub,gsub=string.find,string.format,string.sub,string.gsub
+local osdate,ostime,osclock=os.date,os.time,os.clock
+local ioopen=io.open
+local loaddata,savedata=io.loaddata,io.savedata
+local filejoin,isdir,dirname,mkdirs=file.join,lfs.isdir,file.dirname,dir.mkdirs
+local suffix,suffixes=file.suffix,file.suffixes
+local openfile=io.open
+gzip=gzip or {} 
+if not zlib then
+ zlib=xzip 
+elseif not xzip then
+ xzip=zlib
+end
+local files=utilities.files
+local openfile=files.open
+local closefile=files.close
+local getsize=files.size
+local readstring=files.readstring
+local readcardinal2=files.readcardinal2le
+local readcardinal4=files.readcardinal4le
+local setposition=files.setposition
+local getposition=files.getposition
+local skipbytes=files.skip
+local band=bit32.band
+local rshift=bit32.rshift
+local lshift=bit32.lshift
+local zlibdecompress=zlib.decompress
+local zlibdecompresssize=zlib.decompresssize
+local zlibchecksum=zlib.crc32
+if not CONTEXTLMTXMODE or CONTEXTLMTXMODE==0 then
+ local cs=zlibchecksum
+ zlibchecksum=function(str,n) return cs(n or 0,str) end
+end
+local decompress=function(source)   return zlibdecompress (source,-15)   end 
+local decompresssize=function(source,targetsize) return zlibdecompresssize(source,targetsize,-15) end 
+local calculatecrc=function(buffer,initial) return zlibchecksum   (initial or 0,buffer)   end
+local zipfiles={}
+utilities.zipfiles=zipfiles
+local openzipfile,closezipfile,unzipfile,foundzipfile,getziphash,getziplist  do
+ function openzipfile(name)
+  return {
+   name=name,
+   handle=openfile(name,0),
+  }
+ end
+ local function update(handle,data)
+  position=data.offset
+  setposition(handle,position)
+  local signature=readstring(handle,4)
+  if signature=="PK\3\4" then
+   local version=readcardinal2(handle)
+   local flag=readcardinal2(handle)
+   local method=readcardinal2(handle)
+          skipbytes(handle,4)
+   local crc32=readcardinal4(handle)
+   local compressed=readcardinal4(handle)
+   local uncompressed=readcardinal4(handle)
+   local namelength=readcardinal2(handle)
+   local extralength=readcardinal2(handle)
+   local filename=readstring(handle,namelength)
+   local descriptor=band(flag,8)~=0
+   local encrypted=band(flag,1)~=0
+   local acceptable=method==0 or method==8
+   local skipped=0
+   local size=0
+   if encrypted then
+    size=readcardinal2(handle)
+    skipbytes(handle,size)
+    skipped=skipped+size+2
+    skipbytes(8)
+    skipped=skipped+8
+    size=readcardinal2(handle)
+    skipbytes(handle,size)
+    skipped=skipped+size+2
+    size=readcardinal4(handle)
+    skipbytes(handle,size)
+    skipped=skipped+size+4
+    size=readcardinal2(handle)
+    skipbytes(handle,size)
+    skipped=skipped+size+2
+   end
+   if acceptable then
+     if        filename~=data.filename  then
+    else
+     position=position+30+namelength+extralength+skipped
+     data.position=position
+     return position
+    end
+   else
+   end
+  end
+  data.position=false
+  return false
+ end
+ local function collect(z)
+  if not z.list then
+   local list={}
+   local hash={}
+   local position=0
+   local index=0
+   local handle=z.handle
+   local size=getsize(handle)
+   for i=size-4,size-64*1024,-1 do
+    setposition(handle,i)
+    local enddirsignature=readcardinal4(handle)
+    if enddirsignature==0x06054B50 then
+     local thisdisknumber=readcardinal2(handle)
+     local centraldisknumber=readcardinal2(handle)
+     local thisnofentries=readcardinal2(handle)
+     local totalnofentries=readcardinal2(handle)
+     local centralsize=readcardinal4(handle)
+     local centraloffset=readcardinal4(handle)
+     local commentlength=readcardinal2(handle)
+     local comment=readstring(handle,length)
+     if size-i>=22 then
+      if thisdisknumber==centraldisknumber then
+       setposition(handle,centraloffset)
+       while true do
+        if readcardinal4(handle)==0x02014B50 then
+                skipbytes(handle,4)
+         local flag=readcardinal2(handle)
+         local method=readcardinal2(handle)
+                skipbytes(handle,4)
+         local crc32=readcardinal4(handle)
+         local compressed=readcardinal4(handle)
+         local uncompressed=readcardinal4(handle)
+         local namelength=readcardinal2(handle)
+         local extralength=readcardinal2(handle)
+         local commentlength=readcardinal2(handle)
+                skipbytes(handle,8)
+         local headeroffset=readcardinal4(handle)
+         local filename=readstring(handle,namelength)
+                skipbytes(handle,extralength+commentlength)
+         local descriptor=band(flag,8)~=0
+         local encrypted=band(flag,1)~=0
+         local acceptable=method==0 or method==8
+         if acceptable then
+          index=index+1
+          local data={
+           filename=filename,
+           index=index,
+           position=nil,
+           method=method,
+           compressed=compressed,
+           uncompressed=uncompressed,
+           crc32=crc32,
+           encrypted=encrypted,
+           offset=headeroffset,
+          }
+          hash[filename]=data
+          list[index]=data
+         end
+        else
+         break
+        end
+       end
+      end
+      break
+     end
+    end
+   end
+   z.list=list
+   z.hash=hash
+  end
+ end
+ function getziplist(z)
+  local list=z.list
+  if not list then
+   collect(z)
+  end
+  return z.list
+ end
+ function getziphash(z)
+  local hash=z.hash
+  if not hash then
+   collect(z)
+  end
+  return z.hash
+ end
+ function foundzipfile(z,name)
+  return getziphash(z)[name]
+ end
+ function closezipfile(z)
+  local f=z.handle
+  if f then
+   closefile(f)
+   z.handle=nil
+  end
+ end
+ function unzipfile(z,filename,check)
+  local hash=z.hash
+  if not hash then
+   hash=zipfiles.hash(z)
+  end
+  local data=hash[filename] 
+  if not data then
+  end
+  if data then
+   local handle=z.handle
+   local position=data.position
+   local compressed=data.compressed
+   if position==nil then
+    position=update(handle,data)
+   end
+   if position and compressed>0 then
+    setposition(handle,position)
+    local result=readstring(handle,compressed)
+    if data.method==8 then
+     if decompresssize then
+      result=decompresssize(result,data.uncompressed)
+     else
+      result=decompress(result)
+     end
+    end
+    if check and data.crc32~=calculatecrc(result) then
+     print("checksum mismatch")
+     return ""
+    end
+    return result
+   else
+    return ""
+   end
+  end
+ end
+ zipfiles.open=openzipfile
+ zipfiles.close=closezipfile
+ zipfiles.unzip=unzipfile
+ zipfiles.hash=getziphash
+ zipfiles.list=getziplist
+ zipfiles.found=foundzipfile
+end
+if xzip then 
+ local writecardinal1=files.writebyte
+ local writecardinal2=files.writecardinal2le
+ local writecardinal4=files.writecardinal4le
+ local logwriter=logs.writer
+ local globpattern=dir.globpattern
+ local compress=xzip.compress
+ local checksum=xzip.crc32
+ local function fromdostime(dostime,dosdate)
+  return ostime {
+   year=rshift(dosdate,9)+1980,
+   month=band(rshift(dosdate,5),0x0F),
+   day=band((dosdate   ),0x1F),
+   hour=band(rshift(dostime,11)    ),
+   min=band(rshift(dostime,5),0x3F),
+   sec=band((dostime   ),0x1F),
+  }
+ end
+ local function todostime(time)
+  local t=osdate("*t",time)
+  return
+   lshift(t.year-1980,9)+lshift(t.month,5)+t.day,
+   lshift(t.hour,11)+lshift(t.min,5)+rshift(t.sec,1)
+ end
+ local function openzip(filename,level,comment,verbose)
+  local f=ioopen(filename,"wb")
+  if f then
+   return {
+    filename=filename,
+    handle=f,
+    list={},
+    level=tonumber(level) or 3,
+    comment=tostring(comment),
+    verbose=verbose,
+    uncompressed=0,
+    compressed=0,
+   }
+  end
+ end
+ local function writezip(z,name,data,level,time)
+  local f=z.handle
+  local list=z.list
+  local level=tonumber(level) or z.level or 3
+  local method=8
+  local zipped=compress(data,level)
+  local checksum=checksum(data)
+  local verbose=z.verbose
+  if not zipped then
+   method=0
+   zipped=data
+  end
+  local start=f:seek()
+  local compressed=#zipped
+  local uncompressed=#data
+  z.compressed=z.compressed+compressed
+  z.uncompressed=z.uncompressed+uncompressed
+  if verbose then
+   local pct=100*compressed/uncompressed
+   if pct>=100 then
+    logwriter(format("%10i        %s",uncompressed,name))
+   else
+    logwriter(format("%10i  %02.1f  %s",uncompressed,pct,name))
+   end
+  end
+  f:write("\x50\x4b\x03\x04")
+  writecardinal2(f,0)   
+  writecardinal2(f,0)   
+  writecardinal2(f,method)    
+  writecardinal2(f,0)   
+  writecardinal2(f,0)   
+  writecardinal4(f,checksum)  
+  writecardinal4(f,compressed)   
+  writecardinal4(f,uncompressed) 
+  writecardinal2(f,#name)  
+  writecardinal2(f,0)
+  f:write(name)      
+  f:write(zipped)
+  list[#list+1]={ #zipped,#data,name,checksum,start,time or 0 }
+ end
+ local function closezip(z)
+  local f=z.handle
+  local list=z.list
+  local comment=z.comment
+  local verbose=z.verbose
+  local count=#list
+  local start=f:seek()
+  for i=1,count do
+   local l=list[i]
+   local compressed=l[1]
+   local uncompressed=l[2]
+   local name=l[3]
+   local checksum=l[4]
+   local start=l[5]
+   local time=l[6]
+   local date,time=todostime(time)
+   f:write('\x50\x4b\x01\x02')
+   writecardinal2(f,0)   
+   writecardinal2(f,0)   
+   writecardinal2(f,0)   
+   writecardinal2(f,8)   
+   writecardinal2(f,time)   
+   writecardinal2(f,date)   
+   writecardinal4(f,checksum)  
+   writecardinal4(f,compressed)   
+   writecardinal4(f,uncompressed) 
+   writecardinal2(f,#name)  
+   writecardinal2(f,0)   
+   writecardinal2(f,0)   
+   writecardinal2(f,0)   
+   writecardinal2(f,0)   
+   writecardinal4(f,0)   
+   writecardinal4(f,start)  
+   f:write(name)      
+  end
+  local stop=f:seek()
+  local size=stop-start
+  f:write('\x50\x4b\x05\x06')
+  writecardinal2(f,0)   
+  writecardinal2(f,0)   
+  writecardinal2(f,count)  
+  writecardinal2(f,count)  
+  writecardinal4(f,size)   
+  writecardinal4(f,start)  
+  if type(comment)=="string" and comment~="" then
+   writecardinal2(f,#comment) 
+   f:write(comment)     
+  else
+   writecardinal2(f,0)
+  end
+  if verbose then
+   local compressed=z.compressed
+   local uncompressed=z.uncompressed
+   local filename=z.filename
+   local pct=100*compressed/uncompressed
+   logwriter("")
+   if pct>=100 then
+    logwriter(format("%10i        %s",uncompressed,filename))
+   else
+    logwriter(format("%10i  %02.1f  %s",uncompressed,pct,filename))
+   end
+  end
+  f:close()
+ end
+ local function zipdir(zipname,path,level,verbose)
+  if type(zipname)=="table" then
+   verbose=zipname.verbose
+   level=zipname.level
+   path=zipname.path
+   zipname=zipname.zipname
+  end
+  if not zipname or zipname=="" then
+   return
+  end
+  if not path or path=="" then
+   path="."
+  end
+  if not isdir(path) then
+   return
+  end
+  path=gsub(path,"\\+","/")
+  path=gsub(path,"/+","/")
+  local list={}
+  local count=0
+  globpattern(path,"",true,function(name,size,time)
+   count=count+1
+   list[count]={ name,time }
+  end)
+  sort(list,function(a,b)
+   return a[1]<b[1]
+  end)
+  local zipf=openzip(zipname,level,comment,verbose)
+  if zipf then
+   local p=#path+2
+   for i=1,count do
+    local li=list[i]
+    local name=li[1]
+    local time=li[2]
+    local data=loaddata(name)
+    local name=sub(name,p,#name)
+    writezip(zipf,name,data,level,time,verbose)
+   end
+   closezip(zipf)
+  end
+ end
+ local function unzipdir(zipname,path,verbose,collect,validate)
+  if type(zipname)=="table" then
+   validate=zipname.validate
+   collect=zipname.collect
+   verbose=zipname.verbose
+   path=zipname.path
+   zipname=zipname.zipname
+  end
+  if not zipname or zipname=="" then
+   return
+  end
+  if not path or path=="" then
+   path="."
+  end
+  local z=openzipfile(zipname)
+  if z then
+   local list=getziplist(z)
+   if list then
+    local total=0
+    local count=#list
+    local step=number.idiv(count,10)
+    local done=0
+    local steps=verbose=="steps"
+    local time=steps and osclock()
+    if collect then
+     collect={}
+    else
+     collect=false
+    end
+    for i=1,count do
+     local l=list[i]
+     local n=l.filename
+     if not validate or validate(n) then
+      local d=unzipfile(z,n) 
+      if d then
+       local p=filejoin(path,n)
+       if mkdirs(dirname(p)) then
+        if steps then
+         total=total+#d
+         done=done+1
+         if done>=step then
+          done=0
+          logwriter(format("%4i files of %4i done, %10i bytes, %0.3f seconds",i,count,total,osclock()-time))
+         end
+        elseif verbose then
+         logwriter(n)
+        end
+        savedata(p,d)
+        if collect then
+         collect[#collect+1]=p
+        end
+       end
+      else
+       logwriter(format("problem with file %s",n))
+      end
+     else
+     end
+    end
+    if steps then
+     logwriter(format("%4i files of %4i done, %10i bytes, %0.3f seconds",count,count,total,osclock()-time))
+    end
+    closezipfile(z)
+    if collect then
+     return collect
+    end
+   else
+    closezipfile(z)
+   end
+  end
+ end
+ zipfiles.zipdir=zipdir
+ zipfiles.unzipdir=unzipdir
+end
+local pattern="^\x1F\x8B\x08"
+local gziplevel=3
+function gzip.suffix(filename)
+ local suffix,extra=suffixes(filename)
+ local gzipped=extra=="gz"
+ return suffix,gzipped
+end
+function gzip.compressed(s)
+ return s and find(s,pattern)
+end
+local getdecompressed
+local putcompressed
+if gzip.compress then
+ local gzipwindow=15+16 
+ local compress=zlib.compress
+ local decompress=zlib.decompress
+ getdecompressed=function(str)
+  return decompress(str,gzipwindow) 
+ end
+ putcompressed=function(str,level)
+  return compress(str,level or gziplevel,nil,gzipwindow)
+ end
+else
+ local gzipwindow=-15 
+ local identifier="\x1F\x8B"
+ local compress=zlib.compress
+ local decompress=zlib.decompress
+ local zlibchecksum=zlib.crc32
+ if not CONTEXTLMTXMODE or CONTEXTLMTXMODE==0 then
+  local cs=zlibchecksum
+  zlibchecksum=function(str,n) return cs(n or 0,str) end
+ end
+ local streams=utilities.streams
+ local openstream=streams.openstring
+ local closestream=streams.close
+ local getposition=streams.getposition
+ local readbyte=streams.readbyte
+ local readcardinal4=streams.readcardinal4le
+ local readcardinal2=streams.readcardinal2le
+ local readstring=streams.readstring
+ local readcstring=streams.readcstring
+ local skipbytes=streams.skip
+ local tocardinal1=streams.tocardinal1
+ local tocardinal4=streams.tocardinal4le
+ getdecompressed=function(str)
+  local s=openstream(str)
+  local identifier=readstring(s,2)
+  local method=readbyte(s,1)
+  local flags=readbyte(s,1)
+  local timestamp=readcardinal4(s)
+  local compression=readbyte(s,1)
+  local operating=readbyte(s,1)
+  local isjusttext=band(flags,0x01)~=0 and true    or false
+  local extrasize=band(flags,0x04)~=0 and readcardinal2(s) or 0
+  local filename=band(flags,0x08)~=0 and readcstring(s)   or ""
+  local comment=band(flags,0x10)~=0 and readcstring(s)   or ""
+  local checksum=band(flags,0x02)~=0 and readcardinal2(s) or 0
+  local compressed=readstring(s,#str)
+  local data=decompress(compressed,gzipwindow) 
+  return data
+ end
+ putcompressed=function(str,level,originalname)
+  return concat {
+   identifier,
+   tocardinal1(0x08),
+   tocardinal1(0x08),
+   tocardinal4(os.time()),
+   tocardinal1(0x02),
+   tocardinal1(0xFF),
+   (originalname or "unknownname").."\0",
+   compress(str,level,nil,gzipwindow),
+   tocardinal4(zlibchecksum(str)),
+   tocardinal4(#str),
+  }
+ end
+end
+function gzip.load(filename)
+ local f=openfile(filename,"rb")
+ if not f then
+ else
+  local data=f:read("*all")
+  f:close()
+  if data and data~="" then
+   if suffix(filename)=="gz" then
+    data=getdecompressed(data)
+   end
+   return data
+  end
+ end
+end
+function gzip.save(filename,data,level,originalname)
+ if suffix(filename)~="gz" then
+  filename=filename..".gz"
+ end
+ local f=openfile(filename,"wb")
+ if f then
+  data=putcompressed(data or "",level or gziplevel,originalname)
+  f:write(data)
+  f:close()
+  return #data
+ end
+end
+function gzip.compress(s,level)
+ if s and not find(s,pattern) then
+  if not level then
+   level=gziplevel
+  elseif level<=0 then
+   return s
+  elseif level>9 then
+   level=9
+  end
+  return putcompressed(s,level or gziplevel) or s
+ end
+end
+function gzip.decompress(s)
+ if s and find(s,pattern) then
+  return getdecompressed(s)
+ else
+  return s
+ end
 end
 
 end -- closure

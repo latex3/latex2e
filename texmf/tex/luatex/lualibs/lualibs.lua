@@ -7,9 +7,9 @@
 --  lualibs.dtx  (with options: `lualibs')
 --  This is a generated file.
 --  
---  Copyright (C) 2009--2018 by
+--  Copyright (C) 2009--2021 by
 --          PRAGMA ADE / ConTeXt Development Team
---          The LuaLaTeX Dev Team
+--          The LaTeX Project Team
 --  
 --  See ConTeXt's mreadme.pdf for the license.
 --  
@@ -25,8 +25,8 @@ lualibs = lualibs or { }
 
 lualibs.module_info = {
   name          = "lualibs",
-  version       = "2.67",       --TAGVERSION
-    date        = "2019-08-11", --TAGDATE
+  version       = "2.76",       --TAGVERSION
+    date        = "2023-07-13", --TAGDATE
   description   = "ConTeXt Lua standard libraries.",
   author        = "Hans Hagen, PRAGMA-ADE, Hasselt NL & Elie Roux & Philipp Gesang",
   copyright     = "PRAGMA ADE / ConTeXt Development Team",
@@ -90,7 +90,7 @@ local loadmodule = loadmodule or function (name, t)
   if not t then t = "library" end
   local filepath  = find_file(name, "lua")
   if not filepath or filepath == "" then
-    warn(stringformat("Could not locate %s ^^e2^^80^^9c%s^^e2^^80^^9d.", t, name))
+    warn(stringformat("Could not locate %s “%s”.", t, name))
     return false
   end
   dofile(filepath)

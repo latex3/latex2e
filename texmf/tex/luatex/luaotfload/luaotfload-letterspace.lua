@@ -3,19 +3,15 @@
 --  DESCRIPTION:  part of luaotfload / letterspacing
 -----------------------------------------------------------------------
 
-local ProvidesLuaModule = { 
+assert(luaotfload_module, "This is a part of luaotfload and should not be loaded independently") { 
     name          = "luaotfload-letterspace",
-    version       = "3.00",       --TAGVERSION
-    date          = "2019-09-13", --TAGDATE
-    description   = "luaotfload submodule / color",
+    version       = "3.28",       --TAGVERSION
+    date          = "2024-02-14", --TAGDATE
+    description   = "luaotfload submodule / letterspacing",
     license       = "GPL v2.0",
     copyright     = "PRAGMA ADE / ConTeXt Development Team",
     author        = "Hans Hagen, PRAGMA-ADE, Hasselt NL; adapted by Philipp Gesang, Ulrike Fischer, Marcel Krüger"
 }
-
-if luatexbase and luatexbase.provides_module then
-  luatexbase.provides_module (ProvidesLuaModule)
-end  
 
 --- This code diverged quite a bit from its origin in Context. Please
 --- do *not* report bugs on the Context list.
@@ -63,12 +59,18 @@ local setkern            = nodedirect.setkern
 local getglue            = nodedirect.getglue
 local setglue            = nodedirect.setglue
 
+local hasattribute       = nodedirect.has_attribute
+local setattribute       = nodedirect.set_attribute
+
+local getattributelist   = nodedirect.getattributelist
+local setattributelist   = nodedirect.setattributelist
+
 local find_node_tail     = nodedirect.tail
 local todirect           = nodedirect.todirect
 local tonode             = nodedirect.tonode
 
 local insert_node_before = nodedirect.insert_before
-local free_node          = nodedirect.free
+local real_free_node     = nodedirect.free
 local copy_node          = nodedirect.copy
 local new_node           = nodedirect.new
 
@@ -82,6 +84,26 @@ local fonthashes         = fonts.hashes
 local identifiers        = fonthashes.identifiers
 local chardata           = fonthashes.characters
 local otffeatures        = fonts.constructors.newfeatures "otf"
+local markdata
+
+-- For every attribute list cached in attribute_table, we have to make
+-- sure that it doesn't get deleted. Therefore attribute_cleanup maps
+-- from a node which has the attribute_list referenced in
+-- attribute_table to the key from attribute_table.
+-- Whenever a node which has an entry in attribute_cleanup is deleted,
+-- we delete the corresponding entry from attribute_table since we can
+-- no longer guarantee that it's references somewhere.
+local attribute_table    = {}
+local attribute_cleanup  = {}
+local attr = luatexbase.new_attribute("luaotfload.letterspace_done")
+
+local function free_node(n)
+  local k = attribute_cleanup[n]
+  if k then
+    attribute_cleanup[n], attribute_table[k] = nil
+  end
+  return real_free_node(n)
+end
 
 local function getprevreal(n)
   repeat
@@ -144,12 +166,27 @@ if not chardata then
   fonthashes.characters = chardata
 end
 
+if not markdata then
+  markdata = setmetatable({}, {__index = function(t, k)
+    if k == true then
+      return t[currentfont()]
+    else
+      local tfmdata = font.getfont(k) or font.fonts[k]
+      if tfmdata then
+        local marks = tfmdata.resources.marks or {}
+        t[k] = marks
+        return marks
+      end
+    end
+  end})
+end
+
 ---=================================================================---
 ---                 character kerning functionality
 ---=================================================================---
 
 -- UF changed 2017-07-14
-local kern_injector = function (fillup, kern)
+local function kern_injector (fillup, kern)
  if fillup then
    local g = new_node(glue_code)
    setglue(g, 0, kern, 0, 1, 0)
@@ -161,7 +198,7 @@ local kern_injector = function (fillup, kern)
 end
 -- /UF
 
-local kernable_skip = function (n)
+local function kernable_skip (n)
   local st = getsubtype (n)
   return st == userskip_code
       or st == spaceskip_code
@@ -231,6 +268,10 @@ kerncharacters = function (head)
     local id = getid(start)
     if id == glyph_code then
       --- 1) look up kern factor (slow, but cached rudimentarily)
+      if hasattribute(start, attr, 1) then -- We already kerned this node
+        firstkern = false -- TODO: I'm not sure about this one yet
+        goto nextnode
+      end
       local fontid = getfont(start)
       local krn, fillup = unpack(kernamounts[fontid])
       if not krn or krn == 0 then
@@ -334,7 +375,7 @@ kerncharacters = function (head)
                   local kern = 0
                   local kerns = prevchardata.kerns
                   if kerns then kern = kerns[lastchar] or kern end
-                  krn = kern + krn -- here
+                  krn = kern + (markdata[lastfont][lastchar] and 0 or krn) -- here
                   insert_node_before(head,start,kern_injector(fillup,krn))
                 end
               end
@@ -409,11 +450,20 @@ kerncharacters = function (head)
                   if kerns then kern = kerns[lastchar] or kern end
                 end
               end
-              krn = kern + krn -- here
+              krn = kern + (markdata[lastfont][lastchar] and 0 or krn) -- here
             end
             setfield(disc, "replace", kern_injector(false, krn))
           end --[[if replace and prv and nxt]]
         end --[[if not pid]]
+        local attr_list = getattributelist(start)
+        local new_attr_list = attribute_table[attr_list]
+        if new_attr_list then
+          setattributelist(start, new_attr_list)
+        else
+          setattribute(start, attr, 1)
+          attribute_cleanup[start] = attr_list
+          attribute_table[attr_list] = getattributelist(start)
+        end
       end --[[if prev]]
     end --[[if id == glyph_code]]
 
@@ -436,25 +486,13 @@ end
 
 --- (node_t -> node_t) -> string -> string list -> bool
 local registered_as = { } --- procname -> callbacks
-local add_processor = function (processor, name, ...)
+local function add_processor (processor, name, ...)
   local callbacks = { ... }
   for i=1, #callbacks do
     luatexbase.add_to_callback(callbacks[i], processor, name)
   end
   registered_as[name] = callbacks --- for removal
   return true
-end
-
---- string -> bool
-local remove_processor = function (name)
-  local callbacks = registered_as[name]
-  if callbacks then
-    for i=1, #callbacks do
-      luatexbase.remove_from_callback(callbacks[i], name)
-    end
-    return true
-  end
-  return false --> unregistered
 end
 
 --- When font kerning is requested, usually by defining a font with the
@@ -466,9 +504,9 @@ end
 --- performs all node operations on direct nodes.
 
 --- unit -> bool
-local enablefontkerning = function ( )
+local function enablefontkerning ( )
 
-  local handler = function (hd)
+  local function handler (hd)
     local direct_hd = todirect (hd)
     logreport ("term", 5, "letterspace",
                "kerncharacters() invoked with node.direct interface \z
@@ -478,6 +516,10 @@ local enablefontkerning = function ( )
       logreport ("both", 0, "letterspace",
                  "kerncharacters() failed to return a valid new head")
     end
+
+    for k, v in next, attribute_cleanup do attribute_cleanup[k], attribute_table[v] = nil end
+    assert(not next(attribute_table))
+
     return tonode (direct_hd)
   end
 
@@ -507,7 +549,7 @@ end
 local fontkerning_enabled = false --- callback state
 
 --- fontobj -> float -> unit
-local initializefontkerning = function (tfmdata, factor)
+local function initializefontkerning (tfmdata, factor)
   if factor ~= "max" then
     factor = tonumber (factor) or 0
   end
@@ -532,6 +574,7 @@ otffeatures.register {
   initializers = {
     base = initializefontkerning,
     node = initializefontkerning,
+    plug = initializefontkerning,
   }
 }
 
@@ -546,7 +589,7 @@ otffeatures.register {
 
 --doc]]--
 
-local initializecompatfontkerning = function (tfmdata, percentage)
+local function initializecompatfontkerning (tfmdata, percentage)
   local factor = tonumber (percentage)
   if not factor then
     logreport ("both", 0, "letterspace",
@@ -564,6 +607,7 @@ otffeatures.register {
   initializers = {
     base = initializecompatfontkerning,
     node = initializecompatfontkerning,
+    plug = initializecompatfontkerning,
   }
 }
 

@@ -7,9 +7,9 @@
 --  lualibs.dtx  (with options: `extended')
 --  This is a generated file.
 --  
---  Copyright (C) 2009--2018 by
+--  Copyright (C) 2009--2021 by
 --          PRAGMA ADE / ConTeXt Development Team
---          The LuaLaTeX Dev Team
+--          The LaTeX Project Team
 --  
 --  See ConTeXt's mreadme.pdf for the license.
 --  
@@ -30,8 +30,8 @@ lualibs = lualibs or { }
 
 local lualibs_extended_module = {
   name          = "lualibs-extended",
-  version       = "2.67",       --TAGVERSION
-  date          = "2019-08-11", --TAGDATE
+  version       = "2.76",       --TAGVERSION
+  date          = "2023-07-13", --TAGDATE
   description   = "ConTeXt Lua libraries -- extended collection.",
   author        = "Hans Hagen, PRAGMA-ADE, Hasselt NL & Elie Roux & Philipp Gesang",
   copyright     = "PRAGMA ADE / ConTeXt Development Team",
@@ -111,14 +111,15 @@ fake_context()
 
 local loaded = false
 if lualibs.prefer_merged then
-  info"Loading merged package for collection ^^e2^^80^^9cextended^^e2^^80^^9d."
+  info"Loading merged package for collection “extended”."
   loaded = loadmodule('lualibs-extended-merged.lua')
 else
   info"Ignoring merged packages."
-  info"Falling back to individual libraries from collection ^^e2^^80^^9cextended^^e2^^80^^9d."
+  info"Falling back to individual libraries from collection “extended”."
 end
 
 if loaded == false then
+  loadmodule("lualibs-util-sac.lua")--- streams: string based file parsers
   loadmodule("lualibs-util-str.lua")--- string formatters (fast)
   loadmodule("lualibs-util-fil.lua")--- extra file helpers
   loadmodule("lualibs-util-tab.lua")--- extended table operations
@@ -138,6 +139,7 @@ if loaded == false then
   loadmodule("lualibs-util-deb.lua")--- extra debugging
   loadmodule("lualibs-util-tpl.lua")--- templating
   loadmodule("lualibs-util-sta.lua")--- stacker (for writing pdf)
+  loadmodule("lualibs-util-zip.lua")--- compression and zip files
 end
 
 unfake_context() --- TODO check if this works at runtime

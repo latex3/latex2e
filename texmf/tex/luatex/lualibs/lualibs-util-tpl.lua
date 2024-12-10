@@ -20,6 +20,8 @@ local tostring, next = tostring, next
 local format, sub, byte = string.format, string.sub, string.byte
 local P, C, R, Cs, Cc, Carg, lpegmatch, lpegpatterns = lpeg.P, lpeg.C, lpeg.R, lpeg.Cs, lpeg.Cc, lpeg.Carg, lpeg.match, lpeg.patterns
 
+local formatters = string.formatters
+
 -- todo: make installable template.new
 
 local replacer
@@ -133,34 +135,42 @@ local function replaceoptional(l,m,r,t,how,recurse)
     return v and v ~= "" and lpegmatch(replacer,r,1,t,how or "lua",recurse or false) or ""
 end
 
-local single      = P("%")  -- test %test% test     : resolves test
-local double      = P("%%") -- test 10%% test       : %% becomes %
-local lquoted     = P("%[") -- test '%[test]%' test : resolves to test with escaped "'s
-local rquoted     = P("]%") --
-local lquotedq    = P("%(") -- test %(test)% test   : resolves to 'test' with escaped "'s
-local rquotedq    = P(")%") --
+local function replaceformatted(l,m,r,t,how,recurse)
+    local v = t[r]
+    return v and formatters[l](v)
+end
 
-local escape      = double   / '%%'
-local nosingle    = single   / ''
-local nodouble    = double   / ''
-local nolquoted   = lquoted  / ''
-local norquoted   = rquoted  / ''
-local nolquotedq  = lquotedq / ''
-local norquotedq  = rquotedq / ''
+local single       = P("%")  -- test %test% test     : resolves test
+local double       = P("%%") -- test 10%% test       : %% becomes %
+local lquoted      = P("%[") -- test '%[test]%' test : resolves to test with escaped "'s
+local rquoted      = P("]%") --
+local lquotedq     = P("%(") -- test %(test)% test   : resolves to 'test' with escaped "'s
+local rquotedq     = P(")%") --
 
-local noloptional = P("%?") / ''
-local noroptional = P("?%") / ''
-local nomoptional = P(":")  / ''
+local escape       = double   / '%%'
+local nosingle     = single   / ''
+local nodouble     = double   / ''
+local nolquoted    = lquoted  / ''
+local norquoted    = rquoted  / ''
+local nolquotedq   = lquotedq / ''
+local norquotedq   = rquotedq / ''
 
+local nolformatted = P(":") / "%%"
+local norformatted = P(":") / ""
 
-local args        = Carg(1) * Carg(2) * Carg(3)
-local key         = nosingle    * ((C((1-nosingle   )^1) * args) / replacekey        ) * nosingle
-local quoted      = nolquotedq  * ((C((1-norquotedq )^1) * args) / replacekeyquoted  ) * norquotedq
-local unquoted    = nolquoted   * ((C((1-norquoted  )^1) * args) / replacekeyunquoted) * norquoted
-local optional    = noloptional * ((C((1-nomoptional)^1) * nomoptional * C((1-noroptional)^1) * args) / replaceoptional) *  noroptional
-local any         = P(1)
+local noloptional  = P("%?") / ''
+local noroptional  = P("?%") / ''
+local nomoptional  = P(":")  / ''
 
-      replacer    = Cs((unquoted + quoted + escape + optional + key + any)^0)
+local args         = Carg(1) * Carg(2) * Carg(3)
+local key          = nosingle * ((C((1-nosingle)^1) * args) / replacekey) * nosingle
+local quoted       = nolquotedq * ((C((1-norquotedq)^1) * args) / replacekeyquoted) * norquotedq
+local unquoted     = nolquoted * ((C((1-norquoted)^1) * args) / replacekeyunquoted) * norquoted
+local optional     = noloptional * ((C((1-nomoptional)^1) * nomoptional * C((1-noroptional)^1) * args) / replaceoptional) *  noroptional
+local formatted    = nosingle * ((Cs(nolformatted * (1-norformatted )^1) * norformatted * C((1-nosingle)^1) * args) / replaceformatted) * nosingle
+local any          = P(1)
+
+      replacer     = Cs((unquoted + quoted + formatted + escape + optional + key + any)^0)
 
 local function replace(str,mapping,how,recurse)
     if mapping and str then
@@ -179,6 +189,8 @@ end
 -- print(replace([[test %[x]% test]],{ x = [[a "x"  a]]}))
 -- print(replace([[test %(x)% test]],{ x = [[a "x"  a]]}))
 -- print(replace([[convert %?x: -x "%x%" ?% %?y: -y "%y%" ?%]],{ x = "yes" }))
+-- print(replace("test %:0.3N:x% test",{ x = 123.45 }))
+-- print(replace("test %:0.3N:x% test",{ x = 12345 }))
 
 templates.replace = replace
 

@@ -1,5 +1,6 @@
 if not modules then modules = { } end modules ['util-fil'] = {
     version   = 1.001,
+    optimize  = true,
     comment   = "companion to luat-lib.mkiv",
     author    = "Hans Hagen, PRAGMA-ADE, Hasselt NL",
     copyright = "PRAGMA ADE / ConTeXt Development Team",
@@ -202,23 +203,23 @@ function files.readinteger4le(f)
 end
 
 function files.readfixed2(f)
-    local a, b = byte(f:read(2),1,2)
-    if a >= 0x80 then
-        tonumber((a - 0x100) .. "." .. b)
-    else
-        tonumber(( a       ) .. "." .. b)
+    local n1, n2 = byte(f:read(2),1,2)
+    if n1 >= 0x80 then
+        n1 = n1 - 0x100
     end
+    return n1 + n2/0xFF
 end
 
 -- (real) (n>>16) + ((n&0xffff)/65536.0)) but no cast in lua (we could use unpack)
 
 function files.readfixed4(f)
     local a, b, c, d = byte(f:read(4),1,4)
-    if a >= 0x80 then
-        tonumber((0x100 * a + b - 0x10000) .. "." .. (0x100 * c + d))
-    else
-        tonumber((0x100 * a + b          ) .. "." .. (0x100 * c + d))
+    local n1 = 0x100 * a + b
+    local n2 = 0x100 * c + d
+    if n1 >= 0x8000 then
+        n1 = n1 - 0x10000
     end
+    return n1 + n2/0xFFFF
 end
 
 -- (real) ((n<<16)>>(16+14)) + ((n&0x3fff)/16384.0))

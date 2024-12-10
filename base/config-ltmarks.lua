@@ -1,6 +1,6 @@
 -- Tests for ltmarks
 
-checkengines = {"etex"}
+checkengines = {"pdftex"}
 checksearch  = true
 testfiledir  = "testfiles-ltmarks"
 

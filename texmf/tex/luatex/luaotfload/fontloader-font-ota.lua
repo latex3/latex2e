@@ -9,6 +9,7 @@ if not modules then modules = { } end modules ['font-ota'] = {
 -- context only
 
 local type = type
+local setmetatableindex = table.setmetatableindex
 
 if not trackers then trackers = { register = function() end } end
 
@@ -27,8 +28,6 @@ local methods             = allocate()
 analyzers.initializers    = initializers
 analyzers.methods         = methods
 
-local a_state             = attributes.private('state')
-
 local nuts                = nodes.nuts
 local tonut               = nuts.tonut
 
@@ -41,7 +40,7 @@ local getsubtype          = nuts.getsubtype
 local getchar             = nuts.getchar
 local ischar              = nuts.ischar
 
-local end_of_math         = nuts.end_of_math
+local endofmath           = nuts.endofmath
 
 local nodecodes           = nodes.nodecodes
 ----- glyph_code          = nodecodes.glyph
@@ -55,10 +54,28 @@ local chardata            = characters and characters.data
 local otffeatures         = fonts.constructors.features.otf
 local registerotffeature  = otffeatures.register
 
---[[ldx--
-<p>Analyzers run per script and/or language and are needed in order to
-process features right.</p>
---ldx]]--
+-- Analyzers run per script and/or language and are needed in order to process
+-- features right.
+
+local setstate = nuts.setstate
+local getstate = nuts.getstate
+
+if not setstate or not getstate then
+    -- generic (might move to the nod lib)
+    setstate = function(n,v)
+        setprop(n,"state",v)
+    end
+    getstate = function(n,v)
+        local s = getprop(n,"state")
+        if v then
+            return s == v
+        else
+            return s
+        end
+    end
+    nuts.setstate = setstate
+    nuts.getstate = getstate
+end
 
 -- never use these numbers directly
 
@@ -120,65 +137,65 @@ function analyzers.setstate(head,font)
     current = tonut(current)
     while current do
         local char, id = ischar(current,font)
-        if char and not getprop(current,a_state) then
+        if char and not getstate(current) then
             done = true
             local d = descriptions[char]
             if d then
                 if d.class == "mark" then
                     done = true
-                    setprop(current,a_state,s_mark)
+                    setstate(current,s_mark)
                 elseif useunicodemarks and categories[char] == "mn" then
                     done = true
-                    setprop(current,a_state,s_mark)
+                    setstate(current,s_mark)
                 elseif n == 0 then
                     first, last, n = current, current, 1
-                    setprop(current,a_state,s_init)
+                    setstate(current,s_init)
                 else
                     last, n = current, n+1
-                    setprop(current,a_state,s_medi)
+                    setstate(current,s_medi)
                 end
             else -- finish
                 if first and first == last then
-                    setprop(last,a_state,s_isol)
+                    setstate(last,s_isol)
                 elseif last then
-                    setprop(last,a_state,s_fina)
+                    setstate(last,s_fina)
                 end
                 first, last, n = nil, nil, 0
             end
         elseif char == false then
             -- other font
             if first and first == last then
-                setprop(last,a_state,s_isol)
+                setstate(last,s_isol)
             elseif last then
-                setprop(last,a_state,s_fina)
+                setstate(last,s_fina)
             end
             first, last, n = nil, nil, 0
             if id == math_code then
-                current = end_of_math(current)
+                current = endofmath(current)
             end
         elseif id == disc_code then
             -- always in the middle .. it doesn't make much sense to assign a property
             -- here ... we might at some point decide to flag the components when present
             -- but even then it's kind of bogus
-            setprop(current,a_state,s_medi)
+            setstate(current,s_medi)
             last = current
         else -- finish
             if first and first == last then
-                setprop(last,a_state,s_isol)
+                setstate(last,s_isol)
             elseif last then
-                setprop(last,a_state,s_fina)
+                setstate(last,s_fina)
             end
             first, last, n = nil, nil, 0
             if id == math_code then
-                current = end_of_math(current)
+                current = endofmath(current)
             end
         end
         current = getnext(current)
     end
     if first and first == last then
-        setprop(last,a_state,s_isol)
+        setstate(last,s_isol)
     elseif last then
-        setprop(last,a_state,s_fina)
+        setstate(last,s_fina)
     end
     return head, done
 end
@@ -267,7 +284,7 @@ if not classifiers then
     local f_nko,     l_nko     = characters.blockrange("nko")
     local f_ext_a,   l_ext_a   = characters.blockrange("arabicextendeda")
 
-    classifiers = table.setmetatableindex(function(t,k)
+    classifiers = setmetatableindex(function(t,k)
         if type(k) == "number" then
             local c = chardata[k]
             local v = false
@@ -308,91 +325,91 @@ function methods.arab(head,font,attr)
     current = tonut(current)
     while current do
         local char, id = ischar(current,font)
-        if char and not getprop(current,a_state) then
+        if char and not getstate(current) then
             done = true
             local classifier = classifiers[char]
             if not classifier then
                 if last then
                     if c_last == s_medi or c_last == s_fina then
-                        setprop(last,a_state,s_fina)
+                        setstate(last,s_fina)
                     else
                         warning(last,"fina")
-                        setprop(last,a_state,s_error)
+                        setstate(last,s_error)
                     end
                     first, last = nil, nil
                 elseif first then
                     if c_first == s_medi or c_first == s_fina then
-                        setprop(first,a_state,s_isol)
+                        setstate(first,s_isol)
                     else
                         warning(first,"isol")
-                        setprop(first,a_state,s_error)
+                        setstate(first,s_error)
                     end
                     first = nil
                 end
             elseif classifier == s_mark then
-                setprop(current,a_state,s_mark)
+                setstate(current,s_mark)
             elseif classifier == s_isol then
                 if last then
                     if c_last == s_medi or c_last == s_fina then
-                        setprop(last,a_state,s_fina)
+                        setstate(last,s_fina)
                     else
                         warning(last,"fina")
-                        setprop(last,a_state,s_error)
+                        setstate(last,s_error)
                     end
                     first, last = nil, nil
                 elseif first then
                     if c_first == s_medi or c_first == s_fina then
-                        setprop(first,a_state,s_isol)
+                        setstate(first,s_isol)
                     else
                         warning(first,"isol")
-                        setprop(first,a_state,s_error)
+                        setstate(first,s_error)
                     end
                     first = nil
                 end
-                setprop(current,a_state,s_isol)
+                setstate(current,s_isol)
             elseif classifier == s_medi then
                 if first then
                     last = current
                     c_last = classifier
-                    setprop(current,a_state,s_medi)
+                    setstate(current,s_medi)
                 else
-                    setprop(current,a_state,s_init)
+                    setstate(current,s_init)
                     first = current
                     c_first = classifier
                 end
             elseif classifier == s_fina then
                 if last then
-                    if getprop(last,a_state) ~= s_init then
-                        setprop(last,a_state,s_medi)
+                    if getstate(last) ~= s_init then
+                        setstate(last,s_medi)
                     end
-                    setprop(current,a_state,s_fina)
+                    setstate(current,s_fina)
                     first, last = nil, nil
                 elseif first then
-                 -- if getprop(first,a_state) ~= s_init then
+                 -- if getstate(first) ~= s_init then
                  --     -- needs checking
-                 --     setprop(first,a_state,s_medi)
+                 --     setstate(first,s_medi)
                  -- end
-                    setprop(current,a_state,s_fina)
+                    setstate(current,s_fina)
                     first = nil
                 else
-                    setprop(current,a_state,s_isol)
+                    setstate(current,s_isol)
                 end
             else -- classifier == s_rest
-                setprop(current,a_state,s_rest)
+                setstate(current,s_rest)
                 if last then
                     if c_last == s_medi or c_last == s_fina then
-                        setprop(last,a_state,s_fina)
+                        setstate(last,s_fina)
                     else
                         warning(last,"fina")
-                        setprop(last,a_state,s_error)
+                        setstate(last,s_error)
                     end
                     first, last = nil, nil
                 elseif first then
                     if c_first == s_medi or c_first == s_fina then
-                        setprop(first,a_state,s_isol)
+                        setstate(first,s_isol)
                     else
                         warning(first,"isol")
-                        setprop(first,a_state,s_error)
+                        setstate(first,s_error)
                     end
                     first = nil
                 end
@@ -400,40 +417,40 @@ function methods.arab(head,font,attr)
         else
             if last then
                 if c_last == s_medi or c_last == s_fina then
-                    setprop(last,a_state,s_fina)
+                    setstate(last,s_fina)
                 else
                     warning(last,"fina")
-                    setprop(last,a_state,s_error)
+                    setstate(last,s_error)
                 end
                 first, last = nil, nil
             elseif first then
                 if c_first == s_medi or c_first == s_fina then
-                    setprop(first,a_state,s_isol)
+                    setstate(first,s_isol)
                 else
                     warning(first,"isol")
-                    setprop(first,a_state,s_error)
+                    setstate(first,s_error)
                 end
                 first = nil
             end
             if id == math_code then -- a bit duplicate as we test for glyphs twice
-                current = end_of_math(current)
+                current = endofmath(current)
             end
         end
         current = getnext(current)
     end
     if last then
         if c_last == s_medi or c_last == s_fina then
-            setprop(last,a_state,s_fina)
+            setstate(last,s_fina)
         else
             warning(last,"fina")
-            setprop(last,a_state,s_error)
+            setstate(last,s_error)
         end
     elseif first then
         if c_first == s_medi or c_first == s_fina then
-            setprop(first,a_state,s_isol)
+            setstate(first,s_isol)
         else
             warning(first,"isol")
-            setprop(first,a_state,s_error)
+            setstate(first,s_error)
         end
     end
     return head, done
@@ -442,6 +459,119 @@ end
 methods.syrc = methods.arab
 methods.mand = methods.arab
 methods.nko  = methods.arab
+
+-- a quick first attemp .. more later
+
+do
+
+    -- https://github.com/n8willis/opentype-shaping-documents/blob/master/opentype-shaping-mongolian.md#joining-properties
+    -- todo syrc
+
+    local joining = setmetatableindex(function(t,k)
+        if type(k) == "number" then
+            local c = chardata[k]
+            local v = false
+            if c then
+                local mongolian = c.mongolian
+                --
+                v = mongolian
+            end
+            t[k] = v
+            return v
+        end
+    end)
+
+    function methods.mong(head,font,attr)
+        local first, last
+        local current  = head
+        local done     = false
+        local prevjoin = nil
+        local prestate = nil
+        current = tonut(current)
+
+        local function wrapup()
+            if last then
+                if last ~= first then
+                    local s = getstate(last)
+                    if s == s_medi then
+                        setstate(last,s_fina)
+                    elseif s == s_init then
+                        setstate(last,s_isol)
+                    end
+                end
+                last = nil
+                first = nil
+                prevjoin = nil
+                prestate = nil
+            end
+        end
+
+        while current do
+            local char, id = ischar(current,font)
+            if char and not getstate(current) then
+                local currjoin = joining[char]
+                done = true
+                if not last then
+                    setstate(current,s_isol)
+                    prevjoin  = currjoin
+                    first     = current
+                    last      = current
+                    prevstate = s_isol
+                elseif currjoin == "t" then -- transparent
+                    -- keep state
+                    last = current
+                elseif prevjoin == "d" or prevjoin == "jc" or prevjoin == "l" then
+                    if currjoin == "d" or prevjoin == "jc" or prevjoin == "r" then
+                        local s = getstate(last)
+                        if s == s_isol then
+                            setstate(last,s_init)
+                        elseif s == s_fina then
+                            setstate(last,s_medi)
+                        end
+                        setstate(current,s_fina)
+                        prevstate = s_fina
+                    elseif prevjoin == "nj" or prevjoin == "l" then
+                        local s = getstate(last)
+                        if s == s_medi then
+                            setstate(last,s_fina)
+                        elseif s == s_init then
+                            setstate(last,s_isol)
+                        end
+                        setstate(current,s_isol)
+                        prevstate = s_isol
+                    end
+                    prevjoin = currjoin
+                    last = current
+                elseif prevjoin == "nj" or prevjoin == "r" then
+                    if s == s_medi then
+                        setstate(last,s_fina)
+                    elseif s == s_init then
+                        setstate(last,s_isol)
+                    end
+                    setstate(current,s_isol)
+                    prevjoin = currjoin
+                    prevstate = s_isol
+                    last = current
+                elseif last then
+                    wrapup()
+                end
+            else
+                if last then
+                    wrapup()
+                end
+                if id == math_code then -- a bit duplicate as we test for glyphs twice
+                    current = endofmath(current)
+                end
+            end
+            current = getnext(current)
+        end
+        if last then
+            wrapup()
+        end
+        return head, done
+    end
+
+end
 
 directives.register("otf.analyze.useunicodemarks",function(v)
     analyzers.useunicodemarks = v

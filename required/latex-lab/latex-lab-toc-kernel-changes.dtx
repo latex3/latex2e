@@ -1,0 +1,499 @@
+% \iffalse meta-comment
+%
+%% File: latex-lab-toc-kernel-changes.dtx (C) Copyright 2022-2024 LaTeX Project
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+%
+% The development version of the bundle can be found below
+%
+%    https://github.com/latex3/latex2e/required/latex-lab
+%
+% for those people who are interested or want to report an issue.
+%
+% dates for latex-lab-kernel-changes.sty (pulled from various sources, see ins)
+\def\ltlabkerneldate{2024-07-11}
+\def\ltlabkernelversion{0.85d}
+%<*driver>
+\documentclass{l3doc}
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{latex-lab-toc-kernel-changes.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+% \title{The \textsf{latex-lab-toc-kernel-changes} package\\
+% Changes and additions to the kernel related to tagging and links in toc entries}
+% \author{\LaTeX{} Project\thanks{Initial implementation done by Ulrike Fischer}}
+% \date{Version 0.83 2023-06-07}
+%
+% \maketitle
+%
+% \newcommand{\xt}[1]{\textsl{\textsf{#1}}}
+% \newcommand{\TODO}[1]{\textbf{[TODO:} #1\textbf{]}}
+% \newcommand{\docclass}{document class \marginpar{\raggedright document class
+% customizations}}
+%
+% \providecommand\hook[1]{\texttt{#1}}
+%
+%
+% \ProvideDocElement[printtype=\textit{socket},idxtype=socket,idxgroup=Sockets]{Socket}{socketdecl}
+% \ProvideDocElement[printtype=\textit{hook},idxtype=hook,idxgroup=Hooks]{Hook}{hookdecl}
+% \ProvideDocElement[printtype=\textit{plug},idxtype=plug,idxgroup=Plugs]{Plug}{plugdecl}
+% 
+% \begin{abstract}
+% \end{abstract}
+%
+% \section{Introduction}
+%
+% The followings contains various changes to kernel commands
+% needed for the tagging of table of contents and similar lists.
+% \section{General kernel and class changes}
+% 
+% Some of the changes can probably could go into the kernel. 
+% This are marked with [kernel?],
+% the other are marked with [latex-lab]. A few changes must be done in the classes.
+% They are marked as [class]. They are inserted with hooks here: this will break
+% if a non-standard class is used.
+%
+% \subsection{Package declaration}
+%    \begin{macrocode}
+%<*kernelchange>
+\ProvidesPackage{latex-lab-kernel-changes}
+        [\ltlabkerneldate\space v\ltlabkernelversion\space 
+         General kernel and class changes]
+%    \end{macrocode}
+%
+% \subsection{Providing the counter representation \cs{theHxx} generally}
+% 
+% This has been moved to base.
+% 
+% We still suppress the patches from hyperref:
+%    \begin{macrocode}
+\def\hyper@nopatch@counter{}
+%    \end{macrocode}
+
+% \subsection{Assigning the headings level numbers}
+% [kernel?]
+%
+% The code for the toc must be able to compare the level of |subsection| against
+% |section|. So some numbers are needed. It uses for now the commands used by
+% |hyperref| for the bookmark levels. While headings are more a class thing, it
+% could make sense to provide a standard set already in the kernel.
+% The numbers are a bit different to the one in hyperref, but imho sensible.
+% 
+% Note for the future: 
+% once that heading stuff is turned into template 
+% instances the template should set that number.
+%    \begin{macrocode}
+\def\toclevel@document{-10}
+\def\toclevel@part{-1}
+\def\toclevel@chapter{0}
+\def\toclevel@section{1}
+\def\toclevel@subsection{2}
+\def\toclevel@subsubsection{3}
+\def\toclevel@paragraph{4}
+\def\toclevel@subparagraph{5}
+\def\toclevel@figure{1}
+\def\toclevel@table{1}
+%    \end{macrocode}
+%
+%\subsection{Storing the relation between target names and structure numbers}
+% To be able to add a /Ref key to structures the tagging makes use of target names
+% and stores the relationship in a property. We add a hook to \cs{MakeLinkTarget} to 
+% catch as much as possible, see also tagging issue \#20. This should work also
+% without hyperref. The property is defined in tagpdf-base, so the code would 
+% work also without tagging but we add a test anyway, this is probably faster.
+% TODO: remove 
+%    \begin{macrocode}
+\ExplSyntaxOn
+\str_if_exist:cF { l__socket_tagsupport/recordtarget_str }
+ {
+  \AddToHookWithArguments{cmd/MakeLinkTarget/after}
+    {
+      \tag_if_active:T
+        {    
+          \tl_if_blank:VF \@currentHref
+            {
+              \prop_gput:Nee \g__tag_struct_dest_num_prop {\@currentHref}{\tag_get:n{struct_num}}
+            }
+        }    
+    }
+  }
+\ExplSyntaxOff  
+%    \end{macrocode}
+%    \begin{macrocode}
+%</kernelchange>
+%    \end{macrocode}
+%
+% \subsection{load kernel changes}
+%    \begin{macrocode}
+%<*package>
+\RequirePackage{latex-lab-kernel-changes}
+%    \end{macrocode}
+%
+% \subsection{\cs{contentsline} extension}
+% [latex-lab]
+% The tagging code must add code at the begin and end of \cs{contentsline}.
+% This code must have access to the arguments. They are passed
+% together in tagging socket.
+% \begin{socketdecl}{tagsupport/toc/contentsline/before,
+%  tagsupport/toc/contentsline/after}
+%  Tagging sockets at the begin and end of contentsline.
+%  They receive \emph{all} contentsline arguments as one argument
+%  in four brace groups. The socket code should then use the parts it needs.
+%  The sockets will be in lttagging.dtx, but that may only happen in
+%  the next main release, so for now we test if they are in the
+%  format and if not define them now.
+%    \begin{macrocode}
+\str_if_exist:cF { l__socket_tagsupport/toc/contentsline/before_plug_str }
+    {
+      \NewSocket{tagsupport/toc/contentsline/before}{1}
+      \NewSocket{tagsupport/toc/contentsline/after}{1}
+    }
+%    \end{macrocode}
+% \end{socketdecl}
+% for the hooks we need that the \cs{l@XX} pass also the destination and
+% that \cs{l@XX} takes three arguments. 
+% TODO: test that, if there are two many problems we should pass the 
+% destination through a command name ...
+%    \begin{macrocode}
+\def\contentsline#1#2#3#4%
+  {%
+    \UseTaggingSocket{toc/contentsline/before}{{#1}{#2}{#3}{#4}}%
+    \gdef\@contentsline@destination{#4}%
+    \csname l@#1\endcsname{#2}{#3}%
+    \UseTaggingSocket{toc/contentsline/after}{{#1}{#2}{#3}{#4}}%
+  }
+%    \end{macrocode}
+%
+% \subsection{\cs{addcontentsline} changes}
+% [latex-lab]
+%
+% \cs{addcontentsline} should always write the unique counter representation
+% \cs{@currentHref} so that we can create the |/Ref| key. At the same time
+% we need a hook, so that hyperref can add its bookmarks code, the generic hook
+% with arguments is ok. 
+%
+%    \begin{macrocode}
+\def\addcontentsline#1#2#3{% #1=toc extension, #2= heading type, tag
+    \addtocontents{#1}{%
+      \protect\contentsline{#2}{#3}{\thepage}{\@currentHref}\protected@file@percent
+    }}
+%    \end{macrocode}
+%
+% \subsection{\cs{@starttoc}}
+% [kernel?]
+%
+% We add a tagging socket before and after reading the file
+% for the tagging.
+% \begin{socketdecl}{tagsupport/toc/starttoc/before,
+%                    tagsupport/toc/starttoc/after}
+% Tagging sockets for the begin and end of start of \cs{@starttoc}.
+% They take one argument, the extension.  
+% The sockets will be in lttagging.dtx, but that may only happen in
+% the next main release, so for now we test if they are in the
+% format and if not define them now.
+%    \begin{macrocode}
+\str_if_exist:cF { l__socket_tagsupport/toc/starttoc/before_plug_str }
+    {
+      \NewSocket{tagsupport/toc/starttoc/before}{1}
+      \NewSocket{tagsupport/toc/starttoc/after}{1}
+    }
+%    \end{macrocode}                  
+%    \begin{macrocode}
+%    \end{macrocode}
+% \end{socketdecl}
+% 
+%    \begin{macrocode}
+\def\@starttoc#1{%
+  \begingroup
+    \makeatletter
+    \UseTaggingSocket{toc/starttoc/before}{#1}%
+    \@input{\jobname.#1}%
+    \UseTaggingSocket{toc/starttoc/after}{#1}%
+    \if@filesw
+      \expandafter\newwrite\csname tf@#1\endcsname
+      \immediate\openout \csname tf@#1\endcsname \jobname.#1\relax
+    \fi
+    \@nobreakfalse
+  \endgroup}
+%    \end{macrocode}
+%
+% \subsection{Formatting of the toc entries}
+%
+% \subsubsection{Kernel commands}
+% [latex-lab] or [kernel?]?
+%
+% We need hooks before and after the content and before and after the page number.
+% The number needs some thing so that it can be tagged as label.
+% The text and the page
+% hooks are used in manual \cs{l@xx} commands and in \cs{l@xx} defined by
+% \cs{@dottedtocline} or by other means.
+% The arguments of the following hooks are:
+%  \begin{itemize}
+%  \item[\#1] level as a \emph{number} (integer expression), see above for the standard
+%   numbering. The standard first argument of \cs{contentsline} is not used, as
+%   \cs{@dottedtocline} knows only a number.
+%  \item[\#2] content (the second argument of a \cs{contentsline}
+%  \item[\#3] page    (the third argument of a \cs{contentsline}
+%  \item[\#3] target  (the fourth argument of a \cs{contentsline}
+%  \end{itemize}
+%    \begin{macrocode}
+\NewMirroredHookPairWithArguments{contentsline/number/before}{contentsline/number/after}{1}%
+\NewMirroredHookPairWithArguments{contentsline/text/before}{contentsline/text/after}{4}%
+\NewMirroredHookPairWithArguments{contentsline/page/before}{contentsline/page/after}{4}%
+%    \end{macrocode}
+%
+% The dots in the leader must be set as artifact.
+% But luatex requires that the mc are set outside the leaders.
+% So we need sockets.
+%
+% \cs{@dottedtocline} needs hooks and formatting commands.
+% To make the leaders into artifact we use tagging sockets.
+% The declaration should perhaps be moved into lttagging so that
+% it can be used also by external packages even if the tagging code is not
+% loaded?
+% \begin{socketdecl}{tagsupport/toc/leaders/before,
+%                    tagsupport/toc/leaders/after}
+% Tagging sockets to make the dot leaders an artifact.
+% They do not take an argument.   
+% The sockets will be in lttagging.dtx, but that may only happen in
+% the next main release, so for now we test if they are in the
+% format and if not define them now.
+%    \begin{macrocode}
+\str_if_exist:cF { l__socket_tagsupport/toc/leaders/before_plug_str }
+    {
+      \NewSocket{tagsupport/toc/leaders/before}{0}
+      \NewSocket{tagsupport/toc/leaders/after}{0}
+    }
+%    \end{macrocode}                  
+% \end{socketdecl}
+% The destination is accessed through \cs{@contentsline@destination}.
+%    \begin{macrocode}
+\def\@dottedtocline#1#2#3#4#5{%
+  \ifnum #1>\c@tocdepth \else
+    \vskip \z@ \@plus.2\p@
+    {\leftskip #2\relax \rightskip \@tocrmarg \parfillskip -\rightskip
+     \parindent #2\relax\@afterindenttrue
+     \interlinepenalty\@M
+     \leavevmode
+     \@tempdima #3\relax
+     \advance\leftskip \@tempdima \null\nobreak\hskip -\leftskip
+     \UseHookWithArguments{contentsline/text/before}{4}{#1}{#4}{#5}{\@contentsline@destination}%
+     \csname contentsline@text@#1@format\endcsname{#4}%
+     \UseHookWithArguments{contentsline/text/after}{4}{#1}{#4}{#5}{\@contentsline@destination}%
+     \nobreak
+     \UseTaggingSocket{toc/leaders/before}\SuspendTagging{toc/leaders}%
+       \leaders\hbox{$\m@th
+         \mkern \@dotsep mu\hbox{.}\mkern \@dotsep
+          mu$}\hfill
+     \ResumeTagging{toc/leaders}\UseTaggingSocket{toc/leaders/after}%          
+     \nobreak
+     \hb@xt@\@pnumwidth{\hfil\normalfont \normalcolor
+     \UseHookWithArguments{contentsline/page/before}{4}{#1}{#4}{#5}{\@contentsline@destination}%
+     #5%
+     \UseHookWithArguments{contentsline/page/after}{4}{#1}{#4}{#5}{\@contentsline@destination}%
+                        \kern-\p@\kern\p@}%
+     \par}%
+  \fi}
+%    \end{macrocode}
+%
+% \subsubsection{\cs{numberline}}
+% [kernel?]
+% Inside or outside the box?
+%    \begin{macrocode}
+\def\numberline#1{\hb@xt@\@tempdima{%
+  \UseHookWithArguments{contentsline/number/before}{1}{#1}%
+  #1\hfil
+  \UseHookWithArguments{contentsline/number/after}{1}{#1}%
+  }}
+%    \end{macrocode}
+%
+% \subsubsection{\cs{l@xx} in the classes}
+% Depending on the class we have to redefine also more commands
+% For other classes it should be documented what is needed.
+% Let the commands grab also the third arguments. If a class redefines them again
+% it will break tagging anyway.
+%    \begin{macrocode}
+\AddToHook{class/article/after}
+ {
+  \renewcommand*\l@part[2]{% as in contentsline: content, page
+  \ifnum \c@tocdepth >-2\relax
+    \addpenalty\@secpenalty
+    \addvspace{2.25em \@plus\p@}%
+    \setlength\@tempdima{3em}%
+    \begingroup
+      \parindent \z@ \rightskip \@pnumwidth
+      \parfillskip -\@pnumwidth
+      {\leavevmode
+       \large \bfseries
+       \UseHookWithArguments{contentsline/text/before}{4}
+         {\toclevel@part}{#1}{#2}{\@contentsline@destination}%
+       \csname contentsline@text@-1@format\endcsname{#1}%
+       \UseHookWithArguments{contentsline/text/after}{4}
+         {\toclevel@part}{#1}{#2}{\@contentsline@destination}%
+       \hfil
+       \hb@xt@\@pnumwidth{\hss
+       \UseHookWithArguments{contentsline/page/before}{4}
+         {\toclevel@part}{#1}{#2}{\@contentsline@destination}%
+       #2%
+       \UseHookWithArguments{contentsline/page/after}{4}
+         {\toclevel@part}{#1}{#2}{\@contentsline@destination}%
+                          \kern-\p@\kern\p@}}\par
+       \nobreak
+    \endgroup
+  \fi}
+\renewcommand*\l@section[2]{%
+  \ifnum \c@tocdepth >\z@
+    \addpenalty\@secpenalty
+    \addvspace{1.0em \@plus\p@}%
+    \setlength\@tempdima{1.5em}%
+    \begingroup
+      \parindent \z@ \rightskip \@pnumwidth
+      \parfillskip -\@pnumwidth
+      \leavevmode \bfseries
+      \advance\leftskip\@tempdima
+      \hskip -\leftskip
+       \UseHookWithArguments{contentsline/text/before}{4}
+        {\toclevel@section}{#1}{#2}{\@contentsline@destination}%
+       \csname contentsline@text@1@format\endcsname{#1}%
+       \UseHookWithArguments{contentsline/text/after}{4}
+        {\toclevel@section}{#1}{#2}{\@contentsline@destination}%
+       \nobreak\hfil
+      \nobreak\hb@xt@\@pnumwidth{\hss
+      \UseHookWithArguments{contentsline/page/before}{4}
+        {\toclevel@section}{#1}{#2}{\@contentsline@destination}%
+       #2%
+      \UseHookWithArguments{contentsline/page/after}{4}
+        {\toclevel@section}{#1}{#2}{\@contentsline@destination}%
+      \kern-\p@\kern\p@}\par
+    \endgroup
+  \fi}
+ }
+\AddToHook{class/report/after}
+ {
+    \renewcommand*\l@part[2]{%
+     \ifnum \c@tocdepth >-2\relax
+       \addpenalty{-\@highpenalty}%
+       \addvspace{2.25em \@plus\p@}%
+       \setlength\@tempdima{3em}%
+       \begingroup
+         \parindent \z@ \rightskip \@pnumwidth
+         \parfillskip -\@pnumwidth
+         {\leavevmode
+          \large \bfseries
+          \UseHookWithArguments{contentsline/text/before}{4}
+            {\toclevel@part}{#1}{#2}{\@contentsline@destination}%
+          \csname contentsline@text@-1@format\endcsname{#1}%
+          \UseHookWithArguments{contentsline/text/after}{4}
+            {\toclevel@part}{#1}{#2}{\@contentsline@destination}%
+          \hfil
+          \hb@xt@\@pnumwidth{\hss          
+          \UseHookWithArguments{contentsline/page/before}{4}
+            {\toclevel@part}{#1}{#2}{\@contentsline@destination}%
+          #2%
+          \UseHookWithArguments{contentsline/page/after}{4}
+            {\toclevel@part}{#1}{#2}{\@contentsline@destination}%
+                             \kern-\p@\kern\p@}}\par
+          \nobreak
+       \endgroup
+     \fi}
+   \renewcommand*\l@chapter[2]{%
+     \ifnum \c@tocdepth >\m@ne
+       \addpenalty{-\@highpenalty}%
+       \vskip 1.0em \@plus\p@
+       \setlength\@tempdima{1.5em}%
+       \begingroup
+         \parindent \z@ \rightskip \@pnumwidth
+         \parfillskip -\@pnumwidth
+         \leavevmode \bfseries
+         \advance\leftskip\@tempdima
+         \hskip -\leftskip
+         \UseHookWithArguments{contentsline/text/before}{4}
+           {\toclevel@chapter}{#1}{#2}{\@contentsline@destination}%
+         \csname contentsline@text@0@format\endcsname
+           {#1}%
+         \UseHookWithArguments{contentsline/text/after}{4}
+           {\toclevel@chapter}{#1}{#2}{\@contentsline@destination}%
+          \nobreak\hfil
+         \nobreak\hb@xt@\@pnumwidth{\hss
+          \UseHookWithArguments{contentsline/page/before}{4}
+            {\toclevel@chapter}{#1}{#2}{\@contentsline@destination}%%
+          #2%
+          \UseHookWithArguments{contentsline/page/after}{4}
+            {\toclevel@chapter}{#1}{#2}{\@contentsline@destination}%%
+                                    \kern-\p@\kern\p@}\par
+         \penalty\@highpenalty
+       \endgroup
+     \fi}
+ }
+\AddToHook{class/book/after}
+ {
+    \renewcommand*\l@part[2]{%
+     \ifnum \c@tocdepth >-2\relax
+       \addpenalty{-\@highpenalty}%
+       \addvspace{2.25em \@plus\p@}%
+       \setlength\@tempdima{3em}%
+       \begingroup
+         \parindent \z@ \rightskip \@pnumwidth
+         \parfillskip -\@pnumwidth
+         {\leavevmode
+          \large \bfseries
+          \UseHookWithArguments{contentsline/text/before}{4}
+            {\toclevel@part}{#1}{#2}{\@contentsline@destination}%%
+          \csname contentsline@text@-1@format\endcsname{#1}%
+          \UseHookWithArguments{contentsline/text/after}{4}
+            {\toclevel@part}{#1}{#2}{\@contentsline@destination}%%
+          \hfil
+          \hb@xt@\@pnumwidth{\hss
+          \UseHookWithArguments{contentsline/page/before}{4}
+            {\toclevel@part}{#1}{#2}{\@contentsline@destination}%%
+          #2%
+          \UseHookWithArguments{contentsline/page/after}{4}
+            {\toclevel@part}{#1}{#2}{\@contentsline@destination}%%
+                             \kern-\p@\kern\p@}}\par
+          \nobreak
+       \endgroup
+     \fi}
+   \renewcommand*\l@chapter[2]{%
+     \ifnum \c@tocdepth >\m@ne
+       \addpenalty{-\@highpenalty}%
+       \vskip 1.0em \@plus\p@
+       \setlength\@tempdima{1.5em}%
+       \begingroup
+         \parindent \z@ \rightskip \@pnumwidth
+         \parfillskip -\@pnumwidth
+         \leavevmode \bfseries
+         \advance\leftskip\@tempdima
+         \hskip -\leftskip
+         \UseHookWithArguments{contentsline/text/before}{4}
+          {\toclevel@chapter}{#1}{#2}{\@contentsline@destination}%
+         \csname contentsline@text@0@format\endcsname
+           {#1}%
+         \UseHookWithArguments{contentsline/text/after}{4}
+          {\toclevel@chapter}{#1}{#2}{\@contentsline@destination}%
+          \nobreak\hfil
+         \nobreak\hb@xt@\@pnumwidth{\hss
+          \UseHookWithArguments{contentsline/page/before}{4}
+           {\toclevel@chapter}{#1}{#2}{\@contentsline@destination}%
+          #2%
+          \UseHookWithArguments{contentsline/page/after}{4}
+           {\toclevel@chapter}{#1}{#2}{\@contentsline@destination}%
+                                    \kern-\p@\kern\p@}\par
+         \penalty\@highpenalty
+       \endgroup
+     \fi}
+ }
+%    \end{macrocode}
+%    \begin{macrocode}
+%</package>
+%    \end{macrocode}

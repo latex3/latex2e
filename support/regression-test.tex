@@ -6,7 +6,7 @@
 %%
 %% l3build.dtx  (with options: `package')
 %% 
-%% Copyright (C) 2014-2016 The LaTeX3 Project
+%% Copyright (C) 2014-2021 The LaTeX Project
 %% 
 %% It may be distributed and/or modified under the conditions of
 %% the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -20,8 +20,7 @@
 %% 
 \begingroup\expandafter\expandafter\expandafter\endgroup
 \expandafter\ifx\csname eTeXversion\endcsname\relax
-  \errmessage{e-TeX is required to use regression-test.tex}%
-  \expandafter\endinput
+  \message{e-TeX is required by some regression-test.tex features}%
 \fi
 \ifx\unprotect\undefined
   \expandafter\edef\csname reset\string @catcodes\endcsname{%
@@ -32,7 +31,11 @@
   \unprotect
   \def\reset@catcodes{\protect}%
 \fi
-\ifnum\interactionmode>1 \scrollmode\fi
+\begingroup\expandafter\expandafter\expandafter\endgroup
+\expandafter\ifx\csname interactionmode\endcsname\relax
+\else
+  \ifnum\interactionmode>1 \scrollmode\fi
+\fi
 \errorcontextlines=-1 %
 \showboxbreadth=\maxdimen
 \showboxdepth=\maxdimen
@@ -73,6 +76,13 @@
   \LONGTYPEOUT{^^JEND-TEST-LOG^^J}%
   \@@@end
 }
+\begingroup\expandafter\expandafter\expandafter\endgroup
+\expandafter\ifx\csname currentgrouplevel\endcsname\relax
+  \def\END{%
+    \LONGTYPEOUT{^^JEND-TEST-LOG^^J}%
+    \@@@end
+  }
+\fi
 \ifx\@@end\@undefined
   \let\end\END
 \else
@@ -80,6 +90,27 @@
 \fi
 \def\OMIT{\LONGTYPEOUT{OMIT}}
 \def\TIMO{\LONGTYPEOUT{TIMO}}
+\begingroup       % within the scope of this groups each line needs to end in % !
+\catcode`\^^M\active %
+\gdef\SHOWFILE#1{%
+     \typeout{-------- #1 (start) ---------}%
+\IfFileExists{#1}%
+  {\begingroup %
+     \catcode`\^^M\active %
+     \edef^^M{^\string^M^^J}%
+     \everyeof{\noexpand}%
+     \obeyspaces %
+     \@sanitize %
+     \message{\@@input #1 }%
+   \endgroup }%
+  {\message{Not found}}%
+     \typeout{-------- #1 (end) -----------}%
+}%
+\endgroup
+\begingroup\expandafter\expandafter\expandafter\endgroup
+\expandafter\ifx\csname everyeof\endcsname\relax
+  \def\SHOWFILE#1{\TYPE{FEATURE UNAVAILABLE}}
+\fi
 \ifx\InputIfFileExists\@undefined
   \newread\@inputcheck
   \long\def\InputIfFileExists#1#2#3{%
@@ -101,36 +132,108 @@
     ============================================================%
   }%
 }
-\long\def\TEST#1#2{%
+\csname protected\endcsname\long\def\BEGINTEST#1{%
   \global\advance\gTESTint by 1 %
   \SEPARATOR
   \LONGTYPEOUT{TEST \the\gTESTint: \detokenize{#1}}%
   \SEPARATOR
   \begingroup
     \let\TYPE\LONGTYPEOUT
-    #2%
+}
+\begingroup\expandafter\expandafter\expandafter\endgroup
+\expandafter\ifx\csname detokenize\endcsname\relax
+  \long\def\BEGINTEST#1{%
+    \global\advance\gTESTint by 1 %
+    \SEPARATOR
+    \begingroup
+      \toks0={#1}%
+      \LONGTYPEOUT{TEST \the\gTESTint: \the\toks0 }%
+    \endgroup
+    \SEPARATOR
+    \begingroup
+      \let\TYPE\LONGTYPEOUT
+  }
+\fi
+\csname protected\endcsname\long\def\ENDTEST{%
   \endgroup
   \SEPARATOR
   \LONGTYPEOUT{}%
 }
+\long\def\TEST#1#2{%
+  \BEGINTEST{#1}%
+  #2%
+  \ENDTEST
+}
 \long\def\TESTEXP#1#2{%
-  \global\advance\gTESTint by 1 %
-  \SEPARATOR
-  \LONGTYPEOUT{%
-    TEST \the\gTESTint: \detokenize{#1}}%
-  \SEPARATOR
-  \begingroup
-    \long\def\TYPE##1{##1}%
-    \LONGTYPEOUT{#2}%
-  \endgroup
-  \SEPARATOR
-  \LONGTYPEOUT{}%
+  \BEGINTEST{#1}%
+  \LONGTYPEOUT{#2}%
+  \ENDTEST
 }
 \def \TRUE  {\TYPE{TRUE}}
 \def \FALSE {\TYPE{FALSE}}
 \def \YES   {\TYPE{YES}}
 \def \NO    {\TYPE{NO}}
 \def \NEWLINE {\TYPE{^^J}}
+\csname protected\endcsname\long\def\ASSERT#1#2{%
+  \begingroup
+    \edef\@tempa{#1}%
+    \edef\@tempb{#2}%
+    \ifx\@tempa\@tempb
+      \TYPE{PASSED}%
+    \else
+      \TYPE{FAILED}%
+    \fi
+  \endgroup
+}
+\csname protected\endcsname\long\def\ASSERTSTR#1#2{%
+  \begingroup
+    \edef\@tempa{#1}%
+    \edef\@tempb{#2}%
+    \edef\@tempa{\meaning\@tempa}%
+    \edef\@tempb{\meaning\@tempb}%
+    \ifx\@tempa\@tempb
+      \TYPE{PASSED}%
+    \else
+      \TYPE{FAILED}%
+    \fi
+  \endgroup
+}
+\begingroup\expandafter\expandafter\expandafter\endgroup
+\expandafter\ifx\csname detokenize\endcsname\relax
+  \long\def\ASSERTSTR#1#2{%
+    \TYPE{FEATURE UNAVAILABLE}%
+  }
+\fi
+\ifnum 0%
+  \ifx\pdfoutput\@undefined\else\ifnum\pdfoutput>0 1\fi\fi
+  \ifx\outputmode\@undefined\else\ifnum\outputmode>0 1\fi\fi
+  >0 %
+  \ifx\pdfvariable\@undefined
+    \pdfcompresslevel=0 %
+    \pdfobjcompresslevel=0 %
+  \else
+    \pdfvariable compresslevel=0 %
+    \pdfvariable objcompresslevel=0 %
+  \fi
+\else
+  \ifx\XeTeXversion\@undefined
+  \special{%
+      ps: /setdistillerparams
+      where
+        {pop << /CompressPages false /CompressStreams false >> setdistillerparams}
+      if
+    }%
+  \else
+    \special{dvipdfmx:config z 0}% Compress level
+    \special{dvipdfmx:config C 0x40}% Object compression
+  \fi
+\fi
+\begingroup\expandafter\expandafter\expandafter\endgroup
+\expandafter\ifx\csname protected\endcsname\relax
+  \reset@catcodes
+  \let\protected\undefined
+  \expandafter\endinput
+\fi
 \ifx\pdfoutput\@undefined
   \ifx\outputmode\@undefined
   \else
@@ -143,41 +246,78 @@
     \pdfmapfile{pdftex.map}%
   \fi
 \fi
-\ifnum 0%
-  \ifx\pdfoutput\@undefined\else\ifnum\pdfoutput>0 1\fi\fi
-  \ifx\outputmode\@undefined\else\ifnum\outputmode>0 1\fi\fi
-  >0 %
-  \ifx\pdfvariable\@undefined
-    \pdfinfo{/Producer (\ifx\directlua\@undefined pdf\else Lua\fi TeX)}
-    \ifx\pdfinfoomitdate\@undefined\else
-      \pdfinfoomitdate     = 1 %
-      \pdfsuppressptexinfo = 1 %
-      \pdftrailerid{}
+\ifcsname pdfmeta_set_regression_data:\endcsname
+   \csname pdfmeta_set_regression_data:\endcsname
+\else
+  \ifnum 0%
+    \ifx\pdfoutput\@undefined\else\ifnum\pdfoutput>0 1\fi\fi
+    \ifx\outputmode\@undefined\else\ifnum\outputmode>0 1\fi\fi
+    >0 %
+    \ifx\pdfvariable\@undefined
+      \pdfinfo{/Producer (\ifx\directlua\@undefined pdf\else Lua\fi TeX)}
+      \ifx\pdfinfoomitdate\@undefined\else
+        \pdfinfoomitdate     = 1 %
+        \pdfsuppressptexinfo = \numexpr
+              0
+            + 1 % PTEX.Fullbanner
+            + 2 % PTEX.FileName
+          \relax
+        \pdftrailerid{}
+      \fi
+    \else
+      \pdfextension info{/Producer (LuaTeX)}
+      \pdfvariable suppressoptionalinfo \numexpr
+            0
+          +   1 % PTEX.Fullbanner
+          +   2 % PTEX.FileName
+          +  32 % CreationDate
+          +  64 % ModDate
+          + 512 % ID
+        \relax
     \fi
   \else
-    \pdfextension info{/Producer (LuaTeX)}
-    \pdfvariable suppressoptionalinfo \numexpr
-          0
-        +   1 % PTEX.Fullbanner
-        +  32 % CreationDate
-        +  64 % ModDate
-      \relax
+    \ifx\XeTeXversion\@undefined
+      \special{! <</DocumentUUID (DocumentUUID)>> setpagedevice}
+      \special{! <</InstanceUUID (InstanceUUID)>> setpagedevice}
+    \else
+      \special{%
+        pdf: docinfo
+          <<
+            /Creator        (TeX)
+            /CreationDate   ()
+            /ModDate        ()
+            /Producer       (xdvipdfmx)
+          >>
+      }
+    \fi
   \fi
-\else
-  \special{%
-    pdf: docinfo
-      <<
-        /Creator        (TeX)
-        /CreationDate   ()
-        /ModDate        ()
-        /Producer       (\ifx\XeTeXversion\@undefined\else x\fi dvipdfmx)
-      >>
-  }
-\fi
-\ifx\directlua\@undefined\else
-  \directlua{require'fixup_mathaxis'}%
 \fi
 \reset@catcodes
-%% 
+%%
+
+%%% this has been added to the source of regression-test.tex since
+%%% l3build 2022-11-10.
+
+\ifx\AddToHook\undefined
+\else
+
+%
+% We don't want release information showing up in \end{document}
+% because that would change over and over again.
+% We therefore drop that information from the hook (should also
+% happen in the standard regression test when running a LaTeX
+% format). By using a voids relation we can reactivate the code in
+% a test by dropping "the testmode" label.
+%
+\AddToHook{enddocument/info}[kernel/testmode]{}
+\DeclareHookRule{enddocument/info}{kernel/testmode}{voids}{kernel/release}
+
+\fi
+
+% Suppress message wrapping by expl3, added since l3build 2024-02-08
+\ifcsname\detokenize{l_iow_line_count_int}\endcsname
+  \csname \detokenize{l_iow_line_count_int}\endcsname=9999 %
+\fi
+
 %%
 %% End of file `regression-test.tex'.

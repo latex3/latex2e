@@ -13,7 +13,7 @@ local concat = table.concat
 ----- floor = math.floor
 local type = type
 
-if string.find(os.getenv("PATH"),";",1,true) then
+if string.find(os.getenv("PATH") or "",";",1,true) then
     io.fileseparator, io.pathseparator = "\\", ";"
 else
     io.fileseparator, io.pathseparator = "/" , ":"
@@ -147,9 +147,12 @@ function io.copydata(source,target,action)
     end
 end
 
-function io.savedata(filename,data,joiner)
-    local f = open(filename,"wb")
+function io.savedata(filename,data,joiner,append)
+    local f = open(filename,append and "ab" or "wb")
     if f then
+        if append and joiner and f:seek("end") > 0 then
+            f:write(joiner)
+        end
         if type(data) == "table" then
             f:write(concat(data,joiner or ""))
         elseif type(data) == "function" then
@@ -288,7 +291,8 @@ end
 
 io.noflines = noflines
 
--- inlined is faster ... beware, better use util-fil
+-- inlined is faster ... beware, better use util-fil so these are obsolete
+-- and will go
 
 local nextchar = {
     [ 4] = function(f)

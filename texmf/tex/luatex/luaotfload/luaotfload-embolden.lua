@@ -3,39 +3,28 @@
 --  DESCRIPTION:  part of luaotfload / embolden
 -----------------------------------------------------------------------
 
-local ProvidesLuaModule = { 
+assert(luaotfload_module, "This is a part of luaotfload and should not be loaded independently") { 
     name          = "luaotfload-embolden",
-    version       = "3.00",       --TAGVERSION
-    date          = "2019-09-13", --TAGDATE
-    description   = "luaotfload submodule / color",
+    version       = "3.28",       --TAGVERSION
+    date          = "2024-02-14", --TAGDATE
+    description   = "luaotfload submodule / embolden",
     license       = "GPL v2.0",
     author        = "Marcel Krüger"
 }
 
-if luatexbase and luatexbase.provides_module then
-  luatexbase.provides_module (ProvidesLuaModule)
-end  
-
 local otffeatures        = fonts.constructors.newfeatures "otf"
 
-local function setembolden(tfmdata, factor)
-  tfmdata.embolden = factor
-end
-
-local function enableembolden(tfmdata)
-  tfmdata.mode, tfmdata.width = 2, tfmdata.size*tfmdata.unscaled.embolden/6578.176
+local function enableembolden(tfmdata, _, embolden)
+  tfmdata.mode, tfmdata.width = 2, tfmdata.size*embolden/6578.176
 end
 
 otffeatures.register {
   name        = "embolden",
   description = "embolden",
-  initializers = {
-    base = setembolden,
-    node = setembolden,
-  },
   manipulators = {
     base = enableembolden,
     node = enableembolden,
+    plug = enableembolden,
   }
 }
 

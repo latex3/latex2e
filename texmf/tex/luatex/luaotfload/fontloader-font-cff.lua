@@ -1,5 +1,6 @@
 if not modules then modules = { } end modules ['font-cff'] = {
     version   = 1.001,
+    optimize  = true,
     comment   = "companion to font-ini.mkiv",
     author    = "Hans Hagen, PRAGMA-ADE, Hasselt NL",
     copyright = "PRAGMA ADE / ConTeXt Development Team",
@@ -27,8 +28,8 @@ if not modules then modules = { } end modules ['font-cff'] = {
 -- the other hand, we can now feed back cff2 stuff.
 
 local next, type, tonumber, rawget = next, type, tonumber, rawget
-local byte, char, gmatch = string.byte, string.char, string.gmatch
-local concat, remove, unpack = table.concat, table.remove, table.unpack
+local byte, char, gmatch, sub = string.byte, string.char, string.gmatch, string.sub
+local concat, insert, remove, unpack = table.concat, table.insert, table.remove, table.unpack
 local floor, abs, round, ceil, min, max = math.floor, math.abs, math.round, math.ceil, math.min, math.max
 local P, C, R, S, C, Cs, Ct = lpeg.P, lpeg.C, lpeg.R, lpeg.S, lpeg.C, lpeg.Cs, lpeg.Ct
 local lpegmatch = lpeg.match
@@ -145,12 +146,53 @@ local defaultstrings = { [0] = -- taken from ff
     "Black", "Bold", "Book", "Light", "Medium", "Regular", "Roman", "Semibold",
 }
 
+local standardnames = { [0] = -- needed for seac
+    false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false,
+    "space", "exclam", "quotedbl", "numbersign", "dollar", "percent",
+    "ampersand", "quoteright", "parenleft", "parenright", "asterisk", "plus",
+    "comma", "hyphen", "period", "slash", "zero", "one", "two", "three", "four",
+    "five", "six", "seven", "eight", "nine", "colon", "semicolon", "less",
+    "equal", "greater", "question", "at", "A", "B", "C", "D", "E", "F", "G", "H",
+    "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W",
+    "X", "Y", "Z", "bracketleft", "backslash", "bracketright", "asciicircum",
+    "underscore", "quoteleft", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
+    "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y",
+    "z", "braceleft", "bar", "braceright", "asciitilde", false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, "exclamdown",
+    "cent", "sterling", "fraction", "yen", "florin", "section", "currency",
+    "quotesingle", "quotedblleft", "guillemotleft", "guilsinglleft",
+    "guilsinglright", "fi", "fl", false, "endash", "dagger", "daggerdbl",
+    "periodcentered", false, "paragraph", "bullet", "quotesinglbase",
+    "quotedblbase", "quotedblright", "guillemotright", "ellipsis", "perthousand",
+    false, "questiondown", false, "grave", "acute", "circumflex", "tilde",
+    "macron", "breve", "dotaccent", "dieresis", false, "ring", "cedilla", false,
+    "hungarumlaut", "ogonek", "caron", "emdash", false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false,
+    false, "AE", false, "ordfeminine", false, false, false, false, "Lslash",
+    "Oslash", "OE", "ordmasculine", false, false, false, false, false, "ae",
+    false, false, false, "dotlessi", false, false, "lslash", "oslash", "oe",
+    "germandbls", false, false, false, false
+}
+
 local cffreaders = {
     readbyte,
     readushort,
     readuint,
     readulong,
 }
+
+directives.register("fonts.streamreader",function()
+    cffreaders = {
+        readbyte,
+        readushort,
+        readuint,
+        readulong,
+    }
+end)
 
 -- The header contains information about its own size.
 
@@ -306,11 +348,11 @@ do
             top = 0
         end
       + P("\10") / function()
-            result.strhw = stack[top]
+            result.stdhw = stack[top]
             top = 0
         end
       + P("\11") / function()
-            result.strvw = stack[top]
+            result.stdvw = stack[top]
             top = 0
         end
       + P("\13") / function()
@@ -411,7 +453,7 @@ do
             top = 0
         end
       + P("\10") / function()
-            result.bluesnap = stack[top]
+            result.blueshift = stack[top]
             top = 0
         end
       + P("\11") / function()
@@ -486,7 +528,7 @@ do
     -- the second variant is much faster. Not that it matters much as we don't see
     -- such numbers often.
 
-    local remap = {
+    local remap_1 = {
         ["\x00"] = "00",  ["\x01"] = "01",  ["\x02"] = "02",  ["\x03"] = "03",  ["\x04"] = "04",  ["\x05"] = "05",  ["\x06"] = "06",  ["\x07"] = "07",  ["\x08"] = "08",  ["\x09"] = "09",  ["\x0A"] = "0.",  ["\x0B"] = "0E",  ["\x0C"] = "0E-",  ["\x0D"] = "0",  ["\x0E"] = "0-",  ["\x0F"] = "0",
         ["\x10"] = "10",  ["\x11"] = "11",  ["\x12"] = "12",  ["\x13"] = "13",  ["\x14"] = "14",  ["\x15"] = "15",  ["\x16"] = "16",  ["\x17"] = "17",  ["\x18"] = "18",  ["\x19"] = "19",  ["\x1A"] = "1.",  ["\x1B"] = "1E",  ["\x1C"] = "1E-",  ["\x1D"] = "1",  ["\x1E"] = "1-",  ["\x1F"] = "1",
         ["\x20"] = "20",  ["\x21"] = "21",  ["\x22"] = "22",  ["\x23"] = "23",  ["\x24"] = "24",  ["\x25"] = "25",  ["\x26"] = "26",  ["\x27"] = "27",  ["\x28"] = "28",  ["\x29"] = "29",  ["\x2A"] = "2.",  ["\x2B"] = "2E",  ["\x2C"] = "2E-",  ["\x2D"] = "2",  ["\x2E"] = "2-",  ["\x2F"] = "2",
@@ -502,11 +544,18 @@ do
         ["\xC0"] = "E-0", ["\xC1"] = "E-1", ["\xC2"] = "E-2", ["\xC3"] = "E-3", ["\xC4"] = "E-4", ["\xC5"] = "E-5", ["\xC6"] = "E-6", ["\xC7"] = "E-7", ["\xC8"] = "E-8", ["\xC9"] = "E-9", ["\xCA"] = "E-.", ["\xCB"] = "E-E", ["\xCC"] = "E-E-", ["\xCD"] = "E-", ["\xCE"] = "E--", ["\xCF"] = "E-",
         ["\xD0"] = "-0",  ["\xD1"] = "-1",  ["\xD2"] = "-2",  ["\xD3"] = "-3",  ["\xD4"] = "-4",  ["\xD5"] = "-5",  ["\xD6"] = "-6",  ["\xD7"] = "-7",  ["\xD8"] = "-8",  ["\xD9"] = "-9",  ["\xDA"] = "-.",  ["\xDB"] = "-E",  ["\xDC"] = "-E-",  ["\xDD"] = "-",  ["\xDE"] = "--",  ["\xDF"] = "-",
     }
+    local remap_2 = {
+        ["\x0F"] = "0", ["\x1F"] = "1", ["\x2F"] = "2", ["\x3F"] = "3", ["\x4F"] = "4",
+        ["\x5F"] = "5", ["\x6F"] = "6", ["\x7F"] = "7", ["\x8F"] = "8", ["\x9F"] = "9",
+    }
 
-    local p_last = S("\x0F\x1F\x2F\x3F\x4F\x5F\x6F\x7F\x8F\x9F\xAF\xBF")
-                 + R("\xF0\xFF")
+    local p_last_1 = S("\x0F\x1F\x2F\x3F\x4F\x5F\x6F\x7F\x8F\x9F\xAF\xBF")
+    local p_last_2 = R("\xF0\xFF")
 
-    local p_nibbles = P("\30") * Cs(((1-p_last)/remap)^0 * (P(1)/remap)) / function(n)
+    -- tricky, we don't want to append last
+
+ -- local p_nibbles = P("\30") * Cs(((1-p_last)/remap)^0 * (P(1)/remap)) / function(n)
+    local p_nibbles = P("\30") * Cs(((1-(p_last_1+p_last_2))/remap_1)^0 * (p_last_1/remap_2 + p_last_2/"")) / function(n)
         -- 0-9=digit a=. b=E c=E- d=reserved e=- f=finish
         top = top + 1
         stack[top] = tonumber(n) or 0
@@ -529,6 +578,11 @@ do
         top = top + 1
         stack[top] = -(byte(b0)-251)*256 - byte(b1) - 108
     end
+
+ -- local p_float = P("\255") * C(1) * C(1) * C(1) * C(1) / function(b0,b1,b2,b3)
+ --     top = top + 1
+ --     stack[top] = 0
+ -- end
 
     local p_short = P("\28") * C(1) * C(1) / function(b1,b2)
         -- -32768 .. +32767 : b1<<8 | b2
@@ -565,15 +619,19 @@ do
       + p_nibbles
       + p_single
       + p_double
+   -- + p_float
       + p_unsupported
     )^1
 
-    parsedictionaries = function(data,dictionaries,what)
+    parsedictionaries = function(data,dictionaries,version)
         stack   = { }
         strings = data.strings
+        if trace_charstrings then
+            report("charstring format %a",version)
+        end
         for i=1,#dictionaries do
             top    = 0
-            result = what == "cff" and {
+            result = version == "cff" and {
                 monospaced         = false,
                 italicangle        = 0,
                 underlineposition  = -100,
@@ -655,6 +713,8 @@ do
     local x            = 0
     local y            = 0
     local width        = false
+    local lsb          = 0
+    local result       = { }
     local r            = 0
     local stems        = 0
     local globalbias   = 0
@@ -678,9 +738,17 @@ do
     local factors      = false
     local axis         = false
     local vsindex      = 0
+    local justpass     = false
+    local seacs        = { }
+    local procidx      = nil
 
-    local function showstate(where)
-        report("%w%-10s : [%s] n=%i",depth*2,where,concat(stack," ",1,top),top)
+    local function showstate(where,i,n)
+        if i then
+            local j = i + n - 1
+            report("%w%-10s : [%s] step",depth*2+2,where,concat(stack," ",i,j <= top and j or top))
+        else
+            report("%w%-10s : [%s] n=%i",depth*2,where,concat(stack," ",1,top),top)
+        end
     end
 
     local function showvalue(where,value,showstack)
@@ -695,6 +763,13 @@ do
     -- and we cache the result. As we moved the boundingbox code inline we gain
     -- some back. I inlined some of then and a bit speed can be gained by more
     -- inlining but not that much.
+
+    -- Maybe have several action tables:
+    --
+    -- keep curve / checked
+    -- keep curve / not checked
+    -- checked
+    -- not checked
 
     local function xymoveto()
         if keepcurve then
@@ -810,9 +885,9 @@ do
         end
     end
 
-    local function xycurveto(x1,y1,x2,y2,x3,y3) -- called local so no blend here
+    local function xycurveto(x1,y1,x2,y2,x3,y3,i,n) -- called local so no blend here
         if trace_charstrings then
-            showstate("curveto")
+            showstate("curveto",i,n)
         end
         if keepcurve then
             r = r + 1
@@ -956,6 +1031,16 @@ do
         if trace_charstrings then
             showstate("rrcurveto")
         end
+if top == 6 then
+    local ax = x  + stack[1] -- dxa
+    local ay = y  + stack[2] -- dya
+    local bx = ax + stack[3] -- dxb
+    local by = ay + stack[4] -- dyb
+    x = bx + stack[5]        -- dxc
+    y = by + stack[6]        -- dyc
+    xycurveto(ax,ay,bx,by,x,y,1,6)
+else
+-- print("rr",top==6,top)
         for i=1,top,6 do
             local ax = x  + stack[i]   -- dxa
             local ay = y  + stack[i+1] -- dya
@@ -963,8 +1048,9 @@ do
             local by = ay + stack[i+3] -- dyb
             x = bx + stack[i+4]        -- dxc
             y = by + stack[i+5]        -- dyc
-            xycurveto(ax,ay,bx,by,x,y)
+            xycurveto(ax,ay,bx,by,x,y,i,6)
         end
+end
         top = 0
     end
 
@@ -977,6 +1063,15 @@ do
             y = y + stack[1]           -- dy1
             s = 2
         end
+if top == 4 then
+            local ax = x + stack[1]  -- dxa
+            local ay = y
+            local bx = ax + stack[2] -- dxb
+            local by = ay + stack[3] -- dyb
+            x = bx + stack[4]        -- dxc
+            y = by
+            xycurveto(ax,ay,bx,by,x,y,1,4)
+else
         for i=s,top,4 do
             local ax = x + stack[i]    -- dxa
             local ay = y
@@ -984,8 +1079,9 @@ do
             local by = ay + stack[i+2] -- dyb
             x = bx + stack[i+3]        -- dxc
             y = by
-            xycurveto(ax,ay,bx,by,x,y)
+            xycurveto(ax,ay,bx,by,x,y,i,4)
         end
+end
         top = 0
     end
 
@@ -999,6 +1095,16 @@ do
             d = stack[1]               -- dx1
             s = 2
         end
+if top == 4 then
+    local ax = x + d
+    local ay = y + stack[1]  -- dya
+    local bx = ax + stack[2] -- dxb
+    local by = ay + stack[3] -- dyb
+    x = bx
+    y = by + stack[4]        -- dyc
+    xycurveto(ax,ay,bx,by,x,y,1,4)
+    d = 0
+else
         for i=s,top,4 do
             local ax = x + d
             local ay = y + stack[i]    -- dya
@@ -1006,9 +1112,10 @@ do
             local by = ay + stack[i+2] -- dyb
             x = bx
             y = by + stack[i+3]        -- dyc
-            xycurveto(ax,ay,bx,by,x,y)
+            xycurveto(ax,ay,bx,by,x,y,i,4)
             d = 0
         end
+end
         top = 0
     end
 
@@ -1017,6 +1124,33 @@ do
         if last then
             top = top - 1
         end
+if top == 4 then
+        local ax, ay, bx, by
+        if swap then
+            ax = x  + stack[1]
+            ay = y
+            bx = ax + stack[2]
+            by = ay + stack[3]
+            y  = by + stack[4]
+            if last then
+                x = bx + last
+            else
+                x = bx
+            end
+        else
+            ax = x
+            ay = y  + stack[1]
+            bx = ax + stack[2]
+            by = ay + stack[3]
+            x  = bx + stack[4]
+            if last then
+                y = by + last
+            else
+                y = by
+            end
+        end
+        xycurveto(ax,ay,bx,by,x,y,1 ,4)
+else
         for i=1,top,4 do
             local ax, ay, bx, by
             if swap then
@@ -1044,8 +1178,9 @@ do
                 end
                 swap = true
             end
-            xycurveto(ax,ay,bx,by,x,y)
+            xycurveto(ax,ay,bx,by,x,y,i,4)
         end
+end
         top = 0
     end
 
@@ -1074,7 +1209,7 @@ do
             local by = ay + stack[i+3] -- dyb
             x = bx + stack[i+4] -- dxc
             y = by + stack[i+5] -- dyc
-            xycurveto(ax,ay,bx,by,x,y)
+            xycurveto(ax,ay,bx,by,x,y,i,6)
         end
         x = x + stack[top-1] -- dxc
         y = y + stack[top]   -- dyc
@@ -1264,7 +1399,7 @@ do
     end
 
     local function divide()
-        if version == 1 then
+        if version == "cff" then
             local d = stack[top]
             top = top - 1
             stack[top] = stack[top] / d
@@ -1272,7 +1407,7 @@ do
     end
 
     local function closepath()
-        if version == 1 then
+        if version == "cff" then
             if trace_charstrings then
                 showstate("closepath")
             end
@@ -1281,18 +1416,31 @@ do
     end
 
     local function hsbw()
-        if version == 1 then
+        if version == "cff" then
             if trace_charstrings then
                 showstate("hsbw")
             end
-         -- lsb   = stack[top-1]
+            lsb   = stack[top-1] or 0
             width = stack[top]
         end
         top = 0
     end
 
+    local function sbw()
+        if version == "cff" then
+            if trace_charstrings then
+                showstate("sbw")
+            end
+            lsb   = stack[top-3]
+            width = stack[top-1]
+        end
+        top = 0
+    end
+
+    -- asb adx ady bchar achar seac (accented characters)
+
     local function seac()
-        if version == 1 then
+        if version == "cff" then
             if trace_charstrings then
                 showstate("seac")
             end
@@ -1300,46 +1448,58 @@ do
         top = 0
     end
 
-    local function sbw()
-        if version == 1 then
-            if trace_charstrings then
-                showstate("sbw")
-            end
-            width = stack[top-1]
-        end
-        top = 0
-    end
+    -- These are probably used for special cases i.e. call out to the
+    -- postscript interpreter (p 61 of the spec as well as chapter 8).
+    --
+    -- This needs checking (I have to ask Taco next time we meet.)
 
-    -- these are probably used for special cases i.e. call out to postscript
+    local popped = 3
+    local hints  = 3
+
+    -- arg1 ... argn n othersubr# <callothersubr> (on postscript stack)
 
     local function callothersubr()
-        if version == 1 then
-            -- we don't support this (ok, we could mimick these othersubs)
+        if version == "cff" then
             if trace_charstrings then
-                showstate("callothersubr (unsupported)")
+                showstate("callothersubr")
             end
+            if stack[top] == hints then
+                popped = stack[top-2]
+            else
+                popped = 3
+            end
+            local t = stack[top-1]
+            if t then
+                top = top - (t + 2)
+                if top < 0 then
+                    top = 0
+                end
+            else
+                top = 0
+            end
+        else
+            top = 0
         end
-        top = 0
     end
 
+    -- <pop> number (from postscript stack)
+
     local function pop()
-        if version == 1 then
-            -- we don't support this
+        if version == "cff" then
             if trace_charstrings then
-                showstate("pop (unsupported)")
+                showstate("pop")
             end
             top = top + 1
-            stack[top] = 0 -- a dummy
+            stack[top] = popped
         else
             top = 0
         end
     end
 
     local function setcurrentpoint()
-        if version == 1 then
-            -- we don't support this
+        if version == "cff" then
             if trace_charstrings then
-                showstate("pop (unsupported)")
+                showstate("setcurrentpoint (unsupported)")
             end
             x = x + stack[top-1]
             y = y + stack[top]
@@ -1351,13 +1511,15 @@ do
     -- to wrap my head around the rather complex variable font specification
     -- with regions and axis, the following approach kind of works but is more
     -- some trial and error trick. It's still not clear how much of the complex
-    -- truetype description applies to cff.
+    -- truetype description applies to cff. Once there are fonts out there we'll
+    -- get there. (Marcel and friends did some tests with recent cff2 fonts so
+    -- the code has been adapted accordingly.)
 
     local reginit = false
 
     local function updateregions(n) -- n + 1
         if regions then
-            local current = regions[n] or regions[1]
+            local current = regions[n+1] or regions[1]
             nofregions = #current
             if axis and n ~= reginit then
                 factors = { }
@@ -1447,7 +1609,7 @@ do
                 end
             end
         else
-            -- error
+            top = top - nofregions * n
         end
     end
 
@@ -1489,6 +1651,41 @@ do
         hvcurveto,    -- 31
     }
 
+    local reverse = { [0] =
+        "unsupported",
+        "getstem",
+        "unsupported",
+        "getstem",
+        "vmoveto",
+        "rlineto",
+        "hlineto",
+        "vlineto",
+        "rrcurveto",
+        "unsupported",
+        "unsupported",
+        "unsupported",
+        "unsupported",
+        "hsbw",
+        "unsupported",
+        "setvsindex",
+        "blend",
+        "unsupported",
+        "getstem",
+        "getmask",
+        "getmask",
+        "rmoveto",
+        "hmoveto",
+        "getstem",
+        "rcurveline",
+        "rlinecurve",
+        "vvcurveto",
+        "hhcurveto",
+        "unsupported",
+        "unsupported",
+        "vhcurveto",
+        "hvcurveto",
+    }
+
     local subactions = {
         -- cff 1
         [000] = dotsection,
@@ -1517,7 +1714,8 @@ do
 
     -- todo: round in blend
 
-    local encode = { }
+    local encode  = { }
+    local typeone = false
 
     -- this eventually can become a helper
 
@@ -1534,14 +1732,13 @@ do
         end
         for i=108,1131 do
             local v = 0xF700 + i - 108
---             t[i] = char(band(rshift(v,8),0xFF),band(v,0xFF))
             t[i] = char(extract(v,8,8),extract(v,0,8))
         end
         for i=1132,2048 do
             t[i] = char(28,band(rshift(i,8),0xFF),band(i,0xFF))
         end
         setmetatableindex(encode,function(t,k)
-            -- 16.16-bit signed fixed value
+            -- as we're cff2 we write 16.16-bit signed fixed value
             local r = round(k)
             local v = rawget(t,r)
             if v then
@@ -1625,7 +1822,7 @@ do
     local function call(scope,list,bias) -- ,process)
         depth = depth + 1
         if top == 0 then
-            showstate(formatters["unknown %s call %s"](scope,"?"))
+            showstate(formatters["unknown %s call %s, case %s"](scope,"?",1))
             top = 0
         else
             local index = stack[top] + bias
@@ -1637,7 +1834,7 @@ do
             if tab then
                 process(tab)
             else
-                showstate(formatters["unknown %s call %s"](scope,index))
+                showstate(formatters["unknown %s call %s, case %s"](scope,index,2))
                 top = 0
             end
         end
@@ -1645,44 +1842,6 @@ do
     end
 
     -- precompiling and reuse is much slower than redoing the calls
-
-    local justpass = false
-
- -- local function decode(str)
- --     local a, b, c, d, e = byte(str,1,5)
- --     if a == 28 then
- --         if c then
- --             local n = 0x100 * b + c
- --             if n >= 0x8000 then
- --                 return n - 0x10000
- --             else
- --                 return n
- --             end
- --         end
- --     elseif a < 32 then
- --         return false
- --     elseif a <= 246 then
- --         return  a - 139
- --     elseif a <= 250 then
- --         if b then
- --             return  a*256 - 63124 + b
- --         end
- --     elseif a <= 254 then
- --         if b then
- --             return -a*256 + 64148 - b
- --         end
- --     else
- --         if e then
- --             local n = 0x100 * b + c
- --             if n >= 0x8000 then
- --                 return n - 0x10000 + (0x100 * d + e)/0xFFFF
- --             else
- --                 return n           + (0x100 * d + e)/0xFFFF
- --             end
- --         end
- --     end
- --     return false
- -- end
 
     process = function(tab)
         local i = 1
@@ -1707,14 +1866,20 @@ do
                  -- stack[top] = -t*256 + 251*256 - tab[i+1] - 108
                     stack[top] = -t*256 + 64148 - tab[i+1]
                     i = i + 2
-                else
-                    -- a 16.16 float
-                    local n = 0x100 * tab[i+1] + tab[i+2]
-                    if n >= 0x8000 then
-                        stack[top] = n - 0x10000 + (0x100 * tab[i+3] + tab[i+4])/0xFFFF
-                    else
-                        stack[top] = n           + (0x100 * tab[i+3] + tab[i+4])/0xFFFF
+                elseif typeone then
+                    local n = 0x1000000 * tab[i+1] + 0x10000 * tab[i+2] + 0x100 * tab[i+3] + tab[i+4]
+                    if n >= 0x8000000 then
+                        n = n - 0xFFFFFFFF - 1
                     end
+                    stack[top] = n
+                    i = i + 5
+                else
+                    local n1 = 0x100 * tab[i+1] + tab[i+2]
+                    local n2 = 0x100 * tab[i+3] + tab[i+4]
+                    if n1 >= 0x8000 then
+                        n1 = n1 - 0x10000
+                    end
+                    stack[top] = n1 + n2/0xFFFF
                     i = i + 5
                 end
             elseif t == 28 then
@@ -1765,6 +1930,17 @@ do
                         r = r + 1 ; result[r] = chars[12]
                         r = r + 1 ; result[r] = chars[t]
                         top = 0
+                    elseif t == 6 then
+                        seacs[procidx] = {
+                            asb    = stack[1],
+                            adx    = stack[2],
+                            ady    = stack[3],
+                            base   = stack[4],
+                            accent = stack[5],
+                            width  = width,
+                            lsb    = lsb,
+                        }
+                        top = 0
                     else
                         local a = subactions[t]
                         if a then
@@ -1796,49 +1972,94 @@ do
                 -- cff 1: (when cff2 strip them)
                 elseif t == 1 or t == 3 or t == 18 or operation == 23 then
                     p_getstem() -- at the start
-if true then
-                    if top > 0 then
-                        for i=1,top do
-                            r = r + 1 ; result[r] = encode[stack[i]]
+                    if version == "cff" then
+--                     if true then
+                        if top > 0 then
+                            for i=1,top do
+                                r = r + 1 ; result[r] = encode[stack[i]]
+                            end
+                            top = 0
                         end
+                        r = r + 1 ; result[r] = chars[t]
+                    else
                         top = 0
                     end
-                    r = r + 1 ; result[r] = chars[t]
-else
-    top = 0
-end
                     i = i + 1
                 -- cff 1: (when cff2 strip them)
                 elseif t == 19 or t == 20 then
                     local s = p_getmask() or 0 -- after the stems
-if true then
-                    if top > 0 then
-                        for i=1,top do
-                            r = r + 1 ; result[r] = encode[stack[i]]
+--                     if version == "cff" then
+                    if true then
+                        if top > 0 then
+                            for i=1,top do
+                                r = r + 1 ; result[r] = encode[stack[i]]
+                            end
+                            top = 0
                         end
+                        r = r + 1 ; result[r] = chars[t]
+                        for j=1,s do
+                            i = i + 1
+                            r = r + 1 ; result[r] = chars[tab[i]]
+                        end
+                    else
+                        i = i + s
                         top = 0
                     end
-                    r = r + 1 ; result[r] = chars[t]
-                    for j=1,s do
-                        i = i + 1
-                        r = r + 1 ; result[r] = chars[tab[i]]
-                    end
-else
-    i = i + s
-    top = 0
-end
                     i = i + 1
                 -- cff 1: closepath
                 elseif t == 9 then
                     top = 0
                     i = i + 1
                 elseif t == 13 then
-                    local s = hsbw() or 0
-                    i = i + s + 1
+                    hsbw()
+--                     if version == "cff" then
+                    if true then
+                        -- we do a moveto over lsb
+                        r = r + 1 ; result[r] = encode[lsb]
+                        r = r + 1 ; result[r] = chars[22]
+                    else
+                        -- lsb is supposed to be zero
+                    end
+                    i = i + 1
                 else
+                    if trace_charstrings then
+                        showstate(reverse[t] or "<action>")
+                    end
                     if top > 0 then
-                        for i=1,top do
-                            r = r + 1 ; result[r] = encode[stack[i]]
+                     -- if t == 8 and top > 42 then
+                        if t == 8 and top > 48 then
+                            -- let's assume this only happens for rrcurveto .. the other ones would need some more
+                            -- complex handling (cff2 stuff)
+                            --
+                            -- dx1 dy1 (dx1+dx2) (dy1+dy2) (dx1+dx2+dx3) (dy1+dy2+dy3) rcurveto.
+                            local n = 0
+                            for i=1,top do
+                             -- if n == 42 then
+                                if n == 48 then
+--                                     local zero = encode[0]
+--                                     local res3 = result[r-3]
+--                                     local res2 = result[r-2]
+--                                     local res1 = result[r-1]
+--                                     local res0 = result[r]
+--                                     result[r-3] = zero
+--                                     result[r-2] = zero
+                                    r = r + 1 ; result[r] = chars[t]
+--                                     r = r + 1 ; result[r] = zero
+--                                     r = r + 1 ; result[r] = zero
+--                                     r = r + 1 ; result[r] = res3
+--                                     r = r + 1 ; result[r] = res2
+--                                     r = r + 1 ; result[r] = res1
+--                                     r = r + 1 ; result[r] = res0
+                                    n = 1
+                                else
+                                    n = n + 1
+                                end
+                                r = r + 1 ; result[r] = encode[stack[i]]
+                            end
+                        else
+                            for i=1,top do
+                                r = r + 1 ; result[r] = encode[stack[i]]
+                            end
                         end
                         top = 0
                     end
@@ -1856,7 +2077,7 @@ end
                     end
                 else
                     if trace_charstrings then
-                        showvalue("<action>",t)
+                        showstate(reverse[t] or "<action>")
                     end
                     top = 0
                     i = i + 1
@@ -1915,7 +2136,7 @@ end
         end
     end
 
-    local function processshape(tab,index)
+    local function processshape(glyphs,tab,index,hack)
 
         if not tab then
             glyphs[index] = {
@@ -1931,10 +2152,13 @@ end
         x       = 0
         y       = 0
         width   = false
+        lsb     = 0
         r       = 0
         top     = 0
         stems   = 0
         result  = { } -- we could reuse it when only boundingbox calculations are needed
+        popped  = 3
+        procidx = index
 
         xmin    = 0
         xmax    = 0
@@ -1951,6 +2175,9 @@ end
         end
 
         process(tab)
+        if hack then
+            return x, y
+        end
 
         local boundingbox = {
             round(xmin),
@@ -1970,13 +2197,15 @@ end
             r = r + 1
             result[r] = c_endchar
             local stream = concat(result)
+result = nil
          -- if trace_charstrings then
          --     report("vdata: %s",stream)
          -- end
             if glyph then
-                glyph.stream  = stream
+                glyph.stream = stream
+                glyph.width  = width
             else
-                glyphs[index] = { stream = stream }
+                glyphs[index] = { stream = stream, width = width }
             end
         elseif glyph then
             glyph.segments    = keepcurve ~= false and result or nil
@@ -1996,6 +2225,7 @@ end
                 name        = charset and charset[index] or nil,
              -- sidebearing = 0,
             }
+result = nil
         else
             glyphs[index] = {
                 boundingbox = boundingbox,
@@ -2003,7 +2233,6 @@ end
                 name        = charset and charset[index] or nil,
             }
         end
-
         if trace_charstrings then
             report("width      : %s",tostring(width))
             report("boundingbox: % t",boundingbox)
@@ -2016,8 +2245,17 @@ end
         axis     = false
         regions  = data.regions
         justpass = streams == true
+        popped   = 3
+        seacs    = { }
         if regions then
-            regions = { regions } -- needs checking
+            -- this was:
+         -- regions = { regions } -- needs checking
+            -- and is now (MFC):
+            regions = { }
+            local deltas = data.deltas
+            for i = 1, #deltas do
+                regions[i] = deltas[i].regions
+            end
             axis = data.factors or false
         end
     end
@@ -2030,6 +2268,8 @@ end
         locals  = false
         globals = false
         strings = false
+        popped  = 3
+        seacs   = { }
     end
 
     local function setwidths(private)
@@ -2043,19 +2283,21 @@ end
         return privatedata.nominalwidthx or 0, privatedata.defaultwidthx or 0
     end
 
-    parsecharstrings = function(fontdata,data,glphs,doshapes,tversion,streams,nobias)
+    parsecharstrings = function(fontdata,data,glphs,doshapes,tversion,streams,nobias,istypeone)
 
         local dictionary  = data.dictionaries[1]
         local charstrings = dictionary.charstrings
 
         keepcurve = doshapes
         version   = tversion
+        typeone   = istypeone or false
         strings   = data.strings
         globals   = data.routines or { }
         locals    = dictionary.subroutines or { }
         charset   = dictionary.charset
         vsindex   = dictionary.vsindex or 0
-        glyphs    = glphs or { }
+
+        local glyphs = glphs or { }
 
         globalbias,   localbias    = setbias(globals,locals,nobias)
         nominalwidth, defaultwidth = setwidths(dictionary.private)
@@ -2063,8 +2305,36 @@ end
         if charstrings then
             startparsing(fontdata,data,streams)
             for index=1,#charstrings do
-                processshape(charstrings[index],index-1)
---                 charstrings[index] = nil -- free memory (what if used more often?)
+                processshape(glyphs,charstrings[index],index-1)
+            end
+            if justpass and next(seacs) then
+                -- old type 1 stuff ... seacs
+                local charset = data.dictionaries[1].charset
+                if charset then
+                    local lookup = table.swapped(charset)
+                    for index, v in next, seacs do
+                        local bindex = lookup[standardnames[v.base]]
+                        local aindex = lookup[standardnames[v.accent]]
+                        local bglyph = bindex and glyphs[bindex]
+                        local aglyph = aindex and glyphs[aindex]
+                        if bglyph and aglyph then
+                            -- this is a real ugly hack but we seldom enter this branch (e.g. old lbr)
+                            local jp = justpass
+                            justpass = false
+                            local x, y = processshape(glyphs,charstrings[bindex+1],bindex,true)
+                            justpass = jp
+                            --
+                            local base   = bglyph.stream
+                            local accent = aglyph.stream
+                            local moveto = encode[-x-v.asb+v.adx] .. chars[22]
+                                        .. encode[-y      +v.ady] .. chars[ 4]
+                            -- prune an endchar
+                            base = sub(base,1,#base-1)
+                            -- combine them
+                            glyphs[index].stream = base .. moveto .. accent
+                        end
+                    end
+                end
             end
             stopparsing(fontdata,data)
         else
@@ -2082,22 +2352,24 @@ end
         locals    = dictionary.subroutines or { }
         charset   = false
         vsindex   = dictionary.vsindex or 0
-        glyphs    = glphs or { }
+
+        local glyphs = glphs or { }
 
         justpass = streams == true
+        seacs    = { }
 
         globalbias,   localbias    = setbias(globals,locals,nobias)
         nominalwidth, defaultwidth = setwidths(dictionary.private)
 
-        processshape(tab,index-1)
+        processshape(glyphs,tab,index-1)
 
-     -- return glyphs[index]
+        return glyphs[index]
     end
 
 end
 
-local function readglobals(f,data)
-    local routines = readlengths(f)
+local function readglobals(f,data,version)
+    local routines = readlengths(f,version == "cff2")
     for i=1,#routines do
         routines[i] = readbytetable(f,routines[i])
     end
@@ -2155,14 +2427,14 @@ local function readprivates(f,data)
     end
 end
 
-local function readlocals(f,data,dictionary)
+local function readlocals(f,data,dictionary,version)
     local header  = data.header
     local private = dictionary.private
     if private then
         local subroutineoffset = private.data.subroutines
         if subroutineoffset ~= 0 then
             setposition(f,header.offset+private.offset+subroutineoffset)
-            local subroutines = readlengths(f)
+            local subroutines = readlengths(f,version == "cff2")
             for i=1,#subroutines do
                 subroutines[i] = readbytetable(f,subroutines[i])
             end
@@ -2179,7 +2451,7 @@ end
 -- These charstrings are little programs and described in: Technical Note #5177. A truetype
 -- font has only one dictionary.
 
-local function readcharstrings(f,data,what)
+local function readcharstrings(f,data,version)
     local header       = data.header
     local dictionaries = data.dictionaries
     local dictionary   = dictionaries[1]
@@ -2190,7 +2462,7 @@ local function readcharstrings(f,data,what)
     elseif stringtype == 2 then
         setposition(f,header.offset+offset)
         -- could be a metatable .. delayed loading
-        local charstrings = readlengths(f,what=="cff2")
+        local charstrings = readlengths(f,version=="cff2")
         local nofglyphs   = #charstrings
         for i=1,nofglyphs do
             charstrings[i] = readstring(f,charstrings[i])
@@ -2225,7 +2497,8 @@ readers.parsecharstrings = parsecharstrings -- used in font-onr.lua (type 1)
 local function readnoselect(f,fontdata,data,glyphs,doshapes,version,streams)
     local dictionaries = data.dictionaries
     local dictionary   = dictionaries[1]
-    readglobals(f,data)
+    local cid          = not dictionary.private and dictionary.cid
+    readglobals(f,data,version)
     readcharstrings(f,data,version)
     if version == "cff2" then
         dictionary.charset = nil
@@ -2233,11 +2506,29 @@ local function readnoselect(f,fontdata,data,glyphs,doshapes,version,streams)
         readencodings(f,data)
         readcharsets(f,data,dictionary)
     end
+    if cid then
+        local fdarray = cid.fdarray
+        if fdarray then
+            setposition(f,data.header.offset + fdarray)
+            local dictionaries    = readlengths(f,version=="cff2")
+            local nofdictionaries = #dictionaries
+            if nofdictionaries > 0 then
+                for i=1,nofdictionaries do
+                    dictionaries[i] = readstring(f,dictionaries[i])
+                end
+                parsedictionaries(data,dictionaries)
+                dictionary.private = dictionaries[1].private
+                if nofdictionaries > 1 then
+                    report("ignoring dictionaries > 1 in cid font")
+                end
+            end
+        end
+    end
     readprivates(f,data)
     parseprivates(data,data.dictionaries)
-    readlocals(f,data,dictionary)
+    readlocals(f,data,dictionary,version)
     startparsing(fontdata,data,streams)
-    parsecharstrings(fontdata,data,glyphs,doshapes,version,streams)
+    parsecharstrings(fontdata,data,glyphs,doshapes,version,streams,false)
     stopparsing(fontdata,data)
 end
 
@@ -2247,7 +2538,7 @@ local function readfdselect(f,fontdata,data,glyphs,doshapes,version,streams)
     local dictionary   = dictionaries[1]
     local cid          = dictionary.cid
     local cidselect    = cid and cid.fdselect
-    readglobals(f,data)
+    readglobals(f,data,version)
     readcharstrings(f,data,version)
     if version ~= "cff2" then
         readencodings(f,data)
@@ -2286,29 +2577,38 @@ local function readfdselect(f,fontdata,data,glyphs,doshapes,version,streams)
             end
         end
     else
-        -- unsupported format
+        report("unsupported fd index format %i",format)
     end
     -- hm, always
     if maxindex >= 0 then
         local cidarray = cid.fdarray
         if cidarray then
             setposition(f,header.offset+cidarray)
-            local dictionaries = readlengths(f)
-            for i=1,#dictionaries do
-                dictionaries[i] = readstring(f,dictionaries[i])
+            local dictionaries = readlengths(f,version == "cff2")
+            if #dictionaries > 0 then
+                for i=1,#dictionaries do
+                    dictionaries[i] = readstring(f,dictionaries[i])
+                end
+                parsedictionaries(data,dictionaries)
+                cid.dictionaries = dictionaries
+                readcidprivates(f,data)
+                for i=1,#dictionaries do
+                    readlocals(f,data,dictionaries[i],version)
+                end
+                startparsing(fontdata,data,streams)
+                for i=1,#charstrings do
+                    local dictionary = dictionaries[fdindex[i]+1]
+                    if dictionary then
+                        parsecharstring(fontdata,data,dictionary,charstrings[i],glyphs,i,doshapes,version,streams)
+                    else
+                     -- report("no dictionary for %a : %a => %a",version,i,fdindex[i]+1)
+                    end
+                 -- charstrings[i] = false
+                end
+                stopparsing(fontdata,data)
+            else
+                report("no cid dictionaries")
             end
-            parsedictionaries(data,dictionaries)
-            cid.dictionaries = dictionaries
-            readcidprivates(f,data)
-            for i=1,#dictionaries do
-                readlocals(f,data,dictionaries[i])
-            end
-            startparsing(fontdata,data,streams)
-            for i=1,#charstrings do
-                parsecharstring(fontdata,data,dictionaries[fdindex[i]+1],charstrings[i],glyphs,i,doshapes,version,streams)
---                 charstrings[i] = nil
-            end
-            stopparsing(fontdata,data)
         else
             report("no cid array")
         end
@@ -2396,6 +2696,8 @@ function readers.cff(f,fontdata,specification)
                 cffinfo.bluefuzz         = data.bluefuzz
                 cffinfo.stdhw            = data.stdhw
                 cffinfo.stdvw            = data.stdvw
+                cffinfo.stemsnaph        = data.stemsnaph
+                cffinfo.stemsnapv        = data.stemsnapv
             end
         end
         cleanup(data,dictionaries)
@@ -2446,38 +2748,38 @@ end
 
 -- temporary helper needed for checking backend patches
 
-function readers.cffcheck(filename)
-    local f = io.open(filename,"rb")
-    if f then
-        local fontdata = {
-            glyphs = { },
-        }
-        local header = readheader(f)
-        if header.major ~= 1 then
-            report("only version %s is supported for table %a",1,"cff")
-            return
-        end
-        local names        = readfontnames(f)
-        local dictionaries = readtopdictionaries(f)
-        local strings      = readstrings(f)
-        local glyphs       = { }
-        local data = {
-            header       = header,
-            names        = names,
-            dictionaries = dictionaries,
-            strings      = strings,
-            glyphs       = glyphs,
-            nofglyphs    = 0,
-        }
-        --
-        parsedictionaries(data,dictionaries,"cff")
-        --
-        local cid = data.dictionaries[1].cid
-        if cid and cid.fdselect then
-            readfdselect(f,fontdata,data,glyphs,false)
-        else
-            readnoselect(f,fontdata,data,glyphs,false)
-        end
-        return data
-    end
-end
+-- function readers.cffcheck(filename)
+--     local f = io.open(filename,"rb")
+--     if f then
+--         local fontdata = {
+--             glyphs = { },
+--         }
+--         local header = readheader(f)
+--         if header.major ~= 1 then
+--             report("only version %s is supported for table %a",1,"cff")
+--             return
+--         end
+--         local names        = readfontnames(f)
+--         local dictionaries = readtopdictionaries(f)
+--         local strings      = readstrings(f)
+--         local glyphs       = { }
+--         local data = {
+--             header       = header,
+--             names        = names,
+--             dictionaries = dictionaries,
+--             strings      = strings,
+--             glyphs       = glyphs,
+--             nofglyphs    = 0,
+--         }
+--         --
+--         parsedictionaries(data,dictionaries,"cff")
+--         --
+--         local cid = data.dictionaries[1].cid
+--         if cid and cid.fdselect then
+--             readfdselect(f,fontdata,data,glyphs,false)
+--         else
+--             readnoselect(f,fontdata,data,glyphs,false)
+--         end
+--         return data
+--     end
+-- end

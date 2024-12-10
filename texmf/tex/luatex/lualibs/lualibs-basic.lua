@@ -7,9 +7,9 @@
 --  lualibs.dtx  (with options: `basic')
 --  This is a generated file.
 --  
---  Copyright (C) 2009--2018 by
+--  Copyright (C) 2009--2021 by
 --          PRAGMA ADE / ConTeXt Development Team
---          The LuaLaTeX Dev Team
+--          The LaTeX Project Team
 --  
 --  See ConTeXt's mreadme.pdf for the license.
 --  
@@ -29,8 +29,8 @@ local loadmodule        = lualibs.loadmodule
 
 local lualibs_basic_module = {
   name          = "lualibs-basic",
-  version       = "2.67",       --TAGVERSION
-  date          = "2019-08-11", --TAGDATE
+  version       = "2.76",       --TAGVERSION
+  date          = "2023-07-13", --TAGDATE
   description   = "ConTeXt Lua libraries -- basic collection.",
   author        = "Hans Hagen, PRAGMA-ADE, Hasselt NL & Elie Roux & Philipp Gesang",
   copyright     = "PRAGMA ADE / ConTeXt Development Team",
@@ -40,11 +40,11 @@ local lualibs_basic_module = {
 local loaded = false --- track success of package loading
 
 if lualibs.prefer_merged then
-  info"Loading merged package for collection ^^e2^^80^^9cbasic^^e2^^80^^9d."
+  info"Loading merged package for collection “basic”."
   loaded = loadmodule('lualibs-basic-merged.lua')
 else
   info"Ignoring merged packages."
-  info"Falling back to individual libraries from collection ^^e2^^80^^9cbasic^^e2^^80^^9d."
+  info"Falling back to individual libraries from collection “basic”."
 end
 
 
@@ -61,7 +61,6 @@ if loaded == false then
   loadmodule("lualibs-io.lua")
   loadmodule("lualibs-os.lua")
   loadmodule("lualibs-file.lua")
-  loadmodule("lualibs-gzip.lua")
   loadmodule("lualibs-md5.lua")
   loadmodule("lualibs-dir.lua")
   loadmodule("lualibs-unicode.lua")

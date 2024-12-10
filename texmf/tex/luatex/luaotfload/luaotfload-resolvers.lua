@@ -9,18 +9,13 @@
 --- The bare fontloader uses a set of simplistic file name resolvers
 --- that must be overloaded by the user (i. e. us).
 
-local ProvidesLuaModule = { 
+assert(luaotfload_module, "This is a part of luaotfload and should not be loaded independently") { 
     name          = "luaotfload-resolvers",
-    version       = "3.00",       --TAGVERSION
-    date          = "2019-09-13", --TAGDATE
+    version       = "3.28",       --TAGVERSION
+    date          = "2024-02-14", --TAGDATE
     description   = "luaotfload submodule / resolvers",
     license       = "GPL v2.0"
 }
-
-if luatexbase and luatexbase.provides_module then
-  luatexbase.provides_module (ProvidesLuaModule)
-end  
-
 
 if not lualibs    then error "this module requires Luaotfload" end
 if not luaotfload then error "this module requires Luaotfload" end
@@ -114,9 +109,9 @@ local function resolve_name (specification)
     end
     local resolved, subfont = resolver (specification)
     if resolved then
-        logreport ("log", 1, "resolve", "name lookup %q -> \"%s%s\"",
-                   specification.name, resolved,
-                   subfont and stringformat ("(%d)", subfont) or "")
+        logreport ("log", 1, "resolve", "name lookup %q -> %q",
+                   specification.name, resolved ..
+                   (subfont and stringformat ("(%d)", subfont) or ""))
         return resolved, tonumber(subfont)
     end
     return resolve_file (specification)
@@ -148,18 +143,23 @@ end
 
 local tex_formats = { "tfm", "ofm" }
 
-local resolve_tex_format = function (specification)
+local resolvers_findfile = luaotfload.fontloader.resolvers.findfile
+local function resolve_tex_format (specification)
     local name = specification.name
     for i=1, #tex_formats do
         local format = tex_formats [i]
-        local resolved = resolvers.findfile(name, format)
+        local name = name
+        if name:sub(-#format-1) ~= '.' .. format then -- Add an explicit extension to avoid finding local fonts in other formats
+            name = name .. '.' .. format
+        end
+        local resolved = resolvers_findfile(name, format)
         if resolved then
             return resolved, format
         end
     end
 end
 
-local resolve_path_if_exists = function (specification)
+local function resolve_path_if_exists (specification)
     local spec = specification.specification
     local exists = lfsisfile (spec)
     if exists then
@@ -178,7 +178,7 @@ end
     Custom file resolvers via callback.
 --doc]]--
 
-local resolve_my = function (specification)
+local function resolve_my (specification)
     return luatexbase.call_callback ("luaotfload.resolve_font", specification)
 end
 
@@ -190,7 +190,7 @@ local resolve_methods = {
     my   = resolve_my,
 }
 
-local resolve_sequence = function (seq, specification)
+local function resolve_sequence (seq, specification)
     for i = 1, #seq do
         local id  = seq [i]
         local mth = resolve_methods [id]
@@ -232,15 +232,16 @@ local function resolve_kpse (specification)
     local name       = specification.name
     local suffix     = stringlower (filesuffix (name))
     if suffix and fonts.formats[suffix] then
-        local resolved = resolvers.findfile(name, suffix)
+        local resolved = resolvers_findfile(name, suffix)
         if resolved then return resolved end
     end
-    for t, format in next, fonts.formats do --- brute force
-        local resolved = kpsefind_file (name, format)
+    for _, t in ipairs{'otf', 'ttf', 'pfb', 'lua', 'afm'} do --- brute force
+        local resolved = resolvers_findfile (name, t)
         if resolved then return resolved, t end
     end
 end
 
+local lookup_subfont_index = fonts.names.lookup_subfont_index
 local function wrap_resolver(resolver)
     return function (specification)
         local filename, sub, forced = resolver(specification)
@@ -253,6 +254,10 @@ local function wrap_resolver(resolver)
             specification.filename = filename
             specification.name = filename
             specification.sub = sub or specification.sub
+            if type(specification.sub) == "string" then
+                specification.sub =
+                    lookup_subfont_index(filename, specification.sub)
+            end
             specification.forced = specification.forced or forced
             if not specification.forced then
                 local suffix = stringlower (filesuffix (filename))
@@ -286,7 +291,7 @@ return function()
     end
     logreport ("log", 5, "resolvers", "installing font resolvers", name)
     local request_resolvers = fonts.definers.resolvers
-    for k, _ in pairs(resolvers) do
+    for k, _ in pairs(request_resolvers) do
         request_resolvers[k] = nil
     end
     setmetatable(request_resolvers, {__index = function(t, n)

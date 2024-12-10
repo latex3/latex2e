@@ -1,5 +1,6 @@
 if not modules then modules = { } end modules ['font-otr'] = {
     version   = 1.001,
+    optimize  = true,
     comment   = "companion to font-ini.mkiv",
     author    = "Hans Hagen, PRAGMA-ADE, Hasselt NL",
     copyright = "PRAGMA ADE / ConTeXt Development Team",
@@ -65,7 +66,8 @@ if not modules then modules = { } end modules ['font-otr'] = {
 --     require("char-ini")
 -- end
 
-local next, type, tonumber = next, type, tonumber
+local number = number
+local next, type, tonumber, rawget = next, type, tonumber, rawget
 local byte, lower, char, gsub = string.byte, string.lower, string.char, string.gsub
 local fullstrip = string.fullstrip
 local floor, round = math.floor, math.round
@@ -681,15 +683,15 @@ local weights = {
 }
 
 local widths = {
-    [1] = "ultracondensed",
-    [2] = "extracondensed",
-    [3] = "condensed",
-    [4] = "semicondensed",
-    [5] = "normal",
-    [6] = "semiexpanded",
-    [7] = "expanded",
-    [8] = "extraexpanded",
-    [9] = "ultraexpanded",
+    "ultracondensed",
+    "extracondensed",
+    "condensed",
+    "semicondensed",
+    "normal",
+    "semiexpanded",
+    "expanded",
+    "extraexpanded",
+    "ultraexpanded",
 }
 
 setmetatableindex(weights, function(t,k)
@@ -702,31 +704,31 @@ setmetatableindex(widths,function(t,k)
     return "normal"
 end)
 
-local panoseweights = {
-    [ 0] = "normal",
-    [ 1] = "normal",
-    [ 2] = "verylight",
-    [ 3] = "light",
-    [ 4] = "thin",
-    [ 5] = "book",
-    [ 6] = "medium",
-    [ 7] = "demi",
-    [ 8] = "bold",
-    [ 9] = "heavy",
-    [10] = "black",
+local panoseweights = { [0] =
+    "normal",
+    "normal",
+    "verylight",
+    "light",
+    "thin",
+    "book",
+    "medium",
+    "demi",
+    "bold",
+    "heavy",
+    "black",
 }
 
-local panosewidths = {
-    [ 0] = "normal",
-    [ 1] = "normal",
-    [ 2] = "normal",
-    [ 3] = "normal",
-    [ 4] = "normal",
-    [ 5] = "expanded",
-    [ 6] = "condensed",
-    [ 7] = "veryexpanded",
-    [ 8] = "verycondensed",
-    [ 9] = "monospaced",
+local panosewidths = { [0] =
+    "normal",
+    "normal",
+    "normal",
+    "normal",
+    "normal",
+    "expanded",
+    "condensed",
+    "veryexpanded",
+    "verycondensed",
+    "monospaced",
 }
 
 -- We implement a reader per table.
@@ -1188,6 +1190,9 @@ readers.hmtx = function(f,fontdata,specification)
          -- if leftsidebearing ~= 0 then
          --     glyph.lsb = leftsidebearing
          -- end
+-- if leftsidebearing ~= 0 then
+--     glyph.lsb = leftsidebearing
+-- end
         end
         -- The next can happen in for instance a monospace font or in a cjk font
         -- with fixed widths.
@@ -1249,7 +1254,7 @@ readers.post = function(f,fontdata,specification)
         local version = readulong(f)
         fontdata.postscript = {
             version            = version,
-            italicangle        = round(1000*readfixed(f))/1000,
+            italicangle        = readfixed(f),
             underlineposition  = readfword(f),
             underlinethickness = readfword(f),
             monospaced         = readulong(f),
@@ -1291,8 +1296,8 @@ readers.post = function(f,fontdata,specification)
                     if length > 0 then
                         glyphs[mapping].name = readstring(f,length)
                     else
-                        report("quit post name fetching at %a of %a: %s",i,maxnames,"overflow")
-                        break
+                     -- report("quit post name fetching at %a of %a: %s",i,maxnames,"overflow")
+                     -- break
                     end
                 end
             end
@@ -1682,7 +1687,7 @@ end
 function readers.cmap(f,fontdata,specification)
     local tableoffset = gotodatatable(f,fontdata,"cmap",specification.glyphs)
     if tableoffset then
-        local version      = readushort(f)
+        local version      = readushort(f) -- check later versions
         local noftables    = readushort(f)
         local records      = { }
         local unicodecid   = false
@@ -1961,9 +1966,10 @@ local function getinfo(maindata,sub,platformnames,rawfamilynames,metricstoo,inst
             weight         = weight and lower(weight),
             width          = width and lower(width),
             pfmweight      = metrics.weightclass or 400, -- will become weightclass
-            pfmwidth       = metrics.widthclass or 5,    -- will become widthclass
+            pfmwidth       = metrics.widthclass or 5, -- will become widthclass
             panosewidth    = metrics.panosewidth,
             panoseweight   = metrics.panoseweight,
+            fstype         = metrics.fstype or 0, -- embedding, subsetting and editing
             italicangle    = postscript.italicangle or 0,
             units          = fontheader.units or 0,
             designsize     = fontdata.designsize,
@@ -2084,20 +2090,12 @@ local function readtable(tag,f,fontdata,specification,...)
     end
 end
 
-local variablefonts_supported = (context and true) or (logs and logs.application and true) or false
-
 local function readdata(f,offset,specification)
 
     local fontdata, tables = loadtables(f,specification,offset)
 
     if specification.glyphs then
         prepareglyps(fontdata)
-    end
-
-    if not variablefonts_supported then
-        specification.instance = nil
-        specification.variable = nil
-        specification.factors  = nil
     end
 
     fontdata.temporary = { }
@@ -2118,71 +2116,66 @@ local function readdata(f,offset,specification)
     readtable("avar",f,fontdata,specification)
     readtable("fvar",f,fontdata,specification)
 
-    if variablefonts_supported then
+    local variabledata = fontdata.variabledata
 
-        local variabledata = fontdata.variabledata
-
-        if variabledata then
-            local instances = variabledata.instances
-            local axis      = variabledata.axis
-            if axis and (not instances or #instances == 0) then
-                instances = { }
-                variabledata.instances = instances
-                local function add(n,subfamily,value)
-                    local values = { }
-                    for i=1,#axis do
-                        local a = axis[i]
-                        values[i] = {
-                            axis  = a.tag,
-                            value = i == n and value or a.default,
-                        }
-                    end
-                    instances[#instances+1] = {
-                        subfamily = subfamily,
-                        values    = values,
+    if variabledata then
+        local instances = variabledata.instances
+        local axis      = variabledata.axis
+        if axis and (not instances or #instances == 0) then
+            instances = { }
+            variabledata.instances = instances
+            local function add(n,subfamily,value)
+                local values = { }
+                for i=1,#axis do
+                    local a = axis[i]
+                    values[i] = {
+                        axis  = a.tag,
+                        value = i == n and value or a.default,
                     }
                 end
-                for i=1,#axis do
-                    local a   = axis[i]
-                    local tag = a.tag
-                    add(i,"default"..tag,a.default)
-                    add(i,"minimum"..tag,a.minimum)
-                    add(i,"maximum"..tag,a.maximum)
-                end
-             -- report("%i fake instances added",#instances)
+                instances[#instances+1] = {
+                    subfamily = subfamily,
+                    values    = values,
+                }
             end
-        end
-
-        if not specification.factors then
-            local instance = specification.instance
-            if type(instance) == "string" then
-                local factors = helpers.getfactors(fontdata,instance)
-                if factors then
-                    specification.factors = factors
-                    fontdata.factors  = factors
-                    fontdata.instance = instance
-                    report("user instance: %s, factors: % t",instance,factors)
-                else
-                    report("user instance: %s, bad factors",instance)
-                end
+            for i=1,#axis do
+                local a   = axis[i]
+                local tag = a.tag
+                add(i,"default"..tag,a.default)
+                add(i,"minimum"..tag,a.minimum)
+                add(i,"maximum"..tag,a.maximum)
             end
+         -- report("%i fake instances added",#instances)
         end
-
-        if not fontdata.factors then
-            if fontdata.variabledata then
-                local factors = helpers.getfactors(fontdata,true)
-                if factors then
-                    specification.factors = factors
-                    fontdata.factors = factors
-             --     report("factors: % t",factors)
-             -- else
-             --     report("bad factors")
-                end
+    end
+    if not specification.factors then
+        local instance = specification.instance
+        if type(instance) == "string" then
+            local factors = helpers.getfactors(fontdata,instance)
+            if factors then
+                specification.factors = factors
+                fontdata.factors  = factors
+                fontdata.instance = instance
+                report("user instance: %s, factors: % t",instance,factors)
             else
-             -- report("unknown instance")
+                report("user instance: %s, bad factors",instance)
             end
         end
+    end
 
+    if not fontdata.factors then
+        if fontdata.variabledata then
+            local factors = helpers.getfactors(fontdata,true)
+            if factors then
+                specification.factors = factors
+                fontdata.factors = factors
+         --     report("factors: % t",factors)
+         -- else
+         --     report("bad factors")
+            end
+        else
+         -- report("unknown instance")
+        end
     end
 
     readtable("os/2",f,fontdata,specification)
@@ -2433,27 +2426,32 @@ function readers.loadfont(filename,n,instance)
                 hascolor      = fontdata.hascolor or false,
                 instance      = fontdata.instance,
                 factors       = fontdata.factors,
+                nofsubfonts   = fontdata.subfonts and #fontdata.subfonts or nil,
             },
             resources     = {
-             -- filename      = fontdata.filename,
-                filename      = filename,
-                private       = privateoffset,
-                duplicates    = fontdata.duplicates  or { },
-                features      = fontdata.features    or { }, -- we need to add these in the loader
-                sublookups    = fontdata.sublookups  or { }, -- we need to add these in the loader
-                marks         = fontdata.marks       or { }, -- we need to add these in the loader
-                markclasses   = fontdata.markclasses or { }, -- we need to add these in the loader
-                marksets      = fontdata.marksets    or { }, -- we need to add these in the loader
-                sequences     = fontdata.sequences   or { }, -- we need to add these in the loader
-                variants      = fontdata.variants, -- variant -> unicode -> glyph
-                version       = getname(fontdata,"version"),
-                cidinfo       = fontdata.cidinfo,
-                mathconstants = fontdata.mathconstants,
-                colorpalettes = fontdata.colorpalettes,
-                svgshapes     = fontdata.svgshapes,
-                pngshapes     = fontdata.pngshapes,
-                variabledata  = fontdata.variabledata,
-                foundtables   = fontdata.foundtables,
+             -- filename        = fontdata.filename,
+                filename        = filename,
+                private         = privateoffset,
+                duplicates      = fontdata.duplicates  or { },
+                features        = fontdata.features    or { }, -- we need to add these in the loader
+                sublookups      = fontdata.sublookups  or { }, -- we need to add these in the loader
+                marks           = fontdata.marks       or { }, -- we need to add these in the loader
+                markclasses     = fontdata.markclasses or { }, -- we need to add these in the loader
+                marksets        = fontdata.marksets    or { }, -- we need to add these in the loader
+                sequences       = fontdata.sequences   or { }, -- we need to add these in the loader
+                variants        = fontdata.variants, -- variant -> unicode -> glyph
+                version         = getname(fontdata,"version"),
+                cidinfo         = fontdata.cidinfo,
+                mathconstants   = fontdata.mathconstants,
+                colorpalettes   = fontdata.colorpalettes,
+                colorpaintdata  = fontdata.colorpaintdata,
+                colorpaintlist  = fontdata.colorpaintlist,
+                colorlinesdata  = fontdata.colorlinesdata,
+                coloraffinedata = fontdata.coloraffinedata,
+                svgshapes       = fontdata.svgshapes,
+                pngshapes       = fontdata.pngshapes,
+                variabledata    = fontdata.variabledata,
+                foundtables     = fontdata.foundtables,
             },
         }
     end
@@ -2509,15 +2507,15 @@ function readers.getinfo(filename,specification) -- string, nil|number|table
     end
 end
 
-function readers.rehash(fontdata,hashmethod)
+function readers.rehash() -- fontdata,hashmethod
     report("the %a helper is not yet implemented","rehash")
 end
 
-function readers.checkhash(fontdata)
+function readers.checkhash() --fontdata
     report("the %a helper is not yet implemented","checkhash")
 end
 
-function readers.pack(fontdata,hashmethod)
+function readers.pack() -- fontdata,hashmethod
     report("the %a helper is not yet implemented","pack")
 end
 
@@ -2531,6 +2529,10 @@ end
 
 function readers.compact(fontdata)
     report("the %a helper is not yet implemented","compact")
+end
+
+function readers.condense(fontdata)
+    report("the %a helper is not yet implemented","condense")
 end
 
 -- plug in

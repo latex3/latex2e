@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-% Copyright (C) 1993-2022
+% Copyright (C) 1993-2024
 % The LaTeX Project and any individual authors listed elsewhere
 % in this file.
 %
@@ -32,7 +32,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltfiles.dtx}
-             [2022/04/01 v1.2q LaTeX Kernel (File Handling)]
+             [2024/02/08 v1.2v LaTeX Kernel (File Handling)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltfiles.dtx}
@@ -415,6 +415,16 @@
 %    horizontal mode, so ignore the space after |\begin{document}|.
 %    \begin{macrocode}
   \ignorespaces}
+%    \end{macrocode}
+%
+%    Provide a global definition for \cs{do} as well, so that it is
+%    already defined in the preamble and not late as
+%    \verb=\begin{document}= overwriting some definition given by the
+%    unsuspecting user in the preamble.
+% \changes{v1.2s}{2023/01/05}{\cs{do} now with default definition in
+%    the kernel (gh/975)}
+%    \begin{macrocode}
+\let\do\noexpand
 %    \end{macrocode}
 %
 %    The \hook{begindocument} hook already existed in the kernel since
@@ -1077,7 +1087,7 @@
 %   \texttt{-1} we ensure that we don't get a backslash in front. As a
 %   result we end up with all characters as catcode 12 (plus
 %   spaces). We then sometimes add quotes around the construct
-%   (removing any existing inner quotes. Sometimes we only remove the
+%   (removing any existing inner quotes). Sometimes we only remove the
 %   quotes if they have been supplied by the user. There is clearly
 %   some room for improvement.
 %
@@ -1192,6 +1202,10 @@
 % \changes{v1.0t}{1995/05/25}{(CAR) added \cs{long}}
 % \changes{v1.2d}{2019/10/26}{quote on openin}
 % \changes{v1.2k}{2021/03/12}{Allow unbalanced conditionals (gh/530)}
+% \changes{v1.2t}{2023/05/15}{Use \pkg{expl3} file existence test}
+% \begin{macro}{\IfFileExists@@}
+% \changes{v1.2t}{2023/05/15}{Macro added}
+% \changes{v1.2u}{2023/06/16}{Support piped input}
 % Argument |#1| is |\@curr@file| so catcode 12 string with no quotes.
 %
 %    The original definition picked up arguments |#2| and |#3| in a
@@ -1199,25 +1213,37 @@
 %    implementation would have been not to pick up the arguments at
 %    all but instead use the usual \cs{@firstoftwo} and
 %    \cs{secondoftwo}. However, that changes how |#| is interpreted
-%    and so we can't do that nowaways without invalidating a lot of
+%    and so we can't do that nowadays without invalidating a lot of
 %    code. Therefore the somewhat curious construction near the end.
+%
+%    Earlier versions used |\openin| here, but this led to two
+%    code paths, one in \pkg{expl3} and one here. To avoid that,
+%    and as the \pkg{expl3} approach works by expansion, we use
+%    that here. As we need the file name to include the path,
+%    the actual \pkg{expl3} function used is not the file existence
+%    test!
 %    \begin{macrocode}
 %</2ekernel>
 %<*2ekernel|latexrelease>
-%<latexrelease>\IncludeInRelease{2021/06/01}%
-%<latexrelease>                 {\IfFileExists@}{manage unbalanced conditionals}
+%<latexrelease>\IncludeInRelease{2023/06/01}%
+%<latexrelease>                 {\IfFileExists@}{IfFileExists}
 \long\def \IfFileExists@#1#2#3{%
-  \openin\@inputcheck"#1" %
-  \ifeof\@inputcheck
-    \ifx\input@path\@undefined
-      \let\reserved@a\@secondoftwo
+  \edef\@filef@und{\IfFileExists@@{#1}}%
+%    \end{macrocode}
+%    The \pkg{expl3} function regards an empty argument as nothing at all,
+%    but the \LaTeXe{} convention is that this is equal to the special
+%    \texttt{.tex} file.
+%    \begin{macrocode}
+  \ifx\@filef@und\@empty
+    \if\relax\detokenize{#1}\relax
+      \let\reserved@a\@firstoftwo
+      \def\@filef@und{".tex" }%
     \else
-      \def\reserved@a{\@iffileonpath{#1}}%
+      \let\reserved@a\@secondoftwo
     \fi
   \else
-    \closein\@inputcheck
-    \edef\@filef@und{"#1" }%
     \let\reserved@a\@firstoftwo
+    \edef\@filef@und{"\@filef@und" }%
   \fi
 %    \end{macrocode}
 %    This is just there so that any |#| inside |#2| or |#3| needs
@@ -1226,10 +1252,50 @@
   \expandafter\def\expandafter\reserved@a
     \expandafter{\reserved@a{#2}{#3}}%
 \reserved@a}
+%    \end{macrocode}
+%    Pipes are not really files, but at the document level they are supported.
+%    To quickly trim of any leading spaces, we use a blank test and \cs{use:n}
+%    rather than \cs{tl_trim_spaces:n} for speed as we don't care about the end
+%    of the input.
+%    \begin{macrocode}
+\ExplSyntaxOn
+\cs_new:Npn \IfFileExists@@ #1
+  {
+    \tl_if_blank:nF {#1}
+      {
+        \tl_if_head_eq_charcode:oNTF { \use:n #1 } |
+          {#1}
+          { \file_full_name:n {#1} }
+      }
+  }
+\cs_generate_variant:Nn \tl_if_head_eq_charcode:nNTF { o }
+\ExplSyntaxOff
 %</2ekernel|latexrelease>
 %<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{2021/06/01}%
+%<latexrelease>                 {\IfFileExists@}{IfFileExists}
+%<latexrelease>
+%<latexrelease>\long\def \IfFileExists@#1#2#3{%
+%<latexrelease>  \openin\@inputcheck"#1" %
+%<latexrelease>  \ifeof\@inputcheck
+%<latexrelease>    \ifx\input@path\@undefined
+%<latexrelease>      \let\reserved@a\@secondoftwo
+%<latexrelease>    \else
+%<latexrelease>      \def\reserved@a{\@iffileonpath{#1}}%
+%<latexrelease>    \fi
+%<latexrelease>  \else
+%<latexrelease>    \closein\@inputcheck
+%<latexrelease>    \edef\@filef@und{"#1" }%
+%<latexrelease>    \let\reserved@a\@firstoftwo
+%<latexrelease>  \fi
+%<latexrelease>  \expandafter\def\expandafter\reserved@a
+%<latexrelease>    \expandafter{\reserved@a{#2}{#3}}%
+%<latexrelease>\reserved@a}
+%<latexrelease>\let\IfFileExists@@\@undefined
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>
 %<latexrelease>\IncludeInRelease{2019/10/01}%
-%<latexrelease>                 {\IfFileExists@}{manage unbalanced conditionals}
+%<latexrelease>                 {\IfFileExists@}{IfFileExists}
 %<latexrelease>
 %<latexrelease>\long\def \IfFileExists@#1#2#3{%
 %<latexrelease>  \openin\@inputcheck"#1" %
@@ -1247,7 +1313,7 @@
 %<latexrelease>  \reserved@a}
 %<latexrelease>\EndIncludeInRelease
 %<latexrelease>\IncludeInRelease{0000/00/00}%
-%<latexrelease>                 {\IfFileExists@}{manage unbalanced conditionals}
+%<latexrelease>                 {\IfFileExists@}{IfFileExists}
 %<latexrelease>
 %<latexrelease>\let\IfFileExists@\@undefined
 %<latexrelease>
@@ -1256,7 +1322,7 @@
 %<*2ekernel>
 %    \end{macrocode}
 %  \end{macro}
-%
+%  \end{macro}
 %
 %
 %
@@ -1616,6 +1682,22 @@
 %    \end{macrocode}
 % \end{macro}
 %
+% \begin{macro}{\if@listfiles@hashes}
+% \changes{v1.2v}{2023/11/15}{Extend file list information}
+% \begin{macro}{\if@listfiles@sizes}
+% \changes{v1.2v}{2023/11/15}{Extend file list information}
+%    \begin{macrocode}
+\ExplSyntaxOn
+\keys_define:nn { __kernel / listfiles }
+  {
+    hashes .legacy_if_set:n = @listfiles@hashes ,
+    sizes .legacy_if_set:n  = @listfiles@sizes
+  }
+\ExplSyntaxOff
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
 % \begin{macro}{\listfiles}
 % A preamble command to cause |\end{document}| to list files input
 % from the main file.
@@ -1627,8 +1709,10 @@
 %         {Stop \cs{listfiles} being run twice}
 % \changes{v1.0i}{1994/10/18}
 %         {code moved here from ltclass}
+% \changes{v1.2v}{2023/11/15}{Extend file list information}
 %    \begin{macrocode}
-\def\listfiles{%
+\NewDocumentCommand\listfiles{O{}}{%
+  \SetKeys[__kernel/listfiles]{#1}%
   \let\listfiles\relax
   \def\@listfiles##1##2##3##4##5##6##7##8##9\@@{%
      \def\reserved@d{\\}%
@@ -1640,6 +1724,7 @@
 %
 % \changes{v1.0o}{1994/11/30}
 %         {Use \cs{@dofilelist}}
+% \changes{v1.2r}{2022/05/27}{Try saved version string, if ver@.. is \cs{relax} (gh/825)}
 %    \begin{macrocode}
   \def\@dofilelist{%
      \typeout{^^J *File List*}%
@@ -1650,13 +1735,53 @@
           \ifx\filename@ext\relax tex\else\filename@ext\fi}%
        \expandafter\let\expandafter\reserved@b
                               \csname ver@\reserved@a\endcsname
+%    \end{macrocode}
+%    Packages that \cs{relax} their \cs{ver@...} string to allow for
+%    multiple loading (e.g., \pkg{fontenc}) can use \cs{ver@@...} to
+%    store the version information instead.
+%    \begin{macrocode}
+       \ifx\reserved@b\relax
+         \expandafter\let\expandafter\reserved@b
+                         \csname ver@@\reserved@a\endcsname
+       \fi
        \expandafter\expandafter\expandafter\@listfiles\expandafter
              \filename@area\filename@base\\\\\\\\\\\\\\\\\\\@@
        \typeout{%
          \filename@area\reserved@a
-         \ifx\reserved@b\relax\else\@spaces\reserved@b\fi}}%
+         \ifx\reserved@b\relax\else\@spaces\reserved@b\fi
+%    \end{macrocode}
+%   Now we add the additional information if requested.
+%    \begin{macrocode}
+         \ifnum0%
+           \if@listfiles@hashes1\fi
+           \if@listfiles@sizes1\fi
+             >0 %
+             ^^J\@spaces
+             (%
+               \if@listfiles@sizes
+                 size \@dofilelist@size\@currname
+                 \if@listfiles@hashes
+                   , %
+                 \fi
+               \fi
+               \if@listfiles@hashes
+                 hash \@dofilelist@hash\@currname
+               \fi
+             )%
+         \fi
+      }}%
      \typeout{ ***********^^J}}}
 %    \end{macrocode}
+% \begin{macro}{\@dofilelist@hash}
+% \begin{macro}{\@dofilelist@size}
+%    \begin{macrocode}
+\ExplSyntaxOn
+\cs_new_eq:NN \@dofilelist@hash \file_mdfive_hash:n
+\cs_new_eq:NN \@dofilelist@size \file_size:n
+\ExplSyntaxOff
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
 %
 % \changes{LaTeX2e}{1994/03/13}
 %         {Reset \cs{@addtofilelist} at begin document}

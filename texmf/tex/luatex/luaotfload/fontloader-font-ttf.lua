@@ -1,5 +1,6 @@
 if not modules then modules = { } end modules ['font-ttf'] = {
     version   = 1.001,
+    optimize  = true,
     comment   = "companion to font-ini.mkiv",
     author    = "Hans Hagen, PRAGMA-ADE, Hasselt NL",
     copyright = "PRAGMA ADE / ConTeXt Development Team",
@@ -34,7 +35,7 @@ if not modules then modules = { } end modules ['font-ttf'] = {
 
 local next, type, unpack = next, type, unpack
 local band, rshift = bit32.band, bit32.rshift
-local sqrt, round = math.sqrt, math.round
+local sqrt, round, abs, min, max = math.sqrt, math.round, math.abs, math.min, math.max
 local char, rep = string.char, string.rep
 local concat = table.concat
 local idiv = number.idiv
@@ -135,8 +136,12 @@ local function mergecomposites(glyphs,shapes)
                         local y = p[2]
                         nofpoints = nofpoints + 1
                         points[nofpoints] = {
+                            -- unifractur : u n
+                            -- seguiemj   : 0x270E 0x2710
                             xscale * x + xrotate * y + xoffset,
                             yscale * y + yrotate * x + yoffset,
+--                             xscale * x + yrotate * y + xoffset,
+--                             xrotate * x + yscale * y + yoffset,
                             p[3]
                         }
                     end
@@ -162,8 +167,7 @@ local function mergecomposites(glyphs,shapes)
         return contours, points
     end
 
---     for index=1,#glyphs do
-    for index=0,#glyphs-1 do
+    for index=0,#glyphs do
         local shape = shapes[index]
         if shape then
             local components = shape.components
@@ -203,77 +207,220 @@ end
 -- We had two loops (going backward) but can do it in one loop .. but maybe we
 -- should only accept fonts with proper hvar tables.
 
+-- dowidth is kind of hack ... fonts are not always ok wrt these extra points
+
+local xv = { } -- we share this cache
+local yv = { } -- we share this cache
+
 local function applyaxis(glyph,shape,deltas,dowidth)
     local points = shape.points
     if points then
         local nofpoints = #points
-        local h = nofpoints + 2 -- weird, the example font seems to have left first
-        local l = nofpoints + 1
-        ----- v = nofpoints + 3
-        ----- t = nofpoints + 4
         local dw = 0
         local dl = 0
         for i=1,#deltas do
             local deltaset = deltas[i]
             local xvalues  = deltaset.xvalues
             local yvalues  = deltaset.yvalues
-            local dpoints  = deltaset.points
-            local factor   = deltaset.factor
-            if dpoints then
-                -- todo: interpolate
-                local nofdpoints = #dpoints
-                for i=1,nofdpoints do
-                    local d = dpoints[i]
-                    local p = points[d]
-                    if p then
-                        if xvalues then
-                            local x = xvalues[i]
-                            if x and x ~= 0 then
+            if xvalues and yvalues then
+                local dpoints = deltaset.points
+                local factor  = deltaset.factor
+                if dpoints then
+                    local cnt = #dpoints
+                    if dowidth then
+                        cnt = cnt - 4
+                    end
+                    if cnt > 0 then
+                        -- Not the most efficient solution but we seldom do this. We
+                        -- actually need to avoid the extra points here but I'll deal
+                        -- with that when needed.
+                        local contours    = shape.contours
+                        local nofcontours = #contours
+                        local first       = 1
+                        local firstindex  = 1
+                        for contour=1,nofcontours do
+                            local last = contours[contour]
+                            if last >= first then
+                                local lastindex = cnt
+                                if firstindex < cnt then
+                                    for currentindex=firstindex,cnt do
+                                        local found = dpoints[currentindex]
+                                        if found <= first then
+                                            firstindex = currentindex
+                                        end
+                                        if found == last then
+                                            lastindex = currentindex
+                                            break
+                                        elseif found > last then
+                                            -- \definefontfeature[book][default][axis={weight=800}]
+                                            -- \definefont[testfont][file:Commissioner-vf-test.ttf*book]
+                                            -- \testfont EΘÄΞ
+                                            while lastindex > 1 and dpoints[lastindex] > last do
+                                                lastindex = lastindex - 1
+                                            end
+                                            --
+                                            break
+                                        end
+                                    end
+                                end
+                             -- print("unicode: ",glyph.unicode or "?")
+                             -- print("contour: ",first,contour,last)
+                             -- print("index  : ",firstindex,lastindex,cnt)
+                             -- print("points : ",dpoints[firstindex],dpoints[lastindex])
+                                local function find(i)
+                                    local prv = lastindex
+                                    for j=firstindex,lastindex do
+                                        local nxt = dpoints[j] -- we could save this lookup when we return it
+                                        if nxt == i then
+                                            return false, j, false
+                                        elseif nxt > i then
+                                            return prv, false, j
+                                        end
+                                        prv = j
+                                    end
+                                    return prv, false, firstindex
+                                end
+                                -- We need the first and last points untouched so we first
+                                -- collect data.
+                                for point=first,last do
+                                    local d1, d2, d3 = find(point)
+                                    local p2 = points[point]
+                                    if d2 then
+                                        xv[point] = xvalues[d2]
+                                        yv[point] = yvalues[d2]
+                                    else
+                                        local n1 = dpoints[d1]
+                                        local n3 = dpoints[d3]
+                                        -- Some day I need to figure out these extra points but
+                                        -- I'll wait till the standard is more clear and fonts
+                                        -- become better (ntg-context: fraunces.ttf > abcdef).
+                                        if n1 > nofpoints then
+                                            n1 = nofpoints
+                                        end
+                                        if n3 > nofpoints then
+                                            n3 = nofpoints
+                                        end
+                                        --
+                                        local p1 = points[n1]
+                                        local p3 = points[n3]
+                                        local p1x = p1[1]
+                                        local p2x = p2[1]
+                                        local p3x = p3[1]
+                                        local p1y = p1[2]
+                                        local p2y = p2[2]
+                                        local p3y = p3[2]
+                                        local x1 = xvalues[d1]
+                                        local y1 = yvalues[d1]
+                                        local x3 = xvalues[d3]
+                                        local y3 = yvalues[d3]
+                                        --
+                                        local fx
+                                        local fy
+                                        --
+                                        if p1x == p3x then
+                                            if x1 == x3 then
+                                                fx = x1
+                                            else
+                                                fx = 0
+                                            end
+                                        elseif p2x <= min(p1x,p3x) then
+                                            if p1x < p3x then
+                                                fx = x1
+                                            else
+                                                fx = x3
+                                            end
+                                        elseif p2x >= max(p1x,p3x) then
+                                            if p1x > p3x then
+                                                fx = x1
+                                            else
+                                                fx = x3
+                                            end
+                                        else
+                                            fx = (p2x - p1x)/(p3x - p1x)
+-- fx = round(fx)
+                                            fx = (1 - fx) * x1 + fx * x3
+                                        end
+                                        --
+                                        if p1y == p3y then
+                                            if y1 == y3 then
+                                                fy = y1
+                                            else
+                                                fy = 0
+                                            end
+                                        elseif p2y <= min(p1y,p3y) then
+                                            if p1y < p3y then
+                                                fy = y1
+                                            else
+                                                fy = y3
+                                            end
+                                        elseif p2y >= max(p1y,p3y) then
+                                            if p1y > p3y then
+                                                fy = y1
+                                            else
+                                                fy = y3
+                                            end
+                                        else
+                                            fy = (p2y - p1y)/(p3y - p1y)
+-- fy = round(fy)
+                                            fy = (1 - fy) * y1 + fy * y3
+                                        end
+                                     -- -- maybe:
+                                     -- if p1y ~= p3y then
+                                     --     fy = (p2y - p1y)/(p3y - p1y)
+                                     --     fy = (1 - fy) * y1 + fy * y3
+                                     -- elseif abs(p1y-p2y) < abs(p3y-p2y) then
+                                     --     fy = y1
+                                     -- else
+                                     --     fy = y3
+                                     -- end
+                                        --
+                                        xv[point] = fx
+                                        yv[point] = fy
+                                    end
+                                end
+                                if lastindex < cnt then
+                                    firstindex = lastindex + 1
+                                end
+                            end
+                            first = last + 1
+                        end
+
+                        for i=1,nofpoints do
+                            local pi = points[i]
+                            local fx = xv[i]
+                            local fy = yv[i]
+                            if fx ~= 0 then
+                                pi[1] = pi[1] + factor * fx
+                            end
+                            if fy ~= 0 then
+                                pi[2] = pi[2] + factor * fy
+                            end
+                        end
+                    else
+                        report("bad deltapoint data, maybe a missing hvar table")
+                    end
+                else
+                    for i=1,nofpoints do
+                        local p = points[i]
+                        local x = xvalues[i]
+                        if x then
+                            local y = yvalues[i]
+                            if x ~= 0 then
                                 p[1] = p[1] + factor * x
                             end
-                        end
-                        if yvalues then
-                            local y = yvalues[i]
-                            if y and y ~= 0 then
+                            if y ~= 0 then
                                 p[2] = p[2] + factor * y
                             end
-                        end
-                    elseif dowidth then
-                        -- we've now ran into phantom points which is a bit fuzzy because:
-                        -- are there gaps in there?
-                        --
-                        -- todo: move this outside the loop (when we can be sure of all 4 being there)
-                        if d == h then
-                            -- we have a phantom point hadvance
-                            local x = xvalues[i]
-                            if x then
-                                dw = dw + factor * x
-                            end
-                        elseif d == l then
-                            local x = xvalues[i]
-                            if x then
-                                dl = dl + factor * x
-                            end
-                        end
-                    end
-                end
-            else
-                for i=1,nofpoints do
-                    local p = points[i]
-                    if xvalues then
-                        local x = xvalues[i]
-                        if x and x ~= 0 then
-                            p[1] = p[1] + factor * x
-                        end
-                    end
-                    if yvalues then
-                        local y = yvalues[i]
-                        if y and y ~= 0 then
-                            p[2] = p[2] + factor * y
+                        else
+                            break
                         end
                     end
                 end
                 if dowidth then
+                    local h = nofpoints + 2 -- weird, the example font seems to have left first
+                    local l = nofpoints + 1
+                    ----- v = nofpoints + 3
+                    ----- t = nofpoints + 4
                     local x = xvalues[h]
                     if x then
                         dw = dw + factor * x
@@ -618,6 +765,18 @@ local function contours2outlines_shaped(glyphs,shapes,keepcurve)
                         end
                         first = last + 1
                     end
+                    -- See readers.hvar where we set the delta lsb as well as the adapted
+                    -- width. At this point we do know the boundingbox's llx. The xmax is
+                    -- not that relevant. It needs more testing!
+                    --
+                    xmin = glyph.boundingbox[1]
+                    --
+                    local dlsb = glyph.dlsb
+                    if dlsb then
+                        xmin = xmin + dlsb
+                        glyph.dlsb = nil -- save space
+                    end
+                    --
                     glyph.boundingbox = { round(xmin), round(ymin), round(xmax), round(ymax) }
                 end
             end
@@ -658,7 +817,7 @@ local function repackpoints(glyphs,shapes)
     local result        = { } -- reused
     local xpoints       = { } -- reused
     local ypoints       = { } -- reused
-    for index=0,#glyphs-1 do
+    for index=0,#glyphs do
         local shape = shapes[index]
         if shape then
             local r     = 0
@@ -829,8 +988,8 @@ local function readglyph(f,nofcontours) -- read deltas here, saves space
     local x = 0
     for i=1,nofpoints do
         local flag = flags[i]
-     -- local short = band(flag,0x04) ~= 0
-     -- local same  = band(flag,0x20) ~= 0
+     -- local short = band(flag,0x02) ~= 0
+     -- local same  = band(flag,0x10) ~= 0
         if band(flag,0x02) ~= 0 then
             if band(flag,0x10) ~= 0 then
                 x = x + readbyte(f)
@@ -930,13 +1089,13 @@ local function readcomposite(f)
                 yoffset = yoffset * yscale
             end
         elseif band(flags,0x0080) ~= 0 then -- f_matrix
-            xscale  = read2dot14(f)
-            xrotate = read2dot14(f)
-            yrotate = read2dot14(f)
-            yscale  = read2dot14(f)
+            xscale  = read2dot14(f) -- xxpart
+            xrotate = read2dot14(f) -- yxpart
+            yrotate = read2dot14(f) -- xypart
+            yscale  = read2dot14(f) -- yypart
             if f_xyarg and f_offset then
-                xoffset = xoffset * sqrt(xscale ^2 + xrotate^2)
-                yoffset = yoffset * sqrt(yrotate^2 + yscale ^2)
+                xoffset = xoffset * sqrt(xscale ^2 + yrotate^2) -- was xrotate
+                yoffset = yoffset * sqrt(xrotate^2 + yscale ^2) -- was yrotate
             end
         end
         nofcomponents = nofcomponents + 1
@@ -1119,50 +1278,6 @@ end
 local function readdeltas(f,nofpoints)
     local deltas = { }
     local p = 0
-    local z = 0
-    while nofpoints > 0 do
-        local control   = readbyte(f)
-if not control then
-    break
-end
-        local allzero   = band(control,0x80) ~= 0
-        local runlength = band(control,0x3F) + 1
-        if allzero then
-            z = z + runlength
-        else
-            local runreader = band(control,0x40) ~= 0 and readshort or readinteger
-            if z > 0 then
-                for i=1,z do
-                    p = p + 1
-                    deltas[p] = 0
-                end
-                z = 0
-            end
-            for i=1,runlength do
-                p = p + 1
-                deltas[p] = runreader(f)
-            end
-        end
-        nofpoints = nofpoints - runlength
-    end
-    -- saves space
--- if z > 0 then
---     for i=1,z do
---         p = p + 1
---         deltas[p] = 0
---     end
--- end
-    if p > 0 then
-        -- forget about trailing zeros
-        return deltas
-    else
-        -- forget about all zeros
-    end
-end
-
-local function readdeltas(f,nofpoints)
-    local deltas = { }
-    local p = 0
     while nofpoints > 0 do
         local control = readbyte(f)
         if control then
@@ -1330,7 +1445,8 @@ function readers.gvar(f,fontdata,specification,glyphdata,shapedata)
                          -- local start = start and start[i] or 0
                          -- local stop  = stop  and stop [i] or 0
                             local start = start and start[i] or (peak < 0 and peak or 0)
-                            local stop  = stop  and stop [i] or (peak > 0 and peak or 0)
+                            local stop  = stop  and stop [i] or (peak > 0 and peak or 0) -- or 1 ?
+--                             local stop  = stop  and stop [i] or (peak > 0 and peak or 1) -- or 1 ?
                             -- do we really need these tests ... can't we assume sane values
                             if start > peak or peak > stop then
                                 -- * 1
@@ -1343,7 +1459,6 @@ function readers.gvar(f,fontdata,specification,glyphdata,shapedata)
                                 s = 0
                                 break
                             elseif f < peak then
---                                 s = - s * (f - start) / (peak - start)
                                 s = s * (f - start) / (peak - start)
                             elseif f > peak then
                                 s = s * (stop - f) / (stop - peak)

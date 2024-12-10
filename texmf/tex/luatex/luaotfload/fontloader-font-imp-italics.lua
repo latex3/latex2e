@@ -6,34 +6,39 @@ if not modules then modules = { } end modules ['font-imp-italics'] = {
     license   = "see context related readme files"
 }
 
-local next = next
+local next, tonumber = next, tonumber
 
 local fonts              = fonts
 local handlers           = fonts.handlers
 local registerotffeature = handlers.otf.features.register
 local registerafmfeature = handlers.afm.features.register
 
-local function initialize(tfmdata,key,value)
-    for unicode, character in next, tfmdata.characters do
-        local olditalic = character.italic
-        if olditalic and olditalic ~= 0 then
-            character.width  = character.width + olditalic
-            character.italic = 0
-        end
-    end
-end
+-- This is a precursor to what we do in lmtx now via tweaks but at some point I
+-- might make this a mkiv features too using staircase kerns.
 
-local specification = {
-    name        = "italicwidths",
-    description = "add italic to width",
-    manipulators = {
-        base = initialize,
-        node = initialize, -- only makes sense for math
-    }
-}
-
-registerotffeature(specification)
-registerafmfeature(specification)
+-- local function initialize(tfmdata,key,value)
+--     local factor = tonumber(value) or 1
+--     for unicode, character in next, tfmdata.characters do
+--         local olditalic = character.italic
+--         if olditalic and olditalic ~= 0 then
+--             character.width       = character.width + olditalic
+--             character.italic      = 0
+--             character.bottomright = -factor * olditalic -- lmtx only
+--         end
+--     end
+-- end
+--
+-- local specification = {
+--     name        = "italicwidths",
+--     description = "add italic to width",
+--     manipulators = {
+--         base = initialize,
+--         node = initialize, -- only makes sense for math
+--     }
+-- }
+--
+-- registerotffeature(specification)
+-- registerafmfeature(specification)
 
 local function initialize(tfmdata,value) -- hm, always value
     if value then
@@ -79,33 +84,7 @@ if context then
     registerotffeature(specification)
     registerafmfeature(specification)
 
-end
-
--- no longer used
-
--- if context then
---
---  -- local function initializemathitalics(tfmdata,value) -- yes no delay
---  --     tfmdata.properties.mathitalics = toboolean(value)
---  -- end
---  --
---  -- local specification = {
---  --     name         = "mathitalics",
---  --     description  = "use alternative math italic correction",
---  --     initializers = {
---  --         base = initializemathitalics,
---  --         node = initializemathitalics,
---  --     }
---  -- }
---  --
---  -- registerotffeature(specification)
---  -- registerafmfeature(specification)
---
--- end
-
--- -- also not used, only when testing
-
-if context then
+    -- only used when testing
 
     local letter = characters.is_letter
     local always = true

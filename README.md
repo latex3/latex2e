@@ -84,17 +84,7 @@ suggestions.
 Changes to the core LaTeX distribution have to be approached bearing in mind
 the importance of maintaining stability. This means that all changes have to be
 carefully weighed up, balancing the issues addressed by a change with
-the effects on existing documents. We strongly suggest raising suggestions on
-the [LaTeX-L mailing
-list](https://listserv.uni-heidelberg.de/cgi-bin/wa?A0=latex-l) early.
-
-You can subscribe to the LaTeX-L mailing list by sending mail to
-
-    listserv@urz.uni-heidelberg.de
-
-with the body containing
-
-    subscribe LATEX-L <Your-First-Name> <Your-Second-Name>
+the effects on existing documents.
 
 ## Development team
 
@@ -104,5 +94,4 @@ The LaTeX kernel is developed by [The LaTeX Project](https://latex-project.org).
 
 This README file is
 
-Copyright (C) 2019-2021
-The LaTeX Project
+Copyright (C) 2019-2024 The LaTeX Project

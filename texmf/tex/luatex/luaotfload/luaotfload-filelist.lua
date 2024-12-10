@@ -4,19 +4,13 @@
 --       AUTHOR:  Ulrike Fischer, <fischer@troubleshooting-tex.de>
 -----------------------------------------------------------------------
 
-local ProvidesLuaModule = { 
+if luaotfload_module then luaotfload_module {
     name          = "luaotfload-filelist",
-    version       = "3.00",       --TAGVERSION
-    date          = "2019-09-13", --TAGDATE
+    version       = "3.28",       --TAGVERSION
+    date          = "2024-02-14", --TAGDATE
     description   = "luaotfload submodule / filelist",
     license       = "GPL v2.0"
-}
-
-if luatexbase and luatexbase.provides_module then
-  luatexbase.provides_module (ProvidesLuaModule)
-end  
-
-
+} end
 
 --[[doc-- 
 
@@ -188,26 +182,27 @@ luaotfload.filelist.data =
     { name = "fonts-syn"         , ours = nil                 , ext = ".lua", kind = kind_ignored   , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirgen, ctxtype = "ctxgene" , ctxpref = "luatex-" },
     { name = "font-vfc"          , ours = "font-vfc"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" }, 
     { name = "font-otr"          , ours = "font-otr"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
-    { name = "font-oti"          , ours = "font-oti"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
-    { name = "font-ott"          , ours = "font-ott"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" }, 
     { name = "font-cff"          , ours = "font-cff"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
     { name = "font-ttf"          , ours = "font-ttf"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
     { name = "font-dsp"          , ours = "font-dsp"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
-    { name = "font-oup"          , ours = "font-oup"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
+    { name = "font-oti"          , ours = "font-oti"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
+    { name = "font-ott"          , ours = "font-ott"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" }, 
     { name = "font-otl"          , ours = "font-otl"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
     { name = "font-oto"          , ours = "font-oto"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
     { name = "font-otj"          , ours = "font-otj"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
+    { name = "font-oup"          , ours = "font-oup"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
     { name = "font-ota"          , ours = "font-ota"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
     { name = "font-ots"          , ours = "font-ots"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
+    { name = "font-otc"          , ours = "font-otc"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
     { name = "font-osd"          , ours = "font-osd"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
     { name = "font-ocl"          , ours = "font-ocl"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
-    { name = "font-otc"          , ours = "font-otc"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
     { name = "font-onr"          , ours = "font-onr"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
     { name = "font-one"          , ours = "font-one"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
     { name = "font-afk"          , ours = "font-afk"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
     { name = "fonts-tfm"         , ours = nil                 , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxgene" , ctxpref = "luatex-" },    
     { name = "font-lua"          , ours = "font-lua"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
     { name = "font-def"          , ours = "font-def"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" }, 
+    { name = "font-shp"          , ours = "font-shp"          , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" }, 
     { name = "fonts-def"         , ours = nil                 , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirgen, ctxtype = "ctxgene" , ctxpref = "luatex-" }, 
     { name = "fonts-ext"         , ours = nil                 , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirgen, ctxtype = "ctxgene" , ctxpref = "luatex-" },
     { name = "font-imp-tex"      , ours = "font-imp-tex"      , ext = ".lua", kind = kind_merged    , gitdir=gitdirimp, texdir = texdirtex , ctxdir= ctxdirbas, ctxtype = "ctxbase" },
@@ -248,11 +243,18 @@ luaotfload.filelist.data =
     { name = "letterspace"       ,kind = kind_library, ext =".lua", gitdir=gitdirsrc, texdir=texdirtex, gitpref = "luaotfload-" }, 
     { name = "embolden"          ,kind = kind_library, ext =".lua", gitdir=gitdirsrc, texdir=texdirtex, gitpref = "luaotfload-" },
     { name = "notdef"            ,kind = kind_library, ext =".lua", gitdir=gitdirsrc, texdir=texdirtex, gitpref = "luaotfload-" },
+    { name = "harf-define"       ,kind = kind_library, ext =".lua", gitdir=gitdirsrc, texdir=texdirtex, gitpref = "luaotfload-" },
+    { name = "harf-plug"         ,kind = kind_library, ext =".lua", gitdir=gitdirsrc, texdir=texdirtex, gitpref = "luaotfload-" },
     { name = "loaders"           ,kind = kind_library, ext =".lua", gitdir=gitdirsrc, texdir=texdirtex, gitpref = "luaotfload-" }, 
     { name = "multiscript"       ,kind = kind_library, ext =".lua", gitdir=gitdirsrc, texdir=texdirtex, gitpref = "luaotfload-" }, 
+    { name = "scripts"           ,kind = kind_library, ext =".lua", gitdir=gitdirsrc, texdir=texdirtex, gitpref = "luaotfload-" },
+    { name = "szss"              ,kind = kind_library, ext =".lua", gitdir=gitdirsrc, texdir=texdirtex, gitpref = "luaotfload-" },
+    { name = "fallback"          ,kind = kind_library, ext =".lua", gitdir=gitdirsrc, texdir=texdirtex, gitpref = "luaotfload-" }, 
     { name = "parsers"           ,kind = kind_library, ext =".lua", gitdir=gitdirsrc, texdir=texdirtex, gitpref = "luaotfload-" }, 
     { name = "resolvers"         ,kind = kind_library, ext =".lua", gitdir=gitdirsrc, texdir=texdirtex, gitpref = "luaotfload-" }, 
     { name = "unicode"           ,kind = kind_library, ext =".lua", gitdir=gitdirsrc, texdir=texdirtex, gitpref = "luaotfload-" },
+    { name = "tounicode"         ,kind = kind_library, ext =".lua", gitdir=gitdirsrc, texdir=texdirtex, gitpref = "luaotfload-" },
+    { name = "dvi"               ,kind = kind_library, ext =".lua", gitdir=gitdirsrc, texdir=texdirtex, gitpref = "luaotfload-" },
 
     { name = "characters"        ,kind = kind_generated, ext =".lua", gitdir=gitdirgen, texdir=texdirtex, gitpref = "luaotfload-", script="mkcharacter" },
     { name = "glyphlist"         ,kind = kind_generated, ext =".lua", gitdir=gitdirgen, texdir=texdirtex, gitpref = "luaotfload-", script="mkglyphlist" },

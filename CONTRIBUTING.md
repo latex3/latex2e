@@ -55,7 +55,7 @@ Latin Modern fonts in the test files.
 
 ## Layout and interface deficiencies
 
-Upfront we should probably stress that 'deficiencies' in the design of
+Upfront we should probably stress that 'deficiencies' in the design
 of the standard document classes (`article`, `report` and `book`) as
 well a questionable but long established interface behavior of commands
 is something that we will normally not change, even if we can all agree
@@ -75,10 +75,6 @@ regard to this policy.
 
 ## Code contributions
 
-If you want to discuss a possible contribution before (or instead of)
-making a pull request, drop a line to
-[the team](mailto:latex-team@latex-project.org).
-
 The stability of LaTeX is very important and this means that change in
 the kernel is necessarily very conservative. It also means that a lot of
 discussion happens before any changes are made. If you do decide to post
@@ -87,10 +83,24 @@ cannot always integrate them into the kernel.
 
 If you are submitting a pull request, notice that
 
-- The first line of commit messages should be a short summary (up to about
-  50 chars); leave a blank line then give more detail if required
-- We use Travis-CI for (light) testing so add `[ci skip]` to documentation-only
-  commit messages
+- The first line of commit messages should be a short summary (up to about 50
+  chars); leave a blank line then give more detail if required
+- We use GitHub Actions for testing; you can run the test suite locally using
+  `l3build`
 - We favour a single linear history so will rebase accepted pull requests
-- Where a commit fixes or closes an issue, please include this information
-  in the first line of the commit message [`(fixes #X)` or similar]
+- Where a commit fixes or closes an issue, please include this information in
+  the first line of the commit message [`(fixes #X)` or similar]
+- There is a checklist in the [pull request
+  template](.github/pull_request_template.md) for the various bit of admin that
+  are needed: the key points are
+  - Almost all changes should be listed in the relevant `changes.txt` file
+  - The date in the `\ProvidesPackage` (or similar) line should be updated
+    whenever the file changes
+  - The version in the `\ProvidesPackage` (or similar) should be incremented
+    whenever the code changes
+  - The LaTeX sources include `\changes` that are typeset
+  - Almost always, a code change should be accompanied by a matching test file
+  - More significant changes will need an entry in _LaTeX News_
+- Pull requests that are intended for the next major release of LaTeX should be
+  made against `develop`; if you feel the change is urgent and requires a patch
+  level, the pull request should be made against `main`

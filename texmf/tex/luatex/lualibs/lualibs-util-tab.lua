@@ -314,86 +314,177 @@ end
 -- best keep [%q] keys (as we have some in older applications i.e. saving user data (otherwise
 -- we also need to check for reserved words)
 
-local f_hashed_string   = formatters["[%Q]=%Q,"]
-local f_hashed_number   = formatters["[%Q]=%s,"]
-local f_hashed_boolean  = formatters["[%Q]=%l,"]
-local f_hashed_table    = formatters["[%Q]="]
+if JITSUPPORTED then
 
-local f_indexed_string  = formatters["[%s]=%Q,"]
-local f_indexed_number  = formatters["[%s]=%s,"]
-local f_indexed_boolean = formatters["[%s]=%l,"]
-local f_indexed_table   = formatters["[%s]="]
+    local f_hashed_string   = formatters["[%Q]=%Q,"]
+    local f_hashed_number   = formatters["[%Q]=%s,"]
+    local f_hashed_boolean  = formatters["[%Q]=%l,"]
+    local f_hashed_table    = formatters["[%Q]="]
 
-local f_ordered_string  = formatters["%Q,"]
-local f_ordered_number  = formatters["%s,"]
-local f_ordered_boolean = formatters["%l,"]
+    local f_indexed_string  = formatters["[%s]=%Q,"]
+    local f_indexed_number  = formatters["[%s]=%s,"]
+    local f_indexed_boolean = formatters["[%s]=%l,"]
+    local f_indexed_table   = formatters["[%s]="]
 
-function table.fastserialize(t,prefix) -- todo, move local function out
+    local f_ordered_string  = formatters["%Q,"]
+    local f_ordered_number  = formatters["%s,"]
+    local f_ordered_boolean = formatters["%l,"]
 
-    -- prefix should contain the =
-    -- not sorted
-    -- only number and string indices (currently)
+    function table.fastserialize(t,prefix) -- todo, move local function out
 
-    local r = { type(prefix) == "string" and prefix or "return" }
-    local m = 1
-    local function fastserialize(t,outer) -- no mixes
-        local n = #t
-        m = m + 1
-        r[m] = "{"
-        if n > 0 then
-            for i=0,n do
-                local v  = t[i]
-                local tv = type(v)
-                if tv == "string" then
-                    m = m + 1 r[m] = f_ordered_string(v)
-                elseif tv == "number" then
-                    m = m + 1 r[m] = f_ordered_number(v)
-                elseif tv == "table" then
-                    fastserialize(v)
-                elseif tv == "boolean" then
-                    m = m + 1 r[m] = f_ordered_boolean(v)
-                end
-            end
-        end
-        for k, v in next, t do
-            local tk = type(k)
-            if tk == "number" then
-                if k > n or k < 0 then
+        -- prefix should contain the =
+        -- not sorted
+        -- only number and string indices (currently)
+
+        local r = { type(prefix) == "string" and prefix or "return" }
+        local m = 1
+        local function fastserialize(t,outer) -- no mixes
+            local n = #t
+            m = m + 1
+            r[m] = "{"
+            if n > 0 then
+                local v = t[0]
+                if v then
                     local tv = type(v)
                     if tv == "string" then
-                        m = m + 1 r[m] = f_indexed_string(k,v)
+                        m = m + 1 r[m] = f_indexed_string(0,v)
                     elseif tv == "number" then
-                        m = m + 1 r[m] = f_indexed_number(k,v)
+                        m = m + 1 r[m] = f_indexed_number(0,v)
                     elseif tv == "table" then
-                        m = m + 1 r[m] = f_indexed_table(k)
+                        m = m + 1 r[m] = f_indexed_table(0)
                         fastserialize(v)
+                        m = m + 1 r[m] = f_indexed_table(0)
                     elseif tv == "boolean" then
-                        m = m + 1 r[m] = f_indexed_boolean(k,v)
+                        m = m + 1 r[m] = f_indexed_boolean(0,v)
                     end
                 end
-            else
-                local tv = type(v)
-                if tv == "string" then
-                    m = m + 1 r[m] = f_hashed_string(k,v)
-                elseif tv == "number" then
-                    m = m + 1 r[m] = f_hashed_number(k,v)
-                elseif tv == "table" then
-                    m = m + 1 r[m] = f_hashed_table(k)
-                    fastserialize(v)
-                elseif tv == "boolean" then
-                    m = m + 1 r[m] = f_hashed_boolean(k,v)
+                for i=1,n do
+                    local v  = t[i]
+                    local tv = type(v)
+                    if tv == "string" then
+                        m = m + 1 r[m] = f_ordered_string(v)
+                    elseif tv == "number" then
+                        m = m + 1 r[m] = f_ordered_number(v)
+                    elseif tv == "table" then
+                        fastserialize(v)
+                    elseif tv == "boolean" then
+                        m = m + 1 r[m] = f_ordered_boolean(v)
+                    end
                 end
             end
+            -- hm, can't we avoid this ... lua should have a way to check if there
+            -- is a hash part
+            for k, v in next, t do
+                local tk = type(k)
+                if tk == "number" then
+                    if k > n or k < 0 then
+                        local tv = type(v)
+                        if tv == "string" then
+                            m = m + 1 r[m] = f_indexed_string(k,v)
+                        elseif tv == "number" then
+                            m = m + 1 r[m] = f_indexed_number(k,v)
+                        elseif tv == "table" then
+                            m = m + 1 r[m] = f_indexed_table(k)
+                            fastserialize(v)
+                        elseif tv == "boolean" then
+                            m = m + 1 r[m] = f_indexed_boolean(k,v)
+                        end
+                    end
+                else
+                    local tv = type(v)
+                    if tv == "string" then
+                        m = m + 1 r[m] = f_hashed_string(k,v)
+                    elseif tv == "number" then
+                        m = m + 1 r[m] = f_hashed_number(k,v)
+                    elseif tv == "table" then
+                        m = m + 1 r[m] = f_hashed_table(k)
+                        fastserialize(v)
+                    elseif tv == "boolean" then
+                        m = m + 1 r[m] = f_hashed_boolean(k,v)
+                    end
+                end
+            end
+            m = m + 1
+            if outer then
+                r[m] = "}"
+            else
+                r[m] = "},"
+            end
+            return r
         end
-        m = m + 1
-        if outer then
-            r[m] = "}"
-        else
-            r[m] = "},"
-        end
-        return r
+        return concat(fastserialize(t,true))
     end
-    return concat(fastserialize(t,true))
+
+else
+
+ -- local f_v = formatters["[%q]=%q,"]
+ -- local f_t = formatters["[%q]="]
+ -- local f_q = formatters["%q,"]
+
+    function table.fastserialize(t,prefix) -- todo, move local function out
+        local r = { type(prefix) == "string" and prefix or "return" }
+        local m = 1
+        local function fastserialize(t,outer) -- no mixes
+            local n = #t
+            m = m + 1
+            r[m] = "{"
+            if n > 0 then
+                local v = t[0]
+                if v then
+                    m = m + 1
+                    r[m] = "[0]="
+                    if type(v) == "table" then
+                        fastserialize(v)
+                    else
+                        r[m] = format("%q,",v)
+                    end
+                end
+                for i=1,n do
+                    local v = t[i]
+                    m = m + 1
+                    if type(v) == "table" then
+                        r[m] = format("[%i]=",i)
+                        fastserialize(v)
+                    else
+                        r[m] = format("[%i]=%q,",i,v)
+                    end
+                end
+            end
+            -- hm, can't we avoid this ... lua should have a way to check if there
+            -- is a hash part
+            for k, v in next, t do
+                local tk = type(k)
+                if tk == "number" then
+                    if k > n or k < 0 then
+                        m = m + 1
+                        if type(v) == "table" then
+                            r[m] = format("[%i]=",k)
+                            fastserialize(v)
+                        else
+                            r[m] = format("[%i]=%q,",k,v)
+                        end
+                    end
+                else
+                    m = m + 1
+                    if type(v) == "table" then
+                        r[m] = format("[%q]=",k)
+                        fastserialize(v)
+                    else
+                        r[m] = format("[%q]=%q,",k,v)
+                    end
+                end
+            end
+            m = m + 1
+            if outer then
+                r[m] = "}"
+            else
+                r[m] = "},"
+            end
+            return r
+        end
+        return concat(fastserialize(t,true))
+    end
+
 end
 
 function table.deserialize(str)
@@ -411,7 +502,7 @@ function table.deserialize(str)
     return code
 end
 
--- inspect(table.fastserialize { a = 1, b = { 4, { 5, 6 } }, c = { d = 7, e = 'f"g\nh' } })
+-- inspect(table.fastserialize { a = 1, b = { [0]=4, { 5, 6 } }, c = { d = 7, e = 'f"g\nh' } })
 
 function table.load(filename,loader)
     if filename then
@@ -517,34 +608,34 @@ end
 -- husayni.tma  : 0.28 -> 0.19
 
 local f_start_key_idx     = formatters["%w{"]
-local f_start_key_num     = formatters["%w[%s]={"]
+local f_start_key_num     = JITSUPPORTED and formatters["%w[%s]={"] or formatters["%w[%q]={"]
 local f_start_key_str     = formatters["%w[%q]={"]
 local f_start_key_boo     = formatters["%w[%l]={"]
 local f_start_key_nop     = formatters["%w{"]
 
 local f_stop              = formatters["%w},"]
 
-local f_key_num_value_num = formatters["%w[%s]=%s,"]
-local f_key_str_value_num = formatters["%w[%Q]=%s,"]
-local f_key_boo_value_num = formatters["%w[%l]=%s,"]
+local f_key_num_value_num = JITSUPPORTED and formatters["%w[%s]=%s,"] or formatters["%w[%s]=%q,"]
+local f_key_str_value_num = JITSUPPORTED and formatters["%w[%Q]=%s,"] or formatters["%w[%Q]=%q,"]
+local f_key_boo_value_num = JITSUPPORTED and formatters["%w[%l]=%s,"] or formatters["%w[%l]=%q,"]
 
-local f_key_num_value_str = formatters["%w[%s]=%Q,"]
+local f_key_num_value_str = JITSUPPORTED and formatters["%w[%s]=%Q,"] or formatters["%w[%q]=%Q,"]
 local f_key_str_value_str = formatters["%w[%Q]=%Q,"]
 local f_key_boo_value_str = formatters["%w[%l]=%Q,"]
 
-local f_key_num_value_boo = formatters["%w[%s]=%l,"]
+local f_key_num_value_boo = JITSUPPORTED and formatters["%w[%s]=%l,"] or formatters["%w[%q]=%l,"]
 local f_key_str_value_boo = formatters["%w[%Q]=%l,"]
 local f_key_boo_value_boo = formatters["%w[%l]=%l,"]
 
-local f_key_num_value_not = formatters["%w[%s]={},"]
+local f_key_num_value_not = JITSUPPORTED and formatters["%w[%s]={},"] or formatters["%w[%q]={},"]
 local f_key_str_value_not = formatters["%w[%Q]={},"]
 local f_key_boo_value_not = formatters["%w[%l]={},"]
 
-local f_key_num_value_seq = formatters["%w[%s]={ %, t },"]
+local f_key_num_value_seq = JITSUPPORTED and formatters["%w[%s]={ %, t },"] or formatters["%w[%q]={ %, t },"]
 local f_key_str_value_seq = formatters["%w[%Q]={ %, t },"]
 local f_key_boo_value_seq = formatters["%w[%l]={ %, t },"]
 
-local f_val_num           = formatters["%w%s,"]
+local f_val_num           = JITSUPPORTED and formatters["%w%s,"] or formatters["%w%q,"]
 local f_val_str           = formatters["%w%Q,"]
 local f_val_boo           = formatters["%w%l,"]
 local f_val_not           = formatters["%w{},"]
@@ -556,8 +647,6 @@ local f_table_name        = formatters["%s={"]
 local f_table_direct      = formatters["{"]
 local f_table_entry       = formatters["[%Q]={"]
 local f_table_finish      = formatters["}"]
-
------ f_string            = formatters["%q"]
 
 local spaces = utilities.strings.newrepeater(" ")
 
@@ -631,6 +720,7 @@ local function serialize(root,name,specification)
 
     local t    -- = { }
     local n       = 1
+ -- local m       = 0 -- no gain
     local unknown = false
 
     local function do_serialize(root,name,depth,level,indexed)
@@ -761,6 +851,12 @@ local function serialize(root,name,specification)
                         n = n + 1 t[n] = f_key_str_value_str(depth,tostring(k),tostring(v))
                     end
                 end
+             -- if n > 100000 then -- no gain
+             --     local k = m + 1
+             --     t[k] = concat(t,"\n",k,n)
+             --     n = k
+             --     m = k
+             -- end
             end
         end
         if level > 0 then
@@ -809,6 +905,7 @@ local function serialize(root,name,specification)
     n = n + 1
     t[n] = f_table_finish()
     return concat(t,"\n")
+ -- return concat(t,"\n",1,n) -- no gain
 end
 
 table.serialize = serialize
@@ -872,3 +969,52 @@ function table.ordered(t)
         return function() end
     end
 end
+
+-- function table.randomremove(t,n)
+--     if not n then
+--         n = #t
+--     end
+--     if n > 0 then
+--         return remove(t,random(1,n))
+--     end
+-- end
+
+function combine(target,source)
+    -- no copy so if that is needed one needs to deepcopy source first
+    if target then
+        for k, v in next, source do
+            if type(v) == "table" then
+               target[k] = combine(target[k],source[k])
+            else
+               target[k] = v
+            end
+        end
+        return target
+    else
+        return source
+    end
+end
+
+table.combine = combine
+
+-- If needed we can add something (some discussion on the list but I'm not sure if
+-- it makes sense because merging such mixed tables is quite unusual.
+--
+-- function table.himerged(...)
+--     local result = { }
+--     local r      = 0
+--     for i=1,select("#",...) do
+--         local s = select(i,...)
+--         if s then
+--             for k, v in next, s do
+--                 if type(k) == "number"  then
+--                     r = r + 1
+--                     result[r] = v
+--                 else
+--                     result[k] = v
+--                 end
+--             end
+--         end
+--     end
+--     return result
+-- end
