@@ -34,7 +34,7 @@ l3build save -cconfig-lthooks2 \
 
 
 
-L3build save -cconfig-lthooks \
+l3build save -cconfig-lthooks \
    ltcmdhooks-001 \
    ltcmdhooks-002 \
    ltcmdhooks-003 \
