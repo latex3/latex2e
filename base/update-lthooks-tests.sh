@@ -111,7 +111,8 @@ l3build save -cconfig-lthooks \
    github-0648 \
    github-0648b \
    github-0818 \
-   github-1459
+   github-1459 \
+   github-1591
 
 
 
