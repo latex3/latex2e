@@ -59,7 +59,8 @@ l3build save -cconfig-OR \
 	memoir-001 \
 	scrartcl-001 \
 	tlb-multicol-marks-tagged \
-	tagging-001
+	tagging-001 \
+	tagging-002-longtable
 
 l3build save -cconfig-OR-luatex \
 	footmisc-003 \
