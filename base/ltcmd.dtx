@@ -326,6 +326,13 @@
 %    \end{macrocode}
 % \end{variable}
 %
+% \begin{variable}{\l_@@_verb_safe_bool}
+%   To track if optional arguments should be collected \enquote{verbatim safe}.
+%    \begin{macrocode}
+\bool_new:N \l_@@_verb_safe_bool
+%    \end{macrocode}
+% \end{variable}
+%
 % \begin{variable}{\q_@@_recursion_tail,\q_@@_recursion_stop}
 % \begin{macro}{\@@_if_recursion_tail_stop_do:Nn}
 % \begin{macro}{\@@_use_i_delimit_by_q_recursion_stop:nw}
@@ -1045,6 +1052,7 @@
     \bool_set_false:N \l_@@_some_obey_spaces_bool
     \bool_set_false:N \l_@@_some_long_bool
     \bool_set_false:N \l_@@_some_short_bool
+    \bool_set_false:N \l_@@_verb_safe_bool
     \@@_normalize_arg_spec_loop:n #1
       \q_recursion_tail \q_recursion_tail \q_recursion_tail \q_recursion_stop
     \int_compare:nNnT \l_@@_current_arg_int > 9
@@ -1202,6 +1210,12 @@
           { = { \tl_trim_spaces:n {#1} } }
       }
   }
+\cs_new_protected:cpn { @@_normalize_type_*:w } #1
+  {
+    \@@_normalize_type_aux:NnNn * {#1}
+      \l_@@_verb_safe_bool
+      { \bool_set_true:N \l_@@_verb_safe_bool }
+  }
 \cs_new_protected:Npn \@@_normalize_type_aux:NnNn #1#2#3#4
   {
     \quark_if_recursion_tail_stop_do:nn {#2} { \@@_bad_arg_spec:wn }
@@ -1331,27 +1345,39 @@
 % \end{macro}
 %
 % \begin{macro}{\@@_normalize_type_b:w}
-%   This argument type is not allowed for commands.  This is only
+% \changes{v1.3a}{2025-01-22}{Extend to cover \texttt{f}-type grabbing}
+% \begin{macro}{\@@_normalize_type_f:w}
+% \changes{v1.3a}{2025-01-22}{New function}
+% \begin{macro}{\@@_normalize_type_b_or_f:nn}
+% \changes{v1.3a}{2025-01-22}{New function}
+%   These argument types are not allowed for commands.  They are only
 %   allowed at the end of the argument specification, hence we check
 %   that |#1| is the end.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_normalize_type_b:w #1
+  { \@@_normalize_type_b_or_f:nn {#1} { b } }
+\cs_new_protected:Npn \@@_normalize_type_f:w #1
+  { \@@_normalize_type_b_or_f:nn {#1} { f } }
+\cs_new_protected:Npn \@@_normalize_type_b_or_f:nn #1#2
   {
     \bool_if:NF \l_@@_environment_bool
       {
         \msg_error:nnxx { cmd } { invalid-command-arg }
-          { \@@_environment_or_command: } { b }
+          { \@@_environment_or_command: } {#2}
         \@@_bad_def:wn
       }
     \tl_clear:N \l_@@_last_delimiters_tl
-    \@@_add_arg_spec:n { b }
+    \@@_add_arg_spec:n {#2}
     \quark_if_recursion_tail_stop:n {#1}
-    \msg_error:nnxx { cmd } { arg-after-body }
+    \msg_error:nnxxx { cmd } { arg-after-body }
+      {#2}
       { \@@_environment_or_command: }
       { \tl_to_str:n {#1} }
     \@@_bad_def:wn
   }
 %    \end{macrocode}
+% \end{macro}
+% \end{macro}
 % \end{macro}
 %
 % \begin{macro}{\@@_single_token_check:n}
@@ -1472,6 +1498,7 @@
 %  \changes{v1.2c}{2023/12/22}
 %          {Clarify error message when \texttt{!} prefix is applied to
 %           non-trailing opt-arg (gh/1198)}
+% \changes{v1.3a}{2025-01-22}{Extend to support \texttt{f}-type grabbing}
 %   When adding an argument to the argument specification, set the
 %   \texttt{some_long} or \texttt{some_short} booleans as appropriate
 %   and clear the booleans keeping track of |+|, |!| and |=| markers.
@@ -1501,8 +1528,15 @@
       { \bool_set_true:N \l_@@_some_short_bool }
     \tl_put_right:Nx \l_@@_arg_spec_tl
       {
-        \bool_if:NT \l_@@_long_bool { + }
+        \bool_lazy_and:nnT
+          { \l_@@_long_bool }
+          { ! \str_if_eq_p:nn {#1} { f } }
+          { + }
         \bool_if:NT \l_@@_obey_spaces_bool { ! }
+        \bool_lazy_or:nnT
+          { \l_@@_verb_safe_bool }
+          { \str_if_eq_p:nn {#1} { f } }
+          { * }
         \exp_not:n {#1}
       }
     \bool_set_false:N \l_@@_long_bool
@@ -1543,6 +1577,7 @@
     \bool_set_false:N \l_@@_long_bool
     \bool_set_false:N \l_@@_obey_spaces_bool
     \bool_set_false:N \l_@@_suppress_strip_bool
+    \bool_set_false:N \l_@@_verb_safe_bool
     \int_zero:N \l_@@_m_args_int
     \bool_set_false:N \l_@@_defaults_bool
     \tl_clear:N \l_@@_defaults_tl
@@ -1657,16 +1692,40 @@
 %    \end{macrocode}
 % \end{macro}
 %
+% \begin{macro}{\@@_add_type_*:w}
+% \changes{v1.3a}{2025-01-22}{New macro}
+%    \begin{macrocode}
+\cs_new_protected:cpn { @@_add_type_*:w }
+  {
+    \@@_flush_m_args:
+    \bool_set_true:N \l_@@_verb_safe_bool
+    \bool_set_true:N \l_@@_prefixed_bool
+    \@@_prepare_signature_bypass:N
+  }
+%    \end{macrocode}
+% \end{macro}
+%
 % \begin{macro}{\@@_add_type_b:w}
+% \changes{v1.3a}{2025-01-22}{Extend to cover \texttt{f}-type grabbing}
+% \begin{macro}{\@@_add_type_f:w}
+% \changes{v1.3a}{2025-01-22}{New function}
+% \begin{macro}{\@@_add_type_b_or_f:N}
+% \changes{v1.3a}{2025-01-22}{New function}
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_add_type_b:w
+  { \@@_add_type_b_or_f:N b }
+\cs_new_protected:Npn \@@_add_type_f:w
+  { \@@_add_type_b_or_f:N f }
+\cs_new_protected:Npn \@@_add_type_b_or_f:N #1
   {
     \@@_flush_m_args:
     \@@_add_default:
-    \@@_add_grabber:N b
+    \@@_add_grabber:N #1
     \@@_prepare_signature:N
   }
 %    \end{macrocode}
+% \end{macro}
+% \end{macro}
 % \end{macro}
 %
 % \begin{macro}{\@@_add_type_D:w}
@@ -1842,6 +1901,7 @@
 %   ignored when looking for that optional argument.
 % \changes{v1.0g}{2021/08/07}
 %         {Replicate argument processors for all embellishments (gh/639)}
+% \changes{v1.3a}{2025-01-22}{Extend to support \texttt{f}-type grabbing}
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_add_grabber:N #1
   {
@@ -1856,12 +1916,17 @@
               { \l_@@_suppress_strip_bool }
               { \str_if_eq_p:nn {#1} { D } }
               { _no_strip }
+            \bool_lazy_and:nnT
+              { \l_@@_verb_safe_bool }
+              { \str_if_eq_p:nn {#1} { D } }
+              { _verb_safe }
             :w
           }
       }
     \bool_set_false:N \l_@@_long_bool
     \bool_set_false:N \l_@@_obey_spaces_bool
     \bool_set_false:N \l_@@_suppress_strip_bool
+    \bool_set_false:N \l_@@_verb_safe_bool
     \tl_put_right:Nx \l_@@_process_all_tl
       {
         {
@@ -3025,26 +3090,36 @@
       {
         \tl_map_inline:nn { { } { _no_strip } }
           {
-            \cs_new_protected:cpe { @@_grab_D #1 ##1 ####1 :w }
-              ########1########2########3 \@@_run_code:
+            \tl_map_inline:nn { { } { _verb_safe } }
               {
-                \exp_not:N \@@_grab_D_aux:NNnNNN
-                  ########1 ########2 {########3}
-                  \str_if_eq:nnTF {#1} { _long }
-                    \cs_set_protected:Npn
-                    \cs_set_protected_nopar:Npn
-                  \str_if_eq:nnTF {##1} { _obey_spaces }
-                    { \exp_not:N \@@_peek_meaning_remove:NTF }
-                    { \exp_not:N \@@_peek_nonspace_remove:NTF }
-                  \str_if_eq:nnTF {####1} { _no_strip }
-                    { \exp_not:N \use_none:n }
-                    { \exp_not:N \use_ii:nn }
+                \cs_new_protected:cpe { @@_grab_D #1 ##1 ####1 ########1 :w }
+                  ################1################2################3
+                  \@@_run_code:
+                  {
+                    \exp_not:N \@@_grab_D_aux:NNnNNNN
+                      ################1 ################2 {################3}
+                      \str_if_eq:nnTF {#1} { _long }
+                        \cs_set_protected:Npn
+                        \cs_set_protected_nopar:Npn
+                      \str_if_eq:nnTF {##1} { _obey_spaces }
+                        { \exp_not:N \@@_peek_meaning_remove:NTF }
+                        { \exp_not:N \@@_peek_nonspace_remove:NTF }
+                      \str_if_eq:nnTF {####1} { _no_strip }
+                        { \exp_not:N \use_none:n }
+                        { \exp_not:N \use_ii:nn }
+                      \str_if_eq:nnTF {########1} { _verb_safe }
+                        { \exp_not:N \use:n }
+                        { \exp_not:N \use_none:n }
+                   }
                }
           }
       }
   }
 %    \end{macrocode}
-% \begin{macro}{\@@_grab_D_aux:NNnNNN}
+% \begin{macro}{\@@_grab_D_aux:NNnNNNN}
+% \changes{v1.3a}{2025-01-222}{Extend to support \texttt{f}-type grabbing}
+% \begin{macro}{\@@_grab_D_verb_safe:NN}
+% \changes{v1.3a}{2025-01-22}{New macro}
 % \begin{macro}{\@@_grab_D_aux:NNnNN}
 %   This is a bit complicated. The idea is that, in order to check for
 %   nested optional argument tokens (\texttt{[[...]]} and so on) the
@@ -3054,12 +3129,51 @@
 %   prevents loss of braces, and there is then a test to see if there are
 %   nested delimiters to handle.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_grab_D_aux:NNnNNN #1#2#3#4#5#6
+\group_begin:
+  \char_set_catcode_other:N \^^M
+  \cs_new_protected:Npn \@@_grab_D_aux:NNnNNNN #1#2#3#4#5#6#7
+    {
+      \@@_grab_D_aux:NNnNN #1#2 {#3} #4 #6
+      #7
+        {
+          \group_begin:
+            \@@_grab_D_verb_safe:NN #1#5
+        }
+      #5 #1
+        {
+          #7 { \group_end: }
+          \@@_grab_D_call:Nw #1
+        }
+        {
+          #7 { \group_end: }
+          \@@_add_arg:o \c_novalue_tl
+        }
+    }
+\group_end:
+%    \end{macrocode}
+%   The only awkwardness here is the need to preserve the catcode of the search
+%   token: this is done low-level for performance reasons. Only values that
+%   are realistic are included. As this does not cover spaces when they are
+%   skipped that has to be covered separately.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_D_verb_safe:NN #1#2
   {
-    \@@_grab_D_aux:NNnNN #1#2 {#3} #4 #6
-    #5 #1
-      { \@@_grab_D_call:Nw #1 }
-      { \@@_add_arg:o \c_novalue_tl }
+    \cs_set_eq:NN \do \char_set_catcode_other:N
+    \dospecials
+    \char_set_catcode_other:N \^^M
+    \token_if_eq_meaning:NNT #2 \@@_peek_nonspace_remove:NTF
+      { \char_set_catcode_space:n { `\  } }
+    \use:c
+      {
+        char_set_catcode_
+        \if_catcode:w \c_math_toggle_token #1 math_toggle \else:
+        \if_catcode:w ^ #1 math_superscript \else:
+        \if_catcode:w \c_math_subscript_token #1 math_subscript \else:
+        \if_catcode:w A #1 letter \else:
+        other \fi: \fi: \fi: \fi:
+        :N
+      }
+        #1
   }
 %    \end{macrocode}
 %   Inside the \enquote{standard} grabber, there is a test to see if the
@@ -3091,6 +3205,7 @@
       }
   }
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 % \end{macro}
@@ -3281,6 +3396,132 @@
 % \end{macro}
 % \end{macro}
 %
+% \begin{macro}{\@@_grab_f:w}
+% \changes{v1.3a}{2025-01-22}{New \texttt{f}-type grabbing function}
+% \begin{macro}{\@@_grab_f_obey_spaces:w}
+% \begin{macro}{\@@_grab_f_aux:n}
+% \begin{macro}{\@@_grab_f_aux:w}
+% \begin{macro}{\@@_grab_f_check:w}
+% \begin{macro}{\@@_grab_f_loop:w}
+% \begin{macro}{\@@_grab_f_end:nn}
+% \begin{macro}{\@@_grab_f_end:n}
+% \begin{macro}{\@@_grab_f_end_auxi:w}
+% \begin{macro}{\@@_grab_f_end_auxii:w}
+% \begin{macro}{\@@_grab_f_end_auxiii:w}
+%   Collecting an environment body verbatim shares some ideas with the
+%   \texttt{v}-type grabber, and others with the standard \texttt{filecontents}
+%   environment. The start is to set the end-of-line to a predictable value
+%   and to deactivate the specials. We then define the end marker: this
+%   has to have the correct category codes, so is a token list not a string
+%   (\texttt{end} and the end-of-env name are catcode-11). We use this to set
+%   up the end-of-env test, then hand over to an auxiliary.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_grab_f:w #1 \@@_run_code:
+  {
+    \bool_set_false:N \l_@@_obey_spaces_bool
+    \@@_grab_f_aux:n {#1}
+  }
+\cs_new_protected:Npn \@@_grab_f_obey_spaces:w #1 \@@_run_code:
+  {
+    \bool_set_true:N \l_@@_obey_spaces_bool
+    \@@_grab_f_aux:n {#1}
+  }
+\cs_new_protected:Npn \@@_grab_f_aux:n #1
+  {
+    \tl_set:Nn \l_@@_signature_tl {#1}
+    \group_begin:
+      \tl_clear:N \l_@@_v_arg_tl
+      \tex_escapechar:D = 92 \scan_stop:
+      \tex_endlinechar:D = `\^^M \scan_stop:
+      \cs_set_eq:NN \do \char_set_catcode_other:N
+      \dospecials
+      \tl_set:Ne \l_@@_tmpa_tl
+        {
+          \c_backslash_str end
+            \c_left_brace_str \@currenvir \c_right_brace_str
+        }
+      \use:e
+        {
+          \cs_set_protected:Npn \@@_grab_f_check:w
+            ##1 \l_@@_tmpa_tl ##2 \l_@@_tmpa_tl ##3
+            \scan_stop:
+        }
+        {
+          \tl_if_empty:nTF {##3}
+            {
+              \tl_put_right:Nn \l_@@_v_arg_tl
+                {
+                  ##1
+                  \obeyedline
+                }
+              \@@_grab_f_loop:w
+            }
+            { \@@_grab_f_end:nn {##1} {##2} }
+        }
+      \@@_grab_f_aux:w
+  }
+%    \end{macrocode}
+%   To allow for the need to change the category code of end-of-lines, we
+%   put this in a small auxiliary.
+%    \begin{macrocode}
+\group_begin:
+  \char_set_catcode_other:N \^^M %
+  \cs_new_protected:Npn \@@_grab_f_aux:w %
+    { %
+      \cs_set_protected:Npe \@@_grab_f_loop:w ##1 ^^M %
+        { %
+          \@@_grab_f_check:w ##1 %
+            \l_@@_tmpa_tl %
+            \l_@@_tmpa_tl %
+            \scan_stop: %
+        } %
+      \char_set_catcode_other:N \^^M %
+      \@@_grab_f_loop:w %
+    } %
+\group_end: %
+\cs_new_protected:Npn \@@_grab_f_check:w { }
+\cs_new_protected:Npn \@@_grab_f_loop:w { }
+\cs_new_protected:Npn \@@_grab_f_end:nn #1#2
+  {
+      \tl_if_blank:nF {#1#2}
+        \ERROR
+    \exp_args:NNNo \group_end:
+    \tl_set:Nn \l_@@_v_arg_tl { \l_@@_v_arg_tl }
+    \@@_add_arg:x
+      {
+        \bool_if:NTF \l_@@_obey_spaces_bool
+          { \exp_not:V }
+          { \exp_args:NV \@@_grab_f_end:n }
+          \l_@@_v_arg_tl
+      }
+    \exp_args:NV \end \@currenvir
+  }
+%    \end{macrocode}
+%   Look for line markers at each end and tidy up if required.
+%    \begin{macrocode}
+\cs_new:Npn \@@_grab_f_end:n #1
+  {
+    \@@_grab_f_end_auxi:w \q_nil #1 \q_nil
+      \obeyedline \obeyedline \q_nil \q_stop
+  }
+\cs_new:Npn \@@_grab_f_end_auxi:w #1 \q_nil \obeyedline
+  { \@@_grab_f_end_auxii:w #1 \q_nil }
+\cs_new:Npn \@@_grab_f_end_auxii:w \q_nil #1 \obeyedline \q_nil
+  { \@@_grab_f_end_auxiii:w #1 \q_nil }
+\cs_new:Npn \@@_grab_f_end_auxiii:w #1 \q_nil #2 \q_stop
+  { \exp_not:n {#1} }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
 %
 % \begin{macro}{\@@_grab_m:w}
 % \begin{macro}{\@@_grab_m_long:w}
@@ -4726,12 +4967,13 @@
 % \changes{v1.0f}{2021/06/04}{Normalize various error messages}
 % \changes{v1.2c}{2023/12/22}
 %         {Generalize message \texttt{invalid-bang} (gh/1198)}
+% \changes{v1.3a}{2025-01-22}{Generalize message \texttt{arg-after-body}}
 %    \begin{macrocode}
 \msg_new:nnnn { cmd } { arg-after-body }
-  { Argument~type~'b'~must~be~last~in~#1. }
+  { Argument~type~'#1'~must~be~last~in~#2. }
   {
-    The~'b'~argument~type~must~come~last~but~it~is~followed~
-    by~'#2'~in~the~argument~specification.~This~is~not~allowed.
+    The~'#1'~argument~type~must~come~last~but~it~is~followed~
+    by~'#3'~in~the~argument~specification.~This~is~not~allowed.
     \c_@@_ignore_def_tl
   }
 \msg_new:nnnn { cmd } { bad-arg-spec }
@@ -4754,6 +4996,15 @@
     You~have~used~#2~
     with~a~command~that~was~never~defined.
     \c_@@_ignore_def_tl
+  }
+%    \end{macrocode}
+% \changes{v1.3a}{2025-01-22}{New message \texttt{chars-dropped-last-line}}
+%    \begin{macrocode}
+\msg_new:nnnn { cmd } { chars-dropped-last-line }
+  { Characters~'#1'~dropped~after~end~of~#2~environment. }
+  {
+    LaTeX~was~collecting~a~verbatim-like~environment,~and~the~characters~
+    '#1'~were~found~after~\end{#2}~on~the~last~line:~this~is~not~supported.
   }
 \msg_new:nnnn { cmd } { env-already-defined }
   { Environment~'#1'~already~defined. }
