@@ -1109,8 +1109,7 @@
 {
   \@@_debug_typeout:n{\l_@@_env_name_tl -env-start}
 %  
-  \SetTemplateKeys{blockenv}{display}{#1}
-%
+  \SetKnownTemplateKeys{blockenv}{display}{#1}
 %    \end{macrocode}
 %    We need to know later if we have nested blockenvs inside
 %    a flattened environment. Whenever we  start a new blockenv we
@@ -1201,7 +1200,15 @@
   \UseInstance{block}
               { \l_@@_block_instance_tl - \int_use:N
                 \g_block_nesting_depth_int }
-              {#1}
+              \UnusedTemplateKeys
+%    \end{macrocode}
+%    After this instance has been processed any remaining unused keys
+%    are in \cs{UnusedTemplateKeys} and we can continue with that as
+%    long as we do not call an instance that does unused key
+%    processing but we don't pass our keys on, so have to same its
+%    current value for now.
+%    \begin{macrocode}
+  \tl_set_eq:NN \l_@@_unused_blockenv_keys_tl \UnusedTemplateKeys
 %    \end{macrocode}
 %    After the block instance call the para and then inner (list)
 %    instance if either or both are
@@ -1233,7 +1240,25 @@
                        %   not clean use "o"?
                        { - \int_use:N \l_@@_inner_level_counter_tl }
                   }
-                  {#1}
+                  \l_@@_unused_blockenv_keys_tl
+%    \end{macrocode}
+%    Again the instance may has processed a few keys
+%    \begin{macrocode}
+      \tl_set_eq:NN \l_@@_unused_blockenv_keys_tl \UnusedTemplateKeys
+    }
+%    \end{macrocode}
+%    At this point, the \cs{l_@@_unused_blockenv_keys_tl} token list
+%    should either be empty or it should only contain key suitable for
+%    the item template, but right now I don't have code to test for
+%    the latter, guess it would help if we have an interface fore
+%    this.
+%
+%    For now I handle that when the first item is encountered, but
+%    that isn't realy clean.\fmi{fix}
+%    \begin{macrocode}
+  \tl_if_empty:NF \l_@@_unused_blockenv_keys_tl
+    {
+       % check if only item template keys remain
     }
 %    \end{macrocode}
 %    We finish off with \cs{l_@@_final_code_tl} which defaults to
@@ -1485,7 +1510,7 @@
   parindent       = \l_@@_parindent_dim ,
 }
 {
-    \SetTemplateKeys{block}{display}{#1}
+    \SetKnownTemplateKeys{block}{display}{#1}
 %    \end{macrocode}
 %  \fmi{generalize heading usage (or drop?)}
 %    \begin{macrocode}
@@ -1695,7 +1720,7 @@
 %    if they should alter all items the right place would be the list
 %    environment. For this reason we need to store the values and then
 %    set them inside the \tn{item} template code using
-%    \tn{SetTemplateKeys} in the appropriate context (template type
+%    \tn{SetKnownTemplateKeys} in the appropriate context (template type
 %    and template name). This is done in
 %    \cs{@@_evaluate_saved_user_keys:nn}. The context is provided in
 %    the two arguments (because different list environments may use
@@ -1714,10 +1739,8 @@
 %\cs_new:Npn \@@_save_user_keys:n #1 {
 %  \tl_if_empty:nTF {#1}
 %     { \cs_set_eq:NN \@@_evaluate_saved_user_keys:nn \use_none:nn }
-%     {
-%       \cs_set:Npe \@@_evaluate_saved_user_keys:nn ##1##2
-%          { \SetTemplateKeys{##1}{##2}{ \exp_not:n{#1} } }
-%     }
+%     { \cs_set:Npe \@@_evaluate_saved_user_keys:nn ##1##2
+%          { \SetKnownTemplateKeys{##1}{##2}{ \exp_not:n{#1} }    }
 %}
 %    \end{macrocode}
 %  \end{macro}
@@ -1756,10 +1779,10 @@
 %  \changes{v0.8s}{2024/10/03}{Prepare \cs{@@_evaluate_saved_user_keys:nn}
 %            for use in \tn{item}}
 %    \begin{macrocode}
-  \tl_if_empty:nTF {#1}
+  \tl_if_empty:oTF {#1}
      { \cs_set_eq:NN \@@_evaluate_saved_user_keys:nn \use_none:nn }
      {
-       \SetTemplateKeys{list}{std}{#1}
+       \SetKnownTemplateKeys{list}{std}{#1}
 %    \end{macrocode}
 %    The setup for \cs{@@_evaluate_saved_user_keys:nn} is a bit trcky
 %    and has to be done with \cs{cs_set:Npe} even though we don't want
@@ -1778,7 +1801,19 @@
 %  resulting in very odd and puzzling behavior. 
 %    \begin{macrocode}
        \cs_set:Npe \@@_evaluate_saved_user_keys:nn ##1##2
-          { \SetTemplateKeys{##1}{##2}{ \exp_not:n{ #1 } } }
+          { \SetKnownTemplateKeys{##1}{##2}{
+              \exp_not:o { \UnusedTemplateKeys }
+            }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+            \exp_not:n {
+              \tl_if_empty:NF \UnusedTemplateKeys
+                 {
+                   \show  \UnusedTemplateKeys   % error situation
+                 }
+            }
+          }
      }
 %    \end{macrocode}
 %    Has this list a counter name defined in the instance?
@@ -1954,6 +1989,12 @@
 %            to make use of user keys on the list level}
 %    \begin{macrocode}
     \@@_evaluate_saved_user_keys:nn {item}{std} 
+%    \end{macrocode}
+%    We don't care if not all of the user key from the list level have
+%    been applied, but those explicitly set on the \cs{item} command
+%    should fit, so here we use the command that errors if it doesn't
+%    understand a key name:
+%    \begin{macrocode}
     \SetTemplateKeys{item}{std}{#1}
 %    \end{macrocode}
 %    
