@@ -3399,11 +3399,17 @@
 % \begin{macro}{\@@_grab_f:w}
 % \changes{v1.3a}{2025-01-22}{New \texttt{f}-type grabbing function}
 % \begin{macro}{\@@_grab_f_obey_spaces:w}
-% \begin{macro}{\@@_grab_f_aux:n}
-% \begin{macro}{\@@_grab_f_aux:w}
-% \begin{macro}{\@@_grab_f_check:w}
+% \begin{macro}{\@@_grab_f_start:n}
 % \begin{macro}{\@@_grab_f_loop:w}
-% \begin{macro}{\@@_grab_f_end:nn}
+% \begin{macro}{\@@_grab_f_auxi:w}
+% \begin{macro}{\@@_grab_f_auxii:w}
+% \begin{macro}{\@@_grab_f_auxiii:N}
+% \begin{macro}{\@@_grab_f_auxiv:}
+% \begin{macro}{\@@_grab_f_auxv:}
+% \begin{macro}{\@@_grab_f_auxvi:N}
+% \begin{macro}{\@@_grab_f_auxvii:}
+% \begin{macro}{\@@_grab_f_auxviii:}
+% \begin{macro}{\@@_grab_f_end:w}
 % \begin{macro}{\@@_grab_f_end:n}
 % \begin{macro}{\@@_grab_f_end_auxi:w}
 % \begin{macro}{\@@_grab_f_end_auxii:w}
@@ -3411,22 +3417,19 @@
 %   Collecting an environment body verbatim shares some ideas with the
 %   \texttt{v}-type grabber, and others with the standard \texttt{filecontents}
 %   environment. The start is to set the end-of-line to a predictable value
-%   and to deactivate the specials. We then define the end marker: this
-%   has to have the correct category codes, so is a token list not a string
-%   (\texttt{end} and the end-of-env name are catcode-11). We use this to set
-%   up the end-of-env test, then hand over to an auxiliary.
+%   and to deactivate the specials.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_grab_f:w #1 \@@_run_code:
   {
     \bool_set_false:N \l_@@_obey_spaces_bool
-    \@@_grab_f_aux:n {#1}
+    \@@_grab_f_start:n {#1}
   }
 \cs_new_protected:Npn \@@_grab_f_obey_spaces:w #1 \@@_run_code:
   {
     \bool_set_true:N \l_@@_obey_spaces_bool
-    \@@_grab_f_aux:n {#1}
+    \@@_grab_f_start:n {#1}
   }
-\cs_new_protected:Npn \@@_grab_f_aux:n #1
+\cs_new_protected:Npn \@@_grab_f_start:n #1
   {
     \tl_set:Nn \l_@@_signature_tl {#1}
     \group_begin:
@@ -3435,71 +3438,180 @@
       \tex_endlinechar:D = `\^^M \scan_stop:
       \cs_set_eq:NN \do \char_set_catcode_other:N
       \dospecials
-      \tl_set:Ne \l_@@_tmpa_tl
-        {
-          \c_backslash_str end
-            \c_left_brace_str \@currenvir \c_right_brace_str
-        }
-      \use:e
-        {
-          \cs_set_protected:Npn \@@_grab_f_check:w
-            ##1 \l_@@_tmpa_tl ##2 \l_@@_tmpa_tl ##3
-            \scan_stop:
-        }
-        {
-          \tl_if_empty:nTF {##3}
-            {
-              \tl_put_right:Nn \l_@@_v_arg_tl
-                {
-                  ##1
-                  \obeyedline
-                }
-              \@@_grab_f_loop:w
-            }
-            { \@@_grab_f_end:nn {##1} {##2} }
-        }
-      \@@_grab_f_aux:w
+      \char_set_catcode_other:n { `\^^M }
+      \@@_grab_f_loop:w
   }
 %    \end{macrocode}
-%   To allow for the need to change the category code of end-of-lines, we
-%   put this in a small auxiliary.
+%   Notice here and below that we cannot use |\token_to_str:N \end| as that
+%   would have the wrong category codes for the letters.
 %    \begin{macrocode}
 \group_begin:
   \char_set_catcode_other:N \^^M %
-  \cs_new_protected:Npn \@@_grab_f_aux:w %
+  \cs_new_protected:Npe \@@_grab_f_loop:w #1 ^^M %
     { %
-      \cs_set_protected:Npe \@@_grab_f_loop:w ##1 ^^M %
+      \exp_not:N \@@_grab_f_auxi:w #1 %
+        \c_backslash_str end %
+        \scan_stop: %
+    } %
+\group_end:
+%    \end{macrocode}
+%   We need to see if the current line contains |\end| followed by the name
+%   of the current environment. To do that and allow for spaces, we have to
+%   work stepwise. First, establish if there is an |\end| at all: remember that
+%   here we are dealing with \enquote{other} tokens. Whether these is an
+%   |\end| or not, the tokens \emph{before} it form part of the line.
+%    \begin{macrocode}
+\use:e
+  {
+    \cs_new_protected:Npn \exp_not:N \@@_grab_f_auxi:w
+      #1 \c_backslash_str end #2 \scan_stop:
+  }
+  {
+    \tl_put_right:Nn \l_@@_v_arg_tl {#1}
+    \tl_if_empty:nTF {#2}
+      {
+        \tl_put_right:Nn \l_@@_v_arg_tl { \obeyedline }
+        \@@_grab_f_loop:w
+      }
+      { \@@_grab_f_auxii:w #2 \scan_stop: }
+  }
+%    \end{macrocode}
+%   There is an |\end|, so we now remove the trailing marker we needed
+%   to do the test. This is stripped off, then we need to examine the
+%   rest of the line one token at a time: see |verbatim.dtx| for the
+%   inspiration. Notice that we use |^^M| here as the end marker: this allows
+%   looping to look for multiple |\end| entries in the line.
+%    \begin{macrocode}
+\group_begin:
+  \char_set_catcode_other:N \^^M %
+  \use:e %
+    { %
+      \cs_new_protected:Npe \exp_not:N \@@_grab_f_auxii:w %
+        #1 \c_backslash_str end \scan_stop: %
+    } %
+    { %
+      \tl_set:Nn \exp_not:N \l_@@_tmpa_tl
+        { \c_backslash_str end } %
+      \exp_not:N \@@_grab_f_auxiii:N #1 ^^M %
+    } %
+%    \end{macrocode}
+%   Within the line, we need to collect up the tokens: if we do not find
+%   the end-of-environment argument, we will need those to reinsert. There
+%   are three special cases here: |^^M| (end of line: tidy up and back to
+%   the main loop), \verb*| | (possibly skip over) and |{| (start the inner
+%   loop). Anything else means we move back to examine the rest of the line
+%   for any more |\end| entries.
+%    \begin{macrocode}
+  \cs_new_protected:Npn \@@_grab_f_auxiii:N #1 %
+    { %
+      \token_case_charcode:NnF #1 %
         { %
-          \@@_grab_f_check:w ##1 %
-            \l_@@_tmpa_tl %
-            \l_@@_tmpa_tl %
-            \scan_stop: %
+          ^^M %
+            { \@@_grab_f_auxiv: } %
+          \c_space_token %
+            { %
+             \tl_put_right:Nn \l_@@_tmpa_tl {#1} %
+             \@@_grab_f_auxiii:N %
+            } %
+          \c_group_begin_token %
+            { %
+              \tl_set:Nn \l_@@_tmpb_tl {#1} %
+              \@@_grab_f_auxvi:N %
+            } %
         } %
-      \char_set_catcode_other:N \^^M %
-      \@@_grab_f_loop:w %
+        { \@@_grab_f_auxv: } %
+    } %
+\group_end:
+\cs_new_protected:Npn \@@_grab_f_auxiv:
+  {
+    \tl_put_right:Ne \l_@@_v_arg_tl
+      {
+        \exp_not:V \l_@@_tmpa_tl
+        \exp_not:N \obeyedline
+      }
+    \@@_grab_f_loop:w
+  }
+\cs_new_protected:Npn \@@_grab_f_auxv:
+  {
+    \tl_put_right:NV \l_@@_v_arg_tl \l_@@_tmpa_tl
+    \@@_grab_f_loop:w
+  }
+%    \end{macrocode}
+%   In the inner loop, we again have only a few special cases. First, we could
+%   again have |^^M|, in which case we tidy up using a common auxiliary. Second,
+%   we check for the escape char: this cannot happen inside the end of an
+%   environment and means we loop, re-inserting the token. Finally, we have
+%   |}|, where we need to move on to check what has been collected. Otherwise,
+%   collect up and loop. Notice here that the inner loop needs to
+%   collect tokens separately: this leaves any spaces after |\end| in
+%   \cs{l_@@_tmpa_tl}, so we can test \cs{l_@@_tmpb_tl} directly.
+%    \begin{macrocode}
+\group_begin:
+  \char_set_catcode_other:N \^^M %
+  \cs_new_protected:Npe \@@_grab_f_auxvi:N #1 %
+    { %
+      \exp_not:N \token_case_charcode:NnF #1 %
+        { %
+          ^^M %
+            {
+              \exp_not:N \@@_grab_f_auxvii: %
+              \exp_not:N \@@_grab_f_auxiv: %
+            }%
+          \c_backslash_str %
+            { %
+              \exp_not:N \@@_grab_f_auxvii: %
+              \exp_not:N \@@_grab_f_auxv: #1
+            } %
+         \c_group_end_token %
+           { %
+             \tl_put_right:Nn \exp_not:N \l_@@_tmpb_tl {#1} %
+             \exp_not:N \@@_grab_f_auxviii: %
+           } %
+        } %
+        { %
+          \tl_put_right:Nn \exp_not:N \l_@@_tmpb_tl {#1} %
+          \exp_not:N \@@_grab_f_auxvi:N %
+        } %
     } %
 \group_end: %
-\cs_new_protected:Npn \@@_grab_f_check:w { }
-\cs_new_protected:Npn \@@_grab_f_loop:w { }
-\cs_new_protected:Npn \@@_grab_f_end:nn #1#2
+\cs_new_protected:Npn \@@_grab_f_auxvii:
+  { \tl_put_right:NV \l_@@_tmpa_tl \l_@@_tmpb_tl }
+\cs_new_protected:Npn \@@_grab_f_auxviii:
   {
-      \tl_put_right:Nn \l_@@_v_arg_tl {#1}
-      \tl_if_blank:nF {#2}
-        {
-          \msg_warning:nnee { cmd } { chars-dropped-last-line } { \exp_not:n {#2} }
-            { \exp_not:V \@currenvir }
-        }
-    \exp_args:NNNo \group_end:
-    \tl_set:Nn \l_@@_v_arg_tl { \l_@@_v_arg_tl }
-    \@@_add_arg:x
+    \str_if_eq:eeTF { \exp_not:V \l_@@_tmpb_tl } { { \@currenvir } }
+      { \@@_grab_f_end:w }
       {
-        \bool_if:NTF \l_@@_obey_spaces_bool
-          { \exp_not:V }
-          { \exp_args:NV \@@_grab_f_end:n }
-          \l_@@_v_arg_tl
+        \@@_grab_f_auxvii:
+        \@@_grab_f_auxv:
       }
-    \exp_args:NV \end \@currenvir
   }
+%    \end{macrocode}
+%   To end the collection, we clean up the last line: once again we need to
+%   find |^^M|. Once that is done, we can warn if there is anything left
+%   behind.
+%    \begin{macrocode}
+\group_begin:
+  \char_set_catcode_other:N \^^M %
+  \cs_new_protected:Npn \@@_grab_f_end:w #1 ^^M %
+    { %
+        \tl_if_blank:nF {#1} %
+          { %
+            \msg_warning:nnee { cmd } { chars-dropped-last-line }  %
+              { \exp_not:n {#1} }  %
+              { \exp_not:V \@currenvir } %
+          } %
+      \exp_args:NNNo \group_end: %
+      \tl_set:Nn \l_@@_v_arg_tl { \l_@@_v_arg_tl } %
+      \@@_add_arg:x %
+        { %
+          \bool_if:NTF \l_@@_obey_spaces_bool %
+            { \exp_not:V } %
+            { \exp_args:NV \@@_grab_f_end:n } %
+           \l_@@_v_arg_tl %
+        } %
+      \exp_args:NV \end \@currenvir %
+    } %
+\group_end: %
 %    \end{macrocode}
 %   Look for line markers at each end and tidy up if required.
 %    \begin{macrocode}
@@ -3515,6 +3627,12 @@
 \cs_new:Npn \@@_grab_f_end_auxiii:w #1 \q_nil #2 \q_stop
   { \exp_not:n {#1} }
 %    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 % \end{macro}
