@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.99j",       --TAGVERSION
-    date          = "2024-11-22", --TAGDATE
+    version       = "0.99l",       --TAGVERSION
+    date          = "2025-01-10", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -81,6 +81,9 @@ functions
  ltx.__tag.trace.show_prop: shows a prop
  ltx.__tag.trace.log
  ltx.__tag.trace.showspaces : boolean
+
+ ltx.tag.get_structnum: number, shows the current structure number
+ ltx.tag.get_structnum_next: number, shows the next structure number
 --]]
 
 local mctypeattributeid  = luatexbase.new_attribute ("g__tag_mc_type_attr")
@@ -127,6 +130,7 @@ local MATH           = node.id("math")
 local explicit_disc = 1
 local regular_disc = 3
 ltx             = ltx        or { }
+ltx.tag         = ltx.tag       or { } -- user commands
 ltx.__tag          = ltx.__tag        or { }
 ltx.__tag.mc       = ltx.__tag.mc     or  { } -- mc data
 ltx.__tag.struct   = ltx.__tag.struct or  { } -- struct data
@@ -138,6 +142,28 @@ ltx.__tag.page     = ltx.__tag.page   or  { } -- page data, currently only i->{0
 ltx.__tag.trace    = ltx.__tag.trace  or  { } -- show commands
 ltx.__tag.func     = ltx.__tag.func   or  { } -- functions
 ltx.__tag.conf     = ltx.__tag.conf   or  { } -- configuration variables
+
+local __tag_get_struct_num =
+ function()
+  local a = token.get_macro("g__tag_struct_stack_current_tl")
+  return a
+ end
+
+local __tag_get_struct_counter =
+ function()
+  local a = tex.getcount("c@g__tag_struct_abs_int")
+  return a
+ end
+
+local __tag_get_struct_num_next =
+ function()
+  local a = tex.getcount("c@g__tag_struct_abs_int") + 1
+  return a
+ end
+
+ltx.tag.get_struct_num = __tag_get_struct_num
+ltx.tag.get_struct_counter = __tag_get_struct_counter
+ltx.tag.get_struct_num_next = __tag_get_struct_num_next
 local __tag_log =
  function (message,loglevel)
   if (loglevel or 3) <= tex.count["l__tag_loglevel_int"] then
