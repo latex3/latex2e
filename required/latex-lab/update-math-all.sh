@@ -1,5 +1,6 @@
 
 l3build save -cconfig-math \
+	math-suspended-gh661 \
 	mathcapture-001 \
 	mathcapture-002 \
 	mathcapture-003 \

@@ -2,7 +2,7 @@
 %
 %% File: latex-lab-math.dtx
 %
-% Copyright (C) 2022-2024 The LaTeX Project
+% Copyright (C) 2022-2025 The LaTeX Project
 %
 % It may be distributed and/or modified under the conditions of the
 % LaTeX Project Public License (LPPL), either version 1.3c of this
@@ -19,8 +19,8 @@
 % for those people who are interested or want to report an issue.
 %
 %
-\def\ltlabmathdate{2024-10-25}
-\def\ltlabmathversion{0.6i}
+\def\ltlabmathdate{2024-12-12}
+\def\ltlabmathversion{0.6k}
 %
 %<*driver>
 \documentclass{l3doc}
@@ -205,11 +205,8 @@
 %  The actual tagging is in done through the sockets
 %   \begin{itemize}
 %    \item |tagsupport/math/inline/formula/begin|
-%     This socket takes the math as argument and its code
+%     This socket takes the math as second argument and its code
 %     should output it for typesetting.
-%     It is not \emph{used} as a tagging socket as the math argument should
-%     not be lost without tagging, so without tagging the
-%     socket uses the identity plug.
 %     The |default| plug of the socket calls these three internal sockets
 %     for the tagging support:
 %      \begin{itemize}
@@ -878,7 +875,7 @@
   {
     <!DOCTYPE~html>
     \iow_newline:
-    <html>
+    <html~ xmlns="http://www.w3.org/1999/xhtml">
     \iow_newline:
   }
 \tl_new:N \l_@@_mathml_write_before_tl
@@ -1169,6 +1166,13 @@
 \bool_gset_true:N \g_@@_luamml_write_bool
 %    \end{macrocode}
 % \end{variable}
+% \begin{macro}{\@@_luamml_ignore:,\@@_luamml_structelem:}
+% Internal variants of the luamml commands, that can be remapped if needed.
+%    \begin{macrocode}
+\cs_new:Npn\@@_luamml_structelem:{}
+\cs_new:Npn\@@_luamml_ignore:{}
+%    \end{macrocode}
+% \end{macro}
 %
 %    \begin{macrocode}
 \msg_new:nnn { tag }{ PDF-2.0-recommended }
@@ -1187,18 +1191,26 @@
      math/mathml/luamml/load .default:n = true,
      math/mathml/luamml/load .usage:n=preamble,
 %    \end{macrocode}
-% A key to activate math structure elements. It shouldn't
-% be issued in the preamble as luamml is not yet loaded.
+% A key to activate math structure elements. 
+% \changes{v0.6j}{2024-11-19}{no longer enable globally for better fake math handling, issue \#764}
 %    \begin{macrocode}
-     math/mathml/structelem .code:n =
+     math/mathml/structelem .choice:,
+     math/mathml/structelem/true .code:n =
       {
         \pdf_version_compare:NnT < {2.0}
          {
           \msg_warning:nnne { tag }{ PDF-2.0-recommended }
            { math/mathml/structelem }{ \pdf_version: }
          }
-        \AddToHook{begindocument/end}{\luamml_structelem:}
+        \cs_set:Npn\@@_luamml_structelem:{\luamml_structelem:}
+        \cs_set:Npn\@@_luamml_ignore:{\luamml_ignore:}
       },
+     math/mathml/structelem/false .code:n =
+      {
+        \cs_set_eq:NN\@@_luamml_structelem:\prg_do_nothing:
+        \cs_set_eq:NN\@@_luamml_ignore:\prg_do_nothing:
+      },
+     math/mathml/structelem .default:n = true,       
 %    \end{macrocode}
 % and a key to call the ignore flag. This should only be used locally.
 %    \begin{macrocode}
@@ -1240,7 +1252,7 @@
     \iow_now:Ne \g_@@_writedummy_iow
      {
       \l_@@_mathml_write_before_tl
-      <math></math>
+      <math~ xmlns="http://www.w3.org/1998/Math/MathML"></math>
       \c_@@_mathml_write_after_tl
       }
  }
@@ -1423,10 +1435,12 @@
 %   The formula sockets are despite their naming not symmetric:
 %   the begin socket is issued after the math has started, while
 %   the end socket is after the math!
+%   \changes{v0.6j}{2024-11-19}{change the socket to two arguments so that it can
+%   be used as tagging socket}
 %    \begin{macrocode}
 \socket_new:nn {tagsupport/math/inline/begin}{0}
 \socket_new:nn {tagsupport/math/inline/end}{0}
-\socket_new:nn {tagsupport/math/inline/formula/begin}{1} %
+\socket_new:nn {tagsupport/math/inline/formula/begin}{2} %
 \socket_new:nn {tagsupport/math/inline/formula/end}{0}
 %    \end{macrocode}
 %\end{socketdecl}
@@ -1453,8 +1467,11 @@
   {default}
 %    \end{macrocode}
 % \changes{v0.6g}{2024-10-02}{disable paratagging, issue \#711}
+% \changes{v0.6j}{2024-11-19}{activate structelem locally issue \#764}
+% \changes{v0.6j}{2024-11-19}{change to two arguments}
 %    \begin{macrocode}
   { \tagpdfparaOff
+    \@@_luamml_structelem:
     \tag_socket_use:n{math/content}
     \tag_socket_use:n{math/struct/begin}
 %    \end{macrocode}
@@ -1462,7 +1479,7 @@
 %    \begin{macrocode}
     % inner formula if multiple parts (not really implemented yet)
     \tag_socket_use:n{math/substruct/begin}
-    #1
+    #2
     \tag_socket_use:n{math/end}
   }
 \socket_new_plug:nnn
@@ -1491,13 +1508,11 @@
 %   The formula sockets are despite their naming not symmetric:
 %   the begin socket is issued after the math has started, while
 %   the end socket is after the math!
-%   The socket |tagsupport/math/display/formula/begin| should similar to
-%   the inline version not be used as tagging socket so that the argument, the math,
-%   is not lost.
+%   \changes{v0.6j}{2024-11-19}{change number of arguments of formula/begin socket}
 %    \begin{macrocode}
 \socket_new:nn {tagsupport/math/display/begin}{0}
 \socket_new:nn {tagsupport/math/display/end}{0}
-\socket_new:nn {tagsupport/math/display/formula/begin}{1} %
+\socket_new:nn {tagsupport/math/display/formula/begin}{2} %
 \socket_new:nn {tagsupport/math/display/formula/end}{0}
 %    \end{macrocode}
 %\end{socketdecl}
@@ -1518,15 +1533,18 @@
 
 
 % \begin{plugdecl}{default}
+% \changes{v0.6j}{2024-11-19}{moved \cs{tagpdfparaOff} into the socket, tagging/765}
 %    \begin{macrocode}
 \socket_new_plug:nnn
   {tagsupport/math/display/formula/begin}
   {default}
   {
+    \tagpdfparaOff
+    \@@_luamml_structelem:
     \tag_socket_use:n{math/content}
     \tag_socket_use:n{math/struct/begin}
     \tag_socket_use:n{math/substruct/begin}
-    #1
+    #2
     \tag_socket_use:n{math/end}
   }
 \socket_new_plug:nnn
@@ -1833,47 +1851,20 @@
 \socket_new:nn {tagsupport/math/end}{0}
 %    \end{macrocode}
 % \end{socketdecl}
-
 %
-%  \begin{macro}{\__tag_math_disable:}
-%  Similar to the table code we collect the plugs that should be
-%  assigned to do nothing if we don't want tagging
-%    \begin{macrocode}
-\cs_new_protected:Npn \__tag_math_disable:
-  {
-    \socket_assign_plug:nn {tagsupport/math/inline/begin}{noop}
-    \socket_assign_plug:nn {tagsupport/math/inline/end}{noop}
-    \socket_assign_plug:nn {tagsupport/math/inline/formula/begin}{identity}
-    \socket_assign_plug:nn {tagsupport/math/inline/formula/end}{noop}
-    \socket_assign_plug:nn {tagsupport/math/display/begin}{noop}
-    \socket_assign_plug:nn {tagsupport/math/display/end}{noop}
-    \socket_assign_plug:nn {tagsupport/math/display/formula/begin}{identity}
-    \socket_assign_plug:nn {tagsupport/math/display/formula/end}{noop}
-  }
-%    \end{macrocode}
-% \end{macro}
 %
-%  \begin{macro}{\__tag_math_enable:}
-%  Similar to the table code we collect the default plugs that should be
-%  assigned if we want tagging
+%  \changes{v0.6j}{2024-11-19}{removed enable/disable command and assign tagging sockets directly}
 %    \begin{macrocode}
-\cs_new_protected:Npn \__tag_math_enable:
-  {
-    \socket_assign_plug:nn {tagsupport/math/inline/begin}{MC}
-    \socket_assign_plug:nn {tagsupport/math/inline/end}{MC}
-    \socket_assign_plug:nn {tagsupport/math/inline/formula/begin}{default}
-    \socket_assign_plug:nn {tagsupport/math/inline/formula/end}{default}
-    \socket_assign_plug:nn {tagsupport/math/display/begin}{default}
-    \socket_assign_plug:nn {tagsupport/math/display/end}{default}
-    \socket_assign_plug:nn {tagsupport/math/display/formula/begin}{default}
-    \socket_assign_plug:nn {tagsupport/math/display/formula/end}{default}
-  }
+\socket_assign_plug:nn {tagsupport/math/inline/begin}{MC}
+\socket_assign_plug:nn {tagsupport/math/inline/end}{MC}
+\socket_assign_plug:nn {tagsupport/math/inline/formula/begin}{default}
+\socket_assign_plug:nn {tagsupport/math/inline/formula/end}{default}
+\socket_assign_plug:nn {tagsupport/math/display/begin}{default}
+\socket_assign_plug:nn {tagsupport/math/display/end}{default}
+\socket_assign_plug:nn {tagsupport/math/display/formula/begin}{default}
+\socket_assign_plug:nn {tagsupport/math/display/formula/end}{default}
 %    \end{macrocode}
-% \end{macro}
-% At begin document we can activate:
-%    \begin{macrocode}
-\AtBeginDocument{\tag_if_active:T{\__tag_math_enable: }}
-%    \end{macrocode}
+%
 %
 % \subsection{Interface commands}
 %
@@ -1945,6 +1936,7 @@
           { \tl_if_blank_p:n {#1} }
         }
         {
+          \@@_luamml_ignore:
           #1 $ % $
         }
         {
@@ -1952,8 +1944,9 @@
 %    \end{macrocode}
 % We do no use a tagging socket here, so that the argument (the
 % math) is not lost, tagging-project issue 661.
+% \changes{v0.6j}{2024-11-19}{change socket to tagging socket}
 %    \begin{macrocode}
-            \socket_use:nn {tagsupport/math/inline/formula/begin}{#1}
+            \tag_socket_use:nnn {math/inline/formula/begin}{}{#1}
             $ % $
             \tag_socket_use:n  {math/inline/formula/end}
             \tag_socket_use:n  {math/inline/end} % restart P-MC
@@ -1982,7 +1975,7 @@
       {
         \@@_process:nn { equation* } {#1}
         \tag_socket_use:n {math/display/begin}
-        \socket_use:nn{tagsupport/math/display/formula/begin}{#1}
+        \tag_socket_use:nn{math/display/formula/begin}{}{#1}
       }
     $$
   }
@@ -1990,6 +1983,7 @@
 %
 % The end code is added through a \cs{aftergroup} so we
 % store it inside a command.
+% \changes{v0.6j}{2024-11-19}{removed unneeded \cs{tagpdfparaOn}}
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_tag_dollardollar_display_end:
   {
@@ -1997,34 +1991,54 @@
     %  \ShowTagging{struct-stack}
     \para_raw_end:
 %    \end{macrocode}
-% TODO why is that needed? where is para-tagging disabled?
-%    \begin{macrocode}
-    \tagpdfparaOn
-%    \end{macrocode}
-%    The \cs{postdisplaypenalty} was temporarily set to 10000 inside
-%    the display and the \cs{belowdisplayskip} and the
+%    The \cs{postdisplaypenalty} was temporarily set
+%    to 10000 inside the display and the \cs{belowdisplayskip} and the
 %    \cs{belowdisplayshortskip} was negated, so whatever was inserted
-%    it should have been a negative skip. Whatever skip was added we
-%    pick it ups value up here, so that we can correct the spacing
-%    after the tagging code was inserted.
+%    it should have been a negative skip. Whatever 
+%    was added, we pick up the value up, so that we can correct
+%    the spacing after the tagging code was inserted.
 %    \begin{macrocode}
     \l_@@_tmpa_skip \lastskip
     \tag_socket_use:n{math/display/formula/end}
 %    \end{macrocode}
-%    Now we add a skip without indroducing a page break possibility,
+%    Now we add a skip without introducing a page break possibility,
 %    that should bring the current vertical position back to the point
 %    where \TeX{} would add the penalty and the \enquote{below skip}.
 % \changes{v0.6f}{2024-09-30}{Correct logic for inserting below skips
 %                             after displays (tagging/721)}
 %    \begin{macrocode}
     \nobreak
-    \skip_vertical:n { -\l__math_tmpa_skip  } % remove the negative belowdisplayskip
+    \skip_vertical:n { -\l_@@_tmpa_skip  }
 %    \end{macrocode}
-%    Then we finally add the real stuff:
+%    Then we finally add the real stuff: the true \cs{postdisplaypenalty}
+%    and then negated value of skip we saved from above. It may look
+%    strange that we have two identical negated skips next to each
+%    other, but if you think about it, that is correct: the first
+%    cancels the \enquote{below skip} that \TeX{} had added and the
+%    second puts the same amount after the penalty (which is where it
+%    should be).
 %    \begin{macrocode}
     \penalty \postdisplaypenalty
-    \skip_vertical:n { -\l__math_tmpa_skip  } % insert the correct skip
-  \@doendpe             % this has no \end{...} to take care of it
+    \skip_vertical:n { -\l_@@_tmpa_skip  } % insert the correct skip
+%    \end{macrocode}
+%    As we are now in vertical mode the situation is different from
+%    the way \TeX{} would handle things after a display: \TeX{} would
+%    internally switch to horizontal mode without adding a
+%    \cs{parskip}. But this is not possible to do on the macro
+%    level. Therefore we have to neutralize the upcoming \cs{parskip}
+%    since we can't  prevent it from being set.
+%  \changes{v0.6k}{2024/12/01}{Handle \cs{parskip} after \texttt{\$\$}
+%    display correctly (tagging/762)}
+%    \begin{macrocode}
+%    \typeout{------->~ add~ negative~ parskip~ (to~ cancel~ the~
+%                       one~ that~ TeX~ will~ add)}
+    \skip_vertical:n { -\tex_parskip:D }
+%    \end{macrocode}
+%    
+%    We also set the \texttt{@domathendpetrue} flag to signal that the    
+%    \begin{macrocode}
+    \@domathendpetrue
+    \@doendpe             % this has no \end{...} to take care of it
 }
 
 %    \end{macrocode}
@@ -2320,7 +2334,7 @@
      }
   }
 %    \end{macrocode}
-% TODO: the following command is neither documented nor used. Is is needed?
+% TODO: the following command is neither documented nor used. Is it needed?
 %    \begin{macrocode}
 \cs_new_protected:Npn \math_register_odd_env:nn #1#2
   {
@@ -2399,8 +2413,7 @@
 %         \typeout{==>A3}
          \__tag_tool_close_P:
        }
-  \socket_use:nn{tagsupport/math/display/formula/begin}{}
-  \tagpdfparaOff
+  \tag_socket_use:nn{math/display/formula/begin}{}{}
 %  \typeout{==>MC1}\ShowTagging{mc-current}
 }
 
@@ -2408,7 +2421,7 @@
 %  \typeout{==>MC2}\ShowTagging{mc-current}
   \para_raw_end:
   \tagpdfparaOn
-  \socket_use:n{tagsupport/math/display/formula/end}
+  \tag_socket_use:n{tagsupport/math/display/formula/end}
 %  \typeout{==>MC3}\ShowTagging{mc-current}
   \@endpetrue
 }
