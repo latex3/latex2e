@@ -11,7 +11,7 @@
 -- l3intarray.dtx  (with options: `package,lua')
 -- l3pdf.dtx  (with options: `package,lua')
 -- 
--- Copyright (C) 1990-2024 The LaTeX Project
+-- Copyright (C) 1990-2025 The LaTeX Project
 -- 
 -- It may be distributed and/or modified under the conditions of
 -- the LaTeX Project Public License (LPPL), either version 1.3c of
