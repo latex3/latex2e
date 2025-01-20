@@ -1,7 +1,7 @@
 % \iffalse meta-comment
 %
 %% From File: ltcmdhooks.dtx
-%% Copyright (C) 2020-2024
+%% Copyright (C) 2020-2025
 %% Frank Mittelbach, Phelype Oleinik, The LaTeX Project
 %
 % It may be distributed and/or modified under the conditions of the
@@ -20,7 +20,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltcmdhooks.dtx}
-             [2024/12/12 v1.0j LaTeX Kernel (Command hooks)]
+             [2024/12/25 v1.0k LaTeX Kernel (Command hooks)]
 % \iffalse
 %
 \documentclass{l3doc}
@@ -513,7 +513,7 @@
 % \begin{macro}{\c_@@_hash_tl,\c_@@_hashes_tl}
 %   Two constant token lists that contain one and two parameter tokens.
 %   \changes{v1.0g}{2023/04/06}
-%           {Rename to \cs{c_@@_hashes_tl} and add \cs{c_@@_hash_tl} (hook-args).}
+%           {Rename to \cs{c__hook_hashes_tl} and add \cs{c__hook_hash_tl} (hook-args)}
 %    \begin{macrocode}
 \tl_const:Nn \c_@@_hash_tl { # }
 \tl_const:Nn \c_@@_hashes_tl { # # }
@@ -577,16 +577,49 @@
 %   otherwise it tries to update the hook.
 % \changes{v1.0d}{2021/08/25}{Simplify generic hook detection}
 %    \begin{macrocode}
-%<latexrelease>\IncludeInRelease{2021/11/15}{\@@_try_put_cmd_hook:n}%
-%<latexrelease>                 {Standardise~generic~hook~names}
+%<latexrelease>\IncludeInRelease{2024/12/22}{\@@_try_put_cmd_hook:n}%
+%<latexrelease>                 {Don't~define~command}
 \cs_new_protected:Npn \@@_try_put_cmd_hook:n #1
   { \@@_try_put_cmd_hook:w #1 / / / \s_@@_mark {#1} }
 \cs_new_protected:Npn \@@_try_put_cmd_hook:w
     #1 / #2 / #3 / #4 \s_@@_mark #5
   {
     \@@_debug:n { \iow_term:n { ->~Adding~cmd~hook~to~'#2'~(#3): } }
-    \exp_args:Nc \@@_patch_cmd_or_delay:Nnn {#2} {#2} {#3}
+%    \end{macrocode}
+%    \cs{@@_patch_cmd_or_delay:Nnn} expects the command to be patched
+%    as its first argument so we need to construct it from its name
+%    (\texttt{\#2}). However, at this moment it may not exist yet, so
+%    using \cs{cs:w} would incorrectly turn it from
+%    \enquote{undefined} into \cs{relax}. We  therefore use the
+%    following curious construction: we start a group and expand out of
+%    it to call \cs{cs:w}. If the command is now changed to \cs{relax}
+%    the \cs{group_end:} will undo that change, but the token is
+%    nevertheless there to be consumed by \cs{@@_patch_cmd_or_delay:Nnn}.
+% \changes{v1.0k}{2024/12/22}{Avoid defining command while adding a cmd
+%    hook (gh/1591)}
+%    \begin{macrocode}
+    \group_begin:
+       \exp_after:wN
+    \group_end:
+       \exp_after:wN
+    \@@_patch_cmd_or_delay:Nnn
+       \cs:w #2\cs_end:
+       {#2} {#3}
   }
+%<latexrelease>\EndIncludeInRelease
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2021/11/15}{\@@_try_put_cmd_hook:n}%
+%<latexrelease>                 {Standardise~generic~hook~names}
+%<latexrelease>\cs_new_protected:Npn \@@_try_put_cmd_hook:n #1
+%<latexrelease>  { \@@_try_put_cmd_hook:w #1 / / / \s_@@_mark {#1} }
+%<latexrelease>\cs_new_protected:Npn \@@_try_put_cmd_hook:w
+%<latexrelease>    #1 / #2 / #3 / #4 \s_@@_mark #5
+%<latexrelease>  {
+%<latexrelease>    \@@_debug:n { \iow_term:n { ->~Adding~cmd~hook~to~'#2'~(#3): } }
+%<latexrelease>    \exp_args:Nc \__hook_patch_cmd_or_delay:Nnn {#2} {#2} {#3}
+%<latexrelease>  }
 %<latexrelease>\EndIncludeInRelease
 %    \end{macrocode}
 %
@@ -849,7 +882,7 @@
 %
 % \changes{v1.0f}{2021/10/20}
 %         {Correct patching by expansion+redefinition when the macro
-%          contains a parameter token (gh/697).}
+%          contains a parameter token (gh/697)}
 %   Patching with expansion+redefinition is trickier than it looks like
 %   at first glance.  Suppose the simple definition:
 % \begin{verbatim}
@@ -964,7 +997,7 @@
 %   Here we'll conditionally add |[|\ldots|]| around the first
 %   parameter:
 %   \changes{v1.0g}{2023/04/06}
-%           {Rename to \cs{c_@@_hashes_tl} (hook-args).}
+%           {Rename to \cs{c__hook_hashes_tl} (hook-args)}
 %    \begin{macrocode}
         \bool_if:NTF #1
           { \@@_tmp:w \tl_set:Nx { [ \c_@@_hashes_tl 1 ] } }
@@ -1032,7 +1065,7 @@
 %   the extent we want.  Code stored in the hook and other metadata
 %   about it are not lost in the process.
 % \changes{v1.0h}{2023/05/21}
-%         {Changes to allow support arguments in cmd hooks (cmd-args).}
+%         {Changes to allow support arguments in cmd hooks (cmd-args)}
 %    \begin{macrocode}
     \@@_disable:n { cmd / #3 / #4 }
     \cs_undefine:c { c_@@_cmd / #3 / #4_parameter_tl }
@@ -1242,7 +1275,7 @@
 %   then checks if the token is \cs{c_@@_hashes_tl}, and if so just leaves
 %   it.
 %   \changes{v1.0g}{2023/04/06}
-%           {Add case for \cs{c_@@_hashes_tl} (hook-args).}
+%           {Add case for \cs{c__hook_hashes_tl} (hook-args)}
 %    \begin{macrocode}
 \cs_new:Npn \@@_double_hashes_output:N #1
   {
@@ -1543,7 +1576,7 @@
 %   hashes, and not other characters, and that there is no
 %   \enquote{trick parameter}.
 % \changes{v1.0h}{2023/05/21}
-%         {Macro added (cmd-args).}
+%         {Macro added (cmd-args)}
 %    \begin{macrocode}
 %<latexrelease>\IncludeInRelease{2023/06/01}{\@@_guess_arg_count:NN}
 %<latexrelease>                 {cmd~hooks~with~args}
@@ -1592,7 +1625,7 @@
 %   Here, when patching by retokenization, we can only guess the number
 %   of arguments of the macro.
 % \changes{v1.0h}{2023/05/21}
-%         {Changes to allow support arguments in cmd hooks (cmd-args).}
+%         {Changes to allow support arguments in cmd hooks (cmd-args)}
 %    \begin{macrocode}
     \@@_guess_arg_count:NN #1 \l_@@_patch_num_args_int
 %    \end{macrocode}
