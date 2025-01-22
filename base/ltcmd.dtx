@@ -97,6 +97,10 @@
 %<latexrelease>                 {Document~command~parser}%
 %    \end{macrocode}
 %
+%    \begin{macrocode}
+\cs_generate_variant:Nn \tl_head:n { e }
+%    \end{macrocode}
+%
 % \subsection{Variables and constants}
 %
 % \begin{variable}{\l_@@_arg_spec_tl}
@@ -129,6 +133,15 @@
 %   code function should take.
 %    \begin{macrocode}
 \int_new:N \l_@@_current_arg_int
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_total_args_int}
+% \changes{v1.3a}{2025-01-22}{New variable}
+%   The total number of arguments found during normalization: this is needed
+%   where special action is needed for the penultimate argument.
+%    \begin{macrocode}
+\int_new:N \l_@@_total_args_int
 %    \end{macrocode}
 % \end{variable}
 %
@@ -326,10 +339,12 @@
 %    \end{macrocode}
 % \end{variable}
 %
-% \begin{variable}{\l_@@_verb_safe_bool}
-%   To track if optional arguments should be collected \enquote{verbatim safe}.
+% \begin{variable}{\l_@@_final_verb_bool}
+% \changes{v1.3a}{2025-01-22}{New variable}
+%   Needed to establish if optional arguments should be collected
+%   \enquote{verbatim safe}.
 %    \begin{macrocode}
-\bool_new:N \l_@@_verb_safe_bool
+\bool_new:N \l_@@_final_verb_bool
 %    \end{macrocode}
 % \end{variable}
 %
@@ -1052,7 +1067,6 @@
     \bool_set_false:N \l_@@_some_obey_spaces_bool
     \bool_set_false:N \l_@@_some_long_bool
     \bool_set_false:N \l_@@_some_short_bool
-    \bool_set_false:N \l_@@_verb_safe_bool
     \@@_normalize_arg_spec_loop:n #1
       \q_recursion_tail \q_recursion_tail \q_recursion_tail \q_recursion_stop
     \int_compare:nNnT \l_@@_current_arg_int > 9
@@ -1209,12 +1223,6 @@
         \tl_put_right:Nx \l_@@_arg_spec_tl
           { = { \tl_trim_spaces:n {#1} } }
       }
-  }
-\cs_new_protected:cpn { @@_normalize_type_*:w } #1
-  {
-    \@@_normalize_type_aux:NnNn * {#1}
-      \l_@@_verb_safe_bool
-      { \bool_set_true:N \l_@@_verb_safe_bool }
   }
 \cs_new_protected:Npn \@@_normalize_type_aux:NnNn #1#2#3#4
   {
@@ -1498,7 +1506,6 @@
 %  \changes{v1.2c}{2023/12/22}
 %          {Clarify error message when \texttt{!} prefix is applied to
 %           non-trailing opt-arg (gh/1198)}
-% \changes{v1.3a}{2025-01-22}{Extend to support \texttt{f}-type grabbing}
 %   When adding an argument to the argument specification, set the
 %   \texttt{some_long} or \texttt{some_short} booleans as appropriate
 %   and clear the booleans keeping track of |+|, |!| and |=| markers.
@@ -1533,10 +1540,6 @@
           { ! \str_if_eq_p:nn {#1} { f } }
           { + }
         \bool_if:NT \l_@@_obey_spaces_bool { ! }
-        \bool_lazy_or:nnT
-          { \l_@@_verb_safe_bool }
-          { \str_if_eq_p:nn {#1} { f } }
-          { * }
         \exp_not:n {#1}
       }
     \bool_set_false:N \l_@@_long_bool
@@ -1564,6 +1567,8 @@
 % \subsection{Preparing the signature: general mechanism}
 %
 % \begin{macro}{\@@_prepare_signature:n}
+% \changes{v1.3a}{2025-01-22}{Extend to cover \texttt{f}-type grabbing}
+% \begin{macro}{\@@_prepare_signature_verb_chk:n}
 % \begin{macro}{\@@_prepare_signature:N}
 % \begin{macro}{\@@_prepare_signature_bypass:N}
 %   Actually creating the signature uses the same loop approach as
@@ -1573,11 +1578,11 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_prepare_signature:n #1
   {
+    \int_set_eq:NN \l_@@_total_args_int \l_@@_current_arg_int
     \int_zero:N \l_@@_current_arg_int
     \bool_set_false:N \l_@@_long_bool
     \bool_set_false:N \l_@@_obey_spaces_bool
     \bool_set_false:N \l_@@_suppress_strip_bool
-    \bool_set_false:N \l_@@_verb_safe_bool
     \int_zero:N \l_@@_m_args_int
     \bool_set_false:N \l_@@_defaults_bool
     \tl_clear:N \l_@@_defaults_tl
@@ -1585,8 +1590,18 @@
     \tl_clear:N \l_@@_process_one_tl
     \bool_set_false:N \l_@@_process_some_bool
     \tl_clear:N \l_@@_signature_tl
+    \@@_prepare_signature_verb_chk:n {#1}
     \@@_prepare_signature:N #1 \q_recursion_tail \q_recursion_stop
     \bool_if:NF \l_@@_expandable_bool { \@@_flush_m_args: }
+  }
+%    \end{macrocode}
+%   A quick check on the final arg.~type.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_prepare_signature_verb_chk:n #1
+  {
+    \str_if_eq:eeTF { \tl_head:e { \tl_reverse:n {#1} } } { f }
+      { \bool_set_true:N \l_@@_final_verb_bool }
+      { \bool_set_false:N \l_@@_final_verb_bool }
   }
 %    \end{macrocode}
 %  The main looping function does not take an argument, but carries out the
@@ -1614,6 +1629,7 @@
       }
   }
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 % \end{macro}
@@ -1687,19 +1703,6 @@
     \bool_set_true:N \l_@@_process_some_bool
     \tl_put_left:Nn \l_@@_process_one_tl
       { { \@@_arg_to_keyvalue:nn {#1} } }
-    \@@_prepare_signature_bypass:N
-  }
-%    \end{macrocode}
-% \end{macro}
-%
-% \begin{macro}{\@@_add_type_*:w}
-% \changes{v1.3a}{2025-01-22}{New macro}
-%    \begin{macrocode}
-\cs_new_protected:cpn { @@_add_type_*:w }
-  {
-    \@@_flush_m_args:
-    \bool_set_true:N \l_@@_verb_safe_bool
-    \bool_set_true:N \l_@@_prefixed_bool
     \@@_prepare_signature_bypass:N
   }
 %    \end{macrocode}
@@ -1916,9 +1919,15 @@
               { \l_@@_suppress_strip_bool }
               { \str_if_eq_p:nn {#1} { D } }
               { _no_strip }
-            \bool_lazy_and:nnT
-              { \l_@@_verb_safe_bool }
-              { \str_if_eq_p:nn {#1} { D } }
+            \bool_lazy_all:nT
+              {
+                { \l_@@_final_verb_bool }
+                { \str_if_eq_p:nn {#1} { D } }
+                {
+                  \int_compare_p:nNn \l_@@_current_arg_int 
+                    = { \l_@@_total_args_int - 1 }
+                }
+              }
               { _verb_safe }
             :w
           }
