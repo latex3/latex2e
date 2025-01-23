@@ -2,6 +2,7 @@
 
 
 l3build save -cconfig-block -epdftex \
+        blocks-user-keys-01 \
         tagging-0767
 
 
