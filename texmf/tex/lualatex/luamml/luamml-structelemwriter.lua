@@ -70,7 +70,7 @@ local function write_elem(tree, stash)
     return tex.runtoks(function()
       return tex.sprint(struct_use_num, '{', tree[':structnum'], '}')
     end)
-  end  
+  end
   if not tree[0] then print('ERR', require'inspect'(tree)) end
   local i = 0
   for attr, val in next, tree do if type(attr) == 'string' and not string.find(attr, ':') and attr ~= 'xmlns' then
@@ -81,7 +81,7 @@ local function write_elem(tree, stash)
   table.sort(attrs)
 
   if stash then
-    tree[':structnum'] = get_ltx().tag.get_struct_num_next() 
+    tree[':structnum'] = get_ltx().tag.get_struct_num_next()
     stash = ', stash, '
   end
 
@@ -89,18 +89,19 @@ local function write_elem(tree, stash)
   tex.sprint(struct_begin, '{tag=' .. tree[0] .. '/mathml')
   if stash then tex.sprint(stash) end
   if attr_flag then tex.sprint(attr_flag) end
-  if tree[':actual'] then
-    tex.sprint(', actualtext = {')
-    tex.cprint(12, tree[':actual'])
-    tex.sprint'}'
-  end
   tex.sprint'}'
   for j = 1, i do attrs[j] = nil end
 
   if tree[':nodes'] then
     local n = tree[':nodes']
     tex.runtoks(function()
-      tex.sprint{mc_begin, string.format('{tag=%s}', tree[0])}
+      if tree[':actual'] then
+       tex.sprint(mc_begin,'{tag=Span,actualtext=')
+       tex.cprint(12,tree[':actual'])
+       tex.sprint('}')
+      else
+       tex.sprint{mc_begin, string.format('{tag=%s}', tree[0])}
+      end
       -- NOTE: This will also flush all previous sprint's... That's often annoying, but in this case actually intentional.
     end)
     local mct, mcc = tex.attribute[mc_type], tex.attribute[mc_cnt]
