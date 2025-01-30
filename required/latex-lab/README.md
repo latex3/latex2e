@@ -1,6 +1,6 @@
 # LaTeX laboratory
 
-Release 2024-11-01
+Release 2024-11-01 patch level 2
 
 ## Overview
 
