@@ -48,7 +48,9 @@ local function write_elem(tree, indent)
       out = out .. escape_text(elem)
       is_string = true
     else
-      out = out .. write_elem(elem, inner_indent)
+      if not elem['tex:ignore'] then
+        out = out .. write_elem(elem, inner_indent)
+      end
       is_string = nil
     end
   end
