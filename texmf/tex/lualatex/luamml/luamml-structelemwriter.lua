@@ -6,6 +6,8 @@ local struct_end = token.create'tag_struct_end:'
 local mc_begin = token.create'tag_mc_begin:n'
 local mc_end = token.create'tag_mc_end:'
 
+local catlatex       = luatexbase.registernumber("catcodetable@latex")
+
 local function escape_name(name)
   return name
 end
@@ -44,7 +46,7 @@ local attributes = setmetatable({}, {__index = function(t, k)
   local attr_name = string.format('luamml_attr_%i', attribute_counter)
   t[k] = attr_name
   tex.runtoks(function()
-    tex.sprint(string.format('\\tagpdfsetup{newattribute={%s}{/O/NSO/NS %i 0 R',
+    tex.sprint(catlatex,string.format('\\tagpdfsetup{newattribute={%s}{/O/NSO/NS %i 0 R',
         attr_name, mathml_ns_obj or get_mathml_ns_obj()))
     -- tex.sprint(string.format('\\tagpdfsetup{newattribute={%s}{/O/MathML-3',
     --     attr_name))
