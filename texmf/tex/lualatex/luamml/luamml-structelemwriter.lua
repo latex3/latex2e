@@ -116,7 +116,7 @@ local function write_elem(tree, stash)
     end)
   end
   for _, elem in ipairs(tree) do
-    if type(elem) ~= 'string' then
+    if type(elem) ~= 'string'  and not elem['tex:ignore']  then
       write_elem(elem)
     end
   end
