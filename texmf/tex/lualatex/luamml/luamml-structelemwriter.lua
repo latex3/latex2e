@@ -117,6 +117,10 @@ local function write_elem(tree, stash)
   end
   for _, elem in ipairs(tree) do
     if type(elem) ~= 'string'  and not elem['tex:ignore']  then
+      if elem['intent']==':equationlabel' and lastlblstructnum then
+        elem[1][#elem+1]={[':structnum']= lastlblstructnum}
+        lastlblstructnum=nil
+      end  
       write_elem(elem)
     end
   end
