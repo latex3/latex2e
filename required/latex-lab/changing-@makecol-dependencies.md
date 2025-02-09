@@ -2,9 +2,7 @@
 # Files containing `\@makecol`
 
 
-
-## Files most certainly broken
-
+## Files most certainly broken and no support
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/accessibility/accessibility.sty
 
@@ -13,7 +11,11 @@
   \AtBeginDocument{\let\@AC@orig@makecol\@makecol} %
 ```
 
- - Broken for a number of reasons and not worth fixing.
+ - Broken for a number of reasons and not worth fixing imo.
+
+
+
+## Files most certainly broken
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/footmisc/footmisc.sty
@@ -33,15 +35,6 @@
 
  - May actually work with this hard overwrite, but certainly no support for tagging. And I think, the answer is, no-support.
 
-
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/longfigure/longfigure.sty
-
-```
-          \@makecol
-    \@makecol
-```
-
- - No problem with `\@makecol` but most likely otherwise broken
 
 
 
@@ -279,6 +272,17 @@
  - needs analysis and even if there is a mod it shouldn't be in the class file in this way
  
 
+
+#### /usr/local/texlive/2024/texmf-dist/tex/latex/longfigure/longfigure.sty
+
+```
+          \@makecol
+    \@makecol
+```
+
+ - No problem with `\@makecol` but most likely otherwise broken
+
+
 -------------------------------
 
 
@@ -299,12 +303,6 @@
 ```
 
 
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/tools/multicol-2017-04-11.sty
-
-```
-   \@makecol\@outputpage
-```
-
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/tools/multicol.sty
@@ -314,19 +312,6 @@
 ```
 
 
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/tools/longtable-2020-01-07.sty
-
-```
-          \@makecol
-    \@makecol
-```
-
-
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/tools/multicol-2019-10-01.sty
-
-```
-   \@makecol\@outputpage
-```
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/latex-lab/latex-lab-testphase-new-or-2.sty
 
@@ -634,21 +619,6 @@ Ok, but should be handled by a hook `{cmd/@makecol/after}`
 
  - Patches longtable
 
-
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/glossaries/rollback/glossary-longbooktabs-2021-11-01.sty
-
-```
-           \@makecol
-     \@makecol
-```
-
-
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/glossaries/rollback/glossary-longbooktabs-2020-03-19.sty
-
-```
-           \@makecol
-     \@makecol
-```
 
 
 
