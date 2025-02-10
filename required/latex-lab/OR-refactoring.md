@@ -128,39 +128,42 @@
 
 Plug definition indirect as long as tagpdf.sty still uses the old names
 ```
-\NewSocket{tagsupport/OR/makecol}
+\NewSocket{tagsupport/OR/makecol}{0}
 \NewSocketPlug{tagsupport/OR/makecol}{default}
   { \@kernel@tagsupport@@makecol }
 
 
-\NewSocket{tagsupport/OR/footins}
+\NewSocket{tagsupport/OR/footins}{0}
 \NewSocketPlug{tagsupport/OR/footins}{default}
   { \@kernel@before@footins }
 
 
-\NewSocket{tagsupport/OR/head/before}
+\NewSocket{tagsupport/OR/head/before}{0}
 \NewSocketPlug{tagsupport/OR/head/before}{default}
   { \@kernel@before@head }
 
-\NewSocket{tagsupport/OR/head/after}
+\NewSocket{tagsupport/OR/head/after}{0}
 \NewSocketPlug{tagsupport/OR/head/after}{default}
   { \@kernel@after@head }
 
 
-\NewSocket{tagsupport/OR/foot/before}
+\NewSocket{tagsupport/OR/foot/before}{0}
 \NewSocketPlug{tagsupport/OR/foot/before}{default}
   { \@kernel@before@foot }
 
-\NewSocket{tagsupport/OR/foot/after}
+\NewSocket{tagsupport/OR/foot/after}{0}
 \NewSocketPlug{tagsupport/OR/foot/after}{default}
   { \@kernel@after@foot }
 
 
-\NewSocket{OR/makecol/before}       % we could use cmd/@makecol/before instead
-\NewSocket{OR/makecol/after}        % we could use cmd/@makecol/after instead
+\NewSocket{OR/makecol/before}{0}       % we could use cmd/@makecol/before instead
+\NewSocket{OR/makecol/after}{0}        % we could use cmd/@makecol/after instead
 
-\NewSocket{OR/outputpage/before}    % we could use cmd/@outputpage/before instead
-\NewSocket{OR/outputpage/after}     % we could use cmd/@outputpage/after instead
+\NewSocket{OR/outputpage/before}{0}    % we could use cmd/@outputpage/before instead
+\NewSocket{OR/outputpage/after}{0}     % we could use cmd/@outputpage/after instead
+
+\UseHook {OR/outputpage/reset}{0}
+
 ```
 
 
