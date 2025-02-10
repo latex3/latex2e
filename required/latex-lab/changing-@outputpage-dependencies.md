@@ -4,47 +4,12 @@
 
 ## Files most certainly broken
 
+ - none
 
--------------------------------
+---------------
 
 
 ## Files to check
-
-
-
-
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/fancybox/fancybox.sty
-
-```
-% Otherwise, it is the usual \@outputpage
-  \def\@outputpage{\fb@outputpage}}
-  \gdef\@outputpage{\fb@outputpage}%
-  \def\@outputpage{\fb@outputpage}
-  \gdef\@outputpage{\fb@outputpage}
-  \def\@outputpage{\fb@outputpage}%
-  \def\@outputpage{\fb@outputpage}%
-```
-
- - needs checking
- - are there any hooks and are needed to support this?
-
-
-
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/flowfram/flowfram.sty
-
-```
-        \@outputpage
-         \@outputpage
-\def\@outputpage{%
-    \@outputpage
-      \@outputpage
-         {\@outputpage \@startdblcolumn }%
-```
-
- - needs checking
- - implements its own OR so not compatible with tagging right now
- - also may not work fully correctly with latest mark mechanism (sets \firstmark\botmark, for example)
- - are there any hooks and are needed to support this?
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/vruler/vruler.sty
@@ -103,7 +68,7 @@
 ```
 
  - needs checking
- - might work, but could probably be implemented better with just hooks
+ - replaces the OR but internally calls the LaTeX `\outputpage`, so might work
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/newlfm/newlfm.cls
@@ -118,6 +83,47 @@
 
 
 -------------------------------------------------
+
+## Files incompatible with tagging but otherwise probably ok
+
+#### /usr/local/texlive/2024/texmf-dist/tex/latex/fancybox/fancybox.sty
+
+```
+% Otherwise, it is the usual \@outputpage
+  \def\@outputpage{\fb@outputpage}}
+  \gdef\@outputpage{\fb@outputpage}%
+  \def\@outputpage{\fb@outputpage}
+  \gdef\@outputpage{\fb@outputpage}
+  \def\@outputpage{\fb@outputpage}%
+  \def\@outputpage{\fb@outputpage}%
+```
+
+ - needs checking
+ - implements its own OR so not compatible with tagging right now, but presumably works after kernel has changed
+ - the replacement OR is based on a fairly old version, so should perhaps be updated
+
+ - are there any hooks and are needed to support this?
+
+
+
+#### /usr/local/texlive/2024/texmf-dist/tex/latex/flowfram/flowfram.sty
+
+```
+        \@outputpage
+         \@outputpage
+\def\@outputpage{%
+    \@outputpage
+      \@outputpage
+         {\@outputpage \@startdblcolumn }%
+```
+
+ - needs checking
+ - implements its own OR so not compatible with tagging right now, but presumably works after kernel has changed
+ - looks like a somewhat stripped down OR compared to the LaTeX one
+ - are there any hooks and are needed to support this?
+
+
+-------------------------------
 
 
 ## Files ok

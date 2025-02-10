@@ -2,7 +2,7 @@
 # Files containing `\@makecol`
 
 
-## Files most certainly broken and no support
+## Files with no support
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/accessibility/accessibility.sty
 
@@ -13,6 +13,30 @@
 
  - Broken for a number of reasons and not worth fixing imo.
 
+
+#### /usr/local/texlive/2024/texmf-dist/tex/latex/base/slides.def
+
+```
+\def\@makecol{\if@makingslides\ifnum\c@page>\z@ \@extraslide\fi\fi
+```
+
+ - May actually work with this hard overwrite, but certainly no support for tagging. And I think, the answer is, no-support.
+
+
+#### /usr/local/texlive/2024/texmf-dist/tex/latex/footmisx/footmisx.sty
+
+```
+    \CheckCommand*\@makecol{\ifvoid \footins
+    \CheckCommand*\@makecol{\ifvoid \footins
+      \CheckCommand*\@makecol{\ifvoid \footins
+      \CheckCommand*\@makecol{\ifvoid \footins
+  \edef\@makecol{\the\toks@}
+```
+
+ - Broken - doesn't even load and that since 2016 or so
+ - Should be sunset
+
+------------------------------------
 
 
 ## Files most certainly broken
@@ -27,16 +51,6 @@
  - Not relevant will be updated as part of the change.
 
 
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/base/slides.def
-
-```
-\def\@makecol{\if@makingslides\ifnum\c@page>\z@ \@extraslide\fi\fi
-```
-
- - May actually work with this hard overwrite, but certainly no support for tagging. And I think, the answer is, no-support.
-
-
-
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/tools/ftnright.sty
 
@@ -46,6 +60,70 @@
 ```
 
  - Patches also \@startcolumn and perhaps others.  Need to be reworked when the new OR is in place.
+
+
+
+
+#### /usr/local/texlive/2024/texmf-dist/tex/latex/plautopatch/pxstfloats.sty
+
+```
+%% mostly based on \@makecol in latex.ltx, and
+\def\fnbelowfloat{\global\let\@makecol\pxstfl@fnbelowfl@makecol}
+\def\fnabovefloat{\global\let\@makecol\pxstfl@fnabovefl@makecol}
+```
+
+- Most likely broken, but should be easily fixable.
+
+ - part of plautopatch
+ - Hironobu Yamashita
+
+
+#### /usr/local/texlive/2024/texmf-dist/tex/latex/flowfram/flowfram.sty
+
+```
+    \@makecol
+    \@makecol\@opcol
+\renewcommand{\@makecol}{%
+```
+
+ - Looks like all the redefinition does is adding `\@tempdima\dp\@cclv` but I don't see where this dimen is used. In any case the redefinition should not be necessary, as the new OR also stores the depth.
+
+ - email: nicola.talbot@dickimaw-books.com   Nicola Talbot
+
+
+
+#### /usr/local/texlive/2024/texmf-dist/tex/latex/platex-tools/pxftnright.sty
+
+```
+%   * \@makecol is redefined
+  \@makecol
+\def\@makecol{%
+```
+
+ - Reimplementation of ftnright for Japanese, should follow whatever is going to be done for that package and then should be ok.
+ 
+#### /usr/local/texlive/2024/texmf-dist/tex/latex/footbib/footbib.sty
+
+```
+  \vbox{}\clearpage\fi\fi\else\setbox\@cclv\vbox{\box\@cclv\vfil}\@makecol
+\@tempa\@makecol{\ifvoid\footins\setbox\@outputbox\box\@cclv\else\setbox
+    \@makecol\@opcol
+\def \@makecol {%
+```
+
+ - Patches the OR and also checks if the LaTeX OR is as expect. So will certainly break
+
+ - Needs updating and preferably use hooks to avoid the patching
+
+ - email: Eric.Domenjoud@loria.fr
+
+
+
+------------------------------------
+
+
+## Files incompatible with tagging but otherwise probably ok
+
 
 
 
@@ -78,6 +156,23 @@
 
 
 
+#### /usr/local/texlive/2024/texmf-dist/tex/latex/revtex4/revtex4.cls
+
+```
+  \@makecol\csname output@column@\thepagegrid\endcsname
+\def\@makecol{%
+ \@makecol
+ \@makecol
+\@makecol
+```
+
+ - Installs its own OR
+ - Needs analysing if we should add another hook to support it of it it can be handled with the ones already provided.
+ - As it is may work (as it overwrites) but clearly it will not work with tagging in this way.
+
+
+
+
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/easybook/easybase.sty
 
@@ -85,7 +180,11 @@
     \cs_set:Npn \@makecol
 ```
 
- - Definition of `\@makecol` already in the new style, so should not do that but put any extrac code in hooks.
+ - Definition of `\@makecol` already in the new style, so should not do that, but put any extra code in hooks.
+
+ - email: toquyi@163.com
+ - https://gitee.com/texno3/easybook
+
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/jpsj/jpsj2.cls
@@ -97,6 +196,9 @@
 
  - Installs its own OR (with code fom 1986 or earlier. So will definitely fail tagging, but probably ok with updates of LaTeX OR.
 
+ - email: jpsj-online@jpsj.or.jp    (maybe, from authors doc)
+
+
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/fnpara/fnpara.sty
 
@@ -104,68 +206,34 @@
 \def \@makecol {%
 ```
 
-- Installs its own `\@makecol`. Could probably be fixed using the new one and installs extrac code in hooks.
-
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/plautopatch/pxstfloats.sty
-
-```
-%% mostly based on \@makecol in latex.ltx, and
-\def\fnbelowfloat{\global\let\@makecol\pxstfl@fnbelowfl@makecol}
-\def\fnabovefloat{\global\let\@makecol\pxstfl@fnabovefl@makecol}
-```
-
-- Most likely broken, but should be easily fixable.
+- Installs its own `\@makecol`. Could probably be fixed using the new one and extra code in hooks.
 
 
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/flowfram/flowfram.sty
+#### /usr/local/texlive/2024/texmf-dist/tex/latex/memoir/memoir.cls
 
 ```
+    \@makecol\@opcol
+  %   \@makecol\@opcol
+\newcommand{\feetabovefloat}{\gdef\@makecol{\mem@makecol}}
+\newcommand{\feetbelowfloat}{\gdef\@makecol{\mem@makecolbf}}
+```
+
+ - This needs some analysing, not sure yet if it is difficult or hard to adjust.
+
+ - Could most likely be rewritten using the new OR without a need to introduce extras
+
+ - As it is now it just overwrite the OR so will work but no tagging
+
+
+
+#### /usr/local/texlive/2024/texmf-dist/tex/latex/longfigure/longfigure.sty
+
+```
+          \@makecol
     \@makecol
-    \@makecol\@opcol
-\renewcommand{\@makecol}{%
 ```
 
- - Looks like all the redefinition does is adding `\@tempdima\dp\@cclv` but I don't see where this dimen is used. In any case the redefinition should not be necessary, as the new OR also stores the depth.
-
-
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/platex-tools/pxftnright.sty
-
-```
-%   * \@makecol is redefined
-  \@makecol
-\def\@makecol{%
-```
-
- - Reimplementation of ftnright for Japanese, should follow whatever is going to be done for that package and then should be ok.
- 
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/footbib/footbib.sty
-
-```
-  \vbox{}\clearpage\fi\fi\else\setbox\@cclv\vbox{\box\@cclv\vfil}\@makecol
-\@tempa\@makecol{\ifvoid\footins\setbox\@outputbox\box\@cclv\else\setbox
-    \@makecol\@opcol
-\def \@makecol {%
-```
-
- - Patches the OR and also checks if the LaTeX OR is as expect. So will certainly break
-
- - Needs updating and preferably use hooks to avoid the patching
-
- - Eric.Domenjoud@loria.fr
-
-
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/footmisx/footmisx.sty
-
-```
-    \CheckCommand*\@makecol{\ifvoid \footins
-    \CheckCommand*\@makecol{\ifvoid \footins
-      \CheckCommand*\@makecol{\ifvoid \footins
-      \CheckCommand*\@makecol{\ifvoid \footins
-  \edef\@makecol{\the\toks@}
-```
-
- - Broken - doesn't eaven load and that since 2016 or so
- - Should be sunset
+ - No problem with `\@makecol` but most likely otherwise broken with respect to tagging
 
 
 
@@ -197,22 +265,6 @@
 
 
 
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/memoir/memoir.cls
-
-```
-    \@makecol\@opcol
-  %   \@makecol\@opcol
-\newcommand{\feetabovefloat}{\gdef\@makecol{\mem@makecol}}
-\newcommand{\feetbelowfloat}{\gdef\@makecol{\mem@makecolbf}}
-```
-
- - This needs some analysing, not sure yet if it is difficult or hard to adjust.
-
- - Could most likely be rewritten using the new OR without a need tointroduce extras
-
- - As it is now it just overwrite the OR so will work but no tagging
-
-
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/pdfcolfoot/pdfcolfoot.sty
@@ -224,22 +276,6 @@
 ```
 
  - Does some patching which may or may not work, but needs analysing (and probably replacing using hooks)
-
-
-
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/revtex4/revtex4.cls
-
-```
-  \@makecol\csname output@column@\thepagegrid\endcsname
-\def\@makecol{%
- \@makecol
- \@makecol
-\@makecol
-```
-
- - Installs its own OR
- - Needs analysing if we should add another hook to support it of it it can be handled with the ones already provided.
- - As it is may work (as it overwrites) but clearly it will not work with tagging in this way.
 
 
 
@@ -268,19 +304,34 @@
       \def\@makecol{%
 ```
 
- - on first glance looks like it just has a copy of the std \@makecol inside
- - needs analysis and even if there is a mod it shouldn't be in the class file in this way
- 
-
-
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/longfigure/longfigure.sty
-
+ - overwrites OR in one case
+ - significant difference is this:
 ```
-          \@makecol
-    \@makecol
+  \color@begingroup
+  \normalcolor
+  \footnoterule
+! \makefootnoteparagraph
+  \color@endgroup
+  }%
+! \fi%
+  \xdef\@freelist{\@freelist\@midlist}%
+  \global\let\@midlist\@empty
+  \@combinefloats
+--- 9,19 ----
+  \color@begingroup
+  \normalcolor
+  \footnoterule
+! \unvbox \footins
+  \color@endgroup
+  }%
+! \fi
+! \let\@elt\relax
+  \xdef\@freelist{\@freelist\@midlist}%
+  \global \let \@midlist \@empty
+  \@combinefloats
 ```
+ - should be possible to handle with hooks
 
- - No problem with `\@makecol` but most likely otherwise broken
 
 
 -------------------------------
