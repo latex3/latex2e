@@ -15,7 +15,7 @@
   \xdef \@freelist {\@freelist \@midlist}%
   \global \let \@midlist \@empty
 %  
-  \UseSocket {@makecol/outputbox}%           % <--------
+  \UseSocket {OR/makecol/outputbox}%           % <--------
 %  
   \ifvbox \@kludgeins
     \@make@specialcolbox
@@ -40,6 +40,7 @@
     \global \let \@@if@newlist \if@newlist
     \global \@newlistfalse
     \@parboxrestore
+    \UseHook {OR/outputpage/reset}%            % <--------
     \shipout \vbox {%
        \set@typeset@protect
        \aftergroup \endgroup
@@ -60,9 +61,9 @@
           \fi
        \fi
        \reset@font \normalsize \normalsfcodes
-       \let \label \@gobble
-       \let \index \@gobble
-       \let \glossary \@gobble
+       \let \label \@gobble@with@sphack@om
+       \let \index \@gobble@with@sphack@som
+       \let \glossary \@gobble@with@sphack@om
        \baselineskip \z@skip
        \lineskip \z@skip
        \lineskiplimit \z@
@@ -107,7 +108,17 @@
 }
 ```
 
+## Questions
 
+### What hook/socket names should we use
+
+ - all `OR/...` as done above?
+ - or closer to the command names, e.g., `cmd/@outputpage/before` `@outputpage/reset`, etc?
+   In that case one can use the generic hooks but I'm not so keen on using generic hooks for internal commands
+
+
+
+## Hook, sockets, plugs
 
 Plug definition indirect as long as tagpdf.sty still uses the old names
 ```
