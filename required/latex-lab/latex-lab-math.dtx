@@ -115,10 +115,139 @@
 %    regardless of the state of the boolean. For
 %    |equation|, |equation*| and |math| this is a change as they no longer can
 %    contain verbatim.
-%
-%   \item BUG: |\[...\]| grabs if \cs{l_@@_collected_bool} is false. If it is
-%   true it falls back to |equation*| and then errors because this can't find the end.
 %  \end{itemize}
+%
+% \section{Avoiding math capture}
+% In most cases when an environment or command switches into math,
+% the semantic meaning of the content \emph{is} math and
+% grabbing and then tagging that as a Formula is adequate.
+%
+% But there are exceptions, most prominently with the math shift token |$|.
+% \begin{itemize}
+% \item  |$| can be used to center a box with |\vcenter|,
+% for example in the tabular code. The opening |$| is then often in a
+% different command  than the closing |$| and the content of the box
+% should be tagged normally, including all math it contains.
+% This means one wants to avoid that the opening |$| triggers the math
+% grabbing and creates a Formula structure but then switch back to normal
+% text and math tagging.
+%
+% \item |$| is used to place superscripts and subscripts, see the definition of
+% |\textsuperscript| which uses |\ensuremath| internally. Inside the superscript
+% in special cases you may want more tagging (including nested math tagging) but
+% typically it is simple text.
+%
+% \item |$| is used to access a char in a math font.
+%
+% For example the |\meta| command uses internally the math commands
+% |\langle| and |\rangle| around its argument:\\
+% |$\langle$\textit{argument}$\rangle$|
+% which gives $\langle$\textit{argument}$\rangle$.
+%
+% The symbols are then clearly not math.
+% (Beside disabling math tagging one could also use text commands like
+% |\textlangle| and |\textrangle|: \textlangle\textit{argument}\textrangle{}.
+% Depending on the font that could even look better,
+% but it requires that the font supports the chars, which is not the case
+% for various open type fonts.)
+% Additional tagging inside the math should be not needed.
+% If the symbols needs an actualtext then a Span can be added around the whole thing.
+%
+% \end{itemize}
+%
+% \subsection{Options to suppressing math grabbing and tagging}
+%  We are there providing a number of options to suppress the collection/grabbing
+%  of the math an with it the tagging.
+% \DescribeMacro\MathCollectTrue
+% \DescribeMacro\MathCollectFalse
+% \DescribeMacro\m@th
+% \DescribeMacro\SuspendTagging
+%  These commands can be used to control locally the tagging of math.
+%  The first two are new commands. |\m@th| is a standard \LaTeX\ command
+%  used in a number of places to set |\mathsurround| to zero;
+%  with active tagging it is also used to identify math
+%  that should not be tagged. Details are described below.
+%  (|\SuspendTagging| is documented in source2e.pdf.)
+%
+%  To set |\mathsurround| without disabling math tagging, use |\mathsurround\z@| directly.
+%
+%
+% \subsubsection{Using the trigger token \cs{m@th} \emph{inside} the math}
+%
+% If the grabbed math contains the token |\m@th| the tagging/processing
+% of the math is suppressed. As the math is nevertheless grabbed, this requires
+% that the end math shift token is not hidden in some other command.
+% |\m@th| sets also |\mathsurround| to zero, which is often
+% wanted in untagged math anyway.
+%
+% Text tagging is \emph{not} suppressed inside the math, e.g.,
+% |\mbox{\emph{text}}| will still create an Em-structure.
+% In contrast nested math is not tagged.
+%
+% To suppress the text tagging |\SuspendTagging{}| can be used:
+%    \begin{itemize}
+%    \item no math tagging, but |\emph| is tagged:\\
+%          |$\m@th\langle\mbox{\emph{if and only if} $x=y$}\rangle$|
+%
+%    \item no internal tagging:
+%          \\
+%         |$\m@th\SuspendTagging{}\langle\mbox{\emph{if and only if}} $x=y$}\rangle$|
+%    \end{itemize}
+%
+% The method is quite suitable for symbols and also for sub- and superscripts
+% (as long as they don't contain nested math that should be tagged).
+%
+%
+% \subsubsection{Using \cs{m@th} \emph{before} the opening \texttt{\$}}
+%
+% |\m@th| (as defined in the latex-lab-math code) sets also the internal boolean
+% which controls the grabbing  to true and so when it is used \emph{before}
+% some math it disables math grabbing and tagging for all following math
+% in the current group (including nested math).
+% Text tagging inside the math is still active, it can be disabled as above
+% with |\SuspendTagging{}|.
+%
+% When |\m@th| is used like this it is possible to reenable the math
+% tagging of nested math, by adding |\MathCollectTrue| after the opening |$|.
+%
+%    \begin{itemize}
+%    \item no math tagging, but |\emph| is tagged:\\
+%        |{\m@th$\langle\mbox{\emph{if and only if} $x=y$}\rangle$}|
+%
+%    \item  both nested math and |\emph| is tagged:\\
+%        |{\m@th$\MathCollectTrue\langle\mbox{\emph{if and only if} $x=y$}\rangle$}|
+%    \end{itemize}
+%
+% The method is suitable for symbols and sub- and superscripts too
+% (it is actually how superscripts avoid math tagging currently).
+% It can also be used in cases where the end math shift token is
+% hidden in some other command. But it is not so useful for
+% larger boxes as it sets |\mathsurround| to zero.
+% Grouping should be used to avoid side-effects on following math.
+%
+%
+%\subsubsection{Disabling math tagging with \cs{MathCollectFalse}}
+%
+% Without a side-effect on |\mathsurround| the math grabbing can be
+% suppressed and reenabled by setting the boolean that controls the collecting.
+% So in the following example the math in the |\mbox| is properly tagged,
+% but the angled brackets are simple text.
+%
+%    \begin{verbatim}
+%    %stop math grabbing
+%    \MathCollectFalse
+%    $
+%    %(optional) restart math grabbing for nested math
+%    \MathCollectTrue
+%    \langle\mbox{\emph{if and only if}} $x=y$}\rangle
+%    $
+%    %(optional) restart math grabbing for following math
+%    % if there is no grouping
+%    \MathCollectTrue
+%    \quad $x=1$
+%    \end{verbatim}
+%    The method is suitable if a box should be centered with
+%    |\vcenter| (and is used in array.sty for the tabular code).
 %
 % \subsection{Code level interfaces}
 %
@@ -163,6 +292,15 @@
 %       beginning of the environment; this is used to remove non-mathematical
 %       material.
 %   \end{itemize}
+% \end{function}
+%
+ \begin{function}{\MathCollectTrue,\MathCollectFalse}
+%   \begin{syntax}
+%     \cs{MathCollectTrue}\\
+%     \cs{MathCollectFalse}
+%   \end{syntax}
+%  This activates/deactivates the math collection of the math shift token.
+%  See above for cases when this can be usefull.
 % \end{function}
 %
 % \section{Math tagging}
@@ -1513,7 +1651,7 @@
 %   }
 %   These sockets are used in \cs{maketag@@@} to tag
 %   labels as Lbl. luamml changes the plug to move
-%   the Lbl into the math structure with an intent. 
+%   the Lbl into the math structure with an intent.
 %   \changes{v0.6l}{2025-02-06}{added sockets for tags/labels}
 %    \begin{macrocode}
 \socket_new:nn {tagsupport/math/display/tag/begin}{0}
@@ -1528,7 +1666,7 @@
   {tagsupport/math/display/tag/begin}
   {default}
   {
-    \tag_mc_end: 
+    \tag_mc_end:
     \tag_struct_begin:n {tag=Lbl}
     \tag_mc_begin:n {}
   }
@@ -1536,11 +1674,11 @@
   {tagsupport/math/display/tag/end}
   {default}
   {
-    \tag_mc_end: 
-    \tag_struct_end: 
+    \tag_mc_end:
+    \tag_struct_end:
     \tag_mc_begin:n{}
   }
-\socket_assign_plug:nn {tagsupport/math/display/tag/begin}{default}  
+\socket_assign_plug:nn {tagsupport/math/display/tag/begin}{default}
 \socket_assign_plug:nn {tagsupport/math/display/tag/end}{default}
 %    \end{macrocode}
 % \end{plugdecl}
@@ -1847,6 +1985,13 @@
 % \end{macro}
 %
 % \subsection{Content grabbing}
+%
+% \begin{macro}{\MathCollectTrue,\MathCollectFalse}
+%    \begin{macrocode}
+\cs_set_protected:Npn\MathCollectTrue{\bool_set_false:N \l__math_collected_bool}
+\cs_set_protected:Npn\MathCollectFalse{\bool_set_true:N \l__math_collected_bool}
+%    \end{macrocode}
+% \end{macro}
 %
 % \begin{macro}{\@@_grab_dollar:w}
 % \begin{macro}{\@@_grab_dollar:n}
@@ -2562,26 +2707,24 @@
 %    \end{macrocode}
 %
 % Tabulars currently contain a \$ that shouldn't trigger math
-% tagging.
+% tagging. Also we do need to change the grabbing method to the slow
+% loop-method.
 %    \begin{macrocode}
 \RequirePackage{array}
-\tl_if_in:NnT\@tabular{$}
- {
-   \def\@tabular{%
-   \leavevmode
-   \UseTaggingSocket{tbl/hmode/begin}%
-   \hbox \bgroup
-   \bool_set_true:N \l_@@_collected_bool
-   $
-   \bool_set_false:N \l_@@_collected_bool
-   \col@sep\tabcolsep \let\d@llarbegin\begingroup
-                                    \let\d@llarend\endgroup
+\def\@tabular{%
+ \leavevmode
+ \UseTaggingSocket{tbl/hmode/begin}%
+ \hbox \bgroup
+  \MathCollectFalse
+  $
+  \MathCollectTrue
+  \col@sep\tabcolsep \let\d@llarbegin\begingroup
+                                 \let\d@llarend\endgroup
 %    \end{macrocode}
 %   A proper switching mechanism is needed: for the present, do directly.
 %    \begin{macrocode}
-   \cs_set_protected:Npn \@@_grab_dollar:w { \@@_grab_dollar_loop: }
-   \@tabarray}
- }
+  \cs_set_protected:Npn \@@_grab_dollar:w { \@@_grab_dollar_loop: }
+  \@tabarray}
 %    \end{macrocode}
 %
 % \begin{macro}{\@@_m@th:, \m@th}
