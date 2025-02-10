@@ -4,7 +4,7 @@
 
 ```
 \def\@makecol{%
-  \UseHook {OR/makecol/before}%            % <--------
+  \UseHook {OR/makecol/before}%              % <--------
 %  
   \setbox \@outputbox \box \@cclv
   \@outputbox@removebskip
@@ -15,7 +15,7 @@
   \xdef \@freelist {\@freelist \@midlist}%
   \global \let \@midlist \@empty
 %  
-  \UseSocket {OR/makecol/outputbox}%           % <--------
+  \UseSocket {OR/makecol/outputbox}%         % <--------
 %  
   \ifvbox \@kludgeins
     \@make@specialcolbox
@@ -24,7 +24,7 @@
   \fi
   \global \maxdepth \@maxdepth
 %  
-  \UseHook {OR/makecol/after}%             % <--------
+  \UseHook {OR/makecol/after}%              % <--------
 }  
 ```
 
@@ -73,14 +73,16 @@
           \setbox \@tempboxa \vbox to\headheight {%
               \vfil
 %             
-              \@kernel@before@head                  % <-----
+              \pdfannot_link_off:
+              \UseTaggingSocket{OR/head/before}  % <--------
 %             
               \color@hbox
                 \normalcolor
                 \hb@xt@ \textwidth {\@thehead }%
               \color@endbox
 %             
-              \@kernel@after@head                   % <-----
+              \UseTaggingSocket{OR/head/after}   % <--------
+              \pdfannot_link_on:
 %             
            }%
            \dp \@tempboxa \z@
@@ -89,14 +91,16 @@
            \box \@outputbox
            \baselineskip \footskip
 %             
-           \@kernel@before@foot                     % <-----
+           \pdfannot_link_off:
+           \UseTaggingSocket{OR/foot/before}     % <--------
 %             
            \color@hbox
               \normalcolor
               \hb@xt@ \textwidth {\@thefoot }%
             \color@endbox
 %             
-            \@kernel@after@foot                     % <-----
+            \UseTaggingSocket{OR/foot/after}     % <--------
+            \pdfannot_link_on:
 %             
       }%
    }%
@@ -116,6 +120,8 @@
  - or closer to the command names, e.g., `cmd/@outputpage/before` `@outputpage/reset`, etc?
    In that case one can use the generic hooks but I'm not so keen on using generic hooks for internal commands
 
+- if we can assume that tagging for header and footer is always idential we could reuse the sockets and call them
+  `OR/headfoot/before` and   `OR/headfoot/after`
 
 
 ## Hook, sockets, plugs
@@ -130,6 +136,24 @@ Plug definition indirect as long as tagpdf.sty still uses the old names
 \NewSocket{tagsupport/OR/footins}
 \NewSocketPlug{tagsupport/OR/footins}{default}
   { \@kernel@before@footins }
+
+
+\NewSocket{tagsupport/OR/head/before}
+\NewSocketPlug{tagsupport/OR/head/before}{default}
+  { \@kernel@before@head }
+
+\NewSocket{tagsupport/OR/head/after}
+\NewSocketPlug{tagsupport/OR/head/after}{default}
+  { \@kernel@after@head }
+
+
+\NewSocket{tagsupport/OR/foot/before}
+\NewSocketPlug{tagsupport/OR/foot/before}{default}
+  { \@kernel@before@foot }
+
+\NewSocket{tagsupport/OR/foot/after}
+\NewSocketPlug{tagsupport/OR/foot/after}{default}
+  { \@kernel@after@foot }
 
 
 \NewSocket{OR/makecol/before}       % we could use cmd/@makecol/before instead
