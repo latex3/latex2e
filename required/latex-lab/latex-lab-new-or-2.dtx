@@ -17,8 +17,8 @@
 %
 % for those people who are interested or want to report an issue.
 %
-\def\ltlabneworIIdate{2023-09-04}
-\def\ltlabneworIIversion{0.85c}
+\def\ltlabneworIIdate{2025-02-11}
+\def\ltlabneworIIversion{0.86a}
 
 %<*driver>
 \documentclass{l3doc}
@@ -32,7 +32,7 @@
 % \fi
 %
 %
-% \title{The \texttt{latex-lab-testphase-new-or-2} code\thanks{}}
+% \title{The \texttt{latex-lab-testphase-new-or-2} code}
 % \author{Frank Mittelbach, \LaTeX{} Project}
 % % \date{v\ltlabneworIIversion\ \ltlabneworIIdate}
 % \maketitle
@@ -63,14 +63,52 @@
 %
 % \section{Hooks and replaceable code blocks}
 %
+%    To support packages that want to augment aspects of the output
+%    routine we offer a number of hooks (where several packages can
+%    add code) as well as some sockets (that can only be changed by
+%    one package or through options like those of the \pkg{footmisc}
+%    package).
+%
+%
+% \subsubsection{Output routine hooks}
+%
+%    \begin{description}
+%
+%    \item[\hook{OR/page/before}, \hook{OR/page/after}]
+%       These two hooks enable packages to prepend or append code to
+%       the page processing in the output routine. They are
+%       implemented as mirrored hooks.
+%
+%       Technically, they are executed at the start and end of the internal
+%       \LaTeXe{} \cs{@outputpage} command, respectively.
+%
+%
+%    \item[\hook{OR/page/reset}]
+%       Packages that set up special conventions for text in the main
+%       galley (such as catcode changes, etc) can use this hook to
+%       undo these changes within the output routine, so that they
+%       aren't applied to unrelated material, e.g., the text for
+%       running header or footers.
+%
+%    \item[\hook{OR/column/before}, \hook{OR/column/after}]
+%       These two hooks enable packages to prepend or append code to
+%       the column processing in the output routine. They are
+%       implemented as mirrored hooks.
+%
+%       Technically, they are executed at the start and end of the internal
+%       \LaTeXe{} \cs{@makecol} command, respectively.
+%       
+%    \end{description}
 %
 % \subsubsection{Replaceable code blocks (sockets)}
 %
 %    To cater for different layouts with respect to text, footnotes,
-%    and bottom-floats placements there are two sockets for
-%    now.
+%    and bottom-floats placements there are  sockets for
+%    now. They are sockets not hooks, because the overall layout can only be
+%    controlled by one package, i.e., the last setting wins.
+%
 %    \begin{description}
-%    \item[\socket{@makecol/outputbox} (0 arguments)]
+%    \item[\socket{OR/column/outputbox} (0 arguments)]
 %
 %      In code for this socket the \cs{@outputbox} (holding the
 %      galley text for the current column or page) is augmented by
@@ -123,7 +161,7 @@
 %        \DescribeMacro[noprint]{@outputbox@reinsertbskip}
 %
 %        Reinsert the bottom skip of the \cs{@outputbox} that was
-%        saved before.   
+%        saved before in \cs{@makecol}.   
 %   
 %      \item[Testing for existence of material]
 %
@@ -186,9 +224,8 @@
 %
 %      \end{description}
 %
-%-----------------------
 %
-%    \item[\socket{@makecol/footnotes} (0 arguments)]
+%    \item[\socket{OR/column/footnotes} (0 arguments)]
 %
 %       This socket is used to manipulate the footnote
 %        material inside \cs{box}\cs{footins}. It if contains code, it
@@ -200,6 +237,42 @@
 %         the plug \plug{para} assigned which is defined elsewhere. 
 %
 %    \end{description}
+%
+% \subsubsection{Tagging sockets}
+%
+%  The following sockets are used to implement tagging. They are used
+%  via \cs{UseTaggingSocket} which turns them off when tagging is
+%  disabled.
+%  For each of them a \plug{default} plug is implemented that holds the tagging code.
+%
+%    \begin{description}
+%
+%    \item[\socket{OR/column/outputbox} (0 arguments)]
+%       This socket is used to add any missing tagging structures to the
+%       \cs{@outputbox}, if necessary.
+%
+%    \item[\socket{OR/column/footins} (0 arguments)]
+%       This socket is used to add any missing tagging structures to
+%       \cs{footins} box, if necessary.
+%
+%    \item[\socket{OR/page/header} (2 arguments)]
+%
+%       This socket receives the content of the formatted page header
+%       as its second argument and adds the necessary tagging around
+%       it. The first argument is empty as no special setup is
+%       necessary.
+%
+%    \item[\socket{OR/page/footer} (2 arguments)]
+%
+%       This socket receives the content of the formatted page footer
+%       as its second argument and adds the necessary tagging around
+%       it. The first argument is empty as no special setup is
+%       necessary.
+%
+%    \end{description}
+%
+%
+%
 %
 % \StopEventually{\setlength\IndexMin{200pt}  \PrintIndex  }
 %
@@ -231,6 +304,11 @@
 %    \begin{macrocode}
 \def \@makecol {%
 %    \end{macrocode}
+%    A number of packages want to prepend code to \cs{@makecol}; this
+%    is the hook for that:
+%    \begin{macrocode}
+  \UseHook {OR/column/before}%
+%    \end{macrocode}
 %    Save away box 255 as \cs{@outputbox} to make it available for further adjustments.
 %    \begin{macrocode}
   \setbox\@outputbox \box\@cclv
@@ -241,11 +319,11 @@
 %    \begin{macrocode}
   \@outputbox@removebskip
 %    \end{macrocode}
-%   Now a kernel hook for tagging.
-%    \fmi{The name is likely to change and it probably will eventually
-%         be replaced with a socket.}
+%    Now a kernel hook for tagging that adjusts the content of
+%    \cs{@outputbox}, if necessary. At this point it just contains the material from
+%    the galley.
 %    \begin{macrocode}
-  \@kernel@tagsupport@@makecol
+  \UseTaggingSocket{OR/column/outputbox}%
 %    \end{macrocode}
 %    When this code is run any ``here'' floats in the \cs{@outputbox} are already handled, so we
 %    recycle their registers and put them back to the \cs{@freelist}.
@@ -254,10 +332,13 @@
   \xdef\@freelist{\@freelist\@midlist}%
   \global \let \@midlist \@empty
 %    \end{macrocode}
-%    Here we have the configurable part. This socket is supposed to add floats,
-%    footnotes and stretchable vertical space as appropriate to the \cs{@outputbox}.
+%    Here we have the configurable part. This socket is supposed to
+%    add floats, footnotes and stretchable vertical space as
+%    appropriate to the \cs{@outputbox}. It is used by packages such
+%    as \pkg{footmisc} to implement different layout, e.g., footnotes
+%    above or below bottom floats, etc.
 %    \begin{macrocode}
-  \UseSocket{@makecol/outputbox}%
+  \UseSocket {OR/column/outputbox}%
 %    \end{macrocode}
 %    Then we deal with any \cs{enlargethispage} or run the normal code
 %    to build a column.
@@ -268,6 +349,11 @@
      \@make@normalcolbox
   \fi
   \global \maxdepth \@maxdepth
+%    \end{macrocode}
+%    Finally, another hook for external packages or classes that want
+%    to augment or alter the output routine by appending to \cs{@makecol}.
+%    \begin{macrocode}
+  \UseHook {OR/column/after}%
 }
 %    \end{macrocode}
 %  \end{macro}
@@ -390,17 +476,12 @@
 %
 %
 %
-%  \begin{macro}{\@kernel@before@cclv,
-%                \@kernel@before@footins}
-%    These two commands are internal kernel hooks intended for tagging
-%    support in case that is active. They should not be altered by package code!
-%    By default they do nothing (and
+%  \begin{macro}{\@kernel@before@footins}
+%    This  command is an internal kernel hook intended for tagging
+%    support in case that is active. It should not be altered by package code!
+%    By default it do nothing (and
 %    may have been defined already by \cs{DocumentMetadata}).
-%    \fmi{The names might change and perhaps each of them is turned
-%    into a socket named something like \socket{tagsupport/before/cclv}
-%    or similar.}
 %    \begin{macrocode}
-\providecommand\@kernel@before@cclv{}
 \providecommand\@kernel@before@footins{}
 %    \end{macrocode}
 %  \end{macro}
@@ -411,7 +492,7 @@
 % \subsection{The output routine configuration components}
 %
 %    Here we provide the components that are used to define code for the
-%    \socket{@makecol/outputbox} socket.
+%    \socket{OR/column/outputbox} socket.
 %
 %
 %  \begin{macro}{\@outputbox@append}
@@ -458,18 +539,17 @@
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-     \UseSocket{@makecol/footnotes}%
+     \UseSocket{OR/column/footnotes}%
 %    \end{macrocode}
 %    Then the footnotes are appended:
 %    \begin{macrocode}
      \@outputbox@append{%
        \vskip \skip\footins
 %    \end{macrocode}
-%    This is a kernel hook for tagging.
-%    \fmi{The name is likely to change and it probably will eventually
-%         be replaced with a socket.}
+%    This is socket for inserting tagging.
+%    \fmi{Why doesn't that has to be one with 2 arguments?}
 %    \begin{macrocode}
-       \@kernel@before@footins
+       \UseTaggingSocket{OR/column/footins}%
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -545,14 +625,14 @@
 %
 %
 %
-%  \begin{socketdecl}{@makecol/footnote}
+%  \begin{socketdecl}{OR/column/footnotes}
 %
 %    The socket allowing the manipulation of \cs{footins} box
 %    (result needs to be moved back in there). Used when footnotes are
 %    reformatted into a single paragraph by the
 %    \texttt{para} option of \pkg{footmisc}. By default it does nothing.
 %    \begin{macrocode}
-\NewSocket{@makecol/footnotes}{0}
+\NewSocket{OR/column/footnotes}{0}
 %    \end{macrocode}
 %  \end{socketdecl}
 %
@@ -606,12 +686,12 @@
 % \subsection{The \cs{@makecol} configuration}
 %
 %
-%  \begin{socketdecl}{@makecol/outputbox}
+%  \begin{socketdecl}{OR/column/outputbox}
 %    We have one socket that is supposed to augment the \cs{@outputbox}
 %    by attaching floats and footnotes with appropriate spacing.
 %
 %    \begin{macrocode}
-\NewSocket{@makecol/outputbox}{0}
+\NewSocket{OR/column/outputbox}{0}
 %    \end{macrocode}
 %  \end{socketdecl}
 %
@@ -622,7 +702,7 @@
 %    After the galley text there is a vertical \cs{vfill} followed by
 %    any footnotes followed by the bottom floats, if any.
 %    \begin{macrocode}
-\NewSocketPlug {@makecol/outputbox}{space-footnotes-floats} {%
+\NewSocketPlug {OR/column/outputbox}{space-footnotes-floats} {%
   \@if@footnotes@TF
       {\@outputbox@append{\vfill}}%
       {\@if@bfloats@TF
@@ -639,7 +719,7 @@
 %     As before but the \cs{vfill} is at the bottom (page is ragged
 %    bottom).
 %    \begin{macrocode}
-\NewSocketPlug {@makecol/outputbox}{floats-footnotes-space} {%
+\NewSocketPlug {OR/column/outputbox}{floats-footnotes-space} {%
   \@outputbox@attachfloats
   \@if@footnotes@TF
       {\@outputbox@append{\vfill}}%
@@ -652,7 +732,7 @@
 %  \begin{plugdecl}{footnotes-space-floats}
 %    As before but the \cs{vfill} is between footnotes and floats.
 %    \begin{macrocode}
-\NewSocketPlug {@makecol/outputbox}{footnotes-space-floats} {%
+\NewSocketPlug {OR/column/outputbox}{footnotes-space-floats} {%
   \@outputbox@appendfootnotes
   \@if@bfloats@TF
       {\@outputbox@append{\vfill}}%
@@ -668,7 +748,7 @@
 %         they aren't set up by default --- doing that in a class
 %         would be trivial though.}
 %    \begin{macrocode}
-\NewSocketPlug {@makecol/outputbox}{space-floats-footnotes} {%
+\NewSocketPlug {OR/column/outputbox}{space-floats-footnotes} {%
   \@if@footnotes@TF
       {\@outputbox@append{\vfill}}%
       {\@if@bfloats@TF
@@ -688,7 +768,7 @@
 %         separation between blocks, etc.
 %         The order is text, floats, footnotes.
 %    \begin{macrocode}
-\NewSocketPlug {@makecol/outputbox}{floats-footnotes} {%
+\NewSocketPlug {OR/column/outputbox}{floats-footnotes} {%
   \@outputbox@attachfloats
   \@outputbox@appendfootnotes
 %    \end{macrocode}
@@ -707,7 +787,7 @@
 %
 %  \begin{plugdecl}{footnotes-floats}
 %    \begin{macrocode}
-\NewSocketPlug {@makecol/outputbox}{footnotes-floats} {%
+\NewSocketPlug {OR/column/outputbox}{footnotes-floats} {%
   \@outputbox@appendfootnotes
   \@outputbox@attachfloats
   \@outputbox@reinsertbskip
@@ -718,8 +798,139 @@
 %    by assigning any of the other plugs (or by coding yet another
 %    plug for the socket).
 %    \begin{macrocode}
-\AssignSocketPlug {@makecol/outputbox}{footnotes-floats}
+\AssignSocketPlug {OR/column/outputbox}{footnotes-floats}
 %    \end{macrocode}
+%  \end{plugdecl}
+%
+%
+% \subsection{\cs{@outputpage} reimplementation}
+%
+%
+%  \begin{macro}{\@outputpage}
+%    
+%    \begin{macrocode}
+\ExplSyntaxOn
+\def\@outputpage{%
+  \UseHook {OR/page/before}%             % <--------
+%
+  \begingroup
+    \let \protect \noexpand
+    \language \document@default@language
+    \@resetactivechars
+    \global \let \@@if@newlist \if@newlist
+    \global \@newlistfalse
+    \@parboxrestore
+    \UseHook {OR/page/reset}%            % <--------
+    \shipout \vbox {%
+       \set@typeset@protect
+       \aftergroup \endgroup
+       \aftergroup \set@typeset@protect
+       \if@specialpage
+          \global \@specialpagefalse
+          \@nameuse {ps@\@specialstyle}%
+       \fi
+       \if@twoside
+          \ifodd \count \z@
+             \let \@thehead \@oddhead
+             \let \@thefoot \@oddfoot
+             \let \@themargin \oddsidemargin
+          \else
+             \let \@thehead \@evenhead
+             \let \@thefoot \@evenfoot
+             \let \@themargin \evensidemargin
+          \fi
+       \fi
+       \reset@font \normalsize \normalsfcodes
+       \let \label \@gobble@with@sphack@om
+       \let \index \@gobble@with@sphack@som
+       \let \glossary \@gobble@with@sphack@om
+       \baselineskip \z@skip
+       \lineskip \z@skip
+       \lineskiplimit \z@
+       \@begindvi
+       \vskip \topmargin
+       \moveright \@themargin \vbox {%
+          \setbox \@tempboxa \vbox to\headheight {%
+              \vfil
+%             
+              \pdfannot_link_off:
+              \UseTaggingSocket{OR/page/header}{}  % <--------
+                {
+                  \color@hbox
+                    \normalcolor
+                    \hb@xt@ \textwidth {\@thehead }%
+                  \color@endbox
+                }
+              \pdfannot_link_on:
+%             
+           }%
+           \dp \@tempboxa \z@
+           \box \@tempboxa
+           \vskip \headsep
+           \box \@outputbox
+           \baselineskip \footskip
+%             
+           \pdfannot_link_off:
+           \UseTaggingSocket{OR/page/footer}{}     % <--------
+              {
+                 \color@hbox
+                    \normalcolor
+                    \hb@xt@ \textwidth {\@thefoot }%
+                  \color@endbox
+              }
+           \pdfannot_link_on:
+%             
+      }%
+   }%
+   \global \let \if@newlist \@@if@newlist
+   \global \@colht \textheight
+   \stepcounter {page}%
+%
+   \UseHook {OR/page/after}%                % <--------
+}
+\ExplSyntaxOff
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{plugdecl}{default}
+%
+%    \begin{macrocode}
+
+
+
+\NewMirroredHookPair{OR/page/before}{OR/page/after}
+
+\NewHook {OR/page/reset}
+
+\NewSocket{tagsupport/OR/page/header}{2}
+\NewSocketPlug{tagsupport/OR/page/header}{default}
+  { \@kernel@before@head #2 \@kernel@after@head }
+\AssignSocketPlug{tagsupport/OR/page/header}{default}
+
+
+\NewSocket{tagsupport/OR/page/footer}{2}
+\NewSocketPlug{tagsupport/OR/page/footer}{default}
+  { \@kernel@before@foot #2 \@kernel@after@foot }
+\AssignSocketPlug{tagsupport/OR/page/footer}{default}
+
+
+
+\NewMirroredHookPair{OR/column/before}{OR/column/after}
+
+\NewSocket{tagsupport/OR/column/outputbox}{0}
+\NewSocketPlug{tagsupport/OR/column/outputbox}{default}
+  { \@kernel@tagsupport@@makecol }
+\AssignSocketPlug{tagsupport/OR/column/outputbox}{default}
+
+
+\NewSocket{tagsupport/OR/column/footins}{0}
+\NewSocketPlug{tagsupport/OR/column/footins}{default}
+  { \@kernel@before@footins }
+\AssignSocketPlug{tagsupport/OR/column/footins}{default}
+
+  
+%    \end{macrocode}
+%
 %  \end{plugdecl}
 %
 %

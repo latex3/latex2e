@@ -4,18 +4,18 @@
 
 ```
 \def\@makecol{%
-  \UseHook {OR/makecol/before}%              % <--------
+  \UseHook {OR/column/before}%              % <--------
 %  
   \setbox \@outputbox \box \@cclv
   \@outputbox@removebskip
 %  
-  \UseTaggingSocket{OR/makecol}              % <--------
+  \UseTaggingSocket{OR/column/outputbox}              % <--------
 %  
   \let \@elt \relax
   \xdef \@freelist {\@freelist \@midlist}%
   \global \let \@midlist \@empty
 %  
-  \UseSocket {OR/makecol/outputbox}%         % <--------
+  \UseSocket {OR/column/outputbox}%         % <--------
 %  
   \ifvbox \@kludgeins
     \@make@specialcolbox
@@ -24,14 +24,14 @@
   \fi
   \global \maxdepth \@maxdepth
 %  
-  \UseHook {OR/makecol/after}%              % <--------
+  \UseHook {OR/column/before/after}%              % <--------
 }  
 ```
 
 
 ```
 \def\@outputpage{%
-  \UseHook {OR/outputpage/before}%             % <--------
+  \UseHook {OR/page/before}%             % <--------
 %
   \begingroup
     \let \protect \noexpand
@@ -40,7 +40,7 @@
     \global \let \@@if@newlist \if@newlist
     \global \@newlistfalse
     \@parboxrestore
-    \UseHook {OR/outputpage/reset}%            % <--------
+    \UseHook {OR/page/reset}%            % <--------
     \shipout \vbox {%
        \set@typeset@protect
        \aftergroup \endgroup
@@ -74,7 +74,7 @@
               \vfil
 %             
               \pdfannot_link_off:
-              \UseTaggingSocket{OR/head}{}  % <--------
+              \UseTaggingSocket{OR/page/header}{}  % <--------
                 {
                   \color@hbox
                     \normalcolor
@@ -91,7 +91,7 @@
            \baselineskip \footskip
 %             
            \pdfannot_link_off:
-           \UseTaggingSocket{OR/foot}{}     % <--------
+           \UseTaggingSocket{OR/page/footer}{}     % <--------
               {
                  \color@hbox
                     \normalcolor
@@ -106,7 +106,7 @@
    \global \@colht \textheight
    \stepcounter {page}%
 %
-  \UseHook {OR/outputpage/after}%                % <--------
+  \UseHook {OR/page/after}%                % <--------
 }
 ```
 
@@ -119,33 +119,35 @@
    In that case one can use the generic hooks but I'm not so keen on using generic hooks for internal commands
 
 - if we can assume that tagging for header and footer is always idential we could reuse the sockets and call them
-  `OR/headfoot/before` and   `OR/headfoot/after`
+  `OR/page/headerfoot/before` and   `OR/page/headerfoot/after`
 
 
 ## Hook, sockets, plugs
 
 Plug definition indirect as long as tagpdf.sty still uses the old names
 ```
-\NewSocket{tagsupport/OR/makecol}{0}
-\NewSocketPlug{tagsupport/OR/makecol}{default}
+\NewSocket{tagsupport/OR/column/outputbox}{0}
+\NewSocketPlug{tagsupport/OR/column/outputbox}{default}
   { \@kernel@tagsupport@@makecol }
+\AssignSocketPlug{tagsupport/OR/column/outputbox}{default}
 
 
-\NewSocket{tagsupport/OR/footins}{0}
-\NewSocketPlug{tagsupport/OR/footins}{default}
+\NewSocket{tagsupport/OR/column/footins}{0}
+\NewSocketPlug{tagsupport/OR/column/footins}{default}
   { \@kernel@before@footins }
+\AssignSocketPlug{tagsupport/OR/column/footins}{default}
 
 
-\NewSocket{tagsupport/OR/head}{2}
-\NewSocketPlug{tagsupport/OR/head}{default}
+\NewSocket{tagsupport/OR/page/header}{2}
+\NewSocketPlug{tagsupport/OR/page/header}{default}
   { \@kernel@before@head #2 \@kernel@after@head }
-\AssignSocketPlug{tagsupport/OR/head}{default}
+\AssignSocketPlug{tagsupport/OR/page/header}{default}
 
 
-\NewSocket{tagsupport/OR/foot}{2}
-\NewSocketPlug{tagsupport/OR/foot}{default}
+\NewSocket{tagsupport/OR/page/footer}{2}
+\NewSocketPlug{tagsupport/OR/page/footer}{default}
   { \@kernel@before@foot #2 \@kernel@after@foot }
-\AssignSocketPlug{tagsupport/OR/foot}{default}
+\AssignSocketPlug{tagsupport/OR/page/footer}{default}
 
 ```
 
@@ -153,11 +155,11 @@ Plug definition indirect as long as tagpdf.sty still uses the old names
 The hooks are there to support external packages (not yet used).
 
 ```
-\NewHook{OR/makecol/before}       % we could use cmd/@makecol/before instead
-\NewHook{OR/makecol/after}        % we could use cmd/@makecol/after instead
+\NewHook{OR/column/before}       % we could use cmd/@makecol/before instead
+\NewHook{OR/column/after}        % we could use cmd/@makecol/after instead
 
-\NewHook{OR/outputpage/before}    % we could use cmd/@outputpage/before instead
-\NewHook{OR/outputpage/after}     % we could use cmd/@outputpage/after instead
+\NewHook{OR/page/before}    % we could use cmd/@outputpage/before instead
+\NewHook{OR/page/after}     % we could use cmd/@outputpage/after instead
 
-\NewHook{OR/outputpage/reset}
+\NewHook{OR/page/reset}
 ```
