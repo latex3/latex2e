@@ -8,6 +8,9 @@ local mc_end = token.create'tag_mc_end:'
 
 local catlatex       = luatexbase.registernumber("catcodetable@latex")
 
+ltx = ltx or {}
+ltx.__tag = ltx.__tag or {}
+ltx.__tag.struct = ltx.__tag.struct or {}
 ltx.__tag.struct.luamml = ltx.__tag.struct.luamml or {}
 ltx.__tag.struct.luamml.labels = ltx.__tag.struct.luamml.labels or {}
 
