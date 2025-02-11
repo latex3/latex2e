@@ -74,14 +74,13 @@
               \vfil
 %             
               \pdfannot_link_off:
-              \UseTaggingSocket{OR/head/before}  % <--------
-%             
-              \color@hbox
-                \normalcolor
-                \hb@xt@ \textwidth {\@thehead }%
-              \color@endbox
-%             
-              \UseTaggingSocket{OR/head/after}   % <--------
+              \UseTaggingSocket{OR/head}{}  % <--------
+                {
+                  \color@hbox
+                    \normalcolor
+                    \hb@xt@ \textwidth {\@thehead }%
+                  \color@endbox
+                }
               \pdfannot_link_on:
 %             
            }%
@@ -92,15 +91,14 @@
            \baselineskip \footskip
 %             
            \pdfannot_link_off:
-           \UseTaggingSocket{OR/foot/before}     % <--------
-%             
-           \color@hbox
-              \normalcolor
-              \hb@xt@ \textwidth {\@thefoot }%
-            \color@endbox
-%             
-            \UseTaggingSocket{OR/foot/after}     % <--------
-            \pdfannot_link_on:
+           \UseTaggingSocket{OR/foot}{}     % <--------
+              {
+                 \color@hbox
+                    \normalcolor
+                    \hb@xt@ \textwidth {\@thefoot }%
+                  \color@endbox
+              }
+           \pdfannot_link_on:
 %             
       }%
    }%
@@ -138,35 +136,28 @@ Plug definition indirect as long as tagpdf.sty still uses the old names
   { \@kernel@before@footins }
 
 
-\NewSocket{tagsupport/OR/head/before}{0}
-\NewSocketPlug{tagsupport/OR/head/before}{default}
-  { \@kernel@before@head }
-
-\NewSocket{tagsupport/OR/head/after}{0}
-\NewSocketPlug{tagsupport/OR/head/after}{default}
-  { \@kernel@after@head }
+\NewSocket{tagsupport/OR/head}{2}
+\NewSocketPlug{tagsupport/OR/head}{default}
+  { \@kernel@before@head #2 \@kernel@after@head }
+\AssignSocketPlug{tagsupport/OR/head}{default}
 
 
-\NewSocket{tagsupport/OR/foot/before}{0}
-\NewSocketPlug{tagsupport/OR/foot/before}{default}
-  { \@kernel@before@foot }
-
-\NewSocket{tagsupport/OR/foot/after}{0}
-\NewSocketPlug{tagsupport/OR/foot/after}{default}
-  { \@kernel@after@foot }
-
-
-\NewSocket{OR/makecol/before}{0}       % we could use cmd/@makecol/before instead
-\NewSocket{OR/makecol/after}{0}        % we could use cmd/@makecol/after instead
-
-\NewSocket{OR/outputpage/before}{0}    % we could use cmd/@outputpage/before instead
-\NewSocket{OR/outputpage/after}{0}     % we could use cmd/@outputpage/after instead
-
-\UseHook {OR/outputpage/reset}{0}
+\NewSocket{tagsupport/OR/foot}{2}
+\NewSocketPlug{tagsupport/OR/foot}{default}
+  { \@kernel@before@foot #2 \@kernel@after@foot }
+\AssignSocketPlug{tagsupport/OR/foot}{default}
 
 ```
 
 
+The hooks are there to support external packages (not yet used).
 
 ```
+\NewHook{OR/makecol/before}       % we could use cmd/@makecol/before instead
+\NewHook{OR/makecol/after}        % we could use cmd/@makecol/after instead
+
+\NewHook{OR/outputpage/before}    % we could use cmd/@outputpage/before instead
+\NewHook{OR/outputpage/after}     % we could use cmd/@outputpage/after instead
+
+\NewHook{OR/outputpage/reset}
 ```
