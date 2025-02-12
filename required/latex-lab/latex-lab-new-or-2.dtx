@@ -17,8 +17,8 @@
 %
 % for those people who are interested or want to report an issue.
 %
-\def\ltlabneworIIdate{2025-02-11}
-\def\ltlabneworIIversion{0.86a}
+\def\ltlabneworIIdate{2025-02-12}
+\def\ltlabneworIIversion{0.86b}
 
 %<*driver>
 \documentclass{l3doc}
@@ -74,7 +74,7 @@
 %
 %    \begin{description}
 %
-%    \item[\hook{OR/page/before}, \hook{OR/page/after}]
+%    \item[\hook{build/page/before}, \hook{build/page/after}]
 %       These two hooks enable packages to prepend or append code to
 %       the page processing in the output routine. They are
 %       implemented as mirrored hooks.
@@ -83,14 +83,14 @@
 %       \LaTeXe{} \cs{@outputpage} command, respectively.
 %
 %
-%    \item[\hook{OR/page/reset}]
+%    \item[\hook{build/page/reset}]
 %       Packages that set up special conventions for text in the main
 %       galley (such as catcode changes, etc) can use this hook to
 %       undo these changes within the output routine, so that they
 %       aren't applied to unrelated material, e.g., the text for
 %       running header or footers.
 %
-%    \item[\hook{OR/column/before}, \hook{OR/column/after}]
+%    \item[\hook{build/column/before}, \hook{build/column/after}]
 %       These two hooks enable packages to prepend or append code to
 %       the column processing in the output routine. They are
 %       implemented as mirrored hooks.
@@ -108,7 +108,7 @@
 %    controlled by one package, i.e., the last setting wins.
 %
 %    \begin{description}
-%    \item[\socket{OR/column/outputbox} (0 arguments)]
+%    \item[\socket{build/column/outputbox} (0 arguments)]
 %
 %      In code for this socket the \cs{@outputbox} (holding the
 %      galley text for the current column or page) is augmented by
@@ -225,7 +225,7 @@
 %      \end{description}
 %
 %
-%    \item[\socket{OR/column/footnotes} (0 arguments)]
+%    \item[\socket{build/column/footnotes} (0 arguments)]
 %
 %       This socket is used to manipulate the footnote
 %        material inside \cs{box}\cs{footins}. It if contains code, it
@@ -247,22 +247,22 @@
 %
 %    \begin{description}
 %
-%    \item[\socket{OR/column/outputbox} (0 arguments)]
+%    \item[\socket{build/column/outputbox} (0 arguments)]
 %       This socket is used to add any missing tagging structures to the
 %       \cs{@outputbox}, if necessary.
 %
-%    \item[\socket{OR/column/footins} (0 arguments)]
+%    \item[\socket{build/column/footins} (0 arguments)]
 %       This socket is used to add any missing tagging structures to
 %       \cs{footins} box, if necessary.
 %
-%    \item[\socket{OR/page/header} (2 arguments)]
+%    \item[\socket{build/page/header} (2 arguments)]
 %
 %       This socket receives the content of the formatted page header
 %       as its second argument and adds the necessary tagging around
 %       it. The first argument is empty as no special setup is
 %       necessary.
 %
-%    \item[\socket{OR/page/footer} (2 arguments)]
+%    \item[\socket{build/page/footer} (2 arguments)]
 %
 %       This socket receives the content of the formatted page footer
 %       as its second argument and adds the necessary tagging around
@@ -307,7 +307,7 @@
 %    A number of packages want to prepend code to \cs{@makecol}; this
 %    is the hook for that:
 %    \begin{macrocode}
-  \UseHook {OR/column/before}%
+  \UseHook {build/column/before}%
 %    \end{macrocode}
 %    Save away box 255 as \cs{@outputbox} to make it available for further adjustments.
 %    \begin{macrocode}
@@ -323,7 +323,7 @@
 %    \cs{@outputbox}, if necessary. At this point it just contains the material from
 %    the galley.
 %    \begin{macrocode}
-  \UseTaggingSocket{OR/column/outputbox}%
+  \UseTaggingSocket{build/column/outputbox}%
 %    \end{macrocode}
 %    When this code is run any ``here'' floats in the \cs{@outputbox} are already handled, so we
 %    recycle their registers and put them back to the \cs{@freelist}.
@@ -338,7 +338,7 @@
 %    as \pkg{footmisc} to implement different layout, e.g., footnotes
 %    above or below bottom floats, etc.
 %    \begin{macrocode}
-  \UseSocket {OR/column/outputbox}%
+  \UseSocket {build/column/outputbox}%
 %    \end{macrocode}
 %    Then we deal with any \cs{enlargethispage} or run the normal code
 %    to build a column.
@@ -353,7 +353,7 @@
 %    Finally, another hook for external packages or classes that want
 %    to augment or alter the output routine by appending to \cs{@makecol}.
 %    \begin{macrocode}
-  \UseHook {OR/column/after}%
+  \UseHook {build/column/after}%
 }
 %    \end{macrocode}
 %  \end{macro}
@@ -441,14 +441,24 @@
 %    \begin{macrocode}
   \ifx\@textbottom\relax \else
 %    \end{macrocode}
-%    We then append some negative glue at the end of \cs{@outputbox}
-%    provided it has a glue stretch order of 1 or more (i.e., contains
-%    a \texttt{fil} or \texttt{fill} part).
+%    In some special circumstances the \cs{@outputbox} might be
+%    void. As \cs{@outputbox@append} below would change this, we
+%    better handle this case and leave it unchanged in this situation,
+%    because otherwise we can't detect that situation any longer
+%    (needed, for example, in \pkg{ftnright}). 
 %    \begin{macrocode}
-    \@outputbox@append{%
-      \@tempskipa\lastskip
-      \ifnum \gluestretchorder\@tempskipa>\z@
-        \vskip-\@tempskipa
+    \ifvoid \@outputbox
+      \global\let\@outputbox@reinsertbskip\relax
+    \else
+%    \end{macrocode}
+%    If not, we append some negative glue at the end of \cs{@outputbox}
+%    provided there is a final skip in the box that has a glue stretch
+%    order of 1 or more (i.e., contains a \texttt{fil} or \texttt{fill} part).
+%    \begin{macrocode}
+      \@outputbox@append{%
+        \@tempskipa\lastskip
+        \ifnum \gluestretchorder\@tempskipa>\z@
+          \vskip-\@tempskipa
 %    \end{macrocode}
 %        
 %  \begin{macro}{\@outputbox@reinsertbskip}
@@ -456,12 +466,13 @@
 %    elsewhere. As we have to do this globally, we also need to
 %    explicitly reset it if we don't find any such glue.
 %    \begin{macrocode}
-        \xdef\@outputbox@reinsertbskip
-            {\noexpand\@outputbox@append{\vskip\the\@tempskipa}}%
-      \else
-        \global\let\@outputbox@reinsertbskip\relax
-      \fi
-    }%
+          \xdef\@outputbox@reinsertbskip
+              {\noexpand\@outputbox@append{\vskip\the\@tempskipa}}%
+        \else
+          \global\let\@outputbox@reinsertbskip\relax
+        \fi
+      }%
+   \fi
  \fi
 }
 %    \end{macrocode}
@@ -481,7 +492,7 @@
 % \subsection{The output routine configuration components}
 %
 %    Here we provide the components that are used to define code for the
-%    \socket{OR/column/outputbox} socket.
+%    \socket{build/column/outputbox} socket.
 %
 %
 %  \begin{macro}{\@outputbox@append}
@@ -528,7 +539,7 @@
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-     \UseSocket{OR/column/footnotes}%
+     \UseSocket{build/column/footnotes}%
 %    \end{macrocode}
 %    Then the footnotes are appended:
 %    \begin{macrocode}
@@ -537,7 +548,7 @@
 %    \end{macrocode}
 %    This is socket adjusts the tagging of the \cs{footins} box, if necessary.
 %    \begin{macrocode}
-       \UseTaggingSocket{OR/column/footins}%
+       \UseTaggingSocket{build/column/footins}%
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -613,14 +624,14 @@
 %
 %
 %
-%  \begin{socketdecl}{OR/column/footnotes}
+%  \begin{socketdecl}{build/column/footnotes}
 %
 %    The socket allowing the manipulation of \cs{footins} box
 %    (result needs to be moved back in there). Used when footnotes are
 %    reformatted into a single paragraph by the
 %    \texttt{para} option of \pkg{footmisc}. By default it does nothing.
 %    \begin{macrocode}
-\NewSocket{OR/column/footnotes}{0}
+\NewSocket{build/column/footnotes}{0}
 %    \end{macrocode}
 %  \end{socketdecl}
 %
@@ -674,12 +685,12 @@
 % \subsection{The \cs{@makecol} configuration}
 %
 %
-%  \begin{socketdecl}{OR/column/outputbox}
+%  \begin{socketdecl}{build/column/outputbox}
 %    We have one socket that is supposed to augment the \cs{@outputbox}
 %    by attaching floats and footnotes with appropriate spacing.
 %
 %    \begin{macrocode}
-\NewSocket{OR/column/outputbox}{0}
+\NewSocket{build/column/outputbox}{0}
 %    \end{macrocode}
 %  \end{socketdecl}
 %
@@ -690,7 +701,7 @@
 %    After the galley text there is a vertical \cs{vfill} followed by
 %    any footnotes followed by the bottom floats, if any.
 %    \begin{macrocode}
-\NewSocketPlug {OR/column/outputbox}{space-footnotes-floats} {%
+\NewSocketPlug {build/column/outputbox}{space-footnotes-floats} {%
   \@if@footnotes@TF
       {\@outputbox@append{\vfill}}%
       {\@if@bfloats@TF
@@ -707,7 +718,7 @@
 %     As before but the \cs{vfill} is at the bottom (page is ragged
 %    bottom).
 %    \begin{macrocode}
-\NewSocketPlug {OR/column/outputbox}{floats-footnotes-space} {%
+\NewSocketPlug {build/column/outputbox}{floats-footnotes-space} {%
   \@outputbox@attachfloats
   \@if@footnotes@TF
       {\@outputbox@append{\vfill}}%
@@ -720,7 +731,7 @@
 %  \begin{plugdecl}{footnotes-space-floats}
 %    As before but the \cs{vfill} is between footnotes and floats.
 %    \begin{macrocode}
-\NewSocketPlug {OR/column/outputbox}{footnotes-space-floats} {%
+\NewSocketPlug {build/column/outputbox}{footnotes-space-floats} {%
   \@outputbox@appendfootnotes
   \@if@bfloats@TF
       {\@outputbox@append{\vfill}}%
@@ -736,7 +747,7 @@
 %         they aren't set up by default --- doing that in a class
 %         would be trivial though.}
 %    \begin{macrocode}
-\NewSocketPlug {OR/column/outputbox}{space-floats-footnotes} {%
+\NewSocketPlug {build/column/outputbox}{space-floats-footnotes} {%
   \@if@footnotes@TF
       {\@outputbox@append{\vfill}}%
       {\@if@bfloats@TF
@@ -756,7 +767,7 @@
 %         separation between blocks, etc.
 %         The order is text, floats, footnotes.
 %    \begin{macrocode}
-\NewSocketPlug {OR/column/outputbox}{floats-footnotes} {%
+\NewSocketPlug {build/column/outputbox}{floats-footnotes} {%
   \@outputbox@attachfloats
   \@outputbox@appendfootnotes
 %    \end{macrocode}
@@ -775,7 +786,7 @@
 %
 %  \begin{plugdecl}{footnotes-floats}
 %    \begin{macrocode}
-\NewSocketPlug {OR/column/outputbox}{footnotes-floats} {%
+\NewSocketPlug {build/column/outputbox}{footnotes-floats} {%
   \@outputbox@appendfootnotes
   \@outputbox@attachfloats
   \@outputbox@reinsertbskip
@@ -786,7 +797,7 @@
 %    by assigning any of the other plugs (or by coding yet another
 %    plug for the socket).
 %    \begin{macrocode}
-\AssignSocketPlug {OR/column/outputbox}{footnotes-floats}
+\AssignSocketPlug {build/column/outputbox}{footnotes-floats}
 %    \end{macrocode}
 %  \end{plugdecl}
 %
@@ -803,7 +814,7 @@
 %    \end{macrocode}
 %    A hook available to packages that want to prepend code to \cs{@outputpage}.
 %    \begin{macrocode}
-  \UseHook {OR/page/before}%
+  \UseHook {build/page/before}%
 %
   \begingroup
     \let \protect \noexpand
@@ -819,7 +830,7 @@
 %    into the page production just because a page break happens in the
 %    middle of such an environment.
 %    \begin{macrocode}
-    \UseHook {OR/page/reset}%
+    \UseHook {build/page/reset}%
     \shipout \vbox {%
        \set@typeset@protect
        \aftergroup \endgroup
@@ -858,7 +869,7 @@
 %    content of the second argument.
 %    \begin{macrocode}
               \pdfannot_link_off:
-              \UseTaggingSocket{OR/page/header}{}%
+              \UseTaggingSocket{build/page/header}{}%
                 {
                   \color@hbox
                     \normalcolor
@@ -880,7 +891,7 @@
 %    content of the second argument.
 %    \begin{macrocode}
            \pdfannot_link_off:
-           \UseTaggingSocket{OR/page/footer}{}
+           \UseTaggingSocket{build/page/footer}{}
               {
                  \color@hbox
                     \normalcolor
@@ -897,7 +908,7 @@
 %    \end{macrocode}
 %    Another hook for packages that want to append material to \cs{@outputpage}.
 %    \begin{macrocode}
-   \UseHook {OR/page/after}%
+   \UseHook {build/page/after}%
 }
 \ExplSyntaxOff
 %    \end{macrocode}
@@ -909,41 +920,41 @@
 
 \ExplSyntaxOn
 
-\NewMirroredHookPair{OR/page/before}{OR/page/after}
+\NewMirroredHookPair{build/page/before}{build/page/after}
 
-\NewHook {OR/page/reset}
+\NewHook {build/page/reset}
 
-\NewSocket{tagsupport/OR/page/header}{2}
+\NewSocket{tagsupport/build/page/header}{2}
 
 %    \end{macrocode}
 %    \fmi{where should these plug declarations go? tagpdf?}
 %    \begin{macrocode}
-\NewSocketPlug{tagsupport/OR/page/header}{default}
+\NewSocketPlug{tagsupport/build/page/header}{default}
    {
      \__tag_hook_kernel_before_head:
      #2
      \__tag_hook_kernel_after_head:
    }
 
-\AssignSocketPlug{tagsupport/OR/page/header}{default}
+\AssignSocketPlug{tagsupport/build/page/header}{default}
 
 
-\NewSocket{tagsupport/OR/page/footer}{2}
-\NewSocketPlug{tagsupport/OR/page/footer}{default}
+\NewSocket{tagsupport/build/page/footer}{2}
+\NewSocketPlug{tagsupport/build/page/footer}{default}
    {
      \__tag_hook_kernel_before_foot:
      #2
      \__tag_hook_kernel_after_foot:
    }
               
-\AssignSocketPlug{tagsupport/OR/page/footer}{default}
+\AssignSocketPlug{tagsupport/build/page/footer}{default}
 
 
-\NewMirroredHookPair{OR/column/before}{OR/column/after}
+\NewMirroredHookPair{build/column/before}{build/column/after}
 
-\NewSocket{tagsupport/OR/column/outputbox}{0}
+\NewSocket{tagsupport/build/column/outputbox}{0}
 
-\NewSocketPlug{tagsupport/OR/column/outputbox}{default}
+\NewSocketPlug{tagsupport/build/column/outputbox}{default}
   {
     \__tag_check_typeout_v:n { ====>~In~\token_to_str:N \@makecol
                                \c_space_tl\the\c@page }
@@ -951,9 +962,9 @@
   }
 
 
-\NewSocket{tagsupport/OR/column/footins}{0}
+\NewSocket{tagsupport/build/column/footins}{0}
 
-\NewSocketPlug{tagsupport/OR/column/footins}{default}
+\NewSocketPlug{tagsupport/build/column/footins}{default}
    { \tag_mc_add_missing_to_stream:Nn \footins {footnote} }
               
 %    \end{macrocode}
@@ -962,8 +973,8 @@
 %    \begin{macrocode}
 \sys_if_engine_luatex:F   
    {         
-     \AssignSocketPlug{tagsupport/OR/column/outputbox}{default}
-     \AssignSocketPlug{tagsupport/OR/column/footins}{default}
+     \AssignSocketPlug{tagsupport/build/column/outputbox}{default}
+     \AssignSocketPlug{tagsupport/build/column/footins}{default}
    }
 \ExplSyntaxOff
   

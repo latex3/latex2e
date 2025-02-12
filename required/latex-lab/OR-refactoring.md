@@ -4,18 +4,18 @@
 
 ```
 \def\@makecol{%
-  \UseHook {OR/column/before}%              % <--------
+  \UseHook {build/column/before}%              % <--------
 %  
   \setbox \@outputbox \box \@cclv
   \@outputbox@removebskip
 %  
-  \UseTaggingSocket{OR/column/outputbox}              % <--------
+  \UseTaggingSocket{build/column/outputbox}              % <--------
 %  
   \let \@elt \relax
   \xdef \@freelist {\@freelist \@midlist}%
   \global \let \@midlist \@empty
 %  
-  \UseSocket {OR/column/outputbox}%         % <--------
+  \UseSocket {build/column/outputbox}%         % <--------
 %  
   \ifvbox \@kludgeins
     \@make@specialcolbox
@@ -24,14 +24,14 @@
   \fi
   \global \maxdepth \@maxdepth
 %  
-  \UseHook {OR/column/before/after}%              % <--------
+  \UseHook {build/column/before/after}%              % <--------
 }  
 ```
 
 
 ```
 \def\@outputpage{%
-  \UseHook {OR/page/before}%             % <--------
+  \UseHook {build/page/before}%             % <--------
 %
   \begingroup
     \let \protect \noexpand
@@ -40,7 +40,7 @@
     \global \let \@@if@newlist \if@newlist
     \global \@newlistfalse
     \@parboxrestore
-    \UseHook {OR/page/reset}%            % <--------
+    \UseHook {build/page/reset}%            % <--------
     \shipout \vbox {%
        \set@typeset@protect
        \aftergroup \endgroup
@@ -74,7 +74,7 @@
               \vfil
 %             
               \pdfannot_link_off:
-              \UseTaggingSocket{OR/page/header}{}  % <--------
+              \UseTaggingSocket{build/page/header}{}  % <--------
                 {
                   \color@hbox
                     \normalcolor
@@ -91,7 +91,7 @@
            \baselineskip \footskip
 %             
            \pdfannot_link_off:
-           \UseTaggingSocket{OR/page/footer}{}     % <--------
+           \UseTaggingSocket{build/page/footer}{}     % <--------
               {
                  \color@hbox
                     \normalcolor
@@ -106,7 +106,7 @@
    \global \@colht \textheight
    \stepcounter {page}%
 %
-  \UseHook {OR/page/after}%                % <--------
+  \UseHook {build/page/after}%                % <--------
 }
 ```
 
@@ -114,40 +114,40 @@
 
 ### What hook/socket names should we use
 
- - all `OR/...` as done above?
+ - all `build/...` as done above?
  - or closer to the command names, e.g., `cmd/@outputpage/before` `@outputpage/reset`, etc?
    In that case one can use the generic hooks but I'm not so keen on using generic hooks for internal commands
 
 - if we can assume that tagging for header and footer is always idential we could reuse the sockets and call them
-  `OR/page/headerfoot/before` and   `OR/page/headerfoot/after`
+  `build/page/headerfoot/before` and   `build/page/headerfoot/after`
 
 
 ## Hook, sockets, plugs
 
 Plug definition indirect as long as tagpdf.sty still uses the old names
 ```
-\NewSocket{tagsupport/OR/column/outputbox}{0}
-\NewSocketPlug{tagsupport/OR/column/outputbox}{default}
+\NewSocket{tagsupport/build/column/outputbox}{0}
+\NewSocketPlug{tagsupport/build/column/outputbox}{default}
   { \@kernel@tagsupport@@makecol }
-\AssignSocketPlug{tagsupport/OR/column/outputbox}{default}
+\AssignSocketPlug{tagsupport/build/column/outputbox}{default}
 
 
-\NewSocket{tagsupport/OR/column/footins}{0}
-\NewSocketPlug{tagsupport/OR/column/footins}{default}
+\NewSocket{tagsupport/build/column/footins}{0}
+\NewSocketPlug{tagsupport/build/column/footins}{default}
   { \@kernel@before@footins }
-\AssignSocketPlug{tagsupport/OR/column/footins}{default}
+\AssignSocketPlug{tagsupport/build/column/footins}{default}
 
 
-\NewSocket{tagsupport/OR/page/header}{2}
-\NewSocketPlug{tagsupport/OR/page/header}{default}
+\NewSocket{tagsupport/build/page/header}{2}
+\NewSocketPlug{tagsupport/build/page/header}{default}
   { \@kernel@before@head #2 \@kernel@after@head }
-\AssignSocketPlug{tagsupport/OR/page/header}{default}
+\AssignSocketPlug{tagsupport/build/page/header}{default}
 
 
-\NewSocket{tagsupport/OR/page/footer}{2}
-\NewSocketPlug{tagsupport/OR/page/footer}{default}
+\NewSocket{tagsupport/build/page/footer}{2}
+\NewSocketPlug{tagsupport/build/page/footer}{default}
   { \@kernel@before@foot #2 \@kernel@after@foot }
-\AssignSocketPlug{tagsupport/OR/page/footer}{default}
+\AssignSocketPlug{tagsupport/build/page/footer}{default}
 
 ```
 
@@ -155,11 +155,11 @@ Plug definition indirect as long as tagpdf.sty still uses the old names
 The hooks are there to support external packages (not yet used).
 
 ```
-\NewHook{OR/column/before}       % we could use cmd/@makecol/before instead
-\NewHook{OR/column/after}        % we could use cmd/@makecol/after instead
+\NewHook{build/column/before}       % we could use cmd/@makecol/before instead
+\NewHook{build/column/after}        % we could use cmd/@makecol/after instead
 
-\NewHook{OR/page/before}    % we could use cmd/@outputpage/before instead
-\NewHook{OR/page/after}     % we could use cmd/@outputpage/after instead
+\NewHook{build/page/before}    % we could use cmd/@outputpage/before instead
+\NewHook{build/page/after}     % we could use cmd/@outputpage/after instead
 
-\NewHook{OR/page/reset}
+\NewHook{build/page/reset}
 ```
