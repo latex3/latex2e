@@ -14,11 +14,18 @@ l3build save -epdftex,xetex,luatex \
 	github-0479-often
 
 l3build save  \
-	tlb-latexrelease-rollback-2023-06-01
+	tlb-latexrelease-rollback-2023-06-01 \
+	tlb-latexrelease-rollback-2025-06-01
 
 l3build save -c config-lthooks \
 	lthooks-rollback-args
 
+
+echo ""
+echo "*************************************************"
+echo "* Unexpected errors in release rollbacks if any:"
+echo "*************************************************"
+grep '^!' testfiles/tlb-latexrelease-rollback-2*tlg  # tests with rollback-0... can contain errors
 
 exit
 
