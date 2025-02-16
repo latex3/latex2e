@@ -364,28 +364,6 @@
 
 
 
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/latex-lab/latex-lab-testphase-new-or-2.sty
-
-```
-\def \@makecol {%
-```
-
-Not relevant, will vanish
-
-#### /usr/local/texlive/2024/texmf-dist/tex/latex/latex-lab/latex-lab-testphase-new-or-1.sty
-
-```
-\patchcmd\@makecol
-  {\typeout{Patching \string\@makecol\space for tagging}}{\PATCHerror }
-\patchcmd\@makecol
-  {\typeout{Patching \string\@makecol\space for tagging}}{\PATCHerror }
-  \def\@makecol{%
-```
-
-Not relevant, will vanish
-
-
-
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/arabi/fmultico.sty
 
 ```
@@ -469,7 +447,7 @@ Rollback version. Rollback probably only works if the format is rolled back as w
 -------------------------------
 
 
-## Files ok but should use hook `{cmd/@makecol/before}`
+## Files ok but should use hook `{build/column/before}`
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/fancyhdr/fancyhdr.sty
@@ -479,7 +457,7 @@ Rollback version. Rollback probably only works if the format is rolled back as w
   \def\@makecol{\ifvoid\footins\f@nch@footnotefalse\else\f@nch@footnotetrue\fi
 ```
 
- - Ok, but should be handled by a hook `{cmd/@makecol/before}`
+ - Ok, but should be handled by a hook `{build/column/before}`
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/widows-and-orphans/widows-and-orphans.sty
@@ -488,7 +466,7 @@ Rollback version. Rollback probably only works if the format is rolled back as w
 \tl_put_left:Nn \@makecol { \__fmwao_test_for_widows_etc: }
 ```
 
- - Ok, but should be handled by a hook `{cmd/@makecol/before}`
+ - Ok, but should be handled by a hook `{build/column/before}`
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/ncctools/manyfoot.sty
@@ -498,7 +476,7 @@ Rollback version. Rollback probably only works if the format is rolled back as w
   \def\@makecol{\MFL@joinnotes\MFL@makecol}
 ```
 
- - Ok, but should be handled by a hook `{cmd/@makecol/before}`
+ - Ok, but should be handled by a hook `{build/column/before}`
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/changebar/changebar.sty
@@ -508,7 +486,7 @@ Rollback version. Rollback probably only works if the format is rolled back as w
 \let\@makecol\cb@makecol
 ```
 
- - Ok, but should be handled by a hook `{cmd/@makecol/before}` and `{cmd/@makecol/after}`
+ - Ok, but should be handled by a hook `{build/column/before}` and `{build/column/after}`
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/pbalance/pbalance.sty
@@ -524,7 +502,7 @@ Rollback version. Rollback probably only works if the format is rolled back as w
     \apptocmd{\@makecol}{\@PBcollectColumnUsedHeight}
 ```
 
- - Ok, but should be handled by a hook `{cmd/@makecol/before}` and `{cmd/@makecol/after}`
+ - Ok, but should be handled by a hook `{build/column/before}` and `{build/column/after}`
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/yafoot/dblfnote.sty
@@ -536,7 +514,7 @@ Rollback version. Rollback probably only works if the format is rolled back as w
         \let\@makecol\dfn@makecol
 ```
 
- - Probably ok, but should use `{cmd/@makecol/before}` and `{cmd/@makecol/after}`
+ - Probably ok, but should use `{build/column/before}` and `{build/column/after}`
  - Also need perhaps a bit of thoughts how to swap stuff in and out (in case `\twocolumn` is in force)
 
 
@@ -547,7 +525,7 @@ Rollback version. Rollback probably only works if the format is rolled back as w
   \def\@makecol{%
 ```
 
- - Ok, but should be handled by hook `{cmd/@makecol/before}`
+ - Ok, but should be handled by hook `{build/column/before}`
  - Also questionable if this is still necessary or helpful
 
 
@@ -555,7 +533,7 @@ Rollback version. Rollback probably only works if the format is rolled back as w
 -------------------------------
 
 
-## Files ok but should use hook `{cmd/@makecol/after}`
+## Files ok but should use hook `{build/column/after}`
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/aastex/aastex631.cls
 
@@ -563,7 +541,7 @@ Rollback version. Rollback probably only works if the format is rolled back as w
 \let\LS@makecol=\@makecol
   \def\@makecol{\LS@makecol\LS@rot}%
 ```
- - Ok, but should be handled by a hook `{cmd/@makecol/after}`
+ - Ok, but should be handled by a hook `{build/column/after}`
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/rotpages/rotpages.sty
@@ -573,7 +551,7 @@ Rollback version. Rollback probably only works if the format is rolled back as w
   \def\@makecol{\SC@makecol\SC@processpage}%
 ```
 
- - Ok, but should be handled by a hook `{cmd/@makecol/after}`
+ - Ok, but should be handled by a hook `{build/column/after}`
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/graphics/lscape.sty
@@ -583,7 +561,7 @@ Rollback version. Rollback probably only works if the format is rolled back as w
   \def\@makecol{\LS@makecol\LS@rot}%
 ```
 
- - Ok, but should be handled by a hook `{cmd/@makecol/after}`
+ - Ok, but should be handled by a hook `{build/column/after}`
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/flexipage/flexipage.sty
@@ -593,7 +571,7 @@ Rollback version. Rollback probably only works if the format is rolled back as w
   \def\@makecol{\flx@LS@makecol\flx@LS@rot}%
 ```
 
-Ok, but should be handled by a hook `{cmd/@makecol/after}`
+Ok, but should be handled by a hook `{build/column/after}`
 
 
 
@@ -604,7 +582,7 @@ Ok, but should be handled by a hook `{cmd/@makecol/after}`
 \def\@makecol{%
 ```
 
- - Ok, but should be handled by a hook `{cmd/@makecol/after}`
+ - Ok, but should be handled by a hook `{build/column/after}`
 
  - Tagging probably doesn't work without tagging the side nodes explicitly.
 
@@ -618,7 +596,7 @@ Ok, but should be handled by a hook `{cmd/@makecol/after}`
 \cs_set_protected_nopar:Npn\@makecol{
 ```
 
- - Ok, but should be handled by a hook `{cmd/@makecol/after}`
+ - Ok, but should be handled by a hook `{build/column/after}`
 
 
 
@@ -629,7 +607,7 @@ Ok, but should be handled by a hook `{cmd/@makecol/after}`
 \gdef\@makecol{%
 ```
 
- - Ok, but should be handled by a hook `{cmd/@makecol/after}`
+ - Ok, but should be handled by a hook `{build/column/after}`
 
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/lineno/lineno.sty
