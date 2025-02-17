@@ -7,6 +7,7 @@ l3build save -cconfig-float -epdftex,luatex \
 	float-001 \
 	float-002 \
 	float-003 \
+	float-004 \
 	float-005-double \
 	float-006-spacing \
 	float-007-gh55 \
