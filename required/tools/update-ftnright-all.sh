@@ -1,4 +1,4 @@
-l3build save -epdftex, luatex \
+l3build save -epdftex,luatex \
   tlb-ftnright-001
 
 
