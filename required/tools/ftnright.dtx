@@ -149,6 +149,17 @@
 %
 % \GetFileInfo{ftnright.sty}
 %
+% \providecommand\pkg[1]{\texttt{#1}}
+%
+% \providecommand\hook[1]{\texttt{#1\DescribeHook[noprint]{#1}}}
+% \providecommand\socket[1]{\texttt{#1\DescribeSocket[noprint]{#1}}}
+% \providecommand\plug[1]{\texttt{#1\DescribePlug[noprint]{#1}}}
+%
+% \ProvideDocElement[printtype=\textit{socket},idxtype=socket,idxgroup=Sockets]{Socket}{socketdecl}
+% \ProvideDocElement[printtype=\textit{plug},idxtype=plug,idxgroup=Plugs]{Plug}{plugdecl}
+% \ProvideDocElement[printtype=\textit{hook},idxtype=hook,idxgroup=Hooks]{Hook}{hookdecl}
+%
+%
 % \title{Footnotes in a multi-column layout\thanks
 %   {The \LaTeX{} package {\tt \filename} which is described
 %    in this article has the version number \fileversion{} dated
@@ -157,6 +168,8 @@
 %
 %
 % \maketitle
+%
+% \tableofcontents
 %
 % \pageshrink 1pt  %^^A compensate for the \thanks marker
 %
@@ -381,7 +394,7 @@
 \documentclass[twocolumn]{article}
 
 \usepackage{ftnright}
-\usepackage{doc}
+\usepackage[noprint]{doc}
 \AtBeginDocument{\MakeShortVerb{\|}}
 
 \newcommand{\TUB}{{\sl TUGboat\/}}
@@ -751,23 +764,11 @@
 %    \end{macrocode}
 %  \end{macro}
 %
-% \begin{macro}{\@makecol}
-%    The other internal macro that we have to change is |\@makecol|, a
-%    macro that is called whenever one column of material is assembled
-%    and column floats and footnotes have to be added. Again, we have
-%    to distinguish between actions for the first and the second
-%    column.
-%    \begin{macrocode}
-\def\@makecol{\if@firstcolumn
-%    \end{macrocode}
-%    For the first column, we leave the footnotes in their box and
-%    simply save the contents of box $255$ in the |\box| register
-%    |\@outputbox|.
-%    \begin{macrocode}
-  \setbox\@outputbox\box\@cclv
-%    \end{macrocode}
 %
-%    But if the user erroneously forgot to specify a twocolumn layout, we
+%
+%  \begin{macro}{\check@ftnright@requirements}
+%    
+%    If the user erroneously forgot to specify a twocolumn layout, we
 %    will always typeset the first column, so that the footnotes are
 %    never printed.  Therefore we better check for this special case
 %    and output the footnotes on a separate page in an
@@ -781,17 +782,22 @@
 %                           twocolumn false.}
 % \changes{v1.0d}{1992/06/19}{Better help message}
 %    \begin{macrocode}
-  \if@twocolumn \else
-    \ifvoid\footins \else
+\def \check@ftnright@requirements {%
+  \if@twocolumn
+  \else
+    \ifvoid\footins
+    \else
       \@latexerr{ftnright package
-                 used in one-column mode}%
-   {The ftnright package was designed to
-    work with LaTeX's standard^^Jtwocolumn
-    option. It does *not* work with the
-    multicol package.^^JSo please specify
-    `twocolumn' in the
-    \noexpand\documentclass command.}%
-      \shipout\box\footins \fi\fi
+        used in one-column mode}%
+       {The ftnright package was designed to
+        work with LaTeX's standard^^J%
+        twocolumn option. It does *not* work
+        with the multicol package.^^JSo
+        please specify `twocolumn' in the
+       \noexpand\documentclass command.}%
+      \shipout\box\footins
+    \fi
+  \fi
 %    \end{macrocode}
 %    What we also need to check is if there is so much footnote material that
 %    it resulted in a footnote being split. If that happens the whole
@@ -804,40 +810,112 @@
 % \changes{v1.1f}{2010/02/25}{Check for split footnotes (pr/4099)}
 %    \begin{macrocode}
   \ifnum\insertpenalties>\z@
-      \@latexerr{ftnright package
-                 scrambled footnotes}%
-    {There is too much footnote material in
-     the first column  and ftnright^^Jis
-     unable to cope with this.^^JYou need
-     to reduce the amount to get a properly
-     formatted page.}%
-  \fi
- \else
+    \@latexerr{ftnright package
+               scrambled footnotes}%
+      {There is too much footnote material
+       in the first column  and ftnright^^J%
+       is unable to cope with this.^^JYou
+       need to reduce the amount to get a
+       properly formatted page.}%
+   \fi
+}
 %    \end{macrocode}
-%    When we construct the second column, we must first check whether
-%    footnotes are actually present. If not, we perform the same
-%    actions as before.
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\@if@tfloats@TF}
+%    The conditional \cs{@if@tfloats@TF} tests for top floats; may get
+%    moved to the kernel.
 %    \begin{macrocode}
-  \ifvoid\footins
-    \setbox\@outputbox\box\@cclv
+\def\@if@tfloats@TF{%
+  \ifx \@toplist\@empty
+    \expandafter\@secondoftwo
+  \else
+    \expandafter\@firstoftwo
+  \fi
+}
+%    \end{macrocode}
+%  \end{macro}
+
+%  \begin{macro}{\if@outputbox@void@TF}
+%    The conditional \cs{if@outputbox@void@TF} tests if the
+%    \cs{@outputbox} is void; may get moved to the kernel.
+%    \begin{macrocode}
+\def\if@outputbox@void@TF {%
+  \ifvoid \@outputbox
+    \expandafter\@firstoftwo
+  \else
+    \expandafter\@secondoftwo
+  \fi
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+
+% With these preparations we are now ready to adjust the column
+% production, by declaring a number of plugs for the socket
+% \socket{build/column/outputbox}. For \pkg{ftnright} we have to do a
+% little more work compared to  what is necessary normally, because
+% the socket needs a different behavior depending on whether we are
+% producing the first or the second column.
+%
+%
+% \begin{plugdecl}{ftnright-floats-space-footnotes} \begin{macrocode}
+\NewSocketPlug {build/column/outputbox}
+               {ftnright-floats-space-footnotes}
+ {%
+  \if@firstcolumn
+%    \end{macrocode}
+%    For the first column, we leave the footnotes in their box and
+%    simply  attach any column floats to produce the column.
+%    \begin{macrocode}
+    \check@ftnright@requirements
+    \@outputbox@reinsertbskip
+    \@outputbox@attachfloats
   \else
 %    \end{macrocode}
-%    But, if footnotes are present, it may be possible that the whole
-%    column consists of footnotes, i.e., |\box| $255$ is empty. In
+%    Constructing the second column is much more complicated.
+%    If footnotes are present, it may be possible that the whole
+%    column consists of footnotes, i.e., \cs{@outputbox} is void. In
 %    this case, there is no use in placing any glue (|\skip\footins|)
 %    in front,\footnote{In fact, it would be a mistake since this glue
 %    was not taken into account when the footnotes where assembled, so
 %    it would produce an overfull box.} so we have to check for this
-%    possibility.
+%    possibility and set it locally to zero.
+%
+%    Also, if there is no text but some floats in the top and bottom
+%    areas we would get some strange gap between the the two areas. We
+%    therefore combine all floats and pretend they are all top floats.
 %    \begin{macrocode}
-    \setbox\@outputbox\vbox
-      {\ifvoid\@cclv \else
-         \unvbox\@cclv
-         \vskip\skip\footins\fi
+    \if@outputbox@void@TF
+      {%
+        \let \@elt \relax
+        \xdef\@toplist{\@toplist\@botlist}%
+        \global \let \@botlist \@empty
+    %
+        \@if@tfloats@TF
+          {%
+            \@outputbox@attachfloats
+            \@outputbox@append{\unskip}%
+%           \skip\footins \fill
+          }%
+          {%
+            \skip\footins \z@
+          }%
+      }%
+      {%
+%       \@outputbox@append{\vfill}%
+        \@outputbox@attachfloats
+        \@if@footnotes@TF
+          {\@outputbox@append{\vfill}}%
+          {\@outputbox@reinsertbskip}%
+      }%
 %    \end{macrocode}
-%    But in any case, we place the |\footnoterule| in front of the
-%    footnotes even if this macro is not used by this
-%    package.\footnote{This decision is certainly open to criticism,
+%    We always attach the footnotes with the \cs{footnoterule} on
+%    top, that is, we use the command \cs{@outputbox@appendfootnotes}
+%    for this.\footnote{This
+%    decision is certainly open to criticism,
 %    since there is nothing to separate. On the other hand, a rule or
 %    some other ornament in front of the footnotes is part of the
 %    design which should be used consistently throughout a document.
@@ -846,58 +924,95 @@
 %    the right hand column. In this case a separator again seems
 %    adequate. In this situation one can even argue that it is
 %    necessary to put in the {\tt \bslash skip\.\bslash footins}.}
-%    This ends the if-statement testing whether footnotes are present
-%    or not. It also ends the code which differs depending on the
-%    column number.
-% \changes{v1.1d}{1998/12/02}{Added the color@group macros and
-%    \texttt{\protect\bslash normalcolor} to make this colorsafe}
 %    \begin{macrocode}
-         \color@begingroup
-         \normalcolor
-         \footnoterule\unvbox\footins
-         \color@endgroup}\fi
+    \@outputbox@appendfootnotes
   \fi
+}
 %    \end{macrocode}
-%    Now the column floats are added at the top and the bottom, and
-%    the |\@outputbox| is adjusted to the full column height so that
-%    the glue inside will stretch in certain situations.\footnote{It
-%    is an interesting question as to whether the current layout works
-%    well with bottom floats or not. Actually, I would prefer to place
-%    the footnotes below the bottom floats instead of above, as it is
-%    done here. At least when the floats are part of the document and
-%    not puzzles thrown in.  But I was too lazy to implement it
-%    because I seldom use floats. If somebody implements this layout
-%    (some parts of this macro have to be changed) I would be
-%    interested in seeing the code and some sample results.} Again,
-%    this code is copied verbatim from the original source, so I won't
-%    dwell on details.\footnote{I only changed {\tt\bslash dimen128}
-%    into {\tt\bslash @tempdima} which is, besides being faster and
-%    shorter, only a cosmetic change. The use of this hardwired {\sf
-%    dimen} register seems to indicate that this part of \LaTeX{} was
-%    written very early and left unchanged since then: an interesting
-%    fact for software archaeologists.}\footnote{For the \LaTeXe{}
-%    upgrade I had to add the support for the
-%    {\tt\string\enlargethispage} command---let's hope I did it in the
-%    correct way.}
-% \changes{v1.1a}{1994/01/24}{Upgrades for LaTeX2e}
+% \end{plugdecl}
+%
+% \begin{plugdecl}{ftnright-footnotes-space-floats}
 %    \begin{macrocode}
-  \xdef\@freelist{\@freelist\@midlist}%
-  \global \let \@midlist \@empty
-  \@combinefloats
-  \ifvbox\@kludgeins
-    \@makespecialcolbox
+\NewSocketPlug {build/column/outputbox}
+         {ftnright-footnotes-space-floats}
+ {\if@firstcolumn
+    \check@ftnright@requirements
+    \@outputbox@reinsertbskip
+    \@outputbox@attachfloats
   \else
-   \setbox\@outputbox\vbox to\@colht
-     {\boxmaxdepth\maxdepth
-      \@texttop
-      \@tempdima\dp\@outputbox
-      \unvbox\@outputbox
-      \vskip-\@tempdima
-      \@textbottom}%
+    \if@outputbox@void@TF
+      {%
+       \skip\footins \z@
+       \@outputbox@appendfootnotes
+    %
+        \let \@elt \relax
+        \xdef\@botlist{\@toplist\@botlist}%
+        \global \let \@toplist \@empty
+    %
+        \@if@tfloats@TF
+          {%
+            \@outputbox@append{\vfill}%
+            \@outputbox@attachfloats
+          }{}%
+      }%
+      {%
+       \@outputbox@appendfootnotes
+        \@if@bfloats@TF
+          {\@outputbox@append{\vfill}}%
+          {\@outputbox@reinsertbskip}%
+      }%
+    \@outputbox@attachfloats
   \fi
-  \global\maxdepth\@maxdepth}
+}
 %    \end{macrocode}
-% \end{macro}
+% \end{plugdecl}
+%
+% \begin{plugdecl}{ftnright-floats-footnotes}
+%    \begin{macrocode}
+\NewSocketPlug {build/column/outputbox}
+               {ftnright-floats-footnotes}
+ {\if@firstcolumn
+    \check@ftnright@requirements
+    \@outputbox@reinsertbskip
+    \@outputbox@attachfloats
+  \else
+    \if@outputbox@void@TF
+      {%
+        \let \@elt \relax
+        \xdef\@toplist{\@toplist\@botlist}%
+        \global \let \@botlist \@empty
+%
+        \@if@tfloats@TF
+          {%
+            \@outputbox@attachfloats
+            \@outputbox@append{\unskip}%
+            \@outputbox@appendfootnotes
+          }%
+          {%
+            \skip\footins \z@
+            \@outputbox@appendfootnotes
+          }%
+      }%
+      {%
+       \@outputbox@attachfloats
+       \@outputbox@appendfootnotes
+       \@outputbox@reinsertbskip
+      }%
+  \fi
+}
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \begin{socketdecl}{build/column/outputbox}
+%    \begin{macrocode}
+%\AssignSocketPlug{build/column/outputbox}
+%                 {ftnright-floats-space-footnotes}
+%\AssignSocketPlug{build/column/outputbox}
+%                 {ftnright-footnotes-space-floats}
+\AssignSocketPlug{build/column/outputbox}
+                 {ftnright-floats-footnotes}
+%    \end{macrocode}
+%  \end{socketdecl}
 %
 %
 % \begin{macro}{\footnotesize}
