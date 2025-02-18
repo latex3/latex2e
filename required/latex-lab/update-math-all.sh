@@ -23,8 +23,8 @@ l3build save -cconfig-math \
         mathcapture-tag-001 \
 	mtag-003 \
 	mtag-004 \
-	mtag-005-intertext
-
+	mtag-005-intertext \
+        tagging-762
 
 exit
 

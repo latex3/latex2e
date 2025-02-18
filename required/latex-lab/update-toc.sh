@@ -8,4 +8,5 @@ l3build save -epdftex,luatex -cconfig-toc \
     toc-ex-article-no-tagging \
     toc-ex-book-hyperref-1 \
     toc-ex-book-no-hyperref \
-    toc-ex-book-tocdepth
+    toc-ex-book-tocdepth \
+    toc-math-leaders
