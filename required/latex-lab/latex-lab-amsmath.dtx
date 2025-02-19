@@ -684,7 +684,269 @@
 }
 %    \end{macrocode}
 % \end{environment}
+% 
+% \subsection{The split environment}
+% 
+% The split environment is not trivial to handle as it has a rather convoluted 
+% implementation in amsmath: depending on in which display environment it is embedded
+% it takes different branches, which makes it difficult to finalize the mtable.
+% 
+% The following patches work with leqno and reqno if the (default) \texttt{centertags} 
+% are used. 
+% The currently fail (the structure is wrong) if the option \texttt{tbtags} is used.
+% The alignment of the cells is currently not handled. 
+% A simple debug command until everything is sorted.
+% \begin{macro}{\__math_split_debug_typeout:n}
+%    \begin{macrocode}
+\cs_new:Npn\__math_split_debug_typeout:n#1{\use_none:n{#1}}
+%    \end{macrocode}
+% \end{macro}
+% We need to detect if \cs{gather@split} has been used or not
+% \begin{macro}{\l__math_gathersplit_bool}
+%    \begin{macrocode}
+\bool_new:N\l__math_gathersplit_bool
+%    \end{macrocode}
+% \end{macro}
+% At first a redefinition of the main environment. Here we only have to add
+% the saving command for the inner table:
+% \begin{environment}{split}
+%    \begin{macrocode}
+\renewenvironment{split}{%
+  \__math_split_debug_typeout:n {begin~split}
+  \if@display
+    \ifinner 
+       \@xp\@xp\@xp\split@aligned
+    \else 
+      \ifst@rred \else \global\@eqnswtrue \fi
+    \fi
+  \else 
+    \let\endsplit\@empty \@xp\collect@body\@xp\split@err
+  \fi
+  \collect@body\gather@split
+}{\__math_split_debug_typeout:n{end~split}%
+     \crcr
+    \UseExpandableTaggingSocket{math/luamml/mtable/innertable/save}%
+    \egroup
+  \egroup  
+  \iftagsleft@ \@xp\lendsplit@ \else \@xp\rendsplit@ \fi
+}
+%    \end{macrocode}
+% \end{environment}
 %
+% In \cs{gather@split} we have to add the finalization socket.
+% We also set the boolean to true so that we can detect if 
+% the finalization has already happened. Perhaps this
+% could be done in the luamml code instead?
+% \begin{macro}{\gather@split}
+%    \begin{macrocode}
+\def\gather@split#1#2#3{
+  \__math_split_debug_typeout:n{gather@split}%
+  \@xp\endgroup \reset@equation % math@cr will handle equation numbering
+  \iftag@
+     \toks@\@xp{\df@tag}%
+     \edef\split@tag{%
+       \gdef\@nx\df@tag{\the\toks@}%
+       \global\@nx\tag@true \@nx\nonumber
+     }%
+  \else \let\split@tag\@empty
+  \fi
+  \bool_set_true:N\l__math_gathersplit_bool
+  \spread@equation
+  \vcenter\bgroup
+    \gather@{\split@tag
+    \begin{split}#1\end{split}}%
+    \def\endmathdisplay@a{%
+      \__math_split_debug_typeout:n{endmathdisplay@a}
+      \__math_split_debug_typeout:n{finalize~innertable~endmathdisplay@a}
+      \math@cr 
+      \black@ \totwidth@ 
+      \egroup
+      \egroup
+      \UseExpandableTaggingSocket{math/luamml/mtable/innertable/finalize}%        
+    }%
+}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\insplit@}
+% In \cs{insplit@} we have to add the sockets which store the cell content.
+%    \begin{macrocode}
+\def\insplit@{\__math_split_debug_typeout:n{insplit@}% 
+  \global\setbox\z@\vbox\bgroup
+    \Let@ \chardef\dspbrk@context\@ne \restore@math@cr
+    \default@tag % disallow use of \tag here
+    \ialign\bgroup
+      \hfil
+      \strut@
+      $\m@th\displaystyle {##}%      
+      \UseTaggingSocket{math/luamml/save/nNn}{ {} \displaystyle {mtd} }%      
+      $%            
+      \UseTaggingSocket{math/luamml/mtable/finalizecol}{last}%
+      &$\m@th\displaystyle {{}##}%
+      \UseTaggingSocket{math/luamml/save/nNn}{ {} \displaystyle {mtd} }%      
+      $%
+      \UseTaggingSocket{math/luamml/mtable/finalizecol}{last}%
+      \hfill % Why not \hfil?---dmj, 1994/12/28
+      \crcr
+}
+%    \end{macrocode}
+% \end{macro}
+% And now the difficult part. Depending on the options leqno/reqno \cs{lendsplit@}
+% or \cs{rendsplit@} are used for the typesetting and the inner table must
+% be finalized here in case this hasn't happen yet. This must be tested with the 
+% boolean from \cs{gather@split}
+%    \begin{macrocode}
+\def\lendsplit@{%
+    \global\setbox9\vtop{\unvcopy\z@}%
+    \ifinalign@
+        \setbox\@ne\vbox{%
+            \unvcopy\z@
+            \global\setbox8\lastbox
+        }%
+        \setbox\@ne\hbox{%
+            \unhcopy8%
+            \unskip
+            \setbox\tw@\lastbox
+            \unskip
+            \global\setbox\thr@@\lastbox
+        }%
+        \__math_split_debug_typeout:n{lendsplit@/aligncase}
+        \ifctagsplit@   
+         \__math_split_debug_typeout:n{lendsplit@/aligncase/centertags}         
+            \gdef\split@{%
+                \hbox to\wd\thr@@{}%
+               &\vcenter{\vbox{\moveleft\wd\thr@@\box9}}%               
+               \__math_split_debug_typeout:n{finalize~innertable~aligncase}
+               \UseTaggingSocket{math/luamml/mtable/innertable/finalize}%               
+            }%
+        \else
+        %TODO, not correct yet.
+         \__math_split_debug_typeout:n{lendsplit@/aligncase/tbtags}         
+            \gdef\split@{%
+                \hbox to\wd\thr@@{}%
+               &\vbox{\moveleft\wd\thr@@\box9}%               
+               \__math_split_debug_typeout:n{finalize~innertable~aligncase}
+               \UseTaggingSocket{math/luamml/mtable/innertable/finalize}%               
+            }%
+        \fi
+    \else
+%    \end{macrocode}
+% If not in align we need to test for \cs{gather@split}
+%    \begin{macrocode}
+        \ifctagsplit@
+           \bool_if:NTF \l__math_gathersplit_bool
+            {
+              \__math_split_debug_typeout:n{lendsplit/equationcase/centertags}
+              \gdef\split@%
+               {\UseTaggingSocket{math/luamml/annotate/false}{}{\vcenter{\box9}}} 
+            }
+            {
+              \__math_split_debug_typeout:n {lendsplit/gathercase/centertags}
+              \gdef\split@{\vcenter{\box9}%
+              \__math_split_debug_typeout:n {finalize~innertable~gathercase}
+              \UseTaggingSocket{math/luamml/mtable/innertable/finalize}}
+            }
+        \else
+          % TODO tbtags not correct yet.
+           \bool_if:NTF \l__math_gathersplit_bool
+            {
+              \__math_split_debug_typeout:n {lendsplit/equationcase/tbtags}
+              \gdef\split@%
+               {\UseTaggingSocket{math/luamml/annotate/false}{}{\box9}} 
+            }   
+            {
+              \__math_split_debug_typeout:n {lendsplit/gathercase/tbtags}
+              \gdef\split@{
+                \box9%                 
+                \__math_split_debug_typeout:n {finalize~innertable~gathercase}
+                \UseTaggingSocket{math/luamml/mtable/innertable/finalize}}
+            }
+        \fi       
+    \fi
+    \aftergroup\split@
+}
+%    \end{macrocode}
+% 
+% \begin{macro}{\rendsplit@}
+% And more or less the same for the \cs{rendsplit@} environment.
+%    \begin{macrocode}
+\def\rendsplit@{%
+    \ifinalign@ 
+        \global\setbox9 \vtop{%
+            \unvcopy\z@
+            \global\setbox8 \lastbox
+            \unskip
+        }%
+        \setbox\@ne\hbox{%
+            \unhcopy8
+            \unskip
+            \global\setbox\tw@\lastbox
+            \unskip
+            \global\setbox\thr@@\lastbox
+        }%
+        \ifctagsplit@ 
+            \gdef\split@{%
+                \hbox to\wd\thr@@{}
+                &\vcenter{\vbox{\moveleft\wd\thr@@\boxz@}}%
+            \__math_split_debug_typeout:n {rendsplit/aligncase/centertags}                   
+            \__math_split_debug_typeout:n {finalize~innertable~aligncase}             
+            \UseTaggingSocket{math/luamml/mtable/innertable/finalize}              
+            }%
+        \else 
+           \__math_split_debug_typeout:n{rendsplit@/aligncase/tbtags}
+           %TODO tbtags is not correct yet
+            \global\setbox7 \hbox{\unhbox\tw@\unskip}%
+            \gdef\split@{%
+                \global\@tempcnta\column@
+               &\setboxz@h{}%
+                \savetaglength@
+                \global\advance\row@\@ne
+                \vbox{\moveleft\wd\thr@@\box9}%
+               \crcr
+                \noalign{\global\lineht@\z@}%
+                \add@amps\@tempcnta
+                \UseTaggingSocket{math/luamml/annotate/false}{}{\box\thr@@}                
+               &\box7
+                 \__math_split_debug_typeout:n {finalize~innertable~aligncase}
+                 \UseTaggingSocket{math/luamml/mtable/innertable/finalize}%                                        
+            }%
+        \fi
+%    \end{macrocode}
+% and again the if we are not in align we need to test for \cs{gathersplit}
+%    \begin{macrocode}
+    \else 
+        \ifctagsplit@ 
+          \bool_if:NTF \l__math_gathersplit_bool
+            {
+              \__math_split_debug_typeout:n {rendsplit/equationcase/centertags}
+              \gdef\split@%
+               {\UseTaggingSocket{math/luamml/annotate/false}{}{\vcenter{\boxz@}}} 
+            }
+            {
+              \__math_split_debug_typeout:n  {rendsplit/gathercase/centertags}
+              \gdef\split@{\vcenter{\boxz@}%             
+               \__math_split_debug_typeout:n {finalize~innertable~gathercase}
+               \UseTaggingSocket{math/luamml/mtable/innertable/finalize}}
+            }  
+        \else
+           \bool_if:NTF \l__math_gathersplit_bool
+            {
+              \__math_split_debug_typeout:n {rendsplit/equationcase/tbtags}
+              \gdef\split@{%
+                \UseTaggingSocket{math/luamml/annotate/false}{}{\boxz@}}
+            }
+            {
+              \__math_split_debug_typeout:n {rendsplit/gathercase/tbtags}
+              \gdef\split@{%
+                \boxz@
+                \UseTaggingSocket{math/luamml/mtable/innertable/finalize}}
+            }
+        \fi
+    \fi
+    \aftergroup\split@
+}
+%    \end{macrocode}
+% \end{macro}
 % \subsection{\cs{intertext}}
 % The \cs{intertext} command errors with active tagging as it is processed twice
 % which leads to duplicated structures.
