@@ -34,6 +34,10 @@ local function write_elem(tree, indent)
     return out .. '/>'
   end
   out = out .. '>'
+  -- Never indent the content if it's purely text.
+  if #tree == 1 and type(tree[1]) == 'string' then
+    indent = nil
+  end
   local inner_indent = indent and indent .. '  '
   local is_string
   for _, elem in ipairs(tree) do
@@ -44,7 +48,9 @@ local function write_elem(tree, indent)
       out = out .. escape_text(elem)
       is_string = true
     else
-      out = out .. write_elem(elem, inner_indent)
+      if not elem['tex:ignore'] then
+        out = out .. write_elem(elem, inner_indent)
+      end
       is_string = nil
     end
   end
