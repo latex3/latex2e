@@ -48,15 +48,16 @@
 %
 % \section{Introduction}
 %
-% This file implements adaptations to the \pkg{amsmath} package needed for 
-% the tagging project. 
+% This file implements adaptations to the \pkg{amsmath} package needed for
+% the tagging project.
 %
 % \MaybeStop{\setlength\IndexMin{200pt}  \PrintIndex  }
 %
 % \section{The Implementation}
 %
+% Better no @@ expansion here \ldots ...
 %    \begin{macrocode}
-%<@@=math>
+%<@@=>
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -66,7 +67,7 @@
 % \subsection{File declaration}
 %    \begin{macrocode}
 \ProvidesFile{latex-lab-amsmath.ltx}
-        [2024-09-18 v0.1c amsmath adaptions]
+        [2025-01-31 v0.1e amsmath adaptions]
 %    \end{macrocode}
 % \subsection{Tagpdf support}
 % To make the code independent from tagging being loaded and active
@@ -75,87 +76,958 @@
 %    \begin{macrocode}
 \RequirePackage{tagpdf-base}
 %    \end{macrocode}
-% 
+%
 %    \begin{macrocode}
 \ExplSyntaxOn
 %    \end{macrocode}
 %
+% \subsection{Measuring}
+% When measuring we neither want tagging nor the luamml processing.
+% \begin{macro}{\measuring@true}
+%    \begin{macrocode}
+\def\measuring@true{\let\ifmeasuring@\iftrue\tag_suspend:n{\measuring}\luamml_ignore:}
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Display environments}
+% \changes{0.1e}{2025-01-31}{moved redefinitions from latex-lab-math and luamml into this file}
+%
+% \subsubsection{Tag}
+%  The tag/label must be saved, so that it can be reinserted later.
+%
+%  TODO: \cs{maketag@@@} is perhaps used in places where tagging/luamml handling
+%  is not wanted. This must be checked and handled.
+% \begin{macro}{\maketag@@@}
+%    \begin{macrocode}
+\def\maketag@@@#1
+  {%
+    \ifmeasuring@
+      \hbox{\m@th\normalfont#1}%
+    \else
+      \UseTaggingSocket{math/display/tag/begin}
+      \hbox{\m@th\normalfont#1
+      \UseTaggingSocket{math/luamml/mtable/tag/save}
+      }%
+      \UseTaggingSocket{math/display/tag/end}
+    \fi
+   }
+%    \end{macrocode}
+% \end{macro}
+% \cs{eqref} uses \cs{tagform@} and so \cs{maketag@@@} but we do not want this tagging
+% there.
+%
+% \begin{macro}{\eqref}
+% \begin{macro}{\maketag@@@notog}
+%    \begin{macrocode}
+\def\maketag@@@notag#1{\hbox{\m@th\normalfont#1}}
+\DeclareRobustCommand{\eqref}[1]
+  {\textup{\let\maketag@@@\maketag@@@notag\tagform@{\ref{#1}}}}
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% \subsubsection{align \& friends}
+%
+% Most display environment uses a common command for the end which contains
+% the luamml socket to finalize the mtable.
+% \begin{macro}{\common@align@ending}
+%    \begin{macrocode}
+\def\common@align@ending {
+  \math@cr \black@\totwidth@
+  \UseExpandableTaggingSocket {math/luamml/mtable/finalize} {align}
+  \egroup
+  \ifingather@
+    \restorealignstate@
+    \egroup
+    \nonumber
+    \ifnum0=`{\fi\iffalse}\fi
+  \else
+    $$%
+  \fi
+  \ignorespacesafterend
+}
+%    \end{macrocode}
+% \end{macro}
+% Now we redefine the display alignments to use these ending.
+%    \begin{macrocode}
+\renewenvironment{align}{%
+  \start@align\@ne\st@rredfalse\m@ne
+}{%
+  \common@align@ending
+}
+\renewenvironment{align*}{%
+  \start@align\@ne\st@rredtrue\m@ne
+}{%
+  \common@align@ending
+}
+\renewenvironment{alignat}{%
+  \start@align\z@\st@rredfalse
+}{%
+  \common@align@ending
+}
+\renewenvironment{alignat*}{%
+  \start@align\z@\st@rredtrue
+}{%
+  \common@align@ending
+}
+\renewenvironment{flalign}{%
+  \start@align\tw@\st@rredfalse\m@ne
+}{%
+  \common@align@ending
+}
+\renewenvironment{flalign*}{%
+  \start@align\tw@\st@rredtrue\m@ne
+}{%
+  \common@align@ending
+}
+\renewenvironment{xalignat}{%
+  \start@align\@ne\st@rredfalse
+}{%
+  \common@align@ending
+}
+\renewenvironment{xalignat*}{%
+  \start@align\@ne\st@rredtrue
+}{%
+  \common@align@ending
+}
+\renewenvironment{xxalignat}{%
+  \start@align\tw@\st@rredtrue
+}{%
+  \common@align@ending
+}
+%    \end{macrocode}
+%
+% And register these environments for the math grabbing.
+%    \begin{macrocode}
+  \math_register_halign_env:nn {align}{}
+  \math_register_halign_env:nn {align*}{}
+  \math_register_halign_env:nn {alignat}{}
+  \math_register_halign_env:nn {alignat*}{}
+  \math_register_halign_env:nn {flalign}{}
+  \math_register_halign_env:nn {flalign*}{}
+  \math_register_halign_env:nn {xalignat}{}
+  \math_register_halign_env:nn {xalignat*}{}
+  \math_register_halign_env:nn {xxalignat}{}
+%    \end{macrocode}
+%
+% The align preamble (used in \cs{align@}) needs code for luamml
+% to save the cells.
+% \begin{macro}{\align@preamble}
+%    \begin{macrocode}
+\def\align@preamble{%
+   &\hfil
+    \strut@
+    \setboxz@h
+      {
+        \@lign
+         $
+          \m@th\displaystyle{##}
+         \ifmeasuring@
+          \luamml_ignore:
+         \else
+          \UseTaggingSocket{math/luamml/save/nNn}{ {} \displaystyle {mtd} }
+         \fi
+         $
+      }%
+    \ifmeasuring@
+      \savefieldlength@
+    \else
+      \UseTaggingSocket{math/luamml/mtable/finalizecol}{box}
+    \fi
+    \set@field
+    \tabskip\z@skip
+   &\setboxz@h
+      {
+        \@lign
+         $
+           \m@th\displaystyle{{}##}
+           \ifmeasuring@
+           \luamml_ignore:
+           \else
+           \UseTaggingSocket{math/luamml/save/nNn}{ {} \displaystyle {mtd} }
+           \fi
+         $
+      }%
+    \ifmeasuring@
+      \savefieldlength@
+    \else
+      \UseTaggingSocket{math/luamml/mtable/finalizecol}{box}
+    \fi
+    \set@field
+    \hfil
+    \tabskip\alignsep@
+}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\math@cr@@@align}
+%    \begin{macrocode}
+\def\math@cr@@@align{%
+  \ifst@rred\nonumber\fi
+  \if@eqnsw \global\tag@true \fi
+  \global\advance\row@\@ne
+  \add@amps\maxfields@
+  \omit
+  \kern-\alignsep@
+  \iftag@
+    \setboxz@h{\@lign\strut@{\make@display@tag}}%
+    \place@tag
+  \fi
+  \UseTaggingSocket{math/luamml/mtable/tag/set}
+  \ifst@rred\else\global\@eqnswtrue\fi
+  \global\lineht@\z@
+  \cr
+}
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsubsection{\texttt{gather} and \texttt{gather*}}
+%
+% \begin{macro}{\gather@}
+%    \begin{macrocode}
+\def\gather@#1{%
+    \ingather@true \let\split\insplit@
+    \let\tag\tag@in@align \let\label\label@in@display
+    \chardef\dspbrk@context\z@
+    \intertext@ \displ@y@ \Let@
+    \let\math@cr@@@\math@cr@@@gather
+    \gmeasure@{#1}%
+    \global\shifttag@false
+    \tabskip\z@skip
+    \global\row@\@ne
+    \halign to\displaywidth\bgroup
+        \strut@
+        \setboxz@h
+          {
+           $\m@th\displaystyle{##}
+            \UseTaggingSocket{math/luamml/save/nNn}{ {} \displaystyle {mtd} }
+           $
+          }%
+        \UseTaggingSocket{math/luamml/mtable/finalizecol}{box}
+        \calc@shift@gather
+        \set@gather@field
+        \tabskip\@centering
+       &\setboxz@h{\strut@{##}}%
+       \place@tag@gather
+       \UseTaggingSocket{math/luamml/mtable/tag/set}
+        \tabskip \iftagsleft@ \gdisplaywidth@ \else \z@skip \span\fi
+        \crcr
+        #1%
+}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\endgather}
+%    \begin{macrocode}
+\def\endgather{
+      \math@cr
+      \black@ \totwidth@
+      \UseExpandableTaggingSocket{math/luamml/mtable/finalize} {gather}
+  \egroup
+  $$
+  \ignorespacesafterend
+}
+%    \end{macrocode}
+% \end{macro}
+%
+% The original definition of \texttt{gather*} uses \cs{endgather}
+% but this redirection doesn't work if we alter \texttt{gather} so we use
+% the real meaning and add the socket.
+% \begin{environment}{gather*}
+%    \begin{macrocode}
+\renewenvironment{gather*}
+ {
+   \start@gather\st@rredtrue
+ }
+ {
+    \math@cr
+    \black@\totwidth@
+    \UseExpandableTaggingSocket{math/luamml/mtable/finalize} {gather}
+   \egroup
+  $$\ignorespacesafterend
+ }
+%    \end{macrocode}
+% \end{environment}
+%
+% Register both environments
+%    \begin{macrocode}
+\math_register_halign_env:nn {gather}{}
+\math_register_halign_env:nn {gather*}{}
+%    \end{macrocode}
+%
+% \subsubsection{gathered, aligned and alignedat}
+% These environments are not grabbed as they are inside other display
+% environments but they need various sockets for luamml support.
+% \begin{macro}{\start@aligned}
+%    \begin{macrocode}
+\renewcommand{\start@aligned}[2]{
+  \RIfM@
+  \else
+    \nonmatherr@ {\begin{\@currenvir}}
+  \fi
+  \savecolumn@ % Assumption: called inside a group
+  \UseTaggingSocket{math/luamml/annotate/false}{}{ \alignedspace@left }
+  \ams@start@box {#1} \bgroup
+    \maxfields@ #2 \relax
+    \ifnum \maxfields@ > \m@ne
+      \multiply \maxfields@ \tw@
+      \let \math@cr@@@ \math@cr@@@alignedat
+      \alignsep@ \z@skip
+    \else
+      \let \math@cr@@@ \math@cr@@@aligned
+      \alignsep@ \minalignsep
+    \fi
+    \Let@ \chardef \dspbrk@context \@ne
+    \default@tag
+    \spread@equation % no-op if already called
+    \global \column@ \z@
+    \ialign \bgroup
+      & \column@plus
+        \hfil
+        \strut@
+        $
+          \m@th
+          \displaystyle
+          {##}
+          \UseTaggingSocket{math/luamml/save/nNn}{ {} \displaystyle {mtd} }
+        $
+        \UseTaggingSocket{math/luamml/mtable/finalizecol}{last}
+        \tabskip \z@skip
+      & \column@plus
+        $
+          \m@th
+          \displaystyle
+          {
+            {}
+            ##
+          }
+          \UseTaggingSocket{math/luamml/save/nNn}{ {} \displaystyle {mtd} }
+        $
+        \UseTaggingSocket{math/luamml/mtable/finalizecol}{last}
+        \hfil
+        \tabskip\alignsep@
+      \crcr
+      \ams@return@opt@arg
+}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{environment}{gathered}
+%    \begin{macrocode}
+\renewenvironment{gathered}[1][c]{%
+    \RIfM@\else
+        \nonmatherr@{\begin{gathered}}%
+    \fi
+%    \end{macrocode}
+% This annotates the space
+%    \begin{macrocode}
+    \UseTaggingSocket{ math/luamml/annotate/false } {}{ \alignedspace@left }
+    \ams@start@box{#1}\bgroup
+        \Let@ \chardef\dspbrk@context\@ne \restore@math@cr
+        \spread@equation
+        \ialign\bgroup
+            \hfil\strut@$\m@th\displaystyle##
+%    \end{macrocode}
+% This save the cell and then finalize it.
+%    \begin{macrocode}
+            \UseTaggingSocket{math/luamml/save/nNn}{ {} \displaystyle {mtd} }
+            $
+            \UseTaggingSocket{math/luamml/mtable/finalizecol}{last}
+            \hfil
+            \crcr
+    \ams@return@opt@arg
+}{%
+  \endaligned
+}
+%    \end{macrocode}
+% \end{environment}
+%
+% \begin{macro}{\endaligned}
+%    \begin{macrocode}
+\def\endaligned
+ {
+      \crcr
+      \UseExpandableTaggingSocket{math/luamml/mtable/innertable/save}
+    \egroup
+    \restorecolumn@
+  \egroup
+  \UseTaggingSocket{math/luamml/mtable/innertable/finalize}
+ }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsubsection{multline and multline*}
+%
+% \texttt{multline*} needs a redefinition before it is registered as it uses
+% \cs{endmultline}, this must be replaced by the true code.
+%
+% \begin{environment}{multline*}
+%    \begin{macrocode}
+\renewenvironment{multline*}{\start@multline\st@rredtrue}
+ {%
+  \iftagsleft@ \@xp\lendmultline@ \else \@xp\rendmultline@ \fi
+  \ignorespacesafterend
+ }
+%    \end{macrocode}
+% \end{environment}
+%
+% And now we register both
+%    \begin{macrocode}
+\math_register_halign_env:nn {multline}{}
+\math_register_halign_env:nn {multline*}{}
+%    \end{macrocode}
+%
+% In the internal commands we have to add sockets for alignment attributes
+% \begin{macro}{\multline@}
+%    \begin{macrocode}
+\def\multline@#1{%
+    \Let@
+    \@display@init{\global\advance\row@\@ne \global\dspbrk@lvl\m@ne}%
+    \chardef\dspbrk@context\z@
+    \restore@math@cr
+    \let\tag\tag@in@align
+    \global\tag@false \global\let\raise@tag\@empty
+    \mmeasure@{#1}%
+    \let\tag\gobble@tag \let\label\@gobble
+    \tabskip \if@fleqn \@mathmargin \else \z@skip \fi
+    \totwidth@\displaywidth
+    \if@fleqn
+        \advance\totwidth@-\@mathmargin
+    \fi
+    \halign\bgroup
+        \hbox to\totwidth@{%
+            \if@fleqn
+                \hskip \@centering \relax
+            \else
+                \hfil
+            \fi
+            \strut@
+            $\m@th\displaystyle{}##\endmultline@math
+            \hfil
+        }%
+        \crcr
+        \if@fleqn
+            \hskip-\@mathmargin
+            \def\multline@indent{\hskip\@mathmargin}% put it back
+        \else
+            \hfilneg
+            \def\multline@indent{\hskip\multlinegap}%
+        \fi
+        \iftagsleft@
+            \iftag@
+                \begingroup
+                    \ifshifttag@
+                        \rlap{\vbox{%
+                                \normalbaselines
+                                \hbox{%
+                                    \strut@
+                                    \make@display@tag
+                                }%
+                                \vbox to\lineht@{}%
+                                \raise@tag
+                        }}%
+                        \multline@indent
+                    \else
+                        \setbox\z@\hbox{\make@display@tag}%
+                        \dimen@\@mathmargin \advance\dimen@-\wd\z@
+                        \ifdim\dimen@<\multlinetaggap
+                          \dimen@\multlinetaggap
+                        \fi
+                        \box\z@ \hskip\dimen@\relax
+                    \fi
+                \endgroup
+            \else
+                \multline@indent
+            \fi
+        \else
+            \multline@indent
+        \fi
+    \ifmeasuring@ \else
+      \UseTaggingSocket{math/luamml/mtable/aligncol} {left}
+    \fi
+    #1%
+    \ifmeasuring@ \else
+      \UseTaggingSocket{math/luamml/mtable/aligncol} {right}
+    \fi
+}
+%    \end{macrocode}
+% \end{macro}
+%
+% Luckily, \texttt{multline} uses \cs{endmultline@math} in exactly
+% the spot where we have to set the flag.
+% Less luckily, \cs{endmultline@math} sometimes get overwritten for the last line.
+% But that isn't much of a problem since we want special behavior there anyway.
+% \begin{macro}{\endmultline@math}
+%    \begin{macrocode}
+\def\endmultline@math
+ {
+   \UseTaggingSocket{math/luamml/save/nNn}{ {} \displaystyle {mtd} }
+   $
+   \UseTaggingSocket{math/luamml/mtable/finalizecol}{last}
+ }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\rendmultline@}
+%    \begin{macrocode}
+\def\rendmultline@{%
+    \iftag@
+%    \end{macrocode}
+% we need to surround the math token with tagging sockets.
+%    \begin{macrocode}
+      \UseTaggingSocket{math/luamml/save/nNn}{ {} \displaystyle {mtd} }
+      $
+      \UseTaggingSocket{math/luamml/mtable/finalizecol}{last}
+        \let\endmultline@math\relax
+            \ifshifttag@
+                \hskip\multlinegap
+                \llap{\vtop{%
+                    \raise@tag
+                    \normalbaselines
+                    \setbox\@ne\null
+                    \dp\@ne\lineht@
+                    \box\@ne
+                    \hbox{\strut@\make@display@tag}%
+                }}%
+            \else
+                \hskip\multlinetaggap
+                \make@display@tag
+            \fi
+%    \end{macrocode}
+% Here we set the tag TODO: is that sensible with multline? Where is the tag saved?
+%    \begin{macrocode}
+    \UseTaggingSocket{math/luamml/mtable/tag/set}
+    \else
+        \hskip\multlinegap
+    \fi
+    \hfilneg
+        \math@cr
+%    \end{macrocode}
+% Now we finalize the mtable.
+%    \begin{macrocode}
+       \UseExpandableTaggingSocket {math/luamml/mtable/finalize} {multline}
+    \egroup$$%
+}
+%    \end{macrocode}
+% \end{macro}
+% And something similar for the left version
+% \begin{macro}{\lendmultline@}
+%    \begin{macrocode}
+\def\lendmultline@{%
+        \hfilneg
+        \hskip\multlinegap
+        \math@cr
+        \UseExpandableTaggingSocket {math/luamml/mtable/finalize} {multline}
+    \egroup
+    $$%
+}
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Cases}
+%
+% \begin{macro}{env@cases}
+%    \begin{macrocode}
+\def\env@cases{%
+  \let\@ifnextchar\new@ifnextchar
+  \left\lbrace
+  \def\arraystretch{1.2}%
+  \array{@{}l@{\quad}l@{\luamml_ignore:}}%
+}
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsubsection{smallmatrix}
+
+% \begin{environment}{smallmatrix}
+%    \begin{macrocode}
+\renewenvironment {smallmatrix} {
+  \UseTaggingSocket{ math/luamml/annotate/false } {} { \null\, }
+  \vcenter \bgroup
+    \Let@
+    \restore@math@cr
+    \default@tag
+    \baselineskip 6 \ex@
+    \lineskip 1.5 \ex@
+    \lineskiplimit \lineskip
+    \ialign \bgroup
+        \hfil
+        $
+        \m@th
+        \scriptstyle
+        ##
+        % No \scriptsize here since we want to add the mstyle nodes
+        \UseTaggingSocket{math/luamml/save/nn}{ {} {mtd} }
+        $
+        \UseTaggingSocket{math/luamml/mtable/finalizecol}{last}
+        \hfil
+      &&
+        \thickspace
+        \hfil
+        $
+        \m@th
+        \scriptstyle
+        ##
+        % No \scriptsize here since we want to add the mstyle nodes
+        \UseTaggingSocket{math/luamml/save/nn}{ {} {mtd} }
+        $
+        \UseTaggingSocket{math/luamml/mtable/finalizecol}{last}
+        \hfil
+      \crcr
+}{%
+      \crcr
+      \UseExpandableTaggingSocket{math/luamml/mtable/smallmatrix/save}
+    \egroup
+  \egroup
+  \UseTaggingSocket{math/luamml/mtable/innertable/finalize}
+  \UseTaggingSocket{ math/luamml/annotate/false } {}{ \, }
+}
+%    \end{macrocode}
+% \end{environment}
+%
+% \subsection{The split environment}
+%
+% The split environment is not trivial to handle as it has a rather convoluted
+% implementation in amsmath: depending on in which display environment it is embedded
+% it takes different branches, which makes it difficult to finalize the mtable.
+%
+% The following patches work with leqno and reqno if the (default) \texttt{centertags}
+% are used.
+% The currently fail (the structure is wrong) if the option \texttt{tbtags} is used.
+% The alignment of the cells is currently not handled.
+% A simple debug command until everything is sorted.
+% \begin{macro}{\__math_split_debug_typeout:n}
+%    \begin{macrocode}
+\cs_new:Npn\__math_split_debug_typeout:n#1{\use_none:n{#1}}
+%    \end{macrocode}
+% \end{macro}
+% We need to detect if \cs{gather@split} has been used or not
+% \begin{macro}{\l__math_gathersplit_bool}
+%    \begin{macrocode}
+\bool_new:N\l__math_gathersplit_bool
+%    \end{macrocode}
+% \end{macro}
+% At first a redefinition of the main environment. Here we only have to add
+% the saving command for the inner table:
+% \begin{environment}{split}
+%    \begin{macrocode}
+\renewenvironment{split}{%
+  \__math_split_debug_typeout:n {begin~split}
+  \if@display
+    \ifinner
+       \@xp\@xp\@xp\split@aligned
+    \else
+      \ifst@rred \else \global\@eqnswtrue \fi
+    \fi
+  \else
+    \let\endsplit\@empty \@xp\collect@body\@xp\split@err
+  \fi
+  \collect@body\gather@split
+}{\__math_split_debug_typeout:n{end~split}%
+     \crcr
+    \UseExpandableTaggingSocket{math/luamml/mtable/innertable/save}%
+    \egroup
+  \egroup
+  \iftagsleft@ \@xp\lendsplit@ \else \@xp\rendsplit@ \fi
+}
+%    \end{macrocode}
+% \end{environment}
+%
+% In \cs{gather@split} we have to add the finalization socket.
+% We also set the boolean to true so that we can detect if
+% the finalization has already happened. Perhaps this
+% could be done in the luamml code instead?
+% \begin{macro}{\gather@split}
+%    \begin{macrocode}
+\def\gather@split#1#2#3{
+  \__math_split_debug_typeout:n{gather@split}%
+  \@xp\endgroup \reset@equation % math@cr will handle equation numbering
+  \iftag@
+     \toks@\@xp{\df@tag}%
+     \edef\split@tag{%
+       \gdef\@nx\df@tag{\the\toks@}%
+       \global\@nx\tag@true \@nx\nonumber
+     }%
+  \else \let\split@tag\@empty
+  \fi
+  \bool_set_true:N\l__math_gathersplit_bool
+  \spread@equation
+  \vcenter\bgroup
+    \gather@{\split@tag
+    \begin{split}#1\end{split}}%
+    \def\endmathdisplay@a{%
+      \__math_split_debug_typeout:n{endmathdisplay@a}
+      \__math_split_debug_typeout:n{finalize~innertable~endmathdisplay@a}
+      \math@cr
+      \black@ \totwidth@
+      \egroup
+      \egroup
+      \UseExpandableTaggingSocket{math/luamml/mtable/innertable/finalize}%
+    }%
+}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\insplit@}
+% In \cs{insplit@} we have to add the sockets which store the cell content.
+%    \begin{macrocode}
+\def\insplit@{\__math_split_debug_typeout:n{insplit@}%
+  \global\setbox\z@\vbox\bgroup
+    \Let@ \chardef\dspbrk@context\@ne \restore@math@cr
+    \default@tag % disallow use of \tag here
+    \ialign\bgroup
+      \hfil
+      \strut@
+      $\m@th\displaystyle {##}%
+      \UseTaggingSocket{math/luamml/save/nNn}{ {} \displaystyle {mtd} }%
+      $%
+      \UseTaggingSocket{math/luamml/mtable/finalizecol}{last}%
+      &$\m@th\displaystyle {{}##}%
+      \UseTaggingSocket{math/luamml/save/nNn}{ {} \displaystyle {mtd} }%
+      $%
+      \UseTaggingSocket{math/luamml/mtable/finalizecol}{last}%
+      \hfill % Why not \hfil?---dmj, 1994/12/28
+      \crcr
+}
+%    \end{macrocode}
+% \end{macro}
+% And now the difficult part. Depending on the options leqno/reqno \cs{lendsplit@}
+% or \cs{rendsplit@} are used for the typesetting and the inner table must
+% be finalized here in case this hasn't happen yet. This must be tested with the
+% boolean from \cs{gather@split}
+%    \begin{macrocode}
+\def\lendsplit@{%
+    \global\setbox9\vtop{\unvcopy\z@}%
+    \ifinalign@
+        \setbox\@ne\vbox{%
+            \unvcopy\z@
+            \global\setbox8\lastbox
+        }%
+        \setbox\@ne\hbox{%
+            \unhcopy8%
+            \unskip
+            \setbox\tw@\lastbox
+            \unskip
+            \global\setbox\thr@@\lastbox
+        }%
+        \__math_split_debug_typeout:n{lendsplit@/aligncase}
+        \ifctagsplit@
+         \__math_split_debug_typeout:n{lendsplit@/aligncase/centertags}
+            \gdef\split@{%
+                \hbox to\wd\thr@@{}%
+               &\vcenter{\vbox{\moveleft\wd\thr@@\box9}}%
+               \__math_split_debug_typeout:n{finalize~innertable~aligncase}
+               \UseTaggingSocket{math/luamml/mtable/innertable/finalize}%
+            }%
+        \else
+        %TODO, not correct yet.
+         \__math_split_debug_typeout:n{lendsplit@/aligncase/tbtags}
+            \gdef\split@{%
+                \hbox to\wd\thr@@{}%
+               &\vbox{\moveleft\wd\thr@@\box9}%
+               \__math_split_debug_typeout:n{finalize~innertable~aligncase}
+               \UseTaggingSocket{math/luamml/mtable/innertable/finalize}%
+            }%
+        \fi
+    \else
+%    \end{macrocode}
+% If not in align we need to test for \cs{gather@split}
+%    \begin{macrocode}
+        \ifctagsplit@
+           \bool_if:NTF \l__math_gathersplit_bool
+            {
+              \__math_split_debug_typeout:n{lendsplit/equationcase/centertags}
+              \gdef\split@%
+               {\UseTaggingSocket{math/luamml/annotate/false}{}{\vcenter{\box9}}}
+            }
+            {
+              \__math_split_debug_typeout:n {lendsplit/gathercase/centertags}
+              \gdef\split@{\vcenter{\box9}%
+              \__math_split_debug_typeout:n {finalize~innertable~gathercase}
+              \UseTaggingSocket{math/luamml/mtable/innertable/finalize}}
+            }
+        \else
+          % TODO tbtags not correct yet.
+           \bool_if:NTF \l__math_gathersplit_bool
+            {
+              \__math_split_debug_typeout:n {lendsplit/equationcase/tbtags}
+              \gdef\split@%
+               {\UseTaggingSocket{math/luamml/annotate/false}{}{\box9}}
+            }
+            {
+              \__math_split_debug_typeout:n {lendsplit/gathercase/tbtags}
+              \gdef\split@{
+                \box9%
+                \__math_split_debug_typeout:n {finalize~innertable~gathercase}
+                \UseTaggingSocket{math/luamml/mtable/innertable/finalize}}
+            }
+        \fi
+    \fi
+    \aftergroup\split@
+}
+%    \end{macrocode}
+%
+% \begin{macro}{\rendsplit@}
+% And more or less the same for the \cs{rendsplit@} environment.
+%    \begin{macrocode}
+\def\rendsplit@{%
+    \ifinalign@
+        \global\setbox9 \vtop{%
+            \unvcopy\z@
+            \global\setbox8 \lastbox
+            \unskip
+        }%
+        \setbox\@ne\hbox{%
+            \unhcopy8
+            \unskip
+            \global\setbox\tw@\lastbox
+            \unskip
+            \global\setbox\thr@@\lastbox
+        }%
+        \ifctagsplit@
+            \gdef\split@{%
+                \hbox to\wd\thr@@{}
+                &\vcenter{\vbox{\moveleft\wd\thr@@\boxz@}}%
+            \__math_split_debug_typeout:n {rendsplit/aligncase/centertags}
+            \__math_split_debug_typeout:n {finalize~innertable~aligncase}
+            \UseTaggingSocket{math/luamml/mtable/innertable/finalize}
+            }%
+        \else
+           \__math_split_debug_typeout:n{rendsplit@/aligncase/tbtags}
+           %TODO tbtags is not correct yet
+            \global\setbox7 \hbox{\unhbox\tw@\unskip}%
+            \gdef\split@{%
+                \global\@tempcnta\column@
+               &\setboxz@h{}%
+                \savetaglength@
+                \global\advance\row@\@ne
+                \vbox{\moveleft\wd\thr@@\box9}%
+               \crcr
+                \noalign{\global\lineht@\z@}%
+                \add@amps\@tempcnta
+                \UseTaggingSocket{math/luamml/annotate/false}{}{\box\thr@@}
+               &\box7
+                 \__math_split_debug_typeout:n {finalize~innertable~aligncase}
+                 \UseTaggingSocket{math/luamml/mtable/innertable/finalize}%
+            }%
+        \fi
+%    \end{macrocode}
+% and again the if we are not in align we need to test for \cs{gathersplit}
+%    \begin{macrocode}
+    \else
+        \ifctagsplit@
+          \bool_if:NTF \l__math_gathersplit_bool
+            {
+              \__math_split_debug_typeout:n {rendsplit/equationcase/centertags}
+              \gdef\split@%
+               {\UseTaggingSocket{math/luamml/annotate/false}{}{\vcenter{\boxz@}}}
+            }
+            {
+              \__math_split_debug_typeout:n  {rendsplit/gathercase/centertags}
+              \gdef\split@{\vcenter{\boxz@}%
+               \__math_split_debug_typeout:n {finalize~innertable~gathercase}
+               \UseTaggingSocket{math/luamml/mtable/innertable/finalize}}
+            }
+        \else
+           \bool_if:NTF \l__math_gathersplit_bool
+            {
+              \__math_split_debug_typeout:n {rendsplit/equationcase/tbtags}
+              \gdef\split@{%
+                \UseTaggingSocket{math/luamml/annotate/false}{}{\boxz@}}
+            }
+            {
+              \__math_split_debug_typeout:n {rendsplit/gathercase/tbtags}
+              \gdef\split@{%
+                \boxz@
+                \UseTaggingSocket{math/luamml/mtable/innertable/finalize}}
+            }
+        \fi
+    \fi
+    \aftergroup\split@
+}
+%    \end{macrocode}
+% \end{macro}
 % \subsection{\cs{intertext}}
 % The \cs{intertext} command errors with active tagging as it is processed twice
-% which leads to duplicated structures. 
+% which leads to duplicated structures.
+%
+% \begin{macro}{\intertext@}
+% TODO: review and add sockets!
 %    \begin{macrocode}
-\AddToHook{package/amsmath/after}
- {
-    \def\intertext@{%
-      \def\intertext##1{%
-        \ifvmode\else\\\@empty\fi
-        \noalign{%
+\def\intertext@{%
+  \def\intertext##1{%
+    \ifvmode\else\\\@empty\fi
+    \noalign{%
 %    \end{macrocode}
 % we have to flip the sign and use a negative \cs{belowdisplayskip}
 % as we flipped the sign at the outside.
 %    \begin{macrocode}
-          \penalty\postdisplaypenalty\vskip-\belowdisplayskip
-          \vbox{
+      \penalty\postdisplaypenalty\vskip-\belowdisplayskip
+      \vbox{
 %    \end{macrocode}
 % Stop tagging when measuring:
 %    \begin{macrocode}
-           \ifmeasuring@\tag_suspend:n{\measuring}\fi
-           \normalbaselines
-            \ifdim\linewidth=\columnwidth
-            \else \parshape\@ne \@totalleftmargin \linewidth
-            \fi
+       \ifmeasuring@\tag_suspend:n{\measuring}\fi
+       \normalbaselines
+        \ifdim\linewidth=\columnwidth
+        \else \parshape\@ne \@totalleftmargin \linewidth
+        \fi
 %    \end{macrocode}
 % End the previous mc:
 %    \begin{macrocode}
-            \tag_mc_end_push:
+        \tag_mc_end_push:
 %    \end{macrocode}
 % We are already in a par so we change now to text:
 %    \begin{macrocode}
-            \tagpdfsetup{para/tag=P}% 
+        \tagpdfsetup{para/tag=P}%
 %    \end{macrocode}
-% TODO why \cs{tagpdfparaOn} needed? 
+% TODO why \cs{tagpdfparaOn} needed?
 %    \begin{macrocode}
-            \tagpdfparaOn
-            \noindent\ignorespaces##1\par
+        \tagpdfparaOn
+        \noindent\ignorespaces##1\par
 %    \end{macrocode}
 % Restart the MC
 %    \begin{macrocode}
-            \tag_mc_begin_pop:n{}}%
-          \penalty\predisplaypenalty\vskip\abovedisplayskip%
-        }%
-    }}
-  }      
+        \tag_mc_begin_pop:n{}}%
+      \penalty\predisplaypenalty\vskip\abovedisplayskip%
+    }%
+}}
 %    \end{macrocode}
+% \end{macro}
 %
 % \subsection{\cs{text}}
-% 
+%
 % The \cs{text} command uses \cs{mathchoice} which \enquote{typesets} the argument
-% four times. This makes it quite problematic for tagging. Without precautions 
-% structure objects would be created four times and would get MC-chunks as kids 
-% that doesn't really exist. amsmath contains a switch that allows to execute code
+% four times. This makes it quite problematic for tagging. Without precautions
+% structure objects would be created four times and would get MC-chunks as kids
+% that don't really exist. amsmath contains a switch that allows to execute code
 % only in the first (displaymath) branch, but that isn't usable here. At first because
 % we don't know if the first branch creates the same structure as the one that is
 % actually used. At second because the engines executes some commands like \cs{label}
 % and \cs{pdfannot} only at shipout from the branch that really was used. So we would
-% get structure data from one \cs{mathchoice}-branch and MC-labels and links from another 
-% one and that gets very messy. 
-% 
+% get structure data from one \cs{mathchoice}-branch and MC-labels and links from another
+% one and that gets very messy.
+%
 % We therefore have to avoid that tagging is active in unused branches. In pdflatex it
 % is not possible to detect the mathstyle before, so we use a label. With lualatex is
 % is possible to redefine \cs{text} not to use \cs{mathchoice}
-% 
+%
+% \begin{macro}{\text@}
 %    \begin{macrocode}
 \AddToHook{package/amstext/after}
  {
 %    \end{macrocode}
 % currently amsmath is loaded in a begindocument hook, so this
 % test is fine. If amstext is loaded earlier (in the kernel), this needs perhaps a change.
+% \changes{v0.1d}{2024/12/03}{Add tagging socket for luamml support}
 %    \begin{macrocode}
    \tag_if_active:T
     {
       \sys_if_engine_luatex:TF
        {
-         \def\text@#1{{%
+         \def\text@#1{
+          \tag_socket_use:nnn {math/luamml/hbox}{}
+          {{%
            \ifcase\mathstyle
            \hbox{{#1}}\or
            \hbox{{#1}}\or
@@ -168,7 +1040,7 @@
            \ERROR
            \fi
            \check@mathfonts
-         }}       
+         }}}
        }
        {
          \def\text@#1
@@ -177,39 +1049,41 @@
            \tag_suspend:n{\text@}
            \mathchoice
             {
-             \@@_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{0}
+             \__math_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{0}
              \textdef@\displaystyle\f@size{#1}
             }
             {
-             \@@_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{2}
+             \__math_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{2}
              \textdef@\textstyle\f@size{\firstchoice@false #1}
             }
             {
-             \@@_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{4}
+             \__math_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{4}
              \textdef@\textstyle\sf@size{\firstchoice@false #1}
             }
             {
-              \@@_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{6}
+              \__math_tag_if_mathstyle:en{mathchoice-\int_use:N\g__math_mathchoice_int}{6}
               \textdef@\textstyle \ssf@size{\firstchoice@false #1}
             }
             \check@mathfonts
-          }}     
+          }}
        }
     }
  }
 %    \end{macrocode}
+% \end{macro}
 %
 % \subsection{\cs{pmb}}
 % \cs{pmb} prints its argument three times. For tagging we must mark
 % two of occurrences as artifact.
 % For luatex the attributes in the box must be reset, for this
 % we switch to expl3-boxes.
+% \begin{macro}{\pbm@@,\pmb@}
 %    \begin{macrocode}
 \AddToHook{package/amsbsy/after}
  {
-   \def\pmb@@@@#1#2#3{\leavevmode\hbox_set:Nn\l_@@_tmpa_box{xxx#3}
+   \def\pmb@@#1#2#3{\leavevmode\hbox_set:Nn\l_@@_tmpa_box{xxx#3}
       \dimen@-\box_wd:N\l_@@_tmpa_box
-      \kern-.5\ex@\box_use:N\l_@@_tmpa_box      
+      \kern-.5\ex@\box_use:N\l_@@_tmpa_box
       \tag_mc_end:\tag_mc_begin:n{artifact}
       \tag_mc_reset_box:N\l_@@_tmpa_box
       \kern\dimen@\kern.25\ex@\raise.4\ex@\box_use:N\l_@@_tmpa_box
@@ -220,7 +1094,7 @@
      \setboxz@h{$\m@th#1\mkern.5mu$}\pmbraise@\wdz@
      \binrel@{#2}
      \dimen@-\box_wd:N\l_@@_tmpa_box
-     \binrel@@@@{
+     \binrel@@{
        \mkern-.8mu\box_use:N\l_@@_tmpa_box
        \tag_mc_end:\tag_mc_begin:n{artifact}
        \tag_mc_reset_box:N\l_@@_tmpa_box
@@ -231,6 +1105,7 @@
     }
   }
 %    \end{macrocode}
+% \end{macro}
 %    \begin{macrocode}
 \ExplSyntaxOff
 %    \end{macrocode}

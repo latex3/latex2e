@@ -28,7 +28,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: tagpdf.dtx
-\ProvidesExplPackage {tagpdf} {2025-01-12} {0.99l}
+\ProvidesExplPackage {tagpdf} {2025-02-17} {0.99m}
   { LaTeX kernel code for PDF tagging }
 
 \bool_if:nF
@@ -52,17 +52,9 @@
   }
 \prop_gput:Nnn \g_msg_module_name_prop { tag }{ tagpdf }
 \bool_new:N\g__tag_mode_lua_bool
-\bool_new:N\g__tag_delayed_shipout_bool
-\bool_lazy_and:nnT
-  { \bool_if_exist_p:N \l__pdfmanagement_delayed_shipout_bool }
-  { \l__pdfmanagement_delayed_shipout_bool }
-  {
-    \bool_gset_true:N\g__tag_delayed_shipout_bool
-  }
-\DeclareOption {luamode}  { \sys_if_engine_luatex:T { \bool_gset_true:N \g__tag_mode_lua_bool } }
-\DeclareOption {genericmode}{ \bool_gset_false:N\g__tag_mode_lua_bool }
-\DeclareOption {disabledelayedshipout}{ \bool_gset_false:N\g__tag_delayed_shipout_bool }
-\ExecuteOptions{luamode}
+\sys_if_engine_luatex:T {\bool_gset_true:N \g__tag_mode_lua_bool}
+\DeclareOption {luamode}  { }
+\DeclareOption {genericmode}{ }
 \ProcessOptions
 \RequirePackage{tagpdf-base}
 \AddToHook{package/latex-lab-testphase-new-or-2/after}
@@ -289,7 +281,7 @@
 %% File: tagpdf-checks.dtx
 
 \msg_new:nnn { tag } {mc-nested} { nested~marked~content~found~-~mcid~#1 }
-\msg_new:nnn { tag } {mc-tag-missing} { required~tag~missing~-~mcid~#1 }
+\msg_new:nnn { tag } {mc-tag-missing} { MC-tag~missing;~#1~used~instead~-~mcid~#2 }
 \msg_new:nnn { tag } {mc-label-unknown}
   { label~#1~unknown~or~has~been~already~used.\\
     Either~rerun~or~remove~one~of~the~uses. }
@@ -509,14 +501,17 @@
   }
 \cs_new_protected:Npn \__tag_check_mc_tag:N #1  %#1 is var with a tag name in it
   {
-    \tl_if_empty:NT #1
+    \tl_if_empty:NTF #1
       {
-        \msg_error:nne { tag } {mc-tag-missing} { \__tag_get_mc_abs_cnt: }
+        \tl_set:No #1 { \g__tag_struct_tag_tl }
+        \msg_info:nnee { tag } {mc-tag-missing} { \g__tag_struct_tag_tl }{ \__tag_get_mc_abs_cnt: }
       }
-   \prop_if_in:NoF \g__tag_role_tags_NS_prop {#1}
-     {
-       \msg_warning:nne { tag } {role-unknown-tag} {#1}
-     }
+      {
+       \prop_if_in:NoF \g__tag_role_tags_NS_prop {#1}
+         {
+           \msg_warning:nne { tag } {role-unknown-tag} {#1}
+         }
+      }
   }
 \cs_new_protected:Npn \__tag_check_init_mc_used:
   {
@@ -2180,7 +2175,7 @@
 \cs_generate_variant:Nn\__tag_struct_exchange_kid_command:N { c }
 \cs_new_protected:Npn \__tag_struct_fill_kid_key:n #1 %#1 is the struct num
   {
-    \bool_if:NF\g__tag_mode_lua_bool
+    \bool_if:NF \g__tag_mode_lua_bool
      {
         \seq_clear:N \l__tag_tmpa_seq
         \seq_map_inline:cn { g__tag_struct_kids_#1_seq }
@@ -2206,7 +2201,7 @@
          {
            % in this case we need a special command in
            % luamode to get the array right. See issue #13
-           \bool_if:NTF\g__tag_mode_lua_bool
+           \sys_if_engine_luatex:TF
              {
                \__tag_struct_exchange_kid_command:c
                 {g__tag_struct_kids_#1_seq}
@@ -2482,6 +2477,21 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
            \__tag_struct_prop_gput:nne
              { \int_use:N \c@g__tag_struct_abs_int }
              { ActualText }
+             { <\l__tag_tmpa_str>}
+          }
+      },
+     phoneme .code:n  = % ActualText property
+      {
+        \tl_if_empty:oF{#1}
+          {
+           \str_set_convert:Noon
+             \l__tag_tmpa_str
+             { #1 }
+             { default }
+             { utf16/hex }
+           \__tag_struct_prop_gput:nne
+             { \int_use:N \c@g__tag_struct_abs_int }
+             { Phoneme }
              { <\l__tag_tmpa_str>}
           }
       },
@@ -3345,7 +3355,7 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
   {
     mc-data .code:n =
       {
-        \sys_if_engine_luatex:T
+        \bool_if:NT \g__tag_mode_lua_bool
           {
             \lua_now:e{ltx.__tag.trace.show_all_mc_data(#1,\__tag_get_mc_abs_cnt:,0)}
           }
@@ -3356,60 +3366,57 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
 \keys_define:nn { __tag / show }
   { mc-current .code:n =
      {
-       \bool_if:NTF \g__tag_mode_lua_bool
-         {
-           \sys_if_engine_luatex:T
-             {
-               \int_compare:nNnTF
-                 { -2147483647 }
-                  =
-                 {
-                   \lua_now:e
-                     {
-                        tex.print
-                         (tex.getattribute
-                           (luatexbase.attributes.g__tag_mc_cnt_attr))
-                     }
-                 }
-                 {
-                   \lua_now:e
-                     {
-                       ltx.__tag.trace.log
-                        (
-                          "mc-current:~no~MC~open,~current~abscnt
-                           =\__tag_get_mc_abs_cnt:"
-                          ,0
-                        )
-                       texio.write_nl("")
-                     }
-                 }
-                 {
-                   \lua_now:e
-                     {
-                       ltx.__tag.trace.log
-                        (
-                          "mc-current:~abscnt=\__tag_get_mc_abs_cnt:=="
-                           ..
-                           tex.getattribute(luatexbase.attributes.g__tag_mc_cnt_attr)
-                           ..
-                           "~=>tag="
-                           ..
-                           tostring
-                             (ltx.__tag.func.get_tag_from
-                               (tex.getattribute
-                                 (luatexbase.attributes.g__tag_mc_type_attr)))
-                           ..
-                           "="
-                           ..
-                           tex.getattribute
-                            (luatexbase.attributes.g__tag_mc_type_attr)
-                           ,0
-                        )
-                       texio.write_nl("")
-                     }
-                 }
-             }
-         }
+        \bool_if:NTF \g__tag_mode_lua_bool
+          {
+            \int_compare:nNnTF
+              { -2147483647 }
+               =
+              {
+                \lua_now:e
+                  {
+                     tex.print
+                      (tex.getattribute
+                        (luatexbase.attributes.g__tag_mc_cnt_attr))
+                  }
+              }
+              {
+                \lua_now:e
+                  {
+                    ltx.__tag.trace.log
+                     (
+                       "mc-current:~no~MC~open,~current~abscnt
+                        =\__tag_get_mc_abs_cnt:"
+                       ,0
+                     )
+                    texio.write_nl("")
+                  }
+              }
+              {
+                \lua_now:e
+                  {
+                    ltx.__tag.trace.log
+                     (
+                       "mc-current:~abscnt=\__tag_get_mc_abs_cnt:=="
+                        ..
+                        tex.getattribute(luatexbase.attributes.g__tag_mc_cnt_attr)
+                        ..
+                        "~=>tag="
+                        ..
+                        tostring
+                          (ltx.__tag.func.get_tag_from
+                            (tex.getattribute
+                              (luatexbase.attributes.g__tag_mc_type_attr)))
+                        ..
+                        "="
+                        ..
+                        tex.getattribute
+                         (luatexbase.attributes.g__tag_mc_type_attr)
+                        ,0
+                     )
+                    texio.write_nl("")
+                  }
+              }
+          }
          {
           \msg_note:nn{ tag }{ mc-current }
          }
@@ -3495,7 +3502,7 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
       }
    }
 
-\sys_if_engine_luatex:T
+\bool_if:NT \g__tag_mode_lua_bool
   {
     \NewDocumentCommand\pdffakespace { }
      {
@@ -3565,28 +3572,6 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
   {
     \tl_gset:Ne \g__tag_para_main_struct_tl {\int_use:N \c@g__tag_struct_abs_int }
   }
-\AddToHook{package/latex-lab-testphase-sec/after}
- {
-   \cs_set_protected:Npn \@kernel@tag@hangfrom #1
-    {
-     \tagstructbegin{tag=\l__tag_para_tag_tl}
-     \__tag_gincr_para_begin_int:
-     \tagstructbegin{tag=Lbl}
-     \setbox\@tempboxa
-       \hbox
-         {
-           \bool_lazy_and:nnT
-            {\tag_if_active_p:}
-            {\g__tag_mode_lua_bool}
-            {\tagmcbegin{tag=Lbl}}
-           {#1}
-         }
-   \tag_suspend:n{hangfrom}
-   \hangindent \wd\@tempboxa\noindent
-   \tag_resume:n{hangfrom}
-   \tagmcbegin{}\box\@tempboxa\tagmcend\tagstructend\tagmcbegin{}
-   }
- }
 \AddToHook{package/latex-lab-testphase-block/after}
  {
    \tl_if_exist:NT \l_tag_para_attr_class_tl
@@ -3594,7 +3579,6 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
       \tl_set:Nn \l__tag_para_attr_class_tl { \l_tag_para_attr_class_tl }
     }
 }
-
 \keys_define:nn { __tag / setup }
   {
     para/tagging      .bool_set:N = \l__tag_para_bool,
@@ -3770,38 +3754,37 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
 
 \AddToHook{begindocument/before}
  {
-   \providecommand\@kernel@tagsupport@@makecol{}
-   \providecommand\@kernel@before@cclv{}
    \bool_if:NF \g__tag_mode_lua_bool
      {
         \cs_if_exist:NT \@kernel@before@footins
          {
            \tl_put_right:Nn \@kernel@before@footins
              { \tag_mc_add_missing_to_stream:Nn \footins {footnote} }
-           \tl_put_right:Nn \@kernel@before@cclv
-             {
-               \__tag_check_typeout_v:n {====>~In~\token_to_str:N \@makecol\c_space_tl\the\c@page}
-               \tag_mc_add_missing_to_stream:Nn \@cclv {main}
-             }
            \tl_put_right:Nn \@kernel@tagsupport@@makecol
              {
                \__tag_check_typeout_v:n {====>~In~\token_to_str:N \@makecol\c_space_tl\the\c@page}
                \tag_mc_add_missing_to_stream:Nn \@outputbox {main}
              }
-           \tl_if_exist:NT \@mult@ptagging@hook
-            {
-              \tl_put_right:Nn \@mult@ptagging@hook
-                {
-                  \__tag_check_typeout_v:n {====>~In~\string\page@sofar}
-                  \process@cols\mult@firstbox
-                   {
-                     \tag_mc_add_missing_to_stream:Nn \count@ {multicol}
-                   }
-                  \tag_mc_add_missing_to_stream:Nn \mult@rightbox {multicol}
-                }
-            }
          }
      }
+  }
+
+\str_if_exist:cT { l__socket_tagsupport/build/column/outputbox_plug_str }
+ {
+   \NewSocketPlug{tagsupport/build/column/outputbox}{tagpdf}
+     {
+       \__tag_check_typeout_v:n { ====>~In~\token_to_str:N \@makecol
+                                  \c_space_tl\the\c@page }
+       \tag_mc_add_missing_to_stream:Nn \@outputbox {main}
+     }
+   \NewSocketPlug{tagsupport/build/column/footins}{tagpdf}
+      { \tag_mc_add_missing_to_stream:Nn \footins {footnote} }
+
+   \bool_if:NF \g__tag_mode_lua_bool
+      {
+        \AssignSocketPlug{tagsupport/build/column/outputbox}{tagpdf}
+        \AssignSocketPlug{tagsupport/build/column/footins}{tagpdf}
+      }
   }
 \renewcommand\tagpdfparaOn {\bool_set_true:N \l__tag_para_bool}
 \renewcommand\tagpdfparaOff{\bool_set_false:N \l__tag_para_bool}
@@ -3815,7 +3798,6 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
 \cs_new_protected:Npn\__tag_hook_kernel_after_head:{}
 \cs_new_protected:Npn\__tag_hook_kernel_before_foot:{}
 \cs_new_protected:Npn\__tag_hook_kernel_after_foot:{}
-
 \AddToHook{begindocument}
  {
   \cs_if_exist:NT \@kernel@before@head
@@ -3825,6 +3807,24 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
      \tl_put_right:Nn \@kernel@before@foot {\__tag_hook_kernel_before_foot:}
      \tl_put_left:Nn  \@kernel@after@foot  {\__tag_hook_kernel_after_foot:}
    }
+ }
+\str_if_exist:cT { l__socket_tagsupport/build/page/footer_plug_str }
+ {
+   \NewSocketPlug{tagsupport/build/page/header}{tagpdf}
+    {
+      \__tag_hook_kernel_before_head:
+      #2
+      \__tag_hook_kernel_after_head:
+    }
+
+   \AssignSocketPlug{tagsupport/build/page/header}{tagpdf}
+   \NewSocketPlug{tagsupport/build/page/footer}{tagpdf}
+   {
+     \__tag_hook_kernel_before_foot:
+     #2
+     \__tag_hook_kernel_after_foot:
+   }
+  \AssignSocketPlug{tagsupport/build/page/footer}{tagpdf}
  }
 
 \bool_new:N \g__tag_saved_in_mc_bool
