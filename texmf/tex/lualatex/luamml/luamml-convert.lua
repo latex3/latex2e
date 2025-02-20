@@ -370,7 +370,8 @@ local function radical_to_table(radical, sub, cur_style, text_families)
     elem, core = {[0] = 'msqrt', nucleus, }, nil
   elseif kind == 'uroot' then
     -- FIXME: Check that this is really a root
-    elem, core = {[0] = 'msqrt', nucleus, kernel_to_table(radical.degree, 7, text_families)}, nil
+    -- UF 2024-12-04: force use of only one return value     
+    elem, core = {[0] = 'mroot', nucleus, (kernel_to_table(radical.degree, 7, text_families))}, nil
   elseif kind == 'uunderdelimiter' then
     elem, core = {[0] = 'munder', left, nucleus}, left
   elseif kind == 'uoverdelimiter' then

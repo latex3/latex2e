@@ -83,6 +83,18 @@ local function annotate()
           end
         end
       end
+      if annotation.structnum ~= nil then
+        local saved = props.mathml_filter
+        local structnum = annotation.structnum
+        function props.mathml_filter(mml, core)
+          mml[':structnum'] = structnum
+          if saved then
+            return saved(mml, core)
+          else
+            return mml, core
+          end
+        end
+      end            
     else
       tex.error'Unable to annotate nucleus of node without nucleus'
     end
