@@ -3,6 +3,7 @@ local make_root = require'luamml-convert'.make_root
 local save_result = require'luamml-tex'.save_result
 local store_column = require'luamml-table'.store_column
 local store_tag = require'luamml-table'.store_tag
+local store_notag = require'luamml-table'.store_notag
 local get_table = require'luamml-table'.get_table
 local set_row_attribute = require'luamml-table'.set_row_attribute
 local to_text = require'luamml-lr'
@@ -125,9 +126,9 @@ funcid = luatexbase.new_luafunction'__luamml_amsmath_set_tag:'
 token.set_lua('__luamml_amsmath_set_tag:', funcid, 'protected')
 lua.get_functions_table()[funcid] = function()
   if not last_tag then
-    texio.write_nl'WARNING: Tag extraction failed'
-    return
+    store_notag({[0] = 'mtd',''})
+  else
+    store_tag({[0] = 'mtd', last_tag})
+    last_tag = nil
   end
-  store_tag({[0] = 'mtd', last_tag})
-  last_tag = nil
 end

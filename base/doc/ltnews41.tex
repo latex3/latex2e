@@ -50,6 +50,8 @@
 \usepackage{color}
 
 \providecommand\hook[1]{\texttt{#1}}
+\providecommand\socket[1]{\texttt{#1}}
+\providecommand\plug[1]{\texttt{#1}}
 
 \providecommand\meta[1]{$\langle$\textrm{\itshape#1}$\rangle$}
 \providecommand\option[1]{\texttt{#1}}
@@ -186,16 +188,140 @@ right-mark (\verb=\FirstMark{2e-right}=) or the top right-mark
 See~\cite{41:ltmarks} for details on the extended functionality.
 
 
+\section{Configurable output routine}
+
+For nearly 40 years \LaTeX's output routine (the mechanism to paginate
+the document and attach footnotes, floats and headers \& footers) was
+a largely hardwired algorithm with a limited number of configuration
+possibilities.  Packages that attempted to alter one or the other
+aspect of the process had to overwrite the internals with the usual
+problems: incompatibilities and out of date code whenever something
+was changed in \LaTeX{}.
+
+To improve this situation and to support the production of accessible
+PDF documents we started to refactor the output routine and added a
+number of hooks and sockets, so that packages that want to adjust the
+output routine can do so safely without the dangers associated with
+that in the past.
+
+For packages, we implemented the following hooks:
+\begin{description}
+\item[\hook{build/page/before}, \hook{build/page/after}]
+   These two hooks enable packages to prepend or append code to
+   the page processing in the output routine. They are
+   implemented as mirrored hooks.
+
+   Technically, they are executed at the start and the end of the
+   internal \LaTeXe{} \cs{@outputpage} command, respectively.  A
+   number of packages alter that command to place code in exactly
+   these two places\Dash they can now simply add their code to the
+   hooks instead.
+
+\item[\hook{build/page/reset}]
+   Packages that set up special conventions for text in the main
+   galley (such as catcode changes, etc.)\ can use this hook to
+   undo these changes within the output routine, so that they
+   aren't applied to unrelated material, e.g., the text for
+   running header or footers.
+
+\item[\hook{build/column/before}, \hook{build/column/after}]
+   These two hooks enable packages to prepend or append code to
+   the column processing in the output routine. They are
+   implemented as mirrored hooks.
+
+   Technically, they are executed at the start and the end of the
+   internal \LaTeXe{} \cs{@makecol} command, respectively.  A
+   number of packages alter \cs{@makecol} to place code in exactly
+   these two places\Dash they can now simply add their code to the
+   hooks instead.
+\end{description}
+
+We also added a number of sockets for configuring the algorithm and to
+support tagging. One socket that is of interest for class files but
+also for user in the document preamble is
+\socket{build/column/outputbox}. It defines how the column text, the
+column floats (top and bottom) and the footnotes are combined,
+i.e. their order and spacing. To change the layout all one has to do
+is to assign a different predefined plug to the socket with
+\begin{flushleft}
+  \verb= \AssignSocketPlug{build/column/outputbox}=
+  \verb=                  {=\meta{plug-name}\verb=}=
+\end{flushleft}
+The predeclared plugs are the following:
+\begin{description}
+\item[\plug{space-footnotes-floats}]
+
+   After the galley text there is a vertical \cs{vfill}
+   followed by the footnotes, followed by the bottom floats, if any.
+
+\item[\plug{footnotes-space-floats}]
+
+   As before but the \cs{vfill} is between footnotes and floats.
+
+\item[\plug{floats-space-footnotes}]
+
+   Floats are directly after the text, then a space and then footnotes
+   at the bottom.
+
+\item[\plug{space-floats-footnotes}]
+
+   Both floats and footnotes are pushed to the bottom with footnotes
+   coming last.\footnote{There are two more permutations, but neither
+   of them has ever been requested so they aren't set up by default
+   --- doing that in a class would be trivial though.}
+
+\item[\plug{floats-footnotes}]
+
+   All excess space is distributed across the existing
+   glue on the page, e.g., within the text galley, the
+   separation between blocks, etc.
+   The order is text, floats, footnotes.
+
+\item[\plug{footnotes-floats}]
+
+   As the previous one but floats and footnotes are swapped. This is
+   the \LaTeX{} default for newer documents, i.e., this plug is
+   assigned to the socket when \cs{DocumentMetadata} is used.
+
+\item[\plug{footnotes-floats-legacy}]
+
+   As the previous one but \LaTeX{}'s bottom skip bug is not
+   corrected, i.e., in ragged bottom designs where footnotes
+   are supposed to be directly attached to the text, they suddenly
+   appear at the bottom of the page when the page is ended with
+   \cs{newpage} or \cs{clearpage}.
+   While this is clearly a bug, it was the case since the days
+   of \LaTeX~2.09; thus for
+   compatibility we continue to support this behavior.
+\end{description}
+There are more configuration possibilities, mainly for class
+developers; more documentation on those can be found in
+\cite[\S54 ltoutput.dtx]{41:source2e}.
+
+
 
 \section{News from Tagged PDF project}
 
-The \texttt{testphase} key now takes also the value \texttt{latest}. 
-This will load all modules that we recommend
-so that it is not necessary to specify individual modules. The list of loaded modules
-will be adjusted as needed when the project progresses. It is also written to the log.
+The \texttt{testphase} key now takes also the value \texttt{latest}.
+This will load all modules that we recommend so that it is not
+necessary to specify individual modules. The list of loaded modules
+will be adjusted as needed when the project progresses. For reference,
+it is also written to the log.
 
 
 \emph{to write}
+
+\subsection{Setting up math tagging}
+
+With the \LuaTeX{} engine there are now various options for accessible math described in full details in latex-lab-math.pdf. To simplify the setup a new
+key \texttt{math/setup} can be used that  accepts a comma list with the values \texttt{mathml-SE} (add MathML structure element), \texttt{mathml-AF}
+(attach MathML associated file) or \texttt{tex-AF} (attach the TeX source).
+
+
+\subsection{Promoting PDF 2.0}
+
+PDF 2.0 is a requirement for accessible PDF containing math as the MathML name spaces isn't supported by earlier PDF versions. \LaTeX{} will therefore set
+PDF 2.0 as default version if \cs{DocumentMetadata} is used. A different PDF version can be set with the \texttt{pdfversion} key.  
 
 \subsection{Fixing the spacing after display math}
 
@@ -244,6 +370,66 @@ provided.
 %
 \githubissue{1577}
 
+
+\subsection{Accessing the current counter}
+Counter commands such as \cs{alph}, \cs{stepcounter}, may now have
+the argument \texttt{*} to denote the current counter (as used by
+\cs{label}).  This is compatible with the package \pkg{enumitem} use of
+\verb|\alph*| in item labels but is generally available.
+Not all commands accept \verb|*|, for example
+\verb|\counterwithin| and \verb|\counterwithout| require counter names as before.
+%
+\githubissue{1632}
+
+\subsection{Collecting environment bodies verbatim}
+
+The mechanisms in \pkg{ltcmd} (\enquote{\pkg{xparse}}) offer a powerful way to
+specify a range of types of document command and environment syntax. This
+includes the ability to collect the entire body of an environment, for cases
+where treating it as a standard argument is useful. It is also possible in
+\pkg{ltcmd} to define arguments which grab their content verbatim, another
+specialist argument form. To date, however, it was not possible to combine
+these two ideas.
+
+In this release, a new specifier~\texttt{c} is introduced, which collects the
+body of an environment in a verbatim-like way. Like the existing
+\texttt{+v}~specification, each separate line is marked by the special
+\cs{obeyedline} marker, which as standard issues a normal paragraph. Thus, this
+new specifier is usable both for typesetting and collecting file contents (the
+letter~\texttt{c} indicates \enquote{collect code}). Thus, we may use
+\begin{verbatim}
+\NewDocumentEnvironment
+  {MyVerbatim}{!O{\ttfamily} c}
+  {\begin{center}#1 #2\end{center}} {}
+\begin{MyVerbatim}[\ttfamily\itshape]
+  % Some code is shown here
+  $y = mx + c$
+\end{MyVerbatim}
+\end{verbatim}
+to obtain
+% We can't actually use ...
+%\NewDocumentEnvironment{MyVerbatim}{!O{\ttfamily} c}
+%  {\begin{center} #1 #2\end{center}} {}
+%  ... as this would prevent LaTeX News 41 being processed with LaTeX before
+%  2025-06-01!
+%  So instead ...
+\begin{center}
+\makeatletter
+\def\@verbatim{%
+  \trivlist
+  \centering
+  \let \do \@makeother
+  \dospecials
+  \obeylines
+  \normalfont \ttfamily \itshape
+  \@noligs
+}
+\begin{verbatim}
+  % Some code is shown here
+  $y = mx + c$
+\end{verbatim}
+\end{center}
+
 \section{Code improvements}
 
 \subsection{Refinement of \cs{MakeTitlecase}}
@@ -278,6 +464,13 @@ standard list of characters covered by \cs{dospecials}. This allows them to
 be used in for example a \texttt{v}~specification document command without
 additional steps.
 
+\subsection{Refinement of \texttt{v}~specification category codes}
+
+Work on verbatim argument handling has highlighted that storing
+all characters as \enquote{other} (category code~12) when using a
+\texttt{v}~specification in \pkg{ltcmd} was problematic. We have now
+revised this to capture letters with their original cateogry code.
+
 \subsection{Logging text command and symbol declarations}
 
 For thirty years the documentation claimed that \cs{DeclareTextSymbol},
@@ -286,29 +479,6 @@ contrast to their math counterparts they never did. This has now
 finally changed.
 %
 \githubissue{1242}
-
-\subsection{Supporting the \texttt{ssc} and \texttt{sw} shapes}
-
-The \texttt{ssc} shape (spaced small capitals) is supported in
-\LaTeX{} through the commands \cs{sscshape} and \cs{textssc}. However,
-until this release there where no font shape change rules defined for
-this admittely seldom available shape, so that
-\begin{verbatim}
-  \sscshape\itshape
-\end{verbatim}
-changed unconditionally to \texttt{it} (italics) rather than to
-\texttt{sscit} (spaced small italic capitals).  Thanks to Michael
-Ummels, the missing declarations have now been added so that shape
-changes in font families that support spaced small capitals work
-properly.
-
-At the same time we took the opportunity to improve the fallbacks for
-the \texttt{sw} (swash) shapes, which are accessible through the
-commands \cs{swshape} or \cs{textsw}. If an \texttt{sw} combination is
-not available, the rules now try to replace \texttt{sw} with
-\texttt{it} rather than falling back to \texttt{n}.
-%
-\githubissue{1581}
 
 \subsection{Improvement of the NFSS font series management}
 
@@ -358,6 +528,22 @@ not available, the rules now try to replace \texttt{sw} with
 \texttt{it} rather than falling back to \texttt{n}.
 %
 \githubissue{1581}
+
+
+\subsection{Improving the handling of \cs{label}, \cs{index}, and \cs{glossary}}
+
+In standard \LaTeX{}, the three commands \cs{label}, \cs{index}, and
+\cs{glossary} take exactly one mandatory argument, e.g.,
+\verb=\index{=\meta{entry}\verb=}=. In some extension packages, for
+example, in \pkg{index} or \pkg{cleveref}, they are augmented to
+accept an optional argument and in case of \cs{index} also a star
+form. These extensions conflict with \LaTeX's way of disabling the
+commands within the table of contents or within the running header,
+because there, they were redefined to expect just a mandatory argument
+and then do nothing. We have now changed that behavior so that the
+redefinitions in these places accept an extended syntax.
+%
+\githubissue{311}
 
 
 \section{Bug fixes}
@@ -417,6 +603,77 @@ keyval-based option handling system.
 %
 \githubissue{1619}
 
+
+\subsection{Make \cs{label}, \cs{index}, and \cs{glossary} truely invisible in running headers}
+
+\LaTeX{} has had a bug since its initial implementation, in that it
+correctly ignored any \cs{label}, \cs{index}, or \cs{glossary}
+appearing in a mark, but neglected to handle the spaces around the
+command. As a result one could end up with two spaces in the running
+header when only one should be present. This was detected as part of
+working on issue~311 and has now been corrected.
+%
+\githubissue{1638}
+
+\subsection{Correct the float placement algorithm}
+
+When floats are added to the current or next page, \LaTeX{} makes
+several tests to find an area that can receive the float. One of these
+tests calculates how much space is already used on the page and how
+much additional space is needed to place the float in a particular
+area. This means that it looks not only at the height of the float but also at the
+values from \cs{intextsep} (for \texttt{h} floats) or
+\cs{textfloatsep} and \cs{floatsep} (for \texttt{t} and \texttt{b}
+floats). The resulting space requirement is then stored in an internal
+variable and compared to the space still available on the page.
+
+If the test fails, the algorithm tries the next area. Unfortunately,
+it was reusing the value in that internal variable as the starting point
+for the next test without removing the added space for the float
+separation (\cs{intextsep}, \cs{floatsep}, or \cs{textfloatsep}). Thus
+the comparison was being made with the wrong value (i.e., too high); therefore the test
+may have incorrectly concluded that a float doesn't
+fit, even though in fact it did.
+
+This has now been corrected.
+%
+\githubissue{1645}
+
+
+\subsection{Correct \cs{CheckEncodingSubset}}
+
+In \cite{41:ltnews36} and again in \cite{41:ltnews39} we suggested
+that font maintainers should place an appropriate
+\cs{DeclareEncodingSubset} declaration into each \texttt{ts1\meta{family}.fd}
+file so that it is tied to the font definition and available if a font
+family is explicitly selected through
+\cs{fontfamily}\texttt{\{\meta{name}\}} instead of using some font
+support package. Unfortunately, doing this could result in incorrectly
+selected glyphs when the font encoding subset setting was evaluated before
+the \texttt{.fd} file was loaded (because then subset 9 was assumed).
+This has now been corrected and
+\cs{CheckEncodingSubset} now first loads the \texttt{.fd} file, if
+necessary.
+%
+\githubissue{1669}
+
+
+
+\section{Documentation}
+
+\subsection{Clarifying space handling of \cs{textcolor}}
+
+In contrast to other \cs{text}-commands like \cs{textbf} or
+\cs{textrm}, the command \cs{textcolor} gobbles spaces at the start of
+its argument, so \verb*=Hello\textcolor{red}{ World}= will output
+Hello\textcolor{red}{ World}.  There are technical as well as
+compatibility reasons for this, so the behavior will not change. This
+has now been clarified in the documentation.
+%
+\githubissue{1474}
+
+
+
 %\section{Changes to packages in the \pkg{amsmath} category}
 
 \section{Changes to packages in the \pkg{graphics} category}
@@ -449,7 +706,7 @@ supported.
 \subsection{\pkg{array}:\ Improve preamble setup code for \texttt{p} and friends}
 
 While the preamble of a \env{tabular} or \env{array} is being built
-the arguments to \texttt{p}, \texttt{m}, or \texttt{b} columns got 
+the arguments to \texttt{p}, \texttt{m}, or \texttt{b} columns got
 expanded several times. This is normally harmless because that
 argument contains usually just a dimension. However, in a case like
 \verb=p{\fpeval{15}pt}= this resulted in an error, because \cs{fpeval}
@@ -514,6 +771,14 @@ Leslie Lamport.
   \emph{\LaTeXe{} news 35}. June 2022.
   \url{https://latex-project.org/news/latex2e-news/ltnews35.pdf}
 
+\bibitem{41:ltnews36} \LaTeX{} Project Team.
+  \emph{\LaTeXe{} news 36}. November 2022.
+  \url{https://latex-project.org/news/latex2e-news/ltnews36.pdf}
+
+\bibitem{41:ltnews39} \LaTeX{} Project Team.
+  \emph{\LaTeXe{} news 39}. June 2024.
+  \url{https://latex-project.org/news/latex2e-news/ltnews39.pdf}
+
 \bibitem{41:ltnews40} \LaTeX{} Project Team.
   \emph{\LaTeXe{} news 40}. November 2024.
   \url{https://latex-project.org/news/latex2e-news/ltnews40.pdf}
@@ -521,6 +786,10 @@ Leslie Lamport.
 \bibitem{41:ltmarks} Frank Mittelbach, \LaTeX{} Project Team.
   \emph{The \texttt{ltmarks.dtx} code}. June 2025.
   \url{https://latex-project.org/help/documentation/ltmarks-doc.pdf}
+
+\bibitem{41:source2e} \LaTeX{} Project Team.
+  \emph{The \LaTeXe{} Sources}. June 2025.
+  \url{https://latex-project.org/help/documentation/source2e.pdf}
 
 \end{thebibliography}
 
