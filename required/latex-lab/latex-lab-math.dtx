@@ -19,8 +19,9 @@
 % for those people who are interested or want to report an issue.
 %
 %
-\def\ltlabmathdate{2024-12-12}
-\def\ltlabmathversion{0.6k}
+
+\def\ltlabmathdate{2025-02-26}
+\def\ltlabmathversion{0.6m}
 %
 %<*driver>
 \documentclass{l3doc}
@@ -55,6 +56,13 @@
 % \NewDocElement[printtype=\textit{hook},idxtype=hook,idxgroup=Hooks]{Hook}{hookdecl}
 % \NewDocElement[printtype=\textit{plug},idxtype=plug,idxgroup=Plugs]{Plug}{plugdecl}
 %
+%
+% \ProvideDocElement[printtype=\textit{tag socket},idxtype=tag socket,
+%                    idxgroup=Tagging sockets]{TaggingSocket}{taggingsocketdecl}
+% \ProvideDocElement[printtype=\textit{tag plug},idxtype=tag plug,
+%                    idxgroup=Tagging Plugs]{TaggingPlug}{taggingplugdecl}
+%
+%
 % ^^A \car {...} for marginal comments
 % ^^A \car*{...} for longer inline comments
 %
@@ -80,15 +88,15 @@
 % \car*{Todo: update all the documentation! Both here and
 %   (what little there is!) in the implementation section.}
 %
-% Tagging math involves a variety of tasks that require that math is captured before the
-% typesetting
+% Tagging math involves a variety of tasks that require that
+% math is captured before the typesetting:
 % \begin{itemize}
 % \item When typesetting the math MC-tags and structure commands must
 % be inserted at the begin and the end, and perhaps also around lines
 % or other subparts of the equation.
 % \item The source and/or a mathml-representation of the source must be available
 % so that it can be (perhaps after some preprocessing) be used in an associated file
-% or in an alternate text
+% or in an alternate text.
 % \item It must be possible to measure the math for, e.g., a bbox setting.
 % \end{itemize}
 %
@@ -114,10 +122,145 @@
 %    regardless of the state of the boolean. For
 %    |equation|, |equation*| and |math| this is a change as they no longer can
 %    contain verbatim.
-%
-%   \item BUG: |\[...\]| grabs if \cs{l_@@_collected_bool} is false. If it is
-%   true it falls back to |equation*| and then errors because this can't find the end.
 %  \end{itemize}
+%
+% \section{Avoiding math capture}\label{sec:nocapture}
+% In most cases when an environment or command switches into math,
+% the semantic meaning of the content \emph{is} math and
+% grabbing and then tagging that as a Formula is adequate.
+%
+% But there are exceptions, most prominently with the math shift token |$|.
+% \begin{itemize}
+% \item  |$| can be used to center a box with |\vcenter|,
+% for example in the tabular code. The opening |$| is then often in a
+% different command  than the closing |$| and the content of the box
+% should be tagged normally, including all math it contains.
+% This means one wants to avoid that the opening |$| triggers the math
+% grabbing and creates a Formula structure, and after the |$| one
+% wants to switch back to normal text and math capture/tagging.
+%
+% \item |$| is used to place superscripts and subscripts, see the definition of
+% |\textsuperscript| which uses |\ensuremath| internally. Inside the superscript
+% in special cases you may want more tagging (including nested math tagging) but
+% typically it is simple text.
+%
+% \item |$| is used to access a char in a math font.
+%
+% For example the |\meta| command uses internally the math commands
+% |\langle| and |\rangle| around its argument:\\
+% |$\langle$\textit{argument}$\rangle$|
+% which gives $\langle$\textit{argument}$\rangle$.
+%
+% The symbols are then clearly not math.
+% (Beside disabling math tagging one could also use text commands like
+% |\textlangle| and |\textrangle|: \textlangle\textit{argument}\textrangle{}.
+% Depending on the font that could even look better,
+% but it requires that the font supports the chars, which is not the case
+% for various OpenType fonts.)
+% Additional tagging inside the math should be not needed.
+% If the symbols need an actualtext then a Span can be added around the whole material.
+%
+% \end{itemize}
+%
+% \subsection{Options to suppressing math capture and tagging}
+%  We are there providing a number of options to suppress the collection/grabbing
+%  of the math and with it the tagging.
+% \DescribeMacro\MathCollectTrue
+% \DescribeMacro\MathCollectFalse
+% \DescribeMacro\m@th
+% \DescribeMacro\SuspendTagging
+%  These commands can be used to control locally the tagging of math.
+%  The first two are new commands. |\m@th| is a standard \LaTeX\ command
+%  used in a number of places to set |\mathsurround| to zero;
+%  with active tagging it is also used to identify math
+%  that should not be tagged, because it has traditionally be used in exactly
+%  the places where math mode is used for its layout charactistics and not for
+%  representing a formula.\footnote{This way even code that is not adjusted up
+%  for tagging is handled correctly if it uses \cs{m@th}.}.
+%  Details are described below.
+%  (|\SuspendTagging| is documented in source2e.pdf.)
+%
+%  To set |\mathsurround| without disabling math tagging, use |\mathsurround\z@| directly.
+%
+%
+% \subsubsection{Using the trigger token \cs{m@th} \emph{inside} the math}
+%
+% If the grabbed math contains the token |\m@th| the tagging/processing
+% of the math is suppressed. As the math is nevertheless grabbed, this requires
+% that the end math shift token is not hidden in some other command.
+% |\m@th| sets also |\mathsurround| to zero, which is often
+% wanted in untagged math anyway.
+%
+% Text tagging is \emph{not} suppressed inside the math, e.g.,
+% |\mbox{\emph{text}}| will still create an Em-structure.
+% In contrast nested math is not tagged.
+%
+% To suppress the text tagging |\SuspendTagging{}| can be used:
+%    \begin{itemize}
+%    \item no math tagging, but |\emph| is tagged:\\
+%          |$\m@th\langle\mbox{\emph{if and only if} $x=y$}\rangle$|
+%
+%    \item no internal tagging:
+%          \\
+%         |$\m@th\SuspendTagging{}\langle\mbox{\emph{if and only if}} $x=y$}\rangle$|
+%    \end{itemize}
+%
+% The method is quite suitable for symbols and also for sub- and superscripts
+% (as long as they don't contain nested math that should be tagged).
+%
+%
+% \subsubsection{Using \cs{m@th} \emph{before} the opening \texttt{\$}}
+%
+% |\m@th| (as defined in the latex-lab-math code) sets also the internal boolean
+% which controls the grabbing  to true and so when it is used \emph{before}
+% some math it disables math grabbing and tagging for all following math
+% in the current group (including nested math).
+% Text tagging inside the math is still active, it can be disabled as above
+% with |\SuspendTagging{}|.
+%
+% When |\m@th| is used like this it is possible to reenable the math
+% tagging of nested math, by adding |\MathCollectTrue| after the opening |$|.
+%
+%    \begin{itemize}
+%    \item no math tagging, but |\emph| is tagged:\\
+%        |{\m@th$\langle\mbox{\emph{if and only if} $x=y$}\rangle$}|
+%
+%    \item  both nested math and |\emph| is tagged:\\
+%        |{\m@th$\MathCollectTrue\langle\mbox{\emph{if and only if} $x=y$}\rangle$}|
+%    \end{itemize}
+%
+% The method is suitable for symbols and sub- and superscripts too
+% (it is actually how superscripts avoid math tagging currently).
+% It can also be used in cases where the end math shift token is
+% hidden in some other command. But it is not so useful for
+% larger boxes as it sets |\mathsurround| to zero.
+% Grouping should be used to avoid side-effects on following math.
+%
+%
+%\subsubsection{Disabling math tagging with \cs{MathCollectFalse}}
+%
+% Without a side-effect on |\mathsurround| the math grabbing can be
+% suppressed and reenabled by setting the boolean that controls the collecting.
+% So in the following example the math in the |\mbox| is properly tagged,
+% but the angled brackets are simple text.
+%
+%    \begin{verbatim}
+%    %stop math grabbing
+%    \MathCollectFalse
+%    $
+%    %(optional) restart math grabbing for nested math
+%    \MathCollectTrue
+%    \langle\mbox{\emph{if and only if}} $x=y$}\rangle
+%    $
+%    %(optional) restart math grabbing for following math
+%    % if there is no grouping
+%    \MathCollectTrue
+%    \quad $x=1$
+%    \end{verbatim}
+%    The method is suitable if a box should be centered with
+%    |\vcenter| (and is used in array.sty for the tabular code).
+%
+% \section{Math capture interfaces}
 %
 % \subsection{Code level interfaces}
 %
@@ -164,6 +307,15 @@
 %   \end{itemize}
 % \end{function}
 %
+% \begin{function}{\MathCollectTrue,\MathCollectFalse}
+%   \begin{syntax}
+%     \cs{MathCollectTrue}\\
+%     \cs{MathCollectFalse}
+%   \end{syntax}
+%  This activates/deactivates the math collection of the math shift token.
+%  See above for cases when this can be usefull.
+% \end{function}
+%
 % \section{Math tagging}
 %
 % \subsection{Code requirements}
@@ -184,8 +336,6 @@
 %     \item setup attributes
 %     \item add associated files
 %     \item add a Formula structure
-%     \item surround subparts (e.g., lines) with Formula sub structures
-%          (perhaps with their own set of additional content)
 %     \item surround elements of the equation with mathml structure elements
 %          (currently only luatex with luamml)
 %    \end{itemize}
@@ -194,35 +344,32 @@
 %  \subsection{Inline math}
 %
 %  The embedding code is added through
-%  the sockets
+%  the tagging sockets
 %   \begin{itemize}
-%    \item |tagsupport/math/inline/begin|
-%    \item |tagsupport/math/inline/end|
+%    \item |math/inline/begin|
+%    \item |math/inline/end|
 %   \end{itemize}
 %  The sockets simply push and pop the MC currently. Without
 %  tagging they use the noop-plug.
 %
-%  The actual tagging is in done through the sockets
+%  The actual tagging is in done through the tagging sockets
 %   \begin{itemize}
-%    \item |tagsupport/math/inline/formula/begin|
+%    \item |math/inline/formula/begin|
 %     This socket takes the math as second argument and its code
 %     should output it for typesetting.
 %     The |default| plug of the socket calls these three internal sockets
 %     for the tagging support:
 %      \begin{itemize}
-%      \item |tagsupport/math/content| This should set up the various
+%      \item |math/content| This should set up the various
 %      content variables (empty variables are ignored by the structure code
 %       and so can be used to suppress a setting).
-%      \item |tagsupport/math/struct/begin| This calls \cs{tag_struct_begin:n}.
+%      \item |math/struct/begin| This calls \cs{tag_struct_begin:n}.
 %      It should also write the associated files if needed.
-%      \item |tagsupport/math/substruct/begin| this handles subparts.
-%      TODO: does it really make sense in inline math to have that??
 %      \end{itemize}
-%    \item |tagsupport/math/inline/formula/end|
+%    \item |math/inline/formula/end|
 %      This socket ends the formula structure(s). The |default|
-%      plug calls these internal sockets:
+%      plug calls this internal socket:
 %       \begin{itemize}
-%        \item |tagsupport/math/substruct/end|
 %        \item |tagsupport/math/struct/end|
 %       \end{itemize}
 %   \end{itemize}
@@ -326,22 +473,22 @@
 %
 %  \subsection{Automatic mathml creation with luamml}\label{sec:luamml}
 %
-%  If lualatex and the package \pkg{unicode-math} is used
-%  the package \texttt{luamml} is loaded and 
-%  will automatically generate the file |\jobname-luamml-mathml.html|
+%  If lualatex and the package \pkg{unicode-math} is used,
+%  the package \texttt{luamml} is loaded and this package
+%  will then automatically generate the file |\jobname-luamml-mathml.html|
 %  with mathml representations of all math formulas.
 %  This file is then used in subsequent compilations and works also with
 %  pdflatex.
-%  
+%
 %  The generation of the file can be suppressed (in the preamble)
 %  with |math/mathml/luamml/write=false|.
-%  
-%  If the package \pkg{unicode-math} is not used, 
+%
+%  If the package \pkg{unicode-math} is not used,
 %  the loading of \pkg{luamml} and with it the generation of the file can be forced
 %  with |math/mathml/luamml/load=true| or |math/mathml/luamml/write=true|
 %  but be aware that it is then possible that various symbols
 %  are mapped to the wrong Unicode code points.
-%  
+%
 %  The package \pkg{luamml} is still quite experimental and the output should be checked.
 %  The |\jobname-luamml-mathml.html| file may be previewed in a browser although
 %  you may need to add additional css or javascript declarations
@@ -445,7 +592,7 @@
 %   \item[reading and embedding]
 %    By default the code will read and embed
 %    mathml from |\jobname-mathml.html| and |\jobname-luamml-mathml.html| in this order and
-%    the first fragment with a new hash value will be inserted.%    
+%    the first fragment with a new hash value will be inserted.
 %    The list of sources and their order can be changed with the key
 %    |math/mathml/sources|, setting that to an empty value suppresses
 %    the loading mathml associated files completely. For efficiency reasons
@@ -461,7 +608,7 @@
 %   equations with the same source and so the same hash
 %   can have different mathml representation, e.g.,
 %   if there are references or commands or counters in the equation. This
-%   will change in a feature version.  
+%   will change in a future version.
 %   The attachment can be suppressed locally with |math/mathml/AF=false|.
 %   The mathml fragment will still be embedded in the PDF!
 %
@@ -519,14 +666,14 @@
 %   and |equation*| (see, e.g., tagging-project issue \#30).
 %
 %   \item Begin and end of the math or math environment can not be hidden in commands.
-%   For example \verb+>{$}l<{$}+ in a tabular would lead to errors.
-%   Defining |\[| to fall back to |equation*| doesn't work if |equation*| is
-%   a grabbing environment.
-%
-%   \item The behaviour of |\[...\]| is faulty. See above.
+%   For example \verb+>{$}l<{$}+ in a tabular would lead to errors. Therefore
+%   in a tabular a slower token-by-token grabbing is used.
 % \end{enumerate}
 %
 % \subsection{Fake math}
+% For the current state see \ref{sec:nocapture} above. The text here is mainly
+% kept for history.
+%
 % In a number of places in \LaTeX{} math commands (mainly |$|) is used
 % only for technical reason, e.g., to access a math font, to setup a symbol
 % or to use \cs{vcenter}.
@@ -559,7 +706,7 @@
 % \end{itemize}
 %
 %  \subsubsection{Open problems}
-%  
+%
 %  \begin{enumerate}
 %   \item The grabbing code doesn't pass the info that it detected a \cs{m@th} token.
 %   This means that the tagging code has to do the same check (and doesn't do this
@@ -639,7 +786,6 @@
 %
 % \subsection{File declaration}
 %
-%    \car{Change description here?}
 %    \begin{macrocode}
 \ProvidesFile{latex-lab-math.ltx}
              [\ltlabmathdate\space
@@ -660,7 +806,8 @@
 %
 % Loading \pkg{amsmath} is an absolute requirement: this avoids needing to
 % have conditional definitions and deals with how to define \cs{[}/\cs{]}
-% neatly.
+% neatly. The package is loaded at begin document to allow user to load it with
+% options.
 %    \begin{macrocode}
 \AddToHook{begindocument/before}{ \RequirePackage { amsmath } }
 %    \end{macrocode}
@@ -677,6 +824,7 @@
 \bool_new:N \l_@@_collected_bool
 %    \end{macrocode}
 % \end{variable}
+%
 %
 % \begin{variable}{\l_@@_fakemath_bool}
 %   Tracks whether math mode material has been identified as fake math during
@@ -892,17 +1040,17 @@
 %    \end{macrocode}
 % \end{macro}
 
-% \begin{socketdecl}{tagsupport/math/mathml/write/prepare}
+% \begin{taggingsocketdecl}{math/mathml/write/prepare}
 % To prepare the hash and the starting command we use a socket, so
 % that both the dummy and luamml can make use of it.
 %    \begin{macrocode}
-\socket_new:nn {tagsupport/math/mathml/write/prepare}{0}
+\NewTaggingSocket{math/mathml/write/prepare}{0}
 %    \end{macrocode}
-% \end{socketdecl}
+% \end{taggingsocketdecl}
 %
 % \begin{plugdecl}{On}
 %    \begin{macrocode}
-\socket_new_plug:nnn{tagsupport/math/mathml/write/prepare}{On}
+\NewTaggingSocketPlug{math/mathml/write/prepare}{On}
   {
     \str_set:NV\l_@@_tmpa_str\l_@@_content_AF_source_tl
     \str_replace_all:Nnn\l_@@_tmpa_str{&}{&amp;}
@@ -953,109 +1101,12 @@
 %    \begin{macrocode}
 \sys_if_engine_luatex:TF
  {
-%    \end{macrocode}
-% Temporary (!) fixes for endarray
-%    \begin{macrocode}
-   \cs_new_protected:Npn \@@_correct_luamml_array_patches:
-     {
-       \AddToHook{package/array/after}
-        {
-          \cs_set:Npn \endarray
-           {
-             \tbl_crcr:n{endarray}
-             \__luamml_array_save_array:
-             \egroup
-             \UseTaggingSocket{tbl/finalize}
-             \tbl_restore_outer_cell_data:
-             \egroup
-             \mode_if_math:T { \__luamml_array_finalize_array: }
-             \@arrayright
-             \gdef \@preamble {}
-           }
-         \cs_set:Npn \@classz
-           {
-            \@classx
-            \@tempcnta \count@
-            \prepnext@tok
-            \@addtopreamble {
-              \ifcase \@chnum
-                \hfil
-                \hskip 1sp
-                \d@llarbegin
-                \cs_if_eq:NNTF \d@llarbegin \begingroup {
-                  \insert@column
-                  \d@llarend
-                } {
-                  \__luamml_array_init_col:
-                  \insert@column
-                  \luamml_flag_save:nn {} {mtd}
-                  \d@llarend
-                  \__luamml_array_finalize_col:w 0~
-                }
-                \do@row@strut
-                \hfil
-              \or
-                \hskip 1sp
-                \d@llarbegin
-                \cs_if_eq:NNTF \d@llarbegin \begingroup {
-                  \insert@column
-                  \d@llarend
-                } {
-                  \__luamml_array_init_col:
-                  \insert@column
-                  \luamml_flag_save:nn {} {mtd}
-                  \d@llarend
-                  \__luamml_array_finalize_col:w 1~
-                }
-                \do@row@strut
-                \hfil
-              \or
-                \hfil
-                \hskip 1sp
-                \d@llarbegin
-                \cs_if_eq:NNTF \d@llarbegin \begingroup {
-                  \insert@column
-                  \d@llarend
-                } {
-                  \__luamml_array_init_col:
-                  \insert@column
-                  \luamml_flag_save:nn {} {mtd}
-                  \d@llarend
-                  \__luamml_array_finalize_col:w 2~
-                }
-                \do@row@strut
-              \or
-                \setbox \ar@mcellbox \vbox \@startpbox { \@nextchar }
-                  \insert@pcolumn
-                \@endpbox
-                \ar@align@mcell
-                \do@row@strut
-              \or
-                \vtop \@startpbox { \@nextchar }
-                  \insert@pcolumn
-                \@endpbox
-                \do@row@strut
-              \or
-                \vbox \@startpbox { \@nextchar }
-                  \insert@pcolumn
-                \@endpbox
-                \do@row@strut
-              \fi
-            }
-            \prepnext@tok
-          }
-        }
-     }
-%    \end{macrocode}
-%
-%    \begin{macrocode}
    \AddToHook{begindocument/before}
      {
        \str_case:on \g_@@_luamml_load_tl
          {
            { 1 } {
                    \RequirePackage  { luamml }
-                   \@@_correct_luamml_array_patches:
                    \AddToHook{begindocument/end}
                     {
                       \@@_luamml_activate_write:
@@ -1073,7 +1124,6 @@
              \@ifpackageloaded { unicode-math }
               {
                 \RequirePackage  { luamml }
-                \@@_correct_luamml_array_patches:
                 \AddToHook{begindocument/end}
                   {
                     \@@_luamml_activate_write:
@@ -1086,7 +1136,10 @@
      }
  }
  {
-   \@@_provide_luamml_commands:
+   \AddToHook{begindocument/before}
+    {
+      \@@_provide_luamml_commands:
+    }
  }
 \msg_new:nnn { tag }{ luamml-status }
   {
@@ -1111,14 +1164,12 @@
 % to avoid that nothing is written in the first run, we must activate the sockets:
 %    \begin{macrocode}
        \bool_gset_true:N\g__tag_math_mathml_AF_bool
-       \AssignSocketPlug{tagsupport/math/struct/begin}{mathml-AF}
-       \AssignSocketPlug{tagsupport/math/struct/end}{mathml-AF}
-       \AssignSocketPlug{tagsupport/math/substruct/begin}{single}
-       \AssignSocketPlug{tagsupport/math/substruct/end}{single}
+       \AssignTaggingSocketPlug{math/struct/begin}{mathml-AF}
+       \AssignTaggingSocketPlug{math/struct/end}{mathml-AF}
        \int_set:Nn \l__luamml_pretty_int { 7 }
        \RegisterFamilyMapping\symsymbols{oms}
        \RegisterFamilyMapping\symletters{oml}
-       \AssignSocketPlug{tagsupport/math/mathml/write/prepare}{On}
+       \AssignTaggingSocketPlug{math/mathml/write/prepare}{On}
        \iow_new:N   \g_@@_luamml_iow
        \iow_open:Nn \g_@@_luamml_iow {\c_sys_jobname_str-luamml-mathml.html}
        \iow_now:Ne  \g_@@_luamml_iow { \c_@@_mathml_write_init_tl  }
@@ -1126,6 +1177,14 @@
          {
            \tl_if_empty:NF \l_@@_mathml_write_before_tl
              {
+%    \end{macrocode}
+% We check here if the current group level is equal to the one stored for the
+% outer math. If not, we add currently a suffix to change the hash.
+% \changes{0.6k}{2024-12-04}{Test for current group level}
+%    \begin{macrocode}
+              \int_compare:nNnF
+               { \@math@level } = { 1 }
+               { \tl_put_right:Ne \l_@@_content_hash_tl {-INNER} }
               \iow_now:Ne \g_@@_luamml_iow
                {
                  \l_@@_mathml_write_before_tl
@@ -1191,7 +1250,7 @@
      math/mathml/luamml/load .default:n = true,
      math/mathml/luamml/load .usage:n=preamble,
 %    \end{macrocode}
-% A key to activate math structure elements. 
+% A key to activate math structure elements.
 % \changes{v0.6j}{2024-11-19}{no longer enable globally for better fake math handling, issue \#764}
 %    \begin{macrocode}
      math/mathml/structelem .choice:,
@@ -1210,7 +1269,7 @@
         \cs_set_eq:NN\@@_luamml_structelem:\prg_do_nothing:
         \cs_set_eq:NN\@@_luamml_ignore:\prg_do_nothing:
       },
-     math/mathml/structelem .default:n = true,       
+     math/mathml/structelem .default:n = true,
 %    \end{macrocode}
 % and a key to call the ignore flag. This should only be used locally.
 %    \begin{macrocode}
@@ -1236,18 +1295,18 @@
      math/mathml/luamml .usage:n=preamble
    }
 %    \end{macrocode}
-% \begin{socketdecl}{tagsupport/math/mathml/write}
+% \begin{taggingsocketdecl}{math/mathml/write}
 % This writes a html-dummy with the hash and the math content.
 % This should be optional, so it uses a socket that can be disabled
 %
 %    \begin{macrocode}
-\socket_new:nn {tagsupport/math/mathml/write}{0}
+\NewTaggingSocket{math/mathml/write}{0}
 %    \end{macrocode}
-% \end{socketdecl}
+% \end{taggingsocketdecl}
 %
 % \begin{plugdecl}{On}
 %    \begin{macrocode}
-\socket_new_plug:nnn{tagsupport/math/mathml/write}{On}
+\NewTaggingSocketPlug{math/mathml/write}{On}
  {
     \iow_now:Ne \g_@@_writedummy_iow
      {
@@ -1277,8 +1336,8 @@
              {
                \c_@@_mathml_write_init_tl
              }
-            \AssignSocketPlug {tagsupport/math/mathml/write/prepare}{On}
-            \AssignSocketPlug {tagsupport/math/mathml/write}{On}
+            \AssignTaggingSocketPlug{math/mathml/write/prepare}{On}
+            \AssignTaggingSocketPlug{math/mathml/write}{On}
             \AddToHook{enddocument/afterlastpage}
              {
                \iow_now:Ne \g_@@_writedummy_iow
@@ -1320,13 +1379,8 @@
     \bool_if:NT\g__tag_math_mathml_AF_bool
       {
         \typeout{Info:~Activating~mathml~support}
-        \AssignSocketPlug{tagsupport/math/struct/begin}{mathml-AF}
-        \AssignSocketPlug{tagsupport/math/struct/end}{mathml-AF}
-%    \end{macrocode}
-% mathml handling doesn't like subparts, so we disable them for now:
-%    \begin{macrocode}
-        \AssignSocketPlug{tagsupport/math/substruct/begin}{single}
-        \AssignSocketPlug{tagsupport/math/substruct/end}{single}
+        \AssignTaggingSocketPlug{math/struct/begin}{mathml-AF}
+        \AssignTaggingSocketPlug{math/struct/end}{mathml-AF}
         \AddToHook{enddocument/info}
          {
            \iow_term:n{MathML~statistic}
@@ -1419,16 +1473,70 @@
  }
 %    \end{macrocode}
 %
+% \subsubsection{Meta keys}
+% The |math/setup| key accepts a list with the values |mathml-SE|, |mathml-AF| and |tex-AF|.
+% It is a fast way to set the main option. It at first disables them all, to get a clean state.
+%    \begin{macrocode}
+\keys_define:nn {__tag / setup}
+  {
+    math/setup .code:n =
+     {
+       %deactivate loading of luamml
+       \tl_gset:Nn \g_@@_luamml_load_tl{-1}
+       \keys_set:nn {__tag / setup}
+        {
+          %deactivate tex source AF
+          math/tex/AF = false,
+          %deactivate reading of mathml-AF
+          math/mathml/sources=,
+          math/mathml/AF=false,
+          %deactivate structelem
+          math/mathml/structelem=false,
+          %handle value
+        }
+       \clist_map_inline:nn { #1}
+        {
+          \keys_set:nn {__tag/ setup}{math/__setup/##1}
+        }
+     },
+    math/__setup / mathml-SE .code:n =
+     {
+      \tl_gset:Nn \g_@@_luamml_load_tl{1}
+      \keys_set:nn {__tag / setup}
+        {
+          math/mathml/structelem=true
+        }
+     },
+    math/__setup / mathml-AF .code:n =
+     {
+      \tl_gset:Nn \g_@@_luamml_load_tl{1}
+      \clist_put_right:Ne\l__tag_math_mathml_files_clist
+       {\c_sys_jobname_str-mathml,\c_sys_jobname_str-luamml-mathml}
+      \keys_set:nn {__tag / setup}
+        {
+          math/mathml/AF=true
+        }
+     },
+    math/__setup / tex-AF .code:n =
+     {
+      \keys_set:nn {__tag / setup}
+        {
+          math/tex/AF =true
+        }
+     },
+  }
+%    \end{macrocode}
 % \subsection{Sockets}
 % \subsubsection{Main inline math sockets}
 %
-% \begin{socketdecl}
+% \begin{taggingsocketdecl}
 %   {
-%     tagsupport/math/inline/begin,
-%     tagsupport/math/inline/end,
-%     tagsupport/math/inline/formula/begin,
-%     tagsupport/math/inline/formula/end,
+%     math/inline/begin,
+%     math/inline/end,
+%     math/inline/formula/begin,
+%     math/inline/formula/end,
 %   }
+%   These sockets are already declared in lttagging and only documented here.
 %   The first two sockets are meant to embed inline
 %   math into the surrounding (so to close/reopen, e.g., MC-chunks).
 %   The other two implement the actual formula structure.
@@ -1438,22 +1546,22 @@
 %   \changes{v0.6j}{2024-11-19}{change the socket to two arguments so that it can
 %   be used as tagging socket}
 %    \begin{macrocode}
-\socket_new:nn {tagsupport/math/inline/begin}{0}
-\socket_new:nn {tagsupport/math/inline/end}{0}
-\socket_new:nn {tagsupport/math/inline/formula/begin}{2} %
-\socket_new:nn {tagsupport/math/inline/formula/end}{0}
+%\NewTaggingSocket{math/inline/begin}{0}
+%\NewTaggingSocket{math/inline/end}{0}
+%\NewTaggingSocket{math/inline/formula/begin}{2} %
+%\NewTaggingSocket{math/inline/formula/end}{0}
 %    \end{macrocode}
-%\end{socketdecl}
+%\end{taggingsocketdecl}
 %
 %
 % \begin{plugdecl}{MC}
 %    \begin{macrocode}
-\socket_new_plug:nnn
-  {tagsupport/math/inline/begin}
+\NewTaggingSocketPlug
+  {math/inline/begin}
   {MC}
   {\tag_mc_end_push:}
-\socket_new_plug:nnn
-  {tagsupport/math/inline/end}
+\NewTaggingSocketPlug
+  {math/inline/end}
   {MC}
   {\tag_mc_begin_pop:n{}}
 %    \end{macrocode}
@@ -1462,8 +1570,8 @@
 % We probably will want to test different tagging recipes.
 % \begin{plugdecl}{default}
 %    \begin{macrocode}
-\socket_new_plug:nnn
-  {tagsupport/math/inline/formula/begin}
+\NewTaggingSocketPlug
+  {math/inline/formula/begin}
   {default}
 %    \end{macrocode}
 % \changes{v0.6g}{2024-10-02}{disable paratagging, issue \#711}
@@ -1474,33 +1582,28 @@
     \@@_luamml_structelem:
     \tag_socket_use:n{math/content}
     \tag_socket_use:n{math/struct/begin}
-%    \end{macrocode}
-% TODO: does inline math need subformula handling?
-%    \begin{macrocode}
-    % inner formula if multiple parts (not really implemented yet)
-    \tag_socket_use:n{math/substruct/begin}
     #2
     \tag_socket_use:n{math/end}
   }
-\socket_new_plug:nnn
-  {tagsupport/math/inline/formula/end}
+\NewTaggingSocketPlug
+  {math/inline/formula/end}
   {default}
   {
-    \socket_use:n{tagsupport/math/substruct/end}
-    \socket_use:n{tagsupport/math/struct/end}
+    \tag_socket_use:n{math/struct/end}
   }
 %    \end{macrocode}
 % \end{plugdecl}
 %
 % \subsubsection{Main display math sockets}
 %
-% \begin{socketdecl}
+% \begin{taggingsocketdecl}
 %   {
-%     tagsupport/math/display/begin,
-%     tagsupport/math/display/end,
-%     tagsupport/math/display/formula/begin,
-%     tagsupport/math/display/formula/end,
+%     math/display/begin,
+%     math/display/end,
+%     math/display/formula/begin,
+%     math/display/formula/end,
 %   }
+%   These sockets are already declared in lttagging and only documented here.
 %   The first two sockets are meant to embed display
 %   math into the surrounding (so to close/reopen, e.g., MC-chunks and
 %   P-structure).
@@ -1510,21 +1613,21 @@
 %   the end socket is after the math!
 %   \changes{v0.6j}{2024-11-19}{change number of arguments of formula/begin socket}
 %    \begin{macrocode}
-\socket_new:nn {tagsupport/math/display/begin}{0}
-\socket_new:nn {tagsupport/math/display/end}{0}
-\socket_new:nn {tagsupport/math/display/formula/begin}{2} %
-\socket_new:nn {tagsupport/math/display/formula/end}{0}
+%\NewTaggingSocket{math/display/begin}{0}
+%\NewTaggingSocket{math/display/end}{0}
+%\NewTaggingSocket{math/display/formula/begin}{2} %
+%\NewTaggingSocket{math/display/formula/end}{0}
 %    \end{macrocode}
-%\end{socketdecl}
+%\end{taggingsocketdecl}
 
 % \begin{plugdecl}{default}
 %    \begin{macrocode}
-\socket_new_plug:nnn
-  {tagsupport/math/display/begin}
+\NewTaggingSocketPlug
+  {math/display/begin}
   {default}
   { \__tag_tool_close_P:  }
-\socket_new_plug:nnn
-  {tagsupport/math/display/end}
+\NewTaggingSocketPlug
+  {math/display/end}
   {default}
   {
   }
@@ -1535,25 +1638,64 @@
 % \begin{plugdecl}{default}
 % \changes{v0.6j}{2024-11-19}{moved \cs{tagpdfparaOff} into the socket, tagging/765}
 %    \begin{macrocode}
-\socket_new_plug:nnn
-  {tagsupport/math/display/formula/begin}
+\NewTaggingSocketPlug
+  {math/display/formula/begin}
   {default}
   {
     \tagpdfparaOff
     \@@_luamml_structelem:
     \tag_socket_use:n{math/content}
     \tag_socket_use:n{math/struct/begin}
-    \tag_socket_use:n{math/substruct/begin}
     #2
     \tag_socket_use:n{math/end}
   }
-\socket_new_plug:nnn
-  {tagsupport/math/display/formula/end}
+\NewTaggingSocketPlug
+  {math/display/formula/end}
   {default}
   {
-    \socket_use:n{tagsupport/math/substruct/end}
-    \socket_use:n{tagsupport/math/struct/end}
+    \tag_socket_use:n{math/struct/end}
   }
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \subsubsection{Sockets plugs for tags (labels)}
+% \begin{taggingsocketdecl}
+%   {
+%     math/display/tag/begin,
+%     math/display/tag/end,
+%   }
+%   These sockets are already declared in lttagging and only documented here.
+%   These sockets are used in \cs{maketag@@@} to tag
+%   labels as Lbl. luamml changes the plug to move
+%   the Lbl into the math structure with an intent.
+%   \changes{v0.6l}{2025-02-06}{added sockets for tags/labels}
+%    \begin{macrocode}
+%\NewTaggingSocket{math/display/tag/begin}{0}
+%\NewTaggingSocket{math/display/tag/end}{0}
+%    \end{macrocode}
+%\end{taggingsocketdecl}
+%
+% \begin{plugdecl}{default}
+% \changes{v0.6j}{2024-11-19}{moved \cs{tagpdfparaOff} into the socket, tagging/765}
+%    \begin{macrocode}
+\NewTaggingSocketPlug
+  {math/display/tag/begin}
+  {default}
+  {
+    \tag_mc_end:
+    \tag_struct_begin:n {tag=Lbl}
+    \tag_mc_begin:n {}
+  }
+\NewTaggingSocketPlug
+  {math/display/tag/end}
+  {default}
+  {
+    \tag_mc_end:
+    \tag_struct_end:
+    \tag_mc_begin:n{}
+  }
+\AssignTaggingSocketPlug{math/display/tag/begin}{default}
+\AssignTaggingSocketPlug{math/display/tag/end}{default}
 %    \end{macrocode}
 % \end{plugdecl}
 %
@@ -1599,7 +1741,7 @@
 % \end{variable}
 
 %
-% \begin{socketdecl}{tagsupport/math/content}
+% \begin{taggingsocketdecl}{math/content}
 % The math content is stored in associated files and used for
 % actual and alternative text. As the exact text is still
 % unclear we use a socket to be able to test variants.
@@ -1607,9 +1749,9 @@
 % to identical values. It can use the two variables
 % \cs{g_@@_grabbed_env_tl} and \cs{g_@@_grabbed_math_tl}
 %    \begin{macrocode}
-\socket_new:nn {tagsupport/math/content}{0}
+\NewTaggingSocket{math/content}{0}
 %    \end{macrocode}
-% \end{socketdecl}
+% \end{taggingsocketdecl}
 %
 % Some default sockets to set the contents.
 % TODO: think about naming convention.
@@ -1618,8 +1760,8 @@
 % there are less repetitions.
 % \begin{plugdecl}{actual+source}
 %    \begin{macrocode}
-\socket_new_plug:nnn
-  {tagsupport/math/content}
+\NewTaggingSocketPlug
+  {math/content}
   {actual+source}
   {
    \tl_set:Ne\l_@@_content_actual_tl
@@ -1638,8 +1780,8 @@
 %
 % \begin{plugdecl}{alt+source}
 %    \begin{macrocode}
-\socket_new_plug:nnn
-  {tagsupport/math/content}
+\NewTaggingSocketPlug
+  {math/content}
   {alt+source}
   {
    \tl_set:Ne\l_@@_content_alt_tl
@@ -1656,27 +1798,27 @@
 %    \end{macrocode}
 % \end{plugdecl}
 %    \begin{macrocode}
-\socket_assign_plug:nn {tagsupport/math/content}{alt+source}
+\AssignTaggingSocketPlug{math/content}{alt+source}
 %    \end{macrocode}
 %
-% \begin{socketdecl}{tagsupport/math/struct/begin,
-%  tagsupport/math/struct/end}
+% \begin{taggingsocketdecl}{math/struct/begin,
+%  math/struct/end}
 % For the main structure we use a socket too.
 % This allows, e.g., to create a special one for luamml
 % which setups additional objects.
 % The begin socket can use the two variables
 % \cs{g_@@_grabbed_env_tl} and \cs{g_@@_grabbed_math_tl}
 %    \begin{macrocode}
-\socket_new:nn {tagsupport/math/struct/begin}{0}
-\socket_new:nn {tagsupport/math/struct/end}{0}
+\NewTaggingSocket{math/struct/begin}{0}
+\NewTaggingSocket{math/struct/end}{0}
 %    \end{macrocode}
-% \end{socketdecl}
+% \end{taggingsocketdecl}
 %
 % \begin{plugdecl}{default}
 % TODO: think about some naming convention ...
 %    \begin{macrocode}
-\socket_new_plug:nnn
-  {tagsupport/math/struct/begin}
+\NewTaggingSocketPlug
+  {math/struct/begin}
   {default}
   {
     \bool_if:NTF\l__tag_math_texsource_AF_bool
@@ -1700,14 +1842,16 @@
        actualtext  = \l_@@_content_actual_tl,
        alt         = \l_@@_content_alt_tl
      }
+    \typeout{====>grabbed~math=\meaning\g_@@_grabbed_math_tl}
+    \tag_mc_begin:n{}
   }
-\socket_new_plug:nnn
-  {tagsupport/math/struct/end}
+\NewTaggingSocketPlug
+  {math/struct/end}
   {default}
-  { \tag_struct_end: }
+  { \tag_mc_end: \tag_struct_end: }
 
-\socket_assign_plug:nn {tagsupport/math/struct/begin}{default}
-\socket_assign_plug:nn {tagsupport/math/struct/end}{default}
+\AssignTaggingSocketPlug{math/struct/begin}{default}
+\AssignTaggingSocketPlug{math/struct/end}{default}
 %    \end{macrocode}
 % \end{plugdecl}
 %
@@ -1727,8 +1871,8 @@
 %    \end{macrocode}
 % the socket definition
 %    \begin{macrocode}
-\socket_new_plug:nnn
-  {tagsupport/math/struct/begin}
+\NewTaggingSocketPlug
+  {math/struct/begin}
   {mathml-AF}
   {
    \int_gincr:N\g_@@_math_total_int
@@ -1765,8 +1909,8 @@
           \typeout {WARNING:~mathml~missing~for~hash~\l_@@_content_hash_tl}
         }
      }
-   \socket_use:n {tagsupport/math/mathml/write/prepare}
-   \socket_use:n {tagsupport/math/mathml/write} % write hash if request
+   \tag_socket_use:n {math/mathml/write/prepare}
+   \tag_socket_use:n {math/mathml/write} % write hash if request
     \bool_if:NTF\l__tag_math_texsource_AF_bool
      { \tl_set_eq:NN \l_@@_content_AF_source_tmpa_tl \l_@@_content_AF_source_tl }
      { \tl_clear:N \l_@@_content_AF_source_tmpa_tl }
@@ -1783,86 +1927,41 @@
        title-o     = \g_@@_grabbed_env_tl,    %
        alt         = \l_@@_content_alt_tl
      }
+   \typeout{====>grabbed~math=\meaning\g_@@_grabbed_math_tl}
+   \tag_mc_begin:n{}
    }
 %    \end{macrocode}
 % not really needed but looks more symmetric:
 %    \begin{macrocode}
-\socket_new_plug:nnn
-  {tagsupport/math/struct/end}
+\NewTaggingSocketPlug
+  {math/struct/end}
   {mathml-AF}
   {
+    \tag_mc_end:
     \tag_struct_end:
   }
 %    \end{macrocode}
 % \end{plugdecl}
 %
-% \begin{socketdecl}{tagsupport/math/substruct/begin,
-%  tagsupport/math/substruct/end}
-%  This holds the code to handle subparts of the formula.
-%    \begin{macrocode}
-\socket_new:nn {tagsupport/math/substruct/begin}{0}
-\socket_new:nn {tagsupport/math/substruct/end}{0}
-%    \end{macrocode}
-% \end{socketdecl}
-%
-% \begin{plugdecl}{default}
-%    \begin{macrocode}
-\socket_new_plug:nnn
-  {tagsupport/math/substruct/begin}
-  {default}
-  { \grabaformulapartandstart }
-\socket_new_plug:nnn
-  {tagsupport/math/substruct/end}
-  {default}
-  {
-    \tagmcend
-    \if@subformulas
-      \tagstructend
-    \fi
- }
-\socket_assign_plug:nn {tagsupport/math/substruct/begin}{default}
-\socket_assign_plug:nn {tagsupport/math/substruct/end}{default}
-%    \end{macrocode}
-% \end{plugdecl}
-
-% \begin{plugdecl}{single}
-% We need an option to disable subparts as it is unclear
-% if consumers can handle them:
-%    \begin{macrocode}
-\socket_new_plug:nnn
-  {tagsupport/math/substruct/begin}
-  {single}
-  {
-    \typeout{====>subpart~splitting~deactivated}
-    \typeout{====>grabbed~math=\meaning\g_@@_grabbed_math_tl}
-    \tag_mc_begin:n{}
-  }
-\socket_new_plug:nnn
-  {tagsupport/math/substruct/end}
-  {single}
-  { \tag_mc_end:}
-%    \end{macrocode}
-% \end{plugdecl}
-%
-% \begin{socketdecl}{tagsupport/math/end}
+% \begin{taggingsocketdecl}{math/end}
 %  A socket used at the end of the math (before the closing dollar(s))
 %  which can, e.g., set a flag for luamml.
 %    \begin{macrocode}
-\socket_new:nn {tagsupport/math/end}{0}
+\NewTaggingSocket{math/end}{0}
 %    \end{macrocode}
-% \end{socketdecl}
+% \end{taggingsocketdecl}
 %
 %
 %  \changes{v0.6j}{2024-11-19}{removed enable/disable command and assign tagging sockets directly}
 %    \begin{macrocode}
-\socket_assign_plug:nn {tagsupport/math/inline/begin}{MC}
-\socket_assign_plug:nn {tagsupport/math/inline/end}{MC}
-\socket_assign_plug:nn {tagsupport/math/inline/formula/begin}{default}
-\socket_assign_plug:nn {tagsupport/math/inline/formula/end}{default}
-\socket_assign_plug:nn {tagsupport/math/display/begin}{default}
-\socket_assign_plug:nn {tagsupport/math/display/end}{default}
-\socket_assign_plug:nn {tagsupport/math/display/formula/begin}{default}
-\socket_assign_plug:nn {tagsupport/math/display/formula/end}{default}
+\AssignTaggingSocketPlug{math/inline/begin}{MC}
+\AssignTaggingSocketPlug{math/inline/end}{MC}
+\AssignTaggingSocketPlug{math/inline/formula/begin}{default}
+\AssignTaggingSocketPlug{math/inline/formula/end}{default}
+\AssignTaggingSocketPlug{math/display/begin}{default}
+\AssignTaggingSocketPlug{math/display/end}{default}
+\AssignTaggingSocketPlug{math/display/formula/begin}{default}
+\AssignTaggingSocketPlug{math/display/formula/end}{default}
 %    \end{macrocode}
 %
 %
@@ -1902,6 +2001,13 @@
 % \end{macro}
 %
 % \subsection{Content grabbing}
+%
+% \begin{macro}{\MathCollectTrue,\MathCollectFalse}
+%    \begin{macrocode}
+\cs_set_protected:Npn\MathCollectTrue{\bool_set_false:N \l__math_collected_bool}
+\cs_set_protected:Npn\MathCollectFalse{\bool_set_true:N \l__math_collected_bool}
+%    \end{macrocode}
+% \end{macro}
 %
 % \begin{macro}{\@@_grab_dollar:w}
 % \begin{macro}{\@@_grab_dollar:n}
@@ -1994,7 +2100,7 @@
 %    The \cs{postdisplaypenalty} was temporarily set
 %    to 10000 inside the display and the \cs{belowdisplayskip} and the
 %    \cs{belowdisplayshortskip} was negated, so whatever was inserted
-%    it should have been a negative skip. Whatever 
+%    it should have been a negative skip. Whatever
 %    was added, we pick up the value up, so that we can correct
 %    the spacing after the tagging code was inserted.
 %    \begin{macrocode}
@@ -2034,8 +2140,8 @@
 %                       one~ that~ TeX~ will~ add)}
     \skip_vertical:n { -\tex_parskip:D }
 %    \end{macrocode}
-%    
-%    We also set the \texttt{@domathendpetrue} flag to signal that the    
+%
+%    We also set the \texttt{@domathendpetrue} flag to signal that the
 %    \begin{macrocode}
     \@domathendpetrue
     \@doendpe             % this has no \end{...} to take care of it
@@ -2264,7 +2370,7 @@
 % \begin{macro}{\math_register_env:n}
 % \begin{macro}{\RegisterMathEnvironment}
 %   Set up to capture environment content and make available.
-%
+% \changes{0.6k}{2024-12-04}{Store the current grouplevel for luamml }
 %    \begin{macrocode}
 \cs_new_protected:Npn \math_register_env:nn #1#2
   {
@@ -2299,7 +2405,10 @@
      {
      }
   }
-
+%    \end{macrocode}
+%  \changes{v0.6k}{2024/12/04}{Add tagging sockets for luamml support}
+%  \changes{v0.6k}{2024/12/04}{Store the current grouplevel for luamml }
+%    \begin{macrocode}
 \cs_new_protected:Npn \math_register_halign_env:nn #1#2
   {
     \tl_set:Nn \l_@@_env_name_tl {#1}
@@ -2333,60 +2442,7 @@
        \exp_not:c { @@_env_ #1 _end: }
      }
   }
-%    \end{macrocode}
-% TODO: the following command is neither documented nor used. Is it needed?
-%    \begin{macrocode}
-\cs_new_protected:Npn \math_register_odd_env:nn #1#2
-  {
-    \tl_set:Nn \l_@@_env_name_tl {#1}
-    \keys_set:nn { @@ } {#2}
-    \cs_gset_eq:cc { @@_env_ #1 _begin: } {#1}
-    \cs_gset_eq:cc { @@_env_ #1 _end: } { end #1 }
-%
-    \ExpandArgs { nnee } \RenewDocumentEnvironment {#1} { b }
-      {
-        \exp_not:N \bool_if:NTF \exp_not:N \l_@@_collected_bool
-          {
-%            \typeout{===>B1}
-          }
-          {
-%            \typeout{===>B2}
-            \cs_if_exist:cTF { @@_env #1 _aux: }
-              {
-                \exp_not:c { @@_env #1 _aux: }
-                  ##1 \exp_not:N \@@_env_end: {#1}
-              }
-              { \exp_not:N \@@_process:nn {#1} {##1} }
-            \exp_not:n { \@kernel@math@registered@begin }
-            \bool_set_true:N \exp_not:N \l_@@_collected_bool
-          }
-%        \exp_not:N \tracingall
-        \exp_not:c { @@_env_ #1 _begin: }
-        ##1
-     }
-      {
-        \exp_not:c { @@_env_ #1 _end: }
-% needed if we don't have $$...$$
-%        \exp_not:n { \typeout{---> @kernel@math@registered@end }}
-        \exp_not:n { \@kernel@math@registered@end }
-      }
-  }
 
-
-%  FMi: compare with block change!
-%
-%  \DeclareRobustCommand*\begin[1]{%
-%  \UseHook{env/#1/before}%
-%  \@ifundefined{#1}%
-%    {\def\reserved@a{\@latex@error{Environment #1 undefined}\@eha}}%
-%    {\def\reserved@a{\def\@currenvir{#1}%
-%        \edef\@currenvline{\on@line}%
-%        \@execute@begin@hook{#1}%
-%        \csname #1\endcsname}}%
-%  \@ignorefalse
-%  \begingroup
-%  \@endpefalse  % tmp!!! is it ok to drop this here?
-%  \reserved@a}
 
 
 \cs_new:Npn \@kernel@math@registered@begin {
@@ -2415,15 +2471,6 @@
        }
   \tag_socket_use:nn{math/display/formula/begin}{}{}
 %  \typeout{==>MC1}\ShowTagging{mc-current}
-}
-
-\cs_new:Npn \@kernel@math@registered@end {
-%  \typeout{==>MC2}\ShowTagging{mc-current}
-  \para_raw_end:
-  \tagpdfparaOn
-  \tag_socket_use:n{tagsupport/math/display/formula/end}
-%  \typeout{==>MC3}\ShowTagging{mc-current}
-  \@endpetrue
 }
 
 \cs_new_protected:Npn \math_register_env:n #1
@@ -2613,25 +2660,14 @@
 %    \end{macrocode}
 %
 % Tabulars currently contain a \$ that shouldn't trigger math
-% tagging.
+% tagging. Also we do need to change the grabbing method to the slow
+% loop-method.
 %    \begin{macrocode}
 \RequirePackage{array}
-\tl_if_in:NnT\@tabular{$}
+\tl_if_exist:NT\@kernel@tabular@init
  {
-   \def\@tabular{%
-   \leavevmode
-   \UseTaggingSocket{tbl/hmode/begin}%
-   \hbox \bgroup
-   \bool_set_true:N \l_@@_collected_bool
-   $
-   \bool_set_false:N \l_@@_collected_bool
-   \col@sep\tabcolsep \let\d@llarbegin\begingroup
-                                    \let\d@llarend\endgroup
-%    \end{macrocode}
-%   A proper switching mechanism is needed: for the present, do directly.
-%    \begin{macrocode}
-   \cs_set_protected:Npn \@@_grab_dollar:w { \@@_grab_dollar_loop: }
-   \@tabarray}
+   \tl_put_right:Nn\@kernel@tabular@init
+    {\cs_set_protected:Npn \@@_grab_dollar:w { \@@_grab_dollar_loop: }}
  }
 %    \end{macrocode}
 %
@@ -2645,6 +2681,44 @@
     \bool_set_true:N \l_@@_collected_bool
     \@@_m@th:
   }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Modifying kernel commands}
+%
+% \begin{macro}{\mathpalette}
+% The \cs{mathpalette} command is a problem if lualatex is used and math
+% structure elements are created as the math is then processed more than once.
+% We therefore redefine it to use \cs{mathstyle}.
+%
+%    \begin{macrocode}
+\sys_if_engine_luatex:T
+ {
+  \def\mathpalette#1#2{%
+   \ifcase\mathstyle
+    #1\displaystyle{#2}\or
+    #1\displaystyle{#2}\or
+    #1\textstyle{#2}\or
+    #1\textstyle{#2}\or
+    #1\scriptstyle{#2}\or
+    #1\scriptstyle{#2}\or
+    #1\scriptscriptstyle{#2}\or
+    #1\scriptscriptstyle{#2}
+   \fi}
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+%
+% \begin{macro}{\mathsm@sh}
+% Similar to the phantom commands in latex-lab-text, \cs{mathsm@sh} must be
+% redefined to include luamml sockets.
+%    \begin{macrocode}
+\def\mathsm@sh#1#2{%
+  \setbox\z@\hbox{$\m@th#1{#2}
+    \UseTaggingSocket{math/luamml/save/nNn}{{mathsmash} #1 {mpadded}}
+    $}%
+  \UseTaggingSocket{math/luamml/finsm@sh}{}{{}\finsm@sh}}
 %    \end{macrocode}
 % \end{macro}
 %
@@ -2662,374 +2736,6 @@
  }
 %    \end{macrocode}
 %
-% \subsection{Modifying \pkg{amsmath}}
-%
-% \begin{macro}{\@@_amsmath_align@:nn}
-% \begin{macro}
-%   {
-%     \@@_amsmath_gather@:n ,
-%     \@@_amsmath_multline@:n
-%   }
-% \begin{macro}{\align@}
-% \begin{macro}{\gather@, \multline@}
-%   Mark up all of the display environments as the content is captured anyway.
-%   We then use an internal macro in each environment type to insert the
-%   processing code. Each of these is slightly different, so we cannot use a
-%   simple loop here. The test for \cs{split@tag} is required as the
-%   \texttt{split} environment internally uses \texttt{gather} \emph{when not
-%   within an \pkg{amsmath}} environment, for example inside \texttt{equation}.
-%   Without the precaution, we'd get two copies of the grabbed math, the second
-%   of which would start with \cs{split@tag}.
-%    \begin{macrocode}
-
-
-
-\tl_gput_right:Nn \@kernel@before@begindocument {
-%
-\renewenvironment{gather*}{%
-  \start@gather\st@rredtrue
-}
-{%
-% this redirection doesn't work if we alter "gather"!
-  %  \endgather
-% so replace it with its real meaning
-  \math@cr \black@\totwidth@ \egroup
-  $$\ignorespacesafterend
-}
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-\def\common@align@ending {
-  \math@cr \black@\totwidth@
-  \egroup
-  \ifingather@
-    \restorealignstate@
-    \egroup
-    \nonumber
-    \ifnum0=`{\fi\iffalse}\fi
-  \else
-    $$%
-  \fi
-  \ignorespacesafterend
-}
-\renewenvironment{alignat}{%
-  \start@align\z@\st@rredfalse
-}{%
-  \common@align@ending
-}
-\renewenvironment{alignat*}{%
-  \start@align\z@\st@rredtrue
-}{%
-  \common@align@ending
-}
-\renewenvironment{xalignat}{%
-  \start@align\@ne\st@rredfalse
-}{%
-  \common@align@ending
-}
-\renewenvironment{xalignat*}{%
-  \start@align\@ne\st@rredtrue
-}{%
-  \common@align@ending
-}
-\renewenvironment{xxalignat}{%
-  \start@align\tw@\st@rredtrue
-}{%
-  \common@align@ending
-}
-\renewenvironment{align}{%
-  \start@align\@ne\st@rredfalse\m@ne
-}{%
-  \common@align@ending
-}
-\renewenvironment{align*}{%
-  \start@align\@ne\st@rredtrue\m@ne
-}{%
-  \common@align@ending
-}
-\renewenvironment{flalign}{%
-  \start@align\tw@\st@rredfalse\m@ne
-}{%
-  \common@align@ending
-}
-\renewenvironment{flalign*}{%
-  \start@align\tw@\st@rredtrue\m@ne
-}{%
-  \common@align@ending
-}
-%
-\renewenvironment{multline*}{\start@multline\st@rredtrue}
-{%
-  \iftagsleft@ \@xp\lendmultline@ \else \@xp\rendmultline@ \fi
-  \ignorespacesafterend
-}
-%    \end{macrocode}
-%    Also for "false?"
-%    \begin{macrocode}
-\def\measuring@true{\let\ifmeasuring@\iftrue\tag_suspend:n{\measuring}}
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-%
-  \math_register_halign_env:nn {align}{}
-  \math_register_halign_env:nn {align*}{}
-  \math_register_halign_env:nn {alignat}{}
-  \math_register_halign_env:nn {alignat*}{}
-  \math_register_halign_env:nn {flalign}{}
-  \math_register_halign_env:nn {flalign*}{}
-  \math_register_halign_env:nn {gather}{}
-  \math_register_halign_env:nn {gather*}{}
-  \math_register_halign_env:nn {multline}{}
-  \math_register_halign_env:nn {multline*}{}
-  \math_register_halign_env:nn {xalignat}{}
-  \math_register_halign_env:nn {xalignat*}{}
-  \math_register_halign_env:nn {xxalignat}{}
-  %
-  \@namedef{maketag @ @ @} #1{%
-%    \typeout{--->maketag @ @ @}
-    \ifmeasuring@
-      \hbox{\m@th\normalfont#1}%
-    \else
-      \tagmcend \tagstructbegin{tag=Lbl}%
-      \tagmcbegin{tag=Lbl}%
-      \hbox{\m@th\normalfont#1}%
-      \tagmcend \tagstructend \tagmcbegin{}%
-    \fi
-  }
-%    \end{macrocode}
-%
-%
-%    \begin{macrocode}
-\@namedef{math@cr @ @ @ gather}{%
-    \ifst@rred\nonumber\fi
-   &\relax
-    \make@display@tag
-%
-    \maybestartnewformulatag
-%
-    \ifst@rred\else\global\@eqnswtrue\fi
-    \global\advance\row@\@ne
-    \cr
-}
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-\@namedef{math@cr @ @ @ align}{%
-  \ifst@rred\nonumber\fi
-  \if@eqnsw \global\tag@true \fi
-  \global\advance\row@\@ne
-  \add@amps\maxfields@
-  \omit
-  \kern-\alignsep@
-  \iftag@
-    \setboxz@h{\@lign\strut@{\make@display@tag}}%
-    \place@tag
-  \fi
-%
-    \maybestartnewformulatag
-%
-  \ifst@rred\else\global\@eqnswtrue\fi
-  \global\lineht@\z@
-  \cr
-}
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-\def\restore@math@cr{\@namedef{math@cr @ @ @}{
-%
-    \maybestartnewformulatag
-%
-    \cr}}
-\restore@math@cr
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-}
-%    \end{macrocode}
-% \end{macro}
-% \end{macro}
-% \end{macro}
-% \end{macro}
-%
-%
-%
-
-%  \begin{macro}{\@@_split_at_nl:NN}
-%  This splits grabbed math at newlines.
-%
-%    \begin{macrocode}
-\cs_new:Npn \@@_split_at_nl:NN #1#2 {
-  \tl_set:Nf \l_@@_tmpa_tl {
-      \exp_after:wN \@@_split_at_nl_first:w #1 \\ \q_nil \\ \s_stop }
-  \exp_after:wN \@@_split_at_nl_aux:nnNN \l_@@_tmpa_tl #1 #2
-}
-%    \end{macrocode}
-% and the auxiliary commands
-%    \begin{macrocode}
-\cs_new:Npn \@@_split_at_nl_first:w #1 \\ #2 \\ #3 \s_stop
-  {
-    \quark_if_nil:nTF {#2}
-      { {#1} {  } }
-      {
-        \@@_split_chk_if_begin:ww #1 \begin \q_nil \s_mark
-          #2 \\ #3 \s_stop
-      }
-  }
-
-\cs_new_protected:Npn \@@_split_at_nl_aux:nnNN #1 #2 #3 #4
-  {
-    \tl_gset:Nn #4 {#1}
-    \tl_gset:Nn #3 {#2}
-  }
-
-\cs_new:Npn \@@_split_chk_if_begin:ww
-   #1 \begin #2 #3 \s_mark #4 \\ \q_nil \\ \s_stop
-  {
-    \quark_if_nil:nTF {#2}
-      { {#1} {#4} }
-      {
-        \exp_after:wN \@@_split_collect_one_end:w
-          \@@_split_cleanup_begin_q_nil:w #1 \begin{#2} #3 \\ #4 \s_stop
-            { } { 1 }
-      }
-  }
-
-\cs_new:Npn \@@_split_cleanup_begin_q_nil:w #1 \begin \q_nil {#1}
-
-\cs_new:Npn \@@_split_collect_one_end:w #1 \end #2 #3 \s_stop #4 #5
-  {
-    \exp_args:Nf \@@_split_check_count_begins:nnnn
-      { \@@_split_count_begins:n { #4 #1 } } {#5}
-      { #4 #1 \end{#2} } {#3}
-  }
-\cs_new:Npn \@@_split_count_begins:n #1
-  { \int_eval:n { 0 \@@_split_count_begins:w #1 \begin \q_nil } }
-
-\cs_new:Npn \@@_split_count_begins:w #1 \begin #2
-  { \quark_if_nil:nF {#2} { +1 \@@_split_count_begins:w } }
-
-\cs_new:Npn \@@_split_check_count_begins:nnnn #1 #2 #3 #4
-  {
-    \int_compare:nNnTF {#1} = {#2}
-      {
-        \exp_last_unbraced:Nf \@@_split_final_cleanup:nn
-          { \@@_split:n { \@@_split_guard:n {#3} #4 } }
-      }
-      {
-        \exp_args:No \use_ii_i:nn
-          { \exp_after:wN { \int_value:w \int_eval:n { #2 + 1 } } }
-          { \@@_split_collect_one_end:w #4 \s_stop {#3} }
-      }
-  }
-\cs_new:Npn \@@_split_final_cleanup:nn #1 #2
-  {
-      \exp:w \@@_split_final_cleanup:w #1
-        \@@_split_guard:n \q_nil \s_mark { }
-      {#2}
-  }
-\cs_new:Npn \@@_split_final_cleanup:w #1 \@@_split_guard:n #2 #3 \s_mark #4
-  {
-    \quark_if_nil:nTF {#2}
-      { \exp_end: { #4 #1 } }
-      { \@@_split_final_cleanup:w #3 \s_mark { #4 #1 #2 } }
-  }
-
-\cs_new:Npn \@@_split:n #1 {
-    \@@_split_at_nl_first:w #1 \\ \q_nil \\ \s_stop }
-
-% this looks unused.
-%\NewDocumentCommand \splitnl { mm +m }
-%  {
-%    \tl_set:Nf \l_@@_tmpa_tl { \split:n {#3} }
-%    \show \l_@@_tmpa_tl
-%    \exp_after:wN \__splitnl_aux:nnNN \l_@@_tmpa_tl #1 #2
-%  }
-%    \end{macrocode}
-%  \end{macro}
-%
-%
-%  \begin{macro}{\maybestartnewformulatag}
-%
-%    \begin{macrocode}
-
-\newif\if@subformulas
-\tl_new:N \result
-
-\cs_new_protected:Npn\grabaformulapartandstart {
-  \@@_split_at_nl:NN  \g_@@_grabbed_math_tl \result
-  \typeout{====>first-result=\meaning\result}
-  \typeout{====>first-tmpmathcontent=\meaning\g_@@_grabbed_math_tl}
-  \tl_if_empty:NTF \g_@@_grabbed_math_tl
-     {
-       \typeout{====>formula~ has~ no~ subparts}
-       \global\@subformulasfalse
-     }
-     {
-       \typeout{====>formula~ has~ subparts}
-       \global\@subformulastrue
-       \edef\resulttitle{\g_@@_grabbed_env_tl\space (part)}
-       \tagstructbegin{tag=Formula,
-%    \end{macrocode}
-%    For now we don't put real content in /alt or /ActualText on subformulas
-%    but we add a short text to satisfy the pdf/ua-2 validator
-%    \begin{macrocode}
-%         alt=\result,
-         alt = subformula,
-         title-o=\resulttitle
-       }
-    }
-    \tagmcbegin{}
-}
-
-\cs_new_protected:Npn\grabaformulapartandmayberestart {
-  \@@_split_at_nl:NN  \g_@@_grabbed_math_tl \result
-  \typeout{====>result=\meaning\result}
-  \typeout{====>tmpmathcontent=\meaning\g_@@_grabbed_math_tl}
-%  \tl_if_empty:NTF \g_@@_grabbed_math_tl
-%     {
-%       \typeout{====>tmpmathcontent=empty}
-%     }
-%     {
-%       \typeout{====>tmpmathcontent=not-empty}
-       \edef\resulttitle{\g_@@_grabbed_env_tl\space (part)}
-       \tagstructbegin{tag=Formula,
-         alt=\result,
-         title-o=\resulttitle
-       }
-%    }
-    \tagmcbegin{}
-}
-%    \end{macrocode}
-%  \end{macro}
-%
-%
-%
-%
-%    \begin{macrocode}
-\def\maybestartnewformulatag {
-\if@subformulas
- \ifmeasuring@\else
-%
-  \tl_if_empty:NF \g_@@_grabbed_math_tl
-     {
-       \tagmcend
-       \tagstructend
-       \grabaformulapartandmayberestart
-     }
- \fi
-\fi
-}
-%    \end{macrocode}
-%
-%    The breqn packages changes catcodes and that isn't yet covered
-%    by our mechanism.
-%    \begin{macrocode}
-%\AddToHook{package/breqn/after}{
-%  \typeout{===>~ in~ hook}
-%  \math_register_halign_env:nn {dmath}{}
-%  \math_register_halign_env:nn {dgroup*}{}
-%}
-%    \end{macrocode}
 %
 %    \begin{macrocode}
 \ExplSyntaxOff
