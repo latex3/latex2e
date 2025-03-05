@@ -1,13 +1,8 @@
 l3build save -cconfig-footnote \
    footmisc-000 \
-   footmisc-001 \
    footmisc-002 \
    footmisc-003 \
-   footmisc-004 \
-   footmisc-005 \
    footmisc-006 \
-   footmisc-007-rollback \
-   footmisc-008-pdfcol \
    footmisc-floats-000 \
    footmisc-floats-001 \
    footmisc-floats-002 \
@@ -16,10 +11,6 @@ l3build save -cconfig-footnote \
    footmisc-floats-005 \
    footmisc-floats-abovefloats-flushbottom \
    footmisc-floats-abovefloats \
-
-
-   exit
-
    footmisc-floats-belowfloats-flushbottom \
    footmisc-floats-belowfloats \
    footmisc-floats-bottom-abovefloats-flushbottom \
@@ -55,5 +46,7 @@ l3build save -cconfig-footnote \
    github-011 \
    github-015
 
-   
+
+exit
+
 
