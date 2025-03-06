@@ -2,6 +2,8 @@ l3build save -cconfig-footnote \
    footmisc-000 \
    footmisc-002 \
    footmisc-003 \
+   footmisc-004 \
+   footmisc-005 \
    footmisc-006 \
    footmisc-floats-000 \
    footmisc-floats-001 \
