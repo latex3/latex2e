@@ -72,6 +72,7 @@ checkconfigs =
   "config-graphic",
   "config-minipage",
   "config-float",
+  "config-footnote",
   "config-bib",
   "config-LM-tagging",
   "config-table-pdftex",
