@@ -28,7 +28,8 @@ l3build save -cconfig-table-pdftex \
 	table-020 \
 	table-021-longtable \
 	table-022-cline \
-	table-026-multirow
+	table-026-multirow \
+	table-019-deprecated-keys
 
 
 l3build save -cconfig-table-luatex \
