@@ -52,6 +52,7 @@ l3build save -cconfig-table-luatex \
 	table-014-pbox \
 	table-014-pbox-longtable \
 	table-015 \
+	table-015-presentation\
 	table-016 \
 	table-017 \
 	table-018 \
