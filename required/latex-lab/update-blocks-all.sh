@@ -6,7 +6,6 @@ l3build save -cconfig-block -epdftex \
 	blocks-enumerate-02 \
 	blocks-enumerate-05 \
 	blocks-itemize-01 \
-	blocks-itemize-02 \
 	blocks-list-02 \
 	blocks-trivlist-00 \
         blocks-user-keys-01 \
@@ -27,6 +26,7 @@ l3build save -cconfig-block -epdftex,luatex \
 	blocks-item-03 \
 	blocks-item-04 \
 	blocks-itemize-01b \
+    blocks-itemize-02 \
 	blocks-list-01 \
 	blocks-list-01b \
 	blocks-list-02b \
