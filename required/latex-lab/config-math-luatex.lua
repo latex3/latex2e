@@ -6,5 +6,5 @@ checksearch  = true
 testfiledir  = "testfiles-math-luatex"
 
 checkruns     = 2
-
+-- forcecheckruns = true
 
