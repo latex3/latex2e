@@ -6,4 +6,5 @@ l3build save -cconfig-title -eluatex,pdftex \
 	title-005 \
 	title-006 \
 	title-007 \
-	title-008 
+	title-008 \
+	title-empty
