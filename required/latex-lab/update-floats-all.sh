@@ -13,6 +13,7 @@ l3build save -cconfig-float -epdftex,luatex \
 	float-007-gh55 \
 	float-010-outside \
 	marginpar-01 \
-	marginpar-03
-
+	marginpar-03 \
+    float-011-multicol
+    
 exit

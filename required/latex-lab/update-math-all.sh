@@ -25,7 +25,11 @@ l3build save -cconfig-math \
 	mtag-004 \
 	mtag-005-intertext \
         tagging-762 \
-        tagging-809
+        tagging-809 \
+	mathml-AF-ex1\
+	mathml-AF-hash\
+	mathml-write\
+	math-phantom        
 
 exit
 

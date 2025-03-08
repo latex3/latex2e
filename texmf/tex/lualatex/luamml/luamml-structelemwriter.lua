@@ -123,7 +123,7 @@ local function write_elem(tree, stash)
   end
   for _, elem in ipairs(tree) do
     if type(elem) ~= 'string'  and not elem['tex:ignore']  then
-      if elem['intent']==':equationlabel' and ltx.__tag.struct.luamml.labels then
+      if elem['intent']==':equation-label' and ltx.__tag.struct.luamml.labels then
         if #ltx.__tag.struct.luamml.labels > 0 then         
          -- print("CHECK LABEL STRUCTURE: ",table.serialize(elem), table.serialize(ltx.__tag.struct.luamml.labels))
         local num= table.remove(ltx.__tag.struct.luamml.labels,1) 
