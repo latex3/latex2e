@@ -329,6 +329,15 @@ special conventions used for tagging sockets. So we now have
 \cs{AssignTaggingSocketPlug}.
 
 
+\subsection{Promoting PDF 2.0}
+
+PDF 2.0 is a requirement for accessible PDF containing math as the
+MathML namespace isn't supported by earlier PDF versions. \LaTeX{}
+will therefore set PDF 2.0 as the default version if
+\cs{DocumentMetadata} is used. A different PDF version can be set with
+the \texttt{pdfversion} key.
+
+
 \subsection{New value \texttt{latest} for \texttt{testphase} key}
 
 The \texttt{testphase} key now takes also the value \texttt{latest}.
@@ -349,14 +358,36 @@ document preamble that accepts a comma list with the values
 (attach MathML associated file) or \texttt{tex-AF} (attach the TeX
 source).
 
+\subsection{The use of \texttt{\$\$...\$\$} for math displays}
 
-\subsection{Promoting PDF 2.0}
+In \LaTeX{} using the plain \TeX{} method \verb=$$...$$= to mark up a
+math display is not officially supported because it produces a fixed
+visual result that it not receptive to style changes such as the
+\texttt{fleqn} option. Instead, the recommended way is to use
+\verb=\[ ... \]= or the \env{displaymath} environment. However, many
+users used this input method in their documents, so we do our best to
+support it when accessible PDFs are to be produced, but one should be
+aware that it has some limitations.
 
-PDF 2.0 is a requirement for accessible PDF containing math as the
-MathML namespace isn't supported by earlier PDF versions. \LaTeX{}
-will therefore set PDF 2.0 as the default version if
-\cs{DocumentMetadata} is used. A different PDF version can be set with
-the \texttt{pdfversion} key.
+In contrast, using \verb=$$= in environment definitions for special
+math environments (like those defined in \pkg{amsmath}) makes it
+impossible to use such environments in documents that are
+tagged. Instead,  these definitions should make use of the kernel commands
+\cs{dollardollar@begin} and \cs{dollardollar@end} to specify where the
+math display starts and ends. This is an essential requirement to
+make a package or a class compatible with tagging and allowing it to
+be used when producing accessible documents.
+
+Package and class developer can very easily prepare their code in this
+respect by using
+\begin{verbatim}
+\providecommand\dollardollar@begin{$$}
+\providecommand\dollardollar@end{$$}
+\end{verbatim}
+and replace every usage of \verb=$$= with the appropriate start and
+end command. By adding the \cs{providecommand} lines in the package or
+class, this works also with older \LaTeX{} kernels.
+
 
 \subsection{Fixing the spacing after display math}
 
@@ -389,6 +420,31 @@ In \LuaTeX{} the situation is much better because there the structures can
 be added later when the formula processing has already finished.
 %
 \taggingissue{762}
+
+
+\subsection{Local changes to the spacing around math displays}
+
+Due to \TeX{}'s low-level handling of display math, it is very difficult
+to attach tagging code to such display formulas whilst ensuring that such code
+always stays on the same page as the formula, i.e., it has to be
+attached before \TeX{} places a \cs{postdisplaypenalty} onto the
+page. There is, however, no way to inject code in the middle of this
+\TeX{} process, which is why we have to resort to complex gymnastics:
+we set \cs{postdisplaypenalty} locally to 10000 and also make sure
+that \cs{belowdisplayskip} when used by \TeX{} is negative. Then we
+let \TeX{} do its job and afterwards regain control via
+\cs{aftergroup} and insert the tagging code.  Finally, we add the real
+\cs{postdisplaypenalty} and a corrected space.
+
+With our first implementation of this approach it was not
+possible for a user to add an explicit \cs{postdisplaypenalty} or a
+one-off \cs{belowdisplayskip} setting into the formula. We have now
+slightly altered our algorithm making such user adjustments possible
+again.
+%
+\taggingissue{809}
+
+
 
 \section{New or improved commands}
 
@@ -752,6 +808,20 @@ change later on. This has been corrected and the arguments are
 fully expanded when the declaration is made.
 %
 \githubissue{1675}
+
+
+\subsection{Ensure that late \cs{write} commands aren't lost}
+
+A non-\cs{immediate} \cs{write} command that is used after the final
+page has been shipped out is never written because it waits for
+another \cs{shipout} to happen.  After the last page has been shipped
+out, we therefore force further \cs{write} calls to be always
+\cs{immediate}; this ensures that they get written even though we are
+not going to ship out any more pages. This change of behavior is
+implemented just before the \texttt{enddocument/afterlastpage} hook
+because that hook may contain such \cs{write} commands.
+%
+\githubissue{1689}
 
 
 
