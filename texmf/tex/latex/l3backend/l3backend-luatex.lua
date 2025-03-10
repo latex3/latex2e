@@ -7,7 +7,7 @@
 -- l3backend-color.dtx  (with options: `lua')
 -- l3backend-opacity.dtx  (with options: `lua')
 -- 
--- Copyright (C) 2023-2025 The LaTeX Project
+-- Copyright (C) 2023,2024 The LaTeX Project
 -- 
 -- It may be distributed and/or modified under the conditions of
 -- the LaTeX Project Public License (LPPL), either version 1.3c of
