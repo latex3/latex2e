@@ -44,6 +44,48 @@ lua.get_functions_table()[funcid] = function()
   set_row_attribute('columnalign', token.scan_argument())
 end
 
+-- This function is used to add a intent :continued-row to
+-- rows of a split environment.
+-- we assume that the table is a mtable with mrow with mtd. 
+-- we check row 2..n. If the first cell has only one element and
+-- for this element 'tex:ignore' has been set, we assume a continued row and
+-- set the intent on the mrow.
+local function add_intent_continued_row (table)
+  for index,rowtable in ipairs(table) do
+   if table[index][1] and table[index][1][1] then -- just for safety ...
+     if index > 1 and #table[index][1]==1 and table[index][1][1]['tex:ignore'] then
+      table[index]['intent']=':continued-row'
+     end
+   end
+  end
+end
+
+-- This function add an intent =":pause-medium" on every second mtd in a table
+-- currently it is also on the first (after the label) but this could be changed
+-- used in __luamml_amsmath_finalize_table:n for 
+-- 'align' or 'alignat' or 'flalign' or  'xalignat' or 'xxalignat'
+local function add_intent_pause (mmltable)
+  for mtrindex,mtrtable in ipairs(mmltable) do
+    for mtdindex,mtdtable in ipairs(mtrtable) do
+      if (mtdindex % 2 == 0) then
+       mtdtable['intent']=':pause-medium'
+      end 
+    end
+  end
+end
+
+
+-- debug function for tables
+-- activate with \directlua{debugmtable=2} or \directlua{debugmtable='split'}
+local function debug_mtable (mtable,kind)
+ if debugmtable and (debugmtable==2) or (debugmtable==kind) then
+   texio.write_nl('==============')
+   texio.write_nl(kind)
+   texio.write_nl(table.serialize(mtable))
+   texio.write_nl('==============')
+ end
+end
+
 do
   local saved
   funcid = luatexbase.new_luafunction'__luamml_amsmath_save_inner_table:n'
@@ -51,9 +93,14 @@ do
   lua.get_functions_table()[funcid] = function()
     -- TODO: Error handling etc
     local kind = token.scan_argument()
+    kind = kind:gsub("*","")
     local mml_table = get_table()
     if not mml_table then return end
     mml_table.displaystyle = true
+    mml_table.class=kind
+    if kind=="split" then
+     add_intent_continued_row (mml_table)
+    end
     local columns = node.count(node.id'align_record', tex.lists.align_head)//2
     mml_table.columnalign = kind == 'gathered' and 'center' or string.rep('right left', columns, ' ')
     local spacing = {}
@@ -61,6 +108,7 @@ do
       spacing[#spacing+1] = n.width == 0 and '0' or string.format('%.3fpt', n.width/65781.76)
     end
     mml_table.columnspacing = #spacing > 3 and table.concat(spacing, ' ', 2, #spacing-2) or nil
+    debug_mtable(mml_table,kind)
     saved = mml_table
   end
 
@@ -70,10 +118,12 @@ do
     -- TODO: Error handling etc
     local mml_table = get_table()
     mml_table.align = 'axis'
+    mml_table.class='smallmatrix'
     mml_table.columnalign = 'center'
     mml_table.columnspacing = '0.278em'
     mml_table.rowspacing = string.format('%.3fpt', tex.lineskip.width/65781.76)
     saved = {[0] = 'mpadded', width = '+0.333em', lspace = '0.167em', mml_table}
+    debug_mtable(mml_table,kind)
     saved = mml_table
   end
 
@@ -97,18 +147,26 @@ token.set_lua('__luamml_amsmath_finalize_table:n', funcid)
 lua.get_functions_table()[funcid] = function()
   -- TODO: Error handling etc
   local kind = token.scan_argument()
+  kind = kind:gsub("*","")
   local mml_table = get_table()
   if not mml_table then return end
   mml_table.displaystyle = true
+  mml_table.class=kind
+  -- this should perhaps be configurable and extendable
+  if kind == 'align' or 'alignat' or 'flalign' or  'xalignat' or 'xxalignat' then
+   mml_table.intent=":system-of-equations"
+   add_intent_pause (mml_table)
+  end
   local columns = node.count(node.id'align_record', tex.lists.align_head)//2
-  mml_table.columnalign = kind == 'align' and string.rep('right left', columns, ' ') or nil
+  mml_table.columnalign = kind == 'align' and 'left '..string.rep('right left', columns, ' ') or nil
   mml_table.width = kind == 'multline' and '100%' or nil
   -- mml_table.side = kind == 'multline' and 'rightoverlap' or nil
   local spacing = {}
   for n in node.traverse_id(node.id'glue', tex.lists.align_head) do
     spacing[#spacing+1] = n.width == 0 and '0' or '.8em'
   end
-  mml_table.columnspacing = #spacing > 3 and table.concat(spacing, ' ', 2, #spacing-2) or nil
+  mml_table.columnspacing = #spacing > 3 and "0 "..table.concat(spacing, ' ', 2, #spacing-2) or nil
+  debug_mtable(mml_table,kind)
   save_result(mml_table, true)
 end
 

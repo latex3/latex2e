@@ -302,6 +302,44 @@ developers; more documentation on those can be found in
 
 \section{News from Tagged PDF project}
 
+\emph{write intro}
+
+
+\subsection{Socket declarations for tagging  support}
+
+A lot of the tagging support in packages is handled through the socket
+and plug mechanism that we introduced in \LaTeX{}
+2023-11-01~\cite{41:ltnews38}. Sockets offer an easy to use interface
+for package developers to inject special code at defined places that
+can be changed from the outside, for example, to alter the processing.
+
+For the tagging support we use a special set of sockets that are
+executed through \cs{UseTaggingSocket} instead of the normal
+\cs{UseSocket} call. This allows us to turn tagging off or on at high
+speed with \cs{SuspendTagging} and \cs{ResumeTagging} without the need
+to individually assign different plugs to the many tagging
+sockets~\cite{41:ltnews39}. This is sometimes necessary, for example,
+when trial typesetting some material several times.
+
+In the current release we now offer also dedicated declaration
+commands for the tagging socket (instead of using the underlying
+general socket interface directly), because this better supports the
+special conventions used for tagging sockets. So we now have
+\cs{NewTaggingSocket}, \cs{NewTaggingSocketPlug}, and
+\cs{AssignTaggingSocketPlug}.
+
+
+\subsection{Promoting PDF 2.0}
+
+PDF 2.0 is a requirement for accessible PDF containing math, since the
+MathML namespace isn't supported by earlier PDF versions. \LaTeX{}
+will therefore set PDF 2.0 as the default version if
+\cs{DocumentMetadata} is used. A different PDF version can be set with
+the \texttt{pdfversion} key.
+
+
+\subsection{New value \texttt{latest} for \texttt{testphase} key}
+
 The \texttt{testphase} key now takes also the value \texttt{latest}.
 This will load all modules that we recommend so that it is not
 necessary to specify individual modules. The list of loaded modules
@@ -309,19 +347,49 @@ will be adjusted as needed when the project progresses. For reference,
 it is also written to the log.
 
 
-\emph{to write}
 
 \subsection{Setting up math tagging}
 
-With the \LuaTeX{} engine there are now various options for accessible math described in full details in latex-lab-math.pdf. To simplify the setup a new
-key \texttt{math/setup} can be used that  accepts a comma list with the values \texttt{mathml-SE} (add MathML structure element), \texttt{mathml-AF}
-(attach MathML associated file) or \texttt{tex-AF} (attach the TeX source).
+With the \LuaTeX{} engine there are now various options for accessible
+math described in full detail in \texttt{latex-lab-math.pdf}. To
+simplify the setup a new key \texttt{math/setup} can be used in the
+document preamble that accepts a comma list with the values
+\texttt{mathml-SE} (add MathML structure element), \texttt{mathml-AF}
+(attach MathML associated file) or \texttt{tex-AF} (attach the TeX
+source).
 
+\subsection{The use of \texttt{\$\$...\$\$} for displays math}
 
-\subsection{Promoting PDF 2.0}
+In \LaTeX{} using the plain \TeX{} method \verb=$$...$$= to mark up a
+display math formula is not officially supported because it produces a fixed
+visual result that it not receptive to style changes such as the
+\texttt{fleqn} option. Instead, the recommended way is to use
+\verb=\[ ... \]= or the \env{displaymath} environment. However, many
+users used this input method in their documents, so we do our best to
+support it when accessible PDFs are to be produced; but one should be
+aware that it has some limitations.
 
-PDF 2.0 is a requirement for accessible PDF containing math as the MathML name spaces isn't supported by earlier PDF versions. \LaTeX{} will therefore set
-PDF 2.0 as default version if \cs{DocumentMetadata} is used. A different PDF version can be set with the \texttt{pdfversion} key.  
+In contrast, using \verb=$$= in environment definitions for special
+math environments (like those defined in \pkg{amsmath}) makes it
+impossible to use such environments in documents that are
+tagged.
+Therefore, the kernel now contains these two commands:
+\cs{dollardollar@begin} and \cs{dollardollar@end}.
+These new commands must be used by packages and classes to specify
+where a display math formula starts and ends: their use is essential in
+order to make the package or a class compatible with tagging and allowing it to
+be used when producing accessible documents.
+
+Package and class developer can very easily prepare their code in this
+respect by using
+\begin{verbatim}
+\providecommand\dollardollar@begin{$$}
+\providecommand\dollardollar@end{$$}
+\end{verbatim}
+and replacing every usage of \verb=$$= with the appropriate start or
+end command. By adding these \cs{providecommand} lines in the package or
+class, this then works also with older \LaTeX{} kernels.
+
 
 \subsection{Fixing the spacing after display math}
 
@@ -335,7 +403,7 @@ can't, for example, look backwards past such a whatsit node so
 consecutive spaces that are normally collapsed into one, suddenly
 appear both, if such a node separates them.
 
-The situation is especially complicated with math displays, because
+The situation is especially complicated with displays math formulas, because
 there \TeX{} adds penalties and spaces with low-level procedures, that
 are not directly accessible from the macro level, and the tagging
 structures have to appear somewhere in the middle of that to ensure
@@ -354,6 +422,31 @@ In \LuaTeX{} the situation is much better because there the structures can
 be added later when the formula processing has already finished.
 %
 \taggingissue{762}
+
+
+\subsection{Local changes to the spacing around display math}
+
+\emph{todo: combine text with previous entry}
+
+Due to \TeX{}'s low-level handling of display math, it is very difficult
+to attach \TeX{} code for tagging to such display math formulas whilst ensuring that such code
+always stays on the same page as the formula, i.e., it has to be
+attached before \TeX{} places a \cs{postdisplaypenalty} onto the
+page. There is, however, no way to inject code in the middle of this
+\TeX{} process, which is why we have to resort to complex gymnastics:
+we set \cs{postdisplaypenalty} locally to 10000 and also make sure
+that \cs{belowdisplayskip} when used by \TeX{} is negative. Then we
+let \TeX{} do its job and afterwards regain control via
+\cs{aftergroup} and insert the tagging code.  Finally, we add the real
+\cs{postdisplaypenalty} and a corrected space.
+
+With our first implementation of this approach it was not
+possible for a user to add an explicit \cs{postdisplaypenalty} or a
+one-off \cs{belowdisplayskip} setting inside the formula. We have now
+slightly altered our algorithm making such user adjustments possible
+again.
+%
+\taggingissue{809}
 
 
 
@@ -398,13 +491,13 @@ body of an environment in a verbatim-like way. Like the existing
 new specifier is usable both for typesetting and collecting file contents (the
 letter~\texttt{c} indicates \enquote{collect code}). Thus, we may use
 \begin{verbatim}
-\NewDocumentEnvironment
-  {MyVerbatim}{!O{\ttfamily} c}
-  {\begin{center}#1 #2\end{center}} {}
-\begin{MyVerbatim}[\ttfamily\itshape]
-  % Some code is shown here
-  $y = mx + c$
-\end{MyVerbatim}
+  \NewDocumentEnvironment
+    {MyVerbatim}{!O{\ttfamily} c}
+    {\begin{center}#1 #2\end{center}} {}
+  \begin{MyVerbatim}[\ttfamily\itshape]
+    % Some code is shown here
+    $y = mx + c$
+  \end{MyVerbatim}
 \end{verbatim}
 to obtain
 % We can't actually use ...
@@ -543,8 +636,21 @@ because there, they were redefined to expect just a mandatory argument
 and then do nothing. We have now changed that behavior so that the
 redefinitions in these places accept an extended syntax.
 %
+
 \githubissue{311}
 
+\subsection{Tracing lost characters}
+
+In LaTeX News 33~\cite{41:ltnews33} we announced that \cs{tracingall} changes
+\cs{tracinglostchars} to an error condition. This change has been reverted and
+\cs{tracingall} and \cs{tracingnone} no longer alter \cs{tracinglostchars} but
+retain its current setting.
+
+The default value used in \LaTeX{} is set so that lost character information is
+written to the log and terminal. Users may wish to make this into an error, in
+which case they should set the value to~5 (not~3); this works in all engines.
+
+\githubissue{1687}
 
 \section{Bug fixes}
 
@@ -658,6 +764,70 @@ necessary.
 \githubissue{1669}
 
 
+\subsection{Avoid problems with page breaks in the middle of a \env{verbatim}-like environment}
+
+If a page break occurs in the middle of an environment that sets up
+special \cs{catcode} settings, e.g., a \env{verbatim} environment,
+then these settings will remain active while the output routine builds the
+page. This is normally harmless, because the material used for the
+page has already been tokenized earlier, so that the \cs{catcode}
+changes do not matter. However, in special circumstances tokenization
+can happen during that time, for example, if the header material reads
+in a file, or if it contains a command that uses \cs{scantokens} and
+this way retokenizes some material using the verbatim settings.
+
+This has now been fixed and \LaTeX{} explicitly resets the
+\cs{catcode} values to their default settings when entering the output
+routine. Furthermore, packages that make changes to the tokenization
+that go beyond what \env{verbatim} does can use the newly introduced
+hook \hook{build/page/reset} to add their own resets to the output
+routine processing. This hook is evaluated after \LaTeX{} has done its
+reset, so it is also possible to overwrite \LaTeX{}'s behavior if that
+ever becomes necessary.
+%
+\githubissue{600}
+
+
+\subsection{Fully expand the arguments of \cs{counterwithin} and \cs{counterwithout}}
+
+The arguments of \cs{counterwithin} and \cs{counterwithout} are
+counter names and are used reset one counter if the the other is
+stepped. They also define the representation of that counter, e.g.,
+\begin{verbatim}
+  \renewcommand\thesection
+     {\thechapter.\arabic{section}}
+\end{verbatim}
+However, if one of the counters was implicitly given, e.g.,
+\begin{verbatim}
+  \newcommand\sectioncounter{section}
+  \counterwithin{\sectioncounter}{chapter}
+\end{verbatim}
+we ended up with definitions such as
+\begin{verbatim}
+  \renewcommand\thesection
+     {\thechapter.\arabic{\sectioncounter}}
+\end{verbatim}
+which could lead to strange results if \cs{sectioncounter} would
+change later on. This has been corrected and the arguments are
+fully expanded when the declaration is made.
+%
+\githubissue{1675}
+
+
+\subsection{Ensure that late \cs{write} commands aren't lost}
+
+A non-\cs{immediate} \cs{write} command that is used after the final
+page has been shipped out is never written because it waits for
+another \cs{shipout} to happen.  After the last page has been shipped
+out, we therefore force further \cs{write} calls to be always
+\cs{immediate}; this ensures that they get written even though we are
+not going to ship out any more pages. This change of behavior is
+implemented just before the \texttt{enddocument/afterlastpage} hook
+because that hook may contain such \cs{write} commands.
+%
+\githubissue{1689}
+
+
 
 \section{Documentation}
 
@@ -674,7 +844,21 @@ has now been clarified in the documentation.
 
 
 
-%\section{Changes to packages in the \pkg{amsmath} category}
+\section{Changes to packages in the \pkg{amsmath} category}
+
+\subsection{\cs{numberwithin} is now an alias for \cs{counterwithin}}
+
+The \pkg{amsmath} package offers a \cs{numberwithin} declaration to
+specify that a counter should be reset when some other counter is
+stepped. This is a restricted version of the more general kernel command
+\cs{counterwithin} which was introduced in the \LaTeX{} kernel in 2018
+and extended in 2021~\cite{41:ltnews34}. With the current release we
+have made \cs{numberwithin} an alias for the more powerful
+\cs{counterwithin} and suggest that the latter command is used in new
+documents.
+%
+\githubissue{1673}
+
 
 \section{Changes to packages in the \pkg{graphics} category}
 
@@ -763,6 +947,10 @@ Leslie Lamport.
   \emph{\LaTeXe{} news 31}. February 2020.
   \url{https://latex-project.org/news/latex2e-news/ltnews31.pdf}
 
+\bibitem{41:ltnews33} \LaTeX{} Project Team.
+  \emph{\LaTeXe{} news 33}. June 2021.
+  \url{https://latex-project.org/news/latex2e-news/ltnews33.pdf}
+
 \bibitem{41:ltnews34} \LaTeX{} Project Team.
   \emph{\LaTeXe{} news 34}. November 2021.
   \url{https://latex-project.org/news/latex2e-news/ltnews34.pdf}
@@ -774,6 +962,10 @@ Leslie Lamport.
 \bibitem{41:ltnews36} \LaTeX{} Project Team.
   \emph{\LaTeXe{} news 36}. November 2022.
   \url{https://latex-project.org/news/latex2e-news/ltnews36.pdf}
+
+\bibitem{41:ltnews38} \LaTeX{} Project Team.
+  \emph{\LaTeXe{} news 38}. November 2023.
+  \url{https://latex-project.org/news/latex2e-news/ltnews38.pdf}
 
 \bibitem{41:ltnews39} \LaTeX{} Project Team.
   \emph{\LaTeXe{} news 39}. June 2024.
