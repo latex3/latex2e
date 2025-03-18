@@ -16,8 +16,8 @@
 %
 % for those people who are interested or want to report an issue.
 %
-\def\ltlabtikzdate{2024-10-09}
-\def\ltlabtikzversion{0.80a}
+\def\ltlabtikzdate{2025-03-18}
+\def\ltlabtikzversion{0.80b}
 %<*driver>
 \documentclass{l3doc}
 \EnableCrossrefs
@@ -54,7 +54,7 @@
 %
 % \section{Introduction}
 %
-% Tagging of \tikzname\ (and other) pictures is non trivial.
+% Tagging of pictures is non trivial.
 %
 % At first pictures generally can have various purposes:
 % \begin{itemize}
@@ -76,52 +76,64 @@
 % \item and naturally there can be all sort of mixtures of these elements.
 % \end{itemize}
 %
-% At second \tikzname\ pictures uses lots of boxes and moves them around
-% and that makes is not easy to get the tagging right --
-% at least with pdflatex where one has to
-% insert the literals at the right time.
+% At second the various packages that allow to draw pictures uses lots of boxes and 
+% moves them around and that makes is not easy to get the tagging right --
+% at least with pdflatex where one has to insert the literals at the right time.
 %
-% At third in some cases, e.g., when the \tikzname\ picture is tagged as Figure,
-% one normally should calculate the BBox.
-% This is currently done with some low-level hacking into the pgf code.
+% At third in some cases, e.g., when the picture is tagged as Figure,
+% one normally should calculate the BBox and this typically require some low-level 
+% hacking into the picture code.
+% 
 %
-% The following is a first try to tag at least some of the \tikzname\ pictures.
+% The following is a first try to handle this problems for \tikzname\ pictures.
 % It is incomplete and should be used with care. Resulting structures and contents should
 % be checked!
+% 
+% The setup should be usable for other packages like pstricks or luamplibs but naturally
+% the \tikzname\ specifics and patches must be replaced by suitable code from these packages.
 %
 % The main idea of the implementation is to use sockets that allow to change the
 % purpose of the \tikzname\ picture. This must be done before the actual environment as
-% \tikzname\ processes the keys too late to allow to do this in the optional argument.
+% \tikzname\ processes the keys too late to allow to do this while it normally
+% processes its the optional argument.
 %
 % \subsection{Tagging recipes}
 %
-% As \tikzname\ pictures have so varied purposes there are a number of
-% \enquote{tagging recipes}. Currently some of the recipe must be set before the
-% \tikzname\ picture with \verb+\tagpdfsetup{graphic/tagging=+\meta{recipe name}\verb+}+.
+% As pictures have so varied purposes there are a number of
+% \enquote{tagging recipes}. The main method to set the recipe is
+% the optional argument: A picture with, e.g., an \texttt{alt} key is 
+% tagged as a Figure. There are also \cs{tagpdfsetup} keys in this module to change the
+% recipe, but it is not clear currently, if this is really useful and 
+% how this can be extended to cover also other
+% picture environments like \texttt{picture} or \texttt{pspicture}. 
+% 
 % The following recipes exist:
 %
 % \begin{description}
-% \item[figure] This is the default recipe.
+% \item[figure] 
 % It surrounds the picture with a \texttt{Figure} tag and adds a BBox.
 % Inside the figure tagging is suspended.
 % Such a figure should have an alternative text which describes the content. This alternative
-% text can be set with the \texttt{alt} key:
+% text must be set with the \texttt{alt} key and the use of the \texttt{alt} key therefore
+% also activates this recipe:
 % \begin{verbatim}
 % \begin{tikzpicture}[alt=A duck]
 % \duck
 % \end{tikzpicture}
 % \end{verbatim}
-% This recipe is meant for meaningful pictures.
+% This recipe is meant for meaningful pictures. 
 %
 % \item[text] This surrounds the graphical parts with an artifact MC and activates
 % tagging on node texts. It is meant for small pictures containing text in a node
 % that should be part of the text flow, e.g. a todo.
 %
 % \item[artifact] This marks the picture as an artifact. This is meant for
-% decorations.
+% decorations. This recipe is activated if the \texttt{artifact} key is used or
+% if the artifact tagging recipe is activated in \cs{tagpdfsetup} (see below).
 %
-% \item[symbol] This is meant for pictures where the drawing should
-% represent a single symbol. Such pictures should then add an actualtext:
+% \item[actualtext] This is meant for pictures where the drawing should
+% represent a single symbol or small number of symbols. 
+% Such pictures should then add an \texttt{actualtext}:
 % \begin{verbatim}
 % \begin{tikzpicture}[actualtext=A]
 % % drawing of a A
@@ -148,11 +160,13 @@
 %
 % \subsection{Sockets}
 %
-% \begin{socketdecl}{tagsupport/tikzpicture/init,
-% tagsupport/tikzpicture/begin,
-% tagsupport/tikzpicture/end}
+% \begin{socketdecl}{
+%   tagsupport/tikzpicture/init,
+%   tagsupport/tikzpicture/begin,
+%   tagsupport/tikzpicture/end}
 % Sockets at the begin and the end of a tikzpicture.
-% The argument should process the keys of the picture and switch
+% The argument in the \texttt{init} 
+% should process the keys of the picture and switch
 % the plugs if needed.
 %    \begin{macrocode}
 \NewTaggingSocket{tikzpicture/init}{1}
@@ -161,11 +175,11 @@
 %    \end{macrocode}
 % \end{socketdecl}
 %
-% \begin{socketdecl}{tagsupport/tikzpicture/textbegin,tagsupport/tikzpicture/textend}
+% \begin{socketdecl}{tagsupport/tikzpicture/text/begin,tagsupport/tikzpicture/text/end}
 % Sockets at the end and begin of text parts.
 %    \begin{macrocode}
-\NewSocket{tagsupport/tikzpicture/textbegin}{0}
-\NewSocket{tagsupport/tikzpicture/textend}{0}
+\NewSocket{tagsupport/tikzpicture/text/begin}{0}
+\NewSocket{tagsupport/tikzpicture/text/end}{0}
 %    \end{macrocode}
 % \end{socketdecl}
 %%
@@ -175,22 +189,23 @@
 % \begin{plugdecl}{default (tagsupport/tikzpicture/init)}
 % The init socket takes a list of keys, processes the known keys to setup tagging options
 % and then assigns the plugs.
-% 
+% TODO: correct module name? 
 %    \begin{macrocode}
 \NewTaggingSocketPlug{tikzpicture/init}{default}
- {
-   \keys_set_known:nn { __tag / tikzpicture } {#1}  
- }
+  {
+    \keys_set_known:nn { __tag / tikzpicture } {#1}  
+  }
 \AssignTaggingSocketPlug{tikzpicture/init}{default}
 %    \end{macrocode}
 % \end{plugdecl}
+% 
 % \begin{plugdecl}{text (tagsupport/tikzpicture/begin),text (tagsupport/tikzpicture/end)}
 % This plug handles the \tikzname\ picture as a text object. So the graphical parts
 % are tagged as artifact, but when we encounter a node we activate tagging there.
 % There is no Bbox.
 %    \begin{macrocode}
 \NewTaggingSocketPlug{tikzpicture/begin}{text}
- {
+  {
    \ifvmode
     {
      \UseTaggingSocket{para/begin}  %check
@@ -207,19 +222,19 @@
    \def\pgfsys@begin@text
     {
       \tag_resume:n{\tikzpicture}
-      \tag_socket_use:n{tikzpicture/textbegin}
+      \tag_socket_use:n{tikzpicture/text/begin}
     }
    \def\pgfsys@end@text
     {
-      \tag_socket_use:n{tikzpicture/textend}
+      \tag_socket_use:n{tikzpicture/text/end}
       \tag_suspend:n{\tikzpicture}
     }
- }
+  }
 \NewTaggingSocketPlug{tikzpicture/end}{text}
- {
+  {
    \tagmcend
    \tag_mc_begin_pop:n{}
- }
+  }
 %    \end{macrocode}
 % \end{plugdecl}
 %
@@ -230,23 +245,22 @@
 % The Bbox will be set (after the second compilation) to the size of the bounding box.
 %    \begin{macrocode}
 \NewTaggingSocketPlug{tikzpicture/begin}{figure}
- {
-   \ifvmode
-    {
-     \tag_socket_use:n{para/begin}
-    }
-   \fi
-   \tag_mc_end_push:
-   \tag_struct_begin:n{tag=Figure,
-    alt=\l__tag_tikzpicture_option_tl%
-    }
-   \bool_set_false:N\l__tag_tikzpicture_usetext_bool
-   \pgfrememberpicturepositiononpagetrue
-   \tag_mc_begin:n{tag=Figure}
- }
+  {
+    \ifvmode
+     {
+      \tag_socket_use:n{para/begin}
+     }
+    \fi
+    \tag_mc_end_push:
+    \tag_struct_begin:n{tag=Figure,
+     alt=\l__tag_tikzpicture_option_tl
+     }
+    \pgfrememberpicturepositiononpagetrue
+    \tag_mc_begin:n{tag=Figure}
+  }
 
 \NewTaggingSocketPlug{tikzpicture/end}{figure}
- {
+  {
    \tag_mc_end:
    \cs_set:Npn\pgfqpoint##1##2
     {
@@ -281,11 +295,11 @@
 %
 % \begin{plugdecl}{actualtext (tagsupport/tikzpicture/begin),actualtext (tagsupport/tikzpicture/end)}
 % This plug handles the \tikzname\ picture as a symbol with an actualtext.
-% It tags the content as a Span and expects and actual text.
+% It tags the content as a Span and expects an actualtext.
 % Internally tagging is suspended.
 %    \begin{macrocode}
 \NewTaggingSocketPlug{tikzpicture/begin}{actualtext}
- {
+  {
    \ifvmode
     {
      \tag_socket_use:n{para/begin}
@@ -294,10 +308,10 @@
    \tag_mc_end_push:
    \tag_struct_begin:n{tag=Span,actualtext=\l__tag_tikzpicture_option_tl}
    \tag_mc_begin:n{}
- }
+  }
 
 \NewTaggingSocketPlug{tikzpicture/end}{actualtext}
- {
+  {
    \tag_mc_end:
    \tag_struct_end:
    \tag_mc_begin_pop:n{}
@@ -310,72 +324,68 @@
 % So it is surrounded by an artifact MC and internal text does not restart tagging.
 %    \begin{macrocode}
 \NewTaggingSocketPlug{tikzpicture/begin}{artifact}
- {
-   \ifvmode
-    {
-     \tag_socket_use:n{para/begin}
-    }
-   \fi
-   \tag_mc_end_push:
-   \tag_mc_begin:n{artifact}
- }
+  {
+    \ifvmode
+     {
+      \tag_socket_use:n{para/begin}
+     }
+    \fi
+    \tag_mc_end_push:
+    \tag_mc_begin:n{artifact}
+  }
 
 \NewTaggingSocketPlug{tikzpicture/end}{artifact}
- {
-   \tag_mc_end:
-   \tag_mc_begin_pop:n{}
+  {
+    \tag_mc_end:
+    \tag_mc_begin_pop:n{}
   }
 %    \end{macrocode}
 % \end{plugdecl}
+% 
 %  By default we use the text plugs
 %    \begin{macrocode}
 \AssignTaggingSocketPlug{tikzpicture/begin}{text}
 \AssignTaggingSocketPlug{tikzpicture/end}{text}
 %    \end{macrocode}
 %
-% We add the begin socket to the \cs{tikz@picture} and the \cs{tikz@opt} command. 
-% This allows us to process the keys of the picture and then to suspend tagging.
+% We add the begin socket to the \cs{tikz@picture} command (it is also used
+% by \cs{tikz}). 
+% This allows us to process the keys of the picture, assign the plugs 
+% and then to suspend tagging.
 %    \begin{macrocode}
 \AddToHookWithArguments{cmd/tikz@picture/before}
- {
-  \tag_socket_use:nn{tikzpicture/init}{#1}
-  \tag_socket_use:n {tikzpicture/begin}
-  \tag_suspend:n{\tikzpicture}
- }
-
-\AddToHookWithArguments{cmd/tikz@opt/before}
- {
-  \tag_socket_use:nn{tikzpicture/init}{#1}
-  \tag_socket_use:n {tikzpicture/begin}
-  \tag_suspend:n{\tikzpicture}
- }
+  {
+    \tag_socket_use:nn{tikzpicture/init}{#1}
+    \tag_socket_use:n {tikzpicture/begin}
+    \tag_suspend:n{\tikzpicture}
+  }
 %    \end{macrocode}
 % The end socket is in the \cs{endpgfpicture} command.
 %    \begin{macrocode}
 \AddToHook{cmd/endpgfpicture/after}
- {
-  \tag_resume:n{\tikzpicture}
-  \tag_socket_use:n{tikzpicture/end}
- }
+  {
+    \tag_resume:n{\tikzpicture}
+    \tag_socket_use:n{tikzpicture/end}
+  }
 %    \end{macrocode}
 %
-% \begin{plugdecl}{text (tagsupport/tikzpicture/textbegin),
-%  text (tagsupport/tikzpicture/textend)}
+% \begin{plugdecl}{default (tagsupport/tikzpicture/text/begin),
+%  default (tagsupport/tikzpicture/text/end)}
 % These sockets are used inside the text
 % plugs and ends the previous mc and restarts it after the text.
 %    \begin{macrocode}
-\NewTaggingSocketPlug{tikzpicture/textbegin}{text}
- {
-  \tag_mc_end_push:
-  \tag_mc_begin:n{}
- }
-\NewTaggingSocketPlug{tikzpicture/textend}{text}
- {
-  \tag_mc_end:
-  \tag_mc_begin_pop:n{}
- }
-\AssignTaggingSocketPlug{tikzpicture/textbegin}{text}
-\AssignTaggingSocketPlug{tikzpicture/textend}{text}
+\NewTaggingSocketPlug{tikzpicture/text/begin}{default}
+  {
+   \tag_mc_end:
+   \tag_mc_begin:n{}
+  }
+\NewTaggingSocketPlug{tikzpicture/text/end}{default}
+  {
+   \tag_mc_end:
+   \tag_mc_begin:n{artifact}
+  }
+\AssignTaggingSocketPlug{tikzpicture/text/begin}{default}
+\AssignTaggingSocketPlug{tikzpicture/text/end}{default}
 %    \end{macrocode}
 % \end{plugdecl}
 %
@@ -383,7 +393,7 @@
 % These keys will be processed directly at the begin of the picture commands
 % to change the tagging behaviour. They should also be usable for other 
 % picture environments but for now we make the tikz specific.
-% 
+% TODO: thinks about module name
 %    \begin{macrocode}
 \tl_new:N \l__tag_tikzpicture_option_tl
 \keys_define:nn { __tag / tikzpicture }
@@ -402,22 +412,22 @@
      },
     artifact   .code:n = 
      {
-       \AssignSocketPlug{tagsupport/tikzpicture/begin}{artifact}
-       \AssignSocketPlug{tagsupport/tikzpicture/end}{artifact}
+       \AssignTaggingSocketPlug{tikzpicture/begin}{artifact}
+       \AssignTaggingSocketPlug{tikzpicture/end}{artifact}
      }
   }
 %    \end{macrocode}
 % 
 %   
-% \subsection{Hooking into \tikzname}
+% \subsection{Key definitions for \tikzname}
 %    \begin{macrocode}
 \AddToHook{package/tikz/after}
- {
+  {
 %    \end{macrocode}
-% we add an alt, actualtext and artifact key to avoid errors.
+% we add a dummy definition for alt, actualtext and artifact key to avoid errors.
 %    \begin{macrocode}
    \tikzset{alt/.code={},actualtext/.code={},artifact/.code={}}
- }
+  }
 %    \end{macrocode}
 %
 % \subsection{tagpdf keys to switch the recipes}
@@ -428,6 +438,7 @@
    graphic/tagging .choice:,
    graphic/tagging/figure .code:n =
     {
+      \tl_set:Nn \l__tag_tikzpicture_option_tl {Alternative~text~missing!}
       \AssignTaggingSocketPlug{tikzpicture/begin}{figure}
       \AssignTaggingSocketPlug{tikzpicture/end}{figure}
     },
@@ -449,38 +460,8 @@
  }
 %    \end{macrocode}
 %
-% Handle todonotes. TODO This perhaps should go into firstaid instead
-%    \begin{macrocode}
-\AddToHook{package/todonotes/after}
-{
-\NewSocket{tagsupport/todonotes/todo}{0}
-\NewSocketPlug{tagsupport/todonotes/todo}{default}
- {\tagpdfsetup{graphic/tagging=text}}
-\AssignSocketPlug{tagsupport/todonotes/todo}{default}
-%
-
-\renewcommand{\todo}[2][]{%
-  % Needed to output any dangling \item of a noskip section (see #36):
-  \if@inlabel \leavevmode \fi
-  \if@noskipsec \leavevmode \fi
-  \if@todonotes@inlinepar
-    \ifhmode
-      \@bsphack
-      \@todonotes@vmodefalse
-    \else
-      \@savsf\@m
-      \@savsk\z@
-      \@todonotes@vmodetrue
-    \fi
-     {\UseTaggingSocket{todonotes/todo}\@todo[#1]{#2}}%
-    \@esphack%
-    \if@todonotes@vmode \par \fi
-  \else%
-    {\UseTaggingSocket{todonotes/todo}\@todo[#1]{#2}}%
-  \fi}
-}
-%
-%    \end{macrocode}
+% Todonotes work with the default text recipe quite ok, details can
+% be handled
 %    \begin{macrocode}
 %</package>
 %    \end{macrocode}
