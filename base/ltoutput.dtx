@@ -30,14 +30,14 @@
 %%% From File: ltoutput.dtx
 %<flafter>\ProvidesPackage{flafter}
 %<fltrace>\ProvidesPackage{fltrace}
-%<flafter,fltrace>       [2025/03/05 v1.4p
+%<flafter,fltrace>       [2025/03/20 v1.4q
 %<flafter>                  Standard LaTeX floats after reference (FMi)]
 %<fltrace>                  Tracing LaTeX floats algorithm (FMi)]
 %
 %<*driver>
 % \fi
 \ProvidesFile{ltoutput.dtx}
-             [2025/03/05 v1.4p LaTeX Kernel (Output Routine)]
+             [2025/03/20 v1.4q LaTeX Kernel (Output Routine)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltoutput.dtx}
@@ -1046,7 +1046,7 @@
 %    would appear that this would be done by a |\leavevmode|.
 %    \begin{macrocode}
 %</2ekernel|fltrace>
-%<latexrelease>\IncludeInRelease{2017/04/15}%
+%<latexrelease>\IncludeInRelease{2025/06/01}%
 %<latexrelease>                 {\newpage}{Check depth of page}%
 %<*2ekernel|latexrelease|fltrace>
 \def \newpage {%
@@ -1061,7 +1061,6 @@
     \global \@inlabelfalse
   \fi
   \if@nobreak \@nobreakfalse \everypar{}\fi
-%  \par
 %    \end{macrocode}
 %    The |\vfil| at the end of the macro before the break penalty will
 %    normally result in the page being run short,  even with |\flushbottom|
@@ -1070,10 +1069,26 @@
 %    is some explicit stretch on the page, say, a |\vfill|, it has the undesired
 %    side-effect, that the last line will not align at its baseline if it
 %    contains characters going below the baseline, as the value of |\prevdepth|
-%    is no longer taken into account by \TeX{}. So we back up by that amount
+%    is no longer taken into account by \TeX{}. So we have to back up by that amount
 %    (or by |\maxdepth| if it is really huge), to mimic the normal behavior
 %    without the |\newpage|.
+%  
+%    In 2027 this was fixed by doing the backing-up here. However the
+%    problem with that is  that if the page contains footnotes the
+%    \cs{skip}\cs{\footins} is  measured from the base line of the last
+%    line and not (as in all other pages) from the bottom of the last
+%    line. One can argue that measuring from the base line is better,
+%    but if that is done it should be done everywhere not just on some
+%    pages.
+
+%    Thus this backing up should only happen if there are no
+%    footnotes. The problem is that is it not known to \LaTeX{} at the
+%    point when \cs{newpage} is called if there are footnotes or not;
+%    that is only determined in the output routine.  We have therefore
+%    moved the code in the newly introduced output routine sockets.
+%  \changes{v1.4q}{2025/03/20}{Remove skip added in 2.4a (footmisc/19)}
 %    \begin{macrocode}
+%  \par
 %  \vskip \glueexpr \@flushglue
 %    \ifdim\prevdepth>\z@
 %      -%
@@ -1086,6 +1101,38 @@
   \vfil
   \penalty -\@M}
 %</2ekernel|latexrelease|fltrace>
+%<latexrelease>\EndIncludeInRelease
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2017/04/15}%
+%<latexrelease>                 {\newpage}{Check depth of page}%
+%<latexrelease>\def \newpage {%
+%<latexrelease>  \if@noskipsec
+%<latexrelease>    \ifx \@nodocument\relax
+%<latexrelease>      \leavevmode
+%<latexrelease>      \global \@noskipsecfalse
+%<latexrelease>    \fi
+%<latexrelease>  \fi
+%<latexrelease>  \if@inlabel
+%<latexrelease>    \leavevmode
+%<latexrelease>    \global \@inlabelfalse
+%<latexrelease>  \fi
+%<latexrelease>  \if@nobreak \@nobreakfalse \everypar{}\fi
+%<latexrelease>  \par
+%<latexrelease>  \ifdim\prevdepth>\z@
+%<latexrelease>     \vskip -%
+%<latexrelease>       \ifdim\prevdepth>\maxdepth
+%<latexrelease>         \maxdepth
+%<latexrelease>       \else
+%<latexrelease>         \prevdepth
+%<latexrelease>       \fi
+%<latexrelease>  \fi
+%<latexrelease>  \vfil
+%<latexrelease>  \penalty -\@M}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
 %<latexrelease>\EndIncludeInRelease
 %<latexrelease>\IncludeInRelease{0000/00/00}%
 %<latexrelease>                 {\newpage}{Check depth of page}%
@@ -1466,10 +1513,11 @@
 %
 %       By default footnotes are attached a distance of
 %       \cs{skip}\cs{footins} (plug \plug{noop}). The socket can be
-%       changed to \plug{on} in which case the skip starts at the
-%       baseline of the last line in \cs{@outputbox} if there is one.
+%       changed to \plug{on}, in which case the skip starts at the
+%       baseline of the last line in \cs{@outputbox} if there is one;
+%       otherwise it starts from the bottom of the box.
 %
-%       \textbf{Experimental!} It might can generalizerd (and renamed) to be
+%       \textbf{Experimental!} This socket might get generalized (and renamed) to be
 %       usable for other attachements to \cs{@outputbox}.
 %
 %    \end{description}
@@ -2235,15 +2283,10 @@
 %    \pkg{footmisc} is called with an option specifying the
 %    footnote placement, i.e., not  in the default case.
 %    In new documents we apply it always.
+%  \changes{v1.4q}{2025/03/20}{Remove a `fil' bottom skip even if we
+%    are in ragged bottom typesetting (footmisc/19)}
 %    \begin{macrocode}
 \def\@outputbox@removebskip{%
-%    \end{macrocode}
-%    We first test if we are in a \cs{raggedbottom} layout. If not we
-%    do nothing, but we don't disable the code because
-%    \cs{raggedbottom} may get used only for some parts of the
-%    document.
-%    \begin{macrocode}
-%%  \ifx\@textbottom\relax \else
 %    \end{macrocode}
 %    In some special circumstances the \cs{@outputbox} might be
 %    void. As \cs{@outputbox@append} below would change this, we
@@ -2251,33 +2294,32 @@
 %    because otherwise we can't detect that situation any longer
 %    (needed, for example, in \pkg{ftnright}). 
 %    \begin{macrocode}
-    \ifvoid \@outputbox
-      \global\let\@outputbox@reinsertbskip\relax
-    \else
+   \ifvoid \@outputbox
+     \global\let\@outputbox@reinsertbskip\relax
+   \else
 %    \end{macrocode}
 %    If not, we drop the final skip at the end of \cs{@outputbox}
 %    provided there is one and it has a glue stretch
 %    order of 1 or more (i.e., contains a \texttt{fil} or \texttt{fill} part).
 %    \begin{macrocode}
-      \@outputbox@append{%
-        \@tempskipa\lastskip
-        \ifnum \gluestretchorder\@tempskipa>\z@
-          \unskip
+     \@outputbox@append{%
+       \@tempskipa\lastskip
+       \ifnum \gluestretchorder\@tempskipa>\z@
+         \unskip
 %    \end{macrocode}
 %        
 %  \begin{macro}{\@outputbox@reinsertbskip}
-%    We also record the value so that it can be reinserted
+%    We also record its value so that it can be reinserted
 %    elsewhere. As we have to do this globally, we also need to
 %    explicitly reset it if we don't find any such glue.
 %    \begin{macrocode}
-          \xdef\@outputbox@reinsertbskip
-              {\noexpand\@outputbox@append{\vskip\the\@tempskipa}}%
-        \else
-          \global\let\@outputbox@reinsertbskip\relax
-        \fi
-      }%
-   \fi
-%% \fi
+         \xdef\@outputbox@reinsertbskip
+             {\noexpand\@outputbox@append{\vskip\the\@tempskipa}}%
+       \else
+         \global\let\@outputbox@reinsertbskip\relax
+       \fi
+     }%
+  \fi
 }
 %    \end{macrocode}
 %    We need a trivial top-level definition for
@@ -2361,10 +2403,18 @@
 %    Then the footnotes are appended:
 %    \begin{macrocode}
      \@outputbox@append{%
+%    \end{macrocode}
+%    First we call a socket which may or may not back up by the depth
+%    of the \cs{@outputbox} so that we start adding from the baseline
+%    of the last line.
+%    Then we add the skip above the footnotes.
+%  \changes{v1.4q}{2025/03/20}{Add experimantal socket for baseline
+%    attachment of footnotes -- subject to change (footmisc/19)}
+%    \begin{macrocode}
        \UseSocket{build/column/footnotes/baselineattach}%
        \vskip \skip\footins
 %    \end{macrocode}
-%    This is socket adjusts the tagging of the \cs{footins} box, if necessary.
+%    The next socket adjusts the tagging of the \cs{footins} box, if necessary.
 %    \begin{macrocode}
        \UseTaggingSocket{build/column/footins}%
 %    \end{macrocode}
@@ -2374,7 +2424,7 @@
          \normalcolor
          \footnoterule
 %    \end{macrocode}
-%    Support for \pkg{pdfcolfoot}, eventually this can go once color
+%    Support for \pkg{pdfcolfoot}; eventually this can go once color
 %    is properly supported. The csname is constructed in case the command
 %    is not defined, i.e., the package not loaded.
 %  \task{fmi}{Fix when no longer needed}       
@@ -2604,26 +2654,57 @@
 \NewSocketPlug {build/column/outputbox}{footnotes-floats-legacy} {%
 %    \end{macrocode}
 %    In the legacy case we don't really want to take out the bottom
-%    skip, but rather then altering \cs{@outputbox@removebskip} in
+%    skip, but rather than altering \cs{@outputbox@removebskip} in
 %    \cs{makecol} to do nothing, which we would then have to undo in
 %    each other layout, we simply reinsert the dropped skip
 %    immediately again.
+%
+%    In the legacy case there is, however, one other thing that needs
+%    doing: if there was a \cs{vfil} at the bottom of the page (e.g.,
+%    from \cs{newpage}) and there are no footnotes, then we need to back up
+%    by the depth of the last line in the page box. Otherwise you
+%    might end up with incorrect alignment if there is a higher-order
+%    fill on the page (e.g., \cs{vfill}) that pushes the text material
+%    to the bottom because then the depth will not be taken into
+%    account by \TeX{}.
+%    
+%    Given, that a bottom skip was taken out earlier, we can look at
+%    the \cs{@outputbox@depth} value for this and back up by that
+%    amount. If there was no bottom skip (indicated by
+%    \cs{@outputbox@reinsertbskip} being \cs{relax}), we do nothing.
+%
+%  \changes{v1.4q}{2025/03/20}{Back up by \cs{dp}\cs{@outputbox} in
+%    the \texttt{footnotes-floats-legacy} plug if there are no
+%    footnotes (footmisc/19)}
 %    \begin{macrocode}
   \ifx\@outputbox@reinsertbskip\relax
   \else
+%    \end{macrocode}
+%    Otherwise, if we have footnotes we also do nothing.
+%    \begin{macrocode}
     \@if@footnotes@TF{}%
+%    \end{macrocode}
+%    Otherwise, if the depth is greater than zero we back up. If it is
+%    zero, there is no point doing anything and if the depth is
+%    negative it must have been deliberately set to this value in
+%    which case we aren't altering it either.
+%    \begin{macrocode}
       {%
-       \@outputbox@append{%
-         \ifdim\@outputbox@depth=\z@
-         \else
+        \ifdim\@outputbox@depth>\z@
+%    \end{macrocode}
+%    If the depth is positive we back up by appending a skip at the
+%    end of the \cs{@outputbox} but we limit the skip to be at most
+%    \cs{maxdepth}. Thus very large depths will not be fully canceled.
+%    \begin{macrocode}
+          \@outputbox@append{%
            \vskip -%
              \ifdim\@outputbox@depth>\maxdepth
                \maxdepth
              \else
                \@outputbox@depth
              \fi
-         \fi
-        }%
+          }%
+        \fi
       }%
     \@outputbox@reinsertbskip
   \fi
@@ -2659,6 +2740,9 @@
 %
 %  \begin{socketdecl}{build/column/footnotes/baselineattach}
 %
+%  \changes{v1.4q}{2025/03/20}{Add experimantal socket for baseline
+%    attachment of footnotes -- subject to change (footmisc/19)}
+%
 %    Experimental socket allowing to back up by the depth of the
 %    outputbox (but not more than \cs{maxdepth}  before attaching footnotes.
 %    \begin{macrocode}
@@ -2669,8 +2753,11 @@
 %  \begin{plugdecl}{on}
 %    \begin{macrocode}
 \NewSocketPlug {build/column/footnotes/baselineattach}{on} {%
-  \ifdim\@outputbox@depth=\z@
-  \else
+%    \end{macrocode}
+%    We do nothing if the depth is negative and we also never back up
+%    more than \cs{mathdepth}.
+%    \begin{macrocode}
+  \ifdim\@outputbox@depth>\z@
     \vskip -%
        \ifdim\@outputbox@depth>\maxdepth
           \maxdepth
@@ -2679,6 +2766,11 @@
        \fi
   \fi
 }
+%    \end{macrocode}
+%    This is not turned on by default, and as mentioned, is so far
+%    only experimental and might change/valish again.
+%    \begin{macrocode}
+%\AssignSocketPlug {build/column/footnotes/baselineattach}{on}
 %    \end{macrocode}
 %  \end{plugdecl}
 %
