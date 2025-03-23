@@ -84,17 +84,18 @@
 % one normally should calculate the BBox and this typically require some low-level 
 % hacking into the picture code.
 % 
-%
 % The following is a first try to handle this problems for \tikzname\ pictures.
-% It is incomplete and should be used with care. Resulting structures and contents should
-% be checked!
+% Resulting structures and contents should be checked!
 % 
-% The setup should be usable for other packages like pstricks or luamplibs but naturally
-% the \tikzname\ specifics and patches must be replaced by suitable code from these packages.
+% 
+% The code setups sockets and keys that are \tikzname-specific. But the general
+% structure should be usable for other packages like pstricks or luamplibs if they
+% replace the names and patches by suitable code from these packages.
 %
 % The main idea of the implementation is to use sockets that allow to change the
-% purpose of the \tikzname\ picture. This must be done before the actual environment as
-% \tikzname\ processes the keys too late to allow to do this while it normally
+% tagging purpose of the \tikzname\ picture. This must be done before by processing
+% the keys once before the actual environment to extract the tagging keys
+% as \tikzname\ processes the keys too late to allow to do this while it normally
 % processes its the optional argument.
 %
 % \subsection{Tagging recipes}
@@ -121,18 +122,22 @@
 % \duck
 % \end{tikzpicture}
 % \end{verbatim}
-% This recipe is meant for meaningful pictures. 
+% This recipe is meant for meaningful pictures. It is code wise the most complicated
+% case as getting the BBox requires some patching.
 %
 % \item[text] This surrounds the graphical parts with an artifact MC and activates
 % tagging on node texts. It is meant for small pictures containing text in a node
-% that should be part of the text flow, e.g. a todo.
+% that should be part of the text flow, e.g. a todo. It should be possible to exclude
+% some node and mark them as artifact locally, e.g. in a scope or with the optional argument
+% of the node.
 %
 % \item[artifact] This marks the picture as an artifact. This is meant for
 % decorations. This recipe is activated if the \texttt{artifact} key is used or
 % if the artifact tagging recipe is activated in \cs{tagpdfsetup} (see below).
 %
 % \item[actualtext] This is meant for pictures where the drawing should
-% represent a single symbol or small number of symbols. 
+% represent a single symbol or small number of symbols. This is tagged as a Span
+% and then internal tagging is suspended.
 % Such pictures should then add an \texttt{actualtext}:
 % \begin{verbatim}
 % \begin{tikzpicture}[actualtext=A]
@@ -190,10 +195,11 @@
 % The init socket takes a list of keys, processes the known keys to setup tagging options
 % and then assigns the plugs.
 % TODO: correct module name? 
+% TODO: tikz should probably use pgfkeys, but as l3keys are easier for me \ldots
 %    \begin{macrocode}
 \NewTaggingSocketPlug{tikzpicture/init}{default}
   {
-    \keys_set_known:nn { __tag / tikzpicture } {#1}  
+    \keys_set_known:nn { tikz / tagging } {#1}  
   }
 \AssignTaggingSocketPlug{tikzpicture/init}{default}
 %    \end{macrocode}
@@ -244,6 +250,7 @@
 % use an alt text given in the optional argument and internally tagging is suspended.
 % The Bbox will be set (after the second compilation) to the size of the bounding box.
 %    \begin{macrocode}
+\tagpdfsetup{role/new-tag=tikzpicture/Figure}
 \NewTaggingSocketPlug{tikzpicture/begin}{figure}
   {
     \ifvmode
@@ -252,8 +259,10 @@
      }
     \fi
     \tag_mc_end_push:
-    \tag_struct_begin:n{tag=Figure,
-     alt=\l__tag_tikzpicture_option_tl
+    \tag_struct_begin:n
+     {
+      tag=tikzpicture,
+      alt=\l__tikz_tagging_alt_tl
      }
     \pgfrememberpicturepositiononpagetrue
     \tag_mc_begin:n{tag=Figure}
@@ -274,6 +283,9 @@
     }
    \cs_if_exist:cT { pgf@sys@pdf@mark@pos@pgfid\the\pgf@picture@serial@count }
     {
+%    \end{macrocode}
+% TODO: this needs an official interface. 
+%    \begin{macrocode}
       \__tag_prop_gput:cne
         { g__tag_struct_ \g__tag_struct_stack_current_tl _prop }
         { A }
@@ -306,7 +318,7 @@
     }
    \fi
    \tag_mc_end_push:
-   \tag_struct_begin:n{tag=Span,actualtext=\l__tag_tikzpicture_option_tl}
+   \tag_struct_begin:n{tag=Span,actualtext=\l__tikz_tagging_actualtext_tl}
    \tag_mc_begin:n{}
   }
 
@@ -395,25 +407,34 @@
 % picture environments but for now we make the tikz specific.
 % TODO: thinks about module name
 %    \begin{macrocode}
-\tl_new:N \l__tag_tikzpicture_option_tl
-\keys_define:nn { __tag / tikzpicture }
+\tl_new:N  \l__tikz_tagging_alt_tl
+\tl_set:Nn \l__tikz_tagging_alt_tl {Alternative~text~missing!}
+\tl_new:N  \l__tikz_tagging_actualtext_tl
+
+\keys_define:nn { tikz / tagging }
   {
     alt        .code:n = 
      {
-       \tl_set:No \l__tag_tikzpicture_option_tl{#1}
+       \tl_set:No \l__tikz_tagging_alt_tl{#1}
        \AssignTaggingSocketPlug{tikzpicture/begin}{figure}
        \AssignTaggingSocketPlug{tikzpicture/end}{figure}
+       \def\pgfsys@begin@text{}
+       \def\pgfsys@end@text{}
      },
     actualtext .code:n = 
      {
-       \tl_set:No \l__tag_tikzpicture_option_tl{#1}
+       \tl_set:No \l__tikz_tagging_actualtext_tl {#1}
        \AssignTaggingSocketPlug{tikzpicture/begin}{actualtext}
-       \AssignTaggingSocketPlug{tikzpicture/end}{actualtext}    
+       \AssignTaggingSocketPlug{tikzpicture/end}{actualtext}
+       \def\pgfsys@begin@text{}
+       \def\pgfsys@end@text{}    
      },
     artifact   .code:n = 
      {
        \AssignTaggingSocketPlug{tikzpicture/begin}{artifact}
        \AssignTaggingSocketPlug{tikzpicture/end}{artifact}
+       \def\pgfsys@begin@text{}
+       \def\pgfsys@end@text{}
      }
   }
 %    \end{macrocode}
@@ -424,44 +445,61 @@
 \AddToHook{package/tikz/after}
   {
 %    \end{macrocode}
-% we add a dummy definition for alt, actualtext and artifact key to avoid errors.
+% we add a dummy definition for alt, actualtext and artifact key to avoid errors,
+% and to allow to set the variables outside the tikzpicture.
 %    \begin{macrocode}
-   \tikzset{alt/.code={},actualtext/.code={},artifact/.code={}}
-  }
+   \tikzset
+     {
+      alt/.code={\tl_set:No \l__tikz_tagging_alt_tl{#1}},
+      actualtext/.code={\tl_set:No \l__tikz_tagging_actualtext_tl {#1}},
+      artifact/.code=
+       {
+         \AssignTaggingSocketPlug{tikzpicture/begin}{artifact}
+         \AssignTaggingSocketPlug{tikzpicture/end}{artifact}
+         \def\pgfsys@begin@text{}
+         \def\pgfsys@end@text{} 
+       }
+     }  
 %    \end{macrocode}
 %
-% \subsection{tagpdf keys to switch the recipes}
+% \subsection{\tikzname~ keys to switch the recipes}
 %
 %    \begin{macrocode}
-\keys_define:nn { __tag / setup }
- {
-   graphic/tagging .choice:,
-   graphic/tagging/figure .code:n =
-    {
-      \tl_set:Nn \l__tag_tikzpicture_option_tl {Alternative~text~missing!}
-      \AssignTaggingSocketPlug{tikzpicture/begin}{figure}
-      \AssignTaggingSocketPlug{tikzpicture/end}{figure}
-    },
-   graphic/tagging/text .code:n =
-    {
-      \AssignTaggingSocketPlug{tikzpicture/begin}{text}
-      \AssignTaggingSocketPlug{tikzpicture/end}{text}
-    },
-   graphic/tagging/actualtext .code:n =
-    {
-      \AssignTaggingSocketPlug{tikzpicture/begin}{actualtext}
-      \AssignTaggingSocketPlug{tikzpicture/end}{actualtext}
-    },
-   graphic/tagging/artifact .code:n =
-    {
-      \AssignTaggingSocketPlug{tikzpicture/begin}{artifact}
-      \AssignTaggingSocketPlug{tikzpicture/end}{artifact}
-    },
+   \tikzset 
+     {
+       tagging/.is~choice,
+       tagging/text/.code =
+        {
+          \AssignTaggingSocketPlug{tikzpicture/begin}{text}
+          \AssignTaggingSocketPlug{tikzpicture/end}{text}
+        }, 
+       tagging/figure/.code =
+        {
+          \AssignTaggingSocketPlug{tikzpicture/begin}{figure}
+          \AssignTaggingSocketPlug{tikzpicture/end}{figure}
+          \def\pgfsys@begin@text{}
+          \def\pgfsys@end@text{}
+        },       
+       tagging/actualtext/.code =
+        {
+           \AssignTaggingSocketPlug{tikzpicture/begin}{actualtext}
+           \AssignTaggingSocketPlug{tikzpicture/end}{actualtext}
+           \def\pgfsys@begin@text{}
+           \def\pgfsys@end@text{}    
+        },           
+       tagging/artifact/.code =
+        {
+          \AssignTaggingSocketPlug{tikzpicture/begin}{artifact}
+          \AssignTaggingSocketPlug{tikzpicture/end}{artifact}
+          \def\pgfsys@begin@text{}
+          \def\pgfsys@end@text{}
+        },
+     }
  }
 %    \end{macrocode}
 %
 % Todonotes work with the default text recipe quite ok, details can
-% be handled
+% be handled later.
 %    \begin{macrocode}
 %</package>
 %    \end{macrocode}
