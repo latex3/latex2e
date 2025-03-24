@@ -46,53 +46,167 @@
 % \begin{documentation}
 % \begin{abstract}
 % The following code implements a first draft for the tagging of graphics
-% included with \cs{includegraphics}.
+% included with \cs{includegraphics} and the \env{picture} environment.
 % \end{abstract}
 % 
 % 
 % \section{Introduction}
 % 
-% The code here handle the tagging of pictures included with \cs{includegraphics}
-% and the picture environment. Pictures drawn with \texttt{l3draw} or \texttt{tikz} 
-% or similar packages aren't handled yet.
+% Tagging of pictures is non trivial.
+%
+% \begin{enumerate}
+% \item Pictures generally can have various purposes and so different \emph{tagging recipes} must
+% be provided:
+% \begin{itemize}
+% \item The pictures can be purely \emph{ornamental} and \emph{decorative}, e.g. some page border.
+% This should normally be tagged as \emph{artifact}, either in a \texttt{artifact} 
+% MC-chunk or as an \texttt{Artifact} structure\footnote{The second option exists only in PDF 2.0}.
+%
+% \item The pictures can be \emph{illustrative figures}.
+% This should normally be tagged as a \texttt{Figure} structure with \emph{alternative text.}
+%
+% \item The pictures can represent a symbol. This should be tagged as a \texttt{Span} structure element
+% with an \texttt{/ActualText} mapping to some Unicode Codepoint(s) (or perhaps even directly in the stream with a
+% Span BDC with an \texttt{/ActualText}).
+%
+% \item The pictures can also meant to be consumed as normal \emph{text}. 
+% For example the todonotes package uses a
+% ti\textit{k}Z picture to surround the text in a node with some colored background.
+% In this case the text (which can contain more elements like lists)
+% should be tagged as usual and put in an \texttt{Aside} structure while the decorative
+% elements should be marked up as artifacts. 
 % 
-% Tagging of graphics included with \cs{includegraphics} is at a first glance trivial:
-% They are either only decorations, in which case they should be in a \texttt{artifact} 
-% MC-chunk or (in pdf 2.0) tagged as an \texttt{Artifact} structure, 
-% or they are meaningful and then they should be tagged as a \texttt{Figure}.
-% Such a graphic is a simple box and no other content can interfere so adding the 
-% structure commands shouldn't pose much problems.
+% \item And naturally there can be mixtures of these elements, e.g., some text 
+% in nodes in a ti\textit{k}Z picture can be meaningful 
+% while other nodes still should be tagged as artifact.
+% \end{itemize}
+%
+% \item The various packages that allow to draw pictures uses lots of boxes and 
+% moves them around and that makes is not easy to get the tagging right --
+% at least with pdflatex where one has to insert the literals at the right time.
+%
+% \item When the picture is tagged as \texttt{Figure},
+% one must calculate the \texttt{BBox}, that key describes 
+% the placement of the picture on the
+% page, and this typically require some low-level hacking into the picture code.
+% \end{enumerate}
+% 
+% The code here handles the tagging of pictures included with \cs{includegraphics}
+% and the \env{picture} environment. Pictures drawn with \pkg{l3draw}, \pkg{tikz},
+% \pkg{pstricks}, \pkg{luamplibs} or similar packages are either handled elsewhere
+% or not handled yet.
+% 
+% \subsection{User interfaces}
+% 
+% User interfaces should be similar across all picture/graphic packages to make it
+% easy for authors to adapt their documents. 
+% 
+% We recommend package authors to implement an interface like the following. 
+% 
+% \subsubsection{Individual graphics}
+% To change the tagging recipe of an individual graphic, the keys
+% \texttt{artifact} (decorations), \texttt{alt} (illustrative), 
+% and \texttt{actualtext} (symbol) should be used. The keys \texttt{alt}
+% (and also \texttt{actualtext}) should accept a command as argument to make
+% it easier to handle longer description texts.
+% 
+% \begin{verbatim}
+% \includegraphics[artifact]{example-image}
+% \begin{tikzpicture}[artifact] ... \end{tikzpicture}
+% \tikz[artifact]{...}
+% \begin{picture}[artifact]...\end{picture}
+% 
+% \includegraphics[alt=example image]{example-image}
+% \begin{tikzpicture}[alt=\myalttext] ... \end{tikzpicture}
+% \tikz[alt=example image]{...}
+% \begin{picture}[alt=example image]...\end{picture}
+% 
+% \includegraphics[actualtext=A]{example-image-A}
+% \begin{tikzpicture}[actualtext=A] ... \end{tikzpicture}
+% \tikz[actualtext=A]{...}
+% \begin{picture}[actualtext=A]...\end{picture}
+% \end{verbatim}
+% 
+% The best default tagging recipe (if none of the keys are used) 
+% depends on the graphic type and should be chosen as needed and documented.
+% 
+% With \cs{includegraphics} we use as default the illustrative mode,
+% tag it as \texttt{Figure} structure and issue a warning.
+% 
+% With ti\textit{k}Z (a first implementation is currently in latex-lab-tikz), 
+% the default is the text mode. In this implementation the \texttt{artifact}
+% key can also be applied on nodes and so remove them from the tagging.
+% \begin{verbatim}
+% \begin{tikzpicture}
+% \node[draw=red](x){Important!};
+% \node[artifact,fill=blue,anchor=west] at (x.east){\phantom{Ip}};
+% \end{tikzpicture}
+% \end{verbatim}
+% 
+% \subsubsection{General setup}
+% 
+% There should be also interfaces to change the tagging recipe for all pictures or
+% nodes in scope. 
+% 
+% With ti\textit{k}Z this can be implemented rather easily as it has a setup command anyway.
+% So with the implementation in latex-lab-tikz, all these works as expected
+% \begin{verbatim}
+% \tikzset{artifact}
+% \tikzset{alt=a text}
+% \tikzset{actualtext=A}
+% \end{verbatim}
+% 
+% The only problem is how to switch (back) to the text tagging: The key name
+% \texttt{text} is already taken (and isn't good anyway). So currently the implementation
+% offers additionally also \verb`\tikzset{tagging=text}`, and for consistency also
+% \verb`\tikzset{tagging=alt}`, \verb`\tikzset{tagging=artifact}` and \verb`\tikzset{tagging=actualtext}`.
+% 
+% With \cs{includegraphics} the standard \cs{setkeys} can be used:
+% \begin{verbatim}
+% \setkeys{Gin}{alt=a text}
+% \setkeys{Gin}{artifact}
+% \setkeys{Gin}{actualtext=A}
+% \end{verbatim}
+% 
+% 
+% \subsection{\cs{includegraphics}}
+% Tagging of graphics included with \cs{includegraphics} is at a first glance
+% easier to handle than, e.g., a ti\textit{k}Z graphic, as there is no text mode:
+% there is no content whose tagging could interfere and 
+% adding the structure commands around the box shouldn't pose much problems. 
 %  
 % But things are actually not so easy. 
 % 
-% At first there are two ways to add a graphic
-% to a structure: similar to text as a marked content item (by surrounding 
+% At first such graphics are inserted into the PDF as XObjects and
+% there are two ways to add an such an XObject to a structure: 
+% similar to text as a marked content item (by surrounding 
 % it with \cs{tagmcbegin} and \cs{tagmcend}) or by referencing the XObject 
 % with an OBJR object (similar to a link annotation). Which method is more sensible 
-% (and if it actually matters) is unknown but should be tested. 
+% (and if it actually matters) is unknown. 
 % Currently the first method is used as the second require changes in the backend files.
-%  
-%  
-% At second---and this is actually a \emph{much} larger problem---a 
-% \texttt{Figure} structure should have an attribute with an \texttt{BBox} entry.
-% The value of a \texttt{BBox} is an array of four numbers that gives the 
+%   
+% At second---and this is actually a \emph{much} larger problem---if the graphic
+% is tagged as an illustrative picture the 
+% \texttt{Figure} structure element should have an attribute with an \texttt{BBox} entry.
+% The value of this \texttt{BBox} is an array of four numbers that gives the 
 % coordinates of the left, bottom, right, and top edges 
-% of the structure element’s bounding box. That is the rectangle that completely encloses
-% its \emph{visible} content so not necessarily the TeX bounding box: 
+% of the structure element’s bounding box on the page. 
+% That is the rectangle that completely encloses
+% its \emph{visible} content and so has not necessarily the same size as the TeX bounding box: 
 % if \texttt{viewport} or \texttt{trim} is used and the
 % graphic is not clipped, the visible content can be larger. 
 %  
-% Getting the \texttt{BBox} is quite straightforward for a graphic that is 
+% Getting the \texttt{BBox} can be quite straightforward for a graphic that is 
 % used once as is. But graphics can be trimmed, scaled, reflected, rotated and reused
-% in various ways. This transformations typically involve a mix of \TeX{} commands
-% like shifting a box or changing the bounding box and backend commands like
-% inserting a pdfliteral with a transformation matrix and
-% and not in all cases getting the \texttt{BBox} is possible 
+% in various ways. These transformations typically involve a mix of \TeX{} commands
+% that shift a box or change the bounding box and backend commands that insert
+% a pdfliteral with a transformation matrix. Getting 
+% the correct \texttt{BBox} in all cases is not possible 
 % without rewriting large parts of the graphics/x packages. Problematic are
 %  \begin{itemize}
 %  \item manipulations through external box commands 
 %  (\cs{rotatebox}, \cs{reflectbox}, \cs{scalebox}). The current implementation
-%  in the graphics/x packages do not pass the transformation matrix in way 
+%  in the graphics/x packages do not pass the transformation matrix in a way 
 %  that allows to track the changes for the \texttt{BBox} 
 %  of an included graphic: sometimes
 %  the values are set to late (after the box is already stored), and often the
@@ -113,10 +227,8 @@
 %  and so various kernel changes.
 %  \end{itemize}
 %  
-%  
-%  
-%  \section{Restrictions and Todos}
-%  Correct tagging is currently 
+%  \subsubsection{Restrictions and Todos}
+%  Therefore a correct BBox is currently 
 %  implemented only for simple \cs{includegraphics} and the keys
 %  \texttt{viewport}, \texttt{trim}, 
 %  \texttt{scale} and \texttt{angle} (used at most once). 
