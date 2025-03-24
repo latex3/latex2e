@@ -615,16 +615,25 @@
 \keys_define:nn{tag/picture}
    {
      ,alt .code:n =  
-        {\tl_set:Ne\l_@@_graphic_alt_tl{\text_purify:n{#1}}}
+        {
+          \tl_set:Ne\l_@@_graphic_alt_tl{\text_purify:n{#1}}
+          \AssignTaggingSocketPlug{picture/begin}{figure}
+          \AssignTaggingSocketPlug{picture/end}{figure}
+          %disable text tagging
+        }
      ,artifact .code:n = 
         {
           \bool_set_true:N \l_@@_graphic_artifact_bool
           \bool_set_false:N \l_@@_graphic_BBox_bool
+          \AssignTaggingSocketPlug{picture/begin}{artifact}
+          \AssignTaggingSocketPlug{picture/end}{artifact}
         }
      ,actualtext .code:n = 
         {
           \tl_set:Ne\l_@@_graphic_actual_tl{\text_purify:n{#1}}
           \bool_set_false:N \l_@@_graphic_BBox_bool
+          \AssignTaggingSocketPlug{picture/begin}{actualtext}
+          \AssignTaggingSocketPlug{picture/end}{actualtext}
         }
      ,correct-BBox .code:n = 
       {
@@ -1099,15 +1108,18 @@
 % \end{macro}
 % 
 % \subsubsection{Sockets}
-% The sockets are similar to the one used for tikz in latex-lab-tikz.
+% Unlike implementation of tikz in latex-lab-tikz. We have only three
+% sockets. Text mode is not really sensible in the picture environment
+% and so we do not try to support it. 
+% The end socket takes two argument to allow to calculate the BBox
+% before outputting the box.
 %    \begin{macrocode}
 \NewTaggingSocket{picture/init}{1}
 \NewTaggingSocket{picture/begin}{0}
-\NewTaggingSocket{picture/end}{0}
-\NewTaggingSocket{picture/text/begin}{0}
-\NewTaggingSocket{picture/text/end}{0}
+\NewTaggingSocket{picture/end}{2}
 %    \end{macrocode}
 %
+% \subsubsection{Plugs}
 % \begin{plugdecl}{default (tagsupport/picture/init)}
 % The init socket takes a list of keys, processes the known keys to setup tagging options
 % and then assigns the plugs.
@@ -1116,12 +1128,118 @@
 %    \begin{macrocode}
 \NewTaggingSocketPlug{picture/init}{default}
   {
-    \keys_set_known:nn { tag/picture } {#1}  
     \tl_set:Nn\l_@@_graphic_alt_dflt_tl {picture~environment}
+    \keys_set_known:nn { tag/picture } {#1}      
   }
 \AssignTaggingSocketPlug{picture/init}{default}
 %    \end{macrocode}
 % \end{plugdecl}
+% 
+% \begin{plugdecl}{figure (tagsupport/picture/begin),figure (tagsupport/picture/end)}
+% This plug handles the picture as a figure.
+% Around the graphic is a \texttt{Figure} environment which will
+% use an alt text given in the optional argument and internally tagging is suspended.
+% The Bbox will be set (after the second compilation) to the size of the declared size
+%    \begin{macrocode}
+\tagpdfsetup{role/new-tag=picture/Figure}
+%OK
+\NewTaggingSocketPlug{picture/begin}{figure}
+  {
+    \tag_mc_end_push: 
+    \tl_if_empty:NT\l_@@_graphic_alt_tl         
+      {
+        \msg_warning:nne{tag}{alt-text-missing}{\l_@@_graphic_alt_dflt_tl}
+        \tl_set:Ne\l_@@_graphic_alt_tl {\l_@@_graphic_alt_dflt_tl}
+      }
+    \tag_struct_begin:n
+      {
+       tag=\l_@@_graphic_struct_tl,
+       alt=\l_@@_graphic_alt_tl,
+      }
+    \tag_mc_begin:n{}      
+  }
+%OK
+\NewTaggingSocketPlug{picture/end}{figure}
+  {
+    \picture@tag@bbox@attribute    
+     #2
+     \tag_mc_end:
+     \tag_struct_end:
+     \tag_mc_begin_pop:n{}
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \begin{plugdecl}{actualtext (tagsupport/picture/begin),actualtext (tagsupport/picture/end)}
+% This plug handles the picture as a symbol with an actualtext.
+% It tags the content as a Span and expects an actualtext.
+% Internally tagging is suspended.
+%    \begin{macrocode}
+%OK
+\NewTaggingSocketPlug{picture/begin}{actualtext}
+  {
+   \tag_mc_end_push:
+   \tag_struct_begin:n{tag=Span,actualtext=\l_@@_graphic_actual_tl }
+   \tag_mc_begin:n{}
+  }
+%OK
+\NewTaggingSocketPlug{picture/end}{actualtext}
+  {
+   #2
+   \tag_mc_end:
+   \tag_struct_end:
+   \tag_mc_begin_pop:n{}
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \begin{plugdecl}{artifact (tagsupport/picture/begin),artifact (tagsupport/picture/end)}
+% This plug handles the picture as an artifact, as decoration.
+% So it is surrounded by an artifact MC and internal text does not restart tagging.
+%    \begin{macrocode}
+%OK
+\NewTaggingSocketPlug{picture/begin}{artifact}
+  {
+    \tag_mc_end_push:
+    \tag_mc_begin:n{artifact}
+  }
+%OK
+\NewTaggingSocketPlug{picture/end}{artifact}
+  {
+    #2
+    \tag_mc_end:
+    \tag_mc_begin_pop:n{}
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+% 
+%  By default we use the text plugs
+%    \begin{macrocode}
+\AssignTaggingSocketPlug{picture/begin}{text}
+\AssignTaggingSocketPlug{picture/end}{text}
+%    \end{macrocode}
+%
+% \begin{plugdecl}{default (tagsupport/picture/text/begin),
+%  default (tagsupport/picture/text/end)}
+% These sockets are used inside the text
+% plugs and ends the previous mc and restarts it after the text.
+%    \begin{macrocode}
+\NewTaggingSocketPlug{picture/text/begin}{default}
+  {
+   \tag_mc_end:
+   \tag_mc_begin:n{}
+  }
+\NewTaggingSocketPlug{picture/text/end}{default}
+  {
+   \tag_mc_end:
+   \tag_mc_begin:n{artifact}
+  }
+\AssignTaggingSocketPlug{picture/text/begin}{default}
+\AssignTaggingSocketPlug{picture/text/end}{default}
+%    \end{macrocode}
+% \end{plugdecl}
+% 
+% \subsubsection{Patching the commands}
 % We redefine \cs{picture} to accept an optional argument and
 % change the default alt text. We also ensure that we are in 
 % hmode, so that stopping tagging doesn't confuse the paratags.
@@ -1129,7 +1247,7 @@
 \RenewDocumentCommand\picture{O{}m}
  { 
    \leavevmode
-   \tag_socket_use:nn{tikzpicture/init}{#1}   
+   \tag_socket_use:nn{picture/init}{#1}   
    \pictur@#2
  } 
 %    \end{macrocode}
@@ -1138,9 +1256,9 @@
 \def\@picture(#1,#2)(#3,#4){%
   \@defaultunitsset\@picht{#2}\unitlength
   \@defaultunitsset\@tempdimc{#1}\unitlength
-  \Gin@tag@struct@begin
-  \setbox\@picbox\hb@xt@\@tempdimc\bgroup
-    \tag_suspend:n{\@picture} %do not tag inside the picture box
+  \tag_socket_use:n{picture/begin}
+  \tag_suspend:n{\@picture} %do not tag inside the picture box
+  \setbox\@picbox\hb@xt@\@tempdimc\bgroup    
     \@defaultunitsset\@tempdimc{#3}\unitlength
     \hskip -\@tempdimc
     \@defaultunitsset\@tempdimc{#4}\unitlength
@@ -1152,9 +1270,9 @@
 \def\endpicture{%
   \egroup\hss\egroup
     \ht\@picbox\@picht\dp\@picbox\z@
-    \picture@tag@bbox@attribute    
-    \mbox{\box\@picbox}
-    \Gin@tag@struct@end}
+    \tag_resume:n{\@picture}
+    \tag_socket_use:nnn{picture/end}
+       {}{\mbox{\box\@picbox}}}
 %    \end{macrocode}
 %
 % \subsection{Debugging code}
