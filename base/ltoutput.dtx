@@ -2125,6 +2125,9 @@
 %    We need to know the depth of \cs{@outputbox} once in a
 %    while. Rather than using a temp dimen (as it was done in the
 %    past), we give it a proper register.
+%
+%    The value of this register is only correct inside of
+%    \cs{outputbox@append}, elsewhere you can't rely on it!
 %    \begin{macrocode}
 \newdimen\@outputbox@depth
 %    \end{macrocode}
@@ -2313,10 +2316,24 @@
 %    We also prepare for reinserting the skip we removed elsewhere on the page.
 %    As we have to do this globally, we also need to
 %    explicitly reset \cs{@outputbox@reinsertbskip} if we don't find any such glue.
-%  \changes{v1.4r}{2025/03/25}{ (footmisc/19)}
 %    \begin{macrocode}
          \xdef\@outputbox@reinsertbskip
              {%
+%    \end{macrocode}
+%    Everything is done inside \cs{@outputbox@append} so that a call
+%    to \cs{@outputbox@reinsertbskip} will update the box. If there
+%    are no footnotes we first backup by the depth of the
+%    \cs{@outputbox} so that the skip we add starts from the baseline
+%    of the last line inside (if there is one). As it is a
+%    \texttt{fil}, \texttt{fill}, or \texttt{filll} glue this normally
+%    makes no differences, but if the box itself contains a fill skip
+%    of higher oder our fill is ignored and text is pushed to the
+%    bottom of the page. In that case and without backing up first,
+%    the last line would not be with its baseline on the bottom, but
+%    slightly too high if it has characters with descenders.
+%  \changes{v1.4r}{2025/03/25}{Back out the depth if we have no
+%    footnotes (footmisc/19)}
+%    \begin{macrocode}
                \noexpand\@outputbox@append{%
                  \noexpand\@if@footnotes@TF
                      {}%
@@ -2341,9 +2358,21 @@
 %
 %
 %  \begin{macro}{\@backup@outputbox@depth}
-%    
-%  \changes{v1.4r}{2025/03/25}{ (footmisc/19)}
-%    
+%    In some places we have to make the depth of the \cs{@outputbox}
+%    zero by backing up by its current depth. This is done by
+%    \cs{@backup@outputbox@depth}. The macro can only be used inside
+%    of \cs{@outputbox@append} (or after you have manually set the
+%    \cs{@outputbox@depth} to the right value).
+%
+%    If the depth is zero, there is no point in doing anything, and if
+%    the depth is negative it must have been deliberately set to this
+%    value, so in this case we also do not back up and change it.
+%
+%    If it is positive we back up by the minimum of
+%    \cs{@outputbox@depth} and \cs{maxdepth}, i.e., if the depth is
+%    unusually large we do not perform a full backup.
+%
+%  \changes{v1.4r}{2025/03/25}{Macro added (footmisc/19)}
 %    \begin{macrocode}
 \def\@backup@outputbox@depth{%
 %  \typeout{--> @backup@outputbox@depth : \the \@outputbox@depth}%
@@ -2681,7 +2710,7 @@
 %    In the legacy case we don't really want to take out the bottom
 %    skip, but rather than altering \cs{@outputbox@removebskip} in
 %    \cs{makecol} to do nothing, which we would then have to undo in
-%    every layout, we immediately reinsert the dropped skip
+%    every other layout, we immediately reinsert the dropped skip
 %    again.
 %
 %    In the legacy case there is, however, one other thing that needs
@@ -2693,53 +2722,33 @@
 %    to the bottom, since in such cases the depth will not be taken into
 %    account by \TeX{}.
 %    
-%    Given, that a bottom skip was removed earlier, we can look at
-%    the \cs{@outputbox@depth} value for for the depth of the last
-%    text line (if there was one) and back up by that
-%    amount or by \cs{maxdepth} if the depth is unusually large.
-%    If there was no bottom skip (indicated by
-%    \cs{@outputbox@reinsertbskip} being \cs{relax}), we do nothing.
-%
-%  \changes{v1.4q}{2025/03/20}{Back up by \cs{dp}\cs{@outputbox} in
-%    the \texttt{footnotes-floats-legacy} plug if there are no
-%    footnotes (footmisc/19)}
-%  \changes{v1.4r}{2025/03/25}{ (footmisc/19)}
-%    \begin{macrocode}
-%  \ifx\@outputbox@reinsertbskip\relax
-%  \else
-%    \end{macrocode}
-%    Otherwise, if we have footnotes we also do nothing.
-%    \begin{macrocode}
-%  \@if@footnotes@TF{}%
-%    \end{macrocode}
-%    Otherwise, if the depth is greater than zero we back up. If it is
-%    zero, there is no point doing anything and if the depth is
-%    negative it must have been deliberately set to this value, so in
-%    this case we also do not change it.
-%    The test has to be made inside \cs{@outputbx@append} because only
-%    there does \cs{@outputbox@dp} have the correct value.
-%    \begin{macrocode}
-%      {%
-%        \@outputbox@append{%
-%          \ifdim\@outputbox@depth>\z@
-%    \end{macrocode}
-%    If the depth is positive we back up by appending a skip at the
-%    end of the \cs{@outputbox}; but we limit the skip to be at most
-%    \cs{maxdepth}. Thus very large depths will not be fully canceled.
-%    \begin{macrocode}
-%           \vskip -%
-%             \ifdim\@outputbox@depth>\maxdepth
-%               \maxdepth
-%             \else
-%               \@outputbox@depth
-%             \fi
-%          \fi
-%        }%
-%      }%
-%\@if@footnotes@TF{}{\let\@backup@outputbox@depth\relax}%
-  \UseSocket{build/column/fnotes/baselineattach}%
+%    This is done automatically by \cs{@outputbox@reinsertbskip} as
+%    long as there are no footnotes waiting to be placed.
+%    If there are footnotes the operation is not done because by
+%    default the \cs{skip}\cs{footins} separation is measure from the
+%    bottom of the line not from the baseline.
+%    But if the user has asked to change this behavior we should honor
+%    it and that is done by putting the experimental socket
+%    \socket{build/column/fnotes/baselineattach} in which performs the
+%    backing up if desired.
+%  
+%    It is important to test if footnotes are present and only call
+%    the the socket if there are footnotes, because otherwise the
+%    backing up might happen twice (once in the socket plug and again
+%    in \cs{@outputbox@reinsertbskip}). If the first call would make
+%    the depth zero it wouldn't matter, but assume you have a depth
+%    larger than \cs{maxdepth}. Then the depth is not zero after the
+%    plug has acted and the second call would reduce it further which
+%    is not the desired outcome.
+%  
+%  \changes{v1.4r}{2025/03/25}{Add support for attaching footnotes
+%    with a skip starting at the baseline of the last text line (footmisc/19)}
+  %    \begin{macrocode}
+  \@if@footnotes@TF
+      {\@outputbox@append{%
+          \UseSocket{build/column/fnotes/baselineattach}}}%
+      {}%
   \@outputbox@reinsertbskip
-%  \fi
   \@outputbox@appendfootnotes
   \@outputbox@attachfloats
 }
