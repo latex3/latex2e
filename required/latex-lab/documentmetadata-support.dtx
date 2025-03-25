@@ -18,8 +18,8 @@
 % for those people who are interested or want to report an issue.
 %
 %    \begin{macrocode}
-\def\documentmetadatasupportversion{1.0m}
-\def\documentmetadatasupportdate{2025-02-17}
+\def\documentmetadatasupportversion{1.0n}
+\def\documentmetadatasupportdate{2025-03-25}
 %    \end{macrocode}
 %
 %
@@ -126,8 +126,8 @@
 %
 %    \item[\texttt{pdfstandard}] Choice key to set the pdf standard.
 %      Currently |A-1b|, |A-2a|, |A-2b|, |A-2u|, |A-3a|, |A-3b|, |A-3u|, |A-4|, |A-4E|
-%      and |A-4F| are accepted as
-%      values. The casing is irrelevant, |a-1b| works too.
+%      and |A-4F| are accepted as A-standard.
+%      values. The casing is irrelevant, |a-1b| works too. 
 %      Note that using these
 %      key doesn't mean that the document actually follows the standard. \LaTeX{}
 %      can neither ensure nor check all requirements of a standard, and not everything
@@ -147,7 +147,8 @@
 %      (e.g., the |UA| standards do not automatically activate tagging).
 %
 %      |pdfstandard| can be used more than once to set overlapping standards, e.g:\\
-%      |pdfstandard=A-2b,pdfstandard=X-4,pdfstandard=UA-1|
+%      |pdfstandard=A-2b,pdfstandard=X-4,pdfstandard=UA-1|. It is also possible
+%      to pass a list like |pdfstandard={UA-2,A-4F}|.
 %
 %      If XMP-metadata are added (see the following key \texttt{xmp})
 %      the necessary conformance markers for the standards are set.
@@ -160,7 +161,28 @@
 %
 %    \item[\texttt{colorprofiles}] This allows to load icc-colorprofiles. Details
 %       are described in the documentation of \pkg{l3pdfmeta}.
-%
+%       
+%    \item[\texttt{tagging}] This key allows to activate and deactivate the tagging support.
+%    It accepts the three values \texttt{on}, \texttt{off} and \texttt{draft}. 
+%    When used it loads the tagpdf package and all modules that are loaded with \texttt{testphase=latest}. 
+%    |tagging=off| deactivates then the tagging commands. |tagging=draft| leaves the
+%    tagging commands active, so, e.g., there still will be MC-content marker in the PDF stream,
+%    and tagpdf will issue warnings and errors if the structure is faulty
+%    but it deactivates the writing of the structure at the end of the compilation. This can save
+%    time when drafting a longer document.
+%    
+%    \item[\texttt{tagging-setup}] This key allows to configure the tagging. It accepts all
+%    keys that can also be used in \cs{tagpdfsetup}, see the tagpdf documentation. Additionally
+%    it accepts two keys to change the list of testphase modules loaded:
+%     \begin{description}
+%        \item[\texttt{modules}] With this key it is possible to suppress the 
+%        loading of the \emph{latest} modules and to load only specific modules. 
+%        It will always load the |phase-II| module, so |modules={block,title}| does the 
+%        same as |testphase={phase-II,block,title}|
+%        \item[\texttt{extra-modules}] This key allows to load modules that 
+%        haven't been added to the \textit{latest} set yet.        
+%      \end{description} 
+%    
 %    \item[\texttt{testphase}] This key is used to load testphase code.
 %    The |testphase| key can only be used in the first \cs{DocumentMetadata}.
 %    The values it accepts and their effect will change over time, when testphase packages are added or
@@ -435,6 +457,9 @@
 
 %\subsection{\cs{DocumentMetadata} keys}
 %\changes{1.0k}{2024-12-17}{added latest value for testphase key.}
+%\changes{1.0n}{2025/03/25}{Allow a list as pdfstandard value.}
+%\changes{1.0n}{2025/03/25}{Add tagging key}
+%\changes{1.0n}{2025/03/25}{Add tagging-setup}
 %    \begin{macrocode}
 \keys_define:nn { document / metadata }
   {
@@ -467,8 +492,10 @@
     % this uses internal command from pdfmeta, it should probably move there ...
     ,pdfstandard .code:n =
       {
-        \exp_args:Nne
-        \keys_set:nn {document / metadata} {_pdfstandard=\str_uppercase:n{#1}}
+        \clist_map_inline:nn{#1}
+         {           
+           \keys_set:ne {document / metadata} {_pdfstandard=\str_uppercase:n{##1}}
+         }  
       }
     ,_pdfstandard .choices:nn =
       {A-1B,A-2A,A-2B,A-2U,A-3A,A-3B,A-3U,A-4}
@@ -526,22 +553,15 @@
               }
            }
       }
-    ,tagging-setup .multichoice:,
-    ,tagging-setup / true .code:n = 
+    ,tagging .choice:,
+    ,tagging / on .code:n = 
       {
+        \keys_set:nn { document / metadata }{ testphase=latest }
+      }  
+    ,tagging / off .code:n = 
+      {
+        \keys_set:nn { document / metadata }{ testphase=latest }
         \AddToHook{class/before}
-          {
-            \RequirePackage{tagpdf}
-            \AddToDocumentProperties [document]{testphase/tagpdf}{loaded}
-            \tagpdfsetup{activate,para/tagging,activate/spaces}
-            \AddToDocumentProperties [document]{tagging}{active}
-            \AddToDocumentProperties [document]{tagging/para}{active}
-            \AddToDocumentProperties [document]{tagging/interwordspace}{active}
-          }      
-      } 
-    ,tagging-setup / false .code:n =    
-      {
-       \AddToHook{class/before}
          {
            \tagpdfsetup{activate/mc=false,activate/tree=false,
                         activate/struct=false,activate/socket=false,
@@ -557,12 +577,23 @@
            %\cs_new_protected:Npn \tag_struct_begin:n #1 {\int_gincr:N \c@g__tag_struct_abs_int}
            %\cs_new_protected:Npn \tag_struct_end:{}
          }
-       }   
-    ,tagging-setup / draft .code:n = 
-      { 
+      }  
+    ,tagging / draft .code:n = 
+      {
+        \keys_set:nn { document / metadata }{ testphase=latest }
         \AddToHook{shipout/lastpage}[tagging-setup]{\tagpdfsetup{activate/tree=false}}
         \DeclareHookRule{shipout/lastpage}{tagging-setup}{before}{tagpdf} 
+      }   
+    ,tagging-setup .multichoice:,
+    ,tagging-setup / modules .code:n = 
+      {
+        \tl_gclear:N\g_@@_testphase_tl 
+        \keys_set:nn { document / metadata }{testphase={phase-II,#1}}
       }
+    ,tagging-setup / extra-modules .code:n = 
+      {        
+        \keys_set:nn { document / metadata }{testphase={#1}}
+      }      
     ,tagging-setup / unknown .code:n = 
       {
         \AddToHook{class/before}{\tagpdfsetup{#1}}
