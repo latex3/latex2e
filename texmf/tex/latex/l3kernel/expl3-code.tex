@@ -51,6 +51,7 @@
 %% l3regex.dtx  (with options: `package')
 %% l3box.dtx  (with options: `package')
 %% l3color.dtx  (with options: `package')
+%% l3graphics.dtx  (with options: `package')
 %% l3pdf.dtx  (with options: `package,tex')
 %% l3coffins.dtx  (with options: `package')
 %% l3luatex.dtx  (with options: `package,tex')
@@ -75,7 +76,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: expl3.dtx
-\def\ExplFileDate{2025-03-10}%
+\def\ExplFileDate{2025-03-26}%
 \begingroup
   \def\next{\endgroup}%
   \expandafter\ifx\csname PackageError\endcsname\relax
@@ -1673,7 +1674,7 @@ Type  H <return>  for immediate help}\def~{\errmessage{%
 \cs_gset_protected:Npn \prg_set_conditional:Nnn
   { \__prg_generate_conditional_count:NNNnn \cs_set:Npn e }
 \cs_gset_protected:Npn \prg_gset_conditional:Nnn
-  { \__prg_generate_conditional_count:NNNnn \cs_set:Npn e }
+  { \__prg_generate_conditional_count:NNNnn \cs_gset:Npn e }
 \cs_gset_protected:Npn \prg_new_conditional:Nnn
   { \__prg_generate_conditional_count:NNNnn \cs_new:Npn e }
 \cs_gset_protected:Npn \prg_set_protected_conditional:Nnn
@@ -32135,6 +32136,380 @@ Type  H <return>  for immediate help}\def~{\errmessage{%
     \tl_if_empty:nTF {#2}
       { is~undefined. }
       { has~the~properties: #2 }
+  }
+%% File: l3graphics.dtx
+\dim_new:N \l__graphics_internal_dim
+\ior_new:N \l__graphics_internal_ior
+\tl_new:N  \l__graphics_internal_tl
+\scan_new:N \s__graphics_stop
+\tl_new:N \l__graphics_pagebox_tl
+\keys_define:nn { graphics }
+  {
+    decodearray .str_set:N =
+      \l__graphics_decodearray_str ,
+    draft .bool_set:N =
+      \l__graphics_draft_bool ,
+    interpolate .bool_set:N =
+      \l__graphics_interpolate_bool ,
+    pagebox .choices:nn =
+      { art , bleed , crop , media , trim }
+      {
+        \tl_set:Ne \l__graphics_pagebox_tl
+          { \l_keys_choice_tl box }
+      } ,
+    pagebox .initial:n =
+      crop ,
+    page .int_set:N =
+      \l__graphics_page_int ,
+    pdf-attr .str_set:N =
+      \l__graphics_pdf_str ,
+    type . str_set:N =
+      \l__graphics_type_str
+  }
+\dim_new:N \l__graphics_llx_dim
+\dim_new:N \l__graphics_lly_dim
+\dim_new:N \l__graphics_urx_dim
+\dim_new:N \l__graphics_ury_dim
+\cs_new_protected:Npn \__graphics_bb_save:n #1
+  {
+    \dim_if_exist:cTF { c__graphics_ #1 _urx_dim }
+      { \msg_error:nnn { graphic } { bb-already-cached } {#1} }
+      {
+        \dim_compare:nNnF \l__graphics_llx_dim = { 0pt }
+          { \dim_const:cn { c__graphics_ #1 _llx_dim } { \l__graphics_llx_dim } }
+        \dim_compare:nNnF \l__graphics_lly_dim = { 0pt }
+          { \dim_const:cn { c__graphics_ #1 _lly_dim } { \l__graphics_lly_dim } }
+        \dim_const:cn { c__graphics_ #1 _urx_dim } { \l__graphics_urx_dim }
+        \dim_const:cn { c__graphics_ #1 _ury_dim } { \l__graphics_ury_dim }
+      }
+  }
+\cs_generate_variant:Nn \__graphics_bb_save:n { e }
+\cs_new_protected:Npn \__graphics_bb_restore:nF #1#2
+  {
+    \dim_if_exist:cTF { c__graphics_ #1 _urx_dim }
+      {
+        \dim_set_eq:Nc \l__graphics_urx_dim { c__graphics_ #1 _urx_dim }
+        \dim_set_eq:Nc \l__graphics_ury_dim { c__graphics_ #1 _ury_dim }
+        \dim_if_exist:cTF { c__graphics_ #1 _llx_dim }
+          { \dim_set_eq:Nc \l__graphics_llx_dim { c__graphics_ #1 _llx_dim } }
+          { \dim_zero:N \l__graphics_llx_dim }
+        \dim_if_exist:cTF { c__graphics_ #1 _lly_dim }
+          { \dim_set_eq:Nc \l__graphics_lly_dim { c__graphics_ #1 _lly_dim } }
+          { \dim_zero:N \l__graphics_lly_dim }
+      }
+      {#2}
+  }
+\cs_generate_variant:Nn \__graphics_bb_restore:nF { e }
+\cs_new_protected:Npn \__graphics_extract_bb:n #1
+  {
+    \int_compare:nNnTF \l__graphics_page_int > 0
+      { \__graphics_extract_bb_auxi:Vn \l__graphics_page_int {#1} }
+      { \__graphics_extract_bb_auxii:nnn {#1} { } { } }
+  }
+\cs_new_protected:Npn \__graphics_extract_bb_auxi:nn #1#2
+  { \__graphics_extract_bb_auxii:nnn {#2} { :P #1 } { -p~#1~ } }
+\cs_generate_variant:Nn \__graphics_extract_bb_auxi:nn { Vn }
+\cs_new_protected:Npn \__graphics_extract_bb_auxii:nnn #1#2#3
+  {
+    \tl_if_empty:NTF \l__graphics_pagebox_tl
+      { \__graphics_extract_bb_auxiv:nnn }
+      { \__graphics_extract_bb_auxiii:Vnnn \l__graphics_pagebox_tl }
+      {#1} {#2} {#3}
+  }
+\cs_new_protected:Npn \__graphics_extract_bb_auxiii:nnnn #1#2#3#4
+  { \__graphics_extract_bb_auxiv:nnn {#2} { : #1 #3 } { #4 -B~#1~ } }
+\cs_generate_variant:Nn \__graphics_extract_bb_auxiii:nnnn { V }
+\cs_new_protected:Npn \__graphics_extract_bb_auxiv:nnn #1#2#3
+  {
+    \__graphics_read_bb_auxi:nnnn {#1} {#2}
+      { \ior_shell_open:Nn \l__graphics_internal_ior { extractbb~#3-O~#1 } }
+      { pipe-failed }
+  }
+\cs_new_protected:Npn \__graphics_read_bb:n #1
+  {
+    \__graphics_read_bb_auxi:nnnn {#1} { }
+      { \ior_open:Nn \l__graphics_internal_ior {#1} }
+      { graphic-not-found }
+  }
+\cs_new_protected:Npn \__graphics_read_bb_auxi:nnnn #1#2#3#4
+  {
+    \__graphics_bb_restore:nF {#1#2}
+      { \__graphics_read_bb_auxii:nnnn {#3} {#4} {#1} {#2} }
+  }
+\cs_new_protected:Npe \__graphics_read_bb_auxii:nnnn #1#2#3#4
+  {
+    #1
+    \exp_not:N \ior_if_eof:NTF \exp_not:N \l__graphics_internal_ior
+      { \msg_error:nnn { graphics } {#2} {#3} }
+      {
+        \ior_str_map_inline:Nn \exp_not:N \l__graphics_internal_ior
+          {
+            \exp_not:N \__graphics_read_bb_auxiii:w
+              ##1 ~ \c_colon_str \s__graphics_stop
+          }
+        \__graphics_bb_save:n {#3#4}
+      }
+    \ior_close:N \exp_not:N \l__graphics_internal_ior
+  }
+\use:e
+  {
+    \cs_new_protected:Npn \exp_not:N \__graphics_read_bb_auxiii:w
+      #1 \c_colon_str #2 \s__graphics_stop
+      {
+        \exp_not:N \str_if_eq:nnT
+          { \c_percent_str \c_percent_str BoundingBox }
+          {#1}
+          { \exp_not:N \__graphics_read_bb_auxiv:w #2 ( ) \s__graphics_stop }
+      }
+  }
+\cs_new_protected:Npn \__graphics_read_bb_auxiv:w #1 ( #2 ) #3 \s__graphics_stop
+  {
+    \str_if_eq:nnF {#2} { atend }
+      {
+        \tl_set_rescan:Nne \l__graphics_internal_tl
+          {
+            \char_set_catcode_space:n {  9 }
+            \char_set_catcode_space:n { 32 }
+          }
+          { \use:n #1 }
+        \exp_after:wN \__graphics_read_bb_auxv:w \l__graphics_internal_tl \s__graphics_stop
+      }
+  }
+\cs_new_protected:Npn \__graphics_read_bb_auxv:w #1~#2~#3~#4~#5 \s__graphics_stop
+  {
+    \dim_set:Nn \l__graphics_llx_dim { #1 bp }
+    \dim_set:Nn \l__graphics_lly_dim { #2 bp }
+    \dim_set:Nn \l__graphics_urx_dim { #3 bp }
+    \dim_set:Nn \l__graphics_ury_dim { #4 bp }
+    \ior_map_break:
+  }
+\str_new:N \l__graphics_final_name_str
+\str_new:N \l__graphics_full_name_str
+\box_new:N \l__graphics_internal_box
+\str_new:N \l__graphics_dir_str
+\str_new:N \l__graphics_name_str
+\str_new:N \l__graphics_ext_str
+\seq_new:N \l_graphics_search_path_seq
+\seq_new:N \l_graphics_search_ext_seq
+\prop_new:N \l_graphics_ext_type_prop
+\prop_put:Nnn \l_graphics_ext_type_prop { .ps } { eps }
+\seq_new:N \g__graphics_record_seq
+\cs_new_protected:Npn \graphics_include:nn #1#2
+  {
+    \group_begin:
+      \keys_set:nn { graphics } {#1}
+      \seq_set_eq:NN \l_file_search_path_seq \l_graphics_search_path_seq
+      \file_get_full_name:nNTF {#2} \l__graphics_full_name_str
+        {
+          \str_if_eq:eeTF { \l__graphics_full_name_str } { #2 .tex }
+            { \msg_error:nnn { graphics } { graphic-not-found } {#2} }
+            { \__graphics_include: }
+        }
+        { \msg_error:nnn { graphics } { graphic-not-found } {#2} }
+    \group_end:
+  }
+\cs_generate_variant:Nn \graphics_include:nn { nV }
+\cs_new_protected:Npn \__graphics_include:
+  {
+    \str_if_empty:NTF \l__graphics_type_str
+      {
+        \file_parse_full_name:VNNN \l__graphics_full_name_str
+          \l__graphics_dir_str \l__graphics_name_str \l__graphics_ext_str
+        \__graphics_include_auxi:e
+          {
+            \exp_args:Ne \str_tail:n
+              { \str_casefold:V \l__graphics_ext_str }
+          }
+      }
+      { \__graphics_include_auxi:e { \l__graphics_type_str } }
+  }
+\cs_new_protected:Npn \__graphics_include_auxi:n #1
+  {
+    \prop_get:NnNF \l_graphics_ext_type_prop { .#1 } \l__graphics_internal_tl
+      { \tl_set:Nn \l__graphics_internal_tl {#1} }
+    \exp_args:NV \__graphics_include_auxii:n \l__graphics_internal_tl
+  }
+\cs_generate_variant:Nn \__graphics_include_auxi:n { e }
+\cs_new_protected:Npn \__graphics_include_auxii:n #1
+  {
+    \mode_leave_vertical:
+    \cs_if_exist:cTF { __graphics_backend_include_ #1 :n }
+      {
+        \tl_set_eq:NN \l__graphics_final_name_str \l__graphics_full_name_str
+        \str_set:Ne \l__graphics_full_name_str
+          { \exp_args:NV \__kernel_file_name_quote:n \l__graphics_full_name_str }
+        \exp_args:NnV \use:c { __graphics_backend_getbb_ #1 :n }
+          \l__graphics_full_name_str
+        \seq_gput_right:NV \g__graphics_record_seq \l__graphics_final_name_str
+        \clist_if_exist:NT \@filelist
+          { \exp_args:NV \@addtofilelist \l__graphics_final_name_str }
+        \bool_if:NTF \l__graphics_draft_bool
+          { \__graphics_include_auxiii:n }
+          { \__graphics_include_auxiv:n }
+            {#1}
+      }
+      { \msg_error:nnn { graphics } { unsupported-graphic-type } {#1} }
+  }
+\cs_new_protected:Npn \__graphics_include_auxiii:n #1
+  {
+    \hbox_to_wd:nn { \l__graphics_urx_dim - \l__graphics_llx_dim }
+      {
+        \tex_vrule:D
+        \tex_hss:D
+        \vbox_to_ht:nn
+          { \l__graphics_ury_dim - \l__graphics_lly_dim }
+          {
+            \tex_hrule:D width
+              \dim_eval:n { \l__graphics_urx_dim - \l__graphics_llx_dim }
+            \tex_vss:D
+            \hbox_to_wd:nn
+              { \l__graphics_urx_dim - \l__graphics_llx_dim }
+              {
+                \ttfamily
+                \tex_hss:D \l__graphics_full_name_str \tex_hss:D
+              }
+            \tex_vss:D
+            \tex_hrule:D
+          }
+        \tex_hss:D
+        \tex_vrule:D
+      }
+  }
+\cs_new_protected:Npn \__graphics_include_auxiv:n #1
+  {
+    \hbox_set:Nn \l__graphics_internal_box
+      {
+        \exp_args:NnV \use:c { __graphics_backend_include_ #1 :n }
+          \l__graphics_full_name_str
+      }
+    \box_set_dp:Nn \l__graphics_internal_box { 0pt }
+    \box_set_ht:Nn \l__graphics_internal_box
+      { \l__graphics_ury_dim - \l__graphics_lly_dim }
+    \box_set_wd:Nn \l__graphics_internal_box
+      { \l__graphics_urx_dim - \l__graphics_llx_dim }
+    \box_use_drop:N \l__graphics_internal_box
+  }
+\cs_new_protected:Npn \graphics_show_list: { \__graphics_list:N \msg_show:nneeee }
+\cs_new_protected:Npn \graphics_log_list: { \__graphics_list:N \msg_log:nneeee }
+\cs_new_protected:Npn \__graphics_list:N #1
+  {
+    \seq_remove_duplicates:N \g__graphics_record_seq
+    #1 { kernel } { file-list }
+      { \seq_map_function:NN \g__graphics_record_seq \__graphics_list_aux:n }
+        { } { } { }
+  }
+\cs_new:Npn \__graphics_list_aux:n #1 { \iow_newline: #1 }
+\cs_new_protected:Npn \graphics_get_full_name:nN #1#2
+  {
+    \graphics_get_full_name:nNF {#1} #2
+      { \tl_set:Nn #2 { \q_no_value } }
+  }
+\prg_new_protected_conditional:Npnn \graphics_get_full_name:nN #1#2
+  { T , F , TF }
+  {
+    \group_begin:
+      \seq_set_eq:NN \l_file_search_path_seq \l_graphics_search_path_seq
+      \file_get_full_name:nNTF {#1} \l__graphics_full_name_str
+        {
+          \str_if_eq:eeTF { \l__graphics_full_name_str } { #1 .tex }
+            { \__graphics_get_full_name:n {#1} }
+            {
+              \file_parse_full_name:VNNN \l__graphics_full_name_str
+                \l__graphics_dir_str \l__graphics_name_str \l__graphics_ext_str
+              \seq_map_inline:Nn \l_graphics_search_ext_seq
+                {
+                  \str_if_eq:nVT {##1} \l__graphics_ext_str
+                    { \seq_map_break:n { \use_none:nn } }
+                }
+                  \__graphics_get_full_name:n {#1}
+            }
+        }
+        { \__graphics_get_full_name:n {#1} }
+    \exp_args:NNNV \group_end:
+    \tl_set:Nn #2 \l__graphics_full_name_str
+    \tl_if_empty:NTF #2
+      { \prg_return_false: }
+      { \prg_return_true: }
+  }
+\cs_new_protected:Npn \__graphics_get_full_name:n #1
+  {
+    \str_clear:N \l__graphics_full_name_str
+    \seq_map_inline:Nn \l_graphics_search_ext_seq
+      {
+        \file_get_full_name:nNT { #1 ##1 } \l__graphics_full_name_str
+          { \seq_map_break:n { \use_none:nn } }
+      }
+    \use:n
+      { \str_clear:N \l__graphics_full_name_str }
+  }
+\cs_new_protected:Npn \graphics_get_pagecount:nN #1#2
+  {
+    \group_begin:
+      \seq_set_eq:NN \l_file_search_path_seq \l_graphics_search_path_seq
+      \file_get_full_name:nNTF {#1} \l__graphics_full_name_str
+        {
+          \int_if_exist:cF { c__graphics_ \l__graphics_full_name_str _pages_int }
+            {
+              \exp_args:NV \__graphics_backend_get_pagecount:n
+                \l__graphics_full_name_str
+            }
+          \tl_set:Nv #2 { c__graphics_ \l__graphics_full_name_str _pages_int }
+        }
+        {
+          \tl_set:Nn #2 { 0 }
+          \msg_error:nnn { graphics } { graphic-not-found } {#1}
+        }
+    \exp_args:NNNV \group_end:
+    \tl_set:Nn #2 #2
+  }
+\cs_new_protected:Npe \__graphics_get_pagecount:n #1
+  {
+    \exp_not:N \ior_shell_open:Nn \exp_not:N \l__graphics_internal_ior
+      { extractbb~-O~#1 }
+    \exp_not:N \ior_if_eof:NTF \exp_not:N \l__graphics_internal_ior
+      { \msg_error:nnn { graphics } { pipe-failed } }
+      {
+        \ior_str_map_inline:Nn \exp_not:N \l__graphics_internal_ior
+          {
+            \exp_not:N \__graphics_get_pagecount:nw {#1}
+              ##1 ~ \c_colon_str \c_colon_str \s__graphics_stop
+          }
+        \exp_not:N \int_if_exist:cF { c__graphics_ #1 _pages_int }
+          { \int_const:cn { c__graphics_ #1 _pages_int } { 1 } }
+      }
+    \ior_close:N \exp_not:N \l__graphics_internal_ior
+  }
+\use:e
+  {
+    \cs_new_protected:Npn \exp_not:N \__graphics_get_pagecount:nw
+      #1#2 \c_colon_str #3 \c_colon_str #4 \s__graphics_stop
+      {
+        \exp_not:N \str_if_eq:nnT
+          { \c_percent_str \c_percent_str Pages }
+          {#2}
+          {
+            \int_const:cn { c__graphics_ #1 _pages_int } {#3}
+            \exp_not:N \ior_map_break:
+          }
+      }
+  }
+\msg_new:nnnn { graphics } { graphic-not-found }
+  { Image~file~'#1'~not~found. }
+  {
+    LaTeX~tried~to~open~graphic~file~'#1',~
+    but~the~file~could~not~be~read.
+  }
+\msg_new:nnnn { graphics } { pipe-failed }
+  { Cannot~run~piped~system~commands. }
+  {
+    LaTeX~tried~to~call~a~system~process~but~this~was~not~possible.\\
+    Try~the~"--shell-escape"~(or~"--enable-pipes")~option.
+  }
+\msg_new:nnnn { graphics } { unsupported-graphic-type }
+  { Image~type~'#1'~not~supported~by~current~driver. }
+  {
+    LaTeX~was~asked~to~include~an~graphic~of~type~'#1',~
+    but~this~is~not~supported~by~the~current~driver~(production~route).
   }
 %% File: l3pdf.dtx
 \scan_new:N \s__pdf_stop
