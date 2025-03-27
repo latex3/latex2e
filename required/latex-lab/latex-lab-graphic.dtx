@@ -99,6 +99,8 @@
 % to stay as general as possible, to make it easy to adapt the code to pictures drawn
 % with other packages like \pkg{l3draw}, \pkg{tikz}, \pkg{pstricks}, \pkg{luamplibs} or similar packages. 
 % 
+% \section{General ideas of the implementation}
+% 
 % \subsection{User interfaces}
 % 
 % The tagging of pictures can not be done fully automatically: user
@@ -109,7 +111,7 @@
 % 
 % We therefore recommend package authors to implement an interface like the following. 
 % 
-% \subsubsection{Individual graphics}
+% \subsubsection{Tagging receipe of individual graphics}
 % To change the tagging recipe of an individual graphic, the keys
 % \texttt{artifact} (decorations), \texttt{alt} (illustrative), 
 % and \texttt{actualtext} (symbol) should be used. The keys \texttt{alt}
@@ -132,33 +134,10 @@
 % \tikz[actualtext=A]{...}
 % \begin{picture}[actualtext=A]...\end{picture}
 % \end{verbatim}
+%  
+% \subsubsection{Setting the tagging receipe for a scope}
 % 
-% \subsubsection{Default tagging recipe}
-% 
-% If none of the keys are used, the picture code must chose a default tagging recipe.  
-% The best one depends on the graphic type and should be chosen as needed and documented.
-% 
-% With \cs{includegraphics} we use as default the illustrative mode,
-% tag it as \texttt{Figure} structure, use the file name as alternative text
-% and issue a warning that a real alternative text is missing.
-% 
-% With the \env{picture} enviroment TODO decide!!
-% 
-% With ti\textit{k}Z (a first implementation is currently in latex-lab-tikz), 
-% the default is the text mode, which means that a screen reader will read
-% the text in the node in the order they appear in the code. 
-% In this implementation the \texttt{artifact}
-% key can also be applied on nodes and so remove them from the tagging.
-% \begin{verbatim}
-% \begin{tikzpicture}
-% \node[draw=red](x){Important!};
-% \node[artifact,fill=blue,anchor=west] at (x.east){\phantom{Ip}};
-% \end{tikzpicture}
-% \end{verbatim}
-% 
-% \subsubsection{General setup}
-% 
-% Packages should also provide interfaces to change the tagging recipe for all pictures or
+% Packages can also provide interfaces to change the tagging recipe for all pictures or
 % nodes in a scope. 
 % 
 % With ti\textit{k}Z this can be implemented rather easily as it has a setup command anyway.
@@ -184,9 +163,48 @@
 % 
 % With \env{picture} TODO: decide! React to \verb+\setkeys{Gin}+?
 % 
+% \subsection{Default tagging recipe}
+% 
+% If none of the keys are used, the picture code must chose a default tagging recipe.  
+% The best one depends on the graphic type and should be chosen as needed and then documented.
+% 
+% With \cs{includegraphics} we use as default the illustrative mode,
+% tag it as \texttt{Figure} structure, use the file name as alternative text
+% and issue a warning that a real alternative text is missing.
+% 
+% With the \env{picture} enviroment TODO decide!!
+% 
+% With ti\textit{k}Z (a first implementation is currently in latex-lab-tikz), 
+% the default is the text mode, which means that a screen reader will read
+% the text in the node in the order they appear in the code. 
+% In this implementation the \texttt{artifact}
+% key can also be applied on nodes and so remove them from the tagging.
+% \begin{verbatim}
+% \begin{tikzpicture}
+% \node[draw=red](x){Important!};
+% \node[artifact,fill=blue,anchor=west] at (x.east){\phantom{Ip}};
+% \end{tikzpicture}
+% \end{verbatim}
+
 % \subsection{Sockets, plugs and commands}
 % 
-% TODO 
+% The implementation makes use of fives tagging sockets: An init-socket that handles
+% the key-val input and setup the tagging recipe by switching the plugs of the other
+% tagging sockets. Two sockets that are used at the begin and end of the picture and
+% setup the main structure. The end socket also executes the code to calculate the BBox if needed.
+% And two sockets for the text mode that are used around places where a picture contains 
+% text. The sockets take arguments that allows some configuration (e.g. to use
+% a special command for the BBox calculation) and so they can be used in more
+% than one picture type but there is no obligation to do that. A package can declare
+% its own sockets.
+% 
+% The begin and end sockets have four plugs for the four different modes: 
+% figure, actualtext, artifact and text.  
+%  
+% Besides this a command is needed store the position of a reference 
+% point on the page, and a command to calculate the BBox from this reference
+% point and the size of the picture. These commands are typically specific for a picture type.
+% 
 % 
 % \section{Make \cs{includegraphics} tagging aware}
 % 
@@ -217,7 +235,11 @@
 % if \texttt{viewport} or \texttt{trim} is used and the
 % graphic is not clipped, the visible content can be larger. 
 %  
-% Getting the \texttt{BBox} can be quite straightforward for a graphic that is 
+%  \subsection{The BBox calculation}
+% The reference point on the page is retrieved with \verb+\tex_savepos:D+ and a property
+% just before the graphic.
+%  
+% Getting from this the \texttt{BBox} can be quite straightforward for a graphic that is 
 % used once as is. But graphics can be trimmed, scaled, reflected, rotated and reused
 % in various ways. These transformations typically involve a mix of \TeX{} commands
 % that shift a box or change the bounding box and backend commands that insert
@@ -248,7 +270,7 @@
 %  and so various kernel changes.
 %  \end{itemize}
 %  
-%  \subsection{Restrictions and Todos}
+%  
 %  Therefore a correct BBox is currently 
 %  implemented only for simple \cs{includegraphics} and the keys
 %  \texttt{viewport}, \texttt{trim}, 
@@ -270,26 +292,29 @@
 %  \end{itemize}
 %  
 %  
-%  \section{Additional keys}
-%  The code defines additional keys for \cs{includegraphics}:
+%  \subsection{User interface}
+%  As suggested above the code (re)defines keys for \cs{includegraphics}:
 %  
 %  \begin{description}
-%  \item[\texttt{tag}] with the values
-%   \begin{description}
-%    \item[\texttt{artifact}] When used the graphic will be tagged as artifact. This doesn't
-%     require a \texttt{BBox} and so works also in some of the not yet supported cases described
-%     above.
-%   \item[\texttt{false}] When used tagging will be stopped completely. It is then the 
-%   responsibility of the surrounding code to add appropriate tagging commands.
-%   \item[\meta{name}] Other values will be used as tag names in the structure. If the tag is not
-%   known as a structure tag you will get an warning from tagpdf. The default name is currently
-%   \texttt{Figure}
-%   \end{description}   
-%  \item[\texttt{actualtext}] This allows to add an /ActualText to the structure. 
+%  \item[\texttt{alt}] This key is already defined in the graphicx package
+%  but redefined here to switch to the illustrative mode and to add its value
+%  as alternative text. 
+%  \item[\texttt{actualtext}] This switches to the actualtext mode.
 %  This is useful for small graphics that represent single chars or a short word like a 
 %  logo. If \texttt{actualtext} is used, the graphics is not enclosed in \texttt{Figure}
 %  structure but in a \texttt{Span} structure and no \texttt{/BBox} attribute is added.
 %  This in accordance with (the draft of) PDF/UA-2 but violates perhaps PDF/UA-1.
+%  \item[\texttt{artifact}] This tags the graphic as an artifact.
+%  \item[\texttt{tag}] with the values
+%   \begin{description}
+%    \item[\texttt{artifact}] This a second way to tag the graphic as artifact. 
+%    \item[\texttt{false}] When used tagging will be stopped completely. It is then the 
+%   responsibility of the surrounding code to add appropriate tagging commands.
+%   \item[\meta{name}] This switches to the illustrative mode but uses
+%   \meta{name} tag name in the structure instead of the default \texttt{Figure}. 
+%   If the tag is not
+%   known as a structure tag you will get an warning from tagpdf. 
+%   \end{description}   
 %  \item[\texttt{correct-BBox}] If the calculated \texttt{/BBox} values are wrong
 %  they can be correct with this key. It expects four dimensions that are added to the 
 %  \texttt{/BBox} values. 
@@ -297,10 +322,9 @@
 %  as a half transparent red rectangle. 
 %  \end{description}
 %  
-%  The code also redefines the \texttt{alt} key to actually add its values
-%  as an alternative text. If no \texttt{alt} value is given, a warning is issued 
-%  and the file name of the graphic is used.
+%  \section{Make \env{picture} tagging aware}
 %  
+%  TODO document
 %    \begin{macrocode}
 %<@@=tag>
 %<*package>
@@ -312,15 +336,14 @@
 \ProvidesExplPackage {latex-lab-testphase-graphic} {\ltlabgraphicdate} {\ltlabgraphicversion}
   {Code related to the tagging of graphics}
 %    \end{macrocode}
-% We load l3opacity for the debug code
+% We load l3opacity for the debug code if opacity is not already defined in the kernel:
 %    \begin{macrocode}
-\RequirePackage{l3opacity}
+\cs_if_exist:NF \opacity_select:n
+ {
+   \RequirePackage{l3opacity}
+ }  
 %    \end{macrocode}
 %
-% Needed during switch to e-type:
-%    \begin{macrocode}
-\cs_generate_variant:Nn \@@_prop_gput:Nnn {cne}
-%    \end{macrocode}
 % \begin{macro}{\@@_graphic_savepos:n}
 % this is the command which stores the position. Similar to 
 % zref-savepos it uses two savepos commands 
@@ -340,7 +363,6 @@
 % \begin{variable}
 %  {
 %   \l_@@_graphic_alt_tl,
-%   \l_@@_graphic_alt_dft_tl,   
 %   \l_@@_graphic_actual_tl,
 %   \l_@@_graphic_struct_tl,
 %   \l_@@_graphic_artifact_bool,
@@ -351,8 +373,6 @@
 % Variables for the alt text, the actualtext and the structure tag.
 %    \begin{macrocode}
 \tl_new:N \l_@@_graphic_alt_tl
-\tl_new:N \l_@@_graphic_alt_dflt_tl
-\tl_set:Nn \l_@@_graphic_alt_dflt_tl {\Gin@base\Gin@ext}
 \tl_new:N \l_@@_graphic_actual_tl
 \tl_new:N \l_@@_graphic_struct_tl
 \tl_set:Nn\l_@@_graphic_struct_tl {Figure}
@@ -455,12 +475,11 @@
 \fp_new:N\l_@@_graphic_trim_uy_fp
 %    \end{macrocode}
 % \end{variable}
+% 
 % \subsection{Tagging sockets}
 % The sockets can perhaps not be shared between \cs{includegraphics} and \env{picture}
 % as, e.g., they use different methods to calculate the BBox. CHECK!!
-% Unlike the implementation of tikz (in latex-lab-tikz) we have only three
-% sockets: Text mode is not really sensible in the picture environment
-% and in \cs{includegraphics} so we do not try to support it. 
+%
 % The begin socket takes an argument to allow to pass some configuration.
 % The end socket takes two argument to allow to calculate the BBox
 % before outputting the box.
