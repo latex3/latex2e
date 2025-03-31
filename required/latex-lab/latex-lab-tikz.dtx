@@ -54,15 +54,17 @@
 %
 % \section{Introduction}
 %
-% This implements the tagging of \tikzname\ picture along the lines
-% described in latex-lab-graphic. 
+% This implements the tagging of \tikzname\ picture along the ideas
+% described in latex-lab-graphic, please check its documentation for the
+% background! 
 % 
 % Resulting structures and contents should be checked!
 % 
-% The code doesn't use the generic sockets but instead
-% setups sockets and keys that are \tikzname-specific. Partly
-% to avoid that the tagging tikz pictures has side effect on pictures
-% but more importantly because tikz requires special code in the plugs.
+% The code doesn't use the generic sockets document in latex-lab-graphic 
+% but instead setups sockets and keys that are \tikzname-specific. One reason for
+% this approach is to avoid that the tagging tikz pictures has side effect on pictures
+% but more importantly because as this implementation patches into
+% tikz internal special code in the plugs are required.
 %
 % \begin{implementation}
 % \section{Implementation}
@@ -84,7 +86,8 @@
 % Sockets at the begin and the end of a tikzpicture.
 % The argument in the \texttt{init} 
 % should process the keys of the picture and switch
-% the plugs if needed.
+% the plugs if needed. Unlike the generic sockets the
+% begin and end sockets here do not need arguments.
 %    \begin{macrocode}
 \NewTaggingSocket{tikzpicture/init}{1}
 \NewTaggingSocket{tikzpicture/begin}{0}
@@ -120,7 +123,8 @@
 % \begin{plugdecl}{text (tagsupport/tikzpicture/begin),text (tagsupport/tikzpicture/end)}
 % This plug handles the \tikzname\ picture as a text object. So the graphical parts
 % are tagged as artifact, but when we encounter a node we activate tagging there.
-% There is no Bbox.
+% There is no BBox. A \tikzname\ picture does not necessarly starts with a \cs{leavevmode}
+% so we test for vmode.
 %    \begin{macrocode}
 \NewTaggingSocketPlug{tikzpicture/begin}{text}
   {
@@ -162,7 +166,6 @@
 % use an alt text given in the optional argument and internally tagging is suspended.
 % The Bbox will be set (after the second compilation) to the size of the bounding box.
 %    \begin{macrocode}
-\tagpdfsetup{role/new-tag=tikzpicture/Figure}
 \NewTaggingSocketPlug{tikzpicture/begin}{alt}
   {
     \ifvmode
@@ -171,9 +174,12 @@
      }
     \fi
     \tag_mc_end_push:
+%    \end{macrocode}
+% TODO: The structure name should be adaptable, similar to the generic implementation
+%    \begin{macrocode}
     \tag_struct_begin:n
      {
-      tag=tikzpicture,
+      tag=Figure,
       alt=\l__tikz_tagging_alt_tl
      }
     \pgfrememberpicturepositiononpagetrue
@@ -183,6 +189,9 @@
 \NewTaggingSocketPlug{tikzpicture/end}{alt}
   {
    \tag_mc_end:
+%    \end{macrocode}
+% this is the code that calculates and sets the BBox attribute
+%    \begin{macrocode}
    \cs_set:Npn\pgfqpoint##1##2
     {
       \dim_to_decimal_in_bp:n {##1+ \pgf@picminx}
@@ -261,31 +270,11 @@
 %    \end{macrocode}
 % \end{plugdecl}
 % 
-%  By default we use the text plugs
+%  By default we use the text plugs. This allow packages like todonotes to 
+%  get a sensible tagging without changes.
 %    \begin{macrocode}
 \AssignTaggingSocketPlug{tikzpicture/begin}{text}
 \AssignTaggingSocketPlug{tikzpicture/end}{text}
-%    \end{macrocode}
-%
-% We add the begin socket to the \cs{tikz@picture} command (it is also used
-% by \cs{tikz}). 
-% This allows us to process the keys of the picture, assign the plugs 
-% and then to suspend tagging.
-%    \begin{macrocode}
-\AddToHookWithArguments{cmd/tikz@picture/before}
-  {
-    \tag_socket_use:nn{tikzpicture/init}{#1}
-    \tag_socket_use:n {tikzpicture/begin}
-    \tag_suspend:n{\tikzpicture}
-  }
-%    \end{macrocode}
-% The end socket is in the \cs{endpgfpicture} command.
-%    \begin{macrocode}
-\AddToHook{cmd/endpgfpicture/after}
-  {
-    \tag_resume:n{\tikzpicture}
-    \tag_socket_use:n{tikzpicture/end}
-  }
 %    \end{macrocode}
 %
 % \begin{plugdecl}{default (tagsupport/tikzpicture/text/begin),
@@ -308,11 +297,34 @@
 %    \end{macrocode}
 % \end{plugdecl}
 %
-% \subsection{Keys to change the tagging behaviour}
+% \subsection{Patching tagging into tikz}
+% We add the begin socket to the \cs{tikz@picture} command (it is also used
+% by \cs{tikz}). 
+% This allows us to process the keys of the picture, assign the plugs 
+% and then to suspend tagging.
+%    \begin{macrocode}
+\AddToHookWithArguments{cmd/tikz@picture/before}
+  {
+    \tag_socket_use:nn{tikzpicture/init}{#1}
+    \tag_socket_use:n {tikzpicture/begin}
+    \tag_suspend:n{\tikzpicture}
+  }
+%    \end{macrocode}
+% The end socket is in the \cs{endpgfpicture} command.
+%    \begin{macrocode}
+\AddToHook{cmd/endpgfpicture/after}
+  {
+    \tag_resume:n{\tikzpicture}
+    \tag_socket_use:n{tikzpicture/end}
+  }
+%    \end{macrocode}
+%
+%
+% \subsection{User interface: Keys to change the tagging behaviour}
 % These keys will be processed directly at the begin of the picture commands
-% to change the tagging behaviour. They should also be usable for other 
-% picture environments but for now we make the tikz specific.
-% TODO: thinks about module name
+% to change the tagging behaviour. 
+% They are specific to tikz and should probably better be implemented with
+% pgfkeys \ldots.
 %    \begin{macrocode}
 \tl_new:N  \l__tikz_tagging_alt_tl
 \tl_set:Nn \l__tikz_tagging_alt_tl {Alternative~text~missing!}
@@ -342,7 +354,17 @@
        \AssignTaggingSocketPlug{tikzpicture/end}{artifact}
        \def\pgfsys@begin@text{}
        \def\pgfsys@end@text{}
-     }
+     },
+    tagging-setup .multichoice:,
+    tagging-setup / text .code:n =
+     {
+       \AssignTaggingSocketPlug{tikzpicture/begin}{text}
+       \AssignTaggingSocketPlug{tikzpicture/end}{text}
+     },
+    tagging-setup / unknown .code:n= 
+      {
+        \keys_set:nn { tag/graphic }{#1}
+      }        
   }
 %    \end{macrocode}
 % 
@@ -384,12 +406,13 @@
 %    \end{macrocode}
 %
 % \subsection{\tikzname~ keys to switch the recipes}
-%
+% Todo: alt and actualtext should be able to handle a value, but how
+% is that done in pgfkeys??
 %    \begin{macrocode}
    \tikzset 
      {
        tagging-setup/.is~choice,
-       tagging/text/.code =
+       tagging-setup/text/.code =
         {
           \AssignTaggingSocketPlug{tikzpicture/begin}{text}
           \AssignTaggingSocketPlug{tikzpicture/end}{text}
@@ -419,7 +442,7 @@
  }
 %    \end{macrocode}
 %
-% Todonotes work with the default text recipe quite ok, details can
+% Todonotes works with the default text recipe quite ok, details can
 % be handled later.
 %    \begin{macrocode}
 %</package>
