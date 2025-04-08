@@ -6,4 +6,4 @@ checksearch  = true
 testfiledir  = "testfiles-graphic"
 
 checkruns     = 2
-
+recordstatus = true
