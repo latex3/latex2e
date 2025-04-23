@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{calc}
-\ProvidesExplClass{l3doc}{2025-03-26}{}
+\ProvidesExplClass{l3doc}{2025-04-14}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -1230,7 +1230,6 @@
         \multicolumn { 2 } { @{} r @{} }
           { \scriptsize New: \, \l__codedoc_date_added_tl } \\
       }
-
     \tl_if_empty:NF \l__codedoc_date_updated_tl
       {
         \multicolumn { 2 } { @{} r @{} }
@@ -2413,7 +2412,6 @@
   {
     \tl_to_str:n
       {
-
         alignment, ampersand, atsign, backslash, catcode, circumflex,
         code, colon, document, dollar, e, empty, false, hash, inf,
         initex, job, left, log, math, mark, max, minus, nan, nil, no,
@@ -2421,7 +2419,6 @@
         stop, term, tilde, tmpa, tmpb, true, underscore, zero, one, two,
         three, four, five, six, seven, eight, nine, ten, eleven, twelve,
         thirteen, fourteen, fifteen, sixteen, thirty, hundred
-
       }
   }
 \GlossaryPrologue

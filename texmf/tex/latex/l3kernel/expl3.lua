@@ -4,12 +4,12 @@
 --
 -- The original source files were:
 --
--- l3luatex.dtx  (with options: `package,lua')
--- l3names.dtx  (with options: `package,lua')
--- l3sys.dtx  (with options: `package,lua')
--- l3token.dtx  (with options: `package,lua')
--- l3intarray.dtx  (with options: `package,lua')
--- l3pdf.dtx  (with options: `package,lua')
+-- l3luatex.dtx  (with options: `lua')
+-- l3names.dtx  (with options: `lua')
+-- l3sys.dtx  (with options: `lua')
+-- l3token.dtx  (with options: `lua')
+-- l3intarray.dtx  (with options: `lua')
+-- l3pdf.dtx  (with options: `lua')
 -- 
 -- Copyright (C) 1990-2025 The LaTeX Project
 -- 
