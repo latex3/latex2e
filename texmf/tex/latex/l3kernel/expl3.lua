@@ -65,7 +65,7 @@ local set_macro    = token.set_macro
 local token_create_safe
 do
   local is_defined = token.is_defined
-  local set_char   = token.set_char
+  local set_char   = token.set_char or tex.chardef
   local runtoks    = tex.runtoks
   local let_token  = token_create'let'
 
