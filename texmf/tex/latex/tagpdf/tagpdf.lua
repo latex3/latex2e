@@ -48,6 +48,7 @@ the main table is named ltx.__tag. It contains the functions and also the data
 collected during the compilation.
 
 ltx.__tag.mc     will contain mc connected data.
+ltx.__tag.role   will contain data related to parent-child relations.
 ltx.__tag.struct will contain structure related data.
 ltx.__tag.page   will contain page data
 ltx.__tag.tables contains also data from mc and struct (from older code). This needs cleaning up.
@@ -133,6 +134,11 @@ ltx             = ltx        or { }
 ltx.tag         = ltx.tag       or { } -- user commands
 ltx.__tag          = ltx.__tag        or { }
 ltx.__tag.mc       = ltx.__tag.mc     or  { } -- mc data
+ltx.__tag.role     = ltx.__tag.role   or  { } -- parent-child data
+ltx.__tag.role.states = ltx.__tag.role.states   or  { } -- the states
+ltx.__tag.role.index  = ltx.__tag.role.index    or  { } -- standard types to index
+                                                  --- numbers
+ltx.__tag.role.matrix = ltx.__tag.role.matrix   or  { } -- implements the matrix
 ltx.__tag.struct   = ltx.__tag.struct or  { } -- struct data
 ltx.__tag.tables   = ltx.__tag.tables or  { } -- tables created with new prop and new seq.
                                         -- wasn't a so great idea ...
@@ -905,5 +911,11 @@ do
   luatexbase.add_to_callback('pre_shaping_filter', process_softhyphen_pre, 'tagpdf.rewrite-softhyphen')
   luatexbase.add_to_callback('post_shaping_filter', process_softhyphen_post, 'tagpdf.rewrite-softhyphen')
 end
+local function role_get_parent_child_rule (parent,child)
+   local state=
+   ltx.__tag.role.matrix[ltx.__tag.role.index[parent]][ltx.__tag.role.index[child]] or 0
+   return state
+end
+ltx.__tag.func.role_get_parent_child_rule=role_get_parent_child_rule
 -- 
 --  End of File `tagpdf.lua'.
