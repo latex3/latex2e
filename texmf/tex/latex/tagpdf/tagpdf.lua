@@ -312,7 +312,7 @@ function ltx.__tag.func.store_mc_label (label,num)
  ltx.__tag.mc.labels[label] = num
 end
 function ltx.__tag.func.store_mc_kid (mcnum,kid,page)
- ltx.__tag.trace.log("INFO TAG-STORE-MC-KID: "..mcnum.." => " .. kid.." on page " .. page,3)
+ __tag_log("INFO TAG-STORE-MC-KID: "..mcnum.." => " .. kid.." on page " .. page,3)
  ltx.__tag.mc[mcnum]["kids"] = ltx.__tag.mc[mcnum]["kids"] or { }
  local kidtable = {kid=kid,page=page}
  tableinsert(ltx.__tag.mc[mcnum]["kids"], kidtable )
@@ -323,7 +323,7 @@ function ltx.__tag.func.mc_num_of_kids (mcnum)
  if ltx.__tag.mc[mcnum] and ltx.__tag.mc[mcnum]["kids"] then
    num = #ltx.__tag.mc[mcnum]["kids"]
  end
- ltx.__tag.trace.log ("INFO MC-KID-NUMBERS: " .. mcnum .. "has " .. num .. "KIDS",4)
+ __tag_log ("INFO MC-KID-NUMBERS: " .. mcnum .. "has " .. num .. "KIDS",4)
  return num
 end
 local __tag_backend_create_emc_node
@@ -487,7 +487,7 @@ local function __tag_mark_spaces (head)
       end
     elseif id == PENALTY then
       local glyph = n
-      -- ltx.__tag.trace.log ("PENALTY ".. n.subtype.."VALUE"..n.penalty,3)
+      -- __tag_log ("PENALTY ".. n.subtype.."VALUE"..n.penalty,3)
       if glyph.next and (glyph.next.id == GLUE)
         and not inside_math  and (glyph.next.width >0) and n.subtype==0
       then
@@ -557,7 +557,7 @@ local function __tag_space_chars_shipout (box)
           local space
           local space_char = node.copy(default_space_char)
           local curfont    = nodegetattribute(n,iwfontattributeid)
-          ltx.__tag.trace.log ("INFO SPACE-FUNCTION-FONT: ".. tostring(curfont),3)
+          __tag_log ("INFO SPACE-FUNCTION-FONT: ".. tostring(curfont),3)
           if curfont and
             -- luaotfload.aux.slot_of_name(curfont,"space")
             __tag_font_has_space (curfont)
@@ -579,7 +579,7 @@ function ltx.__tag.func.space_chars_shipout (box)
 end
 function ltx.__tag.func.mc_insert_kids (mcnum,single)
   if ltx.__tag.mc[mcnum] then
-  ltx.__tag.trace.log("INFO TEX-MC-INSERT-KID-TEST: " .. mcnum,4)
+  __tag_log("INFO TEX-MC-INSERT-KID-TEST: " .. mcnum,4)
    if ltx.__tag.mc[mcnum]["kids"] then
     if #ltx.__tag.mc[mcnum]["kids"] > 1 and single==1 then
      tex.sprint("[")
@@ -588,7 +588,7 @@ function ltx.__tag.func.mc_insert_kids (mcnum,single)
      local kidnum  = kidstable["kid"]
      local kidpage = kidstable["page"]
      local kidpageobjnum = pdfpageref(kidpage)
-     ltx.__tag.trace.log("INFO TEX-MC-INSERT-KID: " .. mcnum ..
+     __tag_log("INFO TEX-MC-INSERT-KID: " .. mcnum ..
                       " insert KID " ..i..
                       " with num " .. kidnum ..
                       " on page " .. kidpage.."/"..kidpageobjnum,3)
@@ -600,13 +600,13 @@ function ltx.__tag.func.mc_insert_kids (mcnum,single)
    else
     -- this is typically not a problem, e.g. empty hbox in footer/header can
     -- trigger this warning.
-    ltx.__tag.trace.log("WARN TEX-MC-INSERT-NO-KIDS: "..mcnum.." has no kids",2)
+    __tag_log("WARN TEX-MC-INSERT-NO-KIDS: "..mcnum.." has no kids",2)
     if single==1 then
       tex.sprint("null")
     end
    end
   else
-   ltx.__tag.trace.log("WARN TEX-MC-INSERT-MISSING: "..mcnum.." doesn't exist",0)
+   __tag_log("WARN TEX-MC-INSERT-MISSING: "..mcnum.." doesn't exist",0)
   end
 end
 function ltx.__tag.func.store_struct_mcabs (structnum,mcnum)
@@ -614,7 +614,7 @@ function ltx.__tag.func.store_struct_mcabs (structnum,mcnum)
  ltx.__tag.struct[structnum]["mc"]=ltx.__tag.struct[structnum]["mc"] or { }
  -- a structure can contain more than on mc chunk, the content should be ordered
  tableinsert(ltx.__tag.struct[structnum]["mc"],mcnum)
- ltx.__tag.trace.log("INFO TEX-MC-INTO-STRUCT: "..
+ __tag_log("INFO TEX-MC-INTO-STRUCT: "..
                    mcnum.." inserted in struct "..structnum,3)
  -- but every mc can only be in one structure
  ltx.__tag.mc[mcnum]= ltx.__tag.mc[mcnum] or { }
@@ -626,7 +626,7 @@ end
 function ltx.__tag.func.store_mc_in_page (mcnum,mcpagecnt,page)
  ltx.__tag.page[page] = ltx.__tag.page[page] or {}
  ltx.__tag.page[page][mcpagecnt] = mcnum
- ltx.__tag.trace.log("INFO TAG-MC-INTO-PAGE: page " .. page ..
+ __tag_log("INFO TAG-MC-INTO-PAGE: page " .. page ..
                    ": inserting MCID " .. mcpagecnt .. " => " .. mcnum,3)
 end
 local function __tag_update_mc_attributes (head,mcnum,type)
@@ -662,28 +662,28 @@ function ltx.__tag.func.mark_page_elements (box,mcpagecnt,mccntprev,mcopen,name,
   local abspage = status.total_pages + 1  -- the real counter is increased
                                           -- inside the box so one off
                                           -- if the callback is not used. (???)
-  ltx.__tag.trace.log ("INFO TAG-ABSPAGE: " .. abspage,3)
-  ltx.__tag.trace.log ("INFO TAG-ARGS: pagecnt".. mcpagecnt..
+  __tag_log ("INFO TAG-ABSPAGE: " .. abspage,3)
+  __tag_log ("INFO TAG-ARGS: pagecnt".. mcpagecnt..
                     " prev "..mccntprev ..
                     " type prev "..mctypeprev,4)
-  ltx.__tag.trace.log ("INFO TAG-TRAVERSING-BOX: ".. tostring(name)..
+  __tag_log ("INFO TAG-TRAVERSING-BOX: ".. tostring(name)..
                     " TYPE ".. node.type(node.getid(box)),3)
   local head = box.head -- ShipoutBox is a vlist?
   if head then
     mccnthead, mctypehead,taghead = __tag_get_mc_cnt_type_tag (head)
-    ltx.__tag.trace.log ("INFO TAG-HEAD: " ..
+    __tag_log ("INFO TAG-HEAD: " ..
                       node.type(node.getid(head))..
                       " MC"..tostring(mccnthead)..
                       " => TAG " .. tostring(mctypehead)..
                       " => ".. tostring(taghead),3)
   else
-    ltx.__tag.trace.log ("INFO TAG-NO-HEAD: head is "..
+    __tag_log ("INFO TAG-NO-HEAD: head is "..
                        tostring(head),3)
   end
   for n in node.traverse(head) do
     local mccnt, mctype, tag = __tag_get_mc_cnt_type_tag (n)
     local spaceattr = nodegetattribute(n,iwspaceattributeid)  or -1
-    ltx.__tag.trace.log ("INFO TAG-NODE: "..
+    __tag_log ("INFO TAG-NODE: "..
                        node.type(node.getid(n))..
                       " MC".. tostring(mccnt)..
                       " => TAG ".. tostring(mctype)..
@@ -700,36 +700,36 @@ function ltx.__tag.func.mark_page_elements (box,mcpagecnt,mccntprev,mcopen,name,
     elseif n.id == LOCAL_PAR then  -- local_par is ignored
     elseif n.id == PENALTY then    -- penalty is ignored
     elseif n.id == KERN then       -- kern is ignored
-     ltx.__tag.trace.log ("INFO TAG-KERN-SUBTYPE: "..
+     __tag_log ("INFO TAG-KERN-SUBTYPE: "..
        node.type(node.getid(n)).." "..n.subtype,4)
     else
      -- math is currently only logged.
      -- we could mark the whole as math
      -- for inner processing the mlist_to_hlist callback is probably needed.
      if n.id == MATH then
-      ltx.__tag.trace.log("INFO TAG-MATH-SUBTYPE: "..
+      __tag_log("INFO TAG-MATH-SUBTYPE: "..
         node.type(node.getid(n)).." "..__tag_get_mathsubtype(n),4)
      end
      -- endmath
-     ltx.__tag.trace.log("INFO TAG-MC-COMPARE: current "..
+     __tag_log("INFO TAG-MC-COMPARE: current "..
                mccnt.." prev "..mccntprev,4)
      if mccnt~=mccntprev then -- a new mc chunk
-      ltx.__tag.trace.log ("INFO TAG-NEW-MC-NODE: "..
+      __tag_log ("INFO TAG-NEW-MC-NODE: "..
                          node.type(node.getid(n))..
                         " MC"..tostring(mccnt)..
                         " <=> PREVIOUS "..tostring(mccntprev),4)
       if mcopen~=0 then -- there is a chunk open, close it (hope there is only one ...
        box.list=__tag_insert_emc_node (box.list,n)
        mcopen = mcopen - 1
-       ltx.__tag.trace.log ("INFO TAG-INSERT-EMC: " ..
+       __tag_log ("INFO TAG-INSERT-EMC: " ..
          mcpagecnt .. " MCOPEN = " .. mcopen,3)
        if mcopen ~=0 then
-        ltx.__tag.trace.log ("WARN TAG-OPEN-MC: " .. mcopen,1)
+        __tag_log ("WARN TAG-OPEN-MC: " .. mcopen,1)
        end
       end
       if ltx.__tag.mc[mccnt] then
        if ltx.__tag.mc[mccnt]["artifact"] then
-        ltx.__tag.trace.log("INFO TAG-INSERT-ARTIFACT: "..
+        __tag_log("INFO TAG-INSERT-ARTIFACT: "..
                           tostring(ltx.__tag.mc[mccnt]["artifact"]),3)
         if ltx.__tag.mc[mccnt]["artifact"] == "" then
          box.list = __tag_insert_bmc_node (box.list,n,"Artifact")
@@ -737,23 +737,23 @@ function ltx.__tag.func.mark_page_elements (box,mcpagecnt,mccntprev,mcopen,name,
          box.list = __tag_insert_bdc_node (box.list,n,"Artifact", "/Type /"..ltx.__tag.mc[mccnt]["artifact"])
         end
        else
-        ltx.__tag.trace.log("INFO TAG-INSERT-TAG: "..
+        __tag_log("INFO TAG-INSERT-TAG: "..
                           tostring(tag),3)
         mcpagecnt = mcpagecnt +1
-        ltx.__tag.trace.log ("INFO TAG-INSERT-BDC: "..mcpagecnt,3)
+        __tag_log ("INFO TAG-INSERT-BDC: "..mcpagecnt,3)
         local dict= "/MCID "..mcpagecnt
         if ltx.__tag.mc[mccnt]["raw"] then
-         ltx.__tag.trace.log("INFO TAG-USE-RAW: "..
+         __tag_log("INFO TAG-USE-RAW: "..
            tostring(ltx.__tag.mc[mccnt]["raw"]),3)
          dict= dict .. " " .. ltx.__tag.mc[mccnt]["raw"]
         end
         if ltx.__tag.mc[mccnt]["alt"] then
-         ltx.__tag.trace.log("INFO TAG-USE-ALT: "..
+         __tag_log("INFO TAG-USE-ALT: "..
             tostring(ltx.__tag.mc[mccnt]["alt"]),3)
          dict= dict .. " " .. ltx.__tag.mc[mccnt]["alt"]
         end
         if ltx.__tag.mc[mccnt]["actualtext"] then
-         ltx.__tag.trace.log("INFO TAG-USE-ACTUALTEXT: "..
+         __tag_log("INFO TAG-USE-ACTUALTEXT: "..
            tostring(ltx.__tag.mc[mccnt]["actualtext"]),3)
          dict= dict .. " " .. ltx.__tag.mc[mccnt]["actualtext"]
         end
@@ -765,11 +765,11 @@ function ltx.__tag.func.mark_page_elements (box,mcpagecnt,mccntprev,mcopen,name,
        mcopen = mcopen + 1
       else
        if tagunmarkedbool.mode == truebool.mode then
-        ltx.__tag.trace.log("INFO TAG-NOT-TAGGED: this has not been tagged, using artifact",2)
+        __tag_log("INFO TAG-NOT-TAGGED: this has not been tagged, using artifact",2)
         box.list = __tag_insert_bmc_node (box.list,n,"Artifact")
         mcopen = mcopen + 1
        else
-        ltx.__tag.trace.log("WARN TAG-NOT-TAGGED: this has not been tagged",1)
+        __tag_log("WARN TAG-NOT-TAGGED: this has not been tagged",1)
        end
       end
       mccntprev = mccnt
@@ -778,15 +778,15 @@ function ltx.__tag.func.mark_page_elements (box,mcpagecnt,mccntprev,mcopen,name,
   end -- end for
   if head then
     mccnthead, mctypehead,taghead = __tag_get_mc_cnt_type_tag (head)
-    ltx.__tag.trace.log ("INFO TAG-ENDHEAD: " ..
+    __tag_log ("INFO TAG-ENDHEAD: " ..
                        node.type(node.getid(head))..
                       " MC"..tostring(mccnthead)..
                       " => TAG "..tostring(mctypehead)..
                       " => "..tostring(taghead),4)
   else
-    ltx.__tag.trace.log ("INFO TAG-ENDHEAD: ".. tostring(head),4)
+    __tag_log ("INFO TAG-ENDHEAD: ".. tostring(head),4)
   end
-  ltx.__tag.trace.log ("INFO TAG-QUITTING-BOX "..
+  __tag_log ("INFO TAG-QUITTING-BOX "..
                      tostring(name)..
                     " TYPE ".. node.type(node.getid(box)),4)
  return mcopen,mcpagecnt,mccntprev,mctypeprev
@@ -800,12 +800,12 @@ function ltx.__tag.func.mark_shipout (box)
   if list then
      list = node.insert_after (list,node.tail(list),emcnode)
      mcopen = mcopen - 1
-     ltx.__tag.trace.log ("INFO SHIPOUT-INSERT-LAST-EMC: MCOPEN " .. mcopen,3)
+     __tag_log ("INFO SHIPOUT-INSERT-LAST-EMC: MCOPEN " .. mcopen,3)
   else
-     ltx.__tag.trace.log ("WARN SHIPOUT-UPS: this shouldn't happen",0)
+     __tag_log ("WARN SHIPOUT-UPS: this shouldn't happen",0)
   end
   if mcopen ~=0 then
-     ltx.__tag.trace.log ("WARN SHIPOUT-MC-OPEN: " .. mcopen,1)
+     __tag_log ("WARN SHIPOUT-MC-OPEN: " .. mcopen,1)
   end
  end
 end
@@ -817,11 +817,11 @@ function ltx.__tag.func.fill_parent_tree_line (page)
     local pdfpage = page-1
     if ltx.__tag.page[page] and ltx.__tag.page[page][0] then
      mcchunks=#ltx.__tag.page[page]
-     ltx.__tag.trace.log("INFO PARENTTREE-NUM:  page "..
+     __tag_log("INFO PARENTTREE-NUM:  page "..
                    page.." has "..mcchunks.."+1 Elements ",4)
      for i=0,mcchunks do
      -- what does this log??
-      ltx.__tag.trace.log("INFO PARENTTREE-CHUNKS:  "..
+      __tag_log("INFO PARENTTREE-CHUNKS:  "..
         ltx.__tag.page[page][i],4)
      end
      if mcchunks == 0 then
@@ -831,10 +831,10 @@ function ltx.__tag.func.fill_parent_tree_line (page)
       local propname  = "g__tag_struct_"..structnum.."_prop"
       --local objref   =  ltx.__tag.tables[propname]["objref"] or "XXXX"
       local objref = __tag_pdf_object_ref('__tag/struct',structnum)
-      ltx.__tag.trace.log("INFO PARENTTREE-STRUCT-OBJREF:  =====>"..
+      __tag_log("INFO PARENTTREE-STRUCT-OBJREF:  =====>"..
         tostring(objref),5)
       numsentry = pdfpage .. " [".. objref .. "]"
-      ltx.__tag.trace.log("INFO PARENTTREE-NUMENTRY: page " ..
+      __tag_log("INFO PARENTTREE-NUMENTRY: page " ..
         page.. " num entry = ".. numsentry,3)
      else
       numsentry = pdfpage .. " ["
@@ -847,11 +847,11 @@ function ltx.__tag.func.fill_parent_tree_line (page)
         numsentry = numsentry .. " ".. objref
        end
       numsentry = numsentry .. "] "
-      ltx.__tag.trace.log("INFO PARENTTREE-NUMENTRY: page " ..
+      __tag_log("INFO PARENTTREE-NUMENTRY: page " ..
         page.. " num entry = ".. numsentry,3)
      end
     else
-      ltx.__tag.trace.log ("INFO PARENTTREE-NO-DATA: page "..page,3)
+      __tag_log ("INFO PARENTTREE-NO-DATA: page "..page,3)
       numsentry = pdfpage.." []"
     end
     return numsentry
@@ -913,9 +913,98 @@ do
 end
 local function role_get_parent_child_rule (parent,child)
    local state=
-   ltx.__tag.role.matrix[ltx.__tag.role.index[parent]][ltx.__tag.role.index[child]] or 0
+   ltx.__tag.role.matrix[ltx.__tag.role.index[parent]]
+   and ltx.__tag.role.matrix[ltx.__tag.role.index[parent]][ltx.__tag.role.index[child]] or 0
    return state
 end
 ltx.__tag.func.role_get_parent_child_rule=role_get_parent_child_rule
+function check_update_stashed (struct,loglevel,loop)
+ loop = (loop or 0)  + 1
+ if loop > 10 then
+  __tag_log ('Warning: Too deeply nested stashed structures',0)
+  return
+ end
+ __tag_log ('updating parentrole for stashed structure '..struct,loglevel)
+ local parent = ltx.__tag.tables['g__tag_struct_'..struct..'_prop']['parentnum']
+ if parent then
+   local ptag =
+    string.match(ltx.__tag.tables['g__tag_struct_'..parent..'_prop']['parentrole'], "{(.-)}{(.-)}")
+   if ptag == 'STASHED' then
+   -- look at the parent and update it first
+     check_update_stashed (parent,loglevel,loop)
+   end
+   -- now copy the parent role from the parent
+     ltx.__tag.tables['g__tag_struct_'..struct..'_prop']['parentrole']
+        =
+     ltx.__tag.tables['g__tag_struct_'..parent..'_prop']['parentrole']
+   __tag_log
+    ('new parentrole: ' .. ltx.__tag.tables['g__tag_struct_'..struct..'_prop']['parentrole'], loglevel)
+ else
+  __tag_log ('Warning: structure '..struct.. 'has no parent.',0)
+ end
+end
+
+function check_parent_child_rules (loglevel)
+ for i=2,ltx.tag.get_struct_counter() do
+  local t,tNS=
+    string.match(ltx.__tag.tables['g__tag_struct_'..i..'_prop']['tag'], "{(.-)}{(.-)}")
+  local r,rNS=
+    string.match(ltx.__tag.tables['g__tag_struct_'..i..'_prop']['rolemap'], "{(.-)}{(.-)}")
+  local p,pNS=
+    string.match(ltx.__tag.tables['g__tag_struct_'..i..'_prop']['parentrole'], "{(.-)}{(.-)}")
+  local parent=ltx.__tag.tables['g__tag_struct_'..i..'_prop']['parentnum']
+  if parent then
+    __tag_log (i..': '.. t..':'..tNS,loglevel)
+    __tag_log (i..': '.. r..':'..rNS,loglevel)
+    __tag_log (i..': '.. p..':'..pNS,loglevel)
+    __tag_log ('parent of ' ..i..': '.. parent,loglevel )
+    if p == 'STASHED' then
+     check_update_stashed  (i,loglevel,0)
+     p,pNS=
+       string.match(ltx.__tag.tables['g__tag_struct_'..i..'_prop']['parentrole'], "{(.-)}{(.-)}")
+    end
+    local pt,ptNS=
+    string.match(ltx.__tag.tables['g__tag_struct_'..parent..'_prop']['tag'], "{(.-)}{(.-)}")
+    local pr,prNS=
+    string.match(ltx.__tag.tables['g__tag_struct_'..parent..'_prop']['rolemap'], "{(.-)}{(.-)}")
+    local pp,ppNS=
+    string.match(ltx.__tag.tables['g__tag_struct_'..parent..'_prop']['parentrole'], "{(.-)}{(.-)}")
+    if pp == 'STASHED' then
+     check_update_stashed  (parent,loglevel,0)
+     pp,ppNS=
+      string.match(ltx.__tag.tables['g__tag_struct_'..parent..'_prop']['parentrole'], "{(.-)}{(.-)}")
+    end
+    __tag_log (parent..': '.. pt..':'..ptNS,loglevel)
+    __tag_log (parent..': '.. pr..':'..prNS,loglevel)
+    __tag_log (parent..': '.. pp..':'..ppNS,loglevel)
+   -- now check the rule.
+   -- at first rolemap of child against rolemap of parent.
+    local state=ltx.__tag.func.role_get_parent_child_rule (pr,r)
+    __tag_log ('rule of '..pr.."->"..r..' is '..state,loglevel)
+    -- if the state is 7 we check against parentrole of the parent
+    if state == 7 then
+     state=ltx.__tag.func.role_get_parent_child_rule (pp,r)
+     __tag_log ('Parent-Child relation '..pp.."->"..r..' is '..state,loglevel)
+    end
+    if state == 0 then
+      __tag_log
+      ('Warning: Parent-Child relation '
+       ..ptNS..':'..pt..' -> '..tNS..':'..t..' is unknown',0)
+      __tag_log
+       ('Structure ' ..parent..' -> '..i,0)
+    end
+    if state == -1 then
+     __tag_log
+      ('Warning: Parent-Child relation '
+       ..ptNS..':'..pt..' -> '..tNS..':'..t..' is not allowed',0)
+     __tag_log
+       ('Structure ' ..parent..' -> '..i,0)
+    end
+    __tag_log('=======================================',loglevel)
+   end
+  end -- end for
+ end
+
+ltx.__tag.func.check_parent_child_rules=check_parent_child_rules
 -- 
 --  End of File `tagpdf.lua'.
