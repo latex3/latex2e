@@ -23,6 +23,8 @@ typesetfiles = {
 		 "*-code.tex",
 	       }
 
+
+
 unpackfiles  = {"*.ins"}
 
 sourcefiles  = {
@@ -106,3 +108,79 @@ dofile (maindir .. "/build-config.lua")
 update_tag = update_tag_ltx
 
 table.insert(checksuppfiles,"supp-pdf.mkii")
+
+
+-- adapt some function to allow typesetting with luatex
+
+-- we need a copy of the local fmt function
+
+local function fmt(engines,dest)
+
+  local fmtsearch = false
+
+  local function mkfmt(engine)
+    -- Use .ini files if available
+    local ini = string.gsub(engine,"tex","") .. "latex"
+    if ini == "elatex" then
+        ini = "latex"
+    end
+    local cmd = engine
+    if engine == "luatex" then cmd = "luahbtex" end
+    print("Building format for " .. engine)
+    local errorlevel = os.execute(
+      os_setenv .. " TEXINPUTS=" .. unpackdir .. os_pathsep .. localdir
+      .. os_pathsep .. texmfdir .. "//" .. (fmtsearch and os_pathsep or "")
+      .. os_concat ..
+      os_setenv .. " LUAINPUTS=" .. unpackdir .. os_pathsep .. localdir
+      .. os_pathsep .. texmfdir .. "//" .. (fmtsearch and os_pathsep or "")
+      .. os_concat .. cmd .. " -etex -ini -output-directory=" .. unpackdir
+      .. " " .. ini .. ".ini"
+      .. (hide and (" > " .. os_null) or ""))
+    if errorlevel ~= 0 then return errorlevel end
+
+    cp(ini .. ".fmt",unpackdir,dest)
+
+    return 0
+  end
+
+  if dest ~= typesetdir and
+    (not options["config"] or options["config"][1] ~= "config-TU") then
+    cp("fonttext.cfg",supportdir,unpackdir)
+  end
+
+  -- Zap the custom hyphen.cfg when typesetting
+  if dest == typesetdir then
+    rm(localdir,"hyphen.cfg")
+    fmtsearch =  true
+  end
+
+  local errorlevel
+  for _,engine in pairs(engines) do
+    errorlevel = mkfmt(engine)
+    if errorlevel ~= 0 then return errorlevel end
+  end
+  return 0
+end
+
+
+-- now build both the pdflatex and lualatex format
+
+function docinit_hook() return fmt({"pdftex","luatex"},typesetdir) end
+
+-- To be able to choose the format we make use of the specialtypesetting table
+
+specialtypesetting = specialtypesetting or {}
+specialtypesetting["latex-lab-tikz.dtx"] = {format = "lualatex"}
+
+function tex(file,dir,mode)
+  dir = dir or "."
+  mode = mode or "nonstopmode"
+  local format = 'pdftex -fmt=pdflatex'
+  if specialtypesetting and specialtypesetting[file] then
+    format = specialtypesetting[file].format or format
+  end
+  return runcmd(
+    format .. ' -interaction=' .. mode .. ' -jobname="' ..
+      string.match(file,"^[^.]*") .. '" "\\input ' .. file .. '"',
+    dir,{"TEXINPUTS","TEXFORMATS","LUAINPUTS"})
+end
