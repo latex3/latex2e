@@ -170,7 +170,7 @@ function docinit_hook() return fmt({"pdftex","luatex"},typesetdir) end
 -- To be able to choose the format we make use of the specialtypesetting table
 
 specialtypesetting = specialtypesetting or {}
-specialtypesetting["latex-lab-tikz.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-bib.dtx"] = {format = "lualatex"}
 
 function tex(file,dir,mode)
   dir = dir or "."
