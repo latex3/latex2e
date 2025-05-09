@@ -132,6 +132,16 @@
 %    \end{macrocode}
 % \end{variable}
 % 
+% \begin{variable}{\g__codedoc_macroname_structnum_seq}
+% This holds the structure numbers of the 
+% structure around every command name in a macro environment. As
+% structure are created insidesbox this is a global variable, which is cleared
+% at the end of the outer macro environment. 
+%    \begin{macrocode}
+\seq_new:N\g__codedoc_macroname_structnum_seq   
+%    \end{macrocode}
+% \end{variable}
+% 
 % \subsection{The \env{function} enviroment}
 % 
 % \begin{macro}[no-user-doc]{\__codedoc_function_typeset_start:}
@@ -278,9 +288,19 @@
 % \end{macro}
 % 
 % \subsection{The \env{macro} environment}
+% The macro environment is difficult: It collects various content
+% in boxes and outputs everything at the end in \cs{__codedoc_macro_dump:},
+% including the command names in the argument which are output in the margin.
+% A macro environment can have more than one name in 
+% the argument and the environment be nested and the respective command names
+% are then combined with the outer names. 
+% A command name can link to a \env{function} environment,
+% which mean that it isn't simple text but contains a structure.
+% This means that one has to collect structure numbers to insert them when needed.
+% 
 % 
 % \begin{macro}[no-user-doc]{\__codedoc_macro_dump:}
-% Here we have larger changes as we need to replace the trivlist by a displayblock.
+% Here we have larger changes as we need also to replace the trivlist by a displayblock.
 %    \begin{macrocode}
 \cs_set_protected:Npn \__codedoc_macro_dump:
   {
@@ -288,30 +308,61 @@
      {
        \begin{displayblock} [tag-name=macro,beginsep=\MacroTopsep]
 %    \end{macrocode}
-% we add here a container for the macronames which are built later
+% we add here a container for the macronames which are built later and use
+% the structures from the list. 
 %    \begin{macrocode}
        \tagstructbegin{tag=macronames}
        \tl_set:Ne \l__codedoc_current_names_struct_tl {\tag_get:n{struct_num}}
+       \seq_map_inline:Nn \g__codedoc_macroname_structnum_seq
+         {\tag_struct_use_num:n {##1}}
+       \seq_gclear:N \g__codedoc_macroname_structnum_seq 
        \tagstructend  
      }
    \noindent\llap
-          { \tagmcend
-            \tagstructbegin{tag=macroname,parent=\l__codedoc_current_names_struct_tl}
-%    \end{macrocode}
-% The inserted macroname can e.g. contain a link and mc commands. So we can't
-% start an mc chunk here and simply drop in the box, instead the 
-%    \begin{macrocode}
+          { \tagmcend            
             \hbox_unpack_drop:N \l__codedoc_macro_index_box
             \vtop to \baselineskip
               {
                 \vbox_unpack_drop:N \l__codedoc_macro_box
                 \vss
               }
-            \hspace{\labelsep}
-            \tagstructend
+            \hspace{\labelsep}            
             \tagmcbegin{}   
           }
    }
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\__codedoc_macro_typeset_one:nN}
+% The \cs{__codedoc_macro_typeset_one:nN} command appends one macro name
+% to the \cs{l__codedoc_macro_box}. We have to add a structure.
+% If we are on the outer level we have to record the structure number.
+% In the inner level we can use the existing structure.
+% TODO: is that the right place to open/close the mc-chunk?
+%    \begin{macrocode}
+\cs_set_protected:Npn \__codedoc_macro_typeset_one:nN #1#2
+  { 
+    \vbox_set:Nn \l__codedoc_macro_box
+      { 
+        \vbox_unpack_drop:N \l__codedoc_macro_box
+        \int_compare:nNnTF { \l__codedoc_nested_macro_int } = { 1 }
+         {
+           \tagstructbegin{tag=macroname,stash}
+            \seq_gput_right:Ne 
+             \g__codedoc_macroname_structnum_seq{\tag_get:n{struct_num}}        
+         }
+         {
+           \tagstructbegin{tag=macroname,parent=\l__codedoc_current_names_struct_tl}
+         }    
+        \tagmcbegin{}
+        \hbox { \llap { \__codedoc_print_macroname:nN {#1} #2
+            \MacroFont \
+        } }
+        \tagmcend
+        \tagstructend
+      }
+    \int_incr:N \l__codedoc_macro_int
+  } 
 %    \end{macrocode}
 % \end{macro}
 % 
@@ -327,9 +378,10 @@
 % \end{macro}
 % 
 % \begin{macro}{\__codedoc_macro_end:}
+% TODO. Why on earth two tests??
 %    \begin{macrocode}
 \cs_set_protected:Npn \__codedoc_macro_end:
-  {
+  { \typeout{macro end \int_use:N \l__codedoc_nested_macro_int}
     \__codedoc_macro_end_check_tested:
     \int_compare:nNnT \l__codedoc_nested_macro_int = 1
       { \par \__codedoc_macro_end_style:n { \__codedoc_print_end_definition: } }
