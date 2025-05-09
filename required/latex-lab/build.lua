@@ -174,6 +174,7 @@ specialtypesetting["latex-lab-bib.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-amsmath.dtx"] = {format = "lualatex"}
 -- specialtypesetting["latex-lab-block.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-firstaid.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-float.dtx"] = {format = "lualatex"}
 
 function tex(file,dir,mode)
   dir = dir or "."
