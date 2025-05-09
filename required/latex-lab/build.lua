@@ -48,7 +48,7 @@ checkdeps =
 
 
 checkruns     = 4
-typesetruns   = 2
+typesetruns   = 3
 
 typesetdeps =
   {
@@ -172,7 +172,7 @@ function docinit_hook() return fmt({"pdftex","luatex"},typesetdir) end
 specialtypesetting = specialtypesetting or {}
 specialtypesetting["latex-lab-bib.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-amsmath.dtx"] = {format = "lualatex"}
--- specialtypesetting["latex-lab-block.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-block.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-firstaid.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-float.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-footnotes.dtx"] = {format = "lualatex"}
