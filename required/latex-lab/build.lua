@@ -187,8 +187,8 @@ specialtypesetting["latex-lab-marginpar.dtx"] = {format = "lualatex"}
 -- specialtypesetting["latex-lab-mathindent.dtx"] = {format = "lualatex"}
 -- specialtypesetting["latex-lab-mathpkg.dtx"] = {format = "lualatex"}
 -- specialtypesetting["latex-lab-mathtools.dtx"] = {format = "lualatex"}
--- specialtypesetting["latex-lab-minipage.dtx"] = {format = "lualatex"}
--- specialtypesetting["latex-lab-namespace.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-minipage.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-namespace.dtx"] = {format = "lualatex"}
 -- specialtypesetting["latex-lab-new-or-1.dtx"] = {format = "lualatex"}
 -- specialtypesetting["latex-lab-new-or-2.dtx"] = {format = "lualatex"}
 -- specialtypesetting["latex-lab-sec.dtx"] = {format = "lualatex"}
