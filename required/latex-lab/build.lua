@@ -173,6 +173,7 @@ specialtypesetting = specialtypesetting or {}
 specialtypesetting["latex-lab-bib.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-amsmath.dtx"] = {format = "lualatex"}
 -- the block really needs lualatex! with pdflatex there is a memory exceeded error
+-- when writing the tag tree.
 specialtypesetting["latex-lab-block.dtx"] = {format = "lualatex"}
 specialtypesetting["blocks-code.tex"] = {format = "lualatex"}
 specialtypesetting["blocks-doc.tex"] = {format = "lualatex"}
