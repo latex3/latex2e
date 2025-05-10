@@ -189,19 +189,20 @@ specialtypesetting["latex-lab-mathpkg.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-mathtools.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-minipage.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-namespace.dtx"] = {format = "lualatex"}
--- specialtypesetting["latex-lab-new-or-1.dtx"] = {format = "lualatex"}
--- specialtypesetting["latex-lab-new-or-2.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-new-or-1.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-new-or-2.dtx"] = {format = "lualatex"} -- error
 specialtypesetting["latex-lab-sec.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-table.dtx"] = {format = "lualatex"}
--- specialtypesetting["latex-lab-testphase.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-testphase.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-text.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-tikz.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-toc.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-toc-hyperref-changes.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-toc-kernel-changes.dtx"] = {format = "lualatex"}
--- specialtypesetting["latex-lab-unicode-math.dtx"] = {format = "lualatex"}
--- specialtypesetting["documentmetadata-support-doc.tex"] = {format = "lualatex"}
--- specialtypesetting["documentmetadata-support-code.tex"] = {format = "lualatex"}
+specialtypesetting["latex-lab-unicode-math.dtx"] = {format = "lualatex"}
+-- specialtypesetting["documentmetadata-support.dtx"] = {format = "lualatex"}
+specialtypesetting["documentmetadata-support-doc.tex"] = {format = "lualatex"}
+specialtypesetting["documentmetadata-support-code.tex"] = {format = "lualatex"}
 
 
 function tex(file,dir,mode)
