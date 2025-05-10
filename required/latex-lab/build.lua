@@ -172,7 +172,10 @@ function docinit_hook() return fmt({"pdftex","luatex"},typesetdir) end
 specialtypesetting = specialtypesetting or {}
 specialtypesetting["latex-lab-bib.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-amsmath.dtx"] = {format = "lualatex"}
+-- the block really needs lualatex! with pdflatex there is a memory exceeded error
 specialtypesetting["latex-lab-block.dtx"] = {format = "lualatex"}
+specialtypesetting["blocks-code.tex"] = {format = "lualatex"}
+specialtypesetting["blocks-doc.tex"] = {format = "lualatex"}
 specialtypesetting["latex-lab-firstaid.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-float.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-footnotes.dtx"] = {format = "lualatex"}
