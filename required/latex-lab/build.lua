@@ -183,7 +183,7 @@ specialtypesetting["latex-lab-footnotes.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-graphic.dtx"] = {format = "lualatex"}
 -- specialtypesetting["latex-lab-l3doc-tagging.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-marginpar.dtx"] = {format = "lualatex"}
--- specialtypesetting["latex-lab-math.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-math.dtx"] = {format = "lualatex"}
 -- specialtypesetting["latex-lab-mathindent.dtx"] = {format = "lualatex"}
 -- specialtypesetting["latex-lab-mathpkg.dtx"] = {format = "lualatex"}
 -- specialtypesetting["latex-lab-mathtools.dtx"] = {format = "lualatex"}
