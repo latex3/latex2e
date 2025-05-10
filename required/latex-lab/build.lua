@@ -184,9 +184,9 @@ specialtypesetting["latex-lab-graphic.dtx"] = {format = "lualatex"}
 -- specialtypesetting["latex-lab-l3doc-tagging.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-marginpar.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-math.dtx"] = {format = "lualatex"}
--- specialtypesetting["latex-lab-mathindent.dtx"] = {format = "lualatex"}
--- specialtypesetting["latex-lab-mathpkg.dtx"] = {format = "lualatex"}
--- specialtypesetting["latex-lab-mathtools.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-mathintent.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-mathpkg.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-mathtools.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-minipage.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-namespace.dtx"] = {format = "lualatex"}
 -- specialtypesetting["latex-lab-new-or-1.dtx"] = {format = "lualatex"}
