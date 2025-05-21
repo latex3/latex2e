@@ -177,7 +177,7 @@ function update_tag_ltx(file,content,tagname,tagdate)
 end
 
 -- Need to build format files
-local function fmt(engines,dest)
+function fmt(engines,dest)
 
   local fmtsearch = false
 
