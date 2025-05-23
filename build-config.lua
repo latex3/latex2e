@@ -184,6 +184,8 @@ function fmt(engines,dest)
   local function mkfmt(engine)
     -- Use .ini files if available
     local ini = string.gsub(engine,"tex","") .. "latex"
+    -- To support places we are using DVI mode, we have to allow for
+    -- "etex" -> "elatex" -> "latex" in format building
     if ini == "elatex" then
         ini = "latex"
     end
