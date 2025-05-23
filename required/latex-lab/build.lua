@@ -23,6 +23,8 @@ typesetfiles = {
 		 "*-code.tex",
 	       }
 
+
+
 unpackfiles  = {"*.ins"}
 
 sourcefiles  = {
@@ -46,7 +48,7 @@ checkdeps =
 
 
 checkruns     = 4
-typesetruns   = 2
+typesetruns   = 3
 
 typesetdeps =
   {
@@ -106,3 +108,58 @@ dofile (maindir .. "/build-config.lua")
 update_tag = update_tag_ltx
 
 table.insert(checksuppfiles,"supp-pdf.mkii")
+
+-- now build both the pdflatex and lualatex format
+
+function docinit_hook() return fmt({"pdftex","luatex"},typesetdir) end
+
+-- To be able to choose the format we make use of the specialtypesetting table
+
+specialtypesetting = specialtypesetting or {}
+specialtypesetting["latex-lab-bib.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-amsmath.dtx"] = {format = "lualatex"}
+-- the block really needs lualatex! with pdflatex there is a memory exceeded error
+-- when writing the tag tree.
+specialtypesetting["latex-lab-block.dtx"] = {format = "lualatex"}
+specialtypesetting["blocks-code.tex"] = {format = "lualatex"}
+specialtypesetting["blocks-doc.tex"] = {format = "lualatex"}
+specialtypesetting["latex-lab-firstaid.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-float.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-footnotes.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-graphic.dtx"] = {format = "lualatex"}
+-- specialtypesetting["latex-lab-l3doc-tagging.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-marginpar.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-math.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-mathintent.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-mathpkg.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-mathtools.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-minipage.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-namespace.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-new-or-1.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-new-or-2.dtx"] = {format = "lualatex"} -- error
+specialtypesetting["latex-lab-sec.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-table.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-testphase.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-text.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-tikz.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-toc.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-toc-hyperref-changes.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-toc-kernel-changes.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-unicode-math.dtx"] = {format = "lualatex"}
+-- specialtypesetting["documentmetadata-support.dtx"] = {format = "lualatex"}
+specialtypesetting["documentmetadata-support-doc.tex"] = {format = "lualatex"}
+specialtypesetting["documentmetadata-support-code.tex"] = {format = "lualatex"}
+
+
+function tex(file,dir,mode)
+  dir = dir or "."
+  mode = mode or "nonstopmode"
+  local format = 'pdftex -fmt=pdflatex'
+  if specialtypesetting and specialtypesetting[file] then
+    format = specialtypesetting[file].format or format
+  end
+  return runcmd(
+    format .. ' -interaction=' .. mode .. ' -jobname="' ..
+      string.match(file,"^[^.]*") .. '" "\\input ' .. file .. '"',
+    dir,{"TEXINPUTS","TEXFORMATS","LUAINPUTS"})
+end
