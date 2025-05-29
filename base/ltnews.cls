@@ -41,7 +41,7 @@
 
 \NeedsTeXFormat{LaTeX2e}
 
-\ProvidesClass{ltnews}[2023/05/28 v1.08  Standard LaTeX class]
+\ProvidesClass{ltnews}[2025/05/29 v1.09  Standard LaTeX class]
 
 % The configuration file, used for passing options.
 
@@ -462,7 +462,7 @@
 \newcommand{\@indicia}{%
    \LaTeXNews, and the \LaTeX{} software,
    are brought to you by the \LaTeX\ Project Team;
-   Copyright \@year, all rights reserved.
+   Copyright \@year, license LPPL.
 }
 
 \title{\LaTeXNews}
