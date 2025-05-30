@@ -1,7 +1,7 @@
 The LaTeX `cyrillic` bundle
 ===========================
 
-Release 2024-11-01
+Release 2025-06-01 pre-release 0
 
 Overview
 --------
@@ -51,4 +51,4 @@ of the package.
 
 -----
 
-<p>Copyright (C) 2005-2024 The LaTeX Project <br />
+<p>Copyright (C) 2005-2025 The LaTeX Project <br />

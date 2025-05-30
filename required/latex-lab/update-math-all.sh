@@ -1,5 +1,6 @@
 
 l3build save -cconfig-math \
+	math-suspended-gh661 \
 	mathcapture-001 \
 	mathcapture-002 \
 	mathcapture-003 \
@@ -22,8 +23,13 @@ l3build save -cconfig-math \
         mathcapture-tag-001 \
 	mtag-003 \
 	mtag-004 \
-	mtag-005-intertext
-
+	mtag-005-intertext \
+        tagging-762 \
+        tagging-809 \
+	mathml-AF-ex1\
+	mathml-AF-hash\
+	mathml-write\
+	math-phantom        
 
 exit
 

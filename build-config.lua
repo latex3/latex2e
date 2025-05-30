@@ -177,13 +177,15 @@ function update_tag_ltx(file,content,tagname,tagdate)
 end
 
 -- Need to build format files
-local function fmt(engines,dest)
+function fmt(engines,dest)
 
   local fmtsearch = false
 
   local function mkfmt(engine)
     -- Use .ini files if available
     local ini = string.gsub(engine,"tex","") .. "latex"
+    -- To support places we are using DVI mode, we have to allow for
+    -- "etex" -> "elatex" -> "latex" in format building
     if ini == "elatex" then
         ini = "latex"
     end

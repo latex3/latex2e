@@ -58,9 +58,15 @@ end
 
 local function store_tag(xml)
   local mml_row = store_get_row()
-  xml.intent = ':equationlabel'
+  xml.intent = ':equation-label'
   table.insert(mml_row, 1, xml)
   last_tag = nil
+end
+
+local function store_notag(xml)
+  local mml_row = store_get_row()
+  xml.intent = ':no-equation-label'
+  table.insert(mml_row, 1, xml)  
 end
 
 local function set_row_attribute(name, value)
@@ -105,6 +111,7 @@ return {
   store_column = store_column,
   store_column_xml = store_column_xml,
   store_tag = store_tag,
+  store_notag = store_notag,
   set_row_attribute = set_row_attribute,
   get_table = get_table,
 }

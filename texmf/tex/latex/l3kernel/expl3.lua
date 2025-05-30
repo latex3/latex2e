@@ -279,12 +279,11 @@ if luatexbase then
         lua.bytecode[register] = assert(load(str .. "}"))
       end
     end, "ltx.luadata")
-  else
-    local luadata = lua.bytecode[register]
-    if luadata then
-      lua.bytecode[register] = nil
-      luadata = luadata()
-    end
+  end
+  local luadata = lua.bytecode[register]
+  if luadata then
+    lua.bytecode[register] = nil
+    luadata = luadata()
     function get_luadata(name)
       if not luadata then return end
       local data = luadata[name]

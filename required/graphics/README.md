@@ -1,7 +1,7 @@
 The LaTeX `graphics` bundle
 ===========================
 
-Release 2024-11-01
+Release 2025-06-01 pre-release 4
 
 Overview
 --------
@@ -61,4 +61,4 @@ of the package.
 
 -----
 
-<p>Copyright (C) 1993-2024 The LaTeX Project <br />
+<p>Copyright (C) 1993-2025 The LaTeX Project <br />

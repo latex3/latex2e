@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-%% File: latex-lab-graphic.dtx (C) Copyright 2022-2024 LaTeX Project
+%% File: latex-lab-graphic.dtx (C) Copyright 2022-2025 LaTeX Project
 %
 % It may be distributed and/or modified under the conditions of the
 % LaTeX Project Public License (LPPL), either version 1.3c of this
@@ -15,11 +15,13 @@
 %    https://github.com/latex3/latex2e/required/latex-lab
 %
 % for those people who are interested or want to report an issue.
-\def\ltlabgraphicdate{2024-09-18}
-\def\ltlabgraphicversion{0.80e}
+\def\ltlabgraphicdate{2025-05-10}
+\def\ltlabgraphicversion{0.80g}
 %
 %<*driver>
+\DocumentMetadata{tagging=on,pdfstandard=ua-2}
 \documentclass{l3doc}
+\usepackage{latex-lab-testphase-l3doc}
 \EnableCrossrefs
 \CodelineIndex
 \begin{document}
@@ -43,56 +45,309 @@
 % customizations}}
 %
 % \providecommand\hook[1]{\texttt{#1}}
+% \NewDocElement[printtype=\textit{plug},idxtype=plug,idxgroup=Plugs]{Plug}{plugdecl}
+% \NewDocElement[printtype=\textit{socket},idxtype=socket,idxgroup=Sockets]{Socket}{socketdecl}
+%
+% \newcommand\tikzname{ti\textit{k}Z}
 % \begin{documentation}
 % \begin{abstract}
 % The following code implements a first draft for the tagging of graphics
-% included with \cs{includegraphics}.
+% included with \cs{includegraphics} and the \env{picture} environment.
 % \end{abstract}
 % 
 % 
 % \section{Introduction}
 % 
-% The code here handle the tagging of pictures included with \cs{includegraphics}
-% and the picture environment. Pictures drawn with \texttt{l3draw} or \texttt{tikz} 
-% or similar packages aren't handled yet.
+% Tagging of pictures is non trivial.
+%
+% \begin{enumerate}
+% \item Pictures generally can have various purposes and so different \emph{tagging modes} must
+% be provided:
+% \begin{itemize}
+% \item The pictures can be purely \emph{ornamental} and \emph{decorative}, 
+% e.g., (always/usually) some page border.
+% This should normally be tagged as \emph{artifact}, either in a \texttt{artifact} 
+% MC-chunk or as an \texttt{Artifact} structure\footnote{The second option exists only in PDF 2.0}.
+%
+% \item The pictures can be \emph{illustrative figures}.
+% This should normally be tagged as a \texttt{Figure} structure with \emph{alternative text}.
+%
+% \item The pictures can represent a symbol. This should be tagged as a \texttt{Span} structure element
+% with an \texttt{/ActualText} mapping to some Unicode Codepoint(s) 
+% (or perhaps even directly in the stream with a Span BDC with an \texttt{/ActualText}).
+%
+% \item The pictures can also be intended for consumption as normal \emph{text}
+% For example the todonotes package uses a
+% \tikzname{} picture to surround the text in a node with some colored frame and 
+% background.
+% In this case the text (which can contain more elements like lists)
+% should be tagged as usual and put in an \texttt{Aside} structure while the decorative
+% elements should be marked up as artifacts. 
 % 
-% Tagging of graphics included with \cs{includegraphics} is at a first glance trivial:
-% They are either only decorations, in which case they should be in a \texttt{artifact} 
-% MC-chunk or (in pdf 2.0) tagged as an \texttt{Artifact} structure, 
-% or they are meaningful and then they should be tagged as a \texttt{Figure}.
-% Such a graphic is a simple box and no other content can interfere so adding the 
-% structure commands shouldn't pose much problems.
+% \item There are also case where no tagging is wanted, e.g. because the tagging
+% is done by surrounding commands, in this case the begin/end sockets should be transparent and
+% do nothing.
+%  
+% \item And naturally there can be more complicated scenarios with
+% mixtures of these elements, e.g., some text 
+% in nodes in a \tikzname{} picture can be meaningful 
+% while other nodes still should be tagged as artifact.
+% \end{itemize}
+%
+% \item The various packages that allow to draw pictures uses lots of boxes and 
+% moves them around and that makes is not easy to get the tagging right --
+% especially with pdflatex where one has to insert the literals at the right time.
+%
+% \item When the picture is tagged as \texttt{Figure}, the PDF-UA standards require
+% an attribute with a \texttt{BBox} key in the structure. That BBox describes 
+% the placement of the picture on the page, 
+% and this typically require some low-level hacking into the picture code to calculate
+% the values.
+% \end{enumerate}
+% 
+% The code here handles directly only the tagging of pictures included with \cs{includegraphics}
+% and the \env{picture} environment. But the used method and the documentation tries
+% to stay as general as possible, to make it easy to adapt the code to pictures drawn
+% with other packages like \pkg{l3draw}, \pkg{tikz}, \pkg{pstricks}, \pkg{luamplibs} or similar packages. 
+% 
+% \section{General implementation needs and ideas}
+% 
+% \subsection{User interfaces}
+% 
+% The tagging of pictures can not be done fully automatically: user
+% have to add alternative text or mark up a picture as an artifact. 
+% It is important that the relevant user interfaces are similar across 
+% all picture/graphic packages to make it
+% easy for authors to adapt their documents. 
+% 
+% We therefore recommend package authors to implement an interface 
+% a key-value interface like the following. 
+% 
+% \subsubsection{Tagging mode of individual graphics}
+% To change the tagging mode of an individual graphic, the keys
+% \texttt{artifact} (decorations), \texttt{alt} (illustrative), 
+% and \texttt{actualtext} (symbol) should be used. The keys \texttt{alt}
+% (and also \texttt{actualtext}) take a text as argument. 
+% 
+% \begin{verbatim}
+% \includegraphics[artifact]{example-image}
+% \begin{tikzpicture}[artifact] ... \end{tikzpicture}
+% \tikz[artifact]{...}
+% \begin{picture}[artifact]...\end{picture}
+% 
+% \includegraphics[alt=example image]{example-image}
+% \begin{tikzpicture}[alt=\myalttext] ... \end{tikzpicture}
+% \tikz[alt=example image]{...}
+% \begin{picture}[alt=example image]...\end{picture}
+% 
+% \includegraphics[actualtext=A]{example-image-A}
+% \begin{tikzpicture}[actualtext=A] ... \end{tikzpicture}
+% \tikz[actualtext=A]{...}
+% \begin{picture}[actualtext=A]...\end{picture}
+% \end{verbatim}
+% 
+% Additionally, a key \texttt{tagging-setup} can be 
+% provided that allows to handle more complicated cases, e.g.,
+%  
+% \begin{verbatim}
+% \includegraphics[tagging-setup={false}]{example-image} %no tagging at all
+% \begin{tikzpicture}[tagging-setup={artifact}] ... \end{tikzpicture}
+% \begin{tikzpicture}[tagging-setup={text}] ... \end{tikzpicture}
+% \begin{tikzpicture}[tagging-setup={alt=Water (H20),tag=Formula}] ... \end{tikzpicture}
+% \end{verbatim}
+% 
+% This key is fully implemented for \cs{includegraphics} and \env{picture} but only
+% partially in the \tikzname{} module.
+% 
+% \subsubsection{Setting the tagging mode for a scope}\label{sec:scope}
+% 
+% Packages can also provide interfaces to change the tagging mode for all pictures or
+% nodes in a scope. 
+% 
+% If this is done side-effects on the tagging of other picture 
+% types must be considered: 
+% If the generic sockets declared below are used 
+% (which are then used also by \cs{includegraphics}, \env{picture}
+% and perhaps more environments) a change of the tagging mode can
+% affect all pictures types using these sockets in the same scope. 
+% 
+% This means that packages that want to offer \enquote{scope support} 
+% but restrict it to their own picture type should either use 
+% their own sockets modelled after the generic sockets, 
+% or use some specific variable to control the change of the tagging mode. 
+% 
+% With \tikzname{} \enquote{scope support} could be implemented rather easily as it has a setup command anyway.
+% So with the implementation in latex-lab-tikz, all these work as expected
+% \begin{verbatim}
+% \tikzset{artifact}
+% \tikzset{alt=a text}
+% \tikzset{actualtext=A}
+% \tikzset{tagging-setup=text}
+% \end{verbatim}
+%  
+% With \cs{includegraphics} the standard \cs{setkeys} can be used:
+% \begin{verbatim}
+% \setkeys{Gin}{alt=a text}
+% \setkeys{Gin}{artifact}
+% \setkeys{Gin}{actualtext=A}
+% \end{verbatim}
+% This will then also affect \env{picture} environments in the scope.
+% 
+% \subsection{Default tagging mode}
+% 
+% If none of the keys are used, the picture code must chose a default tagging mode.  
+% The best one depends on the graphic type and 
+% should be chosen as needed and then documented.
+% 
+% With \cs{includegraphics} we use as default the illustrative mode,
+% tag it as \texttt{Figure} structure, use the file name as alternative text
+% and issue a warning that a real alternative text is missing.
+% 
+% With the \env{picture} enviroment we use as default the illustrative mode
+% to, but use a fix text as alternative text and issue a warning too.
+% 
+% With \tikzname{} (a first implementation is currently in latex-lab-tikz), 
+% the default is the text mode, which means that a screen reader will read
+% the text in the nodes in the order they appear in the code. With this default,
+% e.g. \cs{todo}'s from the \env{todonotes} are correctly tagged.  
+% 
+%  
+% In this implementation the \texttt{artifact}
+% key can also be applied on nodes and will remove them from the tagging.
+% \begin{verbatim}
+% \begin{tikzpicture}
+% \node[draw=red](x){Important!};
+% \node[artifact,fill=blue,anchor=west] at (x.east){\phantom{Ip}};
+% \end{tikzpicture}
+% \end{verbatim}
+
+% \subsection{Sockets, plugs and commands}
+% 
+% \begin{description}
+% \item[sockets]
+%  The example implementations make use of up-to five \emph{tagging sockets}.
+%  The sockets are all used by the various graphic codes inside a group:
+%  \begin{itemize}
+%  \item  An initialization (\texttt{init}) socket that handles 
+%  the key-val argument and setups the tagging mode by switching 
+%  the plugs of the other tagging sockets. 
+%  \item  Two sockets that are used at the \texttt{begin} and \texttt{end} of 
+%  the picture and setup the main structure element. 
+%  The \texttt{end} socket typically also executes if needed the code to calculate the BBox
+%  attribute and add it to the structure.
+%  After the \texttt{begin} socket tagging is suspended, and before the
+%  \texttt{end} socket resumed.
+%  \item Two sockets for the text mode that are used around places where a 
+%  picture contains text. Tagging must be resumed before this sockets
+%  if they should do anything at all.
+%  \end{itemize}
+%  
+%  The sockets take arguments that allows some configuration (e.g. to use
+%  a special command for the BBox calculation) and the plugs are coded so that
+%  they can be used in more than one picture type (they are shared here
+%  between \cs{includegraphics} and \env{picture}) but there is no obligation 
+%  to use them in every graphic code. 
+%  A package can declare its own sockets and plugs. See \ref{sec:scope} for some discussion 
+%  why this can be a good idea.
+%  
+% \item[plugs] 
+% The main \texttt{begin} and \texttt{end} sockets should normally have 
+% four \emph{plugs} 
+% for the different modes: 
+% \texttt{alt}, \texttt{actualtext}, \texttt{artifact} and \texttt{text}.
+% To disable tagging, \cs{SuspendTagging} can be used,
+% alternatively for sockets with zero or one argument, 
+% the predefined \texttt{noop} plug can be assigned,
+% and for sockets with two arguments (if the socket has been declared with
+% \cs{NewTaggingSocket} the \texttt{transparent} 
+% socket which lets pass through the 
+% second argument.
+%  
+% The initialization socket and the texts sockets typically have only one 
+% additional \emph{plug} that is used when tagging is active. 
+% 
+% \item[commands] A command to store the position of a reference 
+% point on the page and a command to calculate the BBox from this reference
+% point and the size of the picture are needed. The second command must also add the 
+% attribute to the main structure element (how to do this can be seen in the implementation).
+% These commands are typically specific for a picture type.
+% 
+%\end{description}
+% 
+% We now describe how this general principles have be implemented 
+% in the concrete examples of the \cs{includegraphics} command, the \env{picture} environment, 
+% TODO! and a simple environment for l3draw commands.
+% 
+% \section{Sockets, plugs, commands}
+% 
+%  The code defines the following generic sockets and commands.
+%  
+%  \begin{itemize} 
+%  \item \texttt{graphic/init} with the plug \texttt{default}
+%  \item \texttt{graphic/begin} (one argument) with the plugs \texttt{alt},
+%   \texttt{actualtext}, \texttt{artifact}, \texttt{text}, \texttt{off}. The argument
+%   allows to set a default alternative text.
+%  \item \texttt{graphic/end} (two arguments) with the plugs \texttt{alt},
+%   \texttt{actualtext}, \texttt{artifact}, \texttt{text}, \texttt{off}. The first argument
+%   of the socket typically receives the command to calculate the BBox. This command
+%   often contains a savepos command and so has to go before the graphic box. The second
+%   argument allows to insert the box between this command and the tagging commands.%   
+%  \item \texttt{graphic/text/begin} no argument, with the plug \texttt{default} 
+%  \item \texttt{graphic/text/end} no argument with the plug \texttt{default}
+%  \end{itemize}
+%  
+%  \begin{function}{\l_tag_graphic_mode_tl}
+%  This variable holds the current active graphic mode. It is e.g. used
+%  to test if text should resume tagging.
+%  \end{function}
+% 
+% \section{Make \cs{includegraphics} tagging aware}
+% 
+% Tagging of graphics included with \cs{includegraphics} is at a first glance
+% easier to handle than, e.g., a \tikzname{} graphic, as there is only a simple
+% box with a picture and no text content to consider. 
+% One would think that adding some structure commands around a box shouldn't pose much problems. 
 %  
 % But things are actually not so easy. 
 % 
-% At first there are two ways to add a graphic
-% to a structure: similar to text as a marked content item (by surrounding 
+% At first such graphics are inserted into the PDF as XObjects and
+% there are two ways to add an such an XObject to a structure: 
+% similar to text as a marked content item (by surrounding 
 % it with \cs{tagmcbegin} and \cs{tagmcend}) or by referencing the XObject 
 % with an OBJR object (similar to a link annotation). Which method is more sensible 
-% (and if it actually matters) is unknown but should be tested. 
-% Currently the first method is used as the second require changes in the backend files.
-%  
-%  
-% At second---and this is actually a \emph{much} larger problem---a 
-% \texttt{Figure} structure should have an attribute with an \texttt{BBox} entry.
-% The value of a \texttt{BBox} is an array of four numbers that gives the 
+% (and if it actually matters) is unknown. 
+% Currently the first method is used as the second would changes in the backend files.
+%   
+% At second---and this is actually a \emph{much} bigger problem\footnote{Which shows
+% also in the amount of code dedicated here only to this problem.}---if the graphic
+% is tagged as an illustrative picture the 
+% \texttt{Figure} structure element should have an attribute with an \texttt{BBox} entry.
+% The value of this \texttt{BBox} is an array of four numbers that gives the 
 % coordinates of the left, bottom, right, and top edges 
-% of the structure element’s bounding box. That is the rectangle that completely encloses
-% its \emph{visible} content so not necessarily the TeX bounding box: 
+% of the structure element’s bounding box on the page. 
+% That is the rectangle that completely encloses
+% its \emph{visible} content and so has not necessarily the same size as the TeX bounding box: 
 % if \texttt{viewport} or \texttt{trim} is used and the
 % graphic is not clipped, the visible content can be larger. 
+% It turned out to be extremely tricky to get a sensible result, and there are still
+% open problems and restrictions.
+% 
 %  
-% Getting the \texttt{BBox} is quite straightforward for a graphic that is 
+% \subsection{The BBox calculation}
+% The reference point on the page is retrieved with \verb+\tex_savepos:D+ and a property
+% just before the graphic.
+%  
+% Getting from this the \texttt{BBox} can be quite straightforward for a graphic that is 
 % used once as is. But graphics can be trimmed, scaled, reflected, rotated and reused
-% in various ways. This transformations typically involve a mix of \TeX{} commands
-% like shifting a box or changing the bounding box and backend commands like
-% inserting a pdfliteral with a transformation matrix and
-% and not in all cases getting the \texttt{BBox} is possible 
-% without rewriting large parts of the graphics/x packages. Problematic are
+% in various ways. These transformations typically involve a mix of \TeX{} commands
+% that shift a box or change the bounding box and backend commands that insert
+% a pdfliteral with a transformation matrix. Calculating
+% the correct \texttt{BBox} in all cases is not possible 
+% without rewriting large parts of the graphics and graphicx packages. Problematic are
 %  \begin{itemize}
 %  \item manipulations through external box commands 
-%  (\cs{rotatebox}, \cs{reflectbox}, \cs{scalebox}). The current implementation
-%  in the graphics/x packages do not pass the transformation matrix in way 
+%  (\cs{rotatebox}, \cs{reflectbox}, \cs{scalebox}). Their implementation
+%  do not pass the transformation matrix in a way 
 %  that allows to track the changes for the \texttt{BBox} 
 %  of an included graphic: sometimes
 %  the values are set to late (after the box is already stored), and often the
@@ -114,14 +369,12 @@
 %  \end{itemize}
 %  
 %  
-%  
-%  \section{Restrictions and Todos}
-%  Correct tagging is currently 
+%  Therefore a correct BBox is currently 
 %  implemented only for simple \cs{includegraphics} and the keys
 %  \texttt{viewport}, \texttt{trim}, 
 %  \texttt{scale} and \texttt{angle} (used at most once). 
 %  
-%  Not supported
+%  Currently not supported are
 %  \begin{itemize}
 %  \item graphics inside \cs{rotatebox}, \cs{reflectbox}, \cs{scalebox}. 
 %  
@@ -137,37 +390,209 @@
 %  \end{itemize}
 %  
 %  
-%  \section{Additional keys}
-%  The code defines additional keys for \cs{includegraphics}:
-%  
+%  \subsection{User interface}
+%  As suggested above the code (re)defines keys for \cs{includegraphics}
+%  to add the recommanded interfaces \texttt{alt}, \texttt{artifact} and \texttt{actualtext}.
+%  It also offers some keys specific to \cs{includegraphics}:
 %  \begin{description}
-%  \item[\texttt{tag}] with the values
-%   \begin{description}
-%    \item[\texttt{artifact}] When used the graphic will be tagged as artifact. This doesn't
-%     require a \texttt{BBox} and so works also in some of the not yet supported cases described
-%     above.
-%   \item[\texttt{false}] When used tagging will be stopped completely. It is then the 
-%   responsibility of the surrounding code to add appropriate tagging commands.
-%   \item[\meta{name}] Other values will be used as tag names in the structure. If the tag is not
-%   known as a structure tag you will get an warning from tagpdf. The default name is currently
-%   \texttt{Figure}
-%   \end{description}   
-%  \item[\texttt{actualtext}] This allows to add an /ActualText to the structure. 
+%  \item[\texttt{alt}] This key is already defined in the graphicx package
+%  but redefined here to switch to the illustrative mode and to add its value
+%  as alternative text. 
+%  \item[\texttt{actualtext}] This switches to the actualtext mode.
 %  This is useful for small graphics that represent single chars or a short word like a 
 %  logo. If \texttt{actualtext} is used, the graphics is not enclosed in \texttt{Figure}
-%  structure but in a \texttt{Span} structure and no \texttt{/BBox} attribute is added.
-%  This in accordance with (the draft of) PDF/UA-2 but violates perhaps PDF/UA-1.
-%  \item[\texttt{correct-BBox}] If the calculated \texttt{/BBox} values are wrong
-%  they can be correct with this key. It expects four dimensions that are added to the 
+%  structure but in a \texttt{Span} structure and no \texttt{/BBox} attribute is added.%
+%  \footnote{This in accordance with (the draft of) PDF/UA-2 but violates perhaps PDF/UA-1.}
+%  \item[\texttt{artifact}] This tags the graphic as an artifact.
+%  \item[\texttt{tagging-setup}] This key takes as argument a key-list,
+%  which can contain the following keys:
+%   \begin{description}
+%    \item[\texttt{alt=\meta{text}}] This a second way to tag the graphic as figure with
+%    alternative text. \texttt{alt} without value will tag as figure but not change
+%    the text variable, \texttt{alt=} will empty the text variable (and typically trigger
+%    a warning).
+%    \item[\texttt{actualtext=\meta{text}}] This a second way to tag the graphic as a
+%    symbol with actualtext.  
+%    \item[\texttt{artifact}] This a second way to tag the graphic as artifact. 
+%    \item[\texttt{text}] This switches to text mode.
+%    \item[\texttt{off}] When used tagging will be stopped completely. It is then the 
+%   responsibility of the surrounding code to add appropriate tagging commands.
+%   \item[\texttt{tag=\meta{name}}] This switches to the illustrative mode but uses
+%   \meta{name} as tag name in the structure instead of the default \texttt{Figure}. 
+%   This can for example be used to tag an image of a formula with \texttt{Formula}.
+%   \end{description}   
+%  \item[\texttt{adjust-BBox}] If the calculated \texttt{/BBox} values are wrong
+%  they can be corrected with this key. It expects four dimensions that are added to the 
 %  \texttt{/BBox} values. 
-%  \item[\texttt{debug}] The value \texttt{BBox} will show the calculated  \texttt{/BBox} 
-%  as a half transparent red rectangle. 
 %  \end{description}
 %  
-%  The code also redefines the \texttt{alt} key to actually add its values
-%  as an alternative text. If no \texttt{alt} value is given, a warning is issued 
-%  and the file name of the graphic is used.
+%  The code also add to the \texttt{debug} key of \cs{DocumentMetadata} 
+%  the value \texttt{BBox}.
+%  This adds a half transparent red layer showing the calculated BBox.
+%  \begin{verbatim}
+%   \DocumentMetadata{tagging=on,debug=BBox}
+%  \end{verbatim}
 %  
+%  \section{Make \env{picture} tagging aware}
+%  
+%  \subsection{User interface}
+%  The \env{picture} environment doesn't have a optional argument with key-value value processing.
+%  So the code changes that and then provides the keys already discussed for \cs{includegraphics}.
+%  
+%  \subsection{BBox calculation}
+%  
+%  The BBox calculation is much simpler than for \cs{includegraphics} as the code simply takes
+%  the declared size from the \env{picture} arguments. 
+%  
+%  \subsection{Tagging in text mode}
+%  
+%  A  \env{picture} can contain \cs{put} commands with text content, tagging this in 
+%  text mode could make sense in some cases. But it is not quite clear if one can/should 
+%  redefine the \cs{put} command. If text tagging is wanted we suggest to 
+%  define a dedicated command along these lines:
+%  \begin{verbatim}
+%  \NewDocumentCommand\picturenode{O{}r()m}
+%    {
+%     \group_begin:
+%     \keys_set:nn{tag/graphic}{#1}
+%     \str_if_eq:VnT\l_tag_graphic_mode_tl {text}
+%      {\tag_resume:n{\picturenode}}
+%     \tag_socket_use:n{graphic/text/begin}
+%     \put(#2){#3}
+%     \tag_socket_use:n{graphic/text/end}  
+%     \group_end:
+%    }   
+%  
+%  \end{verbatim}   
+%  
+%  \section{Make an l3draw environment tagging aware}
+%  The newest l3draw version (in the latex3 github)
+%  has all needed data to define a command to retrieve the BBox
+%  and to build a tagging aware environment. l3draw currently has
+%  no dedicated function to add text, instead one has to store the text
+%  in a box and then reuse it, so similar to the \env{picture} environment
+%  a dedicated command with tagging awareness is suggested.
+%  
+%  A command to calculate the BBox can for example be defined like this
+%  \begin{verbatim}
+%  \cs_new:Npn\draw_tag_bbox_attribute:
+%   {
+%     \tl_set:Ne \g__tag_graphic_lx_tl
+%       {
+%         \dim_to_decimal_in_bp:n 
+%           { 
+%             \property_ref:een {draw.\int_use:N\g_draw_id_int}{xpos}{0}sp 
+%             + 
+%             \g_draw_bb_xmin_dim 
+%           }
+%       }   
+%     \tl_set:Ne \g__tag_graphic_ly_tl
+%       {
+%         \dim_to_decimal_in_bp:n 
+%           { 
+%             \property_ref:een {draw.\int_use:N\g_draw_id_int}{ypos}{0}sp 
+%             + 
+%             \g_draw_bb_ymin_dim 
+%           }
+%       }
+%     \tl_set:Ne \g__tag_graphic_ux_tl
+%       {
+%         \dim_to_decimal_in_bp:n 
+%           { 
+%             \property_ref:een {draw.\int_use:N\g_draw_id_int}{xpos}{0}sp 
+%             + 
+%             \g_draw_bb_xmax_dim 
+%           }
+%       }   
+%     \tl_set:Ne \g__tag_graphic_uy_tl
+%       {
+%         \dim_to_decimal_in_bp:n 
+%           { 
+%             \property_ref:een {draw.\int_use:N\g_draw_id_int}{ypos}{0}sp 
+%             + 
+%             \g_draw_bb_ymax_dim 
+%           }
+%       }          
+%     \bool_if:NT\l__tag_graphic_debug_bool
+%      {
+%        \__tag_graphic_show_bbox:VVVVne
+%         \g__tag_graphic_lx_tl
+%         \g__tag_graphic_ly_tl
+%         \g__tag_graphic_ux_tl
+%         \g__tag_graphic_uy_tl
+%         {red}
+%         {draw.\int_use:N\g_draw_id_int}              
+%      }
+%    \tag_struct_gput:ene
+%         {\tag_get:n{struct_num}}
+%         {attribute}
+%         {
+%           /O /Layout /BBox~
+%           [
+%             \dim_to_decimal_in_bp:n 
+%              { 
+%               \property_ref:een {draw.\int_use:N\g_draw_id_int}{xpos}{0}sp 
+%                + 
+%               \g_draw_bb_xmin_dim 
+%              }
+%             \c_space_tl 
+%             \dim_to_decimal_in_bp:n 
+%              {              
+%                \property_ref:een {draw.\int_use:N\g_draw_id_int}{ypos}{0}sp  
+%                +
+%                \g_draw_bb_ymin_dim
+%              }
+%             \c_space_tl 
+%             \dim_to_decimal_in_bp:n 
+%              { 
+%                \property_ref:een {draw.\int_use:N\g_draw_id_int}{xpos}{0}sp  
+%                +
+%                \g_draw_bb_xmax_dim
+%              }
+%             \c_space_tl 
+%             \dim_to_decimal_in_bp:n 
+%              { 
+%                \property_ref:een {draw.\int_use:N\g_draw_id_int}{ypos}{0}sp  
+%                +
+%                \g_draw_bb_ymax_dim
+%              }   
+%           ]
+%         }
+%    }
+% \end{verbatim}
+% 
+% A tagging aware environment can then be defined like this
+% \begin{verbatim}
+% \NewDocumentEnvironment{tagged-draw}{O{}}
+%  {\leavevmode
+%   \ExplSyntaxOn
+%   \tag_socket_use:nn{graphic/init}{#1} 
+%   \tag_socket_use:nn{graphic/begin}{tagged-draw~environment}
+%   \tag_suspend:n{\draw} %
+%   \draw_begin:\ignorespaces
+%  }
+%  {
+%   \draw_end:
+%   \tag_resume:n{\draw}
+%   \tag_socket_use:nnn{graphic/end}{\draw_tag_bbox_attribute:}{} 
+%  }
+% \end{verbatim}
+%  
+% And a command for tagged text nodes could look like this
+% \begin{verbatim}
+% \cs_new_protected:Npn \draw_text_node:nnn #1#2#3 %#1 keyval, #2 point, #3 text
+%  {
+%    \group_begin:
+%    \keys_set:nn{tag/graphic}{#1}
+%    \str_if_eq:VnT\l_tag_graphic_mode_tl {text}      
+%       {\tag_resume:n{\draw_node:nn}}
+%    \tag_socket_use:n{graphic/text/begin}
+%    \hbox_set:Nn \l_tmpa_box{#3}
+%    \draw_box_use:Nn\l_tmpa_box {#2}
+%    \tag_socket_use:n{graphic/text/end}
+%    \group_end:    
+%  }
+% \end{verbatim}   
 %    \begin{macrocode}
 %<@@=tag>
 %<*package>
@@ -179,15 +604,18 @@
 \ProvidesExplPackage {latex-lab-testphase-graphic} {\ltlabgraphicdate} {\ltlabgraphicversion}
   {Code related to the tagging of graphics}
 %    \end{macrocode}
-% We load l3opacity for the debug code
+% a variant
 %    \begin{macrocode}
-\RequirePackage{l3opacity}
+\cs_generate_variant:Nn \tag_socket_use:nn {ne}
+%    \end{macrocode}
+% We load l3opacity for the debug code if opacity is not already defined in the kernel:
+%    \begin{macrocode}
+\cs_if_exist:NF \opacity_select:n
+  {
+    \RequirePackage{l3opacity}
+  }  
 %    \end{macrocode}
 %
-% Needed during switch to e-type:
-%    \begin{macrocode}
-\cs_generate_variant:Nn \@@_prop_gput:Nnn {cne}
-%    \end{macrocode}
 % \begin{macro}{\@@_graphic_savepos:n}
 % this is the command which stores the position. Similar to 
 % zref-savepos it uses two savepos commands 
@@ -204,16 +632,36 @@
 % \end{macro}
 %
 % \subsection{Variables}
+% \begin{variable}
+%  {
+%   \l_@@_graphic_alt_tl,
+%   \l_@@_graphic_actual_tl,
+%   \l_@@_graphic_struct_tl,
+%   \l_tag_graphic_mode_tl,
+%  }
+%  
+% These variables are related to the tagging. 
+% Variables for the alt text, the actualtext and the structure tag.
+% The variable that holds the tagging mode is public,
+% so that commands can test for it, and e.g. restart
+% tagging in text mode. 
+% 
+%    \begin{macrocode}
+\tl_new:N \l_@@_graphic_alt_tl
+\tl_new:N \l_@@_graphic_actual_tl
+\tl_new:N \l_@@_graphic_struct_tl
+\tl_set:Nn\l_@@_graphic_struct_tl {Figure}
+%    \end{macrocode}
+% \end{variable}
+% 
 % \begin{variable}{\l_@@_graphic_debug_bool}
 % A boolean for debug code
 %    \begin{macrocode}
 \bool_new:N \l_@@_graphic_debug_bool
-\keys_define:nn { document / metadata }
-  {
-    debug / BBox .code:n = { \bool_set_true:N \l_@@_graphic_debug_bool }
-  }  
 %    \end{macrocode}
 % \end{variable}
+% 
+% The rest of the variables are related to the BBox calculation in \cs{includegraphics}.
 % \begin{variable}{\g_@@_graphic_int}
 % This is used to get unique labels in the savepos code.
 %    \begin{macrocode}
@@ -248,30 +696,8 @@
 \tl_new:N \l_@@_graphic_currentlabel_tl
 %    \end{macrocode}
 % \end{variable}
-
-% \begin{variable}
-%  {
-%   \l_@@_graphic_alt_tl,
-%   \l_@@_graphic_alt_dft_tl,   
-%   \l_@@_graphic_actual_tl,
-%   \l_@@_graphic_struct_tl,
-%   \l_@@_graphic_artifact_bool,
-%   \l_@@_graphic_BBox_bool  
-%  }
-% Variables for the alt text, the actualtext and the structure tag.
-%    \begin{macrocode}
-\tl_new:N \l_@@_graphic_alt_tl
-\tl_new:N \l_@@_graphic_alt_dflt_tl
-\tl_set:Nn \l_@@_graphic_alt_dflt_tl {\Gin@base\Gin@ext}
-\tl_new:N \l_@@_graphic_actual_tl
-\tl_new:N \l_@@_graphic_struct_tl
-\tl_set:Nn\l_@@_graphic_struct_tl {Figure}
-\bool_new:N\l_@@_graphic_artifact_bool
-\bool_new:N\l_@@_graphic_BBox_bool
-\bool_set_true:N\l_@@_graphic_BBox_bool
-%    \end{macrocode}
-% \end{variable}
-
+%
+%
 % \begin{variable}
 %  {
 %    \l_@@_graphic_sin_fp 
@@ -318,77 +744,307 @@
 %    \end{macrocode}
 % \end{variable}
 % 
-%\subsection{Tagging commands}
+% \subsection{Tagging sockets}
+% The sockets can perhaps not be shared between \cs{includegraphics} and \env{picture}
+% but for now we try to do it, with the exception of the init socket.
 %
-% \begin{macro}{\Gin@tag@struct@begin}
-% The command to start the tagging. 
+% The begin socket takes an argument to allow to pass some configuration.
+% The end socket takes two argument to allow to calculate the BBox
+% before outputting the box.
+% \begin{socketdecl}{tagsupport/graphic/init,tagsupport/graphic/begin,
+% tagsupport/graphic/end,tagsupport/graphic/text/begin,tagsupport/graphic/graphic/text/end}
 %    \begin{macrocode}
-\msg_new:nnn {tag}{alt-text-missing}
+\NewTaggingSocket{graphic/init}{1}
+\NewTaggingSocket{graphic/begin}{1}
+\NewTaggingSocket{graphic/end}{2}
+\NewTaggingSocket{graphic/text/begin}{0}
+\NewTaggingSocket{graphic/text/end}{0}
+%    \end{macrocode}
+%\end{socketdecl}
+%
+% \subsection{Tagging plugs}
+% 
+% \subsubsection{Initialization of the tagging mode}
+% \begin{plugdecl}{default (tagsupport/graphic/init),default (tagsupport/graphic/init)}
+%     \begin{macrocode}
+\NewTaggingSocketPlug{graphic/init}{default}
   {
-    Alternative~text~for~graphic~is~missing.\\
-    Using~the~file~name~'#1'~instead.
+   \keys_set:nn{tag/graphic}{#1}
+   \ExpandArgs{no}\AssignTaggingSocketPlug{graphic/begin}{\l_tag_graphic_mode_tl}  
+   \ExpandArgs{no}\AssignTaggingSocketPlug{graphic/end}{\l_tag_graphic_mode_tl}  
   }
-\cs_new_protected:Npn\Gin@tag@struct@begin
- {
-   \tag_if_active:T
-    {
-      \tag_mc_end_push: 
+\AssignTaggingSocketPlug{graphic/init}{default}  
 %    \end{macrocode}
-% we don't open a structure for artifacts to make it easier to use
-% graphics in saveboxes. 
+% \end{plugdecl}
+% 
+% \subsubsection{Main begin and end sockets}
+% \begin{plugdecl}{figure (tagsupport/graphic/begin),figure (tagsupport/graphic/end)}
+% These plugs handle the graphic as a figure.
+% Around the graphic is a \texttt{Figure} environment which will
+% use an alt text given in the optional argument and internally tagging is suspended.
+% The Bbox will be set (after the second compilation) to the size of the declared size
 %    \begin{macrocode}
-      \bool_if:NTF\l_@@_graphic_artifact_bool
-       {
-         \tag_mc_begin:n{artifact}
-       }
-       {
-         \tl_if_empty:NTF\l_@@_graphic_actual_tl
-           {
-             \tl_if_empty:NT\l_@@_graphic_alt_tl         
-               {
-                 \msg_warning:nne{tag}{alt-text-missing}{\l_@@_graphic_alt_dflt_tl}
-                 \tl_set:Ne\l_@@_graphic_alt_tl {\l_@@_graphic_alt_dflt_tl}
-               }
-             \tag_struct_begin:n
-               {
-                tag=\l_@@_graphic_struct_tl,
-                alt=\l_@@_graphic_alt_tl,
-               }
-           }
-           {
-             \tag_struct_begin:n
-               {
-                 tag=Span,
-                 actualtext=\l_@@_graphic_actual_tl,
-               }
-             \bool_set_false:N\l_@@_graphic_BBox_bool
-           }  
-        \tag_mc_begin:n{}
-       }  
-    }   
+\msg_new:nnn { tag } { alt-text-missing }
+ {
+   Alternative~text~for~graphic~is~missing.\\
+   Using~'#1'~instead.
  }
-%    \end{macrocode}
-% \end{macro}
-
-% \begin{macro}{\Gin@tag@struct@end}
-%    \begin{macrocode}
-\cs_new_protected:Npn\Gin@tag@struct@end
- {
-   \tag_if_active:T
-    {
-     \tag_mc_end:
-     \bool_if:NF\l_@@_graphic_artifact_bool
+\NewTaggingSocketPlug{graphic/begin}{alt}
+  {
+    \tag_mc_end_push: 
+    \tl_if_empty:NT\l_@@_graphic_alt_tl         
       {
-        \tag_struct_end:
-      }  
+        \msg_warning:nne{tag}{alt-text-missing}{#1}
+        \tl_set:Ne\l_@@_graphic_alt_tl {\text_purify:n{#1}}
+      }
+    \tag_struct_begin:n
+      {
+        tag=\l_@@_graphic_struct_tl,
+        alt=\l_@@_graphic_alt_tl,
+      }
+    \tag_mc_begin:n{}      
+  }
+\NewTaggingSocketPlug{graphic/end}{alt}
+  {
+     #1
+     #2
+     \tag_mc_end:
+     \tag_struct_end:
      \tag_mc_begin_pop:n{}
-    }
- }  
+  }  
 %    \end{macrocode}
-% \end{macro}
+% \end{plugdecl}
 %
-% \subsection{Patching graphics commands}
+% \begin{plugdecl}{actualtext (tagsupport/graphic/begin),actualtext (tagsupport/graphic/end)}
+% This plug handles the picture as a symbol with an actualtext.
+% It tags the content as a Span and expects an actualtext.
+% Internally tagging is suspended.
+%    \begin{macrocode}
+\NewTaggingSocketPlug{graphic/begin}{actualtext}
+  {
+   \tag_mc_end_push:
+   \tag_struct_begin:n{tag=Span,actualtext=\l_@@_graphic_actual_tl }
+   \tag_mc_begin:n{}
+  }
+\NewTaggingSocketPlug{graphic/end}{actualtext}
+  {
+   #2
+   \tag_mc_end:
+   \tag_struct_end:
+   \tag_mc_begin_pop:n{}
+  }  
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \begin{plugdecl}{artifact (tagsupport/graphic/begin),artifact (tagsupport/graphic/end)}
+% This plug handles the picture as an artifact, as decoration.
+% So it is surrounded by an artifact MC and internal text does not restart tagging.
+%    \begin{macrocode}
+\NewTaggingSocketPlug{graphic/begin}{artifact}
+  {
+    \tag_mc_end_push:
+    \tag_mc_begin:n{artifact}
+  }
+\NewTaggingSocketPlug{graphic/end}{artifact}
+  {
+    #2
+    \tag_mc_end:
+    \tag_mc_begin_pop:n{}
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+%
+% \begin{plugdecl}{text (tagsupport/graphic/begin),text (tagsupport/graphic/end)}
+% This plug can be used for text tagging.
+% It basically does the same as the artifact plug. The main reason that it
+% exist is that it looks more consistend and
+% that we can test for the plug name and so restart tagging
+% in places where this is wanted. (tagging can not be resumed inside a tagging hook,
+% so has to use some external method).
+%    \begin{macrocode}
+\NewTaggingSocketPlug{graphic/begin}{text}
+  {
+    \tag_mc_end_push:
+    \tag_mc_begin:n{artifact}
+  }
+\NewTaggingSocketPlug{graphic/end}{text}
+  {
+    #2
+    \tag_mc_end:
+    \tag_mc_begin_pop:n{}
+  }
+%    \end{macrocode}
+% \end{plugdecl}
+% 
+% \begin{plugdecl}{off (tagsupport/graphic/begin),off (tagsupport/graphic/end)}
+% This plug can be used for text tagging.
+% It basically does the same as the artifact plug. The main reason that it
+% exist is that it looks more consistend and
+% that we can test for the plug name and so restart tagging
+% in places where this is wanted. (tagging can not be resumed inside a tagging hook,
+% so has to use some external method).
+%    \begin{macrocode}
+\NewTaggingSocketPlug{graphic/begin}{off}{}
+\NewTaggingSocketPlug{graphic/end}{off}{#2}
+%    \end{macrocode}
+% \end{plugdecl}
+
+% 
+%  By default we use the alt plugs
+%    \begin{macrocode}
+\AssignTaggingSocketPlug{graphic/begin}{alt}
+\AssignTaggingSocketPlug{graphic/end}{alt}
+%    \end{macrocode}
+%
+% \begin{plugdecl}{default (tagsupport/graphic/text/begin),
+%  default (tagsupport/picture/text/end)}
+% These sockets are used inside the text
+% plugs and ends the previous mc and restarts it after the text.
+% Not used by \cs{includegraphics}. Unclear if they can be used by
+% the \env{picture} environment.
+%    \begin{macrocode}
+\NewTaggingSocketPlug{graphic/text/begin}{default}
+  {
+   \tag_mc_end:
+   \tag_mc_begin:n{}
+  }
+\NewTaggingSocketPlug{graphic/text/end}{default}
+  {
+   \tag_mc_end:
+   \tag_mc_begin:n{artifact}
+  }
+\AssignTaggingSocketPlug{graphic/text/begin}{default}
+\AssignTaggingSocketPlug{graphic/text/end}{default}
+%    \end{macrocode}
+% \end{plugdecl}
+% 
+% \subsection{Generic keys}
+% The keys are used by picture and \cs{includegraphics} (through the 
+% \texttt{tagging-setup} key
+%    \begin{macrocode}
+\keys_define:nn{tag/graphic}
+   {
+     ,alt .code:n =  
+        {                    
+          \tl_if_empty:nF{#1}
+           { \tl_set:Ne\l_@@_graphic_alt_tl{\text_purify:n{#1}}}
+          \tl_set:Nn\l_tag_graphic_mode_tl{alt}
+        }
+     ,artifact .code:n = 
+        {
+          \tl_set:Nn\l_tag_graphic_mode_tl{artifact}
+        }
+     ,actualtext .code:n = 
+        {
+          \tl_if_empty:nF{#1}
+           { \tl_set:Ne\l_@@_graphic_actual_tl{\text_purify:n{#1}} }          
+          \tl_set:Nn\l_tag_graphic_mode_tl{actualtext}
+        }
+     ,text .code:n =
+        {
+          \tl_set:Nn\l_tag_graphic_mode_tl{text}
+        }   
+     ,off .code:n =
+        {
+          \tl_set:Nn\l_tag_graphic_mode_tl{off}
+        }   
+     ,adjust-BBox .code:n = 
+      {
+        \bool_set_true:N \l_@@_graphic_bboxcorr_bool
+        \seq_set_split:Nnn\l_@@_graphic_bboxcorr_seq{~}{#1~0pt~0pt~0pt~0pt}
+      }
+     ,
+     tagging-setup .code:n= 
+      {
+        \keys_set:nn { tag/graphic }{#1}
+      } 
+%    \end{macrocode}
+% only for legacy. Should perhaps be removed?
+%    \begin{macrocode}
+    ,tag .code:n = 
+      {
+        \str_case:nnF {#1}
+          {
+            {artifact}
+            {
+              \tl_set:Nn\l_tag_graphic_mode_tl{artifact}              
+            }
+            {false}{\tag_suspend:n{picture}}
+          }
+          {
+            \tl_set:Nn\l_@@_graphic_struct_tl{#1}
+            \tl_set:Nn\l_tag_graphic_mode_tl{alt}              
+          }
+      }     
+   }          
+%    \end{macrocode}
+%
+% \subsection{Tagging support for \cs{includegraphics}}
+% 
+% \subsubsection{User interface: Additional keys.}
+%
+% We also ensure that graphicx is loaded for the keyval support.
+% At first a command to hold the tagging mode.
+%    \begin{macrocode}
+\tl_new:N  \l_tag_graphic_mode_tl
+\tl_set:Nn \l_tag_graphic_mode_tl {alt} %TODO think about the right default.
+
+\AddToHook{package/graphicx/after}[latex-lab]
+  {
+    \define@key{Gin}{alt}       
+      {         
+         \tl_if_empty:nF{#1}
+           { \tl_set:Ne\l_@@_graphic_alt_tl{\text_purify:n{#1}}}
+         \tl_set:Nn\l_tag_graphic_mode_tl {alt}
+      }
+    \define@key{Gin}{artifact}[]
+      {
+        \tl_set:Nn\l_tag_graphic_mode_tl{artifact}
+      }
+    \define@key{Gin}{actualtext}
+     {
+       \tl_if_empty:nF{#1}
+         { \tl_set:Ne\l_@@_graphic_actual_tl{\text_purify:n{#1}} }   
+       \tl_set:Nn\l_tag_graphic_mode_tl{actualtext}
+     }
+    \define@key{Gin}{tagging-setup}
+     {
+       \keys_set:nn { tag/graphic}{#1}
+     }     
+    \define@key{Gin}{adjust-BBox}
+      {
+        \bool_set_true:N \l_@@_graphic_bboxcorr_bool
+        \seq_set_split:Nnn\l_@@_graphic_bboxcorr_seq{~}{#1~0pt~0pt~0pt~0pt}
+      }
+%    \end{macrocode}
+% only for legacy, no longer documented
+%    \begin{macrocode}
+    \define@key{Gin}{tag}
+      {
+        \str_case:nnF {#1}
+          {
+            {artifact}
+            {              
+              \tl_set:Nn\l_tag_graphic_mode_tl{artifact}              
+            }
+            {false}{\tag_suspend:n{Gin}}
+          }
+          { 
+            \tl_set:Nn\l_@@_graphic_struct_tl{#1}
+            \tl_set:Nn\l_tag_graphic_mode_tl{alt}              
+          }
+      }  
+  }
+\AddToHook{package/graphics/after}[latex-lab]
+  {\RequirePackage{graphicx}}  
+%    \end{macrocode}
+%
+%
+% \subsubsection{Patching graphics commands}
 % All changes are currently done in \cs{Gin@setfile}.
+% We mainly have to add the sockets in the right place and
+% to rearrange a bit the \cs{ifGin@draft} test.
+% 
 %    \begin{macrocode}
 \AddToHook{package/graphics/after}
  {
@@ -425,8 +1081,14 @@
 % Here the tagging begins. We want to catch also the draft box, 
 % and for luatex tagging must be started before the \cs{setbox}.
 %    \begin{macrocode}
-  \Gin@tag@struct@begin %NEW
+  \tag_socket_use:ne {graphic/init} {tagging-setup=\l_tag_graphic_mode_tl}
+  \tag_socket_use:nn {graphic/begin} {\Gin@base\Gin@ext} 
+%    \end{macrocode}
+% We store also the draft box in a box and do not output it directly
+% so that we can calculate its BBox too. 
+%    \begin{macrocode}
   \ifGin@draft
+     \setbox\z@
       \hb@xt@\Gin@req@width{%
         \vrule\hss
         \vbox to \Gin@req@height{%
@@ -444,98 +1106,21 @@
     \dp\z@\z@
     \ht\z@\Gin@req@height
     \wd\z@\Gin@req@width
+  \fi   
 %    \end{macrocode}
-% This the main command to calculate the BBox values.
+% This ends the tagging. 
 %    \begin{macrocode}
-  \Gin@tag@bbox@attribute %new
-  \box\z@
-%    \end{macrocode}
-% and here the tagging stops.
-%    \begin{macrocode}
-  \fi
-  \Gin@tag@struct@end %new
+  \tag_socket_use:nnn{graphic/end}
+    { \Gin@tag@bbox@attribute } 
+    { \box\z@ } 
   }
  }  
 %    \end{macrocode}
 %
-% \subsection{Additional keys for the graphics command}
-% TODO: this is a bit temporary and will perhaps need more refinement.
-% we also ensure that graphicx is loaded for the keyval support.
-%    \begin{macrocode}
-\AddToHook{package/graphicx/after}[latex-lab]
-  {
-    \define@key{Gin}{alt}       {\tl_set:Ne\l_@@_graphic_alt_tl{\text_purify:n{#1}}}
-    \define@key{Gin}{artifact}[]
-      {
-        \bool_set_true:N \l_@@_graphic_artifact_bool
-        \bool_set_false:N \l_@@_graphic_BBox_bool
-      }
-    \define@key{Gin}{actualtext}
-     {
-       \tl_set:Ne\l_@@_graphic_actual_tl{\text_purify:n{#1}}
-       \bool_set_false:N \l_@@_graphic_BBox_bool
-     }
-    \define@key{Gin}{correct-BBox}
-      {
-        \bool_set_true:N \l_@@_graphic_bboxcorr_bool
-        \seq_set_split:Nnn\l_@@_graphic_bboxcorr_seq{~}{#1~0pt~0pt~0pt~0pt}
-      }
-    \define@key{Gin}{tag}
-      {
-        \str_case:nnF {#1}
-          {
-            {artifact}
-            {
-               \bool_set_true:N \l_@@_graphic_artifact_bool
-               \bool_set_false:N \l_@@_graphic_BBox_bool
-            }
-            {false}{\tag_suspend:n{Gin}}
-          }
-          {\tl_set:Nn\l_@@_graphic_struct_tl{#1}}
-      }  
-  }
-\AddToHook{package/graphics/after}[latex-lab]
-  {\RequirePackage{graphicx}}  
-%    \end{macrocode}
-% For picture and other environments we need a similar set of keys.
-% TODO: redefine \cs{includegraphics} to make use of these here??
-%    \begin{macrocode}
-\keys_define:nn{tag/picture}
-   {
-     ,alt .code:n =  
-        {\tl_set:Ne\l_@@_graphic_alt_tl{\text_purify:n{#1}}}
-     ,artifact .code:n = 
-        {
-          \bool_set_true:N \l_@@_graphic_artifact_bool
-          \bool_set_false:N \l_@@_graphic_BBox_bool
-        }
-     ,actualtext .code:n = 
-        {
-          \tl_set:Ne\l_@@_graphic_actual_tl{\text_purify:n{#1}}
-          \bool_set_false:N \l_@@_graphic_BBox_bool
-        }
-     ,correct-BBox .code:n = 
-      {
-        \bool_set_true:N \l_@@_graphic_bboxcorr_bool
-        \seq_set_split:Nnn\l_@@_graphic_bboxcorr_seq{~}{#1~0pt~0pt~0pt~0pt}
-      }
-    ,tag .code:n = 
-      {
-        \str_case:nnF {#1}
-          {
-            {artifact}
-            {
-               \bool_set_true:N \l_@@_graphic_artifact_bool
-               \bool_set_false:N \l_@@_graphic_BBox_bool
-            }
-            {false}{\tag_suspend:n{picture}}
-          }
-          {\tl_set:Nn\l_@@_graphic_struct_tl{#1}}
-      }     
-   }          
-%    \end{macrocode}
 %
-% \subsection{Calculating the BBox}
+% \subsubsection{Calculating the BBox}
+% 
+% This is the large code part.
 % 
 % \begin{macro}{\@@_graphic_get_trim:}
 % Graphics can be trimmed with the trim and the viewport key.
@@ -775,115 +1360,188 @@
 %    \end{macrocode}
 % \end{macro}
 % 
-% \begin{macro}{\Gin@tag@bbox@attribute}
-% This is the main command to calculate and set the Bbox attribute
+% \begin{macro}[no-user-doc]{\Gin@tag@bbox@attribute}
+% This is the main command to calculate and set the Bbox attribute of the 
+% \cs{includegraphics} command. It also sets the reference point on the page.
+% 
 %    \begin{macrocode}
 \cs_new_protected:Npn \Gin@tag@bbox@attribute
   {  
-%    \end{macrocode}
-% the attribute is only needed if tagging is active and there is not artifact.
-%    \begin{macrocode}
-  \bool_lazy_all:nT
-    {
-      {\tag_if_active_p:}
-      {!\l_@@_graphic_artifact_bool}
-      {\l_@@_graphic_BBox_bool}
-    }
-    {
-      \__tag_graphic_get_scale:
-      \@@_graphic_get_trim:
-      \int_gincr:N\g_@@_graphic_int
-      \tl_set:Ne\l_@@_graphic_currentlabel_tl {_@@_graphic_\int_use:N \g_@@_graphic_int}
-      \@@_graphic_savepos:e { \l_@@_graphic_currentlabel_tl }
-      \tl_gset:Ne\g_@@_graphic_lx_tl
+    \__tag_graphic_get_scale:
+    \@@_graphic_get_trim:
+    \int_gincr:N\g_@@_graphic_int
+    \tl_set:Ne\l_@@_graphic_currentlabel_tl {_@@_graphic.\int_use:N \g_@@_graphic_int}
+    \@@_graphic_savepos:e { \l_@@_graphic_currentlabel_tl }
+    \tl_gset:Ne\g_@@_graphic_lx_tl
+      {
+        \dim_to_decimal_in_bp:n 
+          { \property_ref:een {\l_@@_graphic_currentlabel_tl}{xpos}{0}sp }
+      }  
+    \tl_gset:Ne\g_@@_graphic_ly_tl
+      {
+        \dim_to_decimal_in_bp:n 
+          { \property_ref:een {\l_@@_graphic_currentlabel_tl}{ypos}{0}sp }
+      } 
+    \tl_gset:Ne\g_@@_graphic_ux_tl
         {
-          \dim_to_decimal_in_bp:n 
-            { \property_ref:een {\l_@@_graphic_currentlabel_tl}{xpos}{0}sp }
-        }  
-      \tl_gset:Ne\g_@@_graphic_ly_tl
+          \fp_eval:n 
+           { 
+             \g_@@_graphic_lx_tl
+             + 
+             \dim_to_decimal_in_bp:n { \Gin@req@width }
+           }  
+        }         
+     \tl_gset:Ne\g_@@_graphic_uy_tl
         {
-          \dim_to_decimal_in_bp:n 
-            { \property_ref:een {\l_@@_graphic_currentlabel_tl}{ypos}{0}sp }
-        } 
-      \tl_gset:Ne\g_@@_graphic_ux_tl
-          {
-            \fp_eval:n 
-             { 
-               \g_@@_graphic_lx_tl
-               + 
-               \dim_to_decimal_in_bp:n { \Gin@req@width }
-             }  
-          }         
-       \tl_gset:Ne\g_@@_graphic_uy_tl
-          {
-            \fp_eval:n 
-             {
-               \g_@@_graphic_ly_tl
-               + 
-                \dim_to_decimal_in_bp:n  { \Gin@req@height }
-             }  
-          }
+          \fp_eval:n 
+           {
+             \g_@@_graphic_ly_tl
+             + 
+              \dim_to_decimal_in_bp:n  { \Gin@req@height }
+           }  
+        }
 %    \end{macrocode}
 % If the graphics is not clipped we must add the trim values.
 %    \begin{macrocode}     
-      \legacy_if:nF {Gin@clip}          
-        {            
-          \tl_gset:Ne\g_@@_graphic_ux_tl
-            {
-              \fp_eval:n 
-                {
-                  \g_@@_graphic_ux_tl                       
-                  + 
-                  \l_@@_graphic_trim_ux_fp
-                }  
-            }
-          \tl_gset:Ne\g_@@_graphic_lx_tl
-            {
-              \fp_eval:n 
-                {
-                  \g_@@_graphic_lx_tl              
-                   - 
-                  \l_@@_graphic_trim_lx_fp
-                }  
-            }  
-          \tl_gset:Ne\g_@@_graphic_uy_tl
-            {
-              \fp_eval:n 
-                {
-                  \g_@@_graphic_uy_tl           
-                  + 
-                  \l_@@_graphic_trim_uy_fp
-                }  
-            }                                   
-          \tl_gset:Ne\g_@@_graphic_ly_tl
-            {
-              \fp_eval:n 
-                {
-                  \g_@@_graphic_ly_tl              
-                  - 
-                  \l_@@_graphic_trim_ly_fp
-                }  
-            }                                          
-        } 
+    \legacy_if:nF {Gin@clip}          
+      {            
+        \tl_gset:Ne\g_@@_graphic_ux_tl
+          {
+            \fp_eval:n 
+              {
+                \g_@@_graphic_ux_tl                       
+                + 
+                \l_@@_graphic_trim_ux_fp
+              }  
+          }
+        \tl_gset:Ne\g_@@_graphic_lx_tl
+          {
+            \fp_eval:n 
+              {
+                \g_@@_graphic_lx_tl              
+                 - 
+                \l_@@_graphic_trim_lx_fp
+              }  
+          }  
+        \tl_gset:Ne\g_@@_graphic_uy_tl
+          {
+            \fp_eval:n 
+              {
+                \g_@@_graphic_uy_tl           
+                + 
+                \l_@@_graphic_trim_uy_fp
+              }  
+          }                                   
+        \tl_gset:Ne\g_@@_graphic_ly_tl
+          {
+            \fp_eval:n 
+              {
+                \g_@@_graphic_ly_tl              
+                - 
+                \l_@@_graphic_trim_ly_fp
+              }  
+          }                                          
+      } 
 %    \end{macrocode}
 % If there is an angle we now rotate the values.
 %    \begin{macrocode}
-      \@@_graphic_applyangle:VVVV 
-        \g_@@_graphic_lx_tl
-        \g_@@_graphic_ly_tl
-        \g_@@_graphic_ux_tl
-        \g_@@_graphic_uy_tl 
+    \@@_graphic_applyangle:VVVV 
+      \g_@@_graphic_lx_tl
+      \g_@@_graphic_ly_tl
+      \g_@@_graphic_ux_tl
+      \g_@@_graphic_uy_tl 
 %    \end{macrocode}
 % At last we have to add the correction values
 %    \begin{macrocode}
-      \@@_graphic_applycorr:NNNN
+    \@@_graphic_applycorr:NNNN
+      \g_@@_graphic_lx_tl
+      \g_@@_graphic_ly_tl
+      \g_@@_graphic_ux_tl
+      \g_@@_graphic_uy_tl 
+%    \end{macrocode}
+%    \begin{macrocode}
+  \bool_if:NT\l_@@_graphic_debug_bool
+   {
+     \@@_graphic_show_bbox:VVVVne
+      \g_@@_graphic_lx_tl
+      \g_@@_graphic_ly_tl
+      \g_@@_graphic_ux_tl
+      \g_@@_graphic_uy_tl
+      {red}
+      {\l_@@_graphic_currentlabel_tl}
+   }
+%    \end{macrocode}
+% Now we add the attribute. We do it manually as it had to be delayed until now.
+% The structure and the mc must be open earlier, before the \cs{setbox}  (at least
+% for luatex it has to). 
+%    \begin{macrocode}
+    \tag_struct_gput:ene{\tag_get:n{struct_num}}{attribute}
+       {
+         /O /Layout /BBox~
+           [
+            \g_@@_graphic_lx_tl\c_space_tl
+            \g_@@_graphic_ly_tl\c_space_tl
+            \g_@@_graphic_ux_tl\c_space_tl
+            \g_@@_graphic_uy_tl
+           ]
+       }          
+  } 
+%    \end{macrocode}
+% \end{macro}
+% 
+% \subsection{Support for the picture environment}
+% 
+% \subsubsection{User interface}
+% 
+% The original picture has no key-val argument yet. In the new optional
+% argument uses the generic tag/graphic keys.
+% We could perhaps use the \texttt{Gin} keys instead, but there could
+% be side-effects if some uses other \texttt{Gin} keys like 
+% \texttt{angle}, so better stay on the safe side.
+%
+%
+% \subsubsection{Calculation of the BBox}
+% 
+% \begin{macro}[no-user-doc]{\picture@tag@bbox@attribute}
+% Picture needs a similar command to calculate the BBox. But here we stay simple
+% and use simply the size of the picbox.
+% 
+%    \begin{macrocode}
+\newcommand\picture@tag@bbox@attribute
+ {
+   \int_gincr:N\g_@@_graphic_int
+   \tl_set:Ne\l_@@_graphic_currentlabel_tl {_@@_graphic.\int_use:N \g_@@_graphic_int}
+   \@@_graphic_savepos:e { \l_@@_graphic_currentlabel_tl }
+   \tl_gset:Ne \g_@@_graphic_lx_tl 
+     { 
+       \dim_to_decimal_in_bp:n 
+       { \property_ref:een {\l_@@_graphic_currentlabel_tl}{xpos}{0}sp  } 
+     }
+   \tl_gset:Ne \g_@@_graphic_ly_tl 
+     { 
+       \dim_to_decimal_in_bp:n 
+       { \property_ref:een {\l_@@_graphic_currentlabel_tl}{ypos}{0}sp - \dp\@picbox } 
+     }  
+   \tl_gset:Ne \g_@@_graphic_ux_tl 
+     { 
+       \dim_to_decimal_in_bp:n 
+        {
+          \g_@@_graphic_lx_tl bp + \wd\@picbox        
+        }  
+     }     
+   \tl_gset:Ne \g_@@_graphic_uy_tl 
+     { 
+       \dim_to_decimal_in_bp:n 
+        {
+          \g_@@_graphic_ly_tl bp + \ht\@picbox + \dp\@picbox         
+        }  
+     }     
+   \@@_graphic_applycorr:NNNN
         \g_@@_graphic_lx_tl
         \g_@@_graphic_ly_tl
         \g_@@_graphic_ux_tl
-        \g_@@_graphic_uy_tl 
-%    \end{macrocode}
-%    \begin{macrocode}
-    \bool_if:NT\l_@@_graphic_debug_bool
+        \g_@@_graphic_uy_tl        
+   \bool_if:NT\l_@@_graphic_debug_bool
      {
        \@@_graphic_show_bbox:VVVVne
         \g_@@_graphic_lx_tl
@@ -891,117 +1549,34 @@
         \g_@@_graphic_ux_tl
         \g_@@_graphic_uy_tl
         {red}
-        {\int_use:N\g_@@_graphic_int}
+        {\l_@@_graphic_currentlabel_tl}
      }
 %    \end{macrocode}
-% Now we add the attribute. We do it manually as it had to be delayed until now.
-% The structure and the mc must be open earlier, before the \cs{setbox}  (at least
-% for luatex it has to). TODO: think about interface if more attributes are needed.
+% this stores the attribute in the structure.
 %    \begin{macrocode}
-      \@@_prop_gput:cne
-         { g_@@_struct_\int_eval:n {\c@g_@@_struct_abs_int}_prop }
-         { A } 
+   \tag_struct_gput:ene{\tag_get:n{struct_num}}{attribute}
          {
-           << 
              /O /Layout /BBox~
              [
               \g_@@_graphic_lx_tl\c_space_tl
               \g_@@_graphic_ly_tl\c_space_tl
               \g_@@_graphic_ux_tl\c_space_tl
-              \g_@@_graphic_uy_tl
+              \g_@@_graphic_uy_tl 
              ]
-           >>   
-         } 
-    }         
-  } 
-%    \end{macrocode}
-% \end{macro}
-% \subsection{Support for the picture environment}
-% 
-% \begin{macro}{\picture@tag@bbox@attribute}
-% Picture needs a similar command to calculate the bbox. But here we stay simple
-% and use simply the size of the picbox.
-% 
-%    \begin{macrocode}
-\newcommand\picture@tag@bbox@attribute
- {
-   \bool_lazy_all:nT
-    {
-      {\tag_if_active_p:}
-      {!\l_@@_graphic_artifact_bool}
-      {\l_@@_graphic_BBox_bool}
-    }
-    {
-      \int_gincr:N\g_@@_graphic_int
-      \tl_set:Ne\l_@@_graphic_currentlabel_tl {_@@_graphic_\int_use:N \g_@@_graphic_int}
-      \@@_graphic_savepos:e { \l_@@_graphic_currentlabel_tl }
-      \tl_gset:Ne \g_@@_graphic_lx_tl 
-        { 
-          \dim_to_decimal_in_bp:n 
-          { \property_ref:een {\l_@@_graphic_currentlabel_tl}{xpos}{0}sp  } 
-        }
-      \tl_gset:Ne \g_@@_graphic_ly_tl 
-        { 
-          \dim_to_decimal_in_bp:n 
-          { \property_ref:een {\l_@@_graphic_currentlabel_tl}{ypos}{0}sp - \dp\@picbox } 
-        }  
-      \tl_gset:Ne \g_@@_graphic_ux_tl 
-        { 
-          \dim_to_decimal_in_bp:n 
-           {
-             \g_@@_graphic_lx_tl bp + \wd\@picbox        
-           }  
-        }     
-      \tl_gset:Ne \g_@@_graphic_uy_tl 
-        { 
-          \dim_to_decimal_in_bp:n 
-           {
-             \g_@@_graphic_ly_tl bp + \ht\@picbox + \dp\@picbox         
-           }  
-        }     
-      \@@_graphic_applycorr:NNNN
-           \g_@@_graphic_lx_tl
-           \g_@@_graphic_ly_tl
-           \g_@@_graphic_ux_tl
-           \g_@@_graphic_uy_tl        
-      \bool_if:NT\l_@@_graphic_debug_bool
-        {
-          \@@_graphic_show_bbox:VVVVne
-           \g_@@_graphic_lx_tl
-           \g_@@_graphic_ly_tl
-           \g_@@_graphic_ux_tl
-           \g_@@_graphic_uy_tl
-           {red}
-           {\int_use:N\g_@@_graphic_int}
-        }
-      \@@_prop_gput:cne
-            { g_@@_struct_\int_eval:n {\c@g_@@_struct_abs_int}_prop }
-            { A } 
-            {
-              << 
-                /O /Layout /BBox~
-                [
-                 \g_@@_graphic_lx_tl\c_space_tl
-                 \g_@@_graphic_ly_tl\c_space_tl
-                 \g_@@_graphic_ux_tl\c_space_tl
-                 \g_@@_graphic_uy_tl 
-                ]
-              >>   
-           }     
-     }    
+        }            
   }
- 
 %    \end{macrocode}
 % \end{macro}
-% We redefine \cs{picture} to accept an optional argument and
-% change the default alt text. We also ensure that we are in 
+%  
+% \subsubsection{Patching the commands}
+% We redefine \cs{picture} to accept an optional argument.
+% We also ensure that we are in 
 % hmode, so that stopping tagging doesn't confuse the paratags.
 %    \begin{macrocode}
 \RenewDocumentCommand\picture{O{}m}
  { 
    \leavevmode
-   \keys_set:nn{tag/picture}{#1} % 
-   \tl_set:Nn\l_@@_graphic_alt_dflt_tl {picture~environment}
+   \tag_socket_use:nn{graphic/init}{#1}   
    \pictur@#2
  } 
 %    \end{macrocode}
@@ -1010,9 +1585,9 @@
 \def\@picture(#1,#2)(#3,#4){%
   \@defaultunitsset\@picht{#2}\unitlength
   \@defaultunitsset\@tempdimc{#1}\unitlength
-  \Gin@tag@struct@begin
-  \setbox\@picbox\hb@xt@\@tempdimc\bgroup
-    \tag_suspend:n{\@picture} %do not tag inside the picture box
+  \tag_socket_use:nn{graphic/begin}{picture~environment}
+  \tag_suspend:n{\@picture} %do not tag inside the picture box
+  \setbox\@picbox\hb@xt@\@tempdimc\bgroup    
     \@defaultunitsset\@tempdimc{#3}\unitlength
     \hskip -\@tempdimc
     \@defaultunitsset\@tempdimc{#4}\unitlength
@@ -1024,16 +1599,18 @@
 \def\endpicture{%
   \egroup\hss\egroup
     \ht\@picbox\@picht\dp\@picbox\z@
-    \picture@tag@bbox@attribute    
-    \mbox{\box\@picbox}
-    \Gin@tag@struct@end}
+    \tag_resume:n{\@picture}
+    \tag_socket_use:nnn{graphic/end}
+      {\picture@tag@bbox@attribute}
+      {\mbox{\box\@picbox}}}
 %    \end{macrocode}
 %
+%
 % \subsection{Debugging code}
-% 
+% This command puts a transparent layer in the size of the BBox over an graphic. 
 % \begin{macro}{\@@_graphic_show_bbox:nnnnnn}
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_graphic_show_bbox:nnnnnn #1#2#3#4#5#6%#5 color, #6 graphic
+\cs_new_protected:Npn \@@_graphic_show_bbox:nnnnnn #1#2#3#4#5#6%#5 color, #6 label name
  {  
     \iow_log:n {tag/graphic~debug:~BBox~of~graphics~#6~is~#1~#2~#3~#4}  
     \hook_gput_code:nnn
@@ -1043,7 +1620,7 @@
       \int_compare:nNnT 
        {\g_shipout_readonly_int}
        =
-       {\property_ref:een{_@@_graphic_#6}{abspage}{0}}
+       {\property_ref:een{#6}{abspage}{0}}
        {
         \put
          (#1 bp,\dim_eval:n{-\paperheight + \dim_eval:n{#2 bp}})
@@ -1056,7 +1633,7 @@
        }           
      }
  }
- \cs_generate_variant:Nn  \@@_graphic_show_bbox:nnnnnn {VVVVne}
+ \cs_generate_variant:Nn  \@@_graphic_show_bbox:nnnnnn {VVVVne,nnnnne}
 %    \end{macrocode}
 % \end{macro}
 

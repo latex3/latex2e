@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{calc}
-\ProvidesExplClass{l3doc}{2025-04-29}{}
+\ProvidesExplClass{l3doc}{2025-05-26}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -399,12 +399,13 @@
     cs-break .bool_gset_inverse:N = \g__codedoc_cs_break_bool ,
     cs-break-nohyphen .code:n = \PassOptionsToPackage{nohyphen}{underscore} ,
     show-notes .bool_gset:N = \g__codedoc_show_notes_bool,
-    hide-notes .bool_gset_inverse:N = \g__codedoc_show_notes_bool
+    hide-notes .bool_gset_inverse:N = \g__codedoc_show_notes_bool ,
+    base-date .tl_set:N = \l__codedoc_base_date_tl ,
   }
 \DeclareUnknownKeyHandler [ l3doc / options ]
   { \PassOptionsToClass { \CurrentOption } { article } }
 \SetKeys [ l3doc / options ]
-  { full , check = false , checktest = false , lm-default }
+  { full , check = false , checktest = false , lm-default , base-date = 2020-02-02 }
 \PassOptionsToClass { a4paper } { article }
 \msg_new:nnn { l3doc } { input-cfg }
   { Local~config~file~l3doc.cfg~loaded. }
@@ -1128,6 +1129,10 @@
     \small\ttfamily
     \__codedoc_target:
     \Hy@MakeCurrentHref { HD. \int_use:N \c@HD@hypercount }
+    \__codedoc_date_compare:VNVF \l__codedoc_date_added_tl > \l__codedoc_base_date_tl
+      { \tl_clear:N \l__codedoc_date_added_tl }
+    \__codedoc_date_compare:VNVF \l__codedoc_date_updated_tl > \l__codedoc_base_date_tl
+      { \tl_clear:N \l__codedoc_date_updated_tl }
     \begin{tabular} [t] { @{} l @{} >{\hspace{\tabcolsep}} r @{} }
       \toprule
       \__codedoc_function_extra_labels:
@@ -1137,6 +1142,7 @@
     \end{tabular}
     \normalfont\normalsize
   }
+\cs_generate_variant:Nn \__codedoc_date_compare:nNnF { VNV }
 \cs_new_protected:Npn \__codedoc_typeset_function_block:nN #1#2
   {
     \__codedoc_function_index:e

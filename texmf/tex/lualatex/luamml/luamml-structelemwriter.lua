@@ -1,9 +1,18 @@
 local struct_begin = token.create'tag_struct_begin:n'
 local struct_use = token.create'tag_struct_use:n'
+local struct_use_num = token.create'tag_struct_use_num:n'
 local struct_end = token.create'tag_struct_end:'
 
 local mc_begin = token.create'tag_mc_begin:n'
 local mc_end = token.create'tag_mc_end:'
+
+local catlatex       = luatexbase.registernumber("catcodetable@latex")
+
+ltx = ltx or {}
+ltx.__tag = ltx.__tag or {}
+ltx.__tag.struct = ltx.__tag.struct or {}
+ltx.__tag.struct.luamml = ltx.__tag.struct.luamml or {}
+ltx.__tag.struct.luamml.labels = ltx.__tag.struct.luamml.labels or {}
 
 local function escape_name(name)
   return name
@@ -43,7 +52,7 @@ local attributes = setmetatable({}, {__index = function(t, k)
   local attr_name = string.format('luamml_attr_%i', attribute_counter)
   t[k] = attr_name
   tex.runtoks(function()
-    tex.sprint(string.format('\\tagpdfsetup{newattribute={%s}{/O/NSO/NS %i 0 R',
+    tex.sprint(catlatex,string.format('\\tagpdfsetup{newattribute={%s}{/O/NSO/NS %i 0 R',
         attr_name, mathml_ns_obj or get_mathml_ns_obj()))
     -- tex.sprint(string.format('\\tagpdfsetup{newattribute={%s}{/O/MathML-3',
     --     attr_name))
@@ -65,6 +74,11 @@ local function write_elem(tree, stash)
       return tex.sprint(struct_use, '{', tree[':struct'], '}')
     end)
   end
+  if tree[':structnum'] then
+    return tex.runtoks(function()
+      return tex.sprint(struct_use_num, '{', tree[':structnum'], '}')
+    end)
+  end
   if not tree[0] then print('ERR', require'inspect'(tree)) end
   local i = 0
   for attr, val in next, tree do if type(attr) == 'string' and not string.find(attr, ':') and attr ~= 'xmlns' then
@@ -75,28 +89,27 @@ local function write_elem(tree, stash)
   table.sort(attrs)
 
   if stash then
-    stash_cnt = stash_cnt + 1
-    stash = '__luamml_stashed_' .. stash_cnt
-    tree[':struct'] = stash
-    stash = ', stash, label = ' .. stash
+    tree[':structnum'] = get_ltx().tag.get_struct_num_next()
+    stash = ', stash, '
   end
 
   local attr_flag = i ~= 0 and ', attribute=' .. attributes[table.concat(attrs)]
   tex.sprint(struct_begin, '{tag=' .. tree[0] .. '/mathml')
   if stash then tex.sprint(stash) end
   if attr_flag then tex.sprint(attr_flag) end
-  if tree[':actual'] then
-    tex.sprint(', actualtext = {')
-    tex.cprint(12, tree[':actual'])
-    tex.sprint'}'
-  end
   tex.sprint'}'
   for j = 1, i do attrs[j] = nil end
 
   if tree[':nodes'] then
     local n = tree[':nodes']
     tex.runtoks(function()
-      tex.sprint{mc_begin, string.format('{tag=%s}', tree[0])}
+      if tree[':actual'] then
+       tex.sprint(mc_begin,'{tag=Span,actualtext=')
+       tex.cprint(12,tree[':actual'])
+       tex.sprint('}')
+      else
+       tex.sprint{mc_begin, string.format('{tag=%s}', tree[0])}
+      end
       -- NOTE: This will also flush all previous sprint's... That's often annoying, but in this case actually intentional.
     end)
     local mct, mcc = tex.attribute[mc_type], tex.attribute[mc_cnt]
@@ -109,7 +122,14 @@ local function write_elem(tree, stash)
     end)
   end
   for _, elem in ipairs(tree) do
-    if type(elem) ~= 'string' then
+    if type(elem) ~= 'string'  and not elem['tex:ignore']  then
+      if elem['intent']==':equation-label' and ltx.__tag.struct.luamml.labels then
+        if #ltx.__tag.struct.luamml.labels > 0 then         
+         -- print("CHECK LABEL STRUCTURE: ",table.serialize(elem), table.serialize(ltx.__tag.struct.luamml.labels))
+        local num= table.remove(ltx.__tag.struct.luamml.labels,1) 
+        elem[1][#elem+1]={[':structnum']= num}
+        end
+      end 
       write_elem(elem)
     end
   end

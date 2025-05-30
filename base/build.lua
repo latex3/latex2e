@@ -162,8 +162,18 @@ unpackdeps  = {}
 indexstyle = "source2e.ist"
 
 -- Allow for TU and other test configurations
-checkconfigs = {"build","config-1run","config-TU","config-legacy","config-lthooks",
-                "config-lthooks2","config-ltcmd","config-doc","config-ltmarks"}
+checkconfigs = {
+  "build",
+  "config-1run",
+  "config-TU",
+  "config-doc",
+  "config-legacy",
+  "config-ltcmd",
+  "config-lthooks",
+  "config-lthooks2",
+  "config-ltmarks",
+  "config-lttemplates.lua"
+}
 
 tagfiles = tagfiles or {"*.cls","*.dtx","*.fdd","*.ins","*.tex","README.md"}
 update_tag = update_tag_base

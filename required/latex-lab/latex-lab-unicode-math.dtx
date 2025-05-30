@@ -1,0 +1,178 @@
+% \iffalse meta-comment
+%
+%% File: latex-lab-unicode-math.dtx
+%
+% Copyright (C) 2024-2025 The LaTeX Project
+%
+% It may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License (LPPL), either version 1.3c of this
+% license or (at your option) any later version.  The latest version
+% of this license is in the file
+%
+%    https://www.latex-project.org/lppl.txt
+%
+%
+% The development version of the bundle can be found below
+%
+%    https://github.com/latex3/latex2e/required/latex-lab
+%
+% for those people who are interested or want to report an issue.
+%
+%<*driver>
+\DocumentMetadata{tagging=on,pdfstandard=ua-2}
+\documentclass[kernel]{l3doc}
+\usepackage{latex-lab-testphase-l3doc}
+\EnableCrossrefs
+\CodelineIndex
+\begin{document}
+  \DocInput{latex-lab-unicode-math.dtx}
+\end{document}
+%</driver>
+%
+% \fi
+%
+%
+% \title{The \texttt{latex-lab-unicode-math} code\thanks{}}
+% \author{\LaTeX{} Project}
+%
+% \maketitle
+%
+% \newcommand\fmi[1]{\begin{quote} TODO: \itshape #1\end{quote}}
+% \newcommand\NEW[1]{\marginpar{\mbox{}\hfill\fbox{New: #1}}}
+% \providecommand\class[1]{\texttt{#1.cls}}
+% \providecommand\pkg[1]{\texttt{#1}}
+% \providecommand\hook[1]{\texttt{#1}}
+%
+% \begin{abstract}
+% \end{abstract}
+%
+% \tableofcontents
+%
+% \section{Introduction}
+%
+% This file implements temporary adaptations to the \pkg{unicode-math} package needed for
+% the tagging project.
+%
+% \MaybeStop{\setlength\IndexMin{200pt}  \PrintIndex  }
+%
+% \section{The Implementation}
+%
+%    \begin{macrocode}
+%<@@=math>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<*kernel>
+%    \end{macrocode}
+%
+% \subsection{File declaration}
+%    \begin{macrocode}
+\ProvidesExplFile
+ {latex-lab-unicode-math.ltx}
+ {2025-05-25}
+ {0.1d}
+ {unicode-math adaptions}
+%    \end{macrocode}
+% \subsection{Sockets}
+% Unicode glyphs like a root sign should be marked as artifacts to avoid duplication
+% in derivation if mathml structure elements are used. This is done with a luamml socket.
+%    \begin{macrocode}
+\str_if_exist:cF { l__socket_tagsupport/math/luamml/artifact_plug_str }
+ {
+   \NewTaggingSocket{math/luamml/artifact}{0}
+ }
+%    \end{macrocode}
+% 
+% \subsection{Delimiters}
+% 
+% Extensible delimiters set with \cs{bigl}, \cs{Bigl}, etc.\ use boxes in their 
+% definitions. This gives wrong structure elements if used with luamml. 
+% We therefore redefine the internal amsmath command
+% to make use of the luatex primitive.
+% \changes{v0.1b}{2025-02-10}{redefine \cs{bBigg@}} 
+% \begin{macro}{\bBigg@}
+%    \begin{macrocode}
+\def\bBigg@#1#2 
+ {{\ensuremath {\Uvextensible height~#1 \big@size axis~exact~#2}}}
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{varlim-commands}
+% 
+% The commands \cs{varinjlim}, \cs{varliminf}, \cs{varprojlim} and \cs{varlimisup}
+% use boxes that confuse luamml. We redefine them to use luatex primitives. This slightly
+% changes the look!
+% \changes{0.1d}{2025-05-25}{add missing \cs{mathop}}
+%    \begin{macrocode}
+\protected\def\varinjlim
+  {\mathop{\Udelimiterunder 0 "2192 {\qopname\relax o{\luamml_ignore:\mathstrut lim}}}}
+\protected\def\varprojlim
+  {\mathop{\Udelimiterunder 0 "2190 {\qopname\relax o{\luamml_ignore:\mathstrut lim}}}}
+\protected\def\varlimsup  
+  {\mathop{\overline{\qopname\relax o{\luamml_ignore:\mathstrut lim}}}}
+\protected\def\varliminf  
+  {\mathop{\underline{\qopname\relax o{lim}}}}
+%    \end{macrocode}
+% 
+% \subsection{Roots}
+% Roots have two problems in tagging: At first, if mathml structure elements are 
+% used, the root symbol is given twice:  as Unicode char and through the \texttt{msqrt} 
+% or \texttt{mroot} mathml structure element. In derivation this leads to duplications.
+% The glyph should be tagged as artifact in this case.
+% At second, in some cases complicated box constructions instead of the
+% luatex primitives are used which leads to wrong tagging. 
+% We redefine \cs{sqrtsign} and add the artifact socket for the first problem.
+% 
+% TODO: A root with empty argument should be tagged differently.
+%    \begin{macrocode}
+\AtBeginDocument
+ {
+  \cs_gset_protected_nopar:Npn \sqrtsign
+    {
+      \tag_socket_use:n {math/luamml/artifact}
+      \tex_Uradical:D \symoperators "0221A\scan_stop:  
+    }
+ }  
+%    \end{macrocode}
+% TODO: Tagging of \verb+\sqrt[\leftroot{-2}\uproot{2}\beta]{y}+ is currently incorrect,
+% but setting \cs{Umathradicaldegreeraise} and \cs{Umathradicaldegreeafter} does not
+% work, so another solution must be found (or a warning must be issued). 
+%    \begin{macrocode}
+\cs_set_nopar:Npn \plainroot@ #1 \of #2
+  {
+    \bool_if:nTF
+      {
+        \__um_int_if_zero_p:n \uproot@ && \__um_int_if_zero_p:n \leftroot@
+      }
+      {
+        \tag_socket_use:n {math/luamml/artifact}
+        \Uroot \c__um_radical_sqrt_tl { #1 } { #2 }
+      }
+      {
+        \hbox_set:Nn \rootbox
+          {
+            \c_math_toggle_token \m@th
+            \scriptscriptstyle { #1 }
+            \c_math_toggle_token
+          }
+        \mathchoice
+          { \r@@@@t \displaystyle      { #2 } }
+          { \r@@@@t \textstyle         { #2 } }
+          { \r@@@@t \scriptstyle       { #2 } }
+          { \r@@@@t \scriptscriptstyle { #2 } }
+      }
+     \c_group_end_token
+  }
+%    \end{macrocode}
+% \subsection{Fractions}
+% Similar to roots in fractions the rule must be marked as artifact.
+%    \begin{macrocode}
+\DeclareRobustCommand {\frac}[2]
+ {{\tag_socket_use:n{math/luamml/artifact}\Ustack{\begingroup#1\endgroup\@@@@over#2}}}
+%    \end{macrocode}
+%    \begin{macrocode}
+%</kernel>
+%    \end{macrocode}
+%
+% \Finale
+%

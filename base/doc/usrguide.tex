@@ -35,7 +35,7 @@
 \usepackage{url}
 
 \title{\LaTeX\ for authors\\ current version}
-\author{\copyright~Copyright 2020--2024, \LaTeX\ Project Team.\\
+\author{\copyright~Copyright 2020--2025, \LaTeX\ Project Team.\\
    All rights reserved.%
    \footnote{This file may be distributed and/or modified under the
      conditions of the \LaTeX{} Project Public License, either version 1.3c
@@ -43,7 +43,7 @@
     \texttt{usrguide.tex} for full details.}%
 }
 
-\date{2024-10-22}
+\date{2025-05-01}
 
 \NewDocumentCommand\cs{m}{\texttt{\textbackslash\detokenize{#1}}}
 \NewDocumentCommand\marg{m}{\arg{#1}}
@@ -668,14 +668,20 @@ a,{b}c ==> {a}{{b}c}
 \end{verbatim}
 
 \begin{decl}
-  |\ProcessList| \arg{list} \arg{cmd}
+  |\ProcessList| \arg{list} \arg{tokens}
 \end{decl}
 To support \cs{SplitList}, the function \cs{ProcessList} is available
-to apply a \meta{cmd} to every entry in a \meta{list}. The
-\meta{cmd} should absorb one argument: the list entry. For example
+to apply \meta{tokens} to every entry in a \meta{list}. The
+\meta{tokens} can be arbitrary contents that should expect one argument
+after it: the list entry. For example
 \begin{verbatim}
 \NewDocumentCommand \foo {>{\SplitList{;}} m}
   {\ProcessList{#1}{\SomeDocumentCommand}}
+\end{verbatim}
+or
+\begin{verbatim}
+\NewDocumentCommand \foo {>{\SplitList{;}} m}
+  {\ProcessList{#1}{Abc \SomeDocumentCommand}}
 \end{verbatim}
 
 \begin{decl}
@@ -837,10 +843,12 @@ subsection.
 
 Some additional details that may be useful for those with more \TeX{}
 knowledge: do not worry if this does not make sense to you! Spaces and tabs are
-stored as active characters. In Unicode engines, all other characters are of
-type \enquote{other}. In $8$-bit engines, the ASCII characters other than tab
-and space are of type \enquote{other}, and non-ASCII characters are active. As
-such, token-based comparisons are likely to fail unless set up properly.
+stored as active characters. In $8$-bit engines, non-ASCII characters are
+\enquote{active}, whilst other than the letters a--zA--Z, ASCII characters are
+\enquote{other}. In Unicode engines, non-ASCII codepoints will be either
+letters or \enquote{other}, based on the standard \LaTeX{} settings derived
+from Unicode data. For token-based comparisons, it is likely that the active
+spaces and tabs should be replaced: this can be done conveniently by expansion.
 
 \subsection{Typesetting verbatim-like material}
 
@@ -857,6 +865,58 @@ The \cs{verb} command also selects a monospaced font: this is not intrinsic to
 verbatim material, so will need to be set up using for example \cs{ttfamily}.
 Similarly, the \texttt{verbatim} environment sets up the meaning of \cs{par}
 suitable for breaking lines.
+
+\subsection{Verbatim environments}
+\label{sec:cmd:verbenv}
+
+In some cases, when grabbing the body of an environment you will want the
+contents to be treated verbatim. This is available using the argument
+specification~\texttt{c}. Like the \texttt{b} specification, this has to be the
+last one. Thus for example
+\begin{verbatim}
+\NewDocumentEnvironment{MyVerbatim}{!O{\ttfamily} c}
+  {\begin{center} #1 #2\end{center}} {}
+\begin{MyVerbatim}[\ttfamily\itshape]
+  % Some code is shown here
+  $y = mx + c$
+\end{MyVerbatim}
+\end{verbatim}
+will typeset verbatim the content, thus:
+\NewDocumentEnvironment{MyVerbatim}{!O{\ttfamily} c}
+  {\begin{center} #1 #2\end{center}} {}
+\begin{MyVerbatim}[\ttfamily\itshape]
+  % Some code is shown here
+  $y = mx + c$
+\end{MyVerbatim}
+
+Since grabbing the entire contents verbatim will result in there being no
+\cs{par} tokens, newlines are always permitted: there is no need for a
+|+|~modifier here. As for the \texttt{v} specification, newlines are stored as
+\cs{obeyedline}. In a similar fashion to the \texttt{b}~specification, by
+default \emph{newlines} are trimmed at both ends of the body. Putting the
+prefix |!| before \texttt{c} suppresses this trimming.
+
+Collection of the body takes place on a line-by-line basis: content is
+collected up to the end-of-line in the source, then examined before storage.
+This means that the line ending the environment (containing in the example
+above |\end{MyVerbatim}|) cannot have any text \emph{after} the end of the
+environment. Text \emph{before} the end of environment is treated normally,
+but note that there is no trailing \cs{obeyedline} added if there is text here.
+Other than optional arguments, no text is allowed on the opening line of the
+environment.
+
+Special handling is applied to a \texttt{o}, \texttt{O}, \texttt{d} or
+\texttt{D}~specification argument immediately before an
+\texttt{c}~specification. This means that when the optional argument is absent,
+the first character of the next line will be read with the correctly applied
+verbatim category code. Issues may arise if \emph{multiple} optional arguments
+are used before a \texttt{c}~specification: this will only work reliably where
+the optional tokens are \enquote{other} characters.
+
+For technical reasons, we recommend that spaces are \emph{not} ignored when
+searching for an optional argument before an \texttt{c} specification: this can
+be achieved by adding the \texttt{!} modifier as shown in the example.
+However, this is left as a choice for the user.
 
 \subsection{Performance}
 
@@ -1252,8 +1312,28 @@ it is set to \dimeval{\topskip+\baselineskip*\inteval{40-1}}, given
 the values \cs{topskip} (\dimeval{\topskip}) and \cs{baselineskip}
 (\dimeval{\baselineskip}) in the current document.
 
+\section{Expandable \cs{input} equivalent}
+
+\begin{decl}
+  |\expandableinput| \arg{filename}
+\end{decl}
+The \LaTeX{} definition of \cs{input} cannot be used in places where \TeX{} is
+performing expansion: the classic example is at the start of a tabular cell.
+There are a number of reasons for this: the key ones are that \cs{input}
+records which files are read and provides pre- and post-file hooks.
+
+To support the need to carry out file input in expansion contexts, the command
+\cs{expandableinput} is available: this skips recording the file name and does
+not apply any file hooks, but otherwise behaves like \cs{input}. In particular,
+it still uses \cs{input@path} when doing file lookup.
+
 \section{Case changing}
 
+\begin{decl}
+  |\MakeUppercase| \oarg{keyvals} \arg{text} \\
+  |\MakeLowercaes| \oarg{keyvals} \arg{text} \\
+  |\MakeTitlecase| \oarg{keyvals} \arg{text}
+\end{decl}
 \TeX{} provides two primitives \cs{uppercase} and \cs{lowercase} for changing
 the case of text. However, these have a range of limitations: they only change
 the case of explicit characters, do not account for the surrounding context, do
@@ -1277,13 +1357,26 @@ supported.
 \end{flushleft}
 
 The case-changing commands take an optional argument which can be used to
-tailor the output. This optional argument accepts the key \texttt{locale},
-also available under the alias \texttt{lang},
-which can be used to give a language identifier in BCP-47
-format. This is then applied to select language-specific features during
-case-changing.
+tailor the output. This optional argument accepts the key \texttt{locale}, also
+available under the alias \texttt{lang}, which can be used to give a language
+identifier in BCP-47 format. This is then applied to select language-specific
+features during case-changing.
 
-The input given to these commands is `expanded' before case changing is
+For titlecasing, the key \texttt{words} may also be used: this
+takes a choice of \texttt{first} or \texttt{all}. The standard
+setting is \texttt{first}, and means that only the very first
+\enquote{letter} is (broadly) uppercased. The alternative,
+\texttt{all}, means that the input is divided at each space, and
+for each word that results, the first letter is uppercased. For
+example
+\begin{verbatim}
+  \MakeTitlecase[words = first]{some words}
+  \MakeTitlecase[words = all]{some words}
+\end{verbatim}
+gives \enquote{\MakeTitlecase[words = first]{some words}
+\MakeTitlecase[words = all]{some words}}.
+
+The input given to these commands is \enquote{expanded} before case changing is
 applied. This means that any commands within the input that convert to pure
 text will be case changed. Mathematical content is automatically excluded, as
 are the arguments to the commands \cs{label}, \cs{ref}, \cs{cite}, \cs{begin}
