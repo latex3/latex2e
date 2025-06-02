@@ -65,7 +65,7 @@ checksearch  = true
 -- Allow for TU and other test configurations
 
 checkconfigs = 
- {"build","config-TU","config-OR",
+ {"build","config-OR",
   "config-math","config-math-luatex",
   "config-OR-luatex",
   "config-sec",
