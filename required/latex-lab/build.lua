@@ -105,7 +105,7 @@ uploadconfig = {
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
 
-update_tag = update_tag_ltx
+tag_format = "LaTeX3"
 
 table.insert(checksuppfiles,"supp-pdf.mkii")
 
