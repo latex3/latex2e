@@ -1,6 +1,6 @@
 # LaTeX laboratory
 
-Release 2025-06-01
+Release 2025-06-01 patch level 1
 
 ## Overview
 
