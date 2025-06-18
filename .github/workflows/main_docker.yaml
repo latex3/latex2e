@@ -1,0 +1,231 @@
+name: Automated testing -- New
+
+# Currently we run in two situations:
+on:
+  # Whenever someone pushes to a branch in our repo
+  push:
+    branches:
+      - "**"
+  # Whenever a pull request is opened, reopened or gets new commits.
+  pull_request:
+# This implies that for every push to a local branch in our repo for which a
+# pull request is open this runs twice. But it's important to ensure that pull
+# requests get tested even if their branch comes from a fork.
+
+jobs:
+  # The l3build job contains the actual work. We misuse the matrix mechanism to
+  # create three jobs which only differ in minimal elements.
+  # For tags we do not run this since we run the release job instead.
+  l3build:
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/islandoftex/images/texlive:latest
+    strategy:
+      matrix:
+        # include indicates that we want to set explicitly these combinations
+        # and don't want full matrix testing.
+        include:
+          - module: base
+            config: build
+            engine: pdftex
+          - module: base
+            config: build
+            engine: xetex
+          - module: base
+            config: build
+            engine: luatex
+            extra_command: kpsewhich -mktex=tfm -must-exist ecssdc10.tfm
+            last: m3expl009
+          - module: base
+            config: build
+            engine: luatex
+            extra_command: kpsewhich -mktex=tfm -must-exist ecssdc10.tfm
+            first: m3expl009
+            last: tlb0001
+          - module: base
+            config: build
+            engine: luatex
+            extra_command: kpsewhich -mktex=tfm -must-exist ecssdc10.tfm
+            first: tlb0001
+            last: tlcs01a
+          - module: base
+            config: build
+            engine: luatex
+            extra_command: kpsewhich -mktex=tfm -must-exist ecssdc10.tfm
+            first: tlcs01a
+          - module: base
+            config: config-1run
+          - module: base
+            config: config-TU
+          - module: base
+            config: config-doc
+          - module: base
+            config: config-legacy
+          - module: base
+            config: config-ltcmd
+          - module: base
+            config: config-lthooks
+          - module: base
+            config: config-lthooks2
+          - module: base
+            config: config-lttemplates
+          - module: base
+            config: config-ltmarks
+          - module: required/amsmath
+          - module: required/cyrillic
+          - module: required/firstaid
+          - module: required/graphics
+          - module: required/latex-lab
+            config: build
+          - module: required/latex-lab
+            config: config-OR
+          - module: required/latex-lab
+            config: config-math
+          - module: required/latex-lab
+            config: config-math-luatex            
+          - module: required/latex-lab
+            config: config-OR-luatex
+          - module: required/latex-lab
+            config: config-sec
+          - module: required/latex-lab
+            config: config-toc
+          - module: required/latex-lab
+            config: config-block
+            last: blocks-list-04
+          - module: required/latex-lab
+            config: config-block
+            first: blocks-list-04
+          - module: required/latex-lab
+            config: config-graphic
+          - module: required/latex-lab
+            config: config-minipage
+          - module: required/latex-lab
+            config: config-float
+          - module: required/latex-lab
+            config: config-footnote
+          - module: required/latex-lab
+            config: config-bib
+          - module: required/latex-lab
+            config: config-LM-tagging
+          - module: required/latex-lab
+            config: config-table-pdftex
+          - module: required/latex-lab
+            config: config-table-luatex
+          - module: required/latex-lab
+            config: config-title
+          - module: required/latex-lab
+            config: config-firstaid            
+          - module: required/tools
+    name: "Tests: ${{ matrix.module }}${{ matrix.config && format(' - {0}', matrix.config) || ''}}${{ matrix.engine && format(' - {0}', matrix.engine) || ''}}${{ (matrix.first || matrix.last) && format(' ({0} - {1})', matrix.first || '<first>', matrix.last || '<last>') || ''}}"
+    steps:
+      # Boilerplate
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - if: ${{ matrix.extra_command }}
+        run: ${{ matrix.extra_command }}
+      - name: Run l3build
+        working-directory: ${{ matrix.module }}
+        run: "l3build check -S -q --show-log-on-error${{ matrix.config && format(' -c {0}', matrix.config) || ''}}${{ matrix.engine && format(' -e {0}', matrix.engine) || ''}}${{ matrix.first && format(' --first {0}', matrix.first) || ''}}${{ matrix.last && format(' --last {0}', matrix.last) || ''}}"
+      # "/" is one of invalid characters in artifact names
+      # see https://github.com/actions/toolkit/blob/ef77c9d60bdb03700d7758b0d04b88446e72a896/packages/artifact/src/internal/upload/path-and-artifact-name-validation.ts
+      - name: Sanitize artifact name
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          name="testfiles-${{ matrix.module }}${{ matrix.config && format('-{0}', matrix.config)  || ''}}${{ matrix.engine && format('-{0}', matrix.engine) || ''}}"
+          # replace all "/" with "_"
+          echo "artifact_name=${name//\//_}" >> "$GITHUB_ENV"
+      # Now we create the artifacts for the logs of failed tests
+      - name: Archive failed test output
+        if: ${{ always() }}
+        uses: zauguin/l3build-failure-artifacts@v1
+        with:
+          # example names:
+          # - "testfiles-base-build-pdflatex"
+          # - "testfiles-base-config-1run"
+          # - "testfiles-required_amsmath"
+          name: ${{ env.artifact_name }}
+          # Decide how long to keep the test output artifact:
+          retention-days: 3
+  docs:
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/islandoftex/images/texlive:latest
+    strategy:
+      matrix:
+        include:
+          - module: base
+            environment: LTX_DOC_COMPONENT=1
+          - module: base
+            environment: LTX_DOC_COMPONENT=2
+          - module: base
+            environment: LTX_DOC_COMPONENT=3
+          - module: required
+    name: "Documentation: ${{ matrix.module }}"
+    steps:
+      # Boilerplate
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - if: ${{ matrix.environment }}
+        run: echo "${{ matrix.environment }}" >> $GITHUB_ENV
+      - name: Run l3build
+        working-directory: ${{ matrix.module }}
+        run: l3build doc -q -H --show-log-on-error
+      # Now we create the artifacts for the generated documentation
+      - name: Archive documentation
+        uses: actions/upload-artifact@v4
+        with:
+          # example names: "Documentation-base-1", "Documentation-required"
+          name: Documentation-${{ matrix.module }}${{ matrix.environment && format('-{0}', env.LTX_DOC_COMPONENT) || ''}}
+          path: |
+            **/*.pdf
+            !build
+            !texmf
+            !**/testfiles*
+          # Decide how long to keep the test output artifact:
+          retention-days: 21
+  # GitHub automatically informs the initiator of any action about the result, but
+  # we additionally want to keep the latex-commits mailing list informed about
+  # test failures.
+  notifiy:
+    name: Send notifications
+    runs-on: ubuntu-latest
+    # Run after the `l3build` job in order to be able to react to it's output.
+    needs:
+      - l3build
+      - docs
+    # Only run if the tests failed, we don't want to get notifications for every run.
+    # We don't want information for pull requests since for pull requests from local
+    # branches we already send notifications when the branch test fails and pull requests
+    # from forks can't access the username and password secrets required to send mails.
+    if: ${{ false && failure() && github.event_name != 'pull_request' }}
+    steps:
+      - name: Send mail
+        # The explicit commit hash ensures that this can't be used by dawidd6 as a
+        # backdoor to execute arbitrary code during our runs.
+        uses: dawidd6/action-send-mail@6d98ae34d733f9a723a9e04e94f2f24ba05e1402
+        with:
+          # Currently using my (Marcel's) mail server for sending mails.
+          server_address: typesetting.eu
+          server_port: 587
+          # These values can be changed in the repository settings.
+          username: ${{secrets.MAIL_USERNAME}}
+          password: ${{secrets.MAIL_PASSWORD}}
+          # If we want to send notifications to additional addresses, at them here as
+          # a comma separated list.
+          to: latex3-commits@tug.org
+          # The name is arbitrary, but if you want to change the address you need to
+          # coordinate it with the administrator of the mail server to allow the account
+          # to send from the mail address.
+          from: LaTeX CI <github@latex-project.org>
+          priority: high
+          # Determine the subject and body of the mail.
+          subject: "Test failed: ${{github.repository}} (${{github.ref}})"
+          body: |
+            Test failure for ${{github.repository}}
+            -------------------------------------------------------------
+
+            On branch:        ${{github.ref}} (${{github.sha}})
+            Initiated by:     ${{github.actor}}
+            Commit URL:       https://github.com/${{github.repository}}/commit/${{github.sha}}
+            More information: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
