@@ -39,7 +39,7 @@ typesetfiles_list = {
     "latex-lab-namespace.dtx",
     "latex-lab-new-or-1.dtx",
     "latex-lab-float.dtx",
-    "latex-lab-footnotes.dtx",
+    "latex-lab-firstaid.dtx",
   },
   {
     "latex-lab-new-or-2.dtx",
@@ -53,7 +53,7 @@ typesetfiles_list = {
     "latex-lab-toc-hyperref-changes.dtx",
     "latex-lab-toc-kernel-changes.dtx",
     "latex-lab-unicode-math.dtx",
-    "latex-lab-firstaid.dtx",
+    "latex-lab-footnotes.dtx",
   }
 }
 local doc_component_setting = os.getenv'LTX_DOC_COMPONENT'
