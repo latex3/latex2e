@@ -17,11 +17,54 @@ installfiles = {
 		 "glyphtounicode-cmex.tex",
          "tagpdf-ns-latex-lab.def"  
 		}
-typesetfiles = {
-                 "latex-lab-*.dtx",
-                 "*-doc.tex",
-		 "*-code.tex",
-	       }
+typesetfiles_list = {
+  {
+    "blocks-code.tex",
+    "blocks-doc.tex",
+    "documentmetadata-support-code.tex",
+    "documentmetadata-support-doc.tex",
+    "latex-lab-amsmath.dtx",
+    "latex-lab-bib.dtx",
+    "latex-lab-block.dtx",
+    "latex-lab-firstaid.dtx",
+    "latex-lab-float.dtx",
+    "latex-lab-footnotes.dtx",
+  },
+  {
+    "latex-lab-graphic.dtx",
+    "latex-lab-l3doc-tagging.dtx",
+    "latex-lab-marginpar.dtx",
+    "latex-lab-math.dtx",
+    "latex-lab-mathintent.dtx",
+    "latex-lab-mathpkg.dtx",
+    "latex-lab-mathtools.dtx",
+    "latex-lab-minipage.dtx",
+    "latex-lab-namespace.dtx",
+    "latex-lab-new-or-1.dtx",
+  },
+  {
+    "latex-lab-new-or-2.dtx",
+    "latex-lab-sec.dtx",
+    "latex-lab-table.dtx",
+    "latex-lab-testphase.dtx",
+    "latex-lab-text.dtx",
+    "latex-lab-tikz.dtx",
+    "latex-lab-title.dtx",
+    "latex-lab-toc.dtx",
+    "latex-lab-toc-hyperref-changes.dtx",
+    "latex-lab-toc-kernel-changes.dtx",
+    "latex-lab-unicode-math.dtx",
+  }
+}
+local doc_component_setting = os.getenv'LTX_DOC_COMPONENT'
+if doc_component_setting then
+  typesetfiles = typesetfiles_list[math.tointeger(doc_component_setting)]
+else
+  typesetfiles = {}
+  for _, files in ipairs(typesetfiles_list) do
+    table.move(files, 1, #files, #typesetfiles + 1, typesetfiles)
+  end
+end
 
 
 
