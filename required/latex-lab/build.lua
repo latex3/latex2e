@@ -23,8 +23,6 @@ typesetfiles_list = {
     "blocks-doc.tex",
     "documentmetadata-support-code.tex",
     "documentmetadata-support-doc.tex",
-    "latex-lab-amsmath.dtx",
-    "latex-lab-bib.dtx",
     "latex-lab-block.dtx",
   },
   {
@@ -40,6 +38,7 @@ typesetfiles_list = {
     "latex-lab-new-or-1.dtx",
     "latex-lab-float.dtx",
     "latex-lab-firstaid.dtx",
+    "latex-lab-amsmath.dtx",
   },
   {
     "latex-lab-new-or-2.dtx",
@@ -54,6 +53,7 @@ typesetfiles_list = {
     "latex-lab-toc-kernel-changes.dtx",
     "latex-lab-unicode-math.dtx",
     "latex-lab-footnotes.dtx",
+    "latex-lab-bib.dtx",
   }
 }
 local doc_component_setting = os.getenv'LTX_DOC_COMPONENT'
