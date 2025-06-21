@@ -10,7 +10,8 @@ l3build save -cconfig-block -epdftex \
 	blocks-trivlist-00 \
         blocks-user-keys-01 \
 	tagging-0097b \
-        tagging-0767
+        tagging-0767 \
+        tagging-0893
 
 
 l3build save -cconfig-block -epdftex,luatex \
