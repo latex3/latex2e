@@ -65,7 +65,8 @@ l3build save -cconfig-footnote \
    footnote-heading \
    footnote-hyperref-001 \
    footnote-par \
-   footnote-patches
+   footnote-patches \
+   tagging-845
 
 
 

@@ -90,100 +90,93 @@ do
   end
 end
 
--- Detail how to set the version automatically
---  Used by base, cyrillic, tools
-function update_tag(file,content,tagname,tagdate)
+local match = string.match
+local gsub = string.gsub
+
+tag_format = "LaTeX2e"
+
+-- Deal with the two forms of copyright line:
+-- we use two small functions for this
+
+-- Format used by base, cyrillic, tools
+local function update_tag_ltx(file,content,tag)
   local year = os.date("%Y")
-  if string.match(content,"%% Copyright %(C%) %d%d%d%d%-%d%d%d%d\n") then
-    content = string.gsub(content,
+  if match(content,"%% Copyright %(C%) %d%d%d%d%-%d%d%d%d\n") then
+    content = gsub(content,
       "Copyright %(C%) (%d%d%d%d)%-%d%d%d%d\n",
       "Copyright (C) %1-" .. year .. "\n")
-  elseif string.match(content,"%% Copyright %(C%) %d%d%d%d\n") then
-    local oldyear = string.match(content,"%% Copyright %(C%) (%d%d%d%d)\n")
+  elseif match(content,"%% Copyright %(C%) %d%d%d%d\n") then
+    local oldyear = match(content,"%% Copyright %(C%) (%d%d%d%d)\n")
     if not year ~= oldyear then
-      content = string.gsub(content,
+      content = gsub(content,
         "Copyright %(C%) %d%d%d%d\n",
         "Copyright (C) " .. oldyear .. "-" .. year .. "\n")
     end
-  end
-  if not string.match(file,"%.md$") and not string.match(file,"ltvers.dtx") then
-    -- Stop here for files other than .md
-    return content
-  end
-  local iso = "%d%d%d%d%-%d%d%-%d%d"
-  local tag, rev = string.match(tagname,"^(.*):([^:]*)$")
-  if not tag then
-    tag = tagname
-  end
-  local patch_level = "0"
-  if rev and tonumber(rev) ~= 0 then
-    if main_branch then
-      tag = tag .. " patch level " .. rev
-      patch_level = rev
-    else
-      tag = tag .. " pre-release " .. rev
-      patch_level = "-" .. rev
-    end
-  end
-  if file == "README.md" then
-    return string.gsub(content,
-      "\nRelease " .. iso .. "[^\n]*\n",
-      "\nRelease " .. tag .. "\n")
-  elseif file == "ltvers.dtx" then
-    return string.gsub(content,
-      "\\patch@level{%-?%d}",
-      "\\patch@level{" .. patch_level .. "}")
   end
   return content
 end
 
 -- Form used by amsmath, graphics (and similar to LaTeX3)
-function update_tag_ltx(file,content,tagname,tagdate)
+local function update_tag_l3(file,content,tag)
   local year = os.date("%Y")
-  if string.match(content,
+  if match(content,
     "Copyright %(C%) %d%d%d%d%-%d%d%d%d [^\n]*LaTeX") then
-    content = string.gsub(content,
+    content = gsub(content,
       "Copyright %(C%) (%d%d%d%d)%-%d%d%d%d ([^\n]*LaTeX)",
       "Copyright (C) %1-" .. year .. " %2")
-  elseif string.match(content,"Copyright %(C%) %d%d%d%d [^\n]*LaTeX") then
-    local oldyear = string.match(content,"Copyright %(C%) (%d%d%d%d) ([^\n]*LaTeX)")
+  elseif match(content,"Copyright %(C%) %d%d%d%d [^\n]*LaTeX") then
+    local oldyear = match(content,"Copyright %(C%) (%d%d%d%d) ([^\n]*LaTeX)")
     if year ~= oldyear then
-      content = string.gsub(content,
+      content = gsub(content,
         "Copyright %(C%) %d%d%d%d LaTeX",
         "Copyright (C) " .. oldyear .. "-" .. year .. " LaTeX")
     end
   end
-  if not string.match(file,"%.md$") then
-    -- Stop here for files other than .md
-    return content
-  end
+  return content
+end
+
+function update_tag(file,content,tagname,tagdate)
+  -- Set up the patch/pre-release string
   local iso = "%d%d%d%d%-%d%d%-%d%d"
-  local tag, rev = string.match(tagname,"^(.*):([^:]*)$")
-  if not tag then
-    tag = tagname
-  end
+  local tag, rev = match(tagname,"^(.*):([^:]*)$") 
+  tag = tag or tagname
+  rev = rev or "0"
   if main_branch then
-    if rev and tonumber(rev) ~= 0 then
+    if tonumber(rev) ~= 0 then
       tag = tag .. " patch level " .. rev
     end
   else
-    if rev then
-      tag = tag .. " pre-release " .. rev
-    end
+    tag = tag .. " pre-release " .. rev
   end
-  return string.gsub(content,
-    "\nRelease " .. iso .. "[^\n]*\n",
-    "\nRelease " .. tag .. "\n")
+  -- Deal with README.md files: occurs for all formatting
+  if file == "README.md" then
+    return gsub(content,
+      "\nRelease " .. iso .. "[^\n]*\n",
+      "\nRelease " .. tag .. "\n")
+  end
+  -- Special case for ltvers.dtx: only in base but 'quick'
+  if file == "ltvers.dtx" then
+    content = gsub(content,
+      "\\patch@level{%-?%d}",
+      "\\patch@level{" .. rev .. "}")
+  end
+  if tag_format == "LaTeX2e" then
+    return update_tag_ltx(file,content,tag)
+  else
+    return update_tag_l3(file,content,tag)
+  end
 end
 
 -- Need to build format files
-local function fmt(engines,dest)
+function fmt(engines,dest)
 
   local fmtsearch = false
 
   local function mkfmt(engine)
     -- Use .ini files if available
     local ini = string.gsub(engine,"tex","") .. "latex"
+    -- To support places we are using DVI mode, we have to allow for
+    -- "etex" -> "elatex" -> "latex" in format building
     if ini == "elatex" then
         ini = "latex"
     end
