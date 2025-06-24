@@ -89,6 +89,7 @@ functions
 
 local mctypeattributeid  = luatexbase.new_attribute ("g__tag_mc_type_attr")
 local mccntattributeid   = luatexbase.new_attribute ("g__tag_mc_cnt_attr")
+local structnumattributeid   = luatexbase.new_attribute ("g__tag_structnum_attr")
 local iwspaceOffattributeid = luatexbase.new_attribute ("g__tag_interwordspaceOff_attr")
 local iwspaceattributeid = luatexbase.new_attribute ("g__tag_interwordspace_attr")
 local iwfontattributeid  = luatexbase.new_attribute ("g__tag_interwordfont_attr")
@@ -752,6 +753,11 @@ function ltx.__tag.func.mark_page_elements (box,mcpagecnt,mccntprev,mcopen,name,
             tostring(ltx.__tag.mc[mccnt]["alt"]),3)
          dict= dict .. " " .. ltx.__tag.mc[mccnt]["alt"]
         end
+        if ltx.__tag.mc[mccnt]["lang"] then
+         __tag_log("INFO TAG-USE-LANG: "..
+            tostring(ltx.__tag.mc[mccnt]["lang"]),3)
+         dict= dict .. " " .. ltx.__tag.mc[mccnt]["lang"]
+        end
         if ltx.__tag.mc[mccnt]["actualtext"] then
          __tag_log("INFO TAG-USE-ACTUALTEXT: "..
            tostring(ltx.__tag.mc[mccnt]["actualtext"]),3)
@@ -1006,5 +1012,27 @@ function check_parent_child_rules (loglevel)
  end
 
 ltx.__tag.func.check_parent_child_rules=check_parent_child_rules
+
+  if luatexbase.callbacktypes['linksplit'] then
+   luatexbase.add_to_callback('linksplit', function(start_link, position)
+     local structnum =
+       node.get_attribute(start_link,luatexbase.attributes.g__tag_structnum_attr)
+     if structnum and structnum > -1 then
+       local struct_insert_annot_shipout = token.create'__tag_struct_insert_annot_shipout:nnn'
+       local parentnum = tex.count['c@g__tag_parenttree_obj_int']
+       start_link.link_attr =
+          start_link.link_attr ..
+          ' /Position /' .. position ..
+          '/StructParent ' .. parentnum
+       tex.sprint(struct_insert_annot_shipout,'{'..
+          structnum..'}{'..
+          start_link.objnum..' 0 R}{'..
+          parentnum ..'}')
+       -- the counter must be set explicitly as struct_insert_annot_shipout doesn't do it!
+       tex.setcount('global','c@g__tag_parenttree_obj_int',parentnum +1)
+        __tag_log(position .. " link part has object id " .. start_link.objnum .. " and structparent id " .. parentnum,2)
+     end
+   end, 'tagpdf')
+  end
 -- 
 --  End of File `tagpdf.lua'.
