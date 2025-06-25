@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.99q",       --TAGVERSION
-    date          = "2025-05-16", --TAGDATE
+    version       = "0.99r",       --TAGVERSION
+    date          = "2025-06-25", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -1022,7 +1022,7 @@ ltx.__tag.func.check_parent_child_rules=check_parent_child_rules
        local parentnum = tex.count['c@g__tag_parenttree_obj_int']
        start_link.link_attr =
           start_link.link_attr ..
-          ' /Position /' .. position ..
+          ' /LTEX_position /' .. position ..
           '/StructParent ' .. parentnum
        tex.sprint(struct_insert_annot_shipout,'{'..
           structnum..'}{'..
