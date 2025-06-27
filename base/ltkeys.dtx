@@ -33,7 +33,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltkeys.dtx}
-             [2025/02/18 v1.0p LaTeX Kernel (Keyval options)]
+             [2025/06/27 v1.0q LaTeX Kernel (Keyval options)]
 % \iffalse
 \documentclass{l3doc}
 \GetFileInfo{ltkeys.dtx}
@@ -62,7 +62,10 @@
 %     \cs{DeclareKeys} \oarg{family} \marg{declarations}
 %   \end{syntax}
 %   Creates a series of options from a comma-separated \meta{declarations} list.
-%   Each entry in this list is a key--value pair, with the \meta{key} having one
+%   The \meta{family} is a namespace for the keys; if not given, the basename of
+%   the current class or package is used.
+%   Each entry in the \meta{declarations} (a commas-separated list)
+%   is a key--value pair, with the \meta{key} having one
 %   or more \meta{properties}. A small number of \enquote{basic}
 %   \meta{properties} are described below. The full range of properties,
 %   provided by \pkg{l3keys}, can also be used for more powerful processing.
@@ -120,12 +123,17 @@
 %
 % \begin{function}{\ProcessKeyOptions}
 %   \begin{syntax}
-%     \cs{ProcessKeyOptions} \oarg{family}
+%     \cs{ProcessKeyOptions} \oarg{families}
 %   \end{syntax}
 %   The \cs{ProcessKeyOptions} function is used to check the current
-%   option list against the keys defined for \meta{family}. Global (class)
-%   options and local (package) options are checked when this function
-%   is called in a package.
+%   option list against the keys defined for \meta{families} (a comma-separated
+%   list). Global (class) options and local (package) options are checked when
+%   this function is called in a package. Where there is more than one
+%   \meta{family} in the list of \meta{families}, processing takes place in
+%   the order of the \meta{families}. Every key known in a \meta{family} is
+%   passed for processing, thus a key defined in more than one \meta{family}
+%   will be processed several times, and if the code paths are shared, the
+%   outcome will be determined by the last entry in the list of \meta{families}.
 % \end{function}
 %
 % \begin{function}{\SetKeys}
@@ -261,6 +269,16 @@
 %    \end{macrocode}
 % \end{macro}
 %
+% \begin{macro}{\l_@@_local_clist}
+% \changes{v1.0q}{2025/06/25}{New variable}
+%   Holds the local options when appropriate: otherwise empty. Needed as
+%   the \LaTeXe{} setup here can be equal to \cs{scan_stop:}, which is not
+%   generally supported.
+%    \begin{macrocode}
+\clist_new:N \l_@@_local_clist
+%    \end{macrocode}
+% \end{macro}
+%
 % \begin{variable}{\l_@@_options_loading_bool}
 %   Used to indicate we are in the loading phase: controls the outcome
 %   of warnings.
@@ -278,7 +296,7 @@
 %         {Define key option handler in \pkg{ltkeys}}
 % \changes{v1.0i}{2022/07/05}{Support \cs{CurrentOption}}
 % \changes{v1.0p}{2025/01/15}{Only process global options on first pass}
-% \begin{macro}{\@@_options_end:}
+% \changes{v1.0q}{2025/06/25}{Revise for multiple family support}
 %   The main function calls functions to collect up the global and local
 %   options into \cs{l_@@_options_clist} before calling the
 %   underlying functions to actually do the processing. So that a suitable
@@ -296,35 +314,33 @@
   { \@@_options_expand_module:Nn \@@_options_aux:n {#1} }
 \cs_new_protected:Npn \@@_options_aux:n #1
   {
-    \cs_set_protected:Npn \@@_option_end: { }
-    \clist_clear:N \l_@@_options_clist
+    \@@_options_local:
+    \clist_map_inline:nn {#1}
+      {
+        \clist_clear:N \l_@@_options_clist
+        \cs_if_exist:cF { opt@handler@ \@currname . \@currext }
+          { \@@_options_global:n {##1} }
+        \@@_options_local:n {##1}
+        \bool_set_true:N \l_@@_options_loading_bool
+        \clist_map_variable:NNn \l_@@_options_clist \CurrentOption
+          { \keys_set:nV {##1} \CurrentOption }
+        \bool_set_false:N \l_@@_options_loading_bool
+        \@@_options_loaded:n {##1}
+      }
+    \clist_if_empty:NF \l_@@_unused_clist
+      {
+        \clist_map_inline:Nn \l_@@_unused_clist
+          {
+            \msg_error:nnxx { keys } { option-unknown }
+              {##1} { \@currname }
+          }
+      }
     \cs_if_exist:cF { opt@handler@ \@currname . \@currext }
       {
-        \@@_options_global:n {#1}
         \cs_gset_protected:cpn { opt@handler@ \@currname . \@currext }
-          { \ProcessKeyOptions [ #1 ] }
+          { \ProcessKeyOptions [ {#1} ] }
       }
-    \@@_options_local:
-    \keys_if_exist:nnF {#1} { unknown }
-      {
-        \keys_define:nn {#1}
-          {
-            unknown .code:n =
-              {
-                \msg_error:nnxx { keys } { option-unknown }
-                  { \l_keys_key_str } { \@currname }
-              }
-          }
-        \cs_set_protected:Npn \@@_option_end:
-          { \keys_define:nn {#1} { unknown .undefine: } }
-      }
-    \bool_set_true:N \l_@@_options_loading_bool
-    \clist_map_variable:NNn \l_@@_options_clist \CurrentOption
-      { \keys_set:nV {#1} \CurrentOption }
-    \bool_set_false:N \l_@@_options_loading_bool
     \AtEndOfPackage { \cs_set_eq:NN \@unprocessedoptions \scan_stop: }
-    \@@_option_end:
-    \@@_options_loaded:n {#1}
   }
 %    \end{macrocode}
 % \changes{v1.0j}{2022/07/23}
@@ -337,7 +353,6 @@
     but~the~package~"\msg_module_name:n {#2}"~has~not~created~an~option~with~this~name.
   }
 %    \end{macrocode}
-% \end{macro}
 % \end{macro}
 % \end{macro}
 %
@@ -476,22 +491,66 @@
 %
 % \begin{macro}{\@@_options_local:}
 % \changes{v1.0h}{2022/06/20}{Use raw options data}
+% \changes{v1.0q}{2025/06/25}{Revise for multiple family support}
 %   If local options are found, they are added to the processing list.
 %   \LaTeXe{} stores options for each file in a macro which may or may not
-%   exist, hence the need to use \cs{cs_if_exist:c}.
+%   exist, hence the need to use \cs{cs_if_exist:c}. For tracking the unused
+%   options, we need to hold only the option name, hence needing a mapping.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_options_local:
   {
+    \clist_clear:N \l_@@_local_clist
     \cs_if_eq:NNF \@currext \@clsextension
       {
         \cs_if_exist:cT { @raw@opt@ \@currname . \@currext }
           {
-            \clist_put_right:Nv \l_@@_options_clist
+            \clist_set_eq:Nc \l_@@_local_clist
               { @raw@opt@ \@currname . \@currext }
           }
       }
+    \clist_map_inline:Nn \l_@@_local_clist
+      {
+        \clist_put_right:Ne \l_@@_unused_clist
+          { \tl_trim_spaces:e { \@@_remove_equals:n {##1} } }
+      }
   }
 %    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_options_local:n}
+% \changes{v1.0q}{2025/06/25}{New function}
+% \begin{macro}{\@@_options_local:nnn}
+% \changes{v1.0q}{2025/06/25}{New function}
+%   A simpler version of the code used for package options: we stack up those
+%   that are known, unless the family supports unknown keys in which case we hover
+%   up everything.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_options_local:n #1
+  {
+    \keys_if_exist:nnTF {#1} { unknown }
+      {
+        \clist_put_right:NV \l_@@_options_clist \l_@@_local_clist
+        \clist_clear:N \l_@@_unused_clist
+      }
+      {
+        \clist_map_inline:Nn \l_@@_local_clist
+          {
+            \exp_args:Ne \@@_options_local:nnn
+              { \tl_trim_spaces:e { \@@_remove_equals:n {##1} } }
+              {##1} {#1}
+          }
+      }
+  }
+\cs_new_protected:Npn \@@_options_local:nnn #1#2#3
+  {
+    \keys_if_exist:nnT {#3} {#1}
+      {
+        \clist_put_right:Nn \l_@@_options_clist {#2}
+        \clist_remove_all:Nn \l_@@_unused_clist {#1}
+      }
+   }
+%    \end{macrocode}
+% \end{macro}
 % \end{macro}
 %
 % \begin{macro}[EXP]{\@@_remove_equals:n}
