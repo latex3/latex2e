@@ -29,7 +29,32 @@ l3build save -cconfig-math \
 	mathml-AF-ex1\
 	mathml-AF-hash\
 	mathml-write\
-	math-phantom        
+	math-phantom \
+	mtag-008-gh765       
+
+l3build save -cconfig-math-luatex \
+    amsmath-mbox\
+    array\
+    fakemath\
+    label-align-pdf\
+    label-alignat-pdf\ 
+    label-flalign-pdf\
+    label-gather-pdf\
+    label-multline-pdf\
+    label-xalignat-pdf\
+    labelled-align-pdf\
+    math-20-alt-noluamml\
+    math-20-structelem\
+    mathml-luamml-2\
+    mathml-luamml-3\
+    mathml-luamml-4\
+    mtag-008-gh765\
+    structelem-array-partly-faulty\
+    structelem-mbox\
+    structelem-sqrt-frac\
+    structelem-text\
+    varlim-commands
+
 
 exit
 

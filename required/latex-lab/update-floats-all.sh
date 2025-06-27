@@ -14,6 +14,8 @@ l3build save -cconfig-float -epdftex,luatex \
 	float-010-outside \
 	marginpar-01 \
 	marginpar-03 \
-    float-011-multicol
+    float-011-multicol\
+    float-sidewaystable\
+    marginpar-04-gh-444
     
 exit
