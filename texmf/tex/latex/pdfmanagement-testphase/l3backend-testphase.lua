@@ -6,7 +6,7 @@
 -- 
 --  l3backend-testphase.dtx  (with options: `lua')
 --  
---  Copyright (C) 2019-2021 The LaTeX Project
+--  Copyright (C) 2019-2025 The LaTeX Project
 --  
 --  It may be distributed and/or modified under the conditions of
 --  the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -15,7 +15,7 @@
 --  
 --     https://www.latex-project.org/lppl.txt
 --  
---  This file is part of the "LaTeX PDF management testphase bundle" (The Work in LPPL)
+--  This file is part of the "LaTeX PDF management bundle" (The Work in LPPL)
 --  and all files in that bundle must be distributed together.
 --  
 --  File: l3backend-testphase.dtx

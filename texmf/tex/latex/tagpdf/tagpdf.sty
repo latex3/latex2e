@@ -28,16 +28,11 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: tagpdf.dtx
-\ProvidesExplPackage {tagpdf} {2025-05-16} {0.99q}
+\ProvidesExplPackage {tagpdf} {2025-06-27} {0.99s}
   { LaTeX kernel code for PDF tagging }
 
-\bool_if:nF
+\IfPDFManagementActiveF
   {
-    \bool_lazy_and_p:nn
-      {\cs_if_exist_p:N \pdfmanagement_if_active_p:}
-      { \pdfmanagement_if_active_p: }
-  }
-  {  %error for now, perhaps warning later.
     \PackageError{tagpdf}
      {
        PDF~resource~management~is~no~active!\MessageBreak
@@ -45,7 +40,6 @@
      }
      {
        Activate~it~with \MessageBreak
-       \string\RequirePackage{pdfmanagement-testphase}\MessageBreak
        \string\DocumentMetadata{<options>}\MessageBreak
        before~\string\documentclass
      }
@@ -57,42 +51,8 @@
 \DeclareOption {genericmode}{ }
 \ProcessOptions
 \RequirePackage{tagpdf-base}
-\AddToHook{package/latex-lab-testphase-new-or-2/after}
-  {
-    \cs_set_protected:Npn \__fnote_gput_ref:nn #1 #2 %#1 the structure number receiving the ref #2
-      {
-        \tag_struct_gput:nnn {#1}{ref_num}{#2}
-      }
-  }
-\AddToHook{package/latex-lab-testphase-toc/after}
-  {
-    \cs_set_protected:Npn \g__tag_struct_ref_by_dest:
-      {
-        \prop_map_inline:Nn\g__tag_struct_ref_by_dest_prop
-          {
-            \tag_struct_gput:nnn {##1}{ref_dest}{##2}
-          }
-      }
-  }
-\cs_new_protected:Npn \__tag_lastpagelabel:
-  {
-    \legacy_if:nT { @filesw }
-      {
-        \exp_args:NNne \exp_args:NNe\iow_now:Nn \@auxout
-           {
-             \token_to_str:N \new@label@record
-               {@tag@LastPage}
-               {
-                 {abspage} { \int_use:N \g_shipout_readonly_int}
-                 {tagmcabs}{ \int_use:N \c@g__tag_MCID_abs_int }
-                 {tagstruct}{\int_use:N \c@g__tag_struct_abs_int }
-               }
-           }
-      }
-  }
-
  \AddToHook{enddocument/afterlastpage}
-  {\__tag_lastpagelabel:}
+  {\property_record:nn{@tag@LastPage}{abspage,tagmcabs,tagstruct}}
 \tl_new:N    \l__tag_tmpa_tl
 \tl_new:N    \l__tag_tmpb_tl
 \tl_new:N    \l__tag_tmpc_tl
@@ -751,6 +711,7 @@
 \tl_new:N \l__tag_mc_artifact_type_tl
 \bool_new:N \l__tag_mc_key_stash_bool
 \bool_new:N \l__tag_mc_artifact_bool
+\tl_new:N \l__tag_mc_lang_tl
 \tl_new:N \l__tag_mc_key_tag_tl
 \tl_new:N \g__tag_mc_key_tag_tl
 \tl_new:N \l__tag_mc_key_label_tl
@@ -1867,7 +1828,7 @@
      {
        \tl_set:Ne#3
          {
-           \lua_now:e{tex.print(ltx.__tag.func.role_get_parent_child_rule('#1','#2'))}
+           \lua_now:e{tex.print(\int_use:N\c_document_cctab,ltx.__tag.func.role_get_parent_child_rule('#1','#2'))}
          }
          \int_compare:nNnT {\l__tag_loglevel_int} > { 0 }
            {
@@ -2196,6 +2157,24 @@
 \seq_new:N    \g__tag_struct_tag_stack_seq
 \seq_gpush:Nn \g__tag_struct_tag_stack_seq {{Root}{StructTreeRoot}}
 \tl_new:N     \l__tag_struct_stack_parent_tmpa_tl
+\sys_if_engine_luatex:TF
+ {
+   \cs_new:Npn \__tag_struct_set_attribute:
+    {
+      \lua_now:e
+      {
+        tex.setattribute
+         (
+          "global",
+          luatexbase.attributes.g__tag_structnum_attr,
+          \g__tag_struct_stack_current_tl
+         )
+      }
+    }
+ }
+ {
+   \cs_new_eq:NN \__tag_struct_set_attribute: \prg_do_nothing:
+ }
 
 \seq_const_from_clist:Nn \c__tag_struct_StructTreeRoot_entries_seq
   {%p. 857/858
@@ -2622,7 +2601,7 @@
               { \property_ref:nnn {@tag@objr@page@#2 }{ tagabspage }{1} }
           }
         % add the parent obj number to the parent tree:
-        \exp_args:Nne
+        % the command always expands its arguments!
         \__tag_parenttree_add_objr:nn
           {
             #2
@@ -2634,6 +2613,30 @@
         % increase the int:
         \int_gincr:N \c@g__tag_parenttree_obj_int
       }
+  }
+\cs_new_protected:Npn\__tag_struct_insert_annot_shipout:nnn #1#2#3
+ {
+   \__tag_struct_kid_OBJR_gput_right:eee
+     {
+       #1
+     }
+     {
+       #2
+     }
+     {
+       \pdf_pageobject_ref:n
+         { \int_use:N \g_shipout_readonly_int } %
+     }
+   % add the parent obj number to the parent tree:
+   % the command always expands its arguments!
+   \__tag_parenttree_add_objr:nn
+     {
+       #3
+     }
+     {
+       \pdf_object_ref_indexed:nn
+         { __tag/struct }{ #1 }
+     }
   }
 \cs_new:Npn \__tag_get_data_struct_tag:
   {
@@ -3157,6 +3160,24 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
        \group_end:
      }
   }
+\keys_define:nn { __tag / setup }
+  {
+    catalog-supplemental-file .code:n =
+     {
+       \group_begin:
+       \pdfdict_put:nnn {l_pdffile/Filespec} {AFRelationship}{/Supplement}
+       \int_gincr:N \g__tag_unique_cnt_int
+       \pdffile_embed_file:eee
+        {#1}
+        {#1}
+        {__tag_latex_css_\int_use:N\g__tag_unique_cnt_int}
+       \pdfmanagement_add:nne
+        {Catalog}
+        {AF}
+        {\pdf_object_ref:e{__tag_latex_css_\int_use:N\g__tag_unique_cnt_int }}
+       \group_end:
+     }
+  }
 \tl_new:N \l__tag_struct_lang_tl
 \cs_set_protected:Npn \tag_struct_begin:n #1 %#1 key-val
   {
@@ -3210,6 +3231,7 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
         \seq_gpush:Ne \g__tag_struct_tag_stack_seq
           {{\g__tag_struct_tag_tl}{\l__tag_struct_roletag_tl}}
         \tl_gset:NV   \g__tag_struct_stack_current_tl \c@g__tag_struct_abs_int
+        \__tag_struct_set_attribute:
         %\seq_show:N   \g__tag_struct_stack_seq
          \__tag_struct_prop_gput:nne
            { \int_use:N \c@g__tag_struct_abs_int }
@@ -3301,6 +3323,7 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
         \seq_get:NNTF \g__tag_struct_stack_seq \l__tag_tmpa_tl
           {
             \tl_gset:No  \g__tag_struct_stack_current_tl { \l__tag_tmpa_tl }
+            \__tag_struct_set_attribute:
           }
           {
             \__tag_check_no_open_struct:
@@ -3796,7 +3819,8 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
                 \lua_now:e
                   {
                      tex.print
-                      (tex.getattribute
+                      (\int_use:N\c_document_cctab,
+                       tex.getattribute
                         (luatexbase.attributes.g__tag_mc_cnt_attr))
                   }
               }
@@ -4333,73 +4357,275 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
    page/exclude-header-footer .initial:n = true,
    exclude-header-footer .meta:n = { page/exclude-header-footer = {#1} }
   }
-\hook_gput_code:nnn
-  {pdfannot/link/URI/before}
-  {tagpdf}
+\AtBeginDocument
   {
-    \tag_mc_end_push:
-    \tag_struct_begin:n { tag=Link }
-    \tag_mc_begin:n { tag=Link }
-    \pdfannot_dict_put:nne
-      { link/URI }
-      { StructParent }
-      { \tag_struct_parent_int: }
-  }
+   \socket_if_exist:nT{tagsupport/parbox/before}
+     {
+      \NewTaggingSocketPlug{parbox/before}{tag/footer}
+        {
+         \tag_struct_begin:n{tag=Span}
+         \tag_mc_begin:n{}
+        }
 
-\hook_gput_code:nnn
-  {pdfannot/link/URI/after}
-  {tagpdf}
-  {
-     \tag_struct_insert_annot:ee {\pdfannot_link_ref_last:}{\tag_struct_parent_int:}
-     \tag_mc_end:
-     \tag_struct_end:
-     \tag_mc_begin_pop:n{}
-  }
+      \NewTaggingSocketPlug{parbox/after}{tag/footer}
+        {
+         \tag_mc_end:
+         \tag_struct_end:
+        }
+     }
+   }
 
-\hook_gput_code:nnn
-  {pdfannot/link/GoTo/before}
-  {tagpdf}
-  {
-     \tag_mc_end_push:
-     \tag_struct_begin:n{tag=Link}
-     \tag_mc_begin:n{tag=Link}
-     \pdfannot_dict_put:nne
-       { link/GoTo }
-       { StructParent }
-       { \tag_struct_parent_int: }
-  }
+\cs_new_protected:Npn \__tag_headfoot_tagged_begin:n #1
+ {
+   \AssignTaggingSocketPlug{parbox/before}{tag/footer}
+   \AssignTaggingSocketPlug{parbox/after}{tag/footer}
+    \bool_set_false:N  \l__tag_para_bool
+    \bool_if:NTF \g__tag_mode_lua_bool
+     {
+      \tag_mc_end_push:
+     }
+     {
+       \bool_gset_eq:NN   \g__tag_saved_in_mc_bool \g__tag_in_mc_bool
+       \bool_gset_false:N \g__tag_in_mc_bool
+     }
+    \tag_struct_begin:n{tag=Artifact,attribute-class=__tag/attr/#1,parent=\tag_get:n{current_Sect}}
+ }
 
-\hook_gput_code:nnn
-  {pdfannot/link/GoTo/after}
-  {tagpdf}
-  {
-    \tag_struct_insert_annot:ee {\pdfannot_link_ref_last:}{\tag_struct_parent_int:}
-    \tag_mc_end:
+\cs_new_protected:Npn \__tag_headfoot_tagged_end:
+ {
     \tag_struct_end:
-    \tag_mc_begin_pop:n{}
-  }
+    \bool_if:NTF \g__tag_mode_lua_bool
+     {
+      \tag_mc_begin_pop:n{}
+     }
+     {
+       \bool_gset_eq:NN \g__tag_in_mc_bool\g__tag_saved_in_mc_bool
+     }
+ }
+\keys_define:nn { __tag / setup }
+ {
+   page/tag-header-footer .code:n =
+    {
+      \cs_set:Nn \__tag_hook_kernel_before_head: { \__tag_headfoot_tagged_begin:n {pagination}}
+      \cs_set:Nn \__tag_hook_kernel_before_foot: { \__tag_headfoot_tagged_begin:n {pagination}}
+      \cs_set_eq:NN \__tag_hook_kernel_after_head:  \__tag_headfoot_tagged_end:
+      \cs_set_eq:NN \__tag_hook_kernel_after_foot:  \__tag_headfoot_tagged_end:
+    }
+ }
+\bool_lazy_and:nnTF
+ { \sys_if_engine_luatex_p: }
+ {
+   \tl_if_empty_p:e
+    {
+      \lua_now:e
+       { if~ luatexbase.in_callback('pre_shipout_filter','linksplit')~
+         then~else~tex.print('1')~end
+       }
+    }
+ }
+ {
+   \hook_gput_code:nnn
+     {pdfannot/link/URI/before}
+     {tagpdf}
+     {
+       \tag_mc_end_push:
+       \tag_struct_begin:n { tag=Link }
+       \tag_mc_begin:n { tag=Link }
+     }
 
-\hook_gput_code:nnn
-  {pdfannot/link/GoToR/before}
-  {tagpdf}
-  {
-     \tag_mc_end_push:
-     \tag_struct_begin:n{tag=Link}
-     \tag_mc_begin:n{tag=Link}
-     \pdfannot_dict_put:nne
-       { link/GoToR }
-       { StructParent }
-       { \tag_struct_parent_int: }
-  }
+   \hook_gput_code:nnn
+     {pdfannot/link/URI/after}
+     {tagpdf}
+     {
+        \tag_mc_end:
+        \tag_struct_end:
+        \tag_mc_begin_pop:n{}
+     }
 
-\hook_gput_code:nnn
-  {pdfannot/link/GoToR/after}
-  {tagpdf}
-  {
-    \tag_struct_insert_annot:ee {\pdfannot_link_ref_last:}{\tag_struct_parent_int:}
-    \tag_mc_end:
-    \tag_struct_end:
-    \tag_mc_begin_pop:n{}
+   \hook_gput_code:nnn
+     {pdfannot/link/GoTo/before}
+     {tagpdf}
+     {
+        \tag_mc_end_push:
+        \tag_struct_begin:n{tag=Link}
+        \tag_mc_begin:n{tag=Link}
+     }
+
+   \hook_gput_code:nnn
+     {pdfannot/link/GoTo/after}
+     {tagpdf}
+     {
+       \tag_mc_end:
+       \tag_struct_end:
+       \tag_mc_begin_pop:n{}
+     }
+
+   \hook_gput_code:nnn
+     {pdfannot/link/GoToR/before}
+     {tagpdf}
+     {
+        \tag_mc_end_push:
+        \tag_struct_begin:n{tag=Link}
+        \tag_mc_begin:n{tag=Link}
+     }
+
+   \hook_gput_code:nnn
+     {pdfannot/link/GoToR/after}
+     {tagpdf}
+     {
+       \tag_mc_end:
+       \tag_struct_end:
+       \tag_mc_begin_pop:n{}
+     }
+   \hook_gput_code:nnn
+     {pdfannot/link/Launch/before}
+     {tagpdf}
+     {
+        \tag_mc_end_push:
+        \tag_struct_begin:n{tag=Link}
+        \tag_mc_begin:n{tag=Link}
+     }
+
+   \hook_gput_code:nnn
+     {pdfannot/link/Launch/after}
+     {tagpdf}
+     {
+       \tag_mc_end:
+       \tag_struct_end:
+       \tag_mc_begin_pop:n{}
+     }
+   \hook_gput_code:nnn
+     {pdfannot/link/Named/before}
+     {tagpdf}
+     {
+        \tag_mc_end_push:
+        \tag_struct_begin:n{tag=Link}
+        \tag_mc_begin:n{tag=Link}
+     }
+
+   \hook_gput_code:nnn
+     {pdfannot/link/Named/after}
+     {tagpdf}
+     {
+       \tag_mc_end:
+       \tag_struct_end:
+       \tag_mc_begin_pop:n{}
+     }
+ }
+ {
+   \hook_gput_code:nnn
+     {pdfannot/link/URI/before}
+     {tagpdf}
+     {
+       \tag_mc_end_push:
+       \tag_struct_begin:n { tag=Link }
+       \tag_mc_begin:n { tag=Link }
+       \pdfannot_dict_put:nne
+         { link/URI }
+         { StructParent }
+         { \tag_struct_parent_int: }
+     }
+
+   \hook_gput_code:nnn
+     {pdfannot/link/URI/after}
+     {tagpdf}
+     {
+        \tag_struct_insert_annot:ee {\pdfannot_link_ref_last:}{\tag_struct_parent_int:}
+        \tag_mc_end:
+        \tag_struct_end:
+        \tag_mc_begin_pop:n{}
+     }
+
+   \hook_gput_code:nnn
+     {pdfannot/link/GoTo/before}
+     {tagpdf}
+     {
+        \tag_mc_end_push:
+        \tag_struct_begin:n{tag=Link}
+        \tag_mc_begin:n{tag=Link}
+        \pdfannot_dict_put:nne
+          { link/GoTo }
+          { StructParent }
+          { \tag_struct_parent_int: }
+     }
+
+   \hook_gput_code:nnn
+     {pdfannot/link/GoTo/after}
+     {tagpdf}
+     {
+       \tag_struct_insert_annot:ee {\pdfannot_link_ref_last:}{\tag_struct_parent_int:}
+       \tag_mc_end:
+       \tag_struct_end:
+       \tag_mc_begin_pop:n{}
+     }
+
+   \hook_gput_code:nnn
+     {pdfannot/link/GoToR/before}
+     {tagpdf}
+     {
+        \tag_mc_end_push:
+        \tag_struct_begin:n{tag=Link}
+        \tag_mc_begin:n{tag=Link}
+        \pdfannot_dict_put:nne
+          { link/GoToR }
+          { StructParent }
+          { \tag_struct_parent_int: }
+     }
+
+   \hook_gput_code:nnn
+     {pdfannot/link/GoToR/after}
+     {tagpdf}
+     {
+       \tag_struct_insert_annot:ee {\pdfannot_link_ref_last:}{\tag_struct_parent_int:}
+       \tag_mc_end:
+       \tag_struct_end:
+       \tag_mc_begin_pop:n{}
+     }
+
+   \hook_gput_code:nnn
+     {pdfannot/link/Named/before}
+     {tagpdf}
+     {
+        \tag_mc_end_push:
+        \tag_struct_begin:n{tag=Link}
+        \tag_mc_begin:n{tag=Link}
+        \pdfannot_dict_put:nne
+          { link/Named }
+          { StructParent }
+          { \tag_struct_parent_int: }
+     }
+
+   \hook_gput_code:nnn
+     {pdfannot/link/Named/after}
+     {tagpdf}
+     {
+       \tag_struct_insert_annot:ee {\pdfannot_link_ref_last:}{\tag_struct_parent_int:}
+       \tag_mc_end:
+       \tag_struct_end:
+       \tag_mc_begin_pop:n{}
+     }
+   \hook_gput_code:nnn
+     {pdfannot/link/Launch/before}
+     {tagpdf}
+     {
+        \tag_mc_end_push:
+        \tag_struct_begin:n{tag=Link}
+        \tag_mc_begin:n{tag=Link}
+        \pdfannot_dict_put:nne
+          { link/Launch }
+          { StructParent }
+          { \tag_struct_parent_int: }
+     }
+
+   \hook_gput_code:nnn
+     {pdfannot/link/Launch/after}
+     {tagpdf}
+     {
+       \tag_struct_insert_annot:ee {\pdfannot_link_ref_last:}{\tag_struct_parent_int:}
+       \tag_mc_end:
+       \tag_struct_end:
+       \tag_mc_begin_pop:n{}
+     }
   }
 \prop_new:N \g__tag_css_prop
 \prop_gset_from_keyval:Nn \g__tag_css_prop
@@ -4410,14 +4636,13 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
 
 \bool_new:N \g__tag_css_bool
 \bool_gset_true:N \g__tag_css_bool
-
-\hook_gput_code:nnn{tagpdf/finish/before}{tagpdf/css}
+\tl_gput_left:Nn \g__kernel_pdfmanagement_end_run_code_tl
  {
   \bool_lazy_and:nnT  { \g__tag_css_bool }{ \tag_if_active_p: }
    {
     \prop_map_inline:Nn \g__tag_css_prop
      {
-       \keys_set:nn { __tag / setup }{ root-supplemental-file= {#1} }
+       \keys_set:nn { __tag / setup }{ catalog-supplemental-file= {#1} }
      }
    }
  }

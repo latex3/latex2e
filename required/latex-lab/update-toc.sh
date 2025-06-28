@@ -10,4 +10,5 @@ l3build save -epdftex,luatex -cconfig-toc \
     toc-ex-book-no-hyperref \
     toc-ex-book-tocdepth \
     toc-math-leaders\
-    toc-debug
+    toc-debug\
+    toc-manual-addcontentsline
