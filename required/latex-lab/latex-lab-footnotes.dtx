@@ -17,8 +17,8 @@
 %
 % for those people who are interested or want to report an issue.
 %
-\def\ltlabfootnotedate{2025-06-20}
-\def\ltlabfootnoteversion{0.8n}
+\def\ltlabfootnotedate{2025-07-04}
+\def\ltlabfootnoteversion{0.8o}
 
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
@@ -635,17 +635,19 @@
 %   There are no options yet.
 % \end{function}
 %
-% \begin{function}{\fnote_mark_gput:nn,\fnote_mark_gput:no,\fnote_mark_gput:oo}
+% \begin{function}{\fnote_mark_struct_gput:nnn,\fnote_mark_id_gput:nnn}
 % \begin{syntax}
-% \cs{fnote_mark_gput:nn}\Arg{mark}\Arg{class name}
+% \cs{fnote_mark_struct_gput:nnn}\Arg{mark}\Arg{class name}
+% \cs{fnote_mark_id_gput:nnn}\Arg{mark}\Arg{class name}
 % \end{syntax}
-%   This command stores the current structure number as key and the \meta{mark} as
-%   value in the property list associated with the \meta{class name}.
+%   These commands store either the current structure number or the current id 
+%   as key and the \meta{mark} as value in the property list 
+%   associated with the \meta{class name}.
 % \end{function}
 %
-% \begin{function}{\fnote_mark_gpop_all:nnN}
+% \begin{function}{\fnote_mark_gpop_all:nnnN}
 % \begin{syntax}
-% \cs{fnote_mark_gpop_all:nnN}\Arg{mark}\Arg{class name}\meta{sequence}
+% \cs{fnote_mark_gpop_all:nnN}\Arg{id or struct}\Arg{mark}\Arg{class name}\meta{sequence}
 % \end{syntax}
 % This command stores all the keys/structure numbers whose value in the
 % property list for \meta{class name} are equal to \meta{mark}
@@ -1205,7 +1207,7 @@
 %    \end{macrocode}
 %    Execute a kernel socket for tagging.
 %    \begin{macrocode}
-  \socket_use:n {tagsupport/fntext/begin}
+  \tag_socket_use:n {fntext/begin}
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -1287,7 +1289,7 @@
 %    The corresponding kernel hook that ends the tagging structure if
 %    tagging is active.
 %    \begin{macrocode}
-  \socket_use:n{tagsupport/fntext/end}
+  \tag_socket_use:n{fntext/end}
 %-------
 % ./linguex/linguex.sty
   \hook_use:n {fntext/after}
@@ -1376,8 +1378,8 @@
 % \begin{socketdecl}{tagsupport/fntext/begin,tagsupport/fntext/end}
 %    Kernel sockets for tagging.
 %    \begin{macrocode}
-\NewSocket{tagsupport/fntext/begin}{0}
-\NewSocket{tagsupport/fntext/end}{0}
+\NewTaggingSocket{fntext/begin}{0}
+\NewTaggingSocket{fntext/end}{0}
 %    \end{macrocode}
 % \end{socketdecl}
 %
@@ -1610,24 +1612,27 @@
 %    At \verb=\begin{document}= check if the current definition is
 %    that of the standard classes and if so replace it by
 %    \cs{fnote_makefntext:n} otherwise try and patch the definition
-%    made by some class or package
-%    using the approach above.
+%    made by some class or package  using the approach above.
+%    \changes{0.80}{2025-07-04}{Do nothing if is it already \cs{fnote_makefntext:n}}
 %    \begin{macrocode}
 
 \AddToHook{begindocument}
   {
-    \cs_if_eq:NNTF \@makefntext \old@std@class@makefntext
-      {
-        \cs_set_eq:NN \@makefntext \fnote_makefntext:n
-      }
-      {
+    \cs_if_eq:NNF\@makefntext \fnote_makefntext:n
+     {
+       \cs_if_eq:NNTF \@makefntext \old@std@class@makefntext
+         {
+           \cs_set_eq:NN \@makefntext \fnote_makefntext:n
+         }
+         {
 %    \end{macrocode}
 %    If \cs{@makefntext} contains the definition from \pkg{footmisc}
 %    we do nothing, otherwise we try to patch.
 %    \begin{macrocode}
-        \cs_if_eq:NNF \@makefntext \footmisc@hang@makefntext
-                      { \@@_patch: }
-      }
+           \cs_if_eq:NNF \@makefntext \footmisc@hang@makefntext
+                         { \@@_patch: }
+         }
+     } 
   }
 
 
@@ -1774,6 +1779,7 @@
  {
    \@ifpackageloaded{hyperref}
      {
+       \AssignSocketPlug{fnmark/link}{link}
        \legacy_if:nF{Hy@hyperfootnotes}{\bool_set_false:N \l_fnote_link_bool}
      }
      {
@@ -1784,15 +1790,23 @@
 %
 % \subsection{Tagging and hyperlink code}
 % 
-% \begin{variable}{\g_@@_id_int}
-% We need an unique id to identify footnote marks and footnotes. 
-% It is increases both for the mark in the text and the note below
-% (similar to the structure numbers.
+% \begin{variable}{\g_fnote_id_int}
+% For links we need an unique id to identify footnote marks and footnotes. 
+% It is increased both for the mark in the text and the note below
+% (similar to the structure numbers).
+% We make it public to allow the implementation of other footnote commands,
+% see the test-tnote-setup test. 
+% The int is increase in the fntext/before hook, 
+% so that the following tagging socket can pick it up.
 %    \begin{macrocode}
-\int_new:N\g_@@_id_int
+\int_new:N \g_fnote_id_int
+\AddToHook{fntext/before}{\int_gincr:N\g_fnote_id_int}
 %    \end{macrocode}
 % \end{variable}
 % 
+%    \begin{macrocode}
+
+%    \end{macrocode}
 % \subsubsection{Rolemap for structure tags}
 % We use role-mapping to get more speaking names
 % in the PDF and so ease debugging. These names are already
@@ -1801,13 +1815,13 @@
 % \subsubsection{Extending the label system}
 % For \cs{footref} and (perhaps later for labeled footnotes)
 % we must extend the label system.
-% Beside the normal values we also need the structure number|id of the note.
+% Beside the normal values we also need the structure number and id of the note.
 % We use the in-built label hook
-% At first we define a suitable attribute, it uses as value the structure
-% number|id of the note as stored in \cs{l_@@_currentstruct_tl}
+% We define two suitable attribute, the one store the structure number as stored in
+% \cs{l_@@_currentstruct_tl}, the other the id. 
 %    \begin{macrocode}
 \property_new:nnnn {fnote/struct}{now}{1}{\l_@@_currentstruct_tl}
-\property_new:nnnn {fnote/id}{now}{1}{\int_use:N\g_@@_id_int}
+\property_new:nnnn {fnote/id}{now}{1}{\int_use:N\g_fnote_id_int}
 %    \end{macrocode}
 %
 % We add a hook to the label hook. By default it does nothing
@@ -1817,7 +1831,7 @@
 \AddToHookWithArguments{label}{ \@@_label_hook:e{#1}}
 %    \end{macrocode}
 % \end{macro}
-% Inside a footnotetext we change the hook to store the structure number|id too.
+% Inside a footnotetext we change the hook to store the structure number and id too.
 % The name of label is provided as argument in the label hook.
 %    \begin{macrocode}
 \AddToHook{fntext/begin}
@@ -1842,13 +1856,14 @@
 % This sets up a new footnote type, the first argument
 % is the name, the second is meant for options. Currently
 % it does nothing at all.
-% It is not necessary to setup every footnote like
+% It is not necessary to setup every footnote 
 % command as its own type!
 %
 %    \begin{macrocode}
 \cs_new_protected:Npn \fnote_class_new:nn #1 #2 % #1 name, #2 options
  {
-   \prop_new:c { g_@@_currentmarks_ #1 _prop }
+   \prop_new:c { g_@@_currentmarks_struct_#1_prop }
+   \prop_new:c { g_@@_currentmarks_id_#1_prop }
  }
 
 \fnote_class_new:nn {default}{}
@@ -1856,56 +1871,56 @@
 % \end{macro}
 %
 %
-% \begin{macro}{\fnote_mark_gput:nn}
-% This commands takes as argument the representation of the mark,
+% \begin{macro}{\fnote_mark_id_gput:nn,\fnote_mark_struct_gput:nn}
+% This commands takes as argument the
+% representation of the mark,
 % e.g., \cs{@thefnmark} and the type (typically default should work).
 %    \begin{macrocode}
-\cs_new_protected:Npn \fnote_mark_gput:nn #1 #2 % #1 the representation of the mark, #2 type
+\cs_new_protected:Npn \fnote_mark_struct_gput:nn #1 #2 % #1 the representation of the mark, #2 type
  {
-   \prop_gput:cen { g_@@_currentmarks_ #2 _prop }
-     { |\tag_get:n{struct_num}|\int_use:N\g_@@_id_int| }
+   \prop_gput:cen { g_@@_currentmarks_struct_#2_prop }
+     { \tag_get:n{struct_num} }
      { #1 }
  }
-
-\cs_generate_variant:Nn \fnote_mark_gput:nn {no,oo}
+\cs_new_protected:Npn \fnote_mark_id_gput:nn #1 #2 % #1 the representation of the mark, #2 type
+ {
+   \prop_gput:cen { g_@@_currentmarks_id_#2 _prop }
+     { \int_use:N\g_fnote_id_int }
+     { #1 }  
+ }
+\cs_generate_variant:Nn \fnote_mark_struct_gput:nn {no,oo}
+\cs_generate_variant:Nn \fnote_mark_id_gput:nn {no,oo}
 %    \end{macrocode}
 % \end{macro}
 % 
-% \begin{macro}{\@@_get_struct_num:w,\@@_get_id:w}
-% As we store two data, we need helper commands to extract the first
-% and the second number
-%    \begin{macrocode}
-\cs_new:Npn \@@_get_struct_num:w |#1|#2|{#1}
-\cs_new:Npn \@@_get_id:w    |#1|#2|{#2}
-%    \end{macrocode}
-% \end{macro}
 %
-% \begin{macro}{\fnote_mark_gpop_all:nnN}
-% This commands takes as argument the representation of the mark
+% \begin{macro}{\fnote_mark_gpop_all:nnnN}
+% This commands takes as first argument either id or struct,
+% then representation of the mark
 % (e.g. the content of\cs{@thefnmark}), the class (typically |default| should work)
 % and a sequence into which every key in the property
 % is stored that has the same value as the mark. The sequence is cleared first.
 %    \begin{macrocode}
-\cs_new_protected:Npn \fnote_mark_gpop_all:nnN #1 #2 #3
+\cs_new_protected:Npn \fnote_mark_gpop_all:nnnN #1 #2 #3 #4
   {
-    \seq_clear:N #3
-    \prop_set_eq:Nc     \l_@@_tmpa_prop { g_@@_currentmarks_ #2 _prop }
+    \seq_clear:N #4    
+    \prop_set_eq:Nc     \l_@@_tmpa_prop { g_@@_currentmarks_#1_#3_prop }
     \prop_map_inline:Nn \l_@@_tmpa_prop
       {
-        \tl_if_eq:nnT {#1} { ##2 }
+        \tl_if_eq:nnT {#2} { ##2 }
           {
 %    \end{macrocode}
-% store the key (|struct num|id|) in the seq
+% store the key (struct num or id) in the seq
 %    \begin{macrocode}
-            \seq_put_right:Nn #3 { ##1 }
+            \seq_put_right:Nn #4 { ##1 }
 %    \end{macrocode}
 % remove entry as used from the global prop
 %    \begin{macrocode}
-            \prop_gremove:cn { g_@@_currentmarks_ #2 _prop } {##1}
+            \prop_gremove:cn { g_@@_currentmarks_#1_#3_prop } {##1}
           }
       }
   }
-\cs_generate_variant:Nn\fnote_mark_gpop_all:nnN  {ooN}
+\cs_generate_variant:Nn\fnote_mark_gpop_all:nnnN  {nooN}
 %    \end{macrocode}
 % \end{macro}
 %
@@ -1914,7 +1929,44 @@
 %
 % \subsubsection{Enabling tagging and links for the mark command}
 %
-%
+% \begin{socketdecl}{fnmark/link}
+%  A socket that contains the code to surround the mark in the text with a link.
+%  It should be used in the second argument of the tagging socket as we normally
+%  want the link to be inside the Lbl structure.
+% 
+%    \begin{macrocode}
+\NewSocket{fnmark/link}{1}
+%    \end{macrocode}
+% \end{socketdecl}
+% 
+% \begin{plugdecl}{link}
+% To handle the link around the mark we define a plug for the socket fnmark/link
+%    \begin{macrocode}
+\NewSocketPlug{fnmark/link}{link}
+ {
+   \int_gincr:N\g_fnote_id_int     
+   \bool_if:NTF \l_@@_autodetect_bool
+     {        
+        \fnote_mark_id_gput:oo {\@thefnmark}{\l_fnote_type_tl}
+        \tl_set:Ne \l_@@_linktarget_tl {footnote*.\int_use:N\g_fnote_id_int}
+     }
+     {
+       \tl_set:Ne \l_@@_linktarget_tl 
+         {footnote*.\property_ref:ee {@@/\l_@@_currentlabel_tl} {fnote/id}} 
+     }
+   \bool_if:NTF \l_fnote_link_bool
+     {
+       \exp_args:No
+          \hyper@linkstart
+          { \l_fnote_link_type_tl }
+          { \l_@@_linktarget_tl }
+          #1
+          \hyper@linkend
+      }
+      { #1 } 
+  }
+%    \end{macrocode}
+% \end{plugdecl}
 % \begin{plugdecl}{FEMark}
 %
 %    To handle the mark in the text, we define a special plug for
@@ -1954,35 +2006,20 @@
 %    \begin{macrocode}
      \tag_mc_begin:n{tag=Lbl}
 %    \end{macrocode}
-%    For the auto detecting we store the |struct num|id|
-%    and \cs{@thefnmark} inside a prop and set
-%    the target name of the link to the current id.
+%    For the auto detecting we store the struct num
+%    and \cs{@thefnmark} inside a prop
 %    TODO: this should be usable for other footnote types
 %    which means the name of the prop shouldn't be fix.
-%    The target in the footnote will use the current id.
-%    This part is needed even if tagging is deactivated.
-%    At first increase the id. 
 %    \begin{macrocode}
-    \int_gincr:N\g_@@_id_int     
-    \bool_if:NTF \l_@@_autodetect_bool
-     {        
-        \fnote_mark_gput:oo {\@thefnmark}{\l_fnote_type_tl}
-        \tl_set:Ne \l_@@_linktarget_tl {footnote*.\int_use:N\g_@@_id_int}
-     }
-     {
-       \tl_set:Ne \l_@@_linktarget_tl 
-         {footnote*.\property_ref:ee {@@/\l_@@_currentlabel_tl} {fnote/id}} 
-     }
-     \bool_if:NTF \l_fnote_link_bool
-      {
-        \exp_args:No
-           \hyper@linkstart
-           { \l_fnote_link_type_tl }
-           { \l_@@_linktarget_tl }
-           #1
-           \hyper@linkend
+     \bool_if:NT \l_@@_autodetect_bool
+      {        
+        \fnote_mark_struct_gput:oo {\@thefnmark}{\l_fnote_type_tl}
       }
-      { #1 }
+%    \end{macrocode}
+%    The target in the footnote will use the current id.
+%    This part is needed even if tagging is deactivated.    
+%    \begin{macrocode}
+    \socket_use:nnn{fnmark/link}{#1}    
     \tag_mc_end:
     \tag_struct_end:
     \tag_mc_begin_pop:n{}
@@ -2006,7 +2043,7 @@
   {
     \tag_struct_gput:nnn {#1}{ref_num}{#2}
   }
-\cs_new_protected:Npn \fnote_gput_refs:nn #1 #2 % pair of numbers
+\cs_new_protected:Npn \fnote_gput_refs:nn #1 #2 % pair of structure numbers
   {
     \@@_gput_ref:nn {#1}{#2}
     \@@_gput_ref:nn {#2}{#1}
@@ -2021,13 +2058,11 @@
 %
 % \begin{plugdecl}{FENote}
 %    \begin{macrocode}
-\NewSocketPlug{tagsupport/fntext/begin}{FENote}
+\NewTaggingSocketPlug{fntext/begin}{FENote}
   {
 %    \end{macrocode}
-%    increase the id, this must go outside of the socket, when we switch to 
-%    tagging sockets.
-%    \begin{macrocode}
-    \int_gincr:N\g_@@_id_int
+%    The id has been increased in the previous fntext/before hook. 
+%    \begin{macrocode}    
     \tag_mc_end_push:
 %    \end{macrocode}
 % test if a footnote is allowed, if not move up to the next sect or
@@ -2049,8 +2084,7 @@
           }
       }  
 %    \end{macrocode}
-% Store the current structure number for labels.
-% TODO: do we need something for the id?
+% Store the current structure number for labels. 
 %    \begin{macrocode}
     \tl_set:Ne \l_@@_currentstruct_tl { \tag_get:n{struct_num} }
 %    \end{macrocode}
@@ -2064,14 +2098,14 @@
 %    \end{macrocode}
 % find open marks with identical \cs{@thefnmark}
 %    \begin{macrocode}
-        \fnote_mark_gpop_all:ooN { \@thefnmark }{ \l_fnote_type_tl } \l_@@_currentrefs_seq
+        \fnote_mark_gpop_all:nooN {struct}{ \@thefnmark }{ \l_fnote_type_tl } \l_@@_currentrefs_seq
 %    \end{macrocode}
 % Then we store the object numbers of the marks in the /Ref of the FENote structure:
 % and the number of the FEnote into the marks structure:
 %    \begin{macrocode}
        \seq_map_inline:Nn \l_@@_currentrefs_seq
          {           
-           \fnote_gput_refs:ee {\@@_get_struct_num:w ##1}{ \l_@@_currentstruct_tl }
+           \fnote_gput_refs:ee {##1}{ \l_@@_currentstruct_tl }
          }
       }
 %    \end{macrocode}
@@ -2094,7 +2128,7 @@
 % Now we process the text. The destinations for the links are set with the label
 % so that we can be sure that we are in hmode.
 %    \begin{macrocode}
-\NewSocketPlug{tagsupport/fntext/end}{FENote}
+\NewTaggingSocketPlug{fntext/end}{FENote}
   {
     \tag_struct_end:
     \tag_mc_begin_pop:n{}
@@ -2102,8 +2136,8 @@
 %    \end{macrocode}
 % At last assign the plugs:
 %    \begin{macrocode}
-\AssignSocketPlug{tagsupport/fntext/begin}{FENote}  
-\AssignSocketPlug{tagsupport/fntext/end}{FENote}  
+\AssignTaggingSocketPlug{fntext/begin}{FENote}  
+\AssignTaggingSocketPlug{fntext/end}{FENote}  
 %    \end{macrocode}
 %
 % The kernel socket \socket{tagsupport/fntext/mark} is  responsible for
@@ -2133,8 +2167,9 @@
 %    target for the current id (for \cs{footref}).
 %    \begin{macrocode}
      %\seq_show:N\l_@@_currentrefs_seq
-     \seq_map_inline:Nn\l_@@_currentrefs_seq {\MakeLinkTarget*{footnote*.\@@_get_id:w ##1}}
-     \MakeLinkTarget*{footnote*.\int_use:N\g_@@_id_int}
+     \fnote_mark_gpop_all:nooN {id}{ \@thefnmark }{ \l_fnote_type_tl } \l_@@_currentrefs_seq
+     \seq_map_inline:Nn\l_@@_currentrefs_seq {\MakeLinkTarget*{footnote*.##1}}
+     \MakeLinkTarget*{footnote*.\int_use:N\g_fnote_id_int}
 %    \end{macrocode}
 %    Now we add the tagging commands. We move the structure of the label to
 %    the begin of the footnote structure.
