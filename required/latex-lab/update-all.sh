@@ -8,5 +8,8 @@ l3build save -epdftex,luatex \
 	documentmetadata-support-000 \
 	documentmetadata-support-001 \
 	documentmetadata-support-002 \
+	documentmetadata-tagging\
+	documentmetadata-latest\
 	standard-a4f \
-	tagging-gh34
+	tagging-gh34 \
+	footmisc-19
