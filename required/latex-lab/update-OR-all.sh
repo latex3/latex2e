@@ -1,15 +1,12 @@
 
 
 l3build save -cconfig-OR \
-	github-863-footmisc \
-	memoir-001 \
-	scrartcl-001 \
-	tlb-multicol-marks-tagged \
-	tagging-001 \
-	tagging-002-longtable\
-	memoir-001\
-	scrartcl-001\
-	tagging-002-longtable
+    footmisc-005\
+    memoir-001\    
+    scrartcl-001\    
+	tagging-001 \    
+	tagging-002-longtable\	
+	tlb-multicol-marks-tagged 
 
 
 l3build save -cconfig-OR-luatex \
