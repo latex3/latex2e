@@ -36,7 +36,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{lttemplates.dtx}
-  [2025-01-20 v1.0e LaTeX Kernel (Prototype document functions)]
+  [2025-07-08 v1.0f LaTeX Kernel (Prototype document functions)]
 % \iffalse
 \documentclass{l3doc}
 \GetFileInfo{lttemplates.dtx}
@@ -215,11 +215,11 @@
 %      \ldots
 %    \end{quotation}
 %   Each \meta{key} name should consist of \textsc{ascii} characters,
-%   with the exception of |,|, |=| and \verb*| |. The recommended form
+%   with the exception of |,|, |=| and |:|. The recommended form
 %   for key names is to use lower case letters, with dashes to separate
 %   out different parts. Spaces are ignored in key names, so they can be
 %   included or missed out at will. Each \meta{key} must have a
-%   \meta{key type}, which defined the type of input that the \meta{key}
+%   \meta{key type}, which defines the type of input that the \meta{key}
 %   requires. A full list of key types is given in
 %   Table~\ref{tab:key-types}.  Each key may have a \meta{default}
 %   value, which will be used in by the template if the \meta{key} is
@@ -648,6 +648,22 @@
 %   template untouched.
 % \end{function}
 %
+% \subsection{Expanding the values of keys}
+%
+% To allow the user to apply expansion of values when the key is set,
+% key names can be
+% followed by an expansion specifier. This is given by appending |:| and a
+% single letter specifier to the key name. Thes letters are the normal argument
+% specifiers for \pkg{expl3}, thus they may be one of \texttt{n} (redundant but
+% supported), \texttt{o}, \texttt{V}, \texttt{v}, \texttt{e},
+% \texttt{N} (again redundant) or \texttt{c}. Expansion of a control
+% sequence name is particularly
+% useful when you need to refer to an internal \LaTeXe{} or an L3 programming
+% layer variable, e.g.,
+% \begin{verbatim}
+%   key-a:c =  @itemdepth , % use \@itemdepth as the value
+%   key-b:v =  @itemdepth   % use the current value of \@itempdepth as the value
+% \end{verbatim}
 %
 % \section{Getting information about templates and instances}
 %
@@ -819,6 +835,13 @@
 \tl_new:N \l_@@_keytype_arg_tl
 \tl_new:N \l_@@_value_tl
 \tl_new:N \l_@@_var_tl
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}{\l_@@_value_exp_str}
+% \changes{2025-07-08}{v1.0f}{New variable}
+%    \begin{macrocode}
+\str_new:N \l_@@_value_exp_str
 %    \end{macrocode}
 % \end{variable}
 %
@@ -1794,25 +1817,63 @@
 % \end{macro}
 %
 % \begin{macro}{\@@_parse_values_elt:nn}
+% \begin{macro}{\@@_parse_values_elt_aux:w}
+% \changes{2025-07-08}{v1.0f}{New macro}
 % \begin{macro}{\@@_parse_values_elt_aux:n}
+% \changes{2025-07-08}{v1.0f}{Allow for value expansion}
+% \begin{macro}
+%   {
+%     \@@_parse_values_exp:n, \@@_parse_values_exp:o,
+%     \@@_parse_values_exp:V, \@@_parse_values_exp:v,
+%     \@@_parse_values_exp:e
+%   }
+% \changes{2025-07-08}{v1.0f}{New macro}
+% \begin{macro}{\@@_parse_values_exp:N, \@@_parse_values_exp:c}
+% \changes{2025-07-08}{v1.0f}{New macro}
 %   To store the value, find the keytype then call the saving function.
-%   These need the current key name saved as \cs{l_@@_key_name_tl}.
+%   These need the current key name, stored in \cs{l_@@_key_name_tl}.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_parse_values_elt:nn #1#2
   {
-    \tl_set:Ne \l_@@_key_name_tl
-      { \tl_trim_spaces:e { \tl_to_str:n {#1} } }
+    \use:e
+      {
+        \@@_parse_values_elt_aux:w
+          \tl_trim_spaces:e { \tl_to_str:n { #1 : n : } }
+          \exp_not:N \q_stop
+      }
     \prop_get:NVNTF \l_@@_keytypes_prop \l_@@_key_name_tl
       \l_@@_tmp_tl
       { \@@_parse_values_elt_aux:n {#2} }
       { \msg_error:nnV { template } { unknown-key } \l_@@_key_name_tl }
   }
+\use:e
+  {
+    \cs_new_protected:Npn \exp_not:N \@@_parse_values_elt_aux:w
+      #1 \token_to_str:N : #2 \token_to_str:N : #3 \exp_not:N \q_stop
+  }
+    {
+      \tl_set:Nn \l_@@_key_name_tl {#1}
+      \str_set:Nn \l_@@_value_exp_str {#2}
+    }
 \cs_new_protected:Npn \@@_parse_values_elt_aux:n #1
   {
     \@@_split_keytype_arg:V \l_@@_tmp_tl
-    \use:c { @@_store_value_ \l_@@_keytype_tl :n } {#1}
+    \cs_if_exist_use:cF { @@_parse_values_exp: \l_@@_value_exp_str }
+      {
+        \msg_error:nnV { template } { unknown-expansion } \l_@@_value_exp_str
+        \use_none:n
+      }
+        {#1}
   }
+\cs_new_protected:Npn \@@_parse_values_exp:n #1
+  { \use:c { @@_store_value_ \l_@@_keytype_tl :n } {#1} }
+\cs_generate_variant:Nn \@@_parse_values_exp:n { o , V , v , e }
+\cs_new_eq:NN \@@_parse_values_exp:N \@@_parse_values_exp:n
+\cs_generate_variant:Nn \@@_parse_values_exp:N  { c }
 %    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 %
@@ -2506,6 +2567,12 @@
   {
     The~key~'#1'~takes~a~fixed~list~of~choices~
     and~this~list~does~not~include~'#2'.
+  }
+\msg_new:nnnn { template } { unknown-expansion }
+  { The~expansion~type~'#1'~is~unknown. }
+  {
+    Key~values~can~only~be~expanded~using~one~of~the~pre-defined~methods:~
+    n,~o,~V,~v,~e,~N~or~c.
   }
 \msg_new:nnnn { template } { unknown-instance }
   { The~instance~'#2'~of~type~'#1'~is~unknown. }
