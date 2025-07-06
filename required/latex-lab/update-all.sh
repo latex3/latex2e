@@ -1,8 +1,8 @@
 l3build save \
 	documentmetadata-phase-II \
 	new-or-001 \
-        gh-tagging628-settodim
-
+	gh-tagging628-settodim \
+	gh-tagging628-settodim-calc
 
 l3build save -epdftex,luatex \
 	documentmetadata-support-000 \
