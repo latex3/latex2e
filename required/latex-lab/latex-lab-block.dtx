@@ -9,8 +9,8 @@
 %
 %    https://www.latex-project.org/lppl.txt
 %
-\def\ltlabblockdate{2025-06-30}
-\def\ltlabblockversion{0.9g}
+\def\ltlabblockdate{2025-07-01}
+\def\ltlabblockversion{0.9h}
 
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2,lang=en}
@@ -962,7 +962,7 @@
 %
 %
 %
-%  \begin{macro}{\@doendpe,\__kernel_displayblock_doendpe:}
+%  \begin{macro}{\@doendpe}
 %    The original \LaTeXe{} command is augmented to allow for tagging.
 %    TODO: use sockets for this and move to the kernel eventually.
 %    \begin{macrocode}
@@ -993,7 +993,7 @@
 %    \struct{text-unit}, \struct{text} tag combination,
 %    if necessary:
 %    \begin{macrocode}
-      \__kernel_displayblock_doendpe:
+      \tag_socket_use:n {@doendpe}
 %    \end{macrocode}
 %
 %    The standard \tn{par} command (\cs{par_end:}) acts on
@@ -1019,14 +1019,64 @@
   }
 }
 %    \end{macrocode}
-%
-%    By default we don't do any tagging:
-%    \begin{macrocode}
-\cs_new_eq:NN \__kernel_displayblock_doendpe: \prg_do_nothing:
-%    \end{macrocode}
-%
-%
 % \end{macro}
+%
+% \begin{socketdecl}{tagsupport/@doendpe}
+% The socket used in the \cs{@doendpe}
+% TODO: if this goes into the kernel, the name should probably be different.
+%    \begin{macrocode}
+\socket_if_exist:nF{ tagsupport/@doendpe }
+  {
+    \NewTaggingSocket {@doendpe}{0}
+  }
+%    \end{macrocode}
+% \end{socketdecl}
+% 
+% \begin{plugdecl}{default}
+%  If a display block ends and is followed by a blank line we have to end the
+%  enclosing paragraph tagging structure.
+%    \begin{macrocode}
+\NewTaggingSocketPlug {@doendpe}{default}
+  {
+   \bool_if:NT \l__tag_para_bool
+     {
+%    \end{macrocode}
+%    Given that restoring \tn{par} through the legacy \LaTeXe{} method
+%    can take a few iterations (for example, in case of nested lists,
+%    e.g., \verb=...\end{itemize} \item ...\par= it can happen that
+%    the socket code is called while
+%    \texttt{@endpe} is already handled and then we should not attempt
+%    to close a \struct{text-unit} structure). So we need to check for this.
+%    \begin{macrocode}
+       \legacy_if:nT { @endpe }
+         {
+%    \end{macrocode}
+%    If the display block currently ending was \enquote{flattened}
+%    (i.e., uses simplified paragraphs that are not tagged by a
+%    combination of \struct{text-unit} followed by \struct{text}, but simply
+%    with a \struct{text}),
+%    then we don't have to do anything, because the \struct{text} is already closed.
+%    \begin{macrocode}
+           \@@_debug_typeout:n
+             { flattened= \bool_if:NTF
+                            \l__tag_para_flattened_bool
+                            {true}{false}
+                  \on@line }
+           \bool_if:NF \l__tag_para_flattened_bool
+             {
+               \@@_debug_typeout:n{Structure-end~
+                   \l__tag_para_main_tag_tl\space
+                   after~ displayblock \on@line     }
+               \__tag_gincr_para_main_end_int:      
+               \tag_struct_end: %text-unit
+             }
+         }
+      }
+  }
+\AssignTaggingSocketPlug{@doendpe}{default} 
+%    \end{macrocode}
+% \end{plugdecl}
+%
 %
 %
 %  \begin{macro}[int]{\if@domathendpe,\@domathendpefalse,\@domathendpetrue}
@@ -1379,9 +1429,9 @@
 %    If we are doing tagging we load one of the available recipes for
 %    tagging, which alters various kernel hooks to add appropriate
 %    tagging structures.
+%    \changes{v0.9g}{2025-07-01}{use tagging socket for recipe}
 %    \begin{macrocode}
-  \tag_if_active:T 
-      { \use:c { @@_recipe_ \l_@@_tagging_recipe_tl : } }
+     \UseTaggingSocket{block/recipe}{\l_@@_tagging_recipe_tl}
 %    \end{macrocode}
 %    The default for \env{list} environments is that they have an
 %    empty label and are not numbered (something that is then
@@ -2402,37 +2452,67 @@
 %    If we do tagging then the contents of this box may need to be
 %    wrapped into a structure, e.g., \verb=<Lbl>=.
 %    \begin{macrocode}
-        \__kernel_list_label_begin:
+        \tag_socket_use:nnn {block/list/label}{}
+          {
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-        \@@_label_format:n
-          {
-            \bool_if:NT \l_@@_label_strut_bool { \strut }
-            \bool_if:NTF \l_@@_legacy_support_bool
-                         \makelabel
-                         \use:n 
-                 {#1}
-          }
+            \@@_label_format:n
+              {
+                \bool_if:NT \l_@@_label_strut_bool { \strut }
+                \bool_if:NTF \l_@@_legacy_support_bool
+                             \makelabel
+                             \use:n 
+                     {#1}
+              }
 %    \end{macrocode}
 %    And what gets opened also needs closing:
 %    \begin{macrocode}
-        \__kernel_list_label_end:
+          }
       }
   }
 %    \end{macrocode}
 % \end{macro}
 %
-%  
-%  \begin{macro}{\__kernel_list_label_begin:,
-%                \__kernel_list_label_end:}
-%    If we aren't doing tagging the kernel hooks do nothing.
+% \begin{socketdecl}{block/list/label}
+% A tagging socket to tag the label. It takes two arguments so that it can transparently
+% pass the label content.
+% Declaration is in lttagging.
 %    \begin{macrocode}
-\cs_new_eq:NN \__kernel_list_label_begin: \prg_do_nothing:
-\cs_new_eq:NN \__kernel_list_label_end:   \prg_do_nothing:
+\socket_if_exist:nF {tagsupport/block/list/label}
+ {
+   \NewTaggingSocket{block/list/label}{2}
+ }
 %    \end{macrocode}
-%  \end{macro}
-%
+% \end{socketdecl}
+% \begin{plugdecl}{default}
+%    \begin{macrocode}
+\def\LBody{LBody}
+\NewTaggingSocketPlug{block/list/label}{default}
+ {
+   %
+   % FMi: this needs a different logic to decide when to make the label
+   %     an artifact (after cleaning up the \item code  ), therefore
+   %    disabled for now
+   %  \tl_if_empty:oTF \@itemlabel
+   %     {
+   %       \tag_mc_begin:n {artifact}
+   %     }
+   %     {
+   \tagstructbegin{tag=Lbl}
+   \tagmcbegin{tag=Lbl}
+   %     }
+   #2
+   \tagmcend                                    % end mc-Lbl or artifact
+   % FMi: unconditionally for now
+   %  \tl_if_empty:oF \@itemlabel
+   \tagstructend   % end   Lbl
+   \tagstructbegin{tag=\LBody}
+ }
+\AssignTaggingSocketPlug{block/list/label}{default}  
+%    \end{macrocode}
+% \end{plugdecl}
+%  
 %
 %
 % \begin{macro}{\@@_item_everypar:, \@@_item_everypar_std:, \@@_item_everypar_first:}
@@ -2518,13 +2598,6 @@
 %
 % \end{macro}
 %
-%
-%  \begin{macro}{\__kernel_list_label_after:}
-%    
-%    \begin{macrocode}
-\cs_new_eq:NN \__kernel_list_label_after: \prg_do_nothing:
-%    \end{macrocode}
-%  \end{macro}
 %
 % \begin{variable}{\l_@@_tmpa_skip}
 %    \begin{macrocode}
@@ -2661,12 +2734,11 @@
 % In this section we provide code to the various kernel hooks to support
 % the tagging of different displayblock environments. 
 % 
-%    All of the following definitions should only be made if tagging
-%    is active!
-%    \begin{macrocode}
-\tag_if_active:TF {
-%    \end{macrocode}
-%
+% \changes{v0.9g}{2025-07-01}{Define the following command 
+%  even if tagging is not active, to allow to activate tagging later}   
+% \changes{v0.9g}{2025-07-01}{Removed para-hook code, it is in tagpdf currently}   
+% 
+% 
 %  \begin{macro}{\@@_beginpar_vmode:}
 %    When a block starts out in vertical mode, i.e., is not yet part of
 %    a paragraph, we have to start a paragraph
@@ -2675,33 +2747,35 @@
 %    We also do nothing if \texttt{@endpe} is currently true, because
 %    that means we are right now just after the end of a
 %    \texttt{blockenv} and in the process of looking if we have to end
-%    the current \struct{text-unit}, i.e., it is already open.  
+%    the current \struct{text-unit}, i.e., it is already open. 
+%    
+%    The command is mapped to \cs{__kernel_displayblock_beginpar_vmode} in various
+%    tagging recipes.  It is also used in the math code!
 %    \begin{macrocode}
-  \cs_set:Npn \@@_beginpar_vmode: {
-           \@@_debug_typeout:n
-              { @endpe = \legacy_if:nTF { @endpe }{true}{false}
-                \on@line }
-   \legacy_if:nTF { @endpe }
-      {
-        \legacy_if_gset_false:n { @endpe }
-      }
+\cs_set:Npn \@@_beginpar_vmode: {
+  \@@_debug_typeout:n
+    { @endpe = \legacy_if:nTF { @endpe }{true}{false} \on@line }
+  \legacy_if:nTF { @endpe }
+    {
+      \legacy_if_gset_false:n { @endpe }
+    }
 %    \end{macrocode}
 %    We test for \texttt{<2} because  the first flattened environment
 %    has to surround itself with a \struct{text-unit}. Only any inner ones
 %    then have to avoid adding another \struct{text-unit}.
 %    \begin{macrocode}
-      {
-        \int_compare:nNnT \l__tag_block_flattened_level_int < 2
-            {
-              \__tag_gincr_para_main_begin_int:
-              \tag_struct_begin:n
-                {
-                  tag=\l__tag_para_main_tag_tl,
-                  attribute-class=\l__tag_para_main_attr_class_tl,
-                }
-              \__tag_para_main_store_struct:  
-            }
-      }
+    {
+      \int_compare:nNnT \l__tag_block_flattened_level_int < 2
+          {
+            \__tag_gincr_para_main_begin_int:
+            \tag_struct_begin:n
+              {
+                tag=\l__tag_para_main_tag_tl,
+                attribute-class=\l__tag_para_main_attr_class_tl,
+              }
+            \__tag_para_main_store_struct:  
+          }
+    }
   }
 %    \end{macrocode}
 %  \end{macro}
@@ -2715,152 +2789,69 @@
 %    restarting afterwards again. The argument to this config point
 %    simply gobbles the \tn{par} following it in the code above (which
 %    is used when there is no tagging going on.
+%    
+%    The command is mapped to \cs{__kernel_displayblock_beginpar_hmode:w} in various 
+%    tagging recipes.
 %    \begin{macrocode}
-  \cs_set:Npn \@@_beginpar_hmode:N #1
-     {
-        \tag_mc_end:
-        \__tag_gincr_para_end_int:
-        \@@_debug_typeout:n{increment~ /P \on@line }
-        \bool_if:NT \l__tag_para_show_bool
-          { \tag_mc_begin:n{artifact}
-            \rlap{\color_select:n{red}\tiny\ \int_use:N\g__tag_para_end_int}
-            \tag_mc_end:
-          }
-        \tag_struct_end:
-        \tagpdfparaOff \par \tagpdfparaOn
-     }
+\cs_set:Npn \@@_beginpar_hmode:N #1
+   {
+      \tag_mc_end:
+      \__tag_gincr_para_end_int:
+      \@@_debug_typeout:n{increment~ /P \on@line }
+      \bool_if:NT \l__tag_para_show_bool
+        { \tag_mc_begin:n{artifact}
+          \rlap{\color_select:n{red}\tiny\ \int_use:N\g__tag_para_end_int}
+          \tag_mc_end:
+        }
+      \tag_struct_end:
+      \tagpdfparaOff \par \tagpdfparaOn
+   }
 %    \end{macrocode}
 %  \end{macro}
 %
-%
-%
-%  \begin{macro}{\__kernel_displayblock_doendpe:}
-%    If a display block ends and is followed by a blank line we have to end the
-%    enclosing paragraph tagging structure.
-%    \begin{macrocode}
-\cs_set:Npn \__kernel_displayblock_doendpe: {
-     \bool_if:NT \l__tag_para_bool
-       {
-%    \end{macrocode}
-%    Given that restoring \tn{par} through the legacy \LaTeXe{} method
-%    can take a few iterations (for example, in case of nested lists,
-%    e.g., \verb=...\end{itemize} \item ...\par= it can happen that
-%    \cs{__kernel_displayblock_doendpe:} is called while
-%    \texttt{@endpe} is already handled and then we should not attempt
-%    to close a \struct{text-unit} structure). So we need to check for this.
-%    \begin{macrocode}
-         \legacy_if:nT { @endpe }
-           {
-%    \end{macrocode}
-%    If the display block currently ending was \enquote{flattened}
-%    (i.e., uses simplified paragraphs that are not tagged by a
-%    combination of \struct{text-unit} followed by \struct{text}, but simply
-%    with a \struct{text}),
-%    then we don't have to do anything, because the \struct{text} is already closed.
-%    \begin{macrocode}
-             \@@_debug_typeout:n
-                { flattened= \bool_if:NTF
-                               \l__tag_para_flattened_bool
-                               {true}{false}
-                  \on@line }
-             \bool_if:NF \l__tag_para_flattened_bool
-               {
-                 \@@_debug_typeout:n{Structure-end~
-                   \l__tag_para_main_tag_tl\space
-                   after~ displayblock \on@line     }
-                 \__tag_gincr_para_main_end_int:      
-                 \tag_struct_end: %text-unit
-               }
-           }
-      }
-}
-%    \end{macrocode}
-%  \end{macro}
-%
-%
-%  \begin{macro}{para/begin}
-%
-%    Paragraph tagging is mainly done using the paragraph hooks (will
-%    get moved eventually). The default hook setting is not good
-%    enough when lists get supported: we need to delay starting the
-%    paragraph tagging if we still have to place the list label.
-%    We therefore remove the existing hook data and replace it with an
-%    augmented version (this will get combined eventually).
-%    \begin{macrocode}
-\RemoveFromHook{para/begin}[tagpdf]
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-\AddToHook{para/begin}[tagpdf]{
-  \bool_if:NT \l__tag_para_bool {
-%    \end{macrocode}
-%    if we are still waiting to typeset the list label we do nothing
-%    (the paragraph tagging then happens when the list is finally
-%    typeset).
-%    \begin{macrocode}
-       \legacy_if:nF { @inlabel }
-         {
-%    \end{macrocode}
-%    Otherwise, we start a \struct{text} tag structure but only if we are not
-%    starting a paragraph immediately \emph{after} a list, in which
-%    case we only start a new MC (because the \struct{text} tag is still open from
-%    before the list --- one of the reasons why lists are always put
-%    \enquote{inside} paragraphs.
-%
-%    We do this in a separate command, because it is needed elsewhere too.
-%    \begin{macrocode}
-           \@@_start_para_structure:n { \PARALABEL }
-         }
-     }
-}
-%    \end{macrocode}
+%    Paragraph tagging is mainly done using the paragraph hooks. 
+%    The code is currently in tagpdf and uses sockets. 
+%    The default plug plain is not good enough when lists get supported: 
+%    we need to delay starting the paragraph tagging if we 
+%    still have to place the list label.
+%    tagpdf assigns therefore a different socket in the 
+%    \texttt{package/latex-lab-testphase-block/after} hook. 
+%    This should move into lttagging (and then perhaps use kernel para hooks).
 %    
+%  
+% \begin{socketdecl}{tagsupport/block/startpara/direct}
+% A tagging socket to start a paragraph structure. It takes an argument (which is only
+% used in debugging) that should be gobbled if tagging is not active.
+% Not yet in lttagging (name and function should be reviewed).
+% 
+% This is a similar code to the one used in the para/begin hook
+% but without testing \texttt{@endpe}. This is not
+% needed in the standalone  case and wrong inside lists.
 %    
-%  \begin{macro}{\@@_start_para_structure:n}
-%    
+% This code is used in various places and should be a dummy if tagging is not
+% active.
+
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_start_para_structure:n #1 {
-   \@@_debug_typeout:n
-      { @endpe = \legacy_if:nTF { @endpe }{true}{false}
-        \on@line }
-   \legacy_if:nF { @endpe }
-     {
-       \bool_if:NF \l__tag_para_flattened_bool
-          {
-            \__tag_gincr_para_main_begin_int:
-            \tag_struct_begin:n
-              {
-                tag=\l__tag_para_main_tag_tl,
-                attribute-class=\l__tag_para_main_attr_class_tl,
-              }
-            \__tag_para_main_store_struct:  
-          }
-      }
-   \__tag_gincr_para_begin_int:
-   \@@_debug_typeout:n{increment~ P \on@line }
-   \tag_struct_begin:n
-       {
-          tag=\l__tag_para_tag_tl
-         ,attribute-class=\l__tag_para_attr_class_tl
-       }
-   \__tag_check_para_begin_show:nn {green}{#1}    
-   \tag_mc_begin:n {}
-}
+\socket_if_exist:nF {tagsupport/block/startpara/direct}
+ {
+   \NewTaggingSocket {block/startpara/direct}{1}
+ }
 %    \end{macrocode}
-%    The same code, but without testing \texttt{@endpe}. This is not
-%    needed in the standalone  case and wrong inside lists.
+% \end{socketdecl}
+% \begin{plugdecl}{default}
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_start_para_structure_unconditionally:n #1 {
+\NewTaggingSocketPlug{block/startpara/direct}{default}
+ {
    \bool_if:NF \l__tag_para_flattened_bool
-       {
-         \__tag_gincr_para_main_begin_int:
-         \tag_struct_begin:n
-           {
-             tag=\l__tag_para_main_tag_tl,
-             attribute-class=\l__tag_para_main_attr_class_tl,
-           }
-         \__tag_para_main_store_struct:  
-       }
+      {
+        \__tag_gincr_para_main_begin_int:
+        \tag_struct_begin:n
+          {
+            tag=\l__tag_para_main_tag_tl,
+            attribute-class=\l__tag_para_main_attr_class_tl,
+          }
+        \__tag_para_main_store_struct:  
+      }
    \__tag_gincr_para_begin_int:
    \@@_debug_typeout:n{increment~ P \on@line }
    \tag_struct_begin:n
@@ -2870,36 +2861,63 @@
        }
    \__tag_check_para_begin_show:nn {green}{#1}    
    \tag_mc_begin:n {}
-}
+ }
+\AssignTaggingSocketPlug{block/startpara/direct}{default}  
 %    \end{macrocode}
-%  \end{macro}
+% \end{plugdecl}
 %    
+% The para/end hook is currently handled by tagpdf which uses sockets there
+% and assigns suitable sockets for the block code in a package/after hook.
+% This code should move into lttagging and be active always.
+% Currently we still need to remove the tagpdf chunk 
+% to avoid that the socket is added twice.
+% We add empty chunks to avoid warning messages from code parts trying to remove
+% the chunks.
 %    \begin{macrocode}
+\AddToHook{para/end}[tagpdf]{}
 \RemoveFromHook{para/end}[tagpdf]
-\AddToHook{para/end}
-  {
-    \bool_if:NT \l__tag_para_bool
-      {
-        \__tag_gincr_para_end_int:
-        \@@_debug_typeout:n{increment~ /P \on@line }
-        \tag_mc_end:
-        \__tag_check_para_end_show:nn {red}{}
-        \tag_struct_end:
-        \bool_if:NF \l__tag_para_flattened_bool
-         {
-           \__tag_gincr_para_main_end_int:
-           \tag_struct_end:
-         }
-      }
-  }
+\AddToHook{para/end}{}
 %    \end{macrocode}
 %
 %    \begin{macrocode}
 \def\PARALABEL{NP-}
 %    \end{macrocode}
-%  \end{macro}
 %
 %
+% \begin{socketdecl}{tagsupport/kernel/endpe/vmode}
+% A tagging socket which ends a structure. Used in \cs{begin} 
+% and \cs{para_end:}
+% Not yet in lttagging (name and function should be reviewed).
+%    \begin{macrocode}
+\socket_if_exist:nF {tagsupport/kernel/endpe/vmode}
+ {
+   \NewTaggingSocket {kernel/endpe/vmode}{0}
+ }
+%    \end{macrocode}
+% \end{socketdecl}
+% \begin{plugdecl}{default}
+%    \begin{macrocode}
+\NewTaggingSocketPlug{kernel/endpe/vmode}{default}
+ {
+   \if@endpe \ifvmode
+      \bool_if:NT \l__tag_para_bool
+	{
+	  \bool_if:NF \l__tag_para_flattened_bool
+	   {
+	     \__tag_gincr_para_main_end_int:
+	     \tag_struct_end:
+	   }
+%    \end{macrocode}
+% \cs{@endpefalse} is needed by \cs{para_end:}, see test tagging-0097.
+%    \begin{macrocode}
+       \@endpefalse
+	}
+    \fi \fi
+ }
+\AssignTaggingSocketPlug{kernel/endpe/vmode}{default}  
+%    \end{macrocode}
+% \end{plugdecl}
+% 
 %  \begin{macro}{\para_end:}
 %    If we see a \tn{par} in vmode and a \struct{text-unit} is still open
 %    we need to close that. For this we check if a request for
@@ -2925,7 +2943,11 @@
     }
   }
   {
-    \__kernel_endpe_vmode:       % should do nothing if no tagging
+%    \end{macrocode}
+% TODO 2025-07-01. This is not exactly as before, this doesn't insert an \cs{\@endpefalse}
+% when tagging is active. Check if this a problem.
+%    \begin{macrocode}
+    \UseTaggingSocket{kernel/endpe/vmode}%    
     \tex_par:D
   }
 }
@@ -2940,7 +2962,7 @@
 %  \begin{macro}{\begin}
 %    We need to do a little more than canceling \texttt{@endpe} now.
 %    \begin{macrocode}
-\DeclareRobustCommand*\begin[1]{%
+\protected\def\begin#1{%
   \UseHook{env/#1/before}%
   \@ifundefined{#1}%
     {\def\reserved@a{\@latex@error{Environment~#1~undefined}\@eha}}%
@@ -2950,41 +2972,25 @@
         \csname #1\endcsname}}%
   \@ignorefalse
   \begingroup
-    \__kernel_endpe_vmode:
+    \UseTaggingSocket{kernel/endpe/vmode}%
     \reserved@a}
 %    \end{macrocode}
 %  \end{macro}
 %
 %
-%  \begin{macro}{\__kernel_endpe_vmode:}
-%    Close an open \struct{text-unit} if \texttt{@endpe} is true and we
-%    are in vmode. Used in \cs{para_end:} and \tn{begin}.
-%    \begin{macrocode}
-\cs_new:Npn \__kernel_endpe_vmode: {
-    \if@endpe \ifvmode
-      \bool_if:NT \l__tag_para_bool
-	{
-	  \bool_if:NF \l__tag_para_flattened_bool
-	   {
-	     \__tag_gincr_para_main_end_int:
-	     \tag_struct_end:
-	   }
-	   \@endpefalse
-	}
-    \fi \fi
-}
-%    \end{macrocode}
-%  \end{macro}
-%
+
 %
 %  \begin{macro}{\__kernel_list_label_after:}
-%    If starting the text-unit/text tags got delayed because of a pending label we
-%    have to do it after the label got typeset
+%  If starting the text-unit/text tags got delayed because of a pending label we
+%  have to do it after the label got typeset.
+%  TODO: it should do nothing without tagging that's why there is a test,
+%  this should be better hidden in a tagging socket, but it is not quite clear
+%  how to do this.
 %    \begin{macrocode}
-\cs_set:Npn \__kernel_list_label_after: {
-   \bool_if:NT \l__tag_para_bool
+\cs_new:Npn \__kernel_list_label_after: {
+   \bool_lazy_and:nnT { \tag_if_active_p: } {\l__tag_para_bool }
      {
-       \@@_start_para_structure_unconditionally:n { LI- }
+       \tag_socket_use:nn {block/startpara/direct} { LI- }
      }
 }
 %    \end{macrocode}
@@ -2993,6 +2999,8 @@
 %
 %  \begin{macro}{\@@_inner_begin:}
 %    Start a block that has an inner structure if it isn't also a list.
+%  This command is tagging specific, it is mapped to \cs{__kernel_displayblock_begin:}
+%   in some tagging recipes. 
 %    \begin{macrocode}
 \cs_new:Npn \@@_inner_begin: {
   \tagstructbegin{tag=\l_@@_tag_inner_tag_tl}
@@ -3002,7 +3010,9 @@
 %
 %
 %  \begin{macro}{\@@_inner_end:}
-%    End a block (which isn't also a list).
+%   End a block (which isn't also a list).
+%   This command is tagging specific, it is mapped to \cs{__kernel_displayblock_end:}
+%   in some tagging recipes.
 %    \begin{macrocode}
 \cs_new:Npn \@@_inner_end: {
   \@@_debug_typeout:n{block-end \on@line}
@@ -3034,26 +3044,22 @@
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
-\tag_if_active:T
-{
-  \tagpdfsetup
-      {
-        role/new-attribute = {itemize}
-                             {/O /List /ListNumbering/Unordered},
-        role/new-attribute = {enumerate}
-                             {/O /List /ListNumbering/Ordered},        
-        role/new-attribute = {description}
-                             {/O /List /ListNumbering/Description},
+\tagpdfsetup
+  {
+    role/new-attribute = {itemize}
+                         {/O /List /ListNumbering/Unordered},
+    role/new-attribute = {enumerate}
+                         {/O /List /ListNumbering/Ordered},        
+    role/new-attribute = {description}
+                         {/O /List /ListNumbering/Description},
 %    \end{macrocode}
 %    Initially, we had \texttt{/None} for the basic \env{list}
 %    environment, but that is not allowed in PDF/UA-2 if the list
 %    contains any Lbl tags. So now we default to
 %    \texttt{Unordered}.
 %    \begin{macrocode}
-        % default if unknown
-        role/new-attribute = {list}{/O /List /ListNumbering/Unordered},    
-      }
-}
+    role/new-attribute = {list}{/O /List /ListNumbering/Unordered},    
+  }
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
@@ -3062,6 +3068,8 @@
 %
 %  \begin{macro}{\@@_list_begin:}
 %    Start a list \ldots
+%    This command is tagging specific, it is mapped to \cs{__kernel_displayblock_begin:}
+%    in a tagging recipe.  
 %    \begin{macrocode}
 \cs_set:Npn \@@_list_begin: {
   \tagstructbegin
@@ -3075,50 +3083,14 @@
 %
 %  \begin{macro}{\@@_list_item_begin:}
 %    Start tagging a list item.
+%    This command is tagging specific, it is mapped to \cs{__kernel_list_item_begin:}
+%    in a tagging recipe.
 %    \begin{macrocode}
 \cs_set:Npn \@@_list_item_begin: { \tagstructbegin{tag=\LItag} }
 %    \end{macrocode}
 %  \end{macro}
 %
 %
-%  \begin{macro}{\__kernel_list_label_begin:}
-%    A list label needs a \struct{Lbl} structure tag and an MC.
-%    \begin{macrocode}
-\cs_set:Npn \__kernel_list_label_begin: {
-%
-% FMi: this needs a different logic to decide when to make the label
-%    an artifact (after cleaning up the \item code  ), therefore
-%    disabled for now
-%  \tl_if_empty:oTF \@itemlabel
-%     {
-%       \tag_mc_begin:n {artifact}
-%     }
-%     {
-       \tagstructbegin{tag=Lbl}
-       \tagmcbegin{tag=Lbl}
-%     }
-}
-%    \end{macrocode}
-%  \end{macro}
-%
-%
-%
-%  \begin{macro}{\__kernel_list_label_end:}
-%    And when we are done with the label we have to close the MC and
-%    the \struct{Lbl} structure. We then start the \struct{LBody}. The
-%    material inside will be \enquote{paragraph} text and the tagging
-%    for that is handled by the normal para tagging. 
-%    \begin{macrocode}
-\cs_set:Npn \__kernel_list_label_end: {
-  \tagmcend                                    % end mc-Lbl or artifact
-% FMi: unconditionally for now
-%  \tl_if_empty:oF \@itemlabel
-         \tagstructend   % end   Lbl
-  \tagstructbegin{tag=\LBody}
-}
-\def\LBody{LBody}
-%    \end{macrocode}
-%  \end{macro}
 %
 %
 %
@@ -3126,6 +3098,8 @@
 %    When a list item ends we have to close \struct{LBody} and
 %    \struct{LI} but also a \struct{text} in the special case that the
 %    item material ends in a list (identifiable via \texttt{@endpe}).
+%   This command is tagging specific. 
+%   This command is copied to \cs{__kernel_list_item_end:} in the list recipe.
 %    \begin{macrocode}
 \cs_set:Npn \@@_list_item_end: {
   \legacy_if:nT { @endpe }
@@ -3160,8 +3134,10 @@
 %    hence we have to produce correct tag structures in that case.
 %  \changes{v0.8q}{2024/09/02}{Do not close LI and LBody if they
 %    never were opened.}
+%   This command is tagging specific. 
+%   This command is copied to \cs{__kernel_displayblock_end:} in the list recipe.
 %    \begin{macrocode}
-\cs_set:Npn \@@_list_end: {
+\cs_new:Npn \@@_list_end: {
 %    \end{macrocode}
 %    If \texttt{@newlist} is true (i.e., when we have an error or warning
 %    situation) there is not much to close.
@@ -3181,28 +3157,30 @@
 %    \end{macrocode}
 %  \end{macro}
 %    End of tagging related declarations.
-%    \begin{macrocode}
-}
-%    \end{macrocode}
-% These command should have a dummy declaration if tagging is not active
-%    \begin{macrocode}
-{
-  \cs_new:Npn \@@_start_para_structure_unconditionally:n #1 {}
-}
-%    \end{macrocode}
-%
-%
-%
-%  
-%
-%  
-%
-%
-%
 %
 %
 % \subsection{Tagging recipes}
-%
+% \changes{v0.9g}{2025-07-01}{a tagging socket for recipe}
+% \begin{socketdecl}{tagsupport/block/recipe}
+% A tagging socket to call the tagging recipe.
+% Declared in lttagging.
+%    \begin{macrocode}
+\socket_if_exist:nF {tagsupport/block/recipe}
+ {
+   \NewTaggingSocket{block/recipe}{1}
+ }
+%    \end{macrocode}
+% \end{socketdecl}
+% \begin{plugdecl}{default}
+%    \begin{macrocode}
+\NewTaggingSocketPlug{block/recipe}{default}
+ {
+   \use:c { @@_recipe_#1: }
+ }
+\AssignTaggingSocketPlug{block/recipe}{default}  
+%    \end{macrocode}
+% \end{plugdecl}
+% 
 %  \begin{macro}{\@@_recipe_basic:}
 %    The \keyvalue{basic} recipe simply ensures that the block is inside
 %    a \struct{text-unit} structure and if necessary starts one. When the
@@ -3528,16 +3506,19 @@
 %
 %  \begin{macro}{\@setupverbinvisiblespace}
 %    In the \pdfTeX{} engine we need to use \tn{pdffakespace} chars
-%    for the invisible spaces.
+%    for the invisible spaces. In luatex we do not want this as it would lead to 
+%    doubling the number of real space chars. In dvi-mode we do not want that either:
+%    with pdftex it would error, with xetex it does nothing. 
+%    \changes{v0.9g}{2025-07-01}{changed logic}
 %    \begin{macrocode}
 \newcommand\@setupverbinvisiblespace{}
-\tag_if_active:T {
-  \bool_if:NF\g__tag_mode_lua_bool
-   {
-     \renewcommand\@setupverbinvisiblespace
-         {\def\@xobeysp{\nobreakspace\pdffakespace}}
-   }
-}
+\bool_lazy_or:nnF 
+ { \sys_if_engine_luatex_p: }
+ { \sys_if_output_dvi_p: }
+ {
+   \renewcommand\@setupverbinvisiblespace
+     {\def\@xobeysp{\nobreakspace\pdffakespace}}
+ }
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -3822,7 +3803,7 @@
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
-  \@@_start_para_structure_unconditionally:n { \PARALABEL }
+  \tag_socket_use:nn { block/startpara/direct } { \PARALABEL }
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
@@ -3860,7 +3841,7 @@
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
-  \@@_start_para_structure_unconditionally:n { \PARALABEL }
+ \tag_socket_use:nn { block/startpara/direct} { \PARALABEL }
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
@@ -4570,16 +4551,13 @@
 % \subsection{Para instances}
 %
 %    \begin{macrocode}
-\tag_if_active:T
-{
-  \tagpdfsetup
-      {
-        role/new-attribute = {justify}    {/O /Layout /TextAlign/Justify},
-        role/new-attribute = {center}     {/O /Layout /TextAlign/Center},
-        role/new-attribute = {raggedright}{/O /Layout /TextAlign/Start},
-        role/new-attribute = {raggedleft} {/O /Layout /TextAlign/End},
-      }
-}
+\tagpdfsetup
+  {
+    role/new-attribute = {justify}    {/O /Layout /TextAlign/Justify},
+    role/new-attribute = {center}     {/O /Layout /TextAlign/Center},
+    role/new-attribute = {raggedright}{/O /Layout /TextAlign/Start},
+    role/new-attribute = {raggedleft} {/O /Layout /TextAlign/End},
+  }
 %    \end{macrocode}
 %
 %  \begin{instance}{para center}
