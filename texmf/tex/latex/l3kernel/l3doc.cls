@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{calc}
-\ProvidesExplClass{l3doc}{2025-06-09}{}
+\ProvidesExplClass{l3doc}{2025-06-30}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -76,10 +76,6 @@
 \tl_new:N \l__codedoc_macro_do_not_index_tl
 \bool_new:N \l__codedoc_index_internal_bool
 \tl_new:N \g__codedoc_module_name_tl
-\tl_const:Nn \c__codedoc_iow_rule_tl
-  { ======================================== }
-\tl_const:Nn \c__codedoc_iow_mid_rule_tl
-  { -------------------------------------- }
 \box_new:N \l__codedoc_macro_box
 \box_new:N \l__codedoc_macro_index_box
 \int_new:N \l__codedoc_macro_int
@@ -94,7 +90,6 @@
 \bool_gset_true:N \g__codedoc_typeset_documentation_bool
 \bool_gset_true:N \g__codedoc_typeset_implementation_bool
 \tl_new:N \g__codedoc_base_name_tl
-\prop_new:N \l__codedoc_variants_prop
 \clist_new:N \l__codedoc_function_label_clist
 \bool_new:N \l__codedoc_no_label_bool
 \tl_new:N \l__codedoc_date_added_tl
