@@ -66,5 +66,6 @@ l3build save -cconfig-table-luatex \
 	table-018 \
 	table-019 \
 	table-020 \
-	table-021-longtable
+	table-021-longtable \
+	table-003-tagging-off
 
