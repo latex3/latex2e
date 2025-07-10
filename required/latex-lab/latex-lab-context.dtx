@@ -328,6 +328,57 @@
 %   Bottom line, what is here is nothing more than a first prototype
 %   and likely to change a lot.
 %
+% \section{Currently mainly internal interfaces}
+%
+% \begin{variable}{\l_context_primary_tl}
+%   This variable holds the current primary context name (or is empty
+%   if we are in the context of the main galley).
+% \end{variable}
+%
+% \begin{variable}{\l_context_secondary_tl}
+%   This variable holds the current secondary context name (or is
+%   empty if we are typesetting in \cs{normalsize}). It is by default
+%   automatically set by all fontsize commands in core \LaTeX{}. If
+%   additional secondary contexts are used then the variable may not
+%   be empty even if we are typesetting in \cs{normalsize}
+% \end{variable}
+
+% \section{Debugging}
+% 
+% \begin{function}{\DebugContextsOn,\DebugContextsOff, \context_debug_on:, \context_debug_off:}
+% 
+%   These commands enable/disable debugging messages for context related
+%   processing.
+% 
+% \end{function}
+%
+% \begin{function}{\DebugTemplatesOn,\DebugTemplatesOff, \template_debug_on:, \template_debug_off:}
+% 
+%   These commands enable/disable debugging messages for template related
+%   processing. (Belongs into \file{lttemplates.dtx} one day.)
+% 
+% \end{function}
+%
+%
+% \section{Changes to internals of \LaTeX}
+%
+% \begin{function}{\@setfontsize}
+%   This command has be augmented to execute \cs{SetSecondaryContext}
+%   with the name of the current fontsize command as the context argument.
+% \end{function}
+%
+% \begin{function}{\@float}
+%   This command has be augmented to execute \cs{SetPrimaryContext}\texttt{\{float\}}.
+%   This results in the body of all real floats to be typeset in the
+%   primary \texttt{float} context. Not covered are packages or
+%   methods that make floats not using \cs{@float} or making speudo
+%   float, e.g., somehting not floating but having a caption.
+% \end{function}
+%
+%
+%
+%
+%
 % \section{Implementation}
 %    \begin{macrocode}
 %<*package>
@@ -418,7 +469,7 @@
 %
 %
 %  \begin{macro}{\l_context_primary_tl}
-%    
+%    Variable to hold the name of the current primary context.
 %    \begin{macrocode}
 \tl_new:N \l_context_primary_tl
 %    \end{macrocode}
@@ -428,7 +479,10 @@
 %
 %
 %  \begin{macro}{\SetPrimaryContext}
-%    
+%    Change the context: if the target context is empty, just do
+%   it. Otherwise if we have  rule for current context and new context
+%   use that; otherwise if there is a star rule aply that; otherwise
+%   set the new value as requested,
 %    \begin{macrocode}
 \newcommand \SetPrimaryContext [1] {
   \tl_set:Ne \l_context_primary_tl
@@ -442,6 +496,9 @@
        }
      }
   \@@_debug_typeout:n{set~primary~ <-~ \l_context_primary_tl }   
+%    \end{macrocode}
+%    Also reset the secondary context.
+%    \begin{macrocode}
   \SetSecondaryContext {}
 }
 %    \end{macrocode}
@@ -449,7 +506,7 @@
 %
 %
 %  \begin{macro}{\DeclarePrimaryContextRule}
-%    
+%    Rules are simply stored in macro names:
 %    \begin{macrocode}
 \newcommand \DeclarePrimaryContextRule [3] {
   \tl_gclear_new:c { g_@@_primary_ #1 _ #2 _tl }
@@ -460,6 +517,7 @@
 %
 %
 %  \begin{macro}{\l_context_secondary_tl}
+%    Variable to hold the name of the current secondary context.
 %    \TODO{perhaps to be replaced by a multi-dimensional solution}
 %    \begin{macrocode}
 \tl_new:N \l_context_secondary_tl
@@ -468,7 +526,7 @@
 %
 %
 %  \begin{macro}{\SetSecondaryContext}
-%    
+%    Similar to \cs{SetPrimaryContext}.
 %    \begin{macrocode}
 \newcommand \SetSecondaryContext [1] {
   \tl_set:Ne \l_context_secondary_tl
@@ -504,7 +562,8 @@
 %
 %
 %  \begin{macro}{\@setfontsize}
-%    
+%    We try to be careful with setting the name as we don't know if
+%   \cs{string} returns a backslash or not.
 %    \begin{macrocode}
 \def\@setfontsize#1#2#3{\@nomath#1%
   \ifx\protect\@typeset@protect
@@ -519,6 +578,10 @@
   \fi
   \fontsize{#2}{#3}\selectfont
 }
+%    \end{macrocode}
+%    If we are typesetting in \cs{normalsize} we don't want that as as
+%    the context, so here is a first application of a rule.
+%    \begin{macrocode}
 
 \DeclareSecondaryContextRule{*}{normalsize}{}
 %    \end{macrocode}
@@ -569,11 +632,19 @@
 %<@@=template>
 %    \end{macrocode}
 %
-%    In the normal case (both primary and secondary context  are empty
-%    we have 3 test. We have up to 4 tests if only primary is
+%
+%
+%
+%  \begin{macro}{\@@_use_instance_aux:nn}
+%    This is the command that is use by \cs{UseInstance} to select and
+%    execute a requested instance. So we now have to have a little
+%    more logic here.
+
+%    In the normal case (both primary and secondary context are empty)
+%    we have now 3 tests. We have up to 4 tests if only primary is
 %    non-empty and up to 5 tests if secondary is non-empty.
 %    \begin{macrocode}
-\cs_set_protected:Npn \_@@_use_instance_aux:nn #1#2 {
+\cs_set_protected:Npn \@@_use_instance_aux:nn #1#2 {
   \@@_debug:n { \tl_if_empty:NF \l_context_primary_tl
                   { \@@_debug_typeout:n {primary~ context~ is~
                                         '\l_context_primary_tl' } } }
@@ -584,36 +655,42 @@
      {
        \tl_if_empty:NTF \l_context_primary_tl
           {
-            \@@_if_instance_exist:nnTF {#1} {#2}
+            \@@_if_instance_exist:nnTF { #1 } { #2 }
               { \@@_use_existing_instance:nn { #1 } { #2 } }
               { \msg_error:nnnn { template } { unknown-instance } {#1} {#2} }
           }
           {
-            \@@_if_instance_exist:nnTF {#1} { #2 : \l_context_primary_tl  }
-              { \@@_use_existing_instance:nn {#1} { #2 : \l_context_primary_tl } }
+            \@@_if_instance_exist:nnTF { #1 } { #2 : \l_context_primary_tl  }
+               { \@@_use_existing_instance:nn { #1 }
+                                              { #2 : \l_context_primary_tl } }
               {
-                \@@_if_instance_exist:nnTF {#1} {#2}
-                  { \@@_use_existing_instance:nn {#1} {#2} }
+                \@@_if_instance_exist:nnTF { #1 } { #2 }
+                  { \@@_use_existing_instance:nn { #1 } { #2 } }
                   { \msg_error:nnnn { template } { unknown-instance } {#1} {#2} }
               }
           }
      }
      {
-       \@@_if_instance_exist:nnTF {#1} { #2 : \l_context_primary_tl : \l_context_secondary_tl  }
-         { \@@_use_existing_instance:nn {#1} { #2 : \l_context_primary_tl : \l_context_secondary_tl } }
+       \@@_if_instance_exist:nnTF { #1 }
+                                  { #2 : \l_context_primary_tl
+                                       : \l_context_secondary_tl  }
+         { \@@_use_existing_instance:nn { #1 }
+            { #2 : \l_context_primary_tl : \l_context_secondary_tl } }
          {
            \tl_if_empty:NTF \l_context_primary_tl
               {
-                \@@_if_instance_exist:nnTF {#1} {#2}
-                  { \@@_use_existing_instance:nn {#1} {#2} }
+                \@@_if_instance_exist:nnTF { #1 } { #2 }
+                  { \@@_use_existing_instance:nn { #1 } { #2 } }
                   { \msg_error:nnnn { template } { unknown-instance } {#1} {#2} }
               }
               {
-                \@@_if_instance_exist:nnTF {#1} { #2 : \l_context_primary_tl  }
-                  { \_@@_use_existing_instance:nn {#1} { #2 : \l_context_primary_tl } }
+                \@@_if_instance_exist:nnTF { #1 }
+                                           { #2 : \l_context_primary_tl  }
+                  { \_@@_use_existing_instance:nn { #1 }
+                                                  { #2 : \l_context_primary_tl } }
                   {
-                    \@@_if_instance_exist:nnTF {#1} {#2}
-                      { \@@_use_existing_instance:nn {#1} {#2} }
+                    \@@_if_instance_exist:nnTF { #1 } { #2 }
+                      { \@@_use_existing_instance:nn { #1 } { #2 } }
                       { \msg_error:nnnn { template } { unknown-instance } {#1} {#2} }
                   }
               }
@@ -621,11 +698,15 @@
      }
 }
 %    \end{macrocode}
+%  \end{macro}
+%
 %    
 %
 %
 %  \begin{macro}{\_@@_use_existing_instance:nn}
-%    
+%    We combine debugging info an execution of the instance in one
+%    macro, to be used when we know for sure that this instance
+%    exists.
 %    \begin{macrocode}
 \cs_new_protected:Npn \_@@_use_existing_instance:nn #1#2 {
   \@@_debug_typeout:n{use~ '#1'~ instance:~ #2  \on@line }
