@@ -1,4 +1,4 @@
-# Suggested approach for providing context
+# Suggested approach for providing context (initial version no longer up-to-date)
 
 This is mainly meant for instances of templates (where things can be
 easily automated to react to context, but is probably also applicate
