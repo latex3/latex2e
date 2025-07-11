@@ -26,6 +26,7 @@ typesetfiles_list = {
     "latex-lab-amsmath.dtx",
     "latex-lab-namespace.dtx",
     "latex-lab-sec.dtx",
+    "latex-lab-context.dtx",
   },
   {
     "latex-lab-graphic.dtx",
