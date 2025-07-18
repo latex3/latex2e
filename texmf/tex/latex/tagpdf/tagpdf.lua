@@ -6,7 +6,7 @@
 -- 
 --  tagpdf-backend.dtx  (with options: `lua')
 --  
---  Copyright (C) 2019-2024 Ulrike Fischer
+--  Copyright (C) 2019-2025 Ulrike Fischer
 --  
 --  It may be distributed and/or modified under the conditions of
 --  the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -25,7 +25,7 @@
 local ProvidesLuaModule = {
     name          = "tagpdf",
     version       = "0.99s",       --TAGVERSION
-    date          = "2025-06-27", --TAGDATE
+    date          = "2025-07-13", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
