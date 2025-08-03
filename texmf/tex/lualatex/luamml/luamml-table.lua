@@ -1,3 +1,23 @@
+--[[
+   This file returns a number of helper functions used when tagging 
+   table-like math.
+   
+   The returned functions are 
+    * store_column (startmath)
+    * store_column_xml (mml, display)
+    * store_tag (xml)    (this adds the intent :equation-label')
+    * store_notag (xml)  (this adds the intent :no-equation-label')
+    * set_row_attribute (name, value)
+    * get_table ()
+
+   It adds a function to the callback
+   * hpack_filter. 
+   This function is executed if groupcode == fin_row, so at the end of alignment rows.
+   
+   The file is loaded by luamml-amsmath and luamml-array. 
+--]]
+
+--TODO: why are they loaded? None of the functions is used.
 local write_xml = require'luamml-xmlwriter'
 local make_root = require'luamml-convert'.make_root
 local save_result = require'luamml-tex'.save_result
