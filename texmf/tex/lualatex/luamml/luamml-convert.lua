@@ -1,3 +1,17 @@
+--[[
+ This file returns
+  * nodes_to_table (as process) 
+  * register_remap (as register_family)
+  * to_math (as make_root)
+  
+  nodes_to_table takes the argument (head, cur_style, text_families) and
+  converts nodes/noads to the mathml representation. It calls various subfunctions
+  like kernel_to_table, delim_to_table etc. 
+  
+  to_math surrounds the result with the <math> element.
+    
+--]]
+
 local remap_comb = require'luamml-data-combining'
 local stretchy = require'luamml-data-stretchy'
 local to_text = require'luamml-lr'
@@ -151,7 +165,8 @@ local function delim_to_table(delim)
   end
 end
 
--- Like kernel_to_table but always a math_char_t. Also creating a mo and potentially remapping to handle combining chars.
+-- Like kernel_to_table but always a math_char_t. Also creating a mo and potentially remapping 
+-- to handle combining chars.
 -- No lspace or space is set here since these never appear as core operators in an mrow.
 local function acc_to_table(acc, cur_style, stretch)
   if not acc then return end
@@ -196,6 +211,8 @@ local function kernel_to_table(kernel, cur_style, text_families)
       [':nodes'] = {kernel},
     }
     if mathml_filter then
+    -- this applies changes from annotations, for example adding structure node references
+    -- from the options :struct and :structnum     
       return mathml_filter(result, result)
     else
       return result, result
@@ -339,13 +356,14 @@ end
 
 local function accent_to_table(accent, sub, cur_style, text_families)
   local nucleus, core = kernel_to_table(accent.nucleus, cur_style//2*2+1, text_families)
-  local top_acc = acc_to_table(accent.accent, cur_style, sub & 1 == 1)
-  local bot_acc = acc_to_table(accent.bot_accent, cur_style, sub & 2 == 2)
-  return {[0] = top_acc and (bot_acc and 'munderover' or 'mover') or 'munder',
+  local top_acc = acc_to_table(accent.accent, cur_style, sub & 1 == 0)
+  local bot_acc = acc_to_table(accent.bot_accent, cur_style, sub & 2 == 0)
+  local with_accents = {[0] = top_acc and (bot_acc and 'munderover' or 'mover') or 'munder',
     nucleus,
     bot_acc or top_acc,
     bot_acc and top_acc,
-  }, core
+  }
+  return do_sub_sup(with_accents, core, accent, cur_style, text_families)
 end
 
 local style_table = {
@@ -613,15 +631,12 @@ function nodes_to_table(head, cur_style, text_families)
       elseif new_node[0] ~= 'mspace' or new_node.mathbackground then
         last_core = nil
       end
-      t[#t+1] = new_node
+      -- Omit completely empty mrows.
+      if new_node[0] ~= 'mrow' or #new_node > 0 or next(new_node) ~= 0 or next(new_node, 0) ~= nil then
+        t[#t+1] = new_node
+      end
     end
     joining = new_joining
-  end
-  -- In TeX, groups are never space like, so we insert an artificial node instead.
-  -- This node should be ignored for most purposes
-  if core == space_like then
-    core = {[0] = 'mi', ['tex:ignore'] = 'true'}
-    result[#result+1] = core
   end
   if t[0] == 'mrow' and #t == 1 then
     assert(t == result)
@@ -641,6 +656,9 @@ local function register_remap(family, mapping)
     remap_lookup[family | from] = utf8.char(to)
   end
 end
+
+-- 2025-05-30: Check if the outer outer mrow should be replaced by math 
+-- as firefox doesn't properly support tagging-project#856. 
 
 local function to_math(root, style)
   if root[0] == 'mrow' then

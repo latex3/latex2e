@@ -1,3 +1,12 @@
+--[[
+   This file returns an anonymous function 
+   with the arguments element, indent, version, which 
+   write the mathml tree through the here defined write_elem(tree, indent) 
+   function to a file or to a stream.
+   
+   Used by luamml-tex as write_xml in save_result. 
+--]]
+
 -- FIXME: Not sure yet if this will be needed
 local function escape_name(name)
   return name
@@ -48,9 +57,7 @@ local function write_elem(tree, indent)
       out = out .. escape_text(elem)
       is_string = true
     else
-      if not elem['tex:ignore'] then
-        out = out .. write_elem(elem, inner_indent)
-      end
+      out = out .. write_elem(elem, inner_indent)
       is_string = nil
     end
   end
