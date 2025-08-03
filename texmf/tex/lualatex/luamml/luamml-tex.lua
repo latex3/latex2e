@@ -1,3 +1,22 @@
+--[[
+   This file defines the luafunctions
+   * \RegisterFamilyMapping
+   * \RegisterTextFamily
+   * \luamml_get_last_mathml_stream:e
+   * \luamml_begin_single_file:
+   * \luamml_end_single_file:
+   * \__luamml_register_output_hook:N
+   * \__luamml_disable_output_hook:N
+   
+   It returns
+   * save_result = save_result, (function)
+   * labelled = labelled_mathml (a table containing labelled mathml pieces)
+   
+   It adds a function to the callback
+   * pre_mlist_to_hlist_filter
+--]]
+
+-- load needed functions
 local mlist_to_mml = require'luamml-convert'
 local process_mlist = mlist_to_mml.process
 local make_root = mlist_to_mml.make_root
@@ -14,6 +33,8 @@ local right_brace = token.new(string.byte'}', 2)
 
 local output_hook_token
 local global_text_families = {}
+
+-- ????
 local text_families_meta = {__index = function(t, fam)
   if fam == nil then return nil end
   local assignment = global_text_families[fam]
@@ -31,6 +52,8 @@ local text_families_meta = {__index = function(t, fam)
 end}
 
 local properties = node.get_properties_table()
+
+-- retrieve the mode numbers for math, horizontal and vertical mode.
 local mmode, hmode, vmode do
   local result, input = {}, tex.getmodevalues()
   for k,v in next, tex.getmodevalues() do
@@ -42,6 +65,15 @@ local mmode, hmode, vmode do
   end
   assert(mmode and hmode and vmode)
 end
+
+--[[ Documentation for luafunction \RegisterFamilyMapping
+    Two argument \RegisterFamilyMapping{<family>}{<encoding>}
+    Example usage: \RegisterFamilyMapping\symsymbols{oms}
+    The mappings are defined in luamml-legacy-mappings.lua.
+    Currently only oml, oms, omx known. 
+    The remapping function register_family is in luamml-convert (=register_remap)
+    TODO: document in luamml.dtx
+--]]
 
 local funcid = luatexbase.new_luafunction'RegisterFamilyMapping'
 token.set_lua('RegisterFamilyMapping', funcid, 'protected')
@@ -58,13 +90,21 @@ lua.get_functions_table()[funcid] = function()
   end
 end
 
-local funcid = luatexbase.new_luafunction'RegisterFamilyMapping'
+--[[ Documentation for luafunction \RegisterTextFamily
+    Two arguments \RegisterTextFamily{<family>}{<????>}
+    There is no example (and logging name was wrong)
+--]]
+
+local funcid = luatexbase.new_luafunction'RegisterTextFamily'
 token.set_lua('RegisterTextFamily', funcid, 'protected')
 lua.get_functions_table()[funcid] = function()
   local fam = token.scan_int()
   local _kind = token.scan_string()
   global_text_families[fam] = true
 end
+
+
+-- A helper function to copy a table. 
 
 local function shallow_copy(t)
   local tt = {}
@@ -74,19 +114,21 @@ local function shallow_copy(t)
   return tt
 end
 
--- Possible flag values:
---   0: Skip
---   1: Generate MathML, but only save it for later usage in startmath node
---   3: Normal (This is the only supported one in display mode)
---  11: Generate MathML structure elements
---
---  More generally, flags is a bitfield with the defined bits:
---    Bit 5-7: See Bit 4
---    Bit 4: Overwrite mathstyle with bit 9-11
---    Bit 3: Generate MathML structure elements
---    Bit 2: Change root element name for saved element
---    Bit 1: Save MathML as a fully converted formula
---    Bit 0: Save MathML for later usage in startmath node. Ignored for display math.
+--[[ Documentation for flag \l__luamml_flag_int
+    Possible flag values of \l__luamml_flag_int:
+      0: Skip
+      1: Generate MathML, but only save it for later usage in startmath node
+      3: Normal (This is the only supported one in display mode) ?? what is display mode? display math?
+     11: Generate MathML structure elements
+   
+     More generally, \l__luamml_flag_int: is a bitfield with the defined bits:
+       Bit 5-7: See Bit 4
+       Bit 4: Overwrite mathstyle with bit 9-11
+       Bit 3: Generate MathML structure elements
+       Bit 2: Change root element name for saved element
+       Bit 1: Save MathML as a fully converted formula
+       Bit 0: Save MathML for later usage in startmath node. Ignored for display math.
+--]]
 
 local out_file
 
@@ -96,6 +138,35 @@ local undefined_cmd = token.command_id'undefined_cs'
 local call_cmd = token.command_id'call'
 
 local labelled_mathml = {}
+local labelled_mathml_core = {}
+
+--[[ Documentation for function save_result
+    Core function, exported as save_result. 
+   
+    Used in the callback when math is saved in the startmath node.
+    
+    loaded in luamml-amsmath.lua, luamml-array.lua, luamml-table.lua but 
+    used only in luamml-amsmath.lua in \__luamml_amsmath_finalize_table:n
+   
+    Three arguments: xml, display, structelem
+    Argument xml is the table, display a number. If display<2 it is a display math.
+    ?? Argument structelem is not used ??
+   
+    make_root is defined in luamml-convert.lua (=to_math). It either converts the
+    top level mrow to math or adds a math element. 
+   
+    out_file is set by \luamml_begin_single_file:
+   
+    write_xml is from luamml_xmlwriter. It takes a "mathml-tree" as first argument
+    and writes it out as xml. The second argument is a boolean and decides if the xml uses
+    pretty indentation. It is calculated here from \l__luamml_pretty_int with a bitwise AND.
+   
+    output_hook_token is set by \__luamml_register_output_hook:N, typically this should save
+    the result into a command or write it into a file, see latex-lab-math.dtx for an example.
+    
+    write_struct is defined in luamml-stuctelemwriter.lua (called write_elem there). It writes
+    out the tree together with structure element commands. 
+--]]
 
 local function save_result(xml, display, structelem)
   mlist_result = make_root(xml, display and 0 or 2)
@@ -125,6 +196,7 @@ local function save_result(xml, display, structelem)
   return mlist_result
 end
 
+
 luatexbase.add_to_callback('pre_mlist_to_hlist_filter', function(mlist, style)
   if tex.nest.top.mode == mmode then -- This is a equation label generated with \eqno
     return true
@@ -136,10 +208,13 @@ luatexbase.add_to_callback('pre_mlist_to_hlist_filter', function(mlist, style)
   local display = style == 'display'
   local startmath = tex.nest.top.tail -- Must come before any write_struct calls which adds nodes
   style = flag & 16 == 16 and flag>>5 & 0x7 or display and 0 or 2
+  -- process_mlist==mlist_to_mml.process from luamml_convert.
   local xml, core = process_mlist(mlist, style, setmetatable({}, text_families_meta))
+  -- bit 1 set
   if flag & 2 == 2 then
     xml = save_result(shallow_copy(xml), display)
   end
+  -- bit 2 set, change root element if \l__luamml_root_tl is different to mrow. 
   if flag & 4 == 4 then
     local element_type = token.get_macro'l__luamml_root_tl'
     if element_type ~= 'mrow' then
@@ -150,6 +225,7 @@ luatexbase.add_to_callback('pre_mlist_to_hlist_filter', function(mlist, style)
       end
     end
   end
+  -- bit 0 set
   if not display and flag & 1 == 1 then
     local props = properties[startmath]
     if not props then
@@ -166,16 +242,27 @@ luatexbase.add_to_callback('pre_mlist_to_hlist_filter', function(mlist, style)
              formula. If you do not want to label this formula with a unique \z
              label, set a empty label instead.'})
       else
-        labelled_mathml[label] = xml
+        labelled_mathml[label], labelled_mathml_core[label] = xml, core
       end
     end
+    -- bit 3 set and bit 1 unset.
     if flag & 10 == 8 then
-      write_struct(xml, true) -- This modifies xml in-place to reference the struture element
+      write_struct(xml, true) -- This modifies xml in-place to reference the structure element
     end
   end
   return true
 end, 'dump_list')
 
+--[[ Documentation of luafunction luamml_get_last_mathml_stream:e
+    this creates a stream object with mathml from the last equation. It should be used after
+    the equation. As it nils then the list it can be used only once.
+    The return value is an object number which can then be used for example to create a
+    filespec dictionary or to reference the stream in some other place.
+    It takes an argument: additional dictionary keys for the stream object, e.g. 
+    /Type /EmbeddedFile or /Params. 
+    see luamml-demo for an example use.
+    TODO: document in luamml.dtx
+--]]
 funcid = luatexbase.new_luafunction'luamml_get_last_mathml_stream:e'
 token.set_lua('luamml_get_last_mathml_stream:e', funcid)
 lua.get_functions_table()[funcid] = function()
@@ -192,6 +279,11 @@ lua.get_functions_table()[funcid] = function()
   mlist_result = nil
 end
 
+--[[ Documentation of luafunctions luamml_begin_single_file:,luamml_end_single_file:
+    This opens and closes out_file used in save_result. 
+    The filename (stored in filename_token=\l__luamml_filename_tl)
+    is expanded in the begin function.   
+--]]   
 funcid = luatexbase.new_luafunction'luamml_begin_single_file:'
 token.set_lua('luamml_begin_single_file:', funcid, 'protected')
 lua.get_functions_table()[funcid] = function()
@@ -211,22 +303,30 @@ lua.get_functions_table()[funcid] = function()
   end
 end
 
-funcid = luatexbase.new_luafunction'luamml_register_output_hook:N'
+--[[ Documentation of luafunctions __luamml_register_output_hook:N,
+    and __luamml_disable_output_hook:N
+    This fills/clears the output_hook_token used in save_result. 
+    TODO currently clashing uses in luamml.dtx and latex-lab-math.
+--]]  
+funcid = luatexbase.new_luafunction'__luamml_register_output_hook:N'
 token.set_lua('__luamml_register_output_hook:N', funcid, 'protected')
 lua.get_functions_table()[funcid] = function()
   output_hook_token = token.get_next()
 end
 
-funcid = luatexbase.new_luafunction'luamml_disable_output_hook:'
+funcid = luatexbase.new_luafunction'__luamml_disable_output_hook:'
 token.set_lua('__luamml_disable_output_hook:', funcid, 'protected')
 lua.get_functions_table()[funcid] = function()
   output_hook_token = nil
 end
 
+-- ??
 local annotate_context = require'luamml-tex-annotate'
 annotate_context.data.mathml = labelled_mathml
+annotate_context.data.mathml_core = labelled_mathml_core
 
 return {
   save_result = save_result,
   labelled = labelled_mathml,
+  labelled_core = labelled_mathml_core,
 }
