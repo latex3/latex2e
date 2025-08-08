@@ -1,3 +1,8 @@
+
+--[[
+   This returns a table mapping combining accents etc to other unicode chars.
+--]]
+
 return {
   ["\u{0332}"] = "\u{2212}",
   ["\u{0330}"] = "\u{02DC}",
