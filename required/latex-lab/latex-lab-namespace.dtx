@@ -11,6 +11,10 @@
 %
 %    https://www.latex-project.org/lppl.txt
 %
+%<*package>
+\def\ltlabnamesdate{2025-08-14}
+\def\ltlabnamesversion{0.8f}
+%</package>
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
 \documentclass[kernel]{l3doc}
@@ -28,7 +32,7 @@
 % \fi
 % \title{Prototype reimplementation of \LaTeXe{}'s role mapping}
 % \author{\LaTeX{} Project, initial implementation Ulrike Fischer}
-% \date{v0.8e 2025-05-10}
+% \date{v\ltlabnamesversion\ \ltlabnamesdate}
 %
 % \maketitle
 %
@@ -38,8 +42,11 @@
 %
 % \section{Introduction}
 %
-% This short file collects tag names from the \LaTeX{} namespace and their role mapping used
-% in the latex-lab files. The names and the roles are not necessarily the final ones!
+% This file provides support for tag names.
+% 
+% At first, it creates tagpdf-ns-latex-lab.def which collects tag names
+% from the \LaTeX{} namespace and their role mapping.
+% The names and the roles are not necessarily the final ones! 
 % 
 % Later settings of the same tag overwrite previous settings.
 % The syntax of a line is a list of three strings ending with commas:
@@ -51,8 +58,69 @@
 % which are only in pdf namespace: 
 % Art, BlockQuote, TOC, TOCI, Index, Private, Quote, Note,
 %  Reference, BibEntry, Code.
+%  
+%  At second it provides an interface to use symbolic tag names 
+%  with the \texttt{tag} key of \cs{tagstructbegin}. The symbolic names are strings
+%  structured with slashes similar to the names of (tagging) sockets. 
+%  The list of such names used by \LaTeX{} is below in the implementation section.
+%  
+%  In PDF 2.0 there are namespaces, so theoretically it is possible to use the 
+%  same tag name for different purposes and with different role mapping. 
+%  But practically this is not an option as we build also a global RoleMap 
+%  dictionary for compability with applications that are not PDF 2.0 aware,
+%  and this dictionary can only contain unique tag names. So we assume that tag 
+%  names are used only once across all namespaces. Documents that want to use 
+%  their own specialized tag names must take care not to clash with existing names,
+%  e.g., by using a specific prefix on all their tag names.
 % 
+%  \begin{function}{\NewTagName}
+%   \begin{syntax}
+%    \NewTagName\Arg{symbolic name}\Arg{role}
+%   \end{syntax}
+%   This declares a new symbolic 
+%   tag name \meta{symbolic name} which is rolemapped to \meta{role}. \meta{role}
+%   must be a known tag, so either one of the predefined standard tags, or a new
+%   tag declared with \cs{tagpdfsetup} and the key \texttt{role/new-tag}, see the
+%   \pkg{tagpdf} documentation. 
+%  \end{function}
+%  
+%  \begin{function}[exp]{\UseTagName}
+%   \begin{syntax}
+%    \UseTagName\Arg{symbolic name}
+%   \end{syntax}
+%   This uses the new symbolic tag name \meta{symbolic name}, e.g.\\
+%   \verb+tagstructbegin{tag=\UseTagName{sec/section}}+ is the same as
+%   \verb+tagstructbegin{tag=Sect}+ assuming that \verb+\NewTagName{sec/section}{Sect}+ 
+%   has been used before.
+%  \end{function}
+%  
+%  \begin{function}[exp]{\AssignTagName}
+%   \begin{syntax}
+%    \AssignTagName\Arg{symbolic name}\Arg{role}
+%   \end{syntax}
+%   This assigns to the symbolic tag name \meta{symbolic name} the role \meta{role}. 
+%   \meta{symbolic name} must have been declared first with \verb+\NewTagName+. 
+%   If \meta{role} is a known role it is simply used. If it is unknown, it is declared
+%   first and rolemapped to the tag currently stored for \meta{name}. So 
+%   \begin{verbatim}
+%   \NewTagName{sec/section}{Sect}
+%   % structure with tag 'Sect'
+%   \tagstructbegin{tag=\UseTagName{sec/section}}
+%   
+%   \AssignTagName{sec/section}{Abschnitt}
+%   % structure with tag 'Abschnitt' rolemapped to 'Sect'
+%   \tagstructbegin{tag=\UseTagName{sec/section}}
+%   
+%   \AssignTagName{sec/section}{Figure}
+%   % structure with tag 'Figure' 
+%   \tagstructbegin{tag=\UseTagName{sec/section}}
+%   \end{verbatim}
+%   
+%   Assigning a tag name a role that is not suitable for the structure element can lead to
+%   to invalid tagging and parent-child warnings! 
+%  \end{function}
 % \end{documentation}
+% 
 % \begin{implementation}
 % \changes{v0.8c}{2025/01/12}{changed mapping of verbatim to Code as Sub is now allowed inside Code}
 %    \begin{macrocode}
@@ -119,6 +187,49 @@ tables,       Sect,     pdf2,
 %    \end{macrocode}
 %    \begin{macrocode}
 %</ns-latex-lab>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<*package>
+\ProvidesExplPackage {latex-lab-testphase-names} {\ltlabnamesdate} {\ltlabnamesversion}
+  {Code related to the names of tags}
+%    \end{macrocode}
+% \begin{macro}{\NewTagName}
+%    \begin{macrocode}
+\cs_set_protected:Npn\NewTagName#1#2
+ {
+   \prop_get:NnNTF \g__tag_role_tags_NS_prop {#2}\l__tag_tmp_unused_tl
+      {
+        \tl_new:c  {l__tag_name_#1_tl}
+        \tl_set:cn {l__tag_name_#1_tl}{#2}           
+      }
+      {
+        \msg_error:nne { tag } {role-unknown-tag} {#1}
+      }    
+ }
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{\UseTagName}
+%    \begin{macrocode}
+\cs_set:Npn\UseTagName#1
+ {
+   \cs:w l__tag_name_#1_tl\cs_end:
+ }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\AssignTagName}
+%    \begin{macrocode}
+\cs_set_protected:Npn\AssignTaggingName#1#2
+ {
+   \prop_get:NnNF\g__tag_role_tags_NS_prop{#2}\l__tag_tmp_unused_tl
+    {\exp_args:Ne\tagpdfsetup{role/new-tag=#2/\UseTagName{#1}}}
+   \tl_set:cn { l__tag_name_#1_tl }{#2}
+ }
+%    \end{macrocode}
+% \end{macro}
+%    \begin{macrocode}
+%</package>
 %    \end{macrocode}
 % \end{implementation}
 \endinput
