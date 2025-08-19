@@ -314,7 +314,10 @@
 % Open sec structures should be closed at the end of the document. This should
 % be done before tagpdf closes the Document structure.
 %    \begin{macrocode}
-\hook_gput_code:nnn{tagpdf/finish/before}{tagpdf/sec}{\@@_sec_end:n{-10}}
+\hook_gput_code:nnn
+  {tagpdf/finish/before}
+  {tagpdf/sec}
+  {\AssignTaggingSocketPlug{sec/end}{kernel}\UseTaggingSocket{sec/end}{-10}}
 \hook_gset_rule:nnnn {tagpdf/finish/before}{tagpdf/sec}{before}{tagpdf}
 %    \end{macrocode}
 %
@@ -322,28 +325,73 @@
 % \cs{appendix} close all \texttt{Sect} and \texttt{Part} structures.
 % \changes{v0.84g}{2025/01/05}{ensure that paragraph is ended (tagging/777)}
 %    \begin{macrocode}
-\AddToHook{cmd/frontmatter/before}{\par\@@_sec_end:n{-10}}
-\AddToHook{cmd/mainmatter/before} {\par\@@_sec_end:n{-10}}
-\AddToHook{cmd/backmatter/before} {\par\@@_sec_end:n{-10}}
-\AddToHook{cmd/appendix/before}   {\par\@@_sec_end:n{-10}}
+\AddToHook{cmd/frontmatter/before}{\par\UseTaggingSocket{sec/end}{-10}}
+\AddToHook{cmd/mainmatter/before} {\par\UseTaggingSocket{sec/end}{-10}}
+\AddToHook{cmd/backmatter/before} {\par\UseTaggingSocket{sec/end}{-10}}
+\AddToHook{cmd/appendix/before}   {\par\UseTaggingSocket{sec/end}{-10}}
 %    \end{macrocode}
 %
 % \subsection{Tagging Sockets}
+% At first sockets that handle the Sect structures. The argument is two brace groups,
+% in the first brace is the level, in the second the keys for the structure. 
 %    \begin{macrocode}
-\NewTaggingSocket{sec/start/part}{1}
-\NewTaggingSocketPlug{sec/start/part}{default}
+\NewTaggingSocket{sec/begin}{1}
+\NewTaggingSocketPlug{sec/begin}{kernel}
+  {
+     \@@_sec_begin:nn #1
+  }
+\AssignTaggingSocketPlug{sec/begin}{kernel}  
+%    \end{macrocode}
+% The end socket takes only the level to close as argument.
+%    \begin{macrocode}
+\NewTaggingSocket{sec/end}{1}
+\NewTaggingSocketPlug{sec/end}{kernel}
+  {
+     \@@_sec_end:n {#1}
+  }
+\AssignTaggingSocketPlug{sec/end}{kernel}    
+%    \end{macrocode}
+%
+% The sockets handle the tagging of the headings 
+%    \begin{macrocode}
+\NewTaggingSocket{sec/begin/part}{1}
+\NewTaggingSocketPlug{sec/begin/part}{kernel}
  {
-   \bool_if:NT\l_@@_sec_Sect_bool
-      {
-        \@@_sec_end:n   {-1}
-        \@@_sec_begin:nn{-1}{tag=Part}
-      }
    \tag_struct_begin:n{tag=part,title={#1}}   
    \tl_set:Nn\l_@@_para_main_tag_tl {NonStruct}
    \tl_set:Nn\l_@@_para_tag_tl {Span}
  }
-\AssignTaggingSocketPlug{sec/start/part}{default} 
+\AssignTaggingSocketPlug{sec/begin/part}{kernel} 
 %    \end{macrocode}
+%    \begin{macrocode}
+\NewTaggingSocket{sec/end/part}{0}
+\NewTaggingSocketPlug{sec/end/part}{kernel}
+ {
+   \@@_sec_end_display:
+ }
+\AssignTaggingSocketPlug{sec/end/part}{kernel} 
+%    \end{macrocode}
+% The sockets handle the tagging of the chapter headings
+% TODO: merge with part sockets? 
+%    \begin{macrocode}
+\NewTaggingSocket{sec/begin/chapter}{1}
+\NewTaggingSocketPlug{sec/begin/chapter}{kernel}
+ {
+   \tag_struct_begin:n{tag=chapter,title={#1}}   
+   \tl_set:Nn\l_@@_para_main_tag_tl {NonStruct}
+   \tl_set:Nn\l_@@_para_tag_tl {Span}
+ }
+\AssignTaggingSocketPlug{sec/begin/chapter}{kernel} 
+%    \end{macrocode}
+%    \begin{macrocode}
+\NewTaggingSocket{sec/end/chapter}{0}
+\NewTaggingSocketPlug{sec/end/chapter}{kernel}
+ {
+   \@@_sec_end_display:
+ }
+\AssignTaggingSocketPlug{sec/end/chapter}{kernel} 
+%    \end{macrocode}
+
 % \subsection{Tagging tools}
 % We need to provide user and package level commands
 % \changes{0.84k}{2025/04/09}{Add braces around key values, tagging issue \#830}
@@ -360,12 +408,9 @@
   {
     ,sec-start-part .code:n =
       {
-        \bool_if:NT\l_@@_sec_Sect_bool
-          {
-            \@@_sec_end:n   {-1}
-            \@@_sec_begin:nn{-1}{tag=Part}
-          }
-         \tag_struct_begin:n{tag=part,title={#1}}
+        \UseTaggingSocket{sec/end}{-1}
+        \UseTaggingSocket{sec/begin}{{-1}{tag=Part}}
+        \tag_struct_begin:n{tag=part,title={#1}}
 %    \end{macrocode}
 % We remap here the text-unit from the paragraph to NonStruct.
 % It would be better to suppress it completely as with the other
@@ -380,11 +425,8 @@
     ,sec-stop-part .code:n = {\@@_sec_end_display:}
     ,sec-start-chapter .code:n =
      {
-       \bool_if:NT\l_@@_sec_Sect_bool
-         {
-           \@@_sec_end:n   {0}
-           \@@_sec_begin:nn{0}{tag=Sect}
-         }
+        \UseTaggingSocket{sec/end}{0}
+        \UseTaggingSocket{sec/begin}{{0}{tag=Sect}}
         \tag_struct_begin:n{tag=chapter,title={#1}}
 %    \end{macrocode}
 % similar to part we remap to NonStruct for now ...
@@ -395,11 +437,12 @@
     ,sec-stop-chapter .meta:n = { sec-stop-part}
     ,sec-start .code:n = % #1 is a name like "section"
       {
-        \bool_if:NT\l_@@_sec_Sect_bool
+        \UseTaggingSocket{sec/end}  {\cs_if_exist_use:c{toclevel@#1}+0}
+        \UseTaggingSocket{sec/begin}
           {
-            \@@_sec_end:n    {\cs_if_exist_use:c{toclevel@#1}+0}
-            \@@_sec_begin:nn {\cs_if_exist_use:c{toclevel@#1}+0}{tag=Sect}
-          }
+            {\cs_if_exist_use:c{toclevel@#1}+0}
+            {tag=\cs_if_exist_use:cF{g_tag_role_#1_tl}{Sect}}
+          } 
         \tl_set:Nn\l_@@_para_tag_tl{#1}
       }
     ,sec-start .value_required:n = true
@@ -407,10 +450,22 @@
     ,restore-para .code:n = {\@@_setup_restore_para_default:}
     ,sec-stop .code:n =
       {
-        \par\@@_sec_end:n   {\cs_if_exist_use:c{toclevel@#1}+0}
+        \par
+        \UseTaggingSocket{sec/end}{\cs_if_exist_use:c{toclevel@#1}+0}
       }
     ,sec-stop .value_required:n = true
-    ,sec-add-grouping .bool_set:N = \l_@@_sec_Sect_bool
+    ,sec-add-grouping .choice:,
+    ,sec-add-grouping / true .code:n =
+     {
+       \AssignTaggingSocketPlug{sec/begin}{kernel}
+       \AssignTaggingSocketPlug{sec/end}{kernel}
+     }
+    ,sec-add-grouping / false .code:n =
+     {
+       \AssignTaggingSocketPlug{sec/begin}{noop}
+       \AssignTaggingSocketPlug{sec/end}{noop}
+     }
+    ,sec-add-grouping .default:n = true  
   }
 %    \end{macrocode}
 %
@@ -447,7 +502,9 @@
 % and the structure for the title of the heading.
 %    \begin{macrocode}
         % tagging start commands
-          \UseTaggingSocket{sec/start/part}{#2}
+          \UseTaggingSocket{sec/end}{-1}
+          \UseTaggingSocket{sec/begin}{{-1}{tag=Part}}
+          \UseTaggingSocket{sec/begin/part}{#2}
         % end tagging start commands
 %    \end{macrocode}
 % This adds a  manual target if the part is unnumbered or starred.
@@ -473,7 +530,7 @@
 %    \end{macrocode}
 % and now the closing command for the tagging of the title.
 %    \begin{macrocode}
-         \tag_tool:n {sec-stop-part}
+         \UseTaggingSocket{sec/end/part}
          }
        }
     }
@@ -491,7 +548,9 @@
 % This are the tagging commands needed at the begin. They open a Sect structure
 % and the structure for the title of the heading.
 %    \begin{macrocode}
-        \tag_tool:n { sec-start-chapter= {#2} }
+        \UseTaggingSocket{sec/end}{0}
+        \UseTaggingSocket{sec/begin}{{0}{tag=Sect}}
+        \UseTaggingSocket{sec/begin/chapter}{#2}
 %    \end{macrocode}
 % This adds a  manual target if the chapter is unnumbered or starred.
 % It replaces the hyperref patches.
@@ -525,7 +584,7 @@
 %    \end{macrocode}
 % and now the closing command for the tagging of the title.
 %    \begin{macrocode}
-        \tag_tool:n {sec-stop-chapter}
+        \UseTaggingSocket{sec/end/chapter}
       }
 %    \end{macrocode}
 % and similar for \cs{part}
@@ -549,7 +608,9 @@
 % This are the tagging commands needed at the begin. They open a Part structure
 % and the structure for the title of the heading.
 %    \begin{macrocode}
-       \tag_tool:n {sec-start-part={#2}}
+       \UseTaggingSocket{sec/end}{-1}
+       \UseTaggingSocket{sec/begin}{{-1}{tag=Part}}
+       \UseTaggingSocket{sec/begin/part}{#2}
 %    \end{macrocode}
 % This adds a  manual target if the part is unnumbered or starred.
 % It replaces the hyperref patches.
@@ -580,7 +641,7 @@
 %    \end{macrocode}
 % and now the closing command for the tagging of the title.
 %    \begin{macrocode}
-        \tag_tool:n{sec-stop-part}
+        \UseTaggingSocket{sec/end/part}
       }
     }
  }
@@ -651,7 +712,16 @@
   \else
     \addpenalty\@secpenalty\addvspace\@tempskipa
   \fi
-  \tag_tool:n { sec-start={#1}}%new
+  \UseTaggingSocket{sec/end}  {\cs_if_exist_use:c{toclevel@#1}+0}
+  \UseTaggingSocket{sec/begin}
+      {
+        {\cs_if_exist_use:c{toclevel@#1}+0}
+        {tag=\cs_if_exist_use:cF{g_tag_role_#1_tl}{Sect}}
+      } 
+%    \end{macrocode}
+% TODO: socket for title. 
+%    \begin{macrocode}
+  \tl_set:Nn\l_@@_para_tag_tl{#1}
   \@ifstar
     {\@ssect{#3}{#4}{#5}{#6}}%
     {\@dblarg{\@sect{#1}{#2}{#3}{#4}{#5}{#6}}}}
