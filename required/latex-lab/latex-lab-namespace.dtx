@@ -11,6 +11,10 @@
 %
 %    https://www.latex-project.org/lppl.txt
 %
+%<*package>
+\def\ltlabnamesdate{2025-08-14}
+\def\ltlabnamesversion{0.8f}
+%</package>
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
 \documentclass[kernel]{l3doc}
@@ -28,7 +32,7 @@
 % \fi
 % \title{Prototype reimplementation of \LaTeXe{}'s role mapping}
 % \author{\LaTeX{} Project, initial implementation Ulrike Fischer}
-% \date{v0.8e 2025-05-10}
+% \date{v\ltlabnamesversion\ \ltlabnamesdate}
 %
 % \maketitle
 %
@@ -38,8 +42,11 @@
 %
 % \section{Introduction}
 %
-% This short file collects tag names from the \LaTeX{} namespace and their role mapping used
-% in the latex-lab files. The names and the roles are not necessarily the final ones!
+% This file provides support for tag names and symbolic structure names.
+% 
+% At first, it creates tagpdf-ns-latex-lab.def which collects tag names
+% from the \LaTeX{} namespace and their role mapping.
+% The names and the roles are not necessarily the final ones! 
 % 
 % Later settings of the same tag overwrite previous settings.
 % The syntax of a line is a list of three strings ending with commas:
@@ -51,8 +58,74 @@
 % which are only in pdf namespace: 
 % Art, BlockQuote, TOC, TOCI, Index, Private, Quote, Note,
 %  Reference, BibEntry, Code.
+%  
+%  At second it provides an interface to use symbolic structure names 
+%  which can be used in the \texttt{tag} key of \cs{tagstructbegin}. 
+%  The symbolic names are strings
+%  structured with slashes similar to the names of (tagging) sockets. 
+%  The list of such names used by \LaTeX{} is below in the implementation section.
+%  
+%  In PDF 2.0 there are namespaces, so theoretically it is possible to use the 
+%  same tag name for different purposes and with different role mapping. 
+%  But practically this is not an option as we build also a global RoleMap 
+%  dictionary for compatibility with applications that are not PDF 2.0 aware,
+%  and this dictionary can only contain unique tag names. So we assume that tag 
+%  names are used only once across all namespaces. Documents that want to use 
+%  their own specialized tag names must take care not to clash with existing names,
+%  e.g., by using a specific prefix on all their tag names.
 % 
+%  \begin{function}{\NewStructureName}
+%   \begin{syntax}
+%    \cs{NewStructureName}\Arg{symbolic name}
+%   \end{syntax}
+%   This declares a new symbolic 
+%   structure name \meta{symbolic name} which is initially 
+%   defined as \texttt{NonStruct}. To assign it another role use 
+%   \cs{AssignStructureRole} described below.
+%  \end{function}
+%  
+%  \begin{function}[EXP]{\UseStructureName}
+%   \begin{syntax}
+%    \cs{UseStructureName}\Arg{symbolic name}
+%   \end{syntax}
+%   This uses the new symbolic structure name \meta{symbolic name}, e.g.\\
+%   \verb+tagstructbegin{tag=\UseStructureName{sec/section}}+ is the same as
+%   \verb+tagstructbegin{tag=Sect}+ assuming that 
+%   \verb+\NewStructureName{sec/section}+ and \verb+\AssignStructureRole{sec/section}{Sect}+
+%   has been used before.
+%  \end{function}
+%  
+%  \begin{function}{\AssignStructureRole}
+%   \begin{syntax}
+%    \cs{AssignStructureRole}\Arg{symbolic name}\Arg{role}
+%   \end{syntax}
+%   This assigns to the symbolic structure name \meta{symbolic name} the role \meta{role}. 
+%   \meta{symbolic name} must have been declared first with \verb+\NewStructureName+. 
+%   If \meta{role} is a known role it is simply used. If it is unknown, it is declared
+%   first and rolemapped to the tag currently stored for \meta{name}. So 
+%   \begin{verbatim}
+%   \NewStructureName{sec/section}
+%   % structure with tag 'NonStruct'
+%   \tagstructbegin{tag=\UseStructureName{sec/section}}
+%      
+%   \AssignStructureRole{sec/section}{Sect}
+%   % structure with tag 'Sect'
+%   \tagstructbegin{tag=\UseStructureName{sec/section}}
+%   
+%   \AssignStructureRole{sec/section}{Abschnitt}
+%   % structure with tag 'Abschnitt' rolemapped to 'Sect'
+%   \tagstructbegin{tag=\UseStructureName{sec/section}}
+%   
+%   \AssignStructureRole{sec/section}{Figure}
+%   % structure with tag 'Figure' 
+%   \tagstructbegin{tag=\UseStructureName{sec/section}}
+%   \end{verbatim}
+%   
+%   Assigning a symbolic structure name a role that is not suitable for the 
+%   structure element can lead to invalid tagging and parent-child warnings! 
+%  \end{function}
 % \end{documentation}
+% 
 % \begin{implementation}
 % \changes{v0.8c}{2025/01/12}{changed mapping of verbatim to Code as Sub is now allowed inside Code}
 %    \begin{macrocode}
@@ -120,5 +193,287 @@ tables,       Sect,     pdf2,
 %    \begin{macrocode}
 %</ns-latex-lab>
 %    \end{macrocode}
+%
+%    \begin{macrocode}
+%<*package>
+\ProvidesExplPackage {latex-lab-testphase-names} {\ltlabnamesdate} {\ltlabnamesversion}
+  {Code related to the names of tags}
+%    \end{macrocode}
+%    \begin{macrocode}
+%<@@=tag>
+%    \end{macrocode}
+%
+% \begin{macro}{\AssignStructureRole}
+% We redefine \cs{AssignStructureRole} to setup that tagging rolemapping
+%    \begin{macrocode}
+\cs_set_protected:Npn\AssignStructureRole#1#2
+ {
+   \prop_get:NnNF\g_@@_role_tags_NS_prop{#2}\l_@@_tmp_unused_tl
+    {\exp_args:Ne\tagpdfsetup{role/new-tag=#2/\UseStructureName{#1}}}
+   \tl_set:cn { l_@@_name_#1_tl }{#2}
+ }
+%    \end{macrocode}
+% \end{macro}
+%    \begin{macrocode}
+%</package>
+%    \end{macrocode}
+% 
+% \subsection{Symbolic names}
+% These are the planned symbolic structure names. 
+% Every commented name is not decided and not used yet and can change in future. 
+% 
+% \subsubsection{Paragraphs}
+% 
+%    \begin{macrocode}
+%\NewStructureName{para/textblock}
+%\AssignStructureRole{para/textblock}{text}
+%\NewStructureName{para/paragraph}
+%\AssignStructureRole{para/paragraph}{text-unit}
+%    \end{macrocode}
+% 
+% \subsubsection{Sectioning commands}
+%    \begin{macrocode}
+%\NewStructureName{sec/part}
+%\AssignStructureRole{sec/part}{Part}
+%\NewStructureName{sec/part/title}
+%\AssignStructureRole{sec/part/title}{part}
+%\NewStructureName{sec/part/number}
+%\AssignStructureRole{sec/part/number}{section-number}
+%\NewStructureName{sec/chapter}
+%\AssignStructureRole{sec/chapter}{Sect}
+%\NewStructureName{sec/chapter/title}
+%\AssignStructureRole{sec/chapter/title}{chapter}
+%\NewStructureName{sec/chapter/number}
+%\AssignStructureRole{sec/chapter/number}{section-number}
+%\NewStructureName{sec/section}
+%\AssignStructureRole{sec/section}{Sect}
+%\NewStructureName{sec/section/title}
+%\AssignStructureRole{sec/section/title}{section}
+%\NewStructureName{sec/section/number}
+%\AssignStructureRole{sec/section/number}{section-number}
+%\NewStructureName{sec/subsection}
+%\AssignStructureRole{sec/subsection}{Sect}
+%\NewStructureName{sec/subsection/title}
+%\AssignStructureRole{sec/subsection/title}{subsection}
+%\NewStructureName{sec/subsection/number}
+%\AssignStructureRole{sec/subsection/number}{section-number}
+%\NewStructureName{sec/subsubsection}
+%\AssignStructureRole{sec/subsubsection}{Sect}
+%\NewStructureName{sec/subsubsection/title}
+%\AssignStructureRole{sec/subsubsection/title}{subsubsection}
+%\NewStructureName{sec/subsubsection/number}
+%\AssignStructureRole{sec/subsubsection/number}{section-number}
+%\NewStructureName{sec/paragraph}
+%\AssignStructureRole{sec/paragraph}{Sect}
+%\NewStructureName{sec/paragraph/title}
+%\AssignStructureRole{sec/paragraph/title}{paragraph}
+%\NewStructureName{sec/paragraph/number}
+%\AssignStructureRole{sec/paragraph/number}{section-number}
+%\NewStructureName{sec/subparagraph}
+%\AssignStructureRole{sec/subparagraph}{Sect}
+%\NewStructureName{sec/subparagraph/title}
+%\AssignStructureRole{sec/subparagraph/title}{subparagraph}
+%\NewStructureName{sec/subparagraph/number}
+%\AssignStructureRole{sec/subparagraph/number}{section-number}
+%    \end{macrocode}
+%
+% \subsubsection{Table of contents and similar} 
+%    \begin{macrocode}
+%\NewStructureName{toc}
+%\AssignStructureRole{toc}{TOC}
+%\NewStructureName{toc/item}
+%\AssignStructureRole{toc/item}{TOCI}
+%\NewStructureName{toc/item/label}
+%\AssignStructureRole{toc/item/label}{Lbl}
+%\NewStructureName{toc/item/text}
+%\AssignStructureRole{toc/item/text}{Reference}
+%\NewStructureName{toc/item/page}
+%\AssignStructureRole{toc/item/page}{Reference}
+%    \end{macrocode}
+%
+% \subsubsection{Title}
+% The title code currently only actively sets the Title, the rest is through paragraph tagging.
+%    \begin{macrocode}
+%\NewStructureName{title/env}
+%\AssignStructureRole{title/env}{Part}  % e.g. around a titlepage 
+%\NewStructureName{title/text}
+%\AssignStructureRole{title/text}{Title} 
+%    \end{macrocode}
+%
+% \subsubsection{Lists and blocks}
+%    \begin{macrocode}
+%\NewStructureName{block/inner}
+%\AssignStructureRole{block/inner}{Div} %changeable
+%\NewStructureName{block/itemize}
+%\AssignStructureRole{block/itemize}{itemize}
+%\NewStructureName{block/itemize/item}
+%\AssignStructureRole{block/itemize/item}{LI}
+%\NewStructureName{block/itemize/label}
+%\AssignStructureRole{block/itemize/label}{Lbl}
+%\NewStructureName{block/itemize/body}
+%\AssignStructureRole{block/itemize/body}{LBody}
+%\NewStructureName{block/description}
+%\AssignStructureRole{block/description}{description}        
+%\NewStructureName{block/description/item}
+%\AssignStructureRole{block/description/item}{LI}   
+%\NewStructureName{block/description/label}
+%\AssignStructureRole{block/description/label}{Lbl}  
+%\NewStructureName{block/description/body}
+%\AssignStructureRole{block/description/body}{LBody}   
+%\NewStructureName{block/enumerate}
+%\AssignStructureRole{block/enumerate}{enumerate}        
+%\NewStructureName{block/enumerate/item}
+%\AssignStructureRole{block/enumerate/item}{LI}   
+%\NewStructureName{block/enumerate/label}
+%\AssignStructureRole{block/enumerate/label}{Lbl}  
+%\NewStructureName{block/enumerate/body}
+%\AssignStructureRole{block/enumerate/body}{LBody}   
+%\NewStructureName{block/list}
+%\AssignStructureRole{block/list}{L}        
+%\NewStructureName{block/list/item}
+%\AssignStructureRole{block/list/item}{LI}   
+%\NewStructureName{block/list/label}
+%\AssignStructureRole{block/list/label}{Lbl}  
+%\NewStructureName{block/list/body}
+%\AssignStructureRole{block/list/body}{LBody} 
+%\NewStructureName{block/quote}
+%\AssignStructureRole{block/quote}{quote}
+%\NewStructureName{block/quotation}
+%\AssignStructureRole{block/quotation}{quotation}
+%\NewStructureName{block/center}
+%\AssignStructureRole{block/center}{text-unit}
+%\NewStructureName{block/flushright}
+%\AssignStructureRole{block/flushright}{text-unit}
+%\NewStructureName{block/flushleft}
+%\AssignStructureRole{block/flushleft}{text-unit}
+%
+%\NewStructureName{block/verbatim}
+%\AssignStructureRole{block/verbatim}{verbatim}
+%\NewStructureName{block/verbatim/codeline}
+%\AssignStructureRole{block/verbatim/codeline}{codeline}
+%\NewStructureName{block/verbatim/linenumber}
+%\AssignStructureRole{block/verbatim/linenumber}{Lbl}
+%
+%\NewStructureName{block/theorem}
+%\AssignStructureRole{block/theorem}{theorem-like}
+%\NewStructureName{block/theorem/caption}
+%\AssignStructureRole{block/theorem/caption}{Caption}   
+%\NewStructureName{block/theorem/label}
+%\AssignStructureRole{block/theorem/label}{Lbl}
+%
+%\NewStructureName{block/bib}
+%\AssignStructureRole{block/bib}{L}
+%\NewStructureName{block/bib/label}
+%\AssignStructureRole{block/bib/label}{Lbl}
+%\NewStructureName{block/bib/item}
+%\AssignStructureRole{block/bib/item}{LI}
+%\NewStructureName{block/bib/body}
+%\AssignStructureRole{block/bib/body}{LBody} 
+%    \end{macrocode}
+%
+%\subsubsection{References and Links}
+% 
+%    \begin{macrocode}
+%\NewStructureName{ref}
+%\AssignStructureRole{ref}{Reference}
+%\NewStructureName{link}
+%\AssignStructureRole{link}{Link}
+%\NewStructureName{ref/cite}
+%\AssignStructureRole{ref/cite}{Reference}
+%    \end{macrocode}
+%
+% \subsubsection{Tables}
+% 
+%    \begin{macrocode}
+%\NewStructureName{tbl/table}
+%\AssignStructureRole{tbl/table}{Table}
+%\NewStructureName{tbl/table/row}
+%\AssignStructureRole{tbl/table/row}{TR}
+%\NewStructureName{tbl/table/cell}
+%\AssignStructureRole{tbl/table/cell}{TD}
+%\NewStructureName{tbl/table/pcell}
+%\AssignStructureRole{tbl/table/pcell}{TD}
+%\NewStructureName{tbl/table/hcell}
+%\AssignStructureRole{tbl/table/hcell}{TH}
+%    \end{macrocode}
+% THead and TFoot are currently not used but are perhaps needed later
+%    \begin{macrocode}
+%\NewStructureName{tbl/table/head}
+%\AssignStructureRole{tbl/table/head}{}
+%\NewStructureName{tbl/table/foot}
+%\AssignStructureRole{tbl/table/foot}{}
+%    \end{macrocode}
+%
+% \subsubsection{Floats}
+%    \begin{macrocode}
+%\NewStructureName{float/figures}
+%\AssignStructureRole{float/figures}{Sect}
+%\NewStructureName{float/tables}
+%\AssignStructureRole{float/tables}{Sect}
+%\NewStructureName{float/figure}
+%\AssignStructureRole{float/figure}{Aside}
+%\NewStructureName{float/table}
+%\AssignStructureRole{float/table}{Aside}
+%\NewStructureName{float/figure/caption}
+%\AssignStructureRole{float/figure/caption}{Caption} 
+%\NewStructureName{float/table/caption}
+%\AssignStructureRole{float/table/caption}{Caption}  
+%\NewStructureName{float/figure/label}
+%\AssignStructureRole{float/figure/label}{Lbl}
+%\NewStructureName{float/table/label}
+%\AssignStructureRole{float/table/label}{Lbl}
+%    \end{macrocode}
+%
+% \subsubsection{Footnotes}
+% 
+%    \begin{macrocode}
+%\NewStructureName{fnote/mark}
+%\AssignStructureRole{fnote/mark}{footnotemark}
+%\NewStructureName{fnote/note}
+%\AssignStructureRole{fnote/note}{footnote}
+%\NewStructureName{fnote/note/label}
+%\AssignStructureRole{fnote/note/label}{footnotelabel}
+%    \end{macrocode}
+%
+% \subsubsection{Graphics}
+%    \begin{macrocode}
+%\NewStructureName{graphic}
+%\AssignStructureRole{graphic}{Figure}
+%    \end{macrocode}
+%
+% \subsubsection{Marginnotes}
+%    \begin{macrocode}
+%\NewStructureName{marginnote}
+%\AssignStructureRole{marginnote}{Aside}
+%    \end{macrocode}
+%
+% \subsubsection{Minipages and parboxes}
+%    \begin{macrocode}
+%\NewStructureName{vbox}
+%\AssignStructureRole{vbox}{Div}
+%    \end{macrocode}
+%
+% \subsubsection{Text}
+%    \begin{macrocode}
+%\NewStructureName{text/span}
+%\AssignStructureRole{text/span}{Span}
+%\NewStructureName{text/emph}
+%\AssignStructureRole{text/emph}{Em}
+%    \end{macrocode}
+%
+% \subsubsection{Math}
+% Math uses internally MathML and this should not be remapped so we need only
+% names for the outer \texttt{Formula} tag and perhaps for a label:
+%    \begin{macrocode}
+%\NewStructureName{math/inline}
+%\AssignStructureRole{math/inline}{Formula}
+%\NewStructureName{math/display}
+%\AssignStructureRole{math/display}{Formula}
+%\NewStructureName{math/label}
+%\AssignStructureRole{math/label}{Lbl}
+%    \end{macrocode}
+%
+% \subsection{Index and glossaries}
+% Tagging not decided yet.
 % \end{implementation}
 \endinput
