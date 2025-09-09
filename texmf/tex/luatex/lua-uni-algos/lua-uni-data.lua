@@ -1,4 +1,4 @@
--- lua-uni-algos.lua
+-- lua-uni-data.lua
 -- Copyright 2020--2025 Marcel Krüger
 --
 -- This work may be distributed and/or modified under the
@@ -13,9 +13,8 @@
 -- 
 -- The Current Maintainer of this work is Marcel Krüger
 
-return {
-  case = require'lua-uni-case',
-  graphemes = require'lua-uni-graphemes',
-  normalize = require'lua-uni-normalize',
-  words = require'lua-uni-words',
-}
+-- Make data from lua-uni-data-parser externally reachable.
+--
+-- Preloaded data is provided instead if it's present.
+--
+return require'lua-uni-data-parser'
