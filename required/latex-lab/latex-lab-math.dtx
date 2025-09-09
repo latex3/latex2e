@@ -20,8 +20,8 @@
 %
 %
 
-\def\ltlabmathdate{2025-07-30}
-\def\ltlabmathversion{0.6s}
+\def\ltlabmathdate{2025-09-06}
+\def\ltlabmathversion{0.6t}
 %
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
@@ -1190,6 +1190,17 @@
 %    \end{macrocode}
 % We check here if the current group level is equal to the one stored for the
 % outer math. We only write output if that is the case.
+%
+% Currently in \LaTeX{}, the \cs{math@level} is increased for every
+% nested math mode (via \cs{frozen@everymath}. However, to make the
+% code below work correctly we to undo that in the case of
+%    \enquote{fake math}, i.e., in math mode that
+% is only entered to make use of super or subscript positioning of
+% text or for \cs{vcenter}ing text, i.e., if it is not really a
+% \enquote{math formula}. We therefore provide a special declaration,
+% \cs{UseMathForPositioningText}, to indicate that the directly following
+% \texttt{\$} represents such \enquote{fake math}.
+%
 % \changes{0.6k}{2024-12-04}{Test for current group level}
 % \changes{0.6q}{2025-06-29}{Suppress output for inner mathematics}
 %    \begin{macrocode}
@@ -1220,6 +1231,102 @@
      }
  }
 %    \end{macrocode}
+%
+%
+%
+%
+%  \begin{macro}{\UseMathForPositioningText}
+
+%    The \cs{UseMathForPositioningText} command indicates that a
+%    directly following \texttt{\$} is not a real math formula, but
+%    that the math mode is only entered to position ordinary text with
+%    the help of built in \TeX{} algorithms normally used for math,
+%    e.g., \cs{vcenter}, super and subscripts.
+%
+%    Signalling that special usage is necessary in the case tagged PDF
+%    is produced, because then such math mode should not generate a
+%    \enquote{formula} structure.
+%
+%    The command requires that it is immediately followed by
+%    \texttt{\$}; anything else will result in a low-level \TeX{}
+%    error. As it is not a user but a developer command, this seems
+%    acceptable for the sake of fast runtime execution.
+% 
+%    The way it is implemented it can be used in legacy code in front
+%    of any \texttt{\$} that switches to math mode for non-math
+%    purposes. If tagging is active it will ensure that this
+%    particular math mode content is not treated as math with repsect
+%    to tagigng (though nested math still is). If tagging is inactive
+%    the command is simply ignored.
+% 
+%    \begin{macrocode}
+\cs_set_protected:Npn \UseMathForPositioningText $ {
+%    \end{macrocode}
+%    Before the math mode is started we ensure that its content is not
+%    collected by the grabber.
+%    \begin{macrocode}
+  \bool_if:NTF \l__math_collected_bool
+     { $ }
+     {
+       \bool_set_true:N  \l__math_collected_bool
+       $
+%    \end{macrocode}
+%    Once inside math mode we reenable grabbing, so that any nested
+%    math (within text) is grabbed.
+%    \begin{macrocode}
+       \bool_set_false:N \l__math_collected_bool
+%    \end{macrocode}
+%    In addition we decrement the math level (which was automatically
+%    incremented when entering math mode) so that this math mode is
+%    transparent in \cs{@@_luamml_activate_write:}.
+%    \begin{macrocode}
+       \int_decr:N \@math@level
+     }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\@textsuperscript,\@textsubscript}
+%    
+%    \begin{macrocode}
+\def\@textsuperscript#1{%
+  {\m@th\@unreal@math{^{\mbox{\fontsize\sf@size\sf@size#1}}}}}
+
+\def\@textsubscript#1{%
+  {\m@th\@unreal@math{_{\mbox{\fontsize\sf@size\sf@size#1}}}}}
+%    \end{macrocode}
+%  \end{macro}
+%
+%  \begin{macro}{\@unreal@math,\@ensured@unreal@math}
+%    
+%    \begin{macrocode}
+\DeclareRobustCommand{\@unreal@math}{%
+  \ifmmode
+    \expandafter\@firstofone
+  \else
+    \expandafter\@ensured@unreal@math
+  \fi}
+%    \end{macrocode}
+%    If we are not in math mode we start one. Because of \cs{m@th}
+%    outside this will not be collected, but inside we want to collect
+%    again incase the argument contains nested math.
+%    \begin{macrocode}
+\long\def\@ensured@unreal@math#1{
+  $
+  \bool_set_false:N \l__math_collected_bool
+%    \end{macrocode}
+%    We also decrement the math level so that any inner math is
+%    subject to MathML handling if appropriate.
+%    \begin{macrocode}
+  \int_decr:N \@math@level
+  #1 $
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
 %  And now  keys to activate/deactivate luamml feature
 % \begin{variable}{\g_@@_luamml_load_tl}
 % This variable will be used to suppress the loading of luamml
@@ -1363,7 +1470,7 @@
 %    \end{macrocode}
 %
 % \begin{macro}{\@@_AF_process_mathml_files:}
-% \changes{0.6s}{2025-07_30}{Clear the box to avoid glyph node leakage, tagging issue 963}
+% \changes{0.6s}{2025-07-30}{Clear the box to avoid glyph node leakage, tagging issue 963}
 %    \begin{macrocode}
 \box_new:N\l_@@_tmpa_box
 \cs_new_protected:Npn \@@_AF_process_mathml_files:
