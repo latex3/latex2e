@@ -2,7 +2,7 @@
      This file return three zero-based tables with mappings for
      * oml
      * oms
-     * omx     
+     * omx
 --]]
 
 -- local remap_ot1 = {

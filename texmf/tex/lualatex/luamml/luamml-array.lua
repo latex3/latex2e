@@ -4,10 +4,10 @@
    * \__luamml_array_finalize_col:w
    * \__luamml_array_save_array:
    * \__luamml_array_finalize_array:
-   
-   The functions are used in tagging sockets, that are used in array.sty and 
+
+   The functions are used in tagging sockets, that are used in array.sty and
    handle the math tagging of the array environment.
- 
+
 --]]
 
 -- TODO why are 4 these loaded?
@@ -26,7 +26,7 @@ local properties = node.get_properties_table()
 --[[ Documentation of luafunctions \__luamml_array_init_col:
    Initialization code for a cell, used in \@classz
    TODO: error handling
---]]   
+--]]
 
 local funcid = luatexbase.new_luafunction'__luamml_array_init_col:'
 token.set_lua('__luamml_array_init_col:', funcid, 'protected')
@@ -50,7 +50,7 @@ end
    finalize a cell, used in \@classz
    the argument, a number, describes the alignment.
    TODO: error handling
---]]  
+--]]
 
 local funcid = luatexbase.new_luafunction'__luamml_array_finalize_col:w'
 token.set_lua('__luamml_array_finalize_col:w', funcid, 'protected')
@@ -83,7 +83,7 @@ local saved_array
    save the array as a table.
    Used in \endarray.
    TODO: error handling
---]]  
+--]]
 
 funcid = luatexbase.new_luafunction'__luamml_array_save_array:'
 token.set_lua('__luamml_array_save_array:', funcid)
@@ -104,7 +104,7 @@ end
    finalize the array
    Used in \endarray.
    TODO: error handling
---]]  
+--]]
 
 funcid = luatexbase.new_luafunction'__luamml_array_finalize_array:'
 token.set_lua('__luamml_array_finalize_array:', funcid)

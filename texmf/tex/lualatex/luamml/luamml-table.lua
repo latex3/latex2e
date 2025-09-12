@@ -1,8 +1,8 @@
 --[[
-   This file returns a number of helper functions used when tagging 
+   This file returns a number of helper functions used when tagging
    table-like math.
-   
-   The returned functions are 
+
+   The returned functions are
     * store_column (startmath)
     * store_column_xml (mml, display)
     * store_tag (xml)    (this adds the intent :equation-label')
@@ -11,10 +11,10 @@
     * get_table ()
 
    It adds a function to the callback
-   * hpack_filter. 
+   * hpack_filter.
    This function is executed if groupcode == fin_row, so at the end of alignment rows.
-   
-   The file is loaded by luamml-amsmath and luamml-array. 
+
+   The file is loaded by luamml-amsmath and luamml-array.
 --]]
 
 --TODO: why are they loaded? None of the functions is used.
@@ -86,7 +86,7 @@ end
 local function store_notag(xml)
   local mml_row = store_get_row()
   xml.intent = ':no-equation-label'
-  table.insert(mml_row, 1, xml)  
+  table.insert(mml_row, 1, xml)
 end
 
 local function set_row_attribute(name, value)

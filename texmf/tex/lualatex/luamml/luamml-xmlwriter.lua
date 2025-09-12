@@ -1,10 +1,10 @@
 --[[
-   This file returns an anonymous function 
-   with the arguments element, indent, version, which 
-   write the mathml tree through the here defined write_elem(tree, indent) 
+   This file returns an anonymous function
+   with the arguments element, indent, version, which
+   write the mathml tree through the here defined write_elem(tree, indent)
    function to a file or to a stream.
-   
-   Used by luamml-tex as write_xml in save_result. 
+
+   Used by luamml-tex as write_xml in save_result.
 --]]
 
 -- FIXME: Not sure yet if this will be needed

@@ -1,15 +1,15 @@
 --[[
  This file returns
-  * nodes_to_table (as process) 
+  * nodes_to_table (as process)
   * register_remap (as register_family)
   * to_math (as make_root)
-  
+
   nodes_to_table takes the argument (head, cur_style, text_families) and
   converts nodes/noads to the mathml representation. It calls various subfunctions
-  like kernel_to_table, delim_to_table etc. 
-  
+  like kernel_to_table, delim_to_table etc.
+
   to_math surrounds the result with the <math> element.
-    
+
 --]]
 
 local remap_comb = require'luamml-data-combining'
@@ -165,7 +165,7 @@ local function delim_to_table(delim)
   end
 end
 
--- Like kernel_to_table but always a math_char_t. Also creating a mo and potentially remapping 
+-- Like kernel_to_table but always a math_char_t. Also creating a mo and potentially remapping
 -- to handle combining chars.
 -- No lspace or space is set here since these never appear as core operators in an mrow.
 local function acc_to_table(acc, cur_style, stretch)
@@ -212,7 +212,7 @@ local function kernel_to_table(kernel, cur_style, text_families)
     }
     if mathml_filter then
     -- this applies changes from annotations, for example adding structure node references
-    -- from the options :struct and :structnum     
+    -- from the options :struct and :structnum
       return mathml_filter(result, result)
     else
       return result, result
@@ -374,7 +374,7 @@ local style_table = {
 }
 
 style_table.crampeddisplay, style_table.crampedtext,
-style_table.crampedscript, style_table.crampedscriptscript = 
+style_table.crampedscript, style_table.crampedscriptscript =
   style_table.display, style_table.text,
   style_table.script, style_table.scriptscript
 
@@ -388,7 +388,7 @@ local function radical_to_table(radical, sub, cur_style, text_families)
     elem, core = {[0] = 'msqrt', nucleus, }, nil
   elseif kind == 'uroot' then
     -- FIXME: Check that this is really a root
-    -- UF 2024-12-04: force use of only one return value     
+    -- UF 2024-12-04: force use of only one return value
     elem, core = {[0] = 'mroot', nucleus, (kernel_to_table(radical.degree, 7, text_families))}, nil
   elseif kind == 'uunderdelimiter' then
     elem, core = {[0] = 'munder', left, nucleus}, left
@@ -657,8 +657,8 @@ local function register_remap(family, mapping)
   end
 end
 
--- 2025-05-30: Check if the outer outer mrow should be replaced by math 
--- as firefox doesn't properly support tagging-project#856. 
+-- 2025-05-30: Check if the outer outer mrow should be replaced by math
+-- as firefox doesn't properly support tagging-project#856.
 
 local function to_math(root, style)
   if root[0] == 'mrow' then
