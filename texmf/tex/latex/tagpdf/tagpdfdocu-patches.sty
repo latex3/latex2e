@@ -1,0 +1,159 @@
+%\RequirePackage[enable-debug]{expl3}[2018/06/14]
+\ProvidesExplPackage {tagpdfdocu-patches} {2025-07-16} {0.99u}
+ {patches/commands for the tagpdf documentation}
+\RequirePackage{etoolbox,xpatch}
+
+%Logos
+% only spacing changes:
+\ExplSyntaxOn
+\DeclareRobustCommand\TeX{
+  \leavevmode
+     T\kern-.1667em\lower.5ex\hbox{E}\kern-.05emX\@ %changed from -.125em
+   }
+\DeclareRobustCommand{\LaTeX}{
+        \leavevmode
+        L\kern-.25em % %changed from -0.36em
+        \sbox\z@ T%
+         \vbox to\ht\z@{\hbox{\check@mathfonts
+                              \fontsize\sf@size\z@
+                              \math@fontsfalse\selectfont
+                              A}%
+                        \vss}%
+        \kern-.1em % %changed from 0.15em
+        T\kern-.1667em\lower.5ex\hbox{E}\kern-.05emX\@ %changed from -0.125
+    }
+  
+% minisec, correct tagging is still unclear.  
+\newcommand\minisec[1]{%
+    \if@noskipsec \leavevmode \fi
+    \par
+    \@afterindentfalse
+    \if@nobreak
+      \everypar{}%
+    \else
+      \addpenalty\@secpenalty\addvspace{1.5ex}%
+    \fi
+  {\tagpdfsetup{para/maintag=P,para/tag=Strong}\parindent \z@    
+   \setlength{\parfillskip}{\z@ plus 1fil}%
+    \raggedright\normalfont\bfseries\nobreak
+    \nobreak\interlinepenalty \@M #1\par\nobreak%
+  }\nobreak
+  \@afterheading
+}                    
+
+% listings. Unclear how to make it work for the original lstlisting, so we make a 
+% copy taglstlisting for now
+\DeclareInstance{blockenv}{lstlisting}{display}
+{
+  name           = lstlisting,
+  tag-name       = verbatim,
+  tag-attr-class = ,
+  tagging-recipe = standard,
+  inner-level-counter  = ,
+  increment-level = false,
+  setup-code     = ,
+  block-instance = displayblock ,
+  inner-instance = ,
+  final-code     = \tagtool{paratag=codeline},
+  tagging-suppress-paras = true
+}
+
+\lstnewenvironment{taglstlisting}[2][]{%
+     \MathCollectFalse 
+     \UseInstance{blockenv}{lstlisting} {}
+     \lst@TestEOLChar{#2}%
+     \lstset{#1}%
+     \csname\@lst @SetFirstNumber\endcsname%
+   }{%
+     \@nobreakfalse
+     \csname\@lst @SaveFirstNumber\endcsname%
+     \endblockenv
+   }
+      
+% ======== marginnote ==========
+% 2024-03-23 currently marginnote is no longer used, we use marginpar
+% TODO marginnote has a bug (a \par is missing) so it messes up tagging.
+% but currently unneeded as we marked them up as artifacts anyway as they don't contain
+% meaningful contents
+%\renewcommand*{\mn@parboxrestore}{\tagpdfparaOff}%
+
+%\NewDocumentCommand\sidenote{m}
+% {%
+%   %\tag_mc_artifact_group_begin:n{notype}\tagpdfparaOff\marginnote{#1}\tag_mc_artifact_group_end:
+%   \marginpar{#1}%
+% }
+
+\ExplSyntaxOff
+
+%======== tcolorbox ========
+% We switch of paratagging at the begin and reenable it locally in before upper.
+% the before upper setting is dangerous as it can be overwritten by
+% users. So a more stable hook is needed.
+% we force also a \par and add a div structure, to avoid clashes with the block
+% tagging code. This needs revisiting!
+
+\AddToHook{env/tcolorbox/before}{\par\tagstructbegin{tag=Div}}
+\AddToHook{env/tcolorbox/begin}{%
+\AssignTaggingSocketPlug{minipage/before}{noop}%
+\AssignTaggingSocketPlug{minipage/after}{noop}%
+\tagpdfparaOff \tcbset{before upper=\tagpdfparaOn}}
+\AddToHook{env/tcolorbox/after}{\par\tagstructend}
+
+% ========= doc Commands from tcolorbox
+% Not sure if this is generally usable but one must avoid tagstop if there can
+% be a pagebreak 
+\DeclareInstance{blockenv}{docCommand}{display}
+{
+  name       = docCommand,
+  tag-name       = Div,
+  tag-attr-class      = ,
+  tagging-recipe = standalone,
+  inner-level-counter  = ,
+  increment-level = false,
+  setup-code     = ,
+  block-instance = displayblock ,
+}
+
+\RenewDocumentEnvironment{tcb@manual@entry}{}
+    {\UseInstance{blockenv}{docCommand} 
+      {tag-name=Div,
+       leftmargin=\kvtcb@doc@left,
+       rightmargin=\kvtcb@doc@right,
+       }%
+     \tagtool{para=false}% 
+     \AssignSocketPlug{tagsupport/minipage/before}{noop}%
+     \AssignSocketPlug{tagsupport/minipage/after}{noop}%      
+     \AssignSocketPlug{tagsupport/parbox/before}{noop}%
+     \AssignSocketPlug{tagsupport/parbox/after}{noop}%  
+     \AssignSocketPlug{tagsupport/para/restore}{noop}%  
+    }   
+    {\endblockenv } 
+
+\tcbset{
+ doc head command=
+   {before upper=\tagstructbegin{tag=Code}\tagmcbegin{},
+    after upper=\tagmcend\tagstructend},
+ }
+ 
+%  
+% the \meta command uses \langle/\rangle which produce formulas in code.
+% this need some general solution! For now we suppress tagging of \ensuremath.
+ \long\def\@ensuredmath#1{{\MathCollectFalse$\relax#1$}}
+
+
+% ====== hyperref ========
+% this should probably go into tagpdf, but it is related to
+% problem of pdf strings and context ....
+
+\AddToHook{package/hyperref/after}
+ {%
+  \pdfstringdefDisableCommands{%
+   \let\tagstructbegin\@gobble
+   \let\tagmcbegin\@gobble
+   \let\tagmcend\relax
+   \let\tagstructend\relax
+ }}{}
+
+
+
+\endinput

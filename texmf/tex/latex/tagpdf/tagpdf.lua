@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.99s",       --TAGVERSION
-    date          = "2025-07-13", --TAGDATE
+    version       = "0.99u",       --TAGVERSION
+    date          = "2025-07-16", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -1031,6 +1031,7 @@ ltx.__tag.func.check_parent_child_rules=check_parent_child_rules
 
   if luatexbase.callbacktypes['linksplit'] then
    luatexbase.add_to_callback('linksplit', function(start_link, position)
+     if start_link == nil then return end
      local structnum =
        node.get_attribute(start_link,luatexbase.attributes.g__tag_structnum_attr)
      if structnum and structnum > -1 then
