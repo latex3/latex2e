@@ -1,5 +1,5 @@
 -- lua-uni-algos.lua
--- Copyright 2020--2022 Marcel Krüger
+-- Copyright 2020--2025 Marcel Krüger
 --
 -- This work may be distributed and/or modified under the
 -- conditions of the LaTeX Project Public License, either version 1.3
@@ -17,4 +17,5 @@ return {
   case = require'lua-uni-case',
   graphemes = require'lua-uni-graphemes',
   normalize = require'lua-uni-normalize',
+  words = require'lua-uni-words',
 }

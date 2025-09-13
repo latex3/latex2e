@@ -1,5 +1,5 @@
 -- lua-uni-parse.lua
--- Copyright 2020--2022 Marcel Krüger
+-- Copyright 2020--2025 Marcel Krüger
 --
 -- This work may be distributed and/or modified under the
 -- conditions of the LaTeX Project Public License, either version 1.3
@@ -14,6 +14,9 @@
 -- The Current Maintainer of this work is Marcel Krüger
 
 -- Just a simple helper module to make UCD parsing more readable
+
+-- The rawget is needed here because of Context idiosyncrasies.
+local find_file = assert(kpse and rawget(kpse, 'find_file') or resolvers and resolvers.find_file, 'No file searching library found')
 
 local lpeg = lpeg or require'lpeg'
 local R = lpeg.R
@@ -47,7 +50,7 @@ local function parse_uni_file(filename, patt, func, ...)
   if func then
     return parse_uni_file(filename, lpeg.Cf(lpeg.Ct'' * patt^0 * -1, func), nil, ...)
   end
-  local resolved = kpse.find_file(filename .. '.txt')
+  local resolved = find_file(filename .. '.txt')
   if not resolved then
     error(string.format("Unable to find Unicode datafile %q", filename))
   end

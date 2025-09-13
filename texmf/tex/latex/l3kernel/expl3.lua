@@ -61,6 +61,7 @@ local scan_csname   = token.scancsname or token.scan_csname
 local scan_int      = token.scan_int or token.scan_integer
 local scan_string   = token.scanstring or token.scan_string
 local scan_keyword  = token.scankeyword or token.scan_keyword
+local scan_argument = token.scanargument or token.scan_argument
 local get_next      = token.scannext or token.get_next
 local put_next      = token.putnext or token.put_next
 local token_create  = token.create
@@ -71,6 +72,8 @@ local token_new     = token.new
 local set_macro     = token.setmacro or token.set_macro
 
 local active_prefix = status.luatex_engine == 'luametatex' and status.getconstants().active_character_namespace or utf8.char(0xFFFF)
+
+local lbrace, rbrace = token_create(byte'{'), token_create(byte'}')
 local token_create_safe
 do
   local is_defined = token.is_defined
@@ -301,6 +304,42 @@ if luatexbase then
     end
   end
 end
+do
+  if get_luadata then
+    local saved_unidata = get_luadata'lua-uni-data'
+    if saved_unidata then saved_unidata() end
+  end
+  if register_luadata then
+    register_luadata('lua-uni-data', function()
+      return string.format("load(%q, nil, 'b')", string.dump(require'lua-uni-data-preload'.generate_bytecode(), true))
+    end)
+  end
+
+  local uni_data = require'lua-uni-data'
+  local tables, decomposition_mapping = uni_data.tables, uni_data.misc.decomposition_mapping
+
+  luacmd('__kernel_codepoint_data:wn', function()
+    local cp = scan_int()
+    local table = scan_argument()
+    return sprint(-2, tostring(tables[table][cp]))
+  end)
+
+  luacmd('__codepoint_nfd:w', function()
+    local cp = scan_int()
+    local decomposed = decomposition_mapping[cp]
+    if decomposed then
+      for i=1,2 do
+        if decomposed[i] then
+          sprint(-2, lbrace, tostring(decomposed[i]), rbrace)
+        else
+          sprint(-2, lbrace, rbrace)
+        end
+      end
+    else
+      return sprint(-2, lbrace, tostring(cp), rbrace, lbrace, rbrace)
+    end
+  end)
+end
 -- File: l3names.dtx
 local minus_tok = token_new(string.byte'-', 12)
 local zero_tok = token_new(string.byte'0', 12)
@@ -379,11 +418,11 @@ do
   local function shellescape(cmd)
     local status,msg = os_exec(cmd)
     if status == nil then
-      write_nl("log","runsystem(" .. cmd .. ")...(" .. msg .. ")\n")
+      write_nl("log","runsystem(" .. cmd .. ")...(" .. msg .. ").\n")
     elseif status == 0 then
-      write_nl("log","runsystem(" .. cmd .. ")...executed\n")
+      write_nl("log","runsystem(" .. cmd .. ")...executed.\n")
     else
-      write_nl("log","runsystem(" .. cmd .. ")...failed " .. (msg or "") .. "\n")
+      write_nl("log","runsystem(" .. cmd .. ")...failed. " .. (msg or "") .. "\n")
     end
   end
   luacmd("__sys_shell_now:e", function()

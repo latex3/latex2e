@@ -1,5 +1,5 @@
 -- lua-uni-graphemes.lua
--- Copyright 2020--2022 Marcel Krüger
+-- Copyright 2020--2025 Marcel Krüger
 --
 -- This work may be distributed and/or modified under the
 -- conditions of the LaTeX Project Public License, either version 1.3
@@ -123,7 +123,7 @@ local state_map state_map = {
 
 -- The value of "state" is considered internal and should not be relied upon.
 -- Just pass it to the function as is or pass nil. `nil` should only be passed when the passed codepoint starts a new cluster
-function read_codepoint(cp, state)
+local function read_codepoint(cp, state)
   local new_cluster
   state, new_cluster = state_map[state or 'START'](property[cp])
   return new_cluster, state
