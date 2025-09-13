@@ -536,6 +536,15 @@ local function cleanup_mathbin(head)
   return replacements
 end
 
+local function has_relevant_attributes(t)
+  for k in next, t do
+    if type(k) == 'string' and not string.find(k, ':') and k ~= 'xmlns' then
+      return true
+    end
+  end
+  return false
+end
+
 function nodes_to_table(head, cur_style, text_families)
   local bin_replacements = cleanup_mathbin(head)
   local t = {[0] = 'mrow'}
@@ -638,7 +647,7 @@ function nodes_to_table(head, cur_style, text_families)
     end
     joining = new_joining
   end
-  if t[0] == 'mrow' and #t == 1 then
+  if t[0] == 'mrow' and #t == 1 and not has_relevant_attributes(t) then
     assert(t == result)
     result = t[1]
   end
@@ -678,4 +687,5 @@ return {
   register_family = register_remap,
   process = function(head, style, families) return nodes_to_table(head, style or 2, families) end,
   make_root = to_math,
+  has_relevant_attributes = has_relevant_attributes,
 }

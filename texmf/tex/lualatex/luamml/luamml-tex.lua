@@ -21,6 +21,7 @@ local mlist_to_mml = require'luamml-convert'
 local process_mlist = mlist_to_mml.process
 local make_root = mlist_to_mml.make_root
 local register_family = mlist_to_mml.register_family
+local has_relevant_attributes = mlist_to_mml.has_relevant_attributes
 
 local mappings = require'luamml-legacy-mappings'
 local write_xml = require'luamml-xmlwriter'
@@ -229,7 +230,7 @@ luatexbase.add_to_callback('pre_mlist_to_hlist_filter', function(mlist, style)
   if flag & 4 == 4 then
     local element_type = token.get_macro'l__luamml_root_tl'
     if element_type ~= 'mrow' then
-      if xml[0] == 'mrow' then
+      if xml[0] == 'mrow' and not has_relevant_attributes(xml) then
         xml[0] = element_type
       else
         xml = {[0] = element_type, xml}
