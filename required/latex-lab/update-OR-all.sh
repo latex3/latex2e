@@ -1,12 +1,14 @@
 
 
 l3build save -cconfig-OR \
-	github-863-footmisc \
+	footmisc-005 \
+	footmisc-005-tagging-off \
 	memoir-001 \
 	scrartcl-001 \
-	tlb-multicol-marks-tagged \
 	tagging-001 \
-	tagging-002-longtable
+	tagging-002-longtable \
+	tlb-multicol-marks-tagged
+
 
 l3build save -cconfig-OR-luatex \
 	footmisc-003 \
@@ -36,9 +38,8 @@ l3build save -cconfig-OR-luatex \
 	test6 \
 	test7 \
 	test8 \
-	test9 
-
-
+	test9 \
+    footmisc-014-hang        
 
 exit
 

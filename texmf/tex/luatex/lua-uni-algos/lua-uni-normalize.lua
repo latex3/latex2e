@@ -1,5 +1,5 @@
 -- lua-uni-normalize.lua
--- Copyright 2020--2022 Marcel Krüger
+-- Copyright 2020--2025 Marcel Krüger
 --
 -- This work may be distributed and/or modified under the
 -- conditions of the LaTeX Project Public License, either version 1.3
@@ -224,7 +224,7 @@ local function get_string()
   end
   return s
 end
-function to_nfd_table(s, decomposition_mapping)
+local function to_nfd_table(s, decomposition_mapping)
   local new_codepoints = result_table
   local j = 1
   for _, c in codes(s) do

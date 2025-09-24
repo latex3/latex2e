@@ -1,3 +1,10 @@
+--[[
+     This file return three zero-based tables with mappings for
+     * oml
+     * oms
+     * omx     
+--]]
+
 -- local remap_ot1 = {
   -- 0x0393, 0x0394, 0x0398, 0x039B, 0x039E, 0x03A0, 0x03A3, 0x03A5,
   -- 0x03A6, 0x03A8, 0x03A9, nil, nil, nil, nil, nil,

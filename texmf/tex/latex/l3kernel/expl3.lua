@@ -6,6 +6,7 @@
 --
 -- l3luatex.dtx  (with options: `lua')
 -- l3names.dtx  (with options: `lua')
+-- l3basics.dtx  (with options: `lua')
 -- l3sys.dtx  (with options: `lua')
 -- l3token.dtx  (with options: `lua')
 -- l3intarray.dtx  (with options: `lua')
@@ -37,6 +38,7 @@ local string   = string
 local tex      = tex
 local texio    = texio
 local tonumber = tonumber
+local token    = token
 local abs        = math.abs
 local byte       = string.byte
 local floor      = math.floor
@@ -55,13 +57,23 @@ local package_loaded    = package.loaded
 local package_searchers = package.searchers
 local table_concat      = table.concat
 
-local scan_int     = token.scan_int or token.scan_integer
-local scan_string  = token.scan_string
-local scan_keyword = token.scan_keyword
-local put_next     = token.put_next
-local token_create = token.create
-local token_new    = token.new
-local set_macro    = token.set_macro
+local scan_csname   = token.scancsname or token.scan_csname
+local scan_int      = token.scan_int or token.scan_integer
+local scan_string   = token.scanstring or token.scan_string
+local scan_keyword  = token.scankeyword or token.scan_keyword
+local scan_argument = token.scanargument or token.scan_argument
+local get_next      = token.scannext or token.get_next
+local put_next      = token.putnext or token.put_next
+local token_create  = token.create
+local get_macro     = token.getmacro or token.get_macro
+local get_protected = token.getprotected or token.get_protected
+local get_csname    = token.getcsname or token.get_csname
+local token_new     = token.new
+local set_macro     = token.setmacro or token.set_macro
+
+local active_prefix = status.luatex_engine == 'luametatex' and status.getconstants().active_character_namespace or utf8.char(0xFFFF)
+
+local lbrace, rbrace = token_create(byte'{'), token_create(byte'}')
 local token_create_safe
 do
   local is_defined = token.is_defined
@@ -191,7 +203,7 @@ local function filesize(name)
 end
 ltxutils.filesize = filesize
 local luacmd do
-  local set_lua = token.set_lua
+  local set_lua = token.setlua or token.set_lua
   local undefined_cs = command_id'undefined_cs'
 
   if not context and not luatexbase then require'ltluatex' end
@@ -215,7 +227,7 @@ local luacmd do
     function luacmd(name, func, ...)
       local tok = token_create(name)
       if tok.command == undefined_cs then
-        token.set_lua(name, register(func), ...)
+        set_lua(name, register(func), ...)
       else
         functions[tok.index or tok.mode] = func
       end
@@ -292,6 +304,42 @@ if luatexbase then
     end
   end
 end
+do
+  if get_luadata then
+    local saved_unidata = get_luadata'lua-uni-data'
+    if saved_unidata then saved_unidata() end
+  end
+  if register_luadata then
+    register_luadata('lua-uni-data', function()
+      return string.format("load(%q, nil, 'b')", string.dump(require'lua-uni-data-preload'.generate_bytecode(), true))
+    end)
+  end
+
+  local uni_data = require'lua-uni-data'
+  local tables, decomposition_mapping = uni_data.tables, uni_data.misc.decomposition_mapping
+
+  luacmd('__kernel_codepoint_data:wn', function()
+    local cp = scan_int()
+    local table = scan_argument()
+    return sprint(-2, tostring(tables[table][cp]))
+  end)
+
+  luacmd('__codepoint_nfd:w', function()
+    local cp = scan_int()
+    local decomposed = decomposition_mapping[cp]
+    if decomposed then
+      for i=1,2 do
+        if decomposed[i] then
+          sprint(-2, lbrace, tostring(decomposed[i]), rbrace)
+        else
+          sprint(-2, lbrace, rbrace)
+        end
+      end
+    else
+      return sprint(-2, lbrace, tostring(cp), rbrace, lbrace, rbrace)
+    end
+  end)
+end
 -- File: l3names.dtx
 local minus_tok = token_new(string.byte'-', 12)
 local zero_tok = token_new(string.byte'0', 12)
@@ -340,6 +388,29 @@ luacmd('tex_filedump:D', function()
   local data = filedump(scan_string(), offset, length)
   if data then write(data) end
 end, 'global')
+-- File: l3basics.dtx
+if status.luatex_engine == 'luametatex' then
+  local function scan_full_csname()
+    local t = get_next()
+    local csname = get_csname(t)
+    return t.active and active_prefix .. csname or csname, t
+  end
+  luacmd('__cs_macro_prefix_spec:N', function()
+    local token = get_next()
+    if get_protected(token) then
+      sprint(-2, "\\protected ")
+    end
+  end, 'global')
+  luacmd('__cs_macro_parameter_spec:N', function()
+    local csname, token = scan_full_csname(true)
+    if token.parameters == 0 then return end
+    sprint(-2, get_macro(csname, false, true))
+  end, 'global')
+  luacmd('__cs_macro_replacement_spec:N', function()
+    local csname = scan_full_csname(true)
+    sprint(-2, get_macro(csname, false, false))
+  end, 'global')
+end
 -- File: l3sys.dtx
 do
   local os_exec = os.execute
@@ -347,11 +418,11 @@ do
   local function shellescape(cmd)
     local status,msg = os_exec(cmd)
     if status == nil then
-      write_nl("log","runsystem(" .. cmd .. ")...(" .. msg .. ")\n")
+      write_nl("log","runsystem(" .. cmd .. ")...(" .. msg .. ").\n")
     elseif status == 0 then
-      write_nl("log","runsystem(" .. cmd .. ")...executed\n")
+      write_nl("log","runsystem(" .. cmd .. ")...executed.\n")
     else
-      write_nl("log","runsystem(" .. cmd .. ")...failed " .. (msg or "") .. "\n")
+      write_nl("log","runsystem(" .. cmd .. ")...failed. " .. (msg or "") .. "\n")
     end
   end
   luacmd("__sys_shell_now:e", function()
@@ -384,7 +455,6 @@ end
   end, 'global')
 -- File: l3token.dtx
 do
-  local get_next = token.get_next
   local get_command = token.get_command
   local get_index = token.get_index
   local get_mode = token.get_mode or token.get_index
