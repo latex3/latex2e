@@ -9,8 +9,8 @@
 %
 %    https://www.latex-project.org/lppl.txt
 %
-\def\ltlabblockdate{2025-07-26}
-\def\ltlabblockversion{0.9k}
+\def\ltlabblockdate{2025-10-03}
+\def\ltlabblockversion{0.9l}
 
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2,lang=en}
@@ -153,14 +153,16 @@
 % types: \insttype{block} (horizontally or vertically oriented data that
 % needs some handling at the start and the end), \insttype{para} (that deals
 % with different paragraph layouts), \insttype{list} (that handles list
-% related parameters, and \insttype{item} (for item layouts and handling). To address
-% the independent aspects we have the template type \insttype{blockenv}
-% that ties them together as necessary.
+% related parameters, and \insttype{item} (for item layouts and handling).
+%
+% To address the independent aspects we have the template type
+% \insttype{blockenv} that ties them together as necessary when we
+% build document level environments.
 %
 % For example, a \env{quote} environment would make use of a (display)
-% \insttype{block} and some \insttype{para} instnce while an standard
+% \insttype{block} and some \insttype{para} instance while an standard
 % \env{enumerate} would make use of a display \insttype{block}, a \insttype{list},
-% and  an \insttype{item} and \insttype{para} instance.
+% and  an \insttype{item} and a \insttype{para} instance.
 % An inline list (like \env{enumerate*} from the \pkg{enumitem}
 % package) would be using the same \insttype{list} instance but a different
 % (horizontally oriented) \insttype{block} instance build from a
@@ -172,6 +174,33 @@
 %
 % \subsection{Template types}
 % 
+%
+% \begin{TemplateInterfaceDescription}{blockenv}
+%    \TemplateArgument{1}{key/value list to alter the default parameters of the template
+%       instances used by the particular blockenv environment}
+%    \TemplateArgument{2}{Caption text in cases this environment
+%       supports a caption (most don't), otherwise \cs{NoValue}}
+%    \TemplateSemantics
+%    This template type is used to implement document-level
+%    environments. It defines a \insttype{block} instance to handle the
+%    layout at the \enquote{edge} of the environment data, possibly
+%    some paragraph setup through a \insttype{para} instance, potentially an
+%    \enquote{inner} instance for more complicated environments (such
+%    as lists), and possibly some additional setup code for certain
+%    environments.
+%
+%    The caption argument is passed to block environment which may or
+%    may not make use of it.
+%
+%    It also defines how the \insttype{blockenv} behaves with respect to
+%    nesting, e.g., does it change when nested and if so how many
+%    levels of nesting are supported, etc.
+%
+%    Finally, the template type defines how it appears in a tagged PDF
+%    document, what tag names are used, how they are rolemapped and
+%    whether it adds additional attributes, etc. 
+% \end{TemplateInterfaceDescription}
+%
 % \begin{TemplateInterfaceDescription}{block}
 %    \TemplateArgument{1}{key/value list to alter the default block parameters}
 %    \TemplateSemantics
@@ -198,6 +227,10 @@
 % 
 % \begin{TemplateInterfaceDescription}{list}
 %    \TemplateArgument{1}{key/value list to alter the default item parameters}
+%    \TemplateArgument{2}{Caption text in cases the list offers
+%       support for captions, otherwise it is ignored. May be
+%       explicitly set to \cs{NoValue} to indicate that no caption
+%       should be produced.}
 %    \TemplateSemantics
 %    Handle the aspects related to list design, e.g., the use and
 %    formatting of counters, etc.
@@ -211,28 +244,6 @@
 %    \TemplateSemantics
 %    A sub-type used as part of \insttype{list} to easily cover alternative layout
 %    for list items.
-% \end{TemplateInterfaceDescription}
-%
-%
-% \begin{TemplateInterfaceDescription}{blockenv}
-%    \TemplateArgument{1}{key/value list to alter the default parameters of the template
-%       instances used by the particular block environment}
-%    \TemplateSemantics
-%    This template type is used to implement document-level
-%    environments. It defines a \insttype{block} instance to handle the
-%    layout at the \enquote{edge} of the environment data, possibly
-%    some paragraph setup through a \insttype{para} instance, potentially an
-%    \enquote{inner} instance for more complicated environments (such
-%    as lists), and possibly some additional setup code for certain
-%    environments.
-%
-%    It also defines how the \insttype{blockenv} behaves with respect to
-%    nesting, e.g., does it change when nested and if so how many
-%    levels of nesting are supported, etc.
-%
-%    Finally, the template type defines how it appears in a tagged PDF
-%    document, what tag names are used, how they are rolemapped and
-%    whether it adds additional attributes, etc. 
 % \end{TemplateInterfaceDescription}
 %
 %
@@ -359,12 +370,6 @@
 %  \TemplateKey{para-indent}{length}{}{0pt}
 %
 %    \TemplateSemantics
-%
-%    The idea of a \key{heading} key needs some further
-%    thoughts and therfore has been removed for now.
-%    Maybe instead the template type should accept a second
-%    argument and receive input for such a heading from the document
-%    level instead.
 %
 %    The names of the keys need further thoughts and some
 %    decision. Right now it is a mixture of those with hyphens and
@@ -589,7 +594,7 @@
 %
 %    The generic \env{list} environment of \LaTeXe{} is modeled with a
 %    \insttype{blockenv} instance named \instname{list}, a
-%    \insttype{block} instance named \instname{list-\meta{level}}, and
+%    \insttype{block} instance named \instname{listblock-\meta{level}}, and
 %    an inner instance named \instname{legacy} (with no dependency on
 %    the nesting level). This environment has two arguments and
 %    customization of the layout is expected to be directly set in the
@@ -927,6 +932,36 @@
 %
 %    \begin{macrocode}
 %<*package>
+%    \end{macrocode}
+%
+%    Some code for the kernel \ldots
+%    \begin{macrocode}
+\ExplSyntaxOn
+\prg_set_conditional:Npnn \tl_if_novalue:n #1
+      { p , T ,  F , TF }
+      {  \exp_after:wN \__tl_if_novalue_aux:n \exp_after:wN {#1} }
+
+\cs_set_protected:Npn \__tl_tmp:w #1
+  {
+    \cs_set:Npn\__tl_if_novalue_aux:n ##1
+       {
+         \__tl_if_empty_if:o
+           { \__tl_if_novalue:w {} ##1 {} ? ! #1 ? ? ! }
+          \prg_return_true:
+        \else:
+          \prg_return_false:
+        \fi:
+       }
+    \cs_set:Npn \__tl_if_novalue:w ##1 #1 ##2 ? ##3 ? ! { ##1 ##2 }
+  }
+
+\exp_args:No \__tl_tmp:w { \c_novalue_tl }
+
+\cs_new_eq:NN \NoValue \c_novalue_tl
+\ExplSyntaxOff
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
 %<@@=block>
 %    \end{macrocode}
 %
@@ -1118,10 +1153,10 @@
 %   given use in the document.  This section is devoted to template
 %   interfaces, and the template code is covered later.
 %    \begin{macrocode}
-\NewTemplateType{blockenv}{1}
+\NewTemplateType{blockenv}{2}
 \NewTemplateType{block}{1}
 \NewTemplateType{para}{1}
-\NewTemplateType{list}{1}
+\NewTemplateType{list}{2}
 \NewTemplateType{item}{1}
 %    \end{macrocode}
 % \end{templatetype}
@@ -1131,7 +1166,7 @@
 %  \begin{template}{blockenv display}
 %    
 %    \begin{macrocode}
-\DeclareTemplateInterface{blockenv}{display}{1}
+\DeclareTemplateInterface{blockenv}{display}{2}
 {
   name                   : tokenlist ,
 %    \end{macrocode}
@@ -1209,7 +1244,7 @@
 %  \begin{template}{list std}
 %    
 %    \begin{macrocode}
-\DeclareTemplateInterface{list}{std}{1}
+\DeclareTemplateInterface{list}{std}{2}
 {
   counter         : tokenlist = ,
   item-label      : tokenlist = ,
@@ -1367,7 +1402,7 @@
 %  \begin{template}{blockenv display}
 %    
 %    \begin{macrocode}
-\DeclareTemplateCode{blockenv}{display}{1}
+\DeclareTemplateCode{blockenv}{display}{2}
 {
   name                = \l_@@_env_name_tl ,
   tag-name            = \l_@@_tag_name_tl ,
@@ -1529,6 +1564,7 @@
                        { - \int_use:N \l_@@_inner_level_counter_tl }
                   }
                   \l_@@_unused_blockenv_keys_tl
+                  { #2 }
 %    \end{macrocode}
 %    Again the instance may has processed a few keys from the sofar
 %    unused keys, so we update \cs{l_@@_unused_blockenv_keys_tl} to
@@ -2044,7 +2080,7 @@
 %    This template implements numbered and unnumbered lists  and can
 %    be combined with display blocks or with inline blocks.
 %    \begin{macrocode}
-\DeclareTemplateCode{list}{std}{1}
+\DeclareTemplateCode{list}{std}{2}
 {
   counter         = \l_@@_counter_tl,
   item-label      = \l_@@_item_label_tl,
@@ -3377,7 +3413,7 @@
 %    
 %    \begin{macrocode}
 \NewDocumentEnvironment{displayblock}{ !O{} }
-  { \UseInstance{blockenv}{displayblock} {#1} }
+  { \UseInstance{blockenv}{displayblock} {#1} \NoValue }
   { \endblockenv }
 %    \end{macrocode}
 % \end{environment}
@@ -3387,7 +3423,7 @@
 %    
 %    \begin{macrocode}
 \NewDocumentEnvironment{displayblockflattened}{ !O{} }
-  { \UseInstance{blockenv}{displayblockflattened} {#1} }
+  { \UseInstance{blockenv}{displayblockflattened} {#1} \NoValue }
   { \endblockenv }
 %    \end{macrocode}
 %  \end{environment}
@@ -3409,19 +3445,19 @@
 %    
 %    \begin{macrocode}
   \RenewDocumentEnvironment{center} { !O{} }
-  { \UseInstance{blockenv}{center}{#1} }
+  { \UseInstance{blockenv}{center}{#1} \NoValue }
   { \endblockenv }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
   \RenewDocumentEnvironment{flushright} { !O{} }
-  { \UseInstance{blockenv}{flushright}{#1} }
+  { \UseInstance{blockenv}{flushright}{#1} \NoValue }
   { \endblockenv }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
   \RenewDocumentEnvironment{flushleft} { !O{} }
-  { \UseInstance{blockenv}{flushleft}{#1} }
+  { \UseInstance{blockenv}{flushleft}{#1} \NoValue }
   { \endblockenv }
 }
 %    \end{macrocode}
@@ -3437,13 +3473,13 @@
 %    \begin{macrocode}
 \AddToHook{begindocument/before}{
   \RenewDocumentEnvironment{quote}{ !O{} }
-    { \UseInstance{blockenv}{quote} {#1} }
+    { \UseInstance{blockenv}{quote} {#1} \NoValue }
     { \endblockenv }
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
   \RenewDocumentEnvironment{quotation}{ !O{} }
-    { \UseInstance{blockenv}{quotation} {#1} }
+    { \UseInstance{blockenv}{quotation} {#1} \NoValue }
     { \endblockenv }
 }
 %    \end{macrocode}
@@ -3463,7 +3499,7 @@
 %    \begin{macrocode}
 \AddToHook{begindocument/before}{
   \RenewDocumentEnvironment{verbatim}{ !O{} }
-    { \UseInstance{blockenv}{verbatim} {#1} }
+    { \UseInstance{blockenv}{verbatim} {#1} \NoValue }
     { \endblockenv }
 %    \end{macrocode}
 %    
@@ -3471,7 +3507,7 @@
 %    verbatim and verbatim*}
 %    \begin{macrocode}
   \RenewDocumentEnvironment{verbatim*}{ !O{} }
-    { \UseInstance{blockenv}{verbatim*} {#1} }
+    { \UseInstance{blockenv}{verbatim*} {#1} \NoValue }
     { \endblockenv }
 }
 %    \end{macrocode}
@@ -3550,19 +3586,19 @@
 %    \begin{macrocode}
 \AddToHook{begindocument/before}{
   \RenewDocumentEnvironment{itemize}{!O{}}
-    { \UseInstance{blockenv}{itemize} {#1} }
+    { \UseInstance{blockenv}{itemize} {#1} \NoValue }
     { \endblockenv }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
   \RenewDocumentEnvironment{enumerate}{!O{}}
-    { \UseInstance{blockenv}{enumerate} {#1} }
+    { \UseInstance{blockenv}{enumerate} {#1} \NoValue }
     { \endblockenv }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
   \RenewDocumentEnvironment{description}{!O{}}
-    { \UseInstance{blockenv}{description} {#1} }
+    { \UseInstance{blockenv}{description} {#1} \NoValue }
     { \endblockenv }
 }
 %    \end{macrocode}
@@ -3580,7 +3616,12 @@
   \RenewDocumentEnvironment{verse}{ !O{} }
     { 
       \let\\\@centercr
-      \UseInstance{blockenv}{list} 
+%    \end{macrocode}
+%    
+%    The \LaTeXe{} lists don't support captions so we pass
+%    \cs{NoValue} to the \insttype{blockenv}.
+%    \begin{macrocode}
+      \UseInstance{blockenv}{list}
         {
           item-indent=-1.5em,
           para-indent=-1.5em,
@@ -3588,7 +3629,8 @@
           right-margin = \leftmargin,
           left-margin  = \leftmargin+1.5em,
           #1
-         }
+        }
+        \NoValue
       \item\relax    
     }
     { \endblockenv }
@@ -3620,8 +3662,10 @@
          }
 %    \end{macrocode}
 %
+%    The \LaTeXe{} lists don't support captions so we pass
+%    \cs{NoValue} to the \insttype{blockenv}.
 %    \begin{macrocode}
-      \UseInstance{blockenv}{list} {#1}
+      \UseInstance{blockenv}{list} {#1} \NoValue
     }
     { \endblockenv }
 }
@@ -3800,7 +3844,7 @@
 \AssignTaggingSocketPlug{block/theorem/caption}{kernel} 
    
 \def\@begintheorem#1#2{
-  \UseInstance{blockenv}{theorem}{}
+  \UseInstance{blockenv}{theorem}{} \NoValue
   \tag_socket_use:n {para/off}
 %    \end{macrocode}
 %    
@@ -3831,7 +3875,7 @@
   \ignorespaces
 }
 \def\@opargbegintheorem#1#2#3{
-  \UseInstance{blockenv}{theorem}{}
+  \UseInstance{blockenv}{theorem}{} \NoValue
   \tag_socket_use:n {para/off}
 %    \end{macrocode}
 %    
@@ -4776,6 +4820,14 @@
 %
 % \item RTL and vertical typesetting.
 % \end{itemize}
+%
+%
+%
+%
+%
+% \endinput  ^^A don't typeset the first prototpye notes -------
+%
+%
 %
 % \section{Plan of attack of first prototype}
 %
