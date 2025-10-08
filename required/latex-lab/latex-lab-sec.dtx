@@ -231,7 +231,7 @@
 % \end{variable}
 %
 % \begin{macro}{\@@_sec_begin:nn}
-% This starts a sectioning structure.
+% This starts a sectioning structure (the „Sect environment“). 
 % Currently the default tag is either Sect or Part, depending on the level,
 % but this can be changed by adapting the symbolic structure names which are
 % built from the level.
@@ -325,7 +325,7 @@
 % \end{macro}
 %
 % \begin{macro}{\@@_sec_begin_display:nn}
-% This command is used in the socket the begin of display sectioning commands
+% This command is used in the socket at the begin of display sectioning commands
 % like part and chapter. It takes two arguments: the level and the title.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_sec_begin_display:nn #1 #2 %level, title
@@ -407,6 +407,20 @@
 \AssignTaggingSocketPlug{sec/end/display}{kernel}
 %    \end{macrocode}
 %
+% This socket handles the tagging of the title
+% for sectioning commands that are setup with \cs{@startsection}. The tagging
+% makes use of the para-tagging, so we only change the tag and flatten the paragraph.
+% The argument is the level.
+%    \begin{macrocode}
+\NewTaggingSocket{sec/title/init}{1}
+\NewTaggingSocketPlug{sec/title/init}{kernel}
+ {
+   \tl_set:Ne\l__tag_para_tag_tl{\UseStructureName{sec/#1/title}}
+   \bool_set_true:N \l__tag_para_flattened_bool
+ }
+\AssignTaggingSocketPlug{sec/title/init}{kernel}
+%    \end{macrocode}
+%
 % This socket handle the tagging between a run-in heading and the following text.
 %    \begin{macrocode}
 \NewTaggingSocket{sec/runin/split}{0}
@@ -416,6 +430,7 @@
  }
 \AssignTaggingSocketPlug{sec/runin/split}{kernel}
 %    \end{macrocode}
+%
 % \subsection{Tagging tools}
 % We need to provide user and package level commands
 % \changes{0.84k}{2025/04/09}{Add braces around key values, tagging issue \#830}
@@ -463,7 +478,7 @@
         \tl_set:Nn\l_@@_para_tag_tl{#1}
       }
     ,sec-start .value_required:n = true
-    ,sec-split-para .code:n = {\@@_sec_runin_split:}
+    ,sec-split-para .code:n = {\UseTaggingsocket{sec/runin/split}}
     ,restore-para .code:n = {\UseTaggingSocket{para/restore}}%
     ,sec-stop .code:n =
       {
@@ -715,7 +730,7 @@
 % We add to \cs{@startsection} the commands to open the \texttt{Sect}
 % structure and to change the para tag.
 %
-% We save the current level so that unnumbered section can use it too.
+% We save the current level so that unnumbered sections can use it too.
 % \begin{macro}{\@currentseclevel}
 %    \begin{macrocode}
 \newcommand\@currentseclevel{-2}
@@ -747,8 +762,7 @@
 % TODO: socket for title.
 % \changes{0.84j}{2025-10-07}{Moved para-flattened setting}
 %    \begin{macrocode}
-  \tl_set:Nn\l__tag_para_tag_tl{\UseStructureName{sec/\@currentseclevel/title}}
-  \tagtool{para-flattened=true}
+  \UseTaggingSocket{sec/title/init}{#2}
   \@ifstar
     {\@ssect{#3}{#4}{#5}{#6}}%
     {\@dblarg{\@sect{#1}{#2}{#3}{#4}{#5}{#6}}}}
@@ -766,20 +780,20 @@
 % The code assumes that we are in vmode!
 % \changes{0.84j}{2025-10-06}{use a second argument to get the level}
 % This is the tagging socket. The second argument will pass the normal \cs{@hangfrom} command
-% if tagging is not active. It is not used with tagging. The first argument passes two brace
-% groups: the level and the actual content.
+% if tagging is not active. It is not used with tagging. The first argument passes three brace
+% groups: the level, the actual content of the number and the title.
 %    \begin{macrocode}
 \NewTaggingSocket{sec/hangfrom}{2}
 \NewTaggingSocketPlug{sec/hangfrom}{kernel}
   {
-    \@@_sec_hangfrom:nn #1
+    \@@_sec_hangfrom:nnn #1
   }
 \AssignTaggingSocketPlug{sec/hangfrom}{kernel} 
 %    \end{macrocode}
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_sec_hangfrom:nn #1 #2
+\cs_new_protected:Npn \@@_sec_hangfrom:nnn #1 #2 #3
   {
-     \tagstructbegin{tag=\UseStructureName{sec/#1/title}}
+     \tagstructbegin{tag=\UseStructureName{sec/#1/title},title={#3}}
      \cs_if_exist_use:N \@@_gincr_para_begin_int:
      \ifnum #1>\c@secnumdepth
      \else
@@ -848,15 +862,13 @@
   \ifdim \@tempskipa>\z@
     \begingroup
       #6{%
+%    \end{macrocode}
+% the formatting can contain a \cs{MakeUppercase} so we must protect the name of the socket
+%    \begin{macrocode}
          \NoCaseChange
           {\UseTaggingSocket{sec/hangfrom}
-             {{#2}{\hskip #3\relax\@svsec}}
+             {{#2}{\hskip #3\relax\@svsec}{#7}}
              {\@hangfrom {\hskip #3\relax\@svsec}}} 
-%         \ifnum #2>\c@secnumdepth
-%          \@hangfrom {\hskip #3\relax\@svsec}%
-%         \else
-%          \@kernel@tag@hangfrom{#2}{\hskip #3\relax\@svsec}%
-%         \fi
           \interlinepenalty \@M #8\@@par}%
     \endgroup
     \csname #1mark\endcsname{#7}%
