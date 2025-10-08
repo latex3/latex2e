@@ -753,18 +753,38 @@
     {\@ssect{#3}{#4}{#5}{#6}}%
     {\@dblarg{\@sect{#1}{#2}{#3}{#4}{#5}{#6}}}}
 %    \end{macrocode}
-% To be able to correctly tag the number we need a special
+% To be able to correctly tag the number and insert the link target 
+% we need a special
 % \cs{@hangfrom} variant. This is a bit tricky:
-% As the paragraph starts after the \cs{setbox} luatex attributes
-% are not set yet and numbers are unmarked if one doesn't pay attention.
+% The argument contains the link target and for a correct structure
+% destination it should be typeset \emph{after} the structure has been opened.
+% But to measure the hangindent is must be typeset \emph{before} the paragraph is started.
+% This means that we must open the structure manually and then have to suppress the paratagging.
+% Additionally there are engine difference: with pdftex we want to insert the mc-special 
+% after the paragraph has started but that is too late for luatex, so we have to reset 
+% the attributes. Hiding all this in a tagging socket is non-trivial. 
 % The code assumes that we are in vmode!
 % \changes{0.84j}{2025-10-06}{use a second argument to get the level}
+% This is the tagging socket. The second argument will pass the normal \cs{@hangfrom} command
+% if tagging is not active. It is not used with tagging. The first argument passes two brace
+% groups: the level and the actual content.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@kernel@tag@hangfrom #1 #2
+\NewTaggingSocket{sec/hangfrom}{2}
+\NewTaggingSocketPlug{sec/hangfrom}{kernel}
+  {
+    \@@_sec_hangfrom:nn #1
+  }
+\AssignTaggingSocketPlug{sec/hangfrom}{kernel} 
+%    \end{macrocode}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_sec_hangfrom:nn #1 #2
   {
      \tagstructbegin{tag=\UseStructureName{sec/#1/title}}
      \cs_if_exist_use:N \@@_gincr_para_begin_int:
+     \ifnum #1>\c@secnumdepth
+     \else
      \tagstructbegin{tag=\UseStructureName{sec/#1/number}}
+     \fi
      \setbox\@tempboxa\hbox{{#2}}
 %    \end{macrocode}
 % We stop tagging now, to avoid that the \cs{noindent} triggers
@@ -774,15 +794,23 @@
    \tag_suspend:n{hangfrom}
    \hangindent \wd\@tempboxa\noindent
 %    \end{macrocode}
-% Restart tagging and insert the box.
+% Restart tagging and insert the box. If the box has a real content (if there is a
+% number) we have to add mc-chunks and reset the attribute of the box.
 %    \begin{macrocode}
    \tag_resume:n{hangfrom}
-   \tagmcbegin{}
+   \ifnum #1>\c@secnumdepth
+    \box\@tempboxa
+   \else 
+    \tagmcbegin{}
 %    \end{macrocode}
 % In lua mode we have to reset the attributes inside the box!
 %    \begin{macrocode}
-   \tag_mc_reset_box:N\@tempboxa
-   \box\@tempboxa\tagmcend\tagstructend\tagmcbegin{}}
+    \tag_mc_reset_box:N\@tempboxa
+    \box\@tempboxa
+    \tagmcend
+    \tagstructend
+   \fi
+   \tagmcbegin{}}
 %    \end{macrocode}
 % This tagging socket command is used to tag the numbers of runin.
 % It takes as first argument the name of the sectioning command.
@@ -820,11 +848,15 @@
   \ifdim \@tempskipa>\z@
     \begingroup
       #6{%
-         \ifnum #2>\c@secnumdepth
-          \@hangfrom {\hskip #3\relax\@svsec}%
-         \else
-          \@kernel@tag@hangfrom{#2}{\hskip #3\relax\@svsec}%
-         \fi
+         \NoCaseChange
+          {\UseTaggingSocket{sec/hangfrom}
+             {{#2}{\hskip #3\relax\@svsec}}
+             {\@hangfrom {\hskip #3\relax\@svsec}}} 
+%         \ifnum #2>\c@secnumdepth
+%          \@hangfrom {\hskip #3\relax\@svsec}%
+%         \else
+%          \@kernel@tag@hangfrom{#2}{\hskip #3\relax\@svsec}%
+%         \fi
           \interlinepenalty \@M #8\@@par}%
     \endgroup
     \csname #1mark\endcsname{#7}%
