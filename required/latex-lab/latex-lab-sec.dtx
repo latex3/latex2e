@@ -284,19 +284,19 @@
 %    \end{macrocode}
 % \end{macro}
 
-% \begin{macro}{\@@_sec_title_split:,\@@_tool_restore_para:}
+% \begin{macro}{\@@_sec_title_split:,\@@_sec_restore_para:}
 % Runin-sectioning command must separate the heading from the following text.
 % The code is in an \cs{everypar} which is perhaps executed in a group (e.g. when 
 % a list follows), we have to ensure that the restoring of the para can escape.
 %    \begin{macrocode}
-\cs_new_protected:Npn\@@_tool_restore_para:
+\cs_new_protected:Npn\@@_sec_restore_para:
  {
    \UseTaggingSocket {para/restore}
    \ifnum\currentgrouptype =14        % semi-simple group
-     \aftergroup\@@_tool_restore_para:
+     \aftergroup\@@_sec_restore_para:
    \else
        \ifnum\currentgrouptype =\@ne  % simple group
-         \aftergroup\@@_tool_restore_para:
+         \aftergroup\@@_sec_restore_para:
        \fi
    \fi
  }
@@ -318,7 +318,7 @@
 %    \end{macrocode}
 % Now restore the para-tagging and start a normal paragraph:
 %    \begin{macrocode}
-    \@@_tool_restore_para:
+    \@@_sec_restore_para:
     \UseTaggingSocket{para/begin}
   }
 %    \end{macrocode}
@@ -343,6 +343,62 @@
   {
     \tag_struct_end: %P = Hn
     \UseTaggingSocket{para/restore}
+  }
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\@@_set_title_hang:nnn}
+% To be able to correctly tag the number and insert the link target in the
+% title of a sectioning command created with \cs{@startsection}
+% we need a special\cs{@hangfrom} variant. This is a bit tricky:
+% The argument contains the link target and for a correct structure
+% destination it should be typeset \emph{after} the structure has been opened.
+% But to measure the hangindent it must be typeset \emph{before} the paragraph is started.
+% This means that we have to open the title structure manually 
+% and then have to suppress the para-tagging.
+% Additionally there is an engine difference: with pdftex the literals for the mc are inserted
+% with the box after the paragraph has started but luatex sets the attributes before
+% and we have to reset them. Hiding all this in a tagging socket is non-trivial. 
+% The code assumes that we are in vmode!
+% Attention: The code opens a structure that it doesn't close (it is closed by the \cs{par}).
+% It therefore does not handle the full tagging of the title. In a new implementation
+% of the sectioning command this will perhaps have to change.
+%
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_set_title_hang:nnn #1 #2 #3
+  {
+    \tagstructbegin{tag=\UseStructureName{sec/#1/title},title={#3}}
+    \cs_if_exist_use:N \@@_gincr_para_begin_int:
+    \ifnum #1>\c@secnumdepth
+    \else
+     \tagstructbegin{tag=\UseStructureName{sec/#1/number}}
+    \fi
+    \setbox\@tempboxa\hbox{{#2}}
+%    \end{macrocode}
+% We stop tagging now, to avoid that the \cs{noindent} triggers
+% the paratagging. We do not disable paratagging completely, to
+% avoid that the numbering goes wrong.
+%    \begin{macrocode}
+    \tag_suspend:n{hangfrom}
+    \hangindent \wd\@tempboxa\noindent
+%    \end{macrocode}
+% Restart tagging and insert the box. If the box has a real content (if there is a
+% number) we have to add mc-chunks and reset the attribute of the box.
+%    \begin{macrocode}
+    \tag_resume:n{hangfrom}
+    \ifnum #1>\c@secnumdepth
+     \box\@tempboxa
+    \else 
+    \tagmcbegin{}
+%    \end{macrocode}
+% In lua mode we have to reset the attributes inside the box!
+%    \begin{macrocode}
+    \tag_mc_reset_box:N\@tempboxa
+    \box\@tempboxa
+    \tagmcend
+    \tagstructend
+   \fi
+   \tagmcbegin{}
   }
 %    \end{macrocode}
 % \end{macro}
@@ -378,7 +434,7 @@
   }
 \AssignTaggingSocketPlug{sec/begin}{kernel}
 %    \end{macrocode}
-% The end socket takes only the level to close as argument.
+% The end socket takes as argument only the level to close.
 %    \begin{macrocode}
 \NewTaggingSocket{sec/end}{1}
 \NewTaggingSocketPlug{sec/end}{kernel}
@@ -388,7 +444,7 @@
 \AssignTaggingSocketPlug{sec/end}{kernel}
 %    \end{macrocode}
 %
-% The sockets handle the tagging of headings with special formatting
+% These two sockets handle the tagging of headings with special formatting
 % like part and chapter.
 % The argument of the begin socket is two brace groups containing the level and 
 % the title.
@@ -411,7 +467,26 @@
 \AssignTaggingSocketPlug{sec/title/end}{kernel}
 %    \end{macrocode}
 %
-% This socket handles the tagging of the title
+%
+% These socket is used to typeset the heading of a title using \cs{@hangfrom}.
+% The second argument of this socket will pass the normal \cs{@hangfrom} command
+% if tagging is not active. It is not used with tagging. 
+% The first argument passes three brace groups: 
+% the level, the actual content of the number and the title.
+% 
+% Attention: The socket opens a structure that it doesn't close (it is closed by the \cs{par}).
+% It therefore does not handle the full tagging of the title. In a new implementation
+% of the sectioning command this will perhaps have to change.
+%    \begin{macrocode}
+\NewTaggingSocket{sec/title/hang}{2}
+\NewTaggingSocketPlug{sec/title/hang}{kernel}
+  {
+    \@@_set_title_hang:nnn #1
+  }
+\AssignTaggingSocketPlug{sec/title/hang}{kernel} 
+%    \end{macrocode}
+%
+% This socket is used in the tagging of runin-titles
 % for sectioning commands that are setup with \cs{@startsection}. The tagging
 % makes use of the para-tagging, so we only change the tag and flatten the paragraph.
 % The argument is the level.
@@ -435,6 +510,27 @@
 \AssignTaggingSocketPlug{sec/title/split}{kernel}
 %    \end{macrocode}
 %
+% The following tagging socket command is used to handle the tagging
+% of the number in the title of run-in headings. Similar to the hang variant it does not
+% handle the full structure but relies in part on the paragraph
+% tagging. This again can change if sectioning commands are reimplemented.
+% It takes as first argument the name of the sectioning command.
+% The second argument contains the formatted number. 
+%    \begin{macrocode}
+\NewTaggingSocket{sec/title/runin}{2}
+\NewTaggingSocketPlug{sec/title/runin}{kernel}
+ {
+    \tag_mc_end_push:
+    \tag_struct_begin:n{tag=\UseStructureName{sec/#1/number}}
+    \tag_mc_begin:n{}
+    #2
+    \tag_mc_end:
+    \tag_struct_end:
+    \tag_mc_begin_pop:n{}
+ }
+\AssignTaggingSocketPlug{sec/title/runin}{kernel}
+%    \end{macrocode}
+
 % \subsection{Tagging tools}
 % We need to provide user and package level commands
 % \changes{0.84k}{2025/04/09}{Add braces around key values, tagging issue \#830}
@@ -774,91 +870,7 @@
     {\@ssect{#3}{#4}{#5}{#6}}%
     {\@dblarg{\@sect{#1}{#2}{#3}{#4}{#5}{#6}}}}
 %    \end{macrocode}
-% To be able to correctly tag the number and insert the link target 
-% we need a special
-% \cs{@hangfrom} variant. This is a bit tricky:
-% The argument contains the link target and for a correct structure
-% destination it should be typeset \emph{after} the structure has been opened.
-% But to measure the hangindent is must be typeset \emph{before} the paragraph is started.
-% This means that we must open the title structure manually 
-% and then have to suppress the paratagging.
-% Additionally there is an engine difference: with pdftex the literals for the mc are inserted
-% with the box after the paragraph has started but luatex sets the attributes before
-% and we have to reset them. Hiding all this in a tagging socket is non-trivial. 
-% The code assumes that we are in vmode!
-% \changes{0.84j}{2025-10-06}{use a second argument to get the level}
-% This is the tagging socket. The second argument will pass the normal \cs{@hangfrom} command
-% if tagging is not active. It is not used with tagging. The first argument passes three brace
-% groups: the level, the actual content of the number and the title.
-% 
-% Attention: The socket opens a structure that it doesn't close (it is closed by the \cs{par}).
-% It therefore does not handle the full tagging of the title. In a new implementation
-% of the sectioning command this will perhaps have to change.
-%    \begin{macrocode}
-\NewTaggingSocket{sec/title/hang}{2}
-\NewTaggingSocketPlug{sec/title/hang}{kernel}
-  {
-    \@@_set_title_hang:nnn #1
-  }
-\AssignTaggingSocketPlug{sec/title/hang}{kernel} 
-%    \end{macrocode}
-%    \begin{macrocode}
-\cs_new_protected:Npn \@@_set_title_hang:nnn #1 #2 #3
-  {
-    \tagstructbegin{tag=\UseStructureName{sec/#1/title},title={#3}}
-    \cs_if_exist_use:N \@@_gincr_para_begin_int:
-    \ifnum #1>\c@secnumdepth
-    \else
-     \tagstructbegin{tag=\UseStructureName{sec/#1/number}}
-    \fi
-    \setbox\@tempboxa\hbox{{#2}}
-%    \end{macrocode}
-% We stop tagging now, to avoid that the \cs{noindent} triggers
-% the paratagging. We do not disable paratagging completely, to
-% avoid that the numbering goes wrong.
-%    \begin{macrocode}
-    \tag_suspend:n{hangfrom}
-    \hangindent \wd\@tempboxa\noindent
-%    \end{macrocode}
-% Restart tagging and insert the box. If the box has a real content (if there is a
-% number) we have to add mc-chunks and reset the attribute of the box.
-%    \begin{macrocode}
-    \tag_resume:n{hangfrom}
-    \ifnum #1>\c@secnumdepth
-     \box\@tempboxa
-    \else 
-    \tagmcbegin{}
-%    \end{macrocode}
-% In lua mode we have to reset the attributes inside the box!
-%    \begin{macrocode}
-    \tag_mc_reset_box:N\@tempboxa
-    \box\@tempboxa
-    \tagmcend
-    \tagstructend
-   \fi
-   \tagmcbegin{}
-  }
-%    \end{macrocode}
-% This tagging socket command is used to handle the tagging
-% of runin headings. Similar to the hang variant it does not
-% handle the full structure but relies in part on the paragraph
-% tagging. This again can change if sectioning commands are reimplemented.
-% It takes as first argument the name of the sectioning command.
-% The second argument contains the formatted number. 
-%    \begin{macrocode}
-\NewTaggingSocket{sec/title/runin}{2}
-\NewTaggingSocketPlug{sec/title/runin}{kernel}
- {
-    \tag_mc_end_push:
-    \tag_struct_begin:n{tag=\UseStructureName{sec/#1/number}}
-    \tag_mc_begin:n{}
-    #2
-    \tag_mc_end:
-    \tag_struct_end:
-    \tag_mc_begin_pop:n{}
- }
-\AssignTaggingSocketPlug{sec/title/runin}{kernel}
-%    \end{macrocode}
+%
 % \cs{@sect} is only changed to replace the hyperref patches
 % and to use the new \cs{@kernel@tag@hangfrom}.
 %    \begin{macrocode}
