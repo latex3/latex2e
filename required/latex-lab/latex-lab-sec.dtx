@@ -365,7 +365,7 @@
 % of the sectioning command this will perhaps have to change.
 %
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_set_title_hang:nnnn #1 #2 #3 #4
+\cs_new_protected:Npn \@@_set_title_hang:nNnn #1 #2 #3 #4
   %#1 level,
   %#2 boolean: nonumber? (will be later \l__head_nonumber_bool)
   %#3 formated number /hang space
@@ -409,6 +409,25 @@
 %    \end{macrocode}
 % \end{macro}
 %
+%
+% \begin{macro}{\@@_sec_title_runin_number:nn}
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_sec_title_runin_number:nNn #1 #2 #3 %#1 level, #2 boolean no number, #3 content
+  {
+    \bool_if:NTF #2
+    { #3 }
+    {
+      \tag_mc_end_push:
+      \tag_struct_begin:n{tag=\UseStructureName{sec/#1/number}}
+      \tag_mc_begin:n{}
+      #3
+      \tag_mc_end:
+      \tag_struct_end:
+      \tag_mc_begin_pop:n{}
+    }
+  }
+%    \end{macrocode}
+% \end{macro}
 % Open sec structures should be closed at the end of the document. This should
 % be done before tagpdf closes the Document structure.
 %    \begin{macrocode}
@@ -430,7 +449,9 @@
 %    \end{macrocode}
 %
 % \subsection{Tagging Sockets}
-% At first sockets that handle the Sect structures. The argument is two brace groups,
+% At first sockets that handle the Sect structures. 
+% 
+% The argument of the begin socket is two brace groups,
 % in the first brace is the level, in the second the keys for the structure.
 %    \begin{macrocode}
 \NewTaggingSocket{sec/begin}{1}
@@ -458,7 +479,7 @@
 \NewTaggingSocket{sec/title/begin}{1}
 \NewTaggingSocketPlug{sec/title/begin}{kernel}
  {
-   \@@_sec_title_begin:nn #1
+   \@@_sec_title_begin:nn #1 
  }
 \AssignTaggingSocketPlug{sec/title/begin}{kernel}
 %    \end{macrocode}
@@ -474,11 +495,13 @@
 %    \end{macrocode}
 %
 %
-% These socket is used to typeset the heading of a title using \cs{@hangfrom}.
+% The following socket is used to typeset the heading of a title using \cs{@hangfrom}.
+% It is the most tricky one. 
 % The second argument of this socket will pass the normal \cs{@hangfrom} command
 % if tagging is not active. It is not used with tagging.
 % The first argument passes four brace groups:
-% the level, a boolean nonumber, the actual content of the number and the title.
+% the level, a boolean for \enquote{nonumber}, 
+% the actual content of the number and the title.
 %
 % Attention: The socket opens a structure that it doesn't close (it is closed by the \cs{par}).
 % It therefore does not handle the full tagging of the title. In a new implementation
@@ -487,21 +510,22 @@
 \NewTaggingSocket{sec/title/hang}{2}
 \NewTaggingSocketPlug{sec/title/hang}{kernel}
   {
-    \@@_set_title_hang:nnnn #1
+    \@@_set_title_hang:nNnn #1
   }
 \AssignTaggingSocketPlug{sec/title/hang}{kernel}
 %    \end{macrocode}
 %
-% This socket is used in the tagging of runin-titles
+% This socket is used to initialize in the tagging of titles
 % for sectioning commands that are setup with \cs{@startsection}. The tagging
-% makes use of the para-tagging, so we only change the tag and flatten the paragraph.
+% makes use of the para-tagging, so we change the tag (for the
+% cases where it is not set explicitly) and flatten the paragraph.
 % The argument is the level.
 %    \begin{macrocode}
 \NewTaggingSocket{sec/title/init}{1}
 \NewTaggingSocketPlug{sec/title/init}{kernel}
  {
-   \tl_set:Ne\l__tag_para_tag_tl{\UseStructureName{sec/#1/title}}
-   \bool_set_true:N \l__tag_para_flattened_bool
+   \tl_set:Ne\l_@@_para_tag_tl{\UseStructureName{sec/#1/title}}
+   \bool_set_true:N \l_@@_para_flattened_bool
  }
 \AssignTaggingSocketPlug{sec/title/init}{kernel}
 %    \end{macrocode}
@@ -520,23 +544,13 @@
 % of the number in the title of run-in headings. Similar to the hang variant it does not
 % handle the full structure but relies in part on the paragraph
 % tagging. This again can change if sectioning commands are reimplemented.
-% It takes as first argument the level.
+% It takes as first argument the level and a boolean for the numbering.
 % The second argument contains the formatted number (if numbered) and the destination.
 %    \begin{macrocode}
 \NewTaggingSocket{sec/title/runin}{2}
 \NewTaggingSocketPlug{sec/title/runin}{kernel}
  {
-   \bool_if:NTF \l_@@_sec_nonumber_bool
-    { #2 }
-    {
-      \tag_mc_end_push:
-      \tag_struct_begin:n{tag=\UseStructureName{sec/#1/number}}
-      \tag_mc_begin:n{}
-      #2
-      \tag_mc_end:
-      \tag_struct_end:
-      \tag_mc_begin_pop:n{}
-    }
+   \@@_sec_title_runin_number:nNn #1 {#2}
  }
 \AssignTaggingSocketPlug{sec/title/runin}{kernel}
 %    \end{macrocode}
@@ -747,6 +761,13 @@
 \def\hyper@nopatch@sectioning{}
 %    \end{macrocode}
 %
+% \begin{variable}{\l__kernel_sec_nonumber_bool}
+% A boolean to keep track if a sectioning command should be numbered or not. 
+%    \begin{macrocode}
+\bool_new:N\l__kernel_sec_nonumber_bool
+%    \end{macrocode}
+% \end{variable}
+% 
 % \begin{macro}[no-user-doc]{\@hyp@section@target@nnn}
 % A simple internal command. There is no need for something public,
 % as packages defining their own version of \cs{@startsection} will
@@ -837,15 +858,14 @@
 % and to use the new \cs{@kernel@tag@hangfrom}.
 %    \begin{macrocode}
 %<@@=>
-\bool_new:N\l__tag_sec_nonumber_bool
 \def\@sect#1#2#3#4#5#6[#7]#8{%
 % #1= name, #2= level, #3= indent #4 unused #5 after vspace #6 formatting #7=short title, #8=title
   \ifnum #2>\c@secnumdepth
-    \bool_set_true:N\l__tag_sec_nonumber_bool
+    \bool_set_true:N\l__kernel_sec_nonumber_bool
     \@kernel@makecurrentHref {#1*}
     \def\@svsec{\NoCaseChange{\@hyp@section@target@nnn{*}{\@currentHref}{#3}}}
   \else
-    \bool_set_false:N\l__tag_sec_nonumber_bool
+    \bool_set_false:N\l__kernel_sec_nonumber_bool
     \LinkTargetOff
     \refstepcounter{#1}%
     \tl_gset:Ne\@currentHref{#1.\use:c{theH#1}}
@@ -861,7 +881,7 @@
 %    \begin{macrocode}
          \NoCaseChange
           {\UseTaggingSocket{sec/title/hang}
-             {{#2}{\l__tag_sec_nonumber_bool}{\hskip #3\relax\@svsec}{#7}}
+             {{#2}\l__kernel_sec_nonumber_bool{\hskip #3\relax\@svsec}{#7}}
              {\@hangfrom {\hskip #3\relax\@svsec}}}
           \interlinepenalty \@M #8\@@par}%
     \endgroup
@@ -874,7 +894,8 @@
   \else
     \def\@svsechd{%
       #6{\hskip #3\relax
-         \NoCaseChange{\UseTaggingSocket{sec/title/runin}{#2}{\@svsec}}
+         \NoCaseChange{
+           \UseTaggingSocket{sec/title/runin}{{#2}\l__kernel_sec_nonumber_bool}{\@svsec}}
         #8}%
       \csname #1mark\endcsname{#7}%
       \addcontentsline{toc}{#1}{%
@@ -897,7 +918,7 @@
             \UseTaggingSocket{sec/title/hang}
              {
                {\@currentseclevel}
-               {\c_true_bool}
+               \c_true_bool
                {\hskip #1\relax\NoCaseChange{\@hyp@section@target@nnn{[section]}{}{#1}}}
                {#5}
              }
@@ -1039,8 +1060,6 @@
      }
     ,sec-add-grouping .default:n = true
   }
-%    \end{macrocode}
-%  
 %</package>
 %    \end{macrocode}
 
