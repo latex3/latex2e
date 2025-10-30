@@ -15,8 +15,8 @@
 %    https://github.com/latex3/latex2e/required/latex-lab
 %
 % for those people who are interested or want to report an issue.
-\def\ltlabgraphicdate{2025-05-10}
-\def\ltlabgraphicversion{0.80g}
+\def\ltlabgraphicdate{2025-09-25}
+\def\ltlabgraphicversion{0.80i}
 %
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
@@ -392,7 +392,7 @@
 %  
 %  \subsection{User interface}
 %  As suggested above the code (re)defines keys for \cs{includegraphics}
-%  to add the recommanded interfaces \texttt{alt}, \texttt{artifact} and \texttt{actualtext}.
+%  to add the recommended interfaces \texttt{alt}, \texttt{artifact} and \texttt{actualtext}.
 %  It also offers some keys specific to \cs{includegraphics}:
 %  \begin{description}
 %  \item[\texttt{alt}] This key is already defined in the graphicx package
@@ -433,10 +433,38 @@
 %   \DocumentMetadata{tagging=on,debug=BBox}
 %  \end{verbatim}
 %  
+%  \subsection{Hooks}
+%  The three key definitions \texttt{alt}, \texttt{actualtext} and \texttt{artifact} used by
+%  \cs{includegraphics} contain hooks, named \texttt{Gin/alt},
+%  \texttt{Gin/actualtext}, and \texttt{Gin/artifact}, respectively. 
+%  The first two take two arguments: the (with \verb+\text_purify:n+) purified value of the key 
+%  that is also used in the PDF and the raw value of the key. 
+%  The hooks are processed even if tagging is not activated.
+%  With them, it is for example possible to store the alternative text:
+%  \begin{verbatim}
+%  \AddToHookWithArguments{Gin/alt}{\gdef\myalttext{#2}}
+%  \includegraphics[alt=Hello World]{example-image-A}
+%  The alt text of the graphic was \myalttext.
+%  \end{verbatim}
+%  
+%  Please note
+%  \begin{itemize}
+%   \item The hooks are also executed if the keys are set with \verb+\setkeys{Gin}+.
+%   \item The arguments are given to the hooks without any processing or purifying. 
+%   \item The hooks are not executed in the picture environment or in tikz pictures
+%   as they use different keys. 
+%   \item The hooks are obviously not executed if the keys are not used. 
+%   That means they can't be used directly to issue a warning or an error 
+%   that an alt text is missing. For this some additional logic is needed, e.g., 
+%   a counter in the \texttt{cmd/includegraphics/before} hook, that allows to identify
+%   the graphics and to store the alt or actual text individually. 
+%  \end{itemize}  
+%  
 %  \section{Make \env{picture} tagging aware}
 %  
 %  \subsection{User interface}
-%  The \env{picture} environment doesn't have a optional argument with key-value value processing.
+%  The original \env{picture} environment doesn't have a optional argument 
+%  with key-value value processing.
 %  So the code changes that and then provides the keys already discussed for \cs{includegraphics}.
 %  
 %  \subsection{BBox calculation}
@@ -564,8 +592,7 @@
 % A tagging aware environment can then be defined like this
 % \begin{verbatim}
 % \NewDocumentEnvironment{tagged-draw}{O{}}
-%  {\leavevmode
-%   \ExplSyntaxOn
+%  {\leavevmode  
 %   \tag_socket_use:nn{graphic/init}{#1} 
 %   \tag_socket_use:nn{graphic/begin}{tagged-draw~environment}
 %   \tag_suspend:n{\draw} %
@@ -921,13 +948,17 @@
 % \subsection{Generic keys}
 % The keys are used by picture and \cs{includegraphics} (through the 
 % \texttt{tagging-setup} key
+% \changes{0.80h}{2025-03-08}{new mode key, that doesn't set the text values.}
 %    \begin{macrocode}
 \keys_define:nn{tag/graphic}
    {
+     ,mode .code:n =  
+        {                    
+          \tl_set:Ne\l_tag_graphic_mode_tl{#1}
+        }   
      ,alt .code:n =  
         {                    
-          \tl_if_empty:nF{#1}
-           { \tl_set:Ne\l_@@_graphic_alt_tl{\text_purify:n{#1}}}
+          \tl_set:Ne\l_@@_graphic_alt_tl{\text_purify:n{#1}}
           \tl_set:Nn\l_tag_graphic_mode_tl{alt}
         }
      ,artifact .code:n = 
@@ -936,8 +967,7 @@
         }
      ,actualtext .code:n = 
         {
-          \tl_if_empty:nF{#1}
-           { \tl_set:Ne\l_@@_graphic_actual_tl{\text_purify:n{#1}} }          
+          \tl_set:Ne\l_@@_graphic_actual_tl{\text_purify:n{#1}}          
           \tl_set:Nn\l_tag_graphic_mode_tl{actualtext}
         }
      ,text .code:n =
@@ -988,23 +1018,29 @@
 %    \begin{macrocode}
 \tl_new:N  \l_tag_graphic_mode_tl
 \tl_set:Nn \l_tag_graphic_mode_tl {alt} %TODO think about the right default.
-
+%    \end{macrocode}
+% \changes{0.80h}{2025-07-28}{Add hooks to key, tagging issue 957}
+%    \begin{macrocode}
+\hook_new_with_args:nn {Gin/alt} {2}
+\hook_new:n {Gin/artifact}
+\hook_new_with_args:nn {Gin/actualtext}{2}
 \AddToHook{package/graphicx/after}[latex-lab]
   {
     \define@key{Gin}{alt}       
-      {         
-         \tl_if_empty:nF{#1}
-           { \tl_set:Ne\l_@@_graphic_alt_tl{\text_purify:n{#1}}}
+      {           
+         \tl_set:Ne\l_@@_graphic_alt_tl{\text_purify:n{#1}}
+         \exp_args:Nnno\hook_use:nnw {Gin/alt}{2}{\l_@@_graphic_alt_tl}{#1}         
          \tl_set:Nn\l_tag_graphic_mode_tl {alt}
       }
     \define@key{Gin}{artifact}[]
       {
+        \hook_use:n{Gin/artifact}
         \tl_set:Nn\l_tag_graphic_mode_tl{artifact}
       }
     \define@key{Gin}{actualtext}
-     {
-       \tl_if_empty:nF{#1}
-         { \tl_set:Ne\l_@@_graphic_actual_tl{\text_purify:n{#1}} }   
+     {             
+       \tl_set:Ne\l_@@_graphic_actual_tl{\text_purify:n{#1}}   
+       \exp_args:Nnno\hook_use:nnw {Gin/actualtext}{1}{\l_@@_graphic_actual_tl}{#1}  
        \tl_set:Nn\l_tag_graphic_mode_tl{actualtext}
      }
     \define@key{Gin}{tagging-setup}
@@ -1080,8 +1116,9 @@
 %    \end{macrocode}
 % Here the tagging begins. We want to catch also the draft box, 
 % and for luatex tagging must be started before the \cs{setbox}.
+% \changes{0.80h}{2025-03-08}{use mode key to avoid to reset the alt key value}
 %    \begin{macrocode}
-  \tag_socket_use:ne {graphic/init} {tagging-setup=\l_tag_graphic_mode_tl}
+  \tag_socket_use:ne {graphic/init} {tagging-setup={mode=\l_tag_graphic_mode_tl}}
   \tag_socket_use:nn {graphic/begin} {\Gin@base\Gin@ext} 
 %    \end{macrocode}
 % We store also the draft box in a box and do not output it directly
@@ -1101,7 +1138,7 @@
         \hss\vrule}%
   \else
     \@addtofilelist{#3}%
-    \ProvidesFile{#3}[Graphic file (type #1)]%
+    \ProvidesFile{#3}[Graphic~file~(type~#1)]%
     \setbox\z@\hbox{\csname Ginclude@#1\endcsname{#3}}%
     \dp\z@\z@
     \ht\z@\Gin@req@height

@@ -6,7 +6,7 @@
 -- 
 --  tagpdf-backend.dtx  (with options: `lua')
 --  
---  Copyright (C) 2019-2024 Ulrike Fischer
+--  Copyright (C) 2019-2025 Ulrike Fischer
 --  
 --  It may be distributed and/or modified under the conditions of
 --  the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.99q",       --TAGVERSION
-    date          = "2025-05-16", --TAGDATE
+    version       = "0.99v",       --TAGVERSION
+    date          = "2025-10-02", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -89,6 +89,7 @@ functions
 
 local mctypeattributeid  = luatexbase.new_attribute ("g__tag_mc_type_attr")
 local mccntattributeid   = luatexbase.new_attribute ("g__tag_mc_cnt_attr")
+local structnumattributeid   = luatexbase.new_attribute ("g__tag_structnum_attr")
 local iwspaceOffattributeid = luatexbase.new_attribute ("g__tag_interwordspaceOff_attr")
 local iwspaceattributeid = luatexbase.new_attribute ("g__tag_interwordspace_attr")
 local iwfontattributeid  = luatexbase.new_attribute ("g__tag_interwordfont_attr")
@@ -128,6 +129,7 @@ local PENALTY        = node.id("penalty")
 local LOCAL_PAR      = node.id("local_par")
 local MATH           = node.id("math")
 
+local NEXT = next
 local explicit_disc = 1
 local regular_disc = 3
 ltx             = ltx        or { }
@@ -582,7 +584,7 @@ function ltx.__tag.func.mc_insert_kids (mcnum,single)
   __tag_log("INFO TEX-MC-INSERT-KID-TEST: " .. mcnum,4)
    if ltx.__tag.mc[mcnum]["kids"] then
     if #ltx.__tag.mc[mcnum]["kids"] > 1 and single==1 then
-     tex.sprint("[")
+     tex.sprint(catlatex,"[")
     end
     for i,kidstable in ipairs( ltx.__tag.mc[mcnum]["kids"] ) do
      local kidnum  = kidstable["kid"]
@@ -595,14 +597,14 @@ function ltx.__tag.func.mc_insert_kids (mcnum,single)
      tex.sprint(catlatex,"<</Type /MCR /Pg "..kidpageobjnum .. " 0 R /MCID "..kidnum.. ">> " )
     end
     if #ltx.__tag.mc[mcnum]["kids"] > 1 and single==1 then
-     tex.sprint("]")
+     tex.sprint(catlatex,"]")
     end
    else
     -- this is typically not a problem, e.g. empty hbox in footer/header can
     -- trigger this warning.
     __tag_log("WARN TEX-MC-INSERT-NO-KIDS: "..mcnum.." has no kids",2)
     if single==1 then
-      tex.sprint("null")
+      tex.sprint(catlatex,"null")
     end
    end
   else
@@ -751,6 +753,11 @@ function ltx.__tag.func.mark_page_elements (box,mcpagecnt,mccntprev,mcopen,name,
          __tag_log("INFO TAG-USE-ALT: "..
             tostring(ltx.__tag.mc[mccnt]["alt"]),3)
          dict= dict .. " " .. ltx.__tag.mc[mccnt]["alt"]
+        end
+        if ltx.__tag.mc[mccnt]["lang"] then
+         __tag_log("INFO TAG-USE-LANG: "..
+            tostring(ltx.__tag.mc[mccnt]["lang"]),3)
+         dict= dict .. " " .. ltx.__tag.mc[mccnt]["lang"]
         end
         if ltx.__tag.mc[mccnt]["actualtext"] then
          __tag_log("INFO TAG-USE-ACTUALTEXT: "..
@@ -945,6 +952,8 @@ function check_update_stashed (struct,loglevel,loop)
 end
 
 function check_parent_child_rules (loglevel)
+ texio.write_nl('\n')
+ __tag_log ('checking parent-child rules ...' ,0)
  for i=2,ltx.tag.get_struct_counter() do
   local t,tNS=
     string.match(ltx.__tag.tables['g__tag_struct_'..i..'_prop']['tag'], "{(.-)}{(.-)}")
@@ -1000,11 +1009,54 @@ function check_parent_child_rules (loglevel)
      __tag_log
        ('Structure ' ..parent..' -> '..i,0)
     end
+    -- check also for MC
+    state =ltx.__tag.func.role_get_parent_child_rule ( r ,'MC')
+    local curtag=r
+    if state == 7 then
+     state =ltx.__tag.func.role_get_parent_child_rule ( p ,'MC')
+     local curtag=p
+    end
+    if state == -1 then
+     if ltx.__tag.struct[i] and NEXT(ltx.__tag.struct[i]) then
+       __tag_log
+       ('Warning: Real content (MC) is not allowed in ' ..curtag,0)
+     end
+    end
     __tag_log('=======================================',loglevel)
    end
   end -- end for
  end
 
 ltx.__tag.func.check_parent_child_rules=check_parent_child_rules
+
+  if luatexbase.callbacktypes['linksplit'] then
+   luatexbase.add_to_callback('linksplit', function(start_link, position)
+     if start_link == nil then return end
+     local structnum =
+       node.get_attribute(start_link,luatexbase.attributes.g__tag_structnum_attr)
+     if structnum and structnum > -1 then
+      local s = ltx.__tag.tables['g__tag_struct_'..structnum..'_prop']['rolemap']
+      if s and (string.find(s,'Link') or string.find(s,'Reference')) then
+           local struct_insert_annot_shipout = token.create'__tag_struct_insert_annot_shipout:nnn'
+           local parentnum = tex.count['c@g__tag_parenttree_obj_int']
+           start_link.link_attr =
+              start_link.link_attr ..
+              ' /LTEX_position /' .. position ..
+              '/StructParent ' .. parentnum
+           tex.sprint(catlatex,struct_insert_annot_shipout,'{'..
+              structnum..'}{'..
+              start_link.objnum..' 0 R}{'..
+              parentnum ..'}')
+           -- the counter must be set explicitly as struct_insert_annot_shipout doesn't do it!
+           tex.setcount('global','c@g__tag_parenttree_obj_int',parentnum +1)
+            __tag_log(position .. " link part has object id " .. start_link.objnum .. " and structparent id " .. parentnum,2)
+       else
+        __tag_log('Warning: Link not in Link or Reference structure element',0)
+        __tag_log('OBJR not created',0)
+        __tag_log('',0)
+       end
+     end
+   end, 'tagpdf')
+  end
 -- 
 --  End of File `tagpdf.lua'.

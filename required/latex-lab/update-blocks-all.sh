@@ -9,7 +9,9 @@ l3build save -cconfig-block -epdftex \
 	blocks-list-02 \
 	blocks-trivlist-00 \
         blocks-user-keys-01 \
-        tagging-0767
+	tagging-0097b \
+        tagging-0767 \
+        tagging-0893
 
 
 l3build save -cconfig-block -epdftex,luatex \
@@ -43,6 +45,7 @@ l3build save -cconfig-block -epdftex,luatex \
 	blocks-trivlist-02 \
 	blocks-verbatim-01 \
 	blocks-verbatim-02 \
+	blocks-verbatim-03 \
 	blocks-verbatim-nested-gh119 \
 	blocks-verse-01 \
         gallery-III \
@@ -51,7 +54,6 @@ l3build save -cconfig-block -epdftex,luatex \
         problem-blocks-tabbing \
         ptag-001 \
 	tagging-0097 \
-	tagging-0097b \
 	tagging-0730
 
 

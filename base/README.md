@@ -1,7 +1,7 @@
 The LaTeX kernel
 ================
 
-Release 2025-06-01 patch level 1
+Release 2025-11-01 pre-release 4
 
 Overview
 --------

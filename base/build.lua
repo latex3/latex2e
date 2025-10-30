@@ -176,7 +176,6 @@ checkconfigs = {
 }
 
 tagfiles = tagfiles or {"*.cls","*.dtx","*.fdd","*.ins","*.tex","README.md"}
-update_tag = update_tag_base
 
 -- Custom bundleunpack which does not search the localdir
 -- That is needed as texsys.cfg is unpacked in an odd way and
