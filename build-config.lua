@@ -156,6 +156,10 @@ function update_tag(file,content,tagname,tagdate)
   end
   -- Special case for ltvers.dtx: only in base but 'quick'
   if file == "ltvers.dtx" then
+    local tag = match(tagname,"^(.*):([^:]*)$") 
+    content = gsub(content,
+      "\n   {" .. iso .. "}\n",
+      "\n   {" .. tag .. "}\n")
     content = gsub(content,
       "\\patch@level{%-?%d}",
       "\\patch@level{" .. rev .. "}")
