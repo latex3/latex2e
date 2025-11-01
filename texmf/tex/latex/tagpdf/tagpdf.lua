@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.99v",       --TAGVERSION
-    date          = "2025-10-02", --TAGDATE
+    version       = "0.99w",       --TAGVERSION
+    date          = "2025-10-31", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -532,7 +532,7 @@ default_space_char.font  = default_fontid
 local function __tag_font_has_space (fontid)
  t= fonts.hashes.identifiers[fontid]
  if luaotfload.aux.slot_of_name(fontid,"space")
-    or t.characters and t.characters[32] and t.characters[32]["unicode"]==32
+    or t and t.characters and t.characters[32] and t.characters[32]["unicode"]==32
  then
     return true
  else
