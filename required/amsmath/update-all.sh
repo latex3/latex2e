@@ -52,7 +52,7 @@ l3build save -epdftex,xetex,luatex \
 %--------------------------------------------
 
 
-l3build save -epdftex -cconfig-search \
+l3build save -epdftex,luatex -cconfig-search \
 	github-0783 \
 	github-0783-leqno
 
