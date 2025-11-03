@@ -1,6 +1,6 @@
 # LaTeX2e temporary first aid for external packages and classes during transition periods
 
-Release 2025-11-01
+Release 2025-11-01a
 
 LaTeX2e kernel code that temporarily adjusts packages that are not yet
 updated and therefore fail if a new LaTeX release updates internal
