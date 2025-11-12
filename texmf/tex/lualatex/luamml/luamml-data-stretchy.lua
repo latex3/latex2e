@@ -1,9 +1,9 @@
 --[[
-   This returns a table setting for some unicode code points stretchy to true.   
-   It decides which stretchy value is assumed to be the default. 
+   This returns a table setting for some unicode code points stretchy to true.
+   It decides which stretchy value is assumed to be the default.
    Code points in this list will only set `stretchy="false"`.
    luamml-data-combining.lua is relevant: e.g. \hat (0302) e.g. is mapped there to U+02C6,
-   and that is in the list here, and so it uses `stretchy="false"`. 
+   and that is in the list here, and so it uses `stretchy="false"`.
 --]]
 
 return {
