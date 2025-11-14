@@ -54,7 +54,8 @@ l3build save -cconfig-block -epdftex,luatex \
         problem-blocks-tabbing \
         ptag-001 \
 	tagging-0097 \
-	tagging-0730
+	tagging-0730 \
+	tagging-0996
 
 
 exit
