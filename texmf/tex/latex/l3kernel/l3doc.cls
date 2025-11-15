@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{calc}
-\ProvidesExplClass{l3doc}{2025-11-06}{}
+\ProvidesExplClass{l3doc}{2025-11-14}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
