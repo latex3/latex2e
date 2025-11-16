@@ -52,7 +52,6 @@ l3build save -cconfig-block -epdftex,luatex \
         gallery-III-with-sec \
 	hyperref-target \
         problem-blocks-tabbing \
-        ptag-001 \
 	tagging-0097 \
 	tagging-0730 \
 	tagging-0996
