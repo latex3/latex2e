@@ -13,7 +13,6 @@ l3build save -cconfig-block -epdftex \
         tagging-0767 \
         tagging-0893
 
-
 l3build save -cconfig-block -epdftex,luatex \
 	blocks-000 \
 	blocks-description-01b \
@@ -28,7 +27,7 @@ l3build save -cconfig-block -epdftex,luatex \
 	blocks-item-03 \
 	blocks-item-04 \
 	blocks-itemize-01b \
-    blocks-itemize-02 \
+	blocks-itemize-02 \
 	blocks-list-01 \
 	blocks-list-01b \
 	blocks-list-02b \
@@ -54,6 +53,7 @@ l3build save -cconfig-block -epdftex,luatex \
         problem-blocks-tabbing \
 	tagging-0097 \
 	tagging-0730 \
+	tagging-0962 \
 	tagging-0996
 
 
