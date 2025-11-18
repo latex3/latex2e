@@ -1251,9 +1251,10 @@
     label-strut   : boolean = false ,
     label-align   : choice {left,center,right,parleft} = right ,
     label-boxed   : boolean = true ,
-    next-line     : boolean = false ,
+    next-line     : boolean = false ,         % <- review viz standalone below
     text-font     : tokenlist ,
     compatibility : boolean = true ,
+    label-placement : choice {chained,unchained,standalone} = chained , % <- bad name?
   }
 %    \end{macrocode}
 % \end{template}
@@ -1661,12 +1662,18 @@
 %    \begin{macrocode}
   \@@_if_list:T { \legacy_if_gset_false:n { @newlist } }
 %    \end{macrocode}
+%    
+%    There is a possibility that the \texttt{@nobreak} switch is still
+%    true so we set it back just in case.
+%    \begin{macrocode}
+  \legacy_if_gset_false:n { @nobreak }
+%    \end{macrocode}
 %    What to do in terms of vertical spacing  in different situations
 %    is still somewhat open to debate, right now this is more or less
 %    implementing what \LaTeXe{} list environment have been
 %    doing.\fmi{some redesign/extensions here?}
 %    \begin{macrocode}
-%    \@@_debug_typeout:n{@noparlist =
+%   \@@_debug_typeout:n{@noparlist =
 %                       \legacy_if:nTF { @noparlist }{true}{false}}
   \legacy_if:nF { @noparlist }
     {
@@ -1831,7 +1838,26 @@
 %    all the legacy variables (e.g., \texttt{@noskipsec}) if there is
 %    some chance that they are set in classes or packages.
 %    \begin{macrocode}
-    \legacy_if:nT { @noskipsec } { \mode_leave_vertical: }
+    \legacy_if:nTF { @noskipsec } { \mode_leave_vertical: }
+       {
+%          \typeout{==================================}
+%          \typeout{==>~newlist=\legacy_if:nTF { @newlist }{true}{false} }
+%          \typeout{==>~inlabel=\legacy_if:nTF { @inlabel }{true}{false} }
+%          \typeout{==>~unchained=\bool_if:NTF \g_@@_label_unchained_bool {true}{false} }
+%          \typeout{==>~standalone=\bool_if:NTF \g_@@_label_standalone_bool {true}{false} }
+%          \typeout{==>~noparitem=\legacy_if:nTF { @noparitem }{true}{false} }
+%          \group_begin: \showoutput\scrollmode\showbox\g_@@_labels_box \group_end:
+          \bool_if:NT \g_@@_label_unchained_bool
+            {
+              \@@_debug_typeout:n{set~ captioned~ block~ everypar \on@line }
+              \cs_set_eq:NN \@@_everypar: \@@_captioned_everypar_std:
+              \legacy_if:nT { @inlabel }
+                     { \hbox_unpack_drop:N \g_@@_labels_box
+                       \legacy_if_gset_false:n { @inlabel }
+                       \par
+                     }
+            }
+        }
     \skip_set:Nn \l_@@_topsepadd_skip { \topsep }
     \mode_if_vertical:TF
       {
@@ -1949,13 +1975,20 @@
         \legacy_if_set_false:n { @noparlist }
         \legacy_if:nT { @newlist } { \@noitemerr }
         \legacy_if:nTF { @nobreak }
-         { \addvspace{\skip_eval:n{\@outerparskip-\parsep}} }
-         {
-           \addpenalty \@beginparpenalty
-           \addvspace { \skip_eval:n { \l_@@_topsepadd_skip +
-                                       \@outerparskip } }
-           \addvspace { - \parsep }
-         }
+          {
+%    \end{macrocode}
+%    We are not resetting \texttt{@nobreak} here as it should apply
+%    also the upcoming item.
+%    \begin{macrocode}
+            \addpenalty{ 10000 }
+            \addvspace{\skip_eval:n{\@outerparskip-\parsep}}
+          }
+          {
+            \addpenalty \@beginparpenalty
+            \addvspace { \skip_eval:n { \l_@@_topsepadd_skip +
+                                        \@outerparskip } }
+            \addvspace { - \parsep }
+          }
      }
 }
 %    \end{macrocode}
@@ -2293,6 +2326,14 @@
       right   = \tl_set:Nn \l_@@_item_align_tl { \hss \relax } ,
       parleft = \NOT_IMPLEMENTED ,
     } ,
+    label-placement = {
+      chained    = \bool_gset_false:N \g_@@_label_standalone_bool
+                   \bool_gset_false:N \g_@@_label_unchained_bool ,
+      unchained  = \bool_gset_false:N \g_@@_label_standalone_bool
+                   \bool_gset_true:N  \g_@@_label_unchained_bool ,
+      standalone = \bool_gset_true:N  \g_@@_label_standalone_bool
+                   \bool_gset_false:N \g_@@_label_unchained_bool ,
+    }  ,
   }
 %    \end{macrocode}
 % Then typeset the label at its natural width by applying
@@ -2713,7 +2754,18 @@
 %    \end{macrocode}
 %    Set the legacy switch that signals that we have a pending item label:
 %    \begin{macrocode}
-          \legacy_if_gset_true:n { @inlabel }
+          \bool_if:NTF \g_@@_label_standalone_bool
+             {
+               \bool_gset_true:N \g_@@_label_standalone_bool
+               \leavevmode
+               \box_use_drop:N \g_@@_labels_box
+               \par
+               \legacy_if_gset_true:n { @nobreak }  % do not break after
+                                                    % a standalone item
+             }
+             {
+               \legacy_if_gset_true:n { @inlabel }
+             }
           \ignorespaces
         }
     }
@@ -4742,19 +4794,19 @@
 
 \DeclareTemplateInterface{theoremstyle}{std}{3}
 {
-  numbered        : boolean = true ,
-  space           : tokenlist = \ ,    % <- bad name?
-  punct           : tokenlist = . ,
-  standalone      : boolean = false  , % <- bad name?
-  before-hspace   : skip = 0pt  ,      % <- bad name?
-  after-hspace    : skip = 5pt  ,      % <- bad name?
-  order           : commalist = { title, space, number, punct, space, note } ,
-  caption-decls   : tokenlist = ,
-  title-format    : function{1} = #1 ,
-  number-format   : function{1} = #1 ,
-  punct-format    : function{1} = #1 ,
-  note-format     : function{1} = (#1) ,
-  body-decls      : tokenlist = ,      % <- bad name?
+  numbered          : boolean = true ,
+  space             : tokenlist = \ ,    % <- bad name?
+  punct             : tokenlist = . ,
+  caption-placement : choice {chained,unchained,standalone} = unchained , % <- bad name?
+  before-hspace     : skip = 0pt  ,      % <- bad name?
+  after-hspace      : skip = 5pt  ,      % <- bad name?
+  order             : commalist = { title, space, number, punct, space, note } ,
+  caption-decls     : tokenlist = ,
+  title-format      : function{1} = #1 ,
+  number-format     : function{1} = #1 ,
+  punct-format      : function{1} = #1 ,
+  note-format       : function{1} = (#1) ,
+  body-decls        : tokenlist = ,      % <- bad name?
 }
 
 
@@ -4774,12 +4826,24 @@
 }
 
 
+\bool_new:N \g_@@_label_standalone_bool       % tmp until replaced
+\bool_new:N \g_@@_label_unchained_bool        % tmp until replaced
+
+
+
 \DeclareTemplateCode{theoremstyle}{std}{3}
 {
   numbered        = \l_@@_numbered_bool ,
   space           = \l_@@_space_tl ,
   punct           = \l_@@_punct_tl ,
-  standalone      = \l_@@_caption_standalone_bool ,
+  caption-placement = {
+    chained    = \bool_gset_false:N \g_@@_label_standalone_bool
+                 \bool_gset_false:N \g_@@_label_unchained_bool ,
+    unchained  = \bool_gset_false:N \g_@@_label_standalone_bool
+                 \bool_gset_true:N \g_@@_label_unchained_bool ,
+    standalone = \bool_gset_true:N \g_@@_label_standalone_bool
+                 \bool_gset_false:N \g_@@_label_unchained_bool ,
+  }  ,
   before-hspace   = \l_@@_caption_before_skip ,
   after-hspace    = \l_@@_caption_after_skip ,
   order           = \l_@@_order_clist,
@@ -4843,8 +4907,9 @@
               \skip_horizontal:n { \l_@@_caption_after_skip }
             }
       }
-   \bool_if:NTF \l_@@_caption_standalone_bool
+   \bool_if:NTF \g_@@_label_standalone_bool
       {
+        \bool_gset_true:N \g_@@_label_standalone_bool
         \para_omit_indent:
         \box_use_drop:N \g_@@_labels_box
         \par
@@ -4922,7 +4987,14 @@
     \@@_debug_typeout:n{in~ captioned~ block~ everypar \on@line }
     \legacy_if_set_false:n { @minipage }
     \legacy_if_gset_false:n { @newlist }
-    \legacy_if:nT { @inlabel }            % <- can this be false?
+%    \end{macrocode}
+%    The \texttt{@inlabel} is normally true at this point, but if we
+%    also have \texttt{@nobreak} then the same routine is call again
+%    at the next paragraph to reset \cs{clubpenalty} and at that point
+%    the \cs{g_@@_labels_box} has been typeset and \texttt{@inlabel}
+%    is false.
+%    \begin{macrocode}
+    \legacy_if:nT { @inlabel }
        {
          \legacy_if_gset_false:n { @inlabel }
          \para_omit_indent:
@@ -4934,7 +5006,9 @@
 %       
    \legacy_if:nTF { @nobreak }
        {
-         \legacy_if_gset_false:n { @nobreak }
+         \bool_if:NTF \g_@@_label_unchained_bool
+           { \bool_gset_false:N \g_@@_label_unchained_bool }
+           { \legacy_if_gset_false:n { @nobreak } }
          \int_set:Nn \clubpenalty { 10000 }
        }
        {
@@ -4946,6 +5020,10 @@
 
 
 
+
+%---------------------------------------
+
+
 %---------------------------------------
 
 
@@ -4953,7 +5031,7 @@
 {
   title           : tokenlist = Proof , 
   punct           : tokenlist = . ,
-  standalone      : boolean = false  ,
+  caption-placement : choice {chained,unchained,standalone} = unchained , % <- bad name?
   before-hspace   : skip = 0pt  ,
   after-hspace    : skip = 5pt  ,
   caption-decls   : tokenlist = ,
@@ -4967,7 +5045,14 @@
 {
   title           = \l_@@_title_tl ,
   punct           = \l_@@_punct_tl ,
-  standalone      = \l_@@_caption_standalone_bool ,
+  caption-placement = {
+    chained    = \bool_gset_false:N \g_@@_label_standalone_bool
+                 \bool_gset_false:N \g_@@_label_unchained_bool ,
+    unchained  = \bool_gset_false:N \g_@@_label_standalone_bool
+                 \bool_gset_true:N  \g_@@_label_unchained_bool ,
+    standalone = \bool_gset_true:N  \g_@@_label_standalone_bool
+                 \bool_gset_false:N \g_@@_label_unchained_bool ,
+  }  ,
   before-hspace   = \l_@@_caption_before_skip ,
   after-hspace    = \l_@@_caption_after_skip ,
   caption-decls   = \l_@@_caption_decls_tl ,
@@ -4977,6 +5062,7 @@
 }
 {
   \@@_debug_typeout:n{template:captionedtext:proof}
+  \@@_debug_typeout:n{Arguments:~ \detokenize{#1|#2|#3}}
 %
   \tl_if_empty:oF {#1}
      { \SetTemplateKeys{captionedtext}{proof}{#1} }
@@ -5001,8 +5087,9 @@
             \skip_horizontal:n { \l_@@_caption_after_skip }
           }
     }
-  \bool_if:NTF \l_@@_caption_standalone_bool
+  \bool_if:NTF \g_@@_label_standalone_bool
      {
+       \bool_gset_true:N \g_@@_label_standalone_bool
        \para_omit_indent:
        \box_use_drop:N \g_@@_labels_box
        \par
@@ -5025,7 +5112,106 @@
   \@@_debug_typeout:n{template:captionedtext:proof~end}
 }
 
-% not implemented yet: the full qed handling -- this here is a restricted version
+%---------------------------------------
+
+% handling qed (more or less copy-paste so far from amsthm)
+
+\ExplSyntaxOff
+\AddToHook{package/amsmath/after}{
+  \def\math@qedhere{%
+    \@ifundefined{\@currenvir @qed}{%
+      \qed@warning\quad\hbox{\qedsymbol}%
+    }{%
+      \@xp\aftergroup\csname\@currenvir @qed\endcsname
+    }%
+  }
+  \def\displaymath@qed{%
+    \relax
+    \ifmmode
+      \ifinner \aftergroup\linebox@qed
+      \else
+        \eqno
+        \let\eqno\relax \let\leqno\relax \let\veqno\relax
+        \hbox{\qedsymbol}%
+      \fi
+    \else
+       \aftergroup\linebox@qed
+    \fi
+  }
+  \@xp\let\csname equation*@qed\endcsname\displaymath@qed
+  \def\equation@qed{%
+    \iftagsleft@
+      \hbox{\phantom{\quad\qedsymbol}}%
+      \gdef\alt@tag{%
+        \rlap{\hbox to\displaywidth{\hfil\qedsymbol}}%
+        \global\let\alt@tag\@empty
+      }%
+    \else
+      \gdef\alt@tag{%
+        \global\let\alt@tag\@empty
+        \vtop{\ialign{\hfil####\cr
+                \tagform@\theequation\cr
+                \qedsymbol\cr}}%
+        \setbox\z@
+      }%
+    \fi
+  }
+  \def\qed@tag{%
+    \global\tag@true \nonumber
+    &\omit\setboxz@h {\strut@ \qedsymbol}\tagsleft@false
+    \place@tag@gather
+    \kern-\tabskip
+    \ifst@rred \else \global\@eqnswtrue \fi \global\advance\row@\@ne \cr
+  }
+  \def\split@qed{%
+    \def\endsplit{\crcr\egroup \egroup \ctagsplit@false \rendsplit@
+      \aftergroup\align@qed
+    }%
+  }
+  \def\align@qed{%
+    \ifmeasuring@ \tag*{\qedsymbol}%
+    \else \let\math@cr@@@\qed@tag
+    \fi
+  }
+  \@xp\let\csname align*@qed\endcsname\align@qed
+  \@xp\let\csname gather*@qed\endcsname\align@qed
+  %
+  \renewcommand{\math@qedhere}{\quad\hbox{\qedsymbol}}%
+  %
+  \DeclareRobustCommand{\qed}{%
+    \ifmmode \mathqed
+    \else
+      \leavevmode\unskip\penalty9999 \hbox{}\nobreak\hfill
+      \quad\hbox{\qedsymbol}%
+    \fi
+  }%
+  \let\QED@stack\@empty
+  \let\qed@elt\relax
+  \newcommand{\pushQED}[1]{%
+    \toks@{\qed@elt{#1}}\@temptokena\expandafter{\QED@stack}%
+    \xdef\QED@stack{\the\toks@\the\@temptokena}%
+  }%
+  \newcommand{\popQED}{%
+    \begingroup\let\qed@elt\popQED@elt \QED@stack\relax\relax\endgroup
+  }%
+  \def\popQED@elt#1#2\relax{#1\gdef\QED@stack{#2}}%
+  \newcommand{\qedhere}{%
+    \begingroup \let\mathqed\math@qedhere
+      \let\qed@elt\setQED@elt \QED@stack\relax\relax \endgroup
+  }%
+  \def\setQED@elt#1#2\relax{%
+    \ifmeasuring@
+    \else \iffirstchoice@ \gdef\QED@stack{\qed@elt{}#2}\fi
+    \fi
+    #1%
+  }%
+  \def\qed@warning{%
+    \PackageWarning{amsthm}{The \@nx\qedhere command may not work
+      correctly here}%
+  }%
+  \newcommand{\mathqed}{\quad\hbox{\qedsymbol}}%
+}
+\ExplSyntaxOn
 
 \DeclareRobustCommand{\qed}{%
   \ifmmode \mathqed
@@ -5046,8 +5232,9 @@
 %---------------------------------------
 
 \NewDocumentEnvironment{proof}{ ={note}o }
-   { \ParseLaTeXeTheorem {proof} \BooleanTrue {#1} }
-   { \qed \BlockEnvEnd }
+   { \pushQED{\qed}%
+     \ParseLaTeXeTheorem {proof} \BooleanTrue {#1} }
+   { \popQED \BlockEnvEnd }
 
 \DeclareInstance{blockenv}{proof}{display}
   {
@@ -5077,7 +5264,6 @@
 \DeclareInstance{captionedtext}{proof}{proof}
   {
     title         = Proof ,
-    standalone    = false ,
     punct         = .  ,
     before-hspace = 0pt ,
     after-hspace  = 5pt plus 1pt minus 1pt ,
@@ -5130,8 +5316,8 @@
    \NewDocumentEnvironment{#2}{ ={note}o }
       { \ParseLaTeXeTheorem {#2} \BooleanFalse {##1} }
       { \BlockEnvEnd }
-   \NewDocumentEnvironment{#2*}{ D<>{} o }
-      { \ParseLaTeXeTheorem{#2} \BooleanTrue {##1} }
+   \NewDocumentEnvironment{#2*}{ ={note}o }
+      { \ParseLaTeXeTheorem {#2} \BooleanTrue {##1} }
       { \BlockEnvEnd }
 %
    \IfInstanceExistsF{theoremstyle}{\the\thm@style}
@@ -5182,11 +5368,12 @@
 %  \@@_debug_typeout:n{==================================}
 %  \@@_debug_typeout:n{Parse~#1.~ Arguments~ found:~ \IfBooleanT{#2}{*}
 %                \IfValueT{#3}{[\exp_not:n{#3}]}}
+%  
+  \tl_set:Nn \l_@@_note_tl { \NoValue }
   \IfNoValueTF { #3 }
-               { \tl_clear:N \l_@@_instance_keys_tl
-                 \tl_set:Nn \l_@@_note_tl { \NoValue }
-               }
-    { \keys_set_groups:nnnN {blockenv} {interface} { #3 } \l_@@_instance_keys_tl }
+               { \tl_clear:N \l_@@_instance_keys_tl }
+               { \keys_set_groups:nnnN {blockenv} {interface} { #3 } \l_@@_instance_keys_tl }
+%
   \use:e {
     \exp_not:N \UseInstance{blockenv}{#1}
               { \exp_not:o \l_@@_instance_keys_tl }
@@ -5221,7 +5408,7 @@
 
 \DeclareInstance{theoremstyle}{plain}{std}
   {
-    standalone    = false ,
+    caption-placement = unchained ,
     numbered      = true ,
     space         = \  ,
     punct         = .  ,
@@ -5253,6 +5440,7 @@
 
 \DeclareInstance{theoremstyle}{test}{std}
   {
+    caption-placement = unchained ,
     before-hspace = -20pt ,
     after-hspace  =  20pt ,
     space         = \hspace{3pt} ,
@@ -5263,7 +5451,6 @@
     punct-format  = #1 ,
     note-format   = (\textit{#1}) ,
     body-decls    = \scshape ,
-    standalone    = false ,
 }
 
 % \newtheoremstyle has a bunch of argument conventions that haven't been fully implemented yet, e.g.
@@ -5349,7 +5536,29 @@
 
 %---------------------------------------
 
-    
+\cs_new_protected:Npn \DebugSwitchesOn {
+  \AddToHookWithArguments{cmd/legacy_if_gset_false:n/before}[debug]
+                         {\typeout{[Switch]~==>~ ##1~=~false~(global)}}
+  \AddToHookWithArguments{cmd/legacy_if_gset_true:n/before}[debug]
+                         {\typeout{[Switch]~==>~ ##1~=~true~(global)}}
+  \AddToHookWithArguments{cmd/legacy_if_set_false:n/before}[debug]
+                         {\typeout{[Switch]~==>~ ##1~=~false}}
+  \AddToHookWithArguments{cmd/legacy_if_set_true:n/before}[debug]
+                         {\typeout{[Switch]~==>~ ##1~=~true}}
+}
+
+%---------------------------------------
+
+\cs_new_protected:Npn \DebugSwitchesOff {
+  \RemoveFromHook{cmd/legacy_if_gset_false:n/before}[debug]
+  \RemoveFromHook{cmd/legacy_if_gset_true:n/before}[debug]
+  \RemoveFromHook{cmd/legacy_if_set_false:n/before}[debug]
+  \RemoveFromHook{cmd/legacy_if_set_true:n/before}[debug]
+}
+
+%\DebugSwitchesOn
+%\DebugSwitchesOff
+
 
 % @newlist (global):  signal that we are at the start of a list
 %
