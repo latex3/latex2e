@@ -11,7 +11,8 @@ l3build save -cconfig-block -epdftex \
         blocks-user-keys-01 \
 	tagging-0097b \
         tagging-0767 \
-        tagging-0893
+        tagging-0893 \
+	tagging-0925
 
 l3build save -cconfig-block -epdftex,luatex \
 	blocks-000 \
