@@ -577,6 +577,11 @@
 %  \TemplateKey{label-align}{choice}
 %              {Supported values \keyvalue{left},\keyvalue{center},
 %               \keyvalue{right}, and \keyvalue{parleft}. \emph{Only partly implemented}.}{right}
+%  \TemplateKey{label-placement}{choice}
+%              {Placement of the label in relation to a directly following label
+%               (of a following inner list). Supported values
+%               are \keyvalue{chained},  \keyvalue{unchained}, and
+%               \keyvalue{standalone}.}{chained}
 %  \TemplateKey{label-boxed}{boolean}
 %              {Should the label be boxed?}{true}
 %  \TemplateKey{next-line}{boolean}{}{false}
@@ -587,7 +592,7 @@
 %
 %    This template is only rudimentary implemented at the moment. It
 %    probably needs other keys and the existing ones need a proper
-%    implementation!
+%    implementation!\fmi{fix}
 % 
 % \end{TemplateDescription}
 %
@@ -1939,10 +1944,10 @@
 %    For now we handle that when the first item is encountered, but
 %    that isn't realy clean.\fmi{fix}
 %    \begin{macrocode}
-  \tl_if_empty:NF \l_@@_unused_blockenv_keys_tl
-    {
-       % check if only item template keys remain
-    }
+%  \tl_if_empty:NF \l_@@_unused_blockenv_keys_tl
+%    {
+%       % check if only item template keys remain
+%    }
 %    \end{macrocode}
 %    We finish off with \cs{l_@@_final_code_tl} which defaults to
 %    \tn{ignorespaces} so that spaces between \verb=\begin{...}= and
@@ -2040,8 +2045,9 @@
   \bool_if:NT \l_@@_level_incr_bool
     { \int_gdecr:N \g_block_nesting_depth_int }
 %    \end{macrocode}
-%    If this block was a list and there are still \tn{item} labels to
-%    be placed we move to horizontal mode to get them typeset.
+%    If this block was captioned or a list or and there are still
+%    \tn{item} labels or a caption to be placed we move to horizontal
+%    mode to get them typeset.
 %    \begin{macrocode}
   \legacy_if:nT { @inlabel }
     {
@@ -2086,7 +2092,7 @@
 %    \end{macrocode}
 %    What to do in terms of vertical spacing  in different situations
 %    is still somewhat open to debate, right now this is more or less
-%    implementing what \LaTeXe{} list environment have been
+%    implementing what \LaTeXe{} list environments have been
 %    doing.\fmi{some redesign/extensions here?}
 %    \begin{macrocode}
 %   \@@_debug_typeout:n{@noparlist =
@@ -2167,15 +2173,12 @@
 %    The plugs set the legacy \texttt{@endpe} switch. This must always
 %    happen because block environments with different settings can be nested
 %    and should not inherit the setting from the outer environment.
-%    \begin{macrocode}
-\socket_new_plug:nnn{block/endpe}{on}
-%    \end{macrocode}
+%
 %    We can't use \cs{legacy_if_gset_true:n} because this is now doing
-%    more than setting the legacy switch
+%    more than setting the legacy switch:
 %    \begin{macrocode}
-                    { \@endpetrue }
-\socket_new_plug:nnn{block/endpe}{off}
-                    { \@endpefalse }
+\socket_new_plug:nnn{block/endpe} {on}  { \@endpetrue  }
+\socket_new_plug:nnn{block/endpe} {off} { \@endpefalse }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -2194,15 +2197,15 @@
 %    \begin{macrocode}
 \DeclareTemplateCode{para}{std}{1}
 {
-  para-indent         = \parindent ,
-  begin-hspace        = \l__par_start_skip ,              % name??
-  left-hspace         = \leftskip  ,
-  right-hspace        = \rightskip  ,
-  end-hspace          = \parfillskip ,
-  fixed-word-spaces   = \l__par_fixed_word_spaces_bool ,  % name??
+  para-indent           = \parindent ,
+  begin-hspace          = \l__par_start_skip ,              % name??
+  left-hspace           = \leftskip  ,
+  right-hspace          = \rightskip  ,
+  end-hspace            = \parfillskip ,
+  fixed-word-spaces     = \l__par_fixed_word_spaces_bool ,  % name??
   final-hyphen-demerits = \finalhyphendemerits ,
-  newline-cmd                = \\ ,
-  para-attr-class          = \l__tag_para_attr_class_tl ,                          
+  newline-cmd           = \\ ,
+  para-attr-class       = \l__tag_para_attr_class_tl ,                          
 }
 {
   \__template_debug_typeout:n{~\space template:~ 'std';~
@@ -2257,21 +2260,33 @@
 %    The code largely follows the logic of \LaTeXe{}'s \env{trivlist}
 %    implementation as far as it applicable for the \enquote{display
 %    block} but coded using the L3 programming layer. However, we keep
-%    all the legacy variables (e.g., \texttt{@noskipsec}) if there is
-%    some chance that they are set in classes or packages.
+%    most of the legacy variables (e.g., \texttt{@noskipsec}) if there is
+%    some chance that they are set/used in classes or packages.
 %    \begin{macrocode}
-    \legacy_if:nTF { @noskipsec } { \mode_leave_vertical: }
+    \legacy_if:nTF { @noskipsec }
+%    \end{macrocode}
+%    A \texttt{@noskipsec} heading is a heading that is placed in the
+%    same line as the following text (using \cs{everypar}) but not if
+%    that text starts with a display block, so we ensure that the
+%    heading gets typeset now.\fmi{This is similar to the standalone case
+%    for block captions so perhaps that can be combined, check}
+%    \begin{macrocode}
+       { \mode_leave_vertical: }
+%    \end{macrocode}
+%    If no such heading is waiting we might have a block caption
+%    waiting to be typeset and this might be requested to be set
+%    \enquote{unchained}. In that case we have also have to ensure
+%    that this gets typeset now.
+%       
+%    The situation is slightly different though, because we want to
+%    end in vertical mode in that case also add
+%    some special vertical space and have to properly deal with
+%    avoiding page breaks.
+%    \begin{macrocode}
        {
-%          \typeout{==================================}
-%          \typeout{==>~newlist=\legacy_if:nTF { @newlist }{true}{false} }
-%          \typeout{==>~inlabel=\legacy_if:nTF { @inlabel }{true}{false} }
-%          \typeout{==>~unchained=\bool_if:NTF \g_@@_label_unchained_bool {true}{false} }
-%          \typeout{==>~standalone=\bool_if:NTF \g_@@_label_standalone_bool {true}{false} }
-%          \typeout{==>~noparitem=\legacy_if:nTF { @noparitem }{true}{false} }
-%          \group_begin: \showoutput\scrollmode\showbox\g_@@_labels_box \group_end:
           \bool_if:NT \g_@@_label_unchained_bool
             {
-              \@@_debug_typeout:n{set~ captioned~ block~ everypar \on@line }
+              \@@_debug_typeout:n{Set~ captioned~ block~ everypar \on@line }
               \cs_set_eq:NN \@@_everypar: \@@_captioned_everypar_std:
               \legacy_if:nT { @inlabel }
                      {
@@ -2310,15 +2325,6 @@
         \@@_skip_remove_last: \@@_skip_remove_last:
         \__kernel_displayblock_beginpar_hmode:w \par 
       }
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-%%    \legacy_if:nTF { @inlabel }
-%%       { \bool_if:NT \l_@@_item_chained_bool
-%%         { \noindent \par }
-%%       }
-%%       {
-%%       }
 %    \end{macrocode}
 %    Next lines set some paragraph defaults, any of them may get overwritten
 %    if there is a \key{para-instance} specified on the \insttype{blockenv}
@@ -2536,7 +2542,6 @@
 {
   \__template_debug_typeout:n{~\space template:~ 'std';~
                               arguments:~ \exp_not:o{\exp_after:wN |#1|#2|#3|#4|}}
-%
 %    \end{macrocode}
 %    We start by looking at the user supplied keys in \texttt{\#1}. If
 %    there aren't any we reset \cs{@@_evaluate_saved_user_keys:nn} to
@@ -2669,7 +2674,7 @@
 %    implementation at some point.}
 %  \changes{v0.8q}{2024/09/02}{}
 %    \begin{macrocode}
-    \@@_debug_typeout:n{set~ first~ block~ everypar \on@line }
+    \@@_debug_typeout:n{Set~ first~ block~ everypar \on@line }
     \cs_set_eq:NN \@@_everypar: \@@_item_everypar_first:
 %    \end{macrocode}
 %    
@@ -2753,6 +2758,10 @@
       right   = \tl_set:Nn \l_@@_item_align_tl { \hss \relax } ,
       parleft = \NOT_IMPLEMENTED ,
     } ,
+%    \end{macrocode}
+%    The key{label-placement} are implemented using two booleans (at
+%    the moment). 
+%    \begin{macrocode}
     label-placement = {
       chained    = \bool_gset_false:N \g_@@_label_standalone_bool
                    \bool_gset_false:N \g_@@_label_unchained_bool ,
@@ -2811,8 +2820,9 @@
 %    is still equal to \cs{c_novalue_tl} and so we can distinuish
 %    that from \verb=\item[]=.
 %
+%    \fmi{next line needs checking after novalue implementation was changed}       
 %    \begin{macrocode}
-    \tl_if_novalue:oTF \l_@@_label_given_tl  %<- FMi verify this
+    \tl_if_novalue:oTF \l_@@_label_given_tl
       {
 %    \end{macrocode}
 %    The rest of the code for this template needs work and is both
@@ -2913,13 +2923,21 @@
 %    inside \hook{para/begin}. By default this command does nothing, now we
 %    change it to attach the pending label or labels.
 %    \begin{macrocode}
-    \@@_debug_typeout:n{set~ item~ block~ everypar \on@line }
+    \@@_debug_typeout:n{Set~ item~ block~ everypar \on@line }
     \cs_set_eq:NN \@@_everypar: \@@_item_everypar_std:
   }
 %    \end{macrocode}
 % \end{template}
 %
 %
+%  \begin{macro}{g_@@_label_standalone_bool,g_@@_label_unchained_bool}
+%    The two booleans for implementing \key{label-placement} and below
+%    \key{caption-placement}.
+%    \begin{macrocode}
+\bool_new:N \g_@@_label_standalone_bool       % tmp until replaced
+\bool_new:N \g_@@_label_unchained_bool        % tmp until replaced
+%    \end{macrocode}
+%  \end{macro}
 %
 %  \begin{macro}{\l_@@_item_align_tl}
 %    
@@ -3037,7 +3055,7 @@
 %    \texttt{@inlabel} to make a decision.
 %
 %    By the end of the day both should probably move into the kernel
-%    hook instead or, better, into sockets.
+%    hook instead.
 %    \begin{macrocode}
 \DeclareHookRule{para/begin}{items}{after}{tagpdf}
 %    \end{macrocode}
@@ -3049,7 +3067,7 @@
 %    item template so that the next paragraph start runs the code below.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_item_everypar_std: {
-    \@@_debug_typeout:n{in~ item~ block~ everypar \on@line }
+    \@@_debug_typeout:n{...~ in~ item~ block~ everypar \on@line }
     \legacy_if_set_false:n { @minipage }
     \legacy_if_gset_false:n { @newlist }
     \legacy_if:nT { @inlabel }
@@ -3086,7 +3104,7 @@
 %    \texttt{@nobreak} handling we reset \cs{@@_everypar:} to do
 %    nothing.
 %    \begin{macrocode}
-         \@@_debug_typeout:n{set~ noop~ block~ everypar \on@line }
+         \@@_debug_typeout:n{Set~ noop~ block~ everypar \on@line }
          \cs_set_eq:NN \@@_everypar: \prg_do_nothing:
        }
 }
@@ -3098,7 +3116,7 @@
 %    started before the first item}
 %    \begin{macrocode}
 \cs_new:Npn \@@_item_everypar_first: {
-  \@@_debug_typeout:n{in~ first~ block~ everypar \on@line }
+  \@@_debug_typeout:n{...~ in~ first~ block~ everypar \on@line }
   \legacy_if:nT { @newlist }  { \@noitemerr }
 }
 %    \end{macrocode}
@@ -5225,8 +5243,6 @@
 }
 
 
-\bool_new:N \g_@@_label_standalone_bool       % tmp until replaced
-\bool_new:N \g_@@_label_unchained_bool        % tmp until replaced
 
 
 
@@ -5322,7 +5338,7 @@
     \legacy_if_gset_true:n { @nobreak }  % do not break after the
                                          % first theorem line
 %
-    \@@_debug_typeout:n{set~ captioned~ block~ everypar \on@line }
+    \@@_debug_typeout:n{Set~ captioned~ block~ everypar \on@line }
     \cs_set_eq:NN \@@_everypar: \@@_captioned_everypar_std:
 %
     \l_@@_body_decls_tl
@@ -5384,7 +5400,7 @@
 
 
 \cs_new_protected:Npn \@@_captioned_everypar_std: {
-    \@@_debug_typeout:n{in~ captioned~ block~ everypar \on@line }
+    \@@_debug_typeout:n{...~ in~ captioned~ block~ everypar \on@line }
     \legacy_if_set_false:n { @minipage }
     \legacy_if_gset_false:n { @newlist }
 %    \end{macrocode}
@@ -5411,7 +5427,7 @@
        }
        {
          \int_set_eq:NN \clubpenalty \@clubpenalty
-         \@@_debug_typeout:n{set~ noop~ block~ everypar \on@line }
+         \@@_debug_typeout:n{Set~ noop~ block~ everypar \on@line }
          \cs_set_eq:NN \@@_everypar: \prg_do_nothing:
        }
 }
@@ -5500,7 +5516,7 @@
   \legacy_if_gset_true:n { @nobreak }  % do not break after the
                                        % first theorem line
 %
-  \@@_debug_typeout:n{set~ captioned~ block~ everypar \on@line }
+  \@@_debug_typeout:n{Set~ captioned~ block~ everypar \on@line }
   \cs_set_eq:NN \@@_everypar: \@@_captioned_everypar_std:
 %
   \l_@@_body_decls_tl
