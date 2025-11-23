@@ -1235,7 +1235,7 @@
 % \end{function}
 % 
 % \begin{function}{\newtheorem,\@thm,\@begintheorem}
-% Redefined to make theorems tagging aware.
+%   These are no longer used.
 % \end{function}
 %
 % \begin{function}{\item,\@itemlabel}
@@ -3271,6 +3271,138 @@
 %
 %
 %
+%
+%
+%
+%  \begin{macro}{}
+%    
+%    \begin{macrocode}
+\tl_new:N \l_@@_theoremstyle_tl
+
+\cs_new_protected:Npn \theoremstyle #1{ \tl_set:Nn \l_@@_theoremstyle_tl {#1} }
+
+\theoremstyle{plain}
+
+
+
+\DeclareTemplateCode{theoremstyle}{std}{4}
+{
+  numbered        = \l_@@_numbered_bool ,
+  space           = \l_@@_space_tl ,
+  punct           = \l_@@_punct_tl ,
+  caption-placement = {
+    chained    = \bool_gset_false:N \g_@@_label_standalone_bool
+                 \bool_gset_false:N \g_@@_label_unchained_bool ,
+    unchained  = \bool_gset_false:N \g_@@_label_standalone_bool
+                 \bool_gset_true:N \g_@@_label_unchained_bool ,
+    standalone = \bool_gset_true:N \g_@@_label_standalone_bool
+                 \bool_gset_false:N \g_@@_label_unchained_bool ,
+  }  ,
+  before-hspace   = \l_@@_caption_before_skip ,
+  after-hspace    = \l_@@_caption_after_skip ,
+  order           = \l_@@_order_clist,
+  caption-decls   = \l_@@_caption_decls_tl ,
+  title-format    = \@@_title_format:n ,
+  number-format   = \@@_number_format:n ,
+  punct-format    = \@@_punct_format:n ,
+  note-format     = \@@_note_format:n ,
+  body-decls      = \l_@@_body_decls_tl ,
+}
+{
+  \__template_debug_typeout:n{~\space template:~ 'std';~
+                              arguments:~ \exp_not:o{\exp_after:wN |#1|#2|#3|#4|}}
+%
+  \tl_if_empty:oF {#1}
+     { \SetKnownTemplateKeys{theoremstyle}{std}{#1} }
+%
+  \tl_if_empty:NF \UnusedTemplateKeys
+     {
+       \msg_error:nnee { block } { unknown-keys }
+           { \l_@@_env_name_tl \space environment}
+           \UnusedTemplateKeys
+     }
+%
+%    \end{macrocode}
+%    
+%    In case there is a dangling \cs{item} we can either join that
+%    with the caption or we can output the item first. For now we do
+%    the latter---could be made customizable.
+%    \begin{macrocode}
+%  \legacy_if:nT { @inlabel } { \indent \par }
+%    \end{macrocode}
+%    Add the caption into \cs{g_@@_labels_box}
+%    \begin{macrocode}
+     %
+    \bool_lazy_or:nnT
+      { \tl_if_empty_p:N \l_@@_counter_tl }
+      { #2 }
+      { \bool_set_false:N \l_@@_numbered_bool }
+%   
+    \tl_set:Nn \l_@@_note_tl {#3}
+%   
+    \bool_if:NT \l_@@_numbered_bool
+       {  
+         \@kernel@refstepcounter{ \l_@@_counter_tl }
+         \MakeLinkTarget{ \l_@@_counter_tl }
+       }
+%
+    \hbox_gset:Nn \g_@@_labels_box
+      {
+        \box_use_drop:N \g__block_labels_box % <- does nothing if
+                                             % there is no dangling label
+        \l_@@_caption_decls_tl
+        \tag_socket_use:nnn {block/theorem/caption} {}
+            {
+              \skip_horizontal:n { \l_@@_caption_before_skip }
+              \clist_map_inline:Nn \l_@@_order_clist
+                    { \group_begin:
+                        \use:c { @@_do_##1: } 
+                      \group_end:
+                    }
+              \skip_horizontal:n { \l_@@_caption_after_skip }
+            }
+      }
+   \bool_if:NTF \g_@@_label_standalone_bool
+      {
+        \bool_gset_true:N \g_@@_label_standalone_bool
+        \para_omit_indent:
+        \box_use_drop:N \g_@@_labels_box
+        \par
+      }
+      {
+        \legacy_if_gset_true:n { @newlist }
+        \legacy_if_gset_true:n { @inlabel }
+      }
+%
+    \legacy_if_gset_true:n { @nobreak }  % do not break after the
+                                         % first theorem line
+%
+    \@@_debug_typeout:n{Set~ captioned~ block~ everypar \on@line }
+    \cs_set_eq:NN \@@_everypar: \@@_captioned_everypar_std:
+%
+    \l_@@_body_decls_tl
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \@@_debug_typeout:n{template:theoremstyle:std~end}
+}
+
+
+
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
 % \subsection{Tagging support commands}
 %
 % In this section we provide code to the various kernel hooks to support
@@ -4402,7 +4534,7 @@
                     \bool_if:NT \l_@@_swap_number_bool {-swap}  ,
       }
 %    \end{macrocode}
-%    We known that the style \cs{l_@@_theoremstyle_tl} exists, since
+%    We already know that the style \cs{l_@@_theoremstyle_tl} exists, since
 %    we have tested that earlier, but we don't know if that is also
 %    true for the \texttt{-swap} variant. So we have to check that and
 %    declare it if necessary.
@@ -4410,14 +4542,28 @@
     \bool_if:NT \l_@@_swap_number_bool {
       \IfInstanceExistsF{theoremstyle}{\l_@@_theoremstyle_tl -swap}
       {
+%    \end{macrocode}
+%    If it doesn't exist we first make a copy of the base instance.
+%    \begin{macrocode}
         \DeclareInstanceCopy{theoremstyle}
                             {\l_@@_theoremstyle_tl -swap}
                             {\l_@@_theoremstyle_tl}
+%    \end{macrocode}
+%    Then we retrieve the value of the \key{order} key from that
+%    instance which is a clist.
+%    \begin{macrocode}
         \clist_set:Ne \l_@@_order_clist
             { \InstanceValue { theoremstyle }
                              { \l_@@_theoremstyle_tl }
                              { order }
             }                              
+%    \end{macrocode}
+%    Then we step through this clist and and build a new one in
+%    \cs{l_@@_tmp_clist} with the \texttt{title} and \texttt{number}
+%    swapped. That is done under the assumption that both actually
+%    exist in the clist which would be the case if the instance was
+%    declared with \cs{newtheoremstyle}, i.e., for legacy setups.
+%    \begin{macrocode}
         \clist_clear:N \l_@@_tmp_clist
         \clist_map_inline:Nn \l_@@_order_clist
           {
@@ -4428,122 +4574,20 @@
                 {##1}
             }    
           }
+%    \end{macrocode}
+%    Once that is done we put the new value for \key{order} in the new
+%    instance.
+%    \begin{macrocode}
         \EditInstance {theoremstyle}{\l_@@_theoremstyle_tl -swap}
           { order:e = \l_@@_tmp_clist }
       }
     }
-%   \ShowInstanceValues{theoremstyle}{\l_@@_theoremstyle_tl -swap}
   }
 }
 %    \end{macrocode}
 %  \end{macro}
 %
-%  \begin{macro}[no-user-doc]{\@thm}
-%  \tn{@thm} executes \tn{refstepcounter} too early for hyperref
-%  and structure destinations: the generated target is outside the structure
-%  and can be separated from the theorem by a page break. We therefore move
-%  the anchor setting into \tn{@begintheorem}. \tn{@begintheorem} doesn't
-%  currently get the name of the counter as argument, so we store it in variable
-%  for now, to be able to pass it along.
-%    \begin{macrocode}
-\tl_new:N \l_@@_thm_current_counter_tl
-\def\@thm#1#2{%
-  \@kernel@refstepcounter{#1}
-  \tl_set:Nn \l_@@_thm_current_counter_tl{#1}
-  \@ifnextchar[{\@ythm{#1}{#2}}{\@xthm{#1}{#2}}}
-%    \end{macrocode}
-%  \end{macro}
 %  
-%  \begin{macro}[no-user-doc]{\@begintheorem,\@opargbegintheorem}
-%
-%    The \tn{@thm} command expands to either \tn{@beginthorem} or
-%    \tn{@opargbegintheorem}. For the moment we stick with this as it
-%    will help with the transition. But instead of using a
-%    \env{trivlist} we use a blockenv and some tagging for the title
-%    (as a Caption).
-%    We do not want potential tagging from \tn{textbf} here,
-%    so we use \tn{bfseries} to set the font. The commands set also the link targets
-%    which should be inside the main structure.
-%    \begin{macrocode}  
-\NewTaggingSocket{block/theorem/caption}{2}
-\NewTaggingSocketPlug{block/theorem/caption}{kernel}
- {
-   \tag_struct_begin:n{tag=Caption}
-   #2
-   \tag_struct_end:
- } 
-\AssignTaggingSocketPlug{block/theorem/caption}{kernel} 
-   
-\def\@begintheorem#1#2{
-  \UseInstance{blockenv}{theorem}{} \NoValue
-  \tag_socket_use:n {para/off}
-%    \end{macrocode}
-%    
-%  \changes{v0.8w}{2024/11/23}{\LaTeXe{} theorems always start out
-%    without indentation (tagging/767)}
-%  \changes{v0.9k}{2025-07-26}{Use tagging sockets}  
-%    \begin{macrocode}
-  \noindent 
-  \MakeLinkTarget{\l_@@_thm_current_counter_tl} 
-  \group_begin:
-  \bfseries
-  \tag_socket_use:nnn {block/theorem/caption} {}
-   { 
-     \tag_socket_use:nnn {mc} {} {#1\ }
-     \tag_socket_use:nnn {struct-mc} {tag=Lbl} {#2}
-   }
-  \group_end:
-  \tag_socket_use:n {para/on}
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-  \tag_socket_use:nn { block/startpara/direct } { \PARALABEL }
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-  \itshape
-  \hskip\labelsep
-  \ignorespaces
-}
-\def\@opargbegintheorem#1#2#3{
-  \UseInstance{blockenv}{theorem}{} \NoValue
-  \tag_socket_use:n {para/off}
-%    \end{macrocode}
-%    
-%  \changes{v0.8w}{2024/11/23}{\LaTeXe{} theorems always start out
-%    without indentation (tagging/767)}
-%  \changes{v0.9k}{2025-07-26}{Use tagging sockets}     
-%    \begin{macrocode}
-  \noindent 
-  \MakeLinkTarget{\l_@@_thm_current_counter_tl}
-  \group_begin:
-  \bfseries 
-  \tag_socket_use:nnn {block/theorem/caption}{}
-   {
-     \tag_socket_use:nnn {mc} {} {#1\ }
-     \tag_socket_use:nnn {struct-mc} {tag=Lbl} {#2}
-     \tag_socket_use:nnn {mc} {} {\ (#3)}
-   }  
-  \group_end:   
-  \tag_socket_use:n {para/on}
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-  \tag_socket_use:nn { block/startpara/direct} { \PARALABEL }
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-  \itshape
-  \hskip\labelsep
-  \ignorespaces
-}
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-\def\@endtheorem{ \BlockEnvEnd }
-%    \end{macrocode}
-%  \end{macro}
-%
 %
 %
 % \section{Instance declarations for environments}
@@ -4754,29 +4798,113 @@
 %
 %
 %
-% \subsubsection{The theorem instance}
+% \subsubsection{The theorem-like instances}
 %
-%  \begin{instance}{blockenv theorem}
-%    
+%   Instances for theorem-like environments are normally automatically
+%   declared via \cs{newtheorem} an \cs{newtheoremstyle} but of course
+%   one could also declare them manually or update them wit
+%   \cs{EditInstance} after they have been initially declared in one
+%   way or another.
+%
+%   So here we only repeat an example that one would get from
+%   \verb=\newtheorem{sample}{Example}=.
+%
+%  \begin{instance}{blockenv sample}
+%\begin{verbatim}
+%  \DeclareInstance{blockenv}{sample}{display}
+%  {
+%    name                = theorem-like ,
+%    tag-name            = theorem-like ,
+%    tagging-recipe      = standalone ,
+%    increment-level     = false ,
+%    block-instance:e    = thm-plainblock ,
+%    inner-instance-type = captionedtext,
+%    inner-instance      = sample ,
+%    para-instance       = justify ,
+%  }
+%\end{verbatim}
+%
+%   What varies from instance to instance are the values for
+%   \key{block-instance} and \key{inner-instance}.
+%
 %   We use \struct{theorem-like} as the structure name and rolemap it
 %   to a \struct{Sect} because that can hold a \struct{Caption}.
 %
-%    
-%  \changes{v0.8w}{2024/11/23}{Theorems use their own block-instance
-%    and not displayblock to allow for customization (tagging/767)}
+%  \end{instance}
+%
+%  \begin{instance}{captionedtext sample}
 %    \begin{macrocode}
-\DeclareInstance{blockenv}{theorem}{display}
-{
-  name                 = theorem-like,
-  tag-name             = theorem-like,
-  tag-attr-class       = ,
-  tagging-recipe       = standalone,
-  inner-level-counter  = ,
-  increment-level      = false,
-  setup-code           = ,
-  block-instance       = theoremblock ,
-}
+%\begin{verbatim}
+%  \DeclareInstance{captionedtext}{sample}{theorem}
+%  {
+%    counter = sample ,
+%    title   = Example ,
+%    style   = plain ,
+%  }
+%\end{verbatim}
+%
+%   The \key{title} gets the print name for the theorem-like
+%   environment, the \key{counter} depends on the optional arguments
+%   given to \cs{newtheorem} and the \key{style} is the current active
+%   \cs{theoremstyle} of any, otherwise \texttt{plain}.
+%
+%   If \cs{swapnumbers} was used then the style is appended a
+%   \texttt{-swap}.
+%
+%  \end{instance}
+%
+%   New theorem styles are normally declared with \cs{newtheoremstyle}
+%   which generates generates a new instance of type
+%   \insttype{theoremstyle}. The base styles as defined by
+%   \pkg{amsthm} are declared directly as shown below.
+%
+%  \begin{instance}{theoremstyle plain}
+%    \begin{macrocode}
+\DeclareInstance{theoremstyle}{plain}{std}
+  {
+    caption-placement = unchained ,
+    numbered          = true ,
+    space             = \  ,
+    punct             = .  ,
+    before-hspace     = 0pt ,
+    after-hspace      = 5pt plus 1pt minus 1pt ,
+    order             = {title,space,number,punct,space,note} ,
+    caption-decls     = \bfseries,
+    title-format      = #1 ,
+    number-format     = #1 ,
+    punct-format      = #1 ,
+    note-format       = (#1) ,
+    body-decls        = \itshape ,
+  }
 %    \end{macrocode}
+%
+%  \end{instance}
+%
+%  \begin{instance}{theoremstyle remark}
+%    Like \texttt{plain} with two changes:  
+%    \begin{macrocode}
+\DeclareInstanceCopy{theoremstyle}{remark}{plain}
+\EditInstance{theoremstyle}{remark}
+  {
+    caption-decls = \itshape,
+    body-decls    = \normalfont ,
+  }
+%    \end{macrocode}
+%  \end{instance}
+%
+%  
+%
+%
+%  \begin{instance}{theoremstyle definition}
+%    Like \texttt{plain} with only a difference in font used for the body:  
+%    \begin{macrocode}
+\DeclareInstanceCopy{theoremstyle}{definition}{plain}
+\EditInstance{theoremstyle}{definition}
+  {
+    body-decls    = \normalfont ,
+  }
+%    \end{macrocode}
+%
 %  \end{instance}
 %
 %
@@ -5390,107 +5518,21 @@
 
 
 
-\DeclareTemplateCode{theoremstyle}{std}{4}
-{
-  numbered        = \l_@@_numbered_bool ,
-  space           = \l_@@_space_tl ,
-  punct           = \l_@@_punct_tl ,
-  caption-placement = {
-    chained    = \bool_gset_false:N \g_@@_label_standalone_bool
-                 \bool_gset_false:N \g_@@_label_unchained_bool ,
-    unchained  = \bool_gset_false:N \g_@@_label_standalone_bool
-                 \bool_gset_true:N \g_@@_label_unchained_bool ,
-    standalone = \bool_gset_true:N \g_@@_label_standalone_bool
-                 \bool_gset_false:N \g_@@_label_unchained_bool ,
-  }  ,
-  before-hspace   = \l_@@_caption_before_skip ,
-  after-hspace    = \l_@@_caption_after_skip ,
-  order           = \l_@@_order_clist,
-  caption-decls   = \l_@@_caption_decls_tl ,
-  title-format    = \@@_title_format:n ,
-  number-format   = \@@_number_format:n ,
-  punct-format    = \@@_punct_format:n ,
-  note-format     = \@@_note_format:n ,
-  body-decls      = \l_@@_body_decls_tl ,
-}
-{
-  \__template_debug_typeout:n{~\space template:~ 'std';~
-                              arguments:~ \exp_not:o{\exp_after:wN |#1|#2|#3|#4|}}
-%
-  \tl_if_empty:oF {#1}
-     { \SetKnownTemplateKeys{theoremstyle}{std}{#1} }
-%
-  \tl_if_empty:NF \UnusedTemplateKeys
-     {
-       \msg_error:nnee { block } { unknown-keys }
-           { \l_@@_env_name_tl \space environment}
-           \UnusedTemplateKeys
-     }
-%
+
+%    We do not want potential tagging from \tn{textbf} here,
+%    so we use \tn{bfseries} to set the font. The commands set also the link targets
+%    which should be inside the main structure.
+%    \begin{macrocode}  
+\NewTaggingSocket{block/theorem/caption}{2}
+\NewTaggingSocketPlug{block/theorem/caption}{kernel}
+ {
+   \tag_struct_begin:n{tag=Caption}
+   #2
+   \tag_struct_end:
+ } 
+\AssignTaggingSocketPlug{block/theorem/caption}{kernel} 
 %    \end{macrocode}
-%    
-%    In case there is a dangling \cs{item} we can either join that
-%    with the caption or we can output the item first. For now we do
-%    the latter---could be made customizable.
-%    \begin{macrocode}
-%  \legacy_if:nT { @inlabel } { \indent \par }
-%    \end{macrocode}
-%    Add the caption into \cs{g_@@_labels_box}
-%    \begin{macrocode}
-     %
-    \bool_lazy_or:nnT
-      { \tl_if_empty_p:N \l_@@_counter_tl }
-      { #2 }
-      { \bool_set_false:N \l_@@_numbered_bool }
-%   
-    \tl_set:Nn \l_@@_note_tl {#3}
-%   
-    \bool_if:NT \l_@@_numbered_bool
-       {  
-         \@kernel@refstepcounter{ \l_@@_counter_tl }
-         \MakeLinkTarget{ \l_@@_counter_tl }
-       }
-%
-    \hbox_gset:Nn \g_@@_labels_box
-      {
-        \box_use_drop:N \g__block_labels_box % <- does nothing if
-                                             % there is no dangling label
-        \l_@@_caption_decls_tl
-        \tag_socket_use:nnn {block/theorem/caption} {}
-            {
-              \skip_horizontal:n { \l_@@_caption_before_skip }
-              \clist_map_inline:Nn \l_@@_order_clist
-                    { \group_begin:
-                        \use:c { @@_do_##1: } 
-                      \group_end:
-                    }
-              \skip_horizontal:n { \l_@@_caption_after_skip }
-            }
-      }
-   \bool_if:NTF \g_@@_label_standalone_bool
-      {
-        \bool_gset_true:N \g_@@_label_standalone_bool
-        \para_omit_indent:
-        \box_use_drop:N \g_@@_labels_box
-        \par
-      }
-      {
-        \legacy_if_gset_true:n { @newlist }
-        \legacy_if_gset_true:n { @inlabel }
-      }
-%
-    \legacy_if_gset_true:n { @nobreak }  % do not break after the
-                                         % first theorem line
-%
-    \@@_debug_typeout:n{Set~ captioned~ block~ everypar \on@line }
-    \cs_set_eq:NN \@@_everypar: \@@_captioned_everypar_std:
-%
-    \l_@@_body_decls_tl
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-  \@@_debug_typeout:n{template:theoremstyle:std~end}
-}
+
 
 
 \tl_new:N \g_@@_collected_spaces_tl
@@ -5885,59 +5927,9 @@
 
 
 
-\tl_new:N \l_@@_theoremstyle_tl
-
-\cs_new_protected:Npn \theoremstyle #1{ \tl_set:Nn \l_@@_theoremstyle_tl {#1} }
-
-\theoremstyle{plain}
 
 
-\DeclareInstance{theoremstyle}{plain}{std}
-  {
-    caption-placement = unchained ,
-    numbered      = true ,
-    space         = \  ,
-    punct         = .  ,
-    before-hspace = 0pt ,
-    after-hspace  = 5pt plus 1pt minus 1pt ,
-    order         = {title,space,number,punct,space,note} ,
-    caption-decls = \bfseries,
-    title-format  = #1 ,
-    number-format = #1 ,
-    punct-format  = #1 ,
-    note-format   = (#1) ,
-    body-decls    = \itshape ,
-  }
 
-\DeclareInstanceCopy{theoremstyle}{remark}{plain}
-\EditInstance{theoremstyle}{remark}
-  {
-    caption-decls = \itshape,
-    body-decls    = \normalfont ,
-  }
-
-\DeclareInstanceCopy{theoremstyle}{definition}{plain}
-\EditInstance{theoremstyle}{definition}
-  {
-    body-decls    = \normalfont ,
-  }
-
-  % for testing ...
-
-\DeclareInstance{theoremstyle}{test}{std}
-  {
-    caption-placement = unchained ,
-    before-hspace = -20pt ,
-    after-hspace  =  20pt ,
-    space         = \hspace{3pt} ,
-    order         = {number,space,title,punct,space,note} ,
-    caption-decls = \bfseries,
-    title-format  = #1 ,
-    number-format = \textcolor{red}{#1} ,
-    punct-format  = #1 ,
-    note-format   = (\textit{#1}) ,
-    body-decls    = \scshape ,
-}
 
 % \newtheoremstyle has a bunch of argument conventions that haven't been fully implemented yet, e.g.
 % #8 can be a blank (meaning normal wordspace or \newline) or a skip.
