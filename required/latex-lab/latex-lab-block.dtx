@@ -3198,11 +3198,17 @@
             { \@@_item_instance:n { } }
             { \@@_item_instance:n {#1} }
 %    \end{macrocode}
-%    Set the legacy switch that signals that we have a pending item label:
+%    The \insttype{item} instance puts the the item label into
+%    \cs{g_@@_label_standalone_bool} ready to be placed later. To make
+%    that happen we nee to signal that by  setting the legacy switch
+%    \texttt{@inlabel} to true. However, if this is a label that
+%    should be always placed \enquote{standalone} we instead typeset it
+%    immediately and ensure that there is no page break after
+%    it.\fmi{support extra vertical space as well?}
 %    \begin{macrocode}
           \bool_if:NTF \g_@@_label_standalone_bool
              {
-               \bool_gset_true:N \g_@@_label_standalone_bool
+               \bool_gset_false:N \g_@@_label_standalone_bool
                \leavevmode
                \box_use_drop:N \g_@@_labels_box
                \par
@@ -3517,7 +3523,7 @@
 %  have to do it after the label got typeset.
 %  TODO: it should do nothing without tagging that's why there is a test,
 %  this should be better hidden in a tagging socket, but it is not quite clear
-%  how to do this.
+%  how to do this.\fmi{internally this is now a tagging socket, why the outer test then?}
 %    \begin{macrocode}
 \cs_new:Npn \__kernel_list_label_after:n #1 {
    \bool_lazy_and:nnT { \tag_if_active_p: } {\l__tag_para_bool }
@@ -3885,6 +3891,12 @@
 %    At the end of environment we call \cs{BlockEnvEnd} to
 %    finish everything of.
 %
+%    We require that any optional argument (for a key/value list
+%    modifying the settings) is immediately following the environment
+%    without any spaces (\verb=!O{}=), so that a \texttt{[} at the start of the
+%    environment body is not mistaken as an optional argument. We do
+%    this for all environments where this might be a problem.
+%
 %
 % \subsection{Displayblock environments}
 %
@@ -3892,7 +3904,6 @@
 %    There are two basic block environment which are similar to
 %    \LaTeXe{}'s \env{trivlist} except that there aren't degenerated
 %    lists and thus have no hidden \tn{item} inside.
-%
 %
 %  \begin{environment}{displayblock}
 %    
@@ -3922,7 +3933,7 @@
 %
 %    For now we redeclare various document environments as late as
 %    possible in order to make tagging work, even if classes have changed
-%    the definitions. Of course this means that such changes get lost.
+%    the definitions. Of course, this means that such changes get lost.
 %    \begin{macrocode}
 \AddToHook{begindocument/before}{
 %    \end{macrocode}
@@ -3957,7 +3968,13 @@
 %  \begin{environment}{quote,quotation}
 %    
 %  \changes{v0.9l}{2025/11/20}{Use \cs{DeclareDocumentEnvironment} for \env{quote},
-%    \env{quotation}, \env{description}, and \env{verse} (tagging/284)}
+%    \env{quotation}, \env{description}, and \env{verse}
+%    (tagging/284)}
+%    We can't use \cs{RenewDocumentEnvironment} for \env{quote} and
+%    other environments that are class defined, because some classes
+%    aren't implementing them at all. So we use
+%    \cs{DeclareDocumentEnvironment} instead. This problem will vanish
+%    if all such definitions move in new versions of the classes instead.
 %    \begin{macrocode}
 \AddToHook{begindocument/before}{
   \DeclareDocumentEnvironment{quote}{ !O{} }
@@ -4097,7 +4114,8 @@
 %
 %  \begin{environment}{verse}
 %  The verse environment has not special tagging currently. It is
-%  defined as a simple standard list and takes the tagging from there.
+%  defined as a simple standard list and takes the tagging from
+%    there.\fmi{fix eventually}
 %  But it must be redefined so that \tn{itemindent} is correctly set.
 %    \begin{macrocode}
 \AddToHook{begindocument/before}{
@@ -4105,9 +4123,7 @@
     { 
       \let\\\@centercr
 %    \end{macrocode}
-%    
-%    The \LaTeXe{} lists don't support captions so we pass
-%    \cs{NoValue} to the \insttype{blockenv}.
+%
 %    \begin{macrocode}
       \SimpleBlockEnv{list}
         {
@@ -4252,44 +4268,172 @@
 %
 %
 %  \begin{macro}[no-user-doc]{\newtheorem}
-%    This is a slightly streamlined version of \tn{newtheorem}, but it
-%    still uses a lot of the 2e code for now. Eventually this will change.
+%    We reimplement the extended \pkg{amsthm} version of the declaration which
+%    also supports a star form indicating that this theoremlike
+%    environment should never been numbered.
 %    \begin{macrocode}
-\RenewDocumentCommand \newtheorem { m O{#1} m o }
-{
-  \expandafter\@ifdefinable\csname #1\endcsname
-    {
-      \str_if_eq:nnTF{#1}{#2}
-         {
-           \@definecounter {#2}
-           \IfNoValueTF {#4}
-             {  % @ynthm
-               \tl_gset:ce { the #2 }
-                  {
-                    \@thmcounter{#2}
-                  }
-             }
-             {  % @xnthm
-               \@newctr{#1}[#4]
-               \tl_gset:ce { the #2 }
-                  {
-                    \expandafter\noexpand\csname the#4\endcsname
-                    \@thmcountersep
-                    \@thmcounter{#2}
-                  }
-             }
-         }
-         {  % @othm
-           \@ifundefined{c@#2}
-              { \@nocounterr{#2} }
-              {
-                \tl_gset:cn { the #1 }
-                   { \UseName { the #2 } }
-              }
-         }
-      \global\@namedef{#1}   { \@thm{#2}{#3} }
-      \global\@namedef{end#1}{ \@endtheorem  }
+\RenewDocumentCommand \newtheorem { s m o m o } {
+%    \end{macrocode}
+%    Is the environment definable at all? If not there is no much
+%    point in continuing.
+%    \begin{macrocode}
+  \expandafter\@ifdefinable\csname #2\endcsname
+   {
+%    \end{macrocode}
+%    
+%    If a star was given then there is no need to set up a counter for
+%    this environment. Otherwise we do what \LaTeX2e{} did, except
+%    that we to all there variations in one go, rather than using
+%    \cs{@ynthm}, \cs{@xnthm}, and \cs{@othm}.\fmi{undefined the old
+%    internal commands?}
+%    \begin{macrocode}
+     \IfBooleanF #1
+       {
+         \IfNoValueTF {#3}
+            {
+              \@definecounter {#2}
+              \IfNoValueTF {#5}
+                {  % @ynthm
+                  \tl_gset:ce { the #2 }
+                     {
+                       \@thmcounter{#2}
+                     }
+                }
+                {  % @xnthm
+                  \@newctr{#2}[#5]
+                  \tl_gset:ce { the #2 }
+                     {
+                       \expandafter\noexpand\csname the#5\endcsname
+                       \@thmcountersep
+                       \@thmcounter{#2}
+                     }
+                }
+            }
+            {  % @othm
+              \@ifundefined{c@#3}
+                 { \@nocounterr{#3} }
+                 {
+                   \tl_gset:cn { the #2 }
+                      { \UseName { the #3 } }
+                 }
+            }
+       }
+%    \end{macrocode}
+%    With the counter defined if necxessary we are ready to declare
+%    the the environments. The is a slight complication though: the
+%    \enquote{theorem-like} environments have an optional argument
+%    which contains a possible note, but now we also want to use the
+%    optional argument to hold a key/value list with parameter
+%    settings. We therefore define this argument via \verb/={note}o/
+%    so that a simple note, if given is assigned to a \key{note} key
+%    for furhter processing. Further processing is then delegated to
+%    the command \cs{ParseLaTeXeTheorem} which, after sorting out the
+%    argument situation, eventually calls \cs{BlockEnv}.
+%    \begin{macrocode}
+     \NewDocumentEnvironment{#2}{ ={note}o }
+        { \ParseLaTeXeTheorem {#2} \BooleanFalse {##1} }
+        { \BlockEnvEnd }
+%    \end{macrocode}
+%    The starred form of the environment supresses the  number so we
+%    pass it \cs{BooleanTrue}, otherwise it is the same.
+%    \begin{macrocode}
+     \NewDocumentEnvironment{#2*}{ ={note}o }
+        { \ParseLaTeXeTheorem {#2} \BooleanTrue {##1} }
+        { \BlockEnvEnd }
+%    \end{macrocode}
+%
+%    Now it is about time to provide all necessary template
+%    instances. They depend on the \cs{theoremstyle} specified by the
+%    user and possibly by a \cs{swapnumbers} declaration. We start by
+%    checking the requested \cs{theoremstyle} (if not was given
+%    \texttt{plain} is the default and if it is an undefined one we
+%    also revert to \texttt{plain}).
+%    \begin{macrocode}
+     \IfInstanceExistsF{theoremstyle}{\l_@@_theoremstyle_tl}
+       { \@latex@warning{Unknown~ theoremstyle~ `\l_@@_theoremstyle_tl'~ using~ 'plain'}
+         \theoremstyle {plain}
+       }
+%    \end{macrocode}
+%    So now we know that \cs{l_@@_theoremstyle_tl} holds a valid
+%    style. What we don't know is  whether or not there are special
+%    \insttype{block} instances that go with that (it might be a style
+%    that reuses the \instname{thm-\meta{style}block-...} instances).
+%    \begin{macrocode}
+    \IfInstanceExistsTF{block} { thm- \l_@@_theoremstyle_tl block-0 }
+       { \@@_debug_typeout:n{...~ style~ \l_@@_theoremstyle_tl\space exists } }
+       { \@@_debug_typeout:n{...~ style~ \l_@@_theoremstyle_tl\space
+           does~ not ~exist;~ 'plain'~ used } }
+%    \end{macrocode}
+%    So here is the \insttype{blockenv} instance for the new
+%    \enquote{theorem-like} environment. It uses a
+%    \insttype{captionedtext} instance for the \key{inner-instance}
+%    which we also have to declare.
+%    \begin{macrocode}
+    \DeclareInstance{blockenv}{#2}{display}
+      {
+        name                 = theorem-like,
+        tag-name             = theorem-like,
+        tag-attr-class       = ,
+        tagging-recipe       = standalone,
+        inner-level-counter  = ,
+        increment-level      = false,
+        setup-code           = ,
+        block-instance:e     = thm-
+                              \IfInstanceExistsTF{block}
+                                 {thm- \l_@@_theoremstyle_tl block-0}
+                                 { \l_@@_theoremstyle_tl } { plain }
+                               block ,
+        inner-instance-type  = captionedtext,
+        inner-instance       = #2 ,
+        para-instance        = justify ,
+      }
+%    \end{macrocode}
+%    The \insttype{captionedtext} instance is simple: the counter, if
+%    present is either argument \texttt{\#2} or \texttt{\#3}; the \key{title}
+%    receives argument \texttt{\#4}, and the \key{style} to use is
+%    stored in \cs{l_@@_theoremstyle_tl}. If \cs{\swapnumbers} was
+%    requested we use a style variant with the suffix \texttt{-swap} appended.
+%    \begin{macrocode}
+    \DeclareInstance{captionedtext}{#2}{theorem}
+      {
+        counter:e = \IfBooleanF #1 { \IfNoValueTF{#3}{#2}{#3} } ,  % <-- no counter if * form
+        title     = #4 ,
+        style:e   = \l_@@_theoremstyle_tl
+                    \bool_if:NT \l_@@_swap_number_bool {-swap}  ,
+      }
+%    \end{macrocode}
+%    We known that the style \cs{l_@@_theoremstyle_tl} exists, since
+%    we have tested that earlier, but we don't know if that is also
+%    true for the \texttt{-swap} variant. So we have to check that and
+%    declare it if necessary.
+%    \begin{macrocode}
+    \bool_if:NT \l_@@_swap_number_bool {
+      \IfInstanceExistsF{theoremstyle}{\l_@@_theoremstyle_tl -swap}
+      {
+        \DeclareInstanceCopy{theoremstyle}
+                            {\l_@@_theoremstyle_tl -swap}
+                            {\l_@@_theoremstyle_tl}
+        \clist_set:Ne \l_@@_order_clist
+            { \InstanceValue { theoremstyle }
+                             { \l_@@_theoremstyle_tl }
+                             { order }
+            }                              
+        \clist_clear:N \l_@@_tmp_clist
+        \clist_map_inline:Nn \l_@@_order_clist
+          {
+            \clist_put_right:Ne \l_@@_tmp_clist {
+              \str_case:nnF {##1}
+                { {title} {number}
+                  {number} {title} }
+                {##1}
+            }    
+          }
+        \EditInstance {theoremstyle}{\l_@@_theoremstyle_tl -swap}
+          { order:e = \l_@@_tmp_clist }
+      }
     }
+%   \ShowInstanceValues{theoremstyle}{\l_@@_theoremstyle_tl -swap}
+  }
 }
 %    \end{macrocode}
 %  \end{macro}
@@ -5690,112 +5834,6 @@
      
 %---------------------------------------
 
-\RenewDocumentCommand \newtheorem { s m O{#2} m o } {
-%
-  \IfBooleanF #1
-   {
-     \expandafter\@ifdefinable\csname #2\endcsname
-       {
-         \str_if_eq:nnTF{#2}{#3}
-            {
-              \@definecounter {#3}
-              \IfNoValueTF {#5}
-                {  % @ynthm
-                  \tl_gset:ce { the #3 }
-                     {
-                       \@thmcounter{#3}
-                     }
-                }
-                {  % @xnthm
-                  \@newctr{#2}[#5]
-                  \tl_gset:ce { the #3 }
-                     {
-                       \expandafter\noexpand\csname the#5\endcsname
-                       \@thmcountersep
-                       \@thmcounter{#3}
-                     }
-                }
-            }
-            {  % @othm
-              \@ifundefined{c@#3}
-                 { \@nocounterr{#3} }
-                 {
-                   \tl_gset:cn { the #2 }
-                      { \UseName { the #3 } }
-                 }
-            }
-       }
-   }
-%
-   \NewDocumentEnvironment{#2}{ ={note}o }
-      { \ParseLaTeXeTheorem {#2} \BooleanFalse {##1} }
-      { \BlockEnvEnd }
-   \NewDocumentEnvironment{#2*}{ ={note}o }
-      { \ParseLaTeXeTheorem {#2} \BooleanTrue {##1} }
-      { \BlockEnvEnd }
-%
-   \IfInstanceExistsF{theoremstyle}{\l_@@_theoremstyle_tl}
-     { \@latex@warning{Unknown~ theoremstyle~ `\l_@@_theoremstyle_tl'~ using~ 'plain'}
-       \theoremstyle {plain}
-     }
-%
-  \IfInstanceExistsTF{block}
-                     {thm-\l_@@_theoremstyle_tl block-0}
-                     { \typeout{-->>~ style~ \l_@@_theoremstyle_tl\space exists } }
-                     { \typeout{-->>~ style~ \l_@@_theoremstyle_tl\space does~ not ~exist } }
-   \DeclareInstance{blockenv}{#2}{display}
-     {
-       name                 = theorem-like,
-       tag-name             = theorem-like,
-       tag-attr-class       = ,
-       tagging-recipe       = standalone,
-       inner-level-counter  = ,
-       increment-level      = false,
-       setup-code           = ,
-       block-instance:e     = thm-
-                             \IfInstanceExistsTF{block}
-                                                {thm- \l_@@_theoremstyle_tl block-0}
-                                                { \l_@@_theoremstyle_tl } { plain }
-                              block ,
-       inner-instance-type  = captionedtext,
-       inner-instance       = #2 ,
-       para-instance        = justify ,
-     }
-%
-   \DeclareInstance{captionedtext}{#2}{theorem}
-     {
-       counter:e = \IfBooleanF #1 {#3} ,       % <-- no counter if * form
-       title     = #4 ,
-       style:e   = \l_@@_theoremstyle_tl
-                   \bool_if:NT \l_@@_swap_number_bool {-swap}  ,
-     }
-     \bool_if:NT \l_@@_swap_number_bool {
-       \IfInstanceExistsF{theoremstyle}{\l_@@_theoremstyle_tl -swap}
-       {
-         \DeclareInstanceCopy{theoremstyle}
-                             {\l_@@_theoremstyle_tl -swap}
-                             {\l_@@_theoremstyle_tl}
-         \clist_set:Ne \l_@@_order_clist
-             { \InstanceValue { theoremstyle }
-                              { \l_@@_theoremstyle_tl }
-                              { order }
-             }                              
-         \clist_clear:N \l_@@_tmp_clist
-         \clist_map_inline:Nn \l_@@_order_clist
-           {
-             \clist_put_right:Ne \l_@@_tmp_clist {
-               \str_case:nnF {##1}
-                 { {title} {number}
-                   {number} {title} }
-                 {##1}
-             }    
-           }
-         \EditInstance {theoremstyle}{\l_@@_theoremstyle_tl -swap}
-           { order:e = \l_@@_tmp_clist }
-       }
-     }
-%   \ShowInstanceValues{theoremstyle}{\l_@@_theoremstyle_tl -swap}
-}
 
 \bool_new:N \l_@@_swap_number_bool
 
