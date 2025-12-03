@@ -20,8 +20,8 @@
 %
 %
 
-\def\ltlabmathdate{2025-10-02}
-\def\ltlabmathversion{0.6w}
+\def\ltlabmathdate{2025-12-03}
+\def\ltlabmathversion{0.6x}
 %
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
@@ -475,6 +475,13 @@
 %  |viewer/pane/mathsource=true| (anywhere in the document) and |viewer/pane/mathml=false| (in the
 %  preamble, before the external file is read).
 %
+%  \subsection{MathML in an attribute}
+%  Microsoft Word puts the MathML into a proprietary attribute. For testing
+%  purpose this is implemented here too. The writing of such an attribute can
+%  be activated globally with |tagging-setup={math/setup=mathml-MS}|. 
+%  Locally it can be disabled with |math/MS/use=false|. The code makes use of the exported
+%  MathML file, so it needs two compilation and will not work if embedding of MathML is disabled.
+%  
 %
 %  \subsection{Automatic mathml creation with luamml}\label{sec:luamml}
 %
@@ -988,6 +995,7 @@
 %   \l__tag_math_mathml_pane_bool,
 %   \l__tag_math_alt_bool,
 %   \g__tag_math_luamml_tl,
+%   \l__tag_math_MSFT_bool
 % }
 % The variable \cs{g__tag_math_luamml_tl} is initially 0 and
 % the user key can set it to -1 or 1. This allows to distinguish
@@ -999,6 +1007,7 @@
 \bool_new:N\g__tag_math_mathml_AF_bool
 \bool_new:N\l__tag_math_mathml_pane_bool
 \bool_new:N\l__tag_math_alt_bool
+\bool_new:N\l__tag_math_MSFT_bool
 \tl_new:N\g__tag_math_luamml_tl
 \tl_gset:Nn\g__tag_math_luamml_tl {0}
 %    \end{macrocode}
@@ -1070,6 +1079,30 @@
 %    \end{macrocode}
 % \end{macro}
 %
+% This is a version of the previous command which writes MSFT-attributes
+% \changes{0.6z}{2025-11-22}{Add support for the MSFT attribute}
+% \begin{macro}{\@@_MSFT_mml:nn,\@@_MSFT_mml_aux:nn}
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_MSFT_mml:nn \use_none:nn
+\cs_new_protected:Npn \@@_MSFT_mml_aux:nn #1 #2 
+%#1 hash, #2 mathml
+  { 
+%    \end{macrocode}
+% mathml with the same hash should be included only once:
+%    \begin{macrocode}
+    \tl_if_exist:cF { g_@@_mathml_MSFT_#1_tl }
+     {
+       \pdf_string_from_unicode:nnN{utf16/hex}{#2}\l_@@_tmpa_tl
+       \__tag_attr_new_entry:ee
+        {MSFT-#1}
+        {/O /MSFT_Office /MSFT_MathML \l_@@_tmpa_tl } 
+       \tl_new:c  {g__math_mathml_MSFT_#1_tl} 
+       \tl_gset:cn {g__math_mathml_MSFT_#1_tl}  {MSFT-#1}      
+     }
+  }
+%    \end{macrocode}
+% \end{macro}
+% 
 % The html reader.
 % \changes{0.6o}{2025-05-01}{set catcode of hat to other too, tagging issue 836}
 %    \begin{macrocode}
@@ -1086,7 +1119,8 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn\@@_AF_html_reader_verb:w#1#2#3#4~</div>{
   \endgroup
-   \@@_AF_mml:nnnn{#1}{#2}{#3}{#4}
+   \@@_AF_mml:nnnn{#1}{#2}{#3}{#4}   
+   \@@_MSFT_mml:nn {#3}{#4}
    }
 %    \end{macrocode}
 %
@@ -1639,6 +1673,7 @@
   {
    math/mathml/sources .clist_set:N = \l__tag_math_mathml_files_clist,
    math/alt/use        .bool_set:N  = \l__tag_math_alt_bool,
+   math/MS/use         .bool_set:N  = \l__tag_math_MSFT_bool,
    viewer/pane/mathml      .bool_set:N = \l__tag_math_mathml_pane_bool,
    viewer/pane/mathml      .initial:n = true,
    viewer/pane/mathsource  .bool_set:N = \l__tag_math_texsource_pane_bool,
@@ -1713,6 +1748,14 @@
         {
           math/mathml/AF=true
         }
+     },
+    math/__setup / mathml-MS .code:n =  
+     {
+       \tl_gset:Nn \g_@@_luamml_load_tl{1}
+       \cs_set_eq:NN\@@_MSFT_mml:nn\@@_MSFT_mml_aux:nn
+       \bool_set_true:N\l__tag_math_MSFT_bool
+       \clist_put_right:Ne\l__tag_math_mathml_files_clist
+       {\c_sys_jobname_str-mathml,\c_sys_jobname_str-luamml-mathml}
      },
     math/__setup / tex-AF .code:n =
      {
@@ -2111,7 +2154,7 @@
         {
           \typeout {WARNING:~mathml~missing~for~hash~\l_@@_content_hash_tl}
         }
-     }
+     }   
    \tag_socket_use:n {math/mathml/write/prepare}
    \tag_socket_use:n {math/mathml/write} % write hash if request
     \bool_if:NTF\l__tag_math_texsource_AF_bool
@@ -2121,11 +2164,16 @@
      {
        tag=Formula,
        attribute-class=\l_@@_attribute_class_tl, %
+       attribute   = 
+        \bool_if:NT \l__tag_math_MSFT_bool
+         {
+           \cs_if_exist_use:c {g_@@_mathml_MSFT_ \l_@@_content_hash_tl _tl}
+         },
        AFref       =
         \bool_if:NT\l__tag_math_mathml_AF_bool
          {
            \cs_if_exist_use:c {g_@@_mathml_ \l_@@_content_hash_tl _tl}
-         },
+         },   
        texsource   = \l_@@_content_AF_source_tmpa_tl, % should be after mathml AF!
        title-o     = \g_@@_grabbed_env_tl,    %
        alt         = \l_@@_content_alt_tl
