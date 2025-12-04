@@ -101,6 +101,10 @@
 %
 % Subfigures and subcaptions are currently not handled, but will be implemented
 % as simple \texttt{Part} with their own \texttt{Caption}.
+% 
+% Unknown float types are put into a generic structure when they are encountered in the 
+% source. To add support for a new float type the \texttt{float/new} key described below can 
+% be used.
 %
 % \section{Links}
 % The code disable the caption patches from hyperref. It will add an anchor at the
@@ -116,11 +120,38 @@
 % \begin{function}{float/new,float/flush,float/split}
 % \begin{description}
 % \item[float/new] This setups the needed code for a new float type. The value
-% is the \emph{captype}, the name stored in \cs{\@captype}.
+% is the \meta{captype} which should be the same name as  
+% the name stored in \cs{\@captype}. The code defines symbolic 
+% structure names \texttt{float/\meta{captype}s} (for the container), 
+% \texttt{float/\meta{captype}} (for a single float), \texttt{float/\meta{captype}/caption}
+% and \texttt{float/meta{captype}/label} (for the caption and its label) and
+% assigns standard roles to them. The roles can be changed with \cs{AssignStructureRole}.
 %
 % \item[float/flush]  This will flush out the collected floats sofar (currently
-% table and figure. The value is a sectioning level, e.g. \texttt{section} or \texttt{chapter},
-% or \texttt{document}. The key issues a \cs{par} to end the current paragraph.
+% table and figure into a container. The value is a sectioning level for which \cs{toclevel@}\meta{name}
+% exists, e.g. \texttt{section} or \texttt{chapter}, or an integer number describing the level, like $1$ for 
+% the section level. The container will then behave like a sectioning command of this level and create
+% a \texttt{Sect} structure element containing the floats. The default value is the current sectioning level.
+% The command should typically be used directly before a sectioning of the same or higher level. E.g. this
+% here is wrong as following text \enquote{some text} would no longer be inside subsection A:
+% \begin{verbatim}
+% \DocumentMetadata{tagging=on}
+% \documentclass{article}
+% 
+% \begin{document}
+% \section{section A}
+% \subsection{subsection A}
+% \begin{figure}
+% \caption{hallo}
+% \end{figure}
+% \tagpdfsetup{float/flush}
+% some text 
+% \section{section B}
+% \end{document}
+% \end{verbatim}
+% 
+% Correct would be to put it directly before \verb+\subsection{section B}+.
+% The key issues a \cs{par} to end the current paragraph.
 %
 % The floats will then inserted as a \texttt{Sect} of this level (all \texttt{Sect} of smaller or equal
 % level are closed). The key then starts a new container for following floats.
@@ -131,9 +162,10 @@
 % It will only work reasonably well if the content of the float parts are in a sensible order
 % and can be separated by this command. More complex setups with tabulars will need more
 % thoughts.
-% \item[float/collect] With this key the collection of floats can be changed. The value \texttt{false} disables
-% the collection of floats in a container: the float structure is then inserted directly where it appears in the source.
-% The default value is \texttt{true}.
+% 
+% \item[float/container] The value \texttt{false} disables
+% the collection of floats in a container: the float structure is then inserted directly 
+% where it appears in the source. The default value is \texttt{true}.
 % \end{description}
 % \end{function}
 %
@@ -198,7 +230,12 @@
 \bool_gset_true:N  \g_@@_float_sect_bool
 %    \end{macrocode}
 % \end{variable}
-%
+% \begin{variable}{\l_@@_float_tmpa_tl,\l_@@_float_tmpb_tl}
+%    \begin{macrocode}
+\tl_new:N\l_@@_float_tmpa_tl
+\tl_new:N\l_@@_float_tmpb_tl
+%    \end{macrocode}
+% \end{variable}
 % \begin{macro}{\@@_float_init:}
 % To be able to set unique targets for links, we
 % need a counter outside the tagging sockets.
@@ -246,12 +283,26 @@
 % Currently it is for all float types or none.
 % Probably we will need some more options here to select some float types.
 %
-% \begin{macro}{float/collect}
+% \begin{macro}{float/container}
 %    \begin{macrocode}
 \keys_define:nn{__tag/setup}
   {
-    float/collect .bool_gset:N = \g_@@_float_sect_bool
+    float/container .bool_gset:N = \g_@@_float_sect_bool
   }
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}{\@@_float_container_new:n}
+% This creates a new container and then stashes it. 
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_float_container_new:nN #1 #2 % #1 captype #2 tl-var to return number
+  {
+    \tag_struct_begin:n{tag=\UseStructureName{float/#1s},stash}
+    \tl_set:Ne #2 {\int_use:N\c@g__tag_struct_abs_int}
+    \prop_gput:Nne\g_@@_float_sect_prop {#1-struct}{\int_use:N\c@g__tag_struct_abs_int}
+    \tag_struct_end:
+  }  
+\cs_generate_variant:Nn \@@_float_container_new:nN {eN}  
 %    \end{macrocode}
 % \end{macro}
 % \begin{macro}{\@@_float_init_collect:}
@@ -265,9 +316,7 @@
       {
         \seq_map_inline:Nn\g_@@_float_types_seq
           {
-            \tag_struct_begin:n{tag=\UseStructureName{float/##1s},stash}
-            \prop_gput:Nne\g_@@_float_sect_prop {##1-struct}{\int_use:N\c@g__tag_struct_abs_int}
-            \tag_struct_end:
+            \@@_float_container_new:nN {##1}\l_@@_tmpa_tl
           }
       }
   }
@@ -285,11 +334,15 @@
      {
       \seq_map_inline:Nn\g_@@_float_types_seq
         {
-          \prop_get:NnNT\g_@@_float_sect_prop{##1-used}\l_@@_tmpa_tl
+          \prop_get:NnNT\g_@@_float_sect_prop{##1-used}\l_@@_float_tmpa_tl
             {
+              \prop_get:NnNF\g_@@_float_sect_prop{##1-struct}\l_@@_float_tmpb_tl
+               {
+                 \@@_float_container_new:eN {##1}\l_@@_float_tmpb_tl
+               }
               \exp_args:Ne
-              \tag_struct_use_num:n{\prop_item:Nn\g_@@_float_sect_prop{##1-struct}}
-              \prop_gremove:Nn \g_@@_float_sect_prop{##1-used}
+              \tag_struct_use_num:n{\l_@@_float_tmpb_tl}
+              \prop_gremove:Nn \g_@@_float_sect_prop{##1-used}                
             }
         }
      }
@@ -307,11 +360,13 @@
    float/flush .code:n =
      {
        \par
-       \UseTaggingSocket{sec/end}{\int_eval:n{\cs_if_exist_use:c{toclevel@#1}+0}}
+       \cs_if_exist:cTF{toclevel@#1}
+        { \UseTaggingSocket{sec/end}{\int_eval:n{\use:c{toclevel@#1}}}}
+        { \UseTaggingSocket{sec/end}{\int_eval:n{#1}}}
        \@@_float_stop_sect:
        \@@_float_init_collect:
      },
-   float/flush .default:n = document
+   float/flush .default:n = \@currentseclevel
  }
 %    \end{macrocode}
 % \end{macro}
@@ -463,10 +518,16 @@
     {
      \bool_if:NTF\g_@@_float_sect_bool
       {     
-        \tag_struct_begin:e
-          {tag=\UseStructureName{float/\@captype},
-           parent=0\prop_item:No\g_@@_float_sect_prop{\@captype-struct}}%
-        \prop_gput:Nee \g_@@_float_sect_prop {\@captype-used}{true}
+        \prop_get:NoNF \g_@@_float_sect_prop{\@captype-struct}\l_@@_float_tmpa_tl
+         {
+           \@@_float_container_new:eN {\@captype}\l_@@_float_tmpa_tl
+         }
+       \tag_struct_begin:e
+          {
+            tag=\UseStructureName{float/\@captype},
+            parent=\l_@@_float_tmpa_tl
+          }%             
+       \prop_gput:Nee \g_@@_float_sect_prop {\@captype-used}{true}
       }
       {
         \tag_struct_begin:n{tag=\UseStructureName{float/\@captype}}
