@@ -364,6 +364,9 @@
 %
 %    \TemplateSemantics
 %
+%    The \insttype{blockenv} type handles the overall setup for the
+%    document-level environments.
+%
 %    This \insttype{blockenv} template supports the legacy list setting that
 %    are found in many document classes in the macros \tn{@listi},
 %    \tn{@listii}, up to \tn{@listvi}. It also uses the counter
@@ -1917,6 +1920,9 @@
 %  \begin{instance}{thmstyle plain}
 %    The main style used for many theorem-like environments, i.e., the
 %    one you get if no special \cs{theoremstyle} has been specified.
+%
+%    We do not want potential tagging from \tn{textbf} here, so we use
+%    \tn{bfseries} to set the font.
 %    \begin{macrocode}
 \DeclareInstance{thmstyle}{plain}{std}
   {
@@ -2608,7 +2614,7 @@
                             blockenv implementation]
 %    \end{macrocode}
 %
-% \subsection{Candiates for kernel changes}
+% \subsection{Candidates for kernel changes}
 %
 %   General kernel changes, also loaded by the sec and toc code.
 %    \begin{macrocode}
@@ -2848,6 +2854,19 @@
 \def\@domathendpetrue {\global\let\if@domathendpe\iftrue}
 %    \end{macrocode}
 %  \end{macro}
+%
+%
+%    There is a general bug in the para handling: when the output routine is
+%    triggered the current setting of \texttt{@endpe} affects what
+%    happens in the OR. but it shouldn't so we need to reset its value
+%    (which is global) and set it back after the OR has finished. This
+%    is what the following code does (final implementation should
+%    probably not involve a normal hook):\fmi{fix in kernel}
+%    \begin{macrocode}
+\AddToHook{build/column/before}{%
+  \if@endpe \@endpefalse \aftergroup\@endpetrue \fi
+}  
+%    \end{macrocode}
 %
 %
 %
@@ -3216,12 +3235,94 @@
 % \subsection{Implementation of templates}
 %
 %
+% \subsubsection{Some notes on the \LaTeXe{} legacy switches}
+%
+%    \LaTeXe{} used a number of switches to manage its list environments
+%    and everything that was based on them.
+%
+%    For the reimplementation I made some notes about the original
+%    usage and how this got changed (while keeping the names for now).
+%
+%    Some of these switches really need to keep their names, e.g.,
+%    \texttt{@nobreak} or \texttt{minipage}, because they are used all
+%    over the place. Others can probably replaced with L3 booleans
+%    which makes things faster and cleaner, but for now I kept them
+%    too.
+%
+% \paragraph{Original usage:}
+%    \begin{macrocode}
+%
+% @newlist (global):  signal that we are at the start of a list
+%
+% -> true   at the start of a list before the first item when control
+%           is returned to document
+% -> false  in everypar setting the first item
+% -> false  at end of list if still true (after generating an error)
+%
+% -> tests: at list start setting @noparitemtrue and @noparlisttrue
+%
+%
+% @inlabel (global): signalling that some item label waits to be typeset
+%
+% -> true   in \@item  
+% -> false  at list end
+% -> false  in everypar after label has been typeset
+% -> false  in \newpage after \leavmode to typeset item label
+%           (probably not needed)
+%
+% -> tests: at list start setting @noparitemtrue and @noparlisttrue
+% -> tests: at list end to ensure that dangling label is typeset
+% -> tests: in \@item to output a dangling item label by switching to hmode
+% -> tests: in \everypar to output a dangling item label
+% -> tests: in \newpage to output a dangling item label before the page is ended
+% -> tests: in tagging hook {para/begin}{kernel}
+%
+%
+% @noparlist (local):
+%
+% -> true   at start of list if already @inlabel=true
+% -> false  at start of list otherwise
+%
+% -> tests: in \endtrivlist. If true supress vertical spacing after the list
+%
+%
+% @noparitem (local):
+%
+% -> true   at start of list if already @inlabel=true
+% -> false  
+%
+%    \end{macrocode}
+%    \paragraph{Repurpose:}
+%    \begin{macrocode}
+%
+% Interpret legacy switches as follows (keeping the names for now)
+%
+% @newlist   ->  signals that we are at the start of a new block with a caption or
+%                at the start of a list block expecting an item next
+%
+%                In other words this is now really start of a block
+%                with inner structure.
+%
+% @noparlist ->  signals that we are on a new block with @inlabel already true, i.e.,
+%                and this placement should happen horizontally
+%
+% @inlabel   ->  Signals that we have at least one item or caption waiting to be typeset
+%                inside the label box
+%
+% @noparitem ->  dropped (handled directly)
+%
+%    \end{macrocode}
+%
+%
+%
+%
+%
 % \subsubsection{Implementation of \insttype{blockenv} templates}
 %
-% So far there is only one, but who knows \ldots\ --- this is why we
-% don't call it \texttt{std}
+% So far there is only one, but who knows \ldots\ --- however, the
+%    majority will be vertically oriented blocks, so we make this the \texttt{std}.
 %
-%  \begin{template}{blockenv display}
+%  \begin{template}{blockenv std}
 % ^^A
 %    \begin{macrocode}
 \DeclareTemplateCode{blockenv}{std}{4}
@@ -3242,7 +3343,7 @@
   ,final-code             = \l_@@_final_code_tl 
 }
 {
-  \template_debug_typeout:n{~\space template:~ 'display';~
+  \template_debug_typeout:n{~\space template:~ 'std;~
                             arguments:~ \exp_not:n{|#1|#2|#3|#4|}}
 %    \end{macrocode}
 %    We first evaluate the key list passed from the document (if
@@ -3357,7 +3458,7 @@
     {
 %    \end{macrocode}
 %    For now we don't offer to alter instance parameters here so we
-%    pass an empty argument.
+%    pass an empty argument.^^A
 %  \changes{v0.9j}{2025/07/11}{Expand arguments before passing them to
 %    \cs{Useinstance} to get better error messages}
 %    \begin{macrocode}
@@ -4540,7 +4641,8 @@
 %
 % \begin{socketdecl}{block/list/label}
 % A tagging socket to tag the label. It takes two arguments so that it can transparently
-% pass the label content.
+% pass the label content.\fmi{I think this socket should just be
+%    called list/label}
 % \changes{v0.9k}{2025/07/21}{Removed fallback declaration here}
 % Declaration is in lttagging.
 % \end{socketdecl}
@@ -4912,7 +5014,6 @@
            { \l_@@_env_name_tl \space environment}
            \UnusedTemplateKeys
      }
-%
 %    \end{macrocode}
 %    
 %    In case there is a dangling \cs{item} we can either join that
@@ -4954,7 +5055,7 @@
 %    \end{macrocode}
 %    Then we apply the tagging socket for the caption to the complete content:
 %    \begin{macrocode}
-        \tag_socket_use:nnn {block/theorem/caption} {}
+        \tag_socket_use:nnn {captionedtext/caption} {}
             {
               \skip_horizontal:n { \l_@@_caption_before_skip }
 %    \end{macrocode}
@@ -4972,7 +5073,7 @@
             }
       }
 %    \end{macrocode}
-%    If the proof title should be standalone we immediately push it out:
+%    If the title should be standalone we immediately push it out:
 %    \begin{macrocode}
    \bool_if:NTF \g_@@_label_standalone_bool
       {
@@ -5014,6 +5115,29 @@
 }
 %    \end{macrocode}
 % \end{template}
+%
+%
+%
+%
+% \begin{socketdecl}{tagsupport/captionedtext/caption}
+%    \begin{macrocode}  
+\NewTaggingSocket{captionedtext/caption}{2}
+%    \end{macrocode}
+% \end{socketdecl}
+%    
+% \begin{plugdecl}{kernel}
+%    \fmi{why kernel?}
+%    \begin{macrocode}
+\NewTaggingSocketPlug{captionedtext/caption}{kernel}
+ {
+   \tag_struct_begin:n{tag=Caption}
+   #2
+   \tag_struct_end:
+ } 
+\AssignTaggingSocketPlug{captionedtext/caption}{kernel} 
+%    \end{macrocode}
+% \end{plugdecl}
+%
 %
 %
 %    Here are the functions that are called when the corresponding name appears
@@ -5191,7 +5315,7 @@
       \box_use_drop:N \g_@@_labels_box % <- does nothing if there
                                        %    is no dangling label
       \l_@@_caption_decls_tl
-      \tag_socket_use:nnn {block/theorem/caption} {}
+      \tag_socket_use:nnn {captionedtext/caption} {}
           {
             \skip_horizontal:n { \l_@@_caption_before_skip }
 %    \end{macrocode}
@@ -5670,7 +5794,9 @@
 %    End of tagging related declarations.
 %
 %
-% \subsection{Tagging recipes}
+%
+% \subsubsection{Tagging recipes}
+%
 % \changes{v0.9g}{2025-07-01}{a tagging socket for recipe}
 % \begin{socketdecl}{tagsupport/block/recipe}
 % A tagging socket to call the tagging recipe.
@@ -6080,7 +6206,7 @@
 % mechanism.
 %
 %
-% \subsection{Declarations for theorem-like environments}
+% \subsubsection{Declarations for theorem-like environments}
 %
 %  \begin{macro}[no-user-doc]{\newtheorem}
 %    We reimplement the extended \pkg{amsthm} version of the declaration which
@@ -6485,7 +6611,7 @@
 %
 %
 %
-% \subsection{Supporting QED in proofs}
+% \subsubsection{Supporting QED in proofs}
 %
 %  The \pkg{amsthm} package contains some elaborate code to support
 %  placing a QED symbol into the prood (by default at the end, but
@@ -6605,158 +6731,17 @@
 %    \end{macrocode}
 %
 %
-% \section{Instance declarations for environments}
-%
-% \subsection{Blockenv instances}
-%
-% The blockenv instances handle overall setup for the document-level
-% environments, i.e.,
-% \begin{itemize}
-%  \raggedright
-%  \item name of the environment for debugging purposes (\key{name})
-%  \item how tagging should be performed (\key{tagging-recipe},
-%        \key{tag-name}, \key{tag-attr-class})
-%  \item is this \insttype{blockenv} transparent for any blocks nested
-%        inside (\key{transparent-level})?
-%  \item any special setup code; normally not used (\key{legacy-code})
-%  \item what kind of block instance should be used  (\key{block-instance})
-%  \item what kind of para instance should be used; empty means
-%        inherit from the outside (\key{para-instance})\fmi{Note that
-%    block does set some values --- check if this is right!}
-%  \item are inner paragraphs real paragraphs (default) or are they
-%        just \struct{text} structures and part of an outer
-%        paragraph (\key{tagging-suppress-paras}) 
-%  \item what kind of inner instance should be used, if any
-%        (\key{inner-instance}, \key{inner-instance-type})
-%  \item the counter name of the inner level, if any (\key{inner-level-counter})
-%  \item supported nesting depth of the inner level, if relevant
-%        (\key{max-inner-levels})
-%  \item extra code executed at the end, by default \tn{ignorespaces}
-%        (\key{final-code})
-% \end{itemize}
-% The blockenv \instname{displayblock} instance below shows the full set with
-% those using default values being commented out.
-%
-%
-%
-%
-%
-% \subsubsection{The theorem-like instances}
-%
-%   Instances for theorem-like environments are normally automatically
-%   declared via \cs{newtheorem} an \cs{newtheoremstyle} but, of course,
-%   one could also declare them manually or update them with
-%   \cs{EditInstance} after they have been initially declared in one
-%   way or another.
-%
-%   So here we only repeat an example that one would get from
-%   \verb=\newtheorem{sample}{Example}=.
-%
-%  \begin{instance}{blockenv sample}
-%\begin{verbatim}
-%  \DeclareInstance{blockenv}{sample}{std}
-%  {
-%     name                = theorem-like
-%    ,tag-name            = theorem-like
-%    ,tagging-recipe      = standalone
-%    ,transparent-level   = true
-%    ,block-instance:e    = thm-plain
-%    ,inner-instance-type = captionedtex
-%    ,inner-instance      = sample
-%    ,para-instance       = justify
-%  }
-%\end{verbatim}
-%
-%  \end{instance}
-%
-%  \begin{instance}{captionedtext sample}
-%\begin{verbatim}
-%  \DeclareInstance{captionedtext}{sample}{thmlike}
-%  {
-%    ,counter = sample
-%    ,title   = Example
-%    ,style   = plain
-%  }
-%\end{verbatim}
-%
-%   The \key{title} gets the print name for the theorem-like
-%   environment, the \key{counter} depends on the optional arguments
-%   given to \cs{newtheorem} and the \key{style} is the current active
-%   \cs{theoremstyle} of any, otherwise \texttt{plain}.
-%
-%   If \cs{swapnumbers} was used then the style is appended a
-%   \texttt{-swap}.
-%
-%  \end{instance}
-%
-%   New theorem styles are normally declared with \cs{newtheoremstyle}
-%   which generates generates a new instance of type
-%   \insttype{thmstyle}. The base styles as defined by
-%   \pkg{amsthm} are declared directly as shown below.
-%
-%
 %
 %
 %
 %
 
 
-%    We do not want potential tagging from \tn{textbf} here,
-%    so we use \tn{bfseries} to set the font. The commands set also the link targets
-%    which should be inside the main structure.
-%    \begin{macrocode}  
-\NewTaggingSocket{block/theorem/caption}{2}
-\NewTaggingSocketPlug{block/theorem/caption}{kernel}
- {
-   \tag_struct_begin:n{tag=Caption}
-   #2
-   \tag_struct_end:
- } 
-\AssignTaggingSocketPlug{block/theorem/caption}{kernel} 
-%    \end{macrocode}
 
 
 
 %    \begin{macrocode}  
 
-
-
-
-
-
-
-
-
-%---------------------------------------
-
-% handling qed (more or less copy-paste so far from amsthm)
-
-
-  
-
-     
-
-
-
-
-
-
-
-% fix a bug in @endpe (temp)
-
-\AddToHook{build/column/before}{%
-  \if@endpe \@endpefalse \aftergroup\@endpetrue \fi
-}  
-
-%%  \let\thm@indent\noindent % no indent
-%%  \thm@headfont{\bfseries}% heading font is bold
-%%  \thm@notefont{}% same as heading font
-%%  \thm@headpunct{.}% add period after heading
-%%  \let\thm@swap\@gobble
-%%  \thm@preskip\topsep
-%%  \thm@postskip\theorempreskipamount
-
-%% support \nopunct?
 
 %---------------------------------------
 
@@ -6832,63 +6817,6 @@
 
 %---------------------------------------
 
-%---------------------------------------
-
-
-
-% @newlist (global):  signal that we are at the start of a list
-%
-% -> true    at the start of a list before the first item when control
-%    is returned to document
-%
-% -> false  in everypar setting the first item
-% -> false  at end of list if still true (after generating an error)
-%
-% -> tests: at list start setting @noparitemtrue and @noparlisttrue
-%
-%
-%
-% @inlabel (global): signalling that some item label waits to be typeset
-%
-% -> true   in \@item  
-% -> false  at list end
-% -> false  in everypar after label has been typeset
-% -> false  in \newpage after \leavmode to typeset item label
-%    (probably not needed)
-%
-% -> tests: at list start setting @noparitemtrue and @noparlisttrue
-% -> tests: at list end to ensure that dangling label is typeset
-% -> tests: in \@item to output a dangling item label by switching to hmode
-% -> tests: in \everypar to output a dangling item label
-% -> tests: in \newpage to output a dangling item label before the page is ended
-% -> tests: in tagging hook {para/begin}{kernel}
-%
-%
-% @noparlist (local):
-%
-% -> true   at start of list if already @inlabel=true
-% -> false  at start of list otherwise
-
-% -> tests: in \BlockEnvEnd. if true supress vertical spacing after the block
-
-% @noparitem (local):
-%
-% -> true   at start of list if already @inlabel=true
-% -> false  
-
-
-% Interpret legacy switches as follows (we might want to keep the names for now)
-%
-%
-% @newlist   ->  signals that we are at the start of a new block with a caption or
-%                at the start of a list block expecting an item next
-% @noparlist ->  signals that we are on a new block with @inlabel already true, i.e.,
-%                and this placement should happen horizontally
-% @inlabel   ->  Signals that we have at least one item or caption waiting to be typeset
-%                inside the label box
-%
-% @noparitem ->  dropped (handled directly)
-%
 %    \end{macrocode}
 %
 %
