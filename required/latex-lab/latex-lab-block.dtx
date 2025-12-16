@@ -1399,7 +1399,37 @@
 % \subsection{The \env{verse} environment}
 %
 %    The \env{verse} environment is currently still implemented as a
-%    list without real items (as in \LaTeXe{}. That needs updating.\fmi{fix}
+%    list without real items (as in \LaTeXe{}. That needs updating.
+%
+%  \begin{environment}{verse}
+%  The verse environment has not special tagging currently. It is
+%  defined as a simple standard list and takes the tagging from
+%    there.\fmi{fix eventually}
+%  But it must be redefined so that \tn{itemindent} is correctly set.
+%    \begin{macrocode}
+\AddToHook{begindocument/before}{
+  \DeclareDocumentEnvironment{verse}{ !O{} }
+    { 
+      \let\\\@centercr
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+      \SimpleBlockEnv{list}
+        {
+           item-indent=-1.5em
+          ,para-indent=-1.5em
+          ,item-vspace=0pt
+          ,right-margin = \leftmargin
+          ,left-margin  = \leftmargin+1.5em
+          ,#1
+        }
+      \item\relax    
+    }
+    { \BlockEnvEnd }
+  }   
+%    \end{macrocode}
+% \end{environment}
+%
 %
 %
 % \subsection{The \env{trivlist} environment}
@@ -1662,7 +1692,7 @@
 %
 %  
 %
-% \subsection{The legacy \env{list} environment}
+% \subsection{The legacy \env{list} and \env{trivlist} environments}
 %
 % \begin{environment}{list}
 %    The legacy 2e list environment is more complicated as we have to get the
@@ -1674,7 +1704,7 @@
 %    \end{macrocode}
 %    We do this by storing them away and then call the list
 %    instance. Inside this instance the \key{legacy-code} key
-%    contains \tn{legacylistsetupcode} which makes use of the stored values.
+%    contains \tn{legacylistsetup} which makes use of the stored values.
 %  \changes{v0.8v}{2024/10/11}{Update \tn{@itemlabel} in
 %    \cs{l_@@_legacy_env_params_tl} and not at the start of the
 %    environment (tagging/730)}
@@ -1685,7 +1715,6 @@
            #3
          }
 %    \end{macrocode}
-%
 %    The \LaTeXe{} lists don't support captions so we use \cs{SimpleBlockEnv}.
 %    \begin{macrocode}
       \SimpleBlockEnv{list} {#1}
@@ -1693,8 +1722,29 @@
     { \BlockEnvEnd }
 }
 %    \end{macrocode}
-%
 % \end{environment}
+%
+%
+%
+%  \begin{environment}{trivlist}
+%    \LaTeXe{} defined \env{trivlist} as an implementation of
+%    \env{list} (or rather the other way around).\fmi{Replace with
+%    code not using \tn{list}} 
+%    \begin{macrocode}
+\AddToHook{begindocument/before}{
+  \RenewDocumentEnvironment{trivlist}{ !O{} }
+                           { \list[#1]{}
+                             {
+                               \dim_zero:N \leftmargin
+                               \dim_zero:N \labelwidth
+                               \cs_set_eq:NN \makelabel \use:n
+                             }
+                           }
+    { \BlockEnvEnd }
+}
+%    \end{macrocode}
+%  \end{environment}
+%
 %
 %
 %  \subsubsection{Its \insttype{blockenv} instance}
@@ -1711,7 +1761,7 @@
 %    provide a way to support legacy setups).
 %
 %    To set up the default settings (as they were used in \LaTeXe{})
-%    the \key{legacy-code} key gets \cs{legacylistsetupcode} assigned
+%    the \key{legacy-code} key gets \cs{legacylistsetup} assigned
 %    that contains the necessary code to set up these defaults.
 %    Changing the \insttype{blockenv} is therefore not recommened for
 %    the legacy \env{list} environment.
@@ -1723,7 +1773,7 @@
   ,tag-attr-class      =
   ,tagging-recipe      = list
   ,transparent-level   = false
-  ,legacy-code         = \legacylistsetupcode
+  ,legacy-code         = \legacylistsetup
   ,block-instance      = std-list
   ,inner-level-counter =
   ,inner-instance-type = list
@@ -1783,9 +1833,6 @@
 % see if they could be easily remodeled using the new implementation
 % of if there is a need for extended templates.
 %
-%  \subsubsection{The \insttype{blockenv} and \insttype{captionedtext}
-%    instances they use}
-%
 % Assuming declarations such as
 %\begin{verbatim}
 %  % \swapnumbers              % <- commented out
@@ -1793,7 +1840,13 @@
 %  \newtheorem{axiom}[def]{Axiom}
 %\end{verbatim}
 % in a document, then the following instances of type \insttype{blockenv} and
-% \insttype{captionedtext} are declared by \cs{newtheorem}:
+% \insttype{captionedtext} are declared by \cs{newtheorem}.
+%
+%
+%  \subsubsection{The \insttype{blockenv} instances they use}
+%
+%    Given the above input \cs{newtheorem} defines the following
+%    \insttype{blockenv} instance:
 %\begin{verbatim}
 %  \DeclareInstance{blockenv}{axiom}{std}
 %  {
@@ -1820,6 +1873,16 @@
 %    the \insttype{block} instance from the \texttt{plain} style is
 %    reused.
 %
+%    What varies from \insttype{blockenv} instance to instance are the
+%    values for \key{block-instance} and \key{inner-instance}.
+%
+%    We use \struct{theorem-like} as the structure name and rolemap it
+%    to a \struct{Sect} because that can hold a \struct{Caption}.
+%
+%
+%
+%  \subsubsection{The \insttype{captionedtext} instances they use}
+%
 %    The instance of type \insttype{captionedtext} is also defined by
 %    \cs{newtheorem} and in this case it looks like this:
 %\begin{verbatim}
@@ -1837,17 +1900,19 @@
 %\end{verbatim}
 % in the \insttype{captionedtext} instance instead.
 %
-%    New theorem styles can be declared with \cs{newtheoremstyle} which
-%    then generates an instance of type
-%    \insttype{thmstyle}. Alternatively, it is of course posible
-%    to declare the instances directly (which gives a bit more
-%    flexibility).
 %
-%    A few such styles are predeclared, matching what is offered by
-%    \pkg{amsthm}. These are  shown below.
 %
-
+%
+%
+%
 %  \subsubsection{The \insttype{thmstyle} instances they use}
+%
+%    New theorem styles can be declared with \cs{newtheoremstyle}
+%    which then generates an instance of type
+%    \insttype{thmstyle}. Alternatively, it is, of course, possible to
+%    declare the instances directly (which gives you a bit more
+%    flexibility).  A few such styles are predeclared, matching what
+%    is offered by \pkg{amsthm}. These are shown below.
 %
 %  \begin{instance}{thmstyle plain}
 %    The main style used for many theorem-like environments, i.e., the
@@ -1969,7 +2034,7 @@
 %    possible to interpret it either as the value for the key
 %    \key{note} or as a key/value list that holds special key settings
 %    for this particular environment instance. the result is analyzed
-%    by \cs{ParseLaTeXeTheorem} which then calls a \insttype{blockenv}
+%    by \cs{ParseLaTeXeTheoremlike} which then calls a \insttype{blockenv}
 %    instance with the name \instname{proof}.
 %
 %    In addition we have to set up handling of QED symbols using
@@ -1980,7 +2045,7 @@
 %    \begin{macrocode}
 \NewDocumentEnvironment{proof}{ ={note}o }
    { \pushQED{\qed}%
-     \ParseLaTeXeTheorem {proof} \BooleanTrue {#1} }
+     \ParseLaTeXeTheoremlike {proof} \BooleanTrue {#1} }
    { \popQED \BlockEnvEnd }
 %    \end{macrocode}
 %  \end{environment}
@@ -2170,78 +2235,6 @@
 % \section{Advice on adjusting the layout of standard block environments}
 %
 % \emph{to document}
-%
-%
-% \section{Debugging}
-% 
-% \begin{function}{\DebugBlocksOn,\DebugBlocksOff, \block_debug_on:, \block_debug_off:}
-%    These commands enable/disable debugging messages for blocks. They also
-%    enable/disable debugging of templates (e.g., call
-%    \cs{DebugTemplatesOn} or \cs{DebugTemplatesOff}).
-% \end{function}
-%
-%    The data that is produced is rather verbose and largely guided
-%    (so far) by what seemed helpful while developing the code. This
-%    needs some cleanup at a later stage.\fmi{cleanup} At the moment,
-%    if you have the following simple document
-%
-%\begin{footnotesize}
-%\begin{verbatim}[xleftmargin=-20pt,numbers=left,numbersep=6pt,numberblanklines]
-%         \DocumentMetadata{tagging=on, lang=en}
-%
-%         \documentclass{article}
-%
-%         \DebugBlocksOn
-%
-%         \begin{document}
-%           \begin{itemize}[item-vspace=3pt]
-%             \item             A normal item
-%             \item[\textbf{+}] A special item
-%           \end{itemize}
-%         \end{document}
-%\end{verbatim}
-%\end{footnotesize}
-%
-%    \smallskip
-%    \noindent
-%    then you will get the following information on the screen and in
-%    the \texttt{.log} file:
-%    \smallskip
-%
-%\begin{footnotesize}
-%\begin{verbatim}[xleftmargin=-40pt]
-% [Template] ==> Use 'blockenv' instance: itemize on input line 8
-% [Template] ==>   template: 'display'; arguments: |item-vspace=3pt|\BooleanFalse |\NoValue |\NoValue |
-% [Template] ==> Use 'block' instance: std-list-1 on input line 8
-% [Template] ==>   template: 'std'; argument: |item-vspace={3pt}|
-% [Blocks] ==> @endpe=false on input line 8
-% [Template] ==> Use 'list' instance: itemize-1 on input line 8
-% [Template] ==>   template: 'std'; arguments: ||\BooleanFalse |\NoValue |\NoValue |
-% [Blocks] ==> Set first block everypar on input line 8
-% [Blocks] ==> template:list:std end
-%
-% [Template] ==> Use 'item' instance: basic on input line 9
-% [Template] ==>   template: 'std'; argument: ||
-% [Blocks] ==> Set item block everypar on input line 9
-% [Blocks] ==> ... in item block everypar on input line 9
-% [Blocks] ==> increment P on input line 9
-% [Blocks] ==> Set noop block everypar on input line 9
-%
-% [Template] ==> Use 'item' instance: basic on input line 10
-% [Template] ==>   template: 'std'; argument: |label={\textbf {+}}|
-% [Blocks] ==> item with optional
-% [Blocks] ==> Set item block everypar on input line 10
-% [Blocks] ==> ... in item block everypar on input line 10
-% [Blocks] ==> increment P on input line 10
-% [Blocks] ==> Set noop block everypar on input line 10
-%
-% [Blocks] ==> blockenv common ending on input line 11
-%
-% [Blocks] ==> flattened=false on input line 12
-% [Blocks] ==> Structure-end text-unit after displayblock on input line 12
-%\end{verbatim}
-%\end{footnotesize}
-%
 %
 %
 %
@@ -2458,17 +2451,91 @@
 %   \item
 %     Then the lookahead for an empty line is done as described previously.
 %   \end{itemize}
-%
-%
 % \end{description}
+%
+%
+%
+%
+%
+% \section{Tracing and debugging}
+% 
+% \begin{function}{\DebugBlocksOn,\DebugBlocksOff, \block_debug_on:, \block_debug_off:}
+%    These commands enable/disable debugging messages for blocks. They also
+%    enable/disable debugging of templates (e.g., call
+%    \cs{DebugTemplatesOn} or \cs{DebugTemplatesOff}).
+% \end{function}
+%
+%    The data that is produced is rather verbose and largely guided
+%    (so far) by what seemed helpful while developing the code. This
+%    needs some cleanup at a later stage.\fmi{cleanup} At the moment,
+%    if you have the following simple document
+%
+%\begin{footnotesize}
+%\begin{verbatim}[xleftmargin=-20pt,numbers=left,numbersep=6pt,numberblanklines]
+%         \DocumentMetadata{tagging=on, lang=en}
+%
+%         \documentclass{article}
+%
+%         \DebugBlocksOn
+%
+%         \begin{document}
+%           \begin{itemize}[item-vspace=3pt]
+%             \item             A normal item
+%             \item[\textbf{+}] A special item
+%           \end{itemize}
+%         \end{document}
+%\end{verbatim}
+%\end{footnotesize}
+%
+%    \smallskip
+%    \noindent
+%    then you will get the following information on the screen and in
+%    the \texttt{.log} file:
+%    \smallskip
+%
+%\begin{footnotesize}
+%\begin{verbatim}[xleftmargin=-40pt]
+% [Template] ==> Use 'blockenv' instance: itemize on input line 8
+% [Template] ==>   template: 'display'; arguments: |item-vspace=3pt|\BooleanFalse |\NoValue |\NoValue |
+% [Template] ==> Use 'block' instance: std-list-1 on input line 8
+% [Template] ==>   template: 'std'; argument: |item-vspace={3pt}|
+% [Blocks] ==> @endpe=false on input line 8
+% [Template] ==> Use 'list' instance: itemize-1 on input line 8
+% [Template] ==>   template: 'std'; arguments: ||\BooleanFalse |\NoValue |\NoValue |
+% [Blocks] ==> Set first block everypar on input line 8
+% [Blocks] ==> template:list:std end
+%
+% [Template] ==> Use 'item' instance: basic on input line 9
+% [Template] ==>   template: 'std'; argument: ||
+% [Blocks] ==> Set item block everypar on input line 9
+% [Blocks] ==> ... in item block everypar on input line 9
+% [Blocks] ==> increment P on input line 9
+% [Blocks] ==> Set noop block everypar on input line 9
+%
+% [Template] ==> Use 'item' instance: basic on input line 10
+% [Template] ==>   template: 'std'; argument: |label={\textbf {+}}|
+% [Blocks] ==> item with optional
+% [Blocks] ==> Set item block everypar on input line 10
+% [Blocks] ==> ... in item block everypar on input line 10
+% [Blocks] ==> increment P on input line 10
+% [Blocks] ==> Set noop block everypar on input line 10
+%
+% [Blocks] ==> blockenv common ending on input line 11
+%
+% [Blocks] ==> flattened=false on input line 12
+% [Blocks] ==> Structure-end text-unit after displayblock on input line 12
+%\end{verbatim}
+%\end{footnotesize}
+%
+%
 %
 % \section{New and redefined kernel command}
 % 
-% \begin{function}{\@doendpe}
-%   The original \LaTeXe{} command is augmented to allow for tagging.
+% \begin{function}{\SimpleBlockEnv,\BlockEnv,\BlockEnvEnd,\g_block_nesting_depth_int}
+% \emph{to be documented}
 % \end{function}
-%
-% \begin{function}{\legacyverbatimsetup,\legacylistsetupcode}
+% 
+% \begin{function}{\legacyverbatimsetup,\legacyallttsetup,\legacylistsetup}
 % \emph{to be documented}
 % \end{function}
 % 
@@ -2477,12 +2544,15 @@
 % needed as we need to handle real space chars in verbatim.
 % \end{function}
 %
-% \begin{function}{\BlockEnvEnd,\g_block_nesting_depth_int}
-% \emph{to be documented}
+% \begin{function}{\newtheorem,\newtheoremstyle}
+%   Reimplemented to fit the template approach. \cs{newtheoremstyle}
+%    was defined by \pkg{amsthm}.
 % \end{function}
-% 
-% \begin{function}{\newtheorem,\@thm,\@begintheorem}
-%   These are no longer used.
+%
+% \begin{function}{\@nthm,\@xnthm,\@ynthm,
+%                  \@thm,\@xthm,\@ythm,\@othm,
+%                  \@begintheorem,\@opargbegintheorem,\@endtheorem}
+%   These are no longer used (to be removed).
 % \end{function}
 %
 % \begin{function}{\item,\@itemlabel}
@@ -2497,6 +2567,10 @@
 % \begin{function}{\begin}
 % The \tn{begin} is slightly redefined to handle \tn{@doendpe} better.
 % TODO: move to kernel
+% \end{function}
+%
+% \begin{function}{\@doendpe}
+%   The original \LaTeXe{} command is augmented to allow for tagging.
 % \end{function}
 %
 % \begin{function}{\para_end:}
@@ -2606,6 +2680,17 @@
   }
 %    \end{macrocode}
 %  \end{macro}
+%
+% \subsubsection{Tracing templates and instances}
+%
+%  \begin{macro}{\template_debug_typeout:n}
+%    I guess that tracing macro is needed in several modules, so
+%    should become public (or at least kernel).
+%    \begin{macrocode}
+\cs_new:Npn \template_debug_typeout:n { \__template_debug_typeout:n }
+%    \end{macrocode}
+%  \end{macro}
+%
 %
 %
 % \subsubsection{Handling \tn{par} after the end of the list}
@@ -2767,9 +2852,10 @@
 %
 %
 %
-% \subsection{Useful \pkg{expl3} commands}
+% \subsubsection{Other useful \pkg{expl3} commands}
 %
-% This section collects \pkg{expl3} commands that will be useful.
+% This section collects \pkg{expl3} commands that will be useful in
+% the code here and possibly generally.
 %
 %  \begin{macro}{\@@_skip_set_to_last:N,\@@_skip_remove_last:}
 %    Set a skip register to  the value of an immediately preceding
@@ -2796,7 +2882,7 @@
 %  \end{macro}
 %    
 %
-% \subsection{Debugging interfaces}
+% \subsection{Tracing and debugging interfaces}
 %
 %    This follows the same convention as in other modules, but
 %    eventually that should be given a better
@@ -2980,7 +3066,7 @@
   ,begin-extra-vspace     : skip = \partopsep
   ,begin-unchained-vspace : skip = .5\topsep
   ,para-vspace            : skip = \parskip
-  ,end-vspace             : skip = \KeyValue{begin-vspace} % conflict with name below
+  ,end-vspace             : skip = \KeyValue{begin-vspace}
   ,end-extra-vspace       : skip = \KeyValue{begin-extra-vspace}
   ,item-vspace            : skip = \itemsep
   ,begin-penalty          : integer = \UseName{@beginparpenalty}
@@ -3039,18 +3125,18 @@
 %    \begin{macrocode}
 \DeclareTemplateInterface{item}{std}{1}
   {
-    ,counter-label : function{1} = \arabic{#1}
-    ,counter-ref   : function{1} = \KeyValue{counter-label}
-    ,label-ref     : function{1} = #1
-    ,label-autoref : function{1} = item~#1
-    ,label-format  : function{1} = #1
-    ,label-strut   : boolean = false
-    ,label-align   : choice {left,center,right,parleft} = right
-    ,label-boxed   : boolean = true
-    ,next-line     : boolean = false         % <- review viz standalone below
-    ,text-font     : tokenlist
-    ,compatibility : boolean = true
-    ,label-placement : choice {chained,unchained,standalone} = chained , % <- bad name?
+    ,counter-label   : function{1} = \arabic{#1}
+    ,counter-ref     : function{1} = \KeyValue{counter-label}
+    ,label-ref       : function{1} = #1
+    ,label-autoref   : function{1} = item~#1
+    ,label-format    : function{1} = #1
+    ,label-strut     : boolean = false
+    ,label-align     : choice {left,center,right,parleft} = right
+    ,label-boxed     : boolean = true
+    ,next-line       : boolean = false     % <- review viz standalone below
+    ,text-font       : tokenlist
+    ,compatibility   : boolean = true
+    ,label-placement : choice {chained,unchained,standalone} = chained ,
   }
 %    \end{macrocode}
 % \end{template}
@@ -3083,15 +3169,15 @@
 %    \begin{macrocode}
 \DeclareTemplateInterface{captionedtext}{proof}{4}
 {
-  ,title           : tokenlist = Proof 
-  ,punct           : tokenlist = .
-  ,caption-placement : choice {chained,unchained,standalone} = unchained % <- bad name?
-  ,before-hspace   : skip = 0pt 
-  ,after-hspace    : skip = 5pt 
-  ,caption-decls   : tokenlist =
-  ,title-format    : function{1} = #1
-  ,punct-format    : function{1} = #1
-  ,body-decls      : tokenlist =
+  ,title             : tokenlist = Proof 
+  ,punct             : tokenlist = .
+  ,caption-placement : choice {chained,unchained,standalone} = unchained
+  ,before-hspace     : skip = 0pt 
+  ,after-hspace      : skip = 5pt 
+  ,caption-decls     : tokenlist =
+  ,title-format      : function{1} = #1
+  ,punct-format      : function{1} = #1
+  ,body-decls        : tokenlist =
 }
 %    \end{macrocode}
 % \end{template}
@@ -3108,16 +3194,16 @@
   ,numbered          : boolean = true
   ,space             : tokenlist = \    % <- bad name?
   ,punct             : tokenlist = .
-  ,caption-placement : choice {chained,unchained,standalone} = unchained % <- bad name?
-  ,before-hspace     : skip = 0pt       % <- bad name?
-  ,after-hspace      : skip = 5pt       % <- bad name?
+  ,caption-placement : choice {chained,unchained,standalone} = unchained
+  ,before-hspace     : skip = 0pt
+  ,after-hspace      : skip = 5pt
   ,order             : commalist = { title, space, number, punct, space, note }
   ,caption-decls     : tokenlist =
   ,title-format      : function{1} = #1
   ,number-format     : function{1} = #1
   ,punct-format      : function{1} = #1
   ,note-format       : function{1} = (#1)
-  ,body-decls        : tokenlist =      % <- bad name?
+  ,body-decls        : tokenlist   =
 }
 %    \end{macrocode}
 % \end{template}
@@ -3129,7 +3215,7 @@
 % \subsection{Implementation of templates}
 %
 %
-% \subsubsection{Implementation of blockenv templates \ldots}
+% \subsubsection{Implementation of \insttype{blockenv} templates}
 %
 % So far there is only one, but who knows \ldots\ --- this is why we
 % don't call it \texttt{std}
@@ -3155,8 +3241,8 @@
   ,final-code             = \l_@@_final_code_tl 
 }
 {
-  \__template_debug_typeout:n{~\space template:~ 'display';~
-                              arguments:~ \exp_not:n{|#1|#2|#3|#4|}}
+  \template_debug_typeout:n{~\space template:~ 'display';~
+                            arguments:~ \exp_not:n{|#1|#2|#3|#4|}}
 %    \end{macrocode}
 %    We first evaluate the key list passed from the document (if
 %    any). All known keys are used all, the remainder is stored in
@@ -3575,7 +3661,7 @@
 %
 %
 %
-% \subsubsection{Implementation of para templates \ldots}
+% \subsubsection{Implementation of \insttype{para} templates}
 %
 %  \begin{template}{para std}
 %    
@@ -3598,8 +3684,8 @@
   ,para-attr-class       = \l__tag_para_attr_class_tl                          
 }
 {
-  \__template_debug_typeout:n{~\space template:~ 'std';~
-                              argument:~ \exp_not:n{|#1|}}
+  \template_debug_typeout:n{~\space template:~ 'std';~
+                            argument:~ \exp_not:n{|#1|}}
   \SetTemplateKeys{para}{std}{#1}
   \skip_set:Nn \@rightskip \rightskip
 }
@@ -3610,7 +3696,7 @@
 %
 %
 %
-% \subsubsection{Implementation of block templates \ldots}
+% \subsubsection{Implementation of \insttype{block} templates}
 %
 %
 % \begin{template}{block display}
@@ -3644,8 +3730,8 @@
   ,para-indent            = \l_@@_parindent_dim
 }
 {
-    \__template_debug_typeout:n{~\space template:~ 'std';~
-                                argument:~ \exp_not:o{\exp_after:wN |#1|}}
+    \template_debug_typeout:n{~\space template:~ 'std';~
+                              argument:~ \exp_not:o{\exp_after:wN |#1|}}
     \SetKnownTemplateKeys{block}{std}{#1}
 %    \end{macrocode}
 %    The code largely follows the logic of \LaTeXe{}'s \env{trivlist}
@@ -3815,18 +3901,68 @@
      }
 }
 %    \end{macrocode}
+% \end{template}
 %
 %
-%    Extra keys to support enumitem conventions:
+%
+%
+%
+%  \begin{macro}{\@@_captioned_everypar_std:}
+%    The captioned text is typeset at the start of a paragraph using
+%    code triggered in \cs{everypar} (by setting \cs{@@_everypar} to
+%    this code here).
 %    \begin{macrocode}
-\keys_define:nn { template/block/display }
-{
-  ,topsep        .skip_set:N = \topsep
-  ,partopsep     .skip_set:N = \partopsep
-  ,listparindent .skip_set:N = \listparindent
+\cs_new_protected:Npn \@@_captioned_everypar_std: {
+    \@@_debug_typeout:n{...~ in~ captioned~ block~ everypar \on@line }
+%    \end{macrocode}
+%    First set some control switches to false:
+%    \begin{macrocode}
+    \legacy_if_set_false:n { @minipage }
+    \legacy_if_gset_false:n { @newlist }
+%    \end{macrocode}
+%    The \texttt{@inlabel} is normally true at this point, but if we
+%    also have \texttt{@nobreak} then the same routine is called again
+%    at the next paragraph to reset \cs{clubpenalty} and at that point
+%    the \cs{g_@@_labels_box} has been typeset and \texttt{@inlabel}
+%    is false.
+%    \begin{macrocode}
+    \legacy_if:nT { @inlabel }
+       {
+%    \end{macrocode}
+%    Typeset the saved label (aka captioned text):
+%    \begin{macrocode}
+         \legacy_if_gset_false:n { @inlabel }
+         \para_omit_indent:
+         \box_use_drop:N \g_@@_labels_box
+         \__kernel_list_label_after:n { \PARALABEL }     % <- change
+                                                         % this name
+         \penalty \c_zero_int
+       }
+%    \end{macrocode}
+%    If \texttt{@nobreak} is true we prevent a break after the first
+%    line by setting \cs{clubpenalty}.
+%    \begin{macrocode}
+   \legacy_if:nTF { @nobreak }
+       {
+         \legacy_if_gset_false:n { @nobreak }
+         \int_set:Nn \clubpenalty { 10000 }
+       }
+       {
+%    \end{macrocode}
+%    Otherwise we reset \cs{clubpenalty} andd disable \cs{@@_everypar}.
+%    \begin{macrocode}
+         \int_set_eq:NN \clubpenalty \@clubpenalty
+         \@@_debug_typeout:n{Set~ noop~ block~ everypar \on@line }
+         \cs_set_eq:NN \@@_everypar: \prg_do_nothing:
+       }
 }
 %    \end{macrocode}
-% \end{template}
+%  \end{macro}
+%
+%
+%
+%
+%
 %
 %
 %  \begin{macro}{\__kernel_displayblock_begin:,
@@ -3858,7 +3994,7 @@
 %
 %
 %
-% \subsubsection{Implementation of list templates \ldots}
+% \subsubsection{Implementation of \insttype{list} templates}
 %
 %   This \insttype{list} is one of the template types that can be used
 %   as an \key{inner-type} in a \insttype{blockenv} the other one
@@ -3933,8 +4069,8 @@
   ,legacy-support  = \l_@@_legacy_support_bool % FMi questionable
 }
 {
-  \__template_debug_typeout:n{~\space template:~ 'std';~
-                              arguments:~ \exp_not:o{\exp_after:wN |#1|#2|#3|#4|}}
+  \template_debug_typeout:n{~\space template:~ 'std';~
+                            arguments:~ \exp_not:o{\exp_after:wN |#1|#2|#3|#4|}}
 %    \end{macrocode}
 %    We start by looking at the user supplied keys in \texttt{\#1}. If
 %    there aren't any we reset \cs{@@_evaluate_saved_user_keys:nn} to
@@ -4110,7 +4246,7 @@
 %  \end{template}
 %
 %
-% \subsubsection{Implementation of \tn{item} template(s)}
+% \subsubsection{Implementation of \insttype{item} templates}
 %
 %
 %
@@ -4176,8 +4312,8 @@
 % case add \tn{newline} if the label did not fit in the allotted space.
 %    \begin{macrocode}
   {
-    \__template_debug_typeout:n{~\space template:~ 'std';~
-                                argument:~ \exp_not:n{|#1|}}
+    \template_debug_typeout:n{~\space template:~ 'std';~
+                              argument:~ \exp_not:n{|#1|}}
 %    \end{macrocode}
 %    
 %    First deal with the key--value input, which in particular may
@@ -4668,7 +4804,8 @@
 %
 %
 %
-% \subsubsection{Implementation of captionedtext and thmstyle templates}
+% \subsubsection{Implementation of \insttype{captionedtext}
+%                and \insttype{thmstyle} templates}
 %
 %
 % \begin{template}{captionedtext thmlike}
@@ -4686,8 +4823,8 @@
 %    \end{macrocode}
 %    some debugging info as usual (showing the arguments that are passed):
 %    \begin{macrocode}
-  \__template_debug_typeout:n{~\space template:~ 'thmlike';~
-                              arguments:~ \exp_not:o{\exp_after:wN |#1|#2|#3|#4|}}
+  \template_debug_typeout:n{~\space template:~ 'thmlike';~
+                            arguments:~ \exp_not:o{\exp_after:wN |#1|#2|#3|#4|}}
 %    \end{macrocode}
 %    The we check if there are any keys passed to the instance from
 %    the outside.
@@ -4757,8 +4894,8 @@
 %    \end{macrocode}
 %    Some tracing:
 %    \begin{macrocode}
-  \__template_debug_typeout:n{~\space template:~ 'std';~
-                              arguments:~ \exp_not:o{\exp_after:wN |#1|#2|#3|#4|}}
+  \template_debug_typeout:n{~\space template:~ 'std';~
+                            arguments:~ \exp_not:o{\exp_after:wN |#1|#2|#3|#4|}}
 %    \end{macrocode}
 %    Applying any user keys:
 %    \begin{macrocode}
@@ -4833,25 +4970,41 @@
               \skip_horizontal:n { \l_@@_caption_after_skip }
             }
       }
+%    \end{macrocode}
+%    If the proof title should be standalone we immediately push it out:
+%    \begin{macrocode}
    \bool_if:NTF \g_@@_label_standalone_bool
       {
         \bool_gset_true:N \g_@@_label_standalone_bool
         \para_omit_indent:
         \box_use_drop:N \g_@@_labels_box
         \par
-%%FMi        
+%    \end{macrocode}
+%    \fmi{Do we need a \cs{nobreak} here or is this covered? check}
+%    \begin{macrocode}
       }
+%    \end{macrocode}
+%    Otherwise we signal that we are at the start and have a label
+%    dangling. The name \texttt{@newlist} is a bit unfortunate, but
+%    for now we keep this name.\fmi{check if @newlist could be
+%    replaced by something more general} 
+%    \begin{macrocode}
       {
         \legacy_if_gset_true:n { @newlist }
         \legacy_if_gset_true:n { @inlabel }
       }
-%
-    \legacy_if_gset_true:n { @nobreak }  % do not break after the
-                                         % first thmlike line
-%
+%    \end{macrocode}
+%    Do not break after the first line:
+%    \begin{macrocode}
+    \legacy_if_gset_true:n { @nobreak }
+%    \end{macrocode}
+%    Then set up a special everypar to handle the dangling caption:
+%    \begin{macrocode}
     \@@_debug_typeout:n{Set~ captioned~ block~ everypar \on@line }
     \cs_set_eq:NN \@@_everypar: \@@_captioned_everypar_std:
-%
+%    \end{macrocode}
+%    Finally, set up any declarations for the body of the environment:
+%    \begin{macrocode}
     \l_@@_body_decls_tl
 %    \end{macrocode}
 %    
@@ -4989,7 +5142,7 @@
 %
 %
 % \begin{template}{captionedtext proof}
-%
+%    In case of the templates for proofs we do everything in a single template.
 %    \begin{macrocode}
 \DeclareTemplateCode{captionedtext}{proof}{4}
 {
@@ -5011,31 +5164,48 @@
   ,body-decls      = \l_@@_body_decls_tl
 }
 {
-  \__template_debug_typeout:n{~\space template:~ 'proof';~
-                              arguments:~ \exp_not:o{\exp_after:wN |#1|#2|#3|#4|}}
-%
+%    \end{macrocode}
+%    Display the template's arguments when tracing:
+%    \begin{macrocode}
+  \template_debug_typeout:n{~\space template:~ 'proof';~
+                            arguments:~ \exp_not:o{\exp_after:wN |#1|#2|#3|#4|}}
+%    \end{macrocode}
+%    Evaluate document-level key settings. As all given key should be
+%    handled we use \cs{SetTemplateKeys} to raise an error if one or
+%    more are not recognized:
+%    \begin{macrocode}
   \SetTemplateKeys{captionedtext}{proof}{#1}
-%
+%    \end{macrocode}
+%    By default the title is defined by the proof instance, but if the
+%    user provides an optional argument that optional argument
+%    overwrites the title (in contrast to theorem-like environments
+%    that use the optional argument to provide an additional note):
+%    \begin{macrocode}
   \IfNoValueF {#3} { \tl_set:Nn \l_@@_title_tl {#3} }
-%   
-%
+%    \end{macrocode}
+%    Now we prepare seting the title by placing it in the \cs{g_@@_labels_box}:
+%    \begin{macrocode}
   \hbox_gset:Nn \g_@@_labels_box
     {
-      \box_use_drop:N \g__block_labels_box % <- does nothing if
-                                           % there is no dangling label
+      \box_use_drop:N \g_@@_labels_box % <- does nothing if there
+                                       %    is no dangling label
       \l_@@_caption_decls_tl
       \tag_socket_use:nnn {block/theorem/caption} {}
           {
             \skip_horizontal:n { \l_@@_caption_before_skip }
-            \group_begin:
-              \@@_do_title:  % <-- unnecessarily calls \@@_drop_spaces: but ...
-            \group_end:
-            \group_begin:
-              \@@_do_punct:  % <-- unnecessarily calls \@@_drop_spaces: but ...
-            \group_end:
+%    \end{macrocode}
+%    \cs{@@_do_title:} and \cs{@@_do_punct:} unnecessarily call
+%    \cs{@@_drop_spaces:} but otherwise they do well, so \ldots
+%    \begin{macrocode}
+            \group_begin: \@@_do_title: \group_end:
+            \group_begin: \@@_do_punct: \group_end:
             \skip_horizontal:n { \l_@@_caption_after_skip }
           }
     }
+%    \end{macrocode}
+%    The remaining code is identical to the one in \insttype{thmstyle}
+%    \instname{std}; for documentation see there:
+%    \begin{macrocode}
   \bool_if:NTF \g_@@_label_standalone_bool
      {
        \bool_gset_true:N \g_@@_label_standalone_bool
@@ -5047,13 +5217,9 @@
        \legacy_if_gset_true:n { @newlist }
        \legacy_if_gset_true:n { @inlabel }
      }
-%
-  \legacy_if_gset_true:n { @nobreak }  % do not break after the
-                                       % first thmlike line
-%
+  \legacy_if_gset_true:n { @nobreak }
   \@@_debug_typeout:n{Set~ captioned~ block~ everypar \on@line }
   \cs_set_eq:NN \@@_everypar: \@@_captioned_everypar_std:
-%
   \l_@@_body_decls_tl
 %    \end{macrocode}
 %    
@@ -5687,48 +5853,21 @@
 %    \end{macrocode}
 %
 %
-% \section[Implementation of document-level block environments]
-%            {Implementation of document-level block\\ environments}
-%
-%    Most such environments are pretty simple: they take an optional
-%    argument and call a \texttt{blockenv} instance to do the work.
-%    The command \cs{SimpleBlockEnv} helps with that by hiding the
-%    other unused arguments.
-%
-%    At the end of environment we call \cs{BlockEnvEnd} to
-%    finish everything of.
-%
-%    We require that any optional argument (for a key/value list
-%    modifying the settings) is immediately following the environment
-%    without any spaces (\verb=!O{}=), so that a \texttt{[} at the start of the
-%    environment body is not mistaken as an optional argument. We do
-%    this for all environments where this might be a problem.
-%
-%    \begin{macrocode}
-%<*package-finish>
-%    \end{macrocode}
+% \section[Support code for document-level block environments]
+%         {Support code for document-level block\\ environments}
 %
 %
 %
+% \subsection{Verbatim-like environments}
 %
-%
-% \subsection{The \env{center}, \env{flushleft}, and \env{flushright}  environments}
-%
-%
-%
-% \subsection{Display quote environments}
-%
-%
-%
-%
-%
-%
-% \subsection{Verbatim environments}
-%
-%
-% \subsubsection{Helper commands for verbatim}
+% \subsubsection{Helper commands for \env{verbatim} and \env{verbatim*}}
 %
 %  \begin{macro}{\legacyverbatimsetup}
+% ^^A
+%    This code is called as part of the \key{final-code} of the
+%    \insttype{blockenv} instance and sets up the special conventions
+%    needed for \env{verbatim} environments. We pass one argument to
+%    differentiate between visible and invisible spaces.
 %
 %    This code resembles the \LaTeXe{} verbatim implementation with a
 %    slight twist: in \LaTeXe{} each code line was a paragraph using
@@ -5739,6 +5878,10 @@
 %    paragraph end is executed in a group so that any parshape setup
 %    is preserved.
 % \changes{v0.8x}{2025/01/12}{flattened para inside verbatim using codeline tag}   
+%    \begin{macrocode}
+%<*package-finish>
+%    \end{macrocode}
+%
 %    \begin{macrocode}
 %<@@=>  
 \def\legacyverbatimsetup #1 {%
@@ -5763,66 +5906,25 @@
 %    \begin{macrocode}
   \tl_set:Nn \l__tag_para_tag_tl {codeline}
 %    \end{macrocode}
-%    
+%    If the argument is neither \texttt{visible} nor
+%    \texttt{invisible} nothing will happen---tough.
 %    \begin{macrocode}
-  \use:c { @setupverb #1 space } \@vobeyspaces
+  \use:c { @setupverb #1 space }
+  \@vobeyspaces
 }
 %<@@=block>  
 %    \end{macrocode}
 %  \end{macro}
-%
-%
-%
-%  \begin{macro}{\legacyallttsetup}
-%    
-%    \begin{macrocode}
-%<@@=>
-\ExplSyntaxOff
-\def\legacyallttsetup #1{%
-  \let\org@prime~%
-  \everymath\expandafter{\the\everymath
-    \catcode`\'=12 \let~\org@prime}%
-  \everydisplay\expandafter{\the\everydisplay
-    \catcode`\'=12 \let~\org@prime}%
-  \let\org@dospecials\dospecials
-  \g@remfrom@specials{\\}%
-  \g@remfrom@specials{\{}%
-  \g@remfrom@specials{\}}%
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-  \legacyverbatimsetup {#1}%
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-  \let\dospecials\org@dospecials
-}
-%    \end{macrocode}
-%    
-%    \begin{macrocode}
-\def\g@remfrom@specials#1{%
-  \def\@new@specials{}%
-  \def\@remove##1{%
-    \ifx##1#1\else
-    \g@addto@macro\@new@specials{\do ##1}\fi}%
-  \let\do\@remove\dospecials
-  \let\dospecials\@new@specials
-}
-\ExplSyntaxOn
-%<@@=block>  
-%    \end{macrocode}
-%  \end{macro}
-%
-%
-%
 %
 %
 %  \begin{macro}{\@setupverbinvisiblespace}
+%  ^^A
 %    In the \pdfTeX{} engine we need to use \tn{pdffakespace} chars
-%    for the invisible spaces. In luatex we do not want this as it would lead to 
-%    doubling the number of real space chars. In dvi-mode we do not want that either:
-%    with pdftex it would error, with xetex it does nothing. 
-%    \changes{v0.9g}{2025-07-01}{changed logic}
+%    for the invisible spaces. In luatex we do not want this as it
+%    would lead to doubling the number of real space chars. In
+%    dvi-mode we do not want that either: with pdftex it would error,
+%    with xetex it does nothing.  \changes{v0.9g}{2025-07-01}{changed
+%    logic}
 %    \begin{macrocode}
 \newcommand\@setupverbinvisiblespace{}
 \bool_lazy_or:nnF 
@@ -5835,48 +5937,81 @@
 %    \end{macrocode}
 %  \end{macro}
 %
+%   The command \cs{@setupverbvisiblespace} is already defined in the kernel.
 %
 %
-% \subsection{verse environment}
 %
-%  \begin{environment}{verse}
-%  The verse environment has not special tagging currently. It is
-%  defined as a simple standard list and takes the tagging from
-%    there.\fmi{fix eventually}
-%  But it must be redefined so that \tn{itemindent} is correctly set.
+%
+% \subsubsection{Helper commands for \env{alltt} and \env{alltt*}}
+%
+%
+%  \begin{macro}{\legacyallttsetup}
+%    The \env{alltt} environment also needs some special setup. We can
+%    reuse \cs{legacyverbatimsetup} but we have to take out \verb=\=,
+%    \verb={=, and \verb=}= from \cs{dospecials} as they should remain
+%    available with their normal catcodes and adjust \verb='= inside
+%    math. This is lifted straight from the original package code.
 %    \begin{macrocode}
-\AddToHook{begindocument/before}{
-  \DeclareDocumentEnvironment{verse}{ !O{} }
-    { 
-      \let\\\@centercr
+%<@@=>
+\ExplSyntaxOff
 %    \end{macrocode}
 %
 %    \begin{macrocode}
-      \SimpleBlockEnv{list}
-        {
-           item-indent=-1.5em
-          ,para-indent=-1.5em
-          ,item-vspace=0pt
-          ,right-margin = \leftmargin
-          ,left-margin  = \leftmargin+1.5em
-          ,#1
-        }
-      \item\relax    
-    }
-    { \BlockEnvEnd }
-  }   
+\def\legacyallttsetup #1{%
+  \let\org@prime~%
+  \everymath\expandafter{\the\everymath
+    \catcode`\'=12 \let~\org@prime}%
+  \everydisplay\expandafter{\the\everydisplay
+    \catcode`\'=12 \let~\org@prime}%
 %    \end{macrocode}
-% \end{environment}
-%
-%
-%
-%
-%  \begin{macro}{\legacylistsetupcode}
+%    This alters \cs{dospecials}:
+%    \begin{macrocode}
+  \let\org@dospecials\dospecials
+  \g@remfrom@specials{\\}%
+  \g@remfrom@specials{\{}%
+  \g@remfrom@specials{\}}%
+%    \end{macrocode}
+%    Then call \cs{legacyverbatimsetup}:
+%    \begin{macrocode}
+  \legacyverbatimsetup {#1}%
+%    \end{macrocode}
+%    And afterwards restore \cs{dospecials:}
+%    \begin{macrocode}
+  \let\dospecials\org@dospecials
+}
+%    \end{macrocode}
 %    
-%    And here is the extra code for use in the list instance setup
-%    inside the key \key{legacy-code}.
+%  \begin{macro}{\g@remfrom@specials}
+%    Copied from \pkg{alltt}.
 %    \begin{macrocode}
-\cs_new:Npn \legacylistsetupcode {
+\def\g@remfrom@specials#1{%
+  \def\@new@specials{}%
+  \def\@remove##1{%
+    \ifx##1#1\else
+    \g@addto@macro\@new@specials{\do ##1}\fi}%
+  \let\do\@remove\dospecials
+  \let\dospecials\@new@specials
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\ExplSyntaxOn
+%<@@=block>  
+%    \end{macrocode}
+%  \end{macro}
+%  \end{macro}
+%
+%
+%
+% \subsubsection{Helper command for legacy \env{list} environment}
+%
+%
+%  \begin{macro}{\legacylistsetup}
+%  ^^A    
+%    And here is the extra code for use in the list instance setup
+%    in the key \key{legacy-code}:
+%    \begin{macrocode}
+\cs_new:Npn \legacylistsetup {
 %    \end{macrocode}
 %    Reset values to defaults:
 %    \begin{macrocode}
@@ -5902,7 +6037,8 @@
    \let\makelabel\@mklab % TODO: customize
 %    \end{macrocode}
 %    Now we use the argument with parameter settings to update some or
-%    all of the above defaults:
+%    all of the above defaults (this holds whatever was put into the
+%    second argument to the \env{list} environment):
 %    \begin{macrocode}
    \l_@@_legacy_env_params_tl
 %    \end{macrocode}
@@ -5925,30 +6061,13 @@
 %
 %
 %  \begin{macro}{\l_@@_legacy_env_params_tl}
-%    
+%    The token list in which the declarations from the second argument
+%    of \env{list} are temporarily stored. This is then used
+%    \cs{legacylistsetup}.
 %    \begin{macrocode}
 \tl_new:N\l_@@_legacy_env_params_tl
 %    \end{macrocode}
 %  \end{macro}
-%
-%
-%
-%  \begin{environment}{trivlist}
-%    \fmi{Replace with code not using \tn{list}}
-%    \begin{macrocode}
-\AddToHook{begindocument/before}{
-  \RenewDocumentEnvironment{trivlist}{ !O{} }
-                           { \list[#1]{}
-                             {
-                               \dim_zero:N \leftmargin
-                               \dim_zero:N \labelwidth
-                               \cs_set_eq:NN \makelabel \use:n
-                             }
-                           }
-    { \BlockEnvEnd }
-}
-%    \end{macrocode}
-%  \end{environment}
 %
 %
 % \subsection{Theorem-like environments}
@@ -5976,15 +6095,24 @@
 %    
 %    If a star was given then there is no need to set up a counter for
 %    this environment. Otherwise we do what \LaTeX2e{} did, except
-%    that we to all there variations in one go, rather than using
+%    that we do all the variations in one go, rather than using
 %    \cs{@ynthm}, \cs{@xnthm}, and \cs{@othm}.\fmi{undefined the old
 %    internal commands?}
 %    \begin{macrocode}
      \IfBooleanF #1
        {
          \IfNoValueTF {#3}
+%    \end{macrocode}
+%    If there was no counter to use (\verb=#2=) then we set up a
+%    counter with the same name as the environment (\verb=#2=).
+%    \begin{macrocode}
             {
               \@definecounter {#2}
+%    \end{macrocode}
+%    If there was no \enquote{counter within} the counter
+%    representation is simple, otherwise we build it up from the two
+%    counters:
+%    \begin{macrocode}
               \IfNoValueTF {#5}
                 {  % @ynthm
                   \tl_gset:ce { the #2 }
@@ -6003,6 +6131,10 @@
                 }
             }
             {  % @othm
+%    \end{macrocode}
+%    If we should reuse an existing counter (\verb=#3= was given) we
+%    check that this counter actually exists and if so use it:
+%    \begin{macrocode}
               \@ifundefined{c@#3}
                  { \@nocounterr{#3} }
                  {
@@ -6012,44 +6144,46 @@
             }
        }
 %    \end{macrocode}
-%    With the counter defined we are ready to declare
-%    the the environments. The is a slight complication though: the
+%    With the counter defined we are ready to declare the the
+%    environments. There is a slight complication though: the
 %    \enquote{theorem-like} environments have an optional argument
-%    which contains a possible note, but now we also want to use the first
-%    optional argument to hold a key/value list with parameter
+%    which contains a possible note, but now we also want to use the
+%    first optional argument to hold a key/value list with parameter
 %    settings. We therefore define this argument via \verb/={note}o/
 %    so that a simple note, if given is assigned to a \key{note} key.
-%    Further processing is then delegated to
-%    the command \cs{ParseLaTeXeTheorem} which, after sorting out the
-%    argument situation, eventually calls \cs{BlockEnv}.
+%    Further processing is then delegated to the command
+%    \cs{ParseLaTeXeTheoremlike} which, after sorting out the argument
+%    situation, eventually calls \cs{BlockEnv}.
 %    \begin{macrocode}
      \NewDocumentEnvironment{#2}{ ={note}o }
-        { \ParseLaTeXeTheorem {#2} \BooleanFalse {##1} }
+        { \ParseLaTeXeTheoremlike {#2} \BooleanFalse {##1} }
         { \BlockEnvEnd }
 %    \end{macrocode}
 %    The starred form of the environment supresses the  number so we
-%    pass it \cs{BooleanTrue}, otherwise it is the same.
+%    pass it \cs{BooleanTrue}, otherwise it is identical to the
+%    previous definition.
 %    \begin{macrocode}
      \NewDocumentEnvironment{#2*}{ ={note}o }
-        { \ParseLaTeXeTheorem {#2} \BooleanTrue {##1} }
+        { \ParseLaTeXeTheoremlike {#2} \BooleanTrue {##1} }
         { \BlockEnvEnd }
 %    \end{macrocode}
 %
 %    Now it is about time to provide all necessary template
 %    instances. They depend on the \cs{theoremstyle} specified by the
 %    user and possibly by a \cs{swapnumbers} declaration. We start by
-%    checking the requested \cs{theoremstyle} (if not was given
-%    \texttt{plain} is the default and if it is an undefined one we
-%    also revert to \texttt{plain}).
+%    checking the requested \cs{theoremstyle} (if none was given then
+%    \texttt{plain} is the default and if it is an an unknown name we
+%    also revert to \texttt{plain} after issuing a warning).
 %    \begin{macrocode}
      \IfInstanceExistsF{thmstyle}{\l_@@_thmstyle_tl}
-       { \@latex@warning{Unknown~ theoremstyle~ `\l_@@_thmstyle_tl'~ using~ 'plain'}
-         \theoremstyle {plain}
-       }
+                       { \@latex@warning{Unknown~ theoremstyle~
+                              '\l_@@_thmstyle_tl'~ using~ 'plain'}
+                         \theoremstyle {plain}
+                       }
 %    \end{macrocode}
 %    So now we know that \cs{l_@@_thmstyle_tl} holds a valid
 %    style. What we don't know is  whether or not there are special
-%    \insttype{block} instances that go with that (it might be a style
+%    \insttype{block} instances that go with that style (it might be a style
 %    that reuses the \instname{thm-\meta{style}block-...} instances).
 %    \begin{macrocode}
     \IfInstanceExistsTF{block} { thm- \l_@@_thmstyle_tl -1 }
@@ -6071,12 +6205,20 @@
         ,inner-level-counter  =
         ,transparent-level    = true
         ,legacy-code          =
+%    \end{macrocode}
+%    What block instance to use is determined by checking if a special
+%    one exists or whether we should use \texttt{plain}:
+%    \begin{macrocode}
         ,block-instance:e     = thm-
                                \IfInstanceExistsTF{block}
                                   {thm- \l_@@_thmstyle_tl -1}
                                   { \l_@@_thmstyle_tl } { plain }
         ,inner-instance-type  = captionedtext
         ,inner-instance       = #2
+%    \end{macrocode}
+%    By default the body text is justified, but perhaps we should not
+%    set anything here and use whatever is current.\fmi{decide}
+%    \begin{macrocode}
         ,para-instance        = justify
       }
 %    \end{macrocode}
@@ -6088,7 +6230,11 @@
 %    \begin{macrocode}
     \DeclareInstance{captionedtext}{#2}{thmlike}
       {
-        ,counter:e = \IfBooleanF #1 { \IfNoValueTF{#3}{#2}{#3} }  % <-- no counter if * form
+%    \end{macrocode}
+%    The counter to use is either none or \texttt{\#2} or \texttt{\#3}
+%    based on the arguments given:
+%    \begin{macrocode}
+        ,counter:e = \IfBooleanF #1 { \IfNoValueTF{#3}{#2}{#3} }
         ,title     = #4
         ,style:e   = \l_@@_thmstyle_tl
                      \bool_if:NT \l_@@_swap_number_bool {-swap} 
@@ -6146,6 +6292,136 @@
 }
 %    \end{macrocode}
 %  \end{macro}
+%
+%  
+%
+%
+%
+%  \begin{macro}{\ParseLaTeXeTheoremlike}
+%    The arguments to \cs{ParseLaTeXeTheoremlike} are as follows:
+%    \begin{itemize}
+%    \item[\#1:] instance name to use (of type \enquote{blockenv})
+%    \item[\#2:] unnumbered? boolean normally provided by using the star
+%    form of the environment
+%    \item[\#3:] key/val for layout adjustments settings provided in the
+%       optional argument of the \enquote{theorem-like}
+%       environment. If a note to the them was given in that argument,
+%       then it has been turned into \verb=note={...}=
+%    \end{itemize}
+%    To be able to pick up the \key{note}, if provided, we make the
+%    following declaration:
+%    \begin{macrocode}
+\keys_define:nn {blockenv} {
+  , note        .tl_set:N  = \l_@@_note_tl
+  , note        .groups:n  = { interface }
+}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \ParseLaTeXeTheoremlike #1 #2 #3 {
+%
+%  \@@_debug_typeout:n{Parse~#1.~ Arguments~ found:~ \IfBooleanT{#2}{*}
+%                \IfValueT{#3}{[\exp_not:n{#3}]}}
+%  
+%    \end{macrocode}
+%    Normally, no note is provided, so that's the starting point:
+%    \begin{macrocode}
+  \tl_set:Nn \l_@@_note_tl { \NoValue }
+%    \end{macrocode}
+%    Then we check \texttt{\#3} if it contains a key/val list
+%    containing \key{note}. This then sets \cs{l_@@_note_tl} and puts
+%    all other key/vals in \cs{l_@@_instance_keys_tl}. Otherwise the
+%    complete key/val list ends up there.
+%    \begin{macrocode}
+  \IfNoValueTF { #3 }
+               { \tl_clear:N \l_@@_instance_keys_tl }
+               { \keys_set_groups:nnnN {blockenv} {interface} { #3 }
+                                       \l_@@_instance_keys_tl        }
+%    \end{macrocode}
+%    We are now ready to invoke the \insttype{blockenv} instance for
+%    \texttt{\#1} but we need to expand some of the values first,
+%    hence the \cs{use:e}. 
+%    \begin{macrocode}
+  \use:e {
+    \exp_not:N \BlockEnv { #1 }
+        { \exp_not:o \l_@@_instance_keys_tl }
+        { #2 }
+        { \exp_not:o \l_@@_note_tl }
+  }
+%    \end{macrocode}
+%    We don't have any use for the last argument (the sub-caption) in
+%    the standard setup, so we pass \cs{NoValue}.
+%    \begin{macrocode}
+        \NoValue
+}
+
+%    \end{macrocode}
+%  \end{macro}
+%  
+%
+%  
+%
+%
+%
+%  
+%
+%  
+%
+%
+%
+%  
+%  \begin{macro}{\newtheoremstyle}
+%    
+%    \begin{macrocode}
+
+% \newtheoremstyle has a bunch of argument conventions that haven't been fully implemented yet, e.g.
+% #8 can be a blank (meaning normal wordspace or \newline) or a skip.
+  
+\cs_set_protected:Npn \newtheoremstyle #1#2#3#4#5#6#7#8#9 {
+  \DeclareInstance{thmstyle}{#1}{std}{
+    ,caption-decls   = {#4}
+    ,before-hspace:e = \tl_if_empty:nTF{#5}{0pt}{#5}
+    ,body-decls      = {#6}
+    ,punct           = {#7}
+    ,after-hspace:e  = \tl_if_empty:nTF{#8}{0pt}
+                          {\tl_if_blank:nTF{#8}{3.3pt}{#8}} % <--- not fully matching amsthm syntax yet
+  }
+  \ShowInstanceValues{thmstyle}{#1}
+%  
+  \tl_if_empty:nF { #2#3 }
+    {
+      \DeclareInstance{block}{thm-#1-1}{std}{
+        ,begin-vspace:e = \tl_if_empty:nTF{#2}{0pt}{#2}
+        ,end-vspace:e   = \tl_if_empty:nTF{#3}{0pt}{#3}
+        ,left-margin      = 0pt
+        ,para-indent      = \parindent
+        ,para-vspace      = \parskip
+      }
+      \DeclareInstanceCopy{block}{thm-#1-2}{thm-#1-1}
+    }
+  \tl_if_empty:oF { \exp_not:n{#9} }
+     {
+       \cs_set:Npn \thmname   ##1 {title-format={{\unexpanded{##1}}},}
+       \cs_set:Npn \thmnumber ##1 {number-format={{\unexpanded{##1}}},}
+       \cs_set:Npn \thmnote   ##1 {note-format={{\unexpanded{##1}}},}
+       \cs_set:Npn \@@_tmp:w ##1##2##3 {
+         \exp_args:Nnne \EditInstance{thmstyle}{#1}{#9}}
+       \@@_tmp:w {##1} {##1} {##1}
+%
+       \cs_set:Npn \thmname   ##1 {title,}
+       \cs_set:Npn \thmnumber ##1 {number,}
+       \cs_set:Npn \thmnote   ##1 {punct,note}
+       \cs_set:Npn \@@_tmp:w##1##2##3 {
+         \exp_args:Nnne \EditInstance{thmstyle}{#1}{order={#9}}}
+       \@@_tmp:w {##1} {##1} {##1}
+%
+       \ShowInstanceValues{thmstyle}{#1}
+     }  
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
 %
 %  
 %
@@ -6212,12 +6488,6 @@
 %  }
 %\end{verbatim}
 %
-%   What varies from instance to instance are the values for
-%   \key{block-instance} and \key{inner-instance}.
-%
-%   We use \struct{theorem-like} as the structure name and rolemap it
-%   to a \struct{Sect} because that can hold a \struct{Caption}.
-%
 %  \end{instance}
 %
 %  \begin{instance}{captionedtext sample}
@@ -6247,31 +6517,6 @@
 %
 %
 %
-% \subsubsection{The \instname{verbatim} and \instname{verbatim*} instances}
-%
-%
-% \subsubsection{Standard list instances}
-%
-%
-%
-%
-% \subsection{Block instances}
-%
-%    Below, we declare the different block instances for the
-%  document-level environments. Some, such as the displayblock ones
-%  are shared between different environments (as long as one doesn't
-%  need to adjust individual values), other environments have their
-%  own instances (for precisely that reason).
-%
-%
-%  
-%
-%  
-% \subsection{Item instances}
-%
-%
-%
-% \subsection{Para instances}
 %
 %
 %
@@ -6297,38 +6542,6 @@
 
 
 
-\cs_new_protected:Npn \@@_captioned_everypar_std: {
-    \@@_debug_typeout:n{...~ in~ captioned~ block~ everypar \on@line }
-    \legacy_if_set_false:n { @minipage }
-    \legacy_if_gset_false:n { @newlist }
-%    \end{macrocode}
-%    The \texttt{@inlabel} is normally true at this point, but if we
-%    also have \texttt{@nobreak} then the same routine is call again
-%    at the next paragraph to reset \cs{clubpenalty} and at that point
-%    the \cs{g_@@_labels_box} has been typeset and \texttt{@inlabel}
-%    is false.
-%    \begin{macrocode}
-    \legacy_if:nT { @inlabel }
-       {
-         \legacy_if_gset_false:n { @inlabel }
-         \para_omit_indent:
-         \box_use_drop:N \g_@@_labels_box
-         \__kernel_list_label_after:n { \PARALABEL }     % <- change
-                                                         % this name
-         \penalty \c_zero_int
-       }
-%       
-   \legacy_if:nTF { @nobreak }
-       {
-         \legacy_if_gset_false:n { @nobreak }
-         \int_set:Nn \clubpenalty { 10000 }
-       }
-       {
-         \int_set_eq:NN \clubpenalty \@clubpenalty
-         \@@_debug_typeout:n{Set~ noop~ block~ everypar \on@line }
-         \cs_set_eq:NN \@@_everypar: \prg_do_nothing:
-       }
-}
 
 
 
@@ -6474,35 +6687,7 @@
                   \l_@@_swap_number_bool }
 
 %    \cs{ParseLaTeX2eTheorem} arguments:
-%    \begin{itemize}
-%    \item[1:] instance name to use (of type \enquote{blockenv})
-%    \item[2:] unnumbered? boolean
-%    \item[3:] title or key/val for layout adjustments and title settings
-%    \end{itemize}
 
-\cs_new_protected:Npn \ParseLaTeXeTheorem #1 #2 #3 {
-%  \@@_debug_typeout:n{==================================}
-%  \@@_debug_typeout:n{Parse~#1.~ Arguments~ found:~ \IfBooleanT{#2}{*}
-%                \IfValueT{#3}{[\exp_not:n{#3}]}}
-%  
-  \tl_set:Nn \l_@@_note_tl { \NoValue }
-  \IfNoValueTF { #3 }
-               { \tl_clear:N \l_@@_instance_keys_tl }
-               { \keys_set_groups:nnnN {blockenv} {interface} { #3 } \l_@@_instance_keys_tl }
-%
-  \use:e {
-    \exp_not:N \UseInstance{blockenv}{#1}
-              { \exp_not:o \l_@@_instance_keys_tl }
-              { #2 }
-              { \exp_not:o \l_@@_note_tl }
-              \NoValue                % <-- not used with normal theorem-like environments
-  }
-}
-
-\keys_define:nn {blockenv} {
-  , note        .tl_set:N  = \l_@@_note_tl
-  , note        .groups:n  = { interface }
-}
   
 
 
@@ -6511,51 +6696,6 @@
 
 
 
-
-% \newtheoremstyle has a bunch of argument conventions that haven't been fully implemented yet, e.g.
-% #8 can be a blank (meaning normal wordspace or \newline) or a skip.
-  
-\cs_set_protected:Npn \newtheoremstyle #1#2#3#4#5#6#7#8#9 {
-  \DeclareInstance{thmstyle}{#1}{std}{
-    ,caption-decls   = {#4}
-    ,before-hspace:e = \tl_if_empty:nTF{#5}{0pt}{#5}
-    ,body-decls      = {#6}
-    ,punct           = {#7}
-    ,after-hspace:e  = \tl_if_empty:nTF{#8}{0pt}
-                          {\tl_if_blank:nTF{#8}{3.3pt}{#8}} % <--- not fully matching amsthm syntax yet
-  }
-  \ShowInstanceValues{thmstyle}{#1}
-%  
-  \tl_if_empty:nF { #2#3 }
-    {
-      \DeclareInstance{block}{thm-#1-1}{std}{
-        ,begin-vspace:e = \tl_if_empty:nTF{#2}{0pt}{#2}
-        ,end-vspace:e   = \tl_if_empty:nTF{#3}{0pt}{#3}
-        ,left-margin      = 0pt
-        ,para-indent      = \parindent
-        ,para-vspace      = \parskip
-      }
-      \DeclareInstanceCopy{block}{thm-#1-2}{thm-#1-1}
-    }
-  \tl_if_empty:oF { \exp_not:n{#9} }
-     {
-       \cs_set:Npn \thmname   ##1 {title-format={{\unexpanded{##1}}},}
-       \cs_set:Npn \thmnumber ##1 {number-format={{\unexpanded{##1}}},}
-       \cs_set:Npn \thmnote   ##1 {note-format={{\unexpanded{##1}}},}
-       \cs_set:Npn \@@_tmp:w ##1##2##3 {
-         \exp_args:Nnne \EditInstance{thmstyle}{#1}{#9}}
-       \@@_tmp:w {##1} {##1} {##1}
-%
-       \cs_set:Npn \thmname   ##1 {title,}
-       \cs_set:Npn \thmnumber ##1 {number,}
-       \cs_set:Npn \thmnote   ##1 {punct,note}
-       \cs_set:Npn \@@_tmp:w##1##2##3 {
-         \exp_args:Nnne \EditInstance{thmstyle}{#1}{order={#9}}}
-       \@@_tmp:w {##1} {##1} {##1}
-%
-       \ShowInstanceValues{thmstyle}{#1}
-     }  
-}
 
 % fix a bug in @endpe (temp)
 
@@ -6692,7 +6832,7 @@
 % -> false  
 
 
-% Interpret legacy switches as followes (we might want to keep the names for now)
+% Interpret legacy switches as follows (we might want to keep the names for now)
 %
 %
 % @newlist   ->  signals that we are at the start of a new block with a caption or
@@ -6704,6 +6844,17 @@
 %
 % @noparitem ->  dropped (handled directly)
 %
+%    \end{macrocode}
+%
+%
+%    Extra keys to support enumitem conventions:
+%    \begin{macrocode}
+\keys_define:nn { template/block/display }
+{
+  ,topsep        .skip_set:N = \topsep
+  ,partopsep     .skip_set:N = \partopsep
+  ,listparindent .skip_set:N = \listparindent
+}
 %    \end{macrocode}
 %
 %    
