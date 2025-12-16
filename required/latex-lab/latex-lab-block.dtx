@@ -2350,7 +2350,8 @@
 % \texttt{lttagging.dtx}. They can be disabled by assigning these sockets the 
 % plug \texttt{noop}.
 %
-% \subsection{Tagging recipes}
+%
+% \subsubsection{Tagging recipes}
 %
 % There are a number of different tagging recipes that implement
 % different tagging approaches. They are selected through the
@@ -6079,6 +6080,8 @@
 % mechanism.
 %
 %
+% \subsection{Declarations for theorem-like environments}
+%
 %  \begin{macro}[no-user-doc]{\newtheorem}
 %    We reimplement the extended \pkg{amsthm} version of the declaration which
 %    also supports a star form indicating that this theoremlike
@@ -6354,12 +6357,25 @@
 %    \begin{macrocode}
         \NoValue
 }
-
 %    \end{macrocode}
 %  \end{macro}
 %  
 %
 %  
+%  \begin{macro}{\swapnumbers}
+%    Beside declaring theorem-like environments with \cs{newtheorem}
+%    and \cs{theoremstyle}, the \pkg{amsthm} package also introduced
+%    \cs{swapnumbers} to swap title and number in all environments
+%    (because that is a common requirement. The new implementation
+%    supports this approach as well.
+%
+%    It is implemented with a boolean \cs{l_@@_swap_number_bool} which
+%    is toggled by \cs{swapnumbers}.
+%    \begin{macrocode}
+\bool_new:N \l_@@_swap_number_bool
+\cs_new_protected:Npn \swapnumbers { \bool_inverse:N \l_@@_swap_number_bool }
+%    \end{macrocode}
+%  \end{macro}
 %
 %
 %
@@ -6371,23 +6387,36 @@
 %
 %  
 %  \begin{macro}{\newtheoremstyle}
-%    
+%    The \cs{newtheoremstyle} declaration was originally provided in
+%    the \pkg{amsthm} package. It has 9 mandatory arguments that sets
+%    some aspects of theorem styles. We map those to the template
+%    mechanism and generate \insttype{thmstyle} instances from them.
+%
+%    \cs{newtheoremstyle} has a bunch of argument conventions that
+%    haven't been fully implemented yet, e.g., \texttt{\#8} can be a
+%    blank (meaning normal wordspace or \cs{newline}) or a skip. Those
+%    should eventually also be covered.\fmi{extend}
 %    \begin{macrocode}
-
-% \newtheoremstyle has a bunch of argument conventions that haven't been fully implemented yet, e.g.
-% #8 can be a blank (meaning normal wordspace or \newline) or a skip.
-  
 \cs_set_protected:Npn \newtheoremstyle #1#2#3#4#5#6#7#8#9 {
+%    \end{macrocode}
+%    First we build a \insttype{thmstyle} instance:
+%    \begin{macrocode}
   \DeclareInstance{thmstyle}{#1}{std}{
     ,caption-decls   = {#4}
     ,before-hspace:e = \tl_if_empty:nTF{#5}{0pt}{#5}
     ,body-decls      = {#6}
     ,punct           = {#7}
+%    \end{macrocode}
+%    This setting doesn't cover all syntax possibilities.
+%    \begin{macrocode}
     ,after-hspace:e  = \tl_if_empty:nTF{#8}{0pt}
-                          {\tl_if_blank:nTF{#8}{3.3pt}{#8}} % <--- not fully matching amsthm syntax yet
+                          {\tl_if_blank:nTF{#8}{3.3pt}{#8}}
   }
-  \ShowInstanceValues{thmstyle}{#1}
-%  
+%    \end{macrocode}
+%    If \texttt{\#2} or \texttt{\#3} are not empty we also have to set
+%    up a \insttype{block} instance to account for the fact that
+%    special vertical spacing is requested:
+%    \begin{macrocode}
   \tl_if_empty:nF { #2#3 }
     {
       \DeclareInstance{block}{thm-#1-1}{std}{
@@ -6397,33 +6426,183 @@
         ,para-indent      = \parindent
         ,para-vspace      = \parskip
       }
+%    \end{macrocode}
+%    As elsewhere we provide two levels.
+%    \begin{macrocode}
       \DeclareInstanceCopy{block}{thm-#1-2}{thm-#1-1}
     }
+%    \end{macrocode}
+%    More complicated is argument \texttt{\#9}. It not empty it can
+%    contain \cs{thmname}, \cs{thmnumber}, and/or \cs{thmnote} to
+%    define the layout of the theorem caption. All the spacing hass to
+%    be given inside the arguments of these commands which means that
+%    this doesn't work together with \cs{swapnumbers}, but this is the
+%    way \pkg{amsthm} was defined. If the instances are manually
+%    defined then it is easy to make them work with and without a
+%    \cs{swapnumbers} declaration. So basically, this here is good for
+%    a subset of cases and for backwards compatibility with
+%    \pkg{amsthm}.
+%    
+%    The approach used doesn't cover all circumstances, e.g., if the
+%    argument contains low-level programming on top of the interface
+%    commands that the translation below will fail, but most existing
+%    code should work and the rest would need a replacement using
+%    instances that are directly set up.
+%    \begin{macrocode}
   \tl_if_empty:oF { \exp_not:n{#9} }
      {
+%    \end{macrocode}
+%    Give special definitions for the commands and then expand
+%    \texttt{\#9} and used the result to edit the instance we defined
+%    earlier.
+%    \begin{macrocode}
        \cs_set:Npn \thmname   ##1 {title-format={{\unexpanded{##1}}},}
        \cs_set:Npn \thmnumber ##1 {number-format={{\unexpanded{##1}}},}
        \cs_set:Npn \thmnote   ##1 {note-format={{\unexpanded{##1}}},}
        \cs_set:Npn \@@_tmp:w ##1##2##3 {
          \exp_args:Nnne \EditInstance{thmstyle}{#1}{#9}}
        \@@_tmp:w {##1} {##1} {##1}
-%
+%    \end{macrocode}
+%    We then also use the commands to deduce a suitable \key{order}
+%    and put that into the instance as well.
+%    \begin{macrocode}
        \cs_set:Npn \thmname   ##1 {title,}
        \cs_set:Npn \thmnumber ##1 {number,}
        \cs_set:Npn \thmnote   ##1 {punct,note}
        \cs_set:Npn \@@_tmp:w##1##2##3 {
          \exp_args:Nnne \EditInstance{thmstyle}{#1}{order={#9}}}
        \@@_tmp:w {##1} {##1} {##1}
-%
-       \ShowInstanceValues{thmstyle}{#1}
-     }  
+     } 
+%    \end{macrocode}
+%    If block tracing is turned on we show the final result:
+%    \begin{macrocode}
+  \@@_debug:n { \ShowInstanceValues{thmstyle}{#1} }
 }
 %    \end{macrocode}
 %  \end{macro}
 %
 %
 %
-%  
+%
+%
+% \subsection{Supporting QED in proofs}
+%
+%  The \pkg{amsthm} package contains some elaborate code to support
+%  placing a QED symbol into the prood (by default at the end, but
+%  alternatively manually placed with \cs{qedhere}. This codee is
+%  simply lifted and not adjusted in any way for now (and therefore
+%  also not documented---see the \pkg{amsthm} package for
+%  documentation for now).
+%   
+%    \begin{macrocode}
+\ExplSyntaxOff
+  \def\math@qedhere{%
+    \@ifundefined{\@currenvir @qed}{%
+      \qed@warning\quad\hbox{\qedsymbol}%
+    }{%
+      \@xp\aftergroup\csname\@currenvir @qed\endcsname
+    }%
+  }
+  \def\displaymath@qed{%
+    \relax
+    \ifmmode
+      \ifinner \aftergroup\linebox@qed
+      \else
+        \eqno
+        \let\eqno\relax \let\leqno\relax \let\veqno\relax
+        \hbox{\qedsymbol}%
+      \fi
+    \else
+       \aftergroup\linebox@qed
+    \fi
+  }
+  \expandafter\let\csname equation*@qed\endcsname\displaymath@qed
+  \def\equation@qed{%
+    \iftagsleft@
+      \hbox{\phantom{\quad\qedsymbol}}%
+      \gdef\alt@tag{%
+        \rlap{\hbox to\displaywidth{\hfil\qedsymbol}}%
+        \global\let\alt@tag\@empty
+      }%
+    \else
+      \gdef\alt@tag{%
+        \global\let\alt@tag\@empty
+        \vtop{\ialign{\hfil####\cr
+                \tagform@\theequation\cr
+                \qedsymbol\cr}}%
+        \setbox\z@
+      }%
+    \fi
+  }
+  \def\qed@tag{%
+    \global\tag@true \nonumber
+    &\omit\setboxz@h {\strut@ \qedsymbol}\tagsleft@false
+    \place@tag@gather
+    \kern-\tabskip
+    \ifst@rred \else \global\@eqnswtrue \fi \global\advance\row@\@ne \cr
+  }
+  \def\split@qed{%
+    \def\endsplit{\crcr\egroup \egroup \ctagsplit@false \rendsplit@
+      \aftergroup\align@qed
+    }%
+  }
+  \def\align@qed{%
+    \ifmeasuring@ \tag*{\qedsymbol}%
+    \else \let\math@cr@@@\qed@tag
+    \fi
+  }
+  \expandafter\let\csname align*@qed\endcsname\align@qed
+  \expandafter\let\csname gather*@qed\endcsname\align@qed
+  %
+  \def\math@qedhere{\quad\hbox{\qedsymbol}}%
+  %
+  \DeclareRobustCommand{\qed}{%
+    \ifmmode \mathqed
+    \else
+      \leavevmode\unskip\penalty9999 \hbox{}\nobreak\hfill
+      \quad\hbox{\qedsymbol}%
+    \fi
+  }%
+  \let\QED@stack\@empty
+  \let\qed@elt\relax
+  \newcommand{\pushQED}[1]{%
+    \toks@{\qed@elt{#1}}\@temptokena\expandafter{\QED@stack}%
+    \xdef\QED@stack{\the\toks@\the\@temptokena}%
+  }%
+  \newcommand{\popQED}{%
+    \begingroup\let\qed@elt\popQED@elt \QED@stack\relax\relax\endgroup
+  }%
+  \def\popQED@elt#1#2\relax{#1\gdef\QED@stack{#2}}%
+  \newcommand{\qedhere}{%
+    \begingroup \let\mathqed\math@qedhere
+      \let\qed@elt\setQED@elt \QED@stack\relax\relax \endgroup
+  }%
+  \def\setQED@elt#1#2\relax{%
+    \ifmeasuring@
+    \else \iffirstchoice@ \gdef\QED@stack{\qed@elt{}#2}\fi
+    \fi
+    #1%
+  }%
+  \def\qed@warning{%
+    \PackageWarning{amsthm}{The \@nx\qedhere command may not work
+      correctly here}%
+  }%
+  \newcommand{\mathqed}{\quad\hbox{\qedsymbol}}%
+  \DeclareRobustCommand{\qed}{%
+    \ifmmode \mathqed
+    \else
+      \leavevmode\unskip\penalty9999 \hbox{}\nobreak\hfill
+      \quad\hbox{\qedsymbol}%
+    \fi
+  }
+  \newcommand{\openbox}{\leavevmode
+    \hbox to.77778em{%
+    \hfil\vrule
+    \vbox to.675em{\hrule width.6em\vfil\hrule}%
+    \vrule\hfil}}
+  \providecommand{\qedsymbol}{\openbox}
+\ExplSyntaxOn
+%    \end{macrocode}
 %
 %
 % \section{Instance declarations for environments}
@@ -6546,150 +6725,16 @@
 
 
 
-%---------------------------------------
-
-
-%---------------------------------------
-
-
-
 
 
 %---------------------------------------
 
 % handling qed (more or less copy-paste so far from amsthm)
 
-\ExplSyntaxOff
-
-  \def\math@qedhere{%
-    \@ifundefined{\@currenvir @qed}{%
-      \qed@warning\quad\hbox{\qedsymbol}%
-    }{%
-      \@xp\aftergroup\csname\@currenvir @qed\endcsname
-    }%
-  }
-  \def\displaymath@qed{%
-    \relax
-    \ifmmode
-      \ifinner \aftergroup\linebox@qed
-      \else
-        \eqno
-        \let\eqno\relax \let\leqno\relax \let\veqno\relax
-        \hbox{\qedsymbol}%
-      \fi
-    \else
-       \aftergroup\linebox@qed
-    \fi
-  }
-  \expandafter\let\csname equation*@qed\endcsname\displaymath@qed
-  \def\equation@qed{%
-    \iftagsleft@
-      \hbox{\phantom{\quad\qedsymbol}}%
-      \gdef\alt@tag{%
-        \rlap{\hbox to\displaywidth{\hfil\qedsymbol}}%
-        \global\let\alt@tag\@empty
-      }%
-    \else
-      \gdef\alt@tag{%
-        \global\let\alt@tag\@empty
-        \vtop{\ialign{\hfil####\cr
-                \tagform@\theequation\cr
-                \qedsymbol\cr}}%
-        \setbox\z@
-      }%
-    \fi
-  }
-  \def\qed@tag{%
-    \global\tag@true \nonumber
-    &\omit\setboxz@h {\strut@ \qedsymbol}\tagsleft@false
-    \place@tag@gather
-    \kern-\tabskip
-    \ifst@rred \else \global\@eqnswtrue \fi \global\advance\row@\@ne \cr
-  }
-  \def\split@qed{%
-    \def\endsplit{\crcr\egroup \egroup \ctagsplit@false \rendsplit@
-      \aftergroup\align@qed
-    }%
-  }
-  \def\align@qed{%
-    \ifmeasuring@ \tag*{\qedsymbol}%
-    \else \let\math@cr@@@\qed@tag
-    \fi
-  }
-  \expandafter\let\csname align*@qed\endcsname\align@qed
-  \expandafter\let\csname gather*@qed\endcsname\align@qed
-  %
-  \def\math@qedhere{\quad\hbox{\qedsymbol}}%
-  %
-  \DeclareRobustCommand{\qed}{%
-    \ifmmode \mathqed
-    \else
-      \leavevmode\unskip\penalty9999 \hbox{}\nobreak\hfill
-      \quad\hbox{\qedsymbol}%
-    \fi
-  }%
-  \let\QED@stack\@empty
-  \let\qed@elt\relax
-  \newcommand{\pushQED}[1]{%
-    \toks@{\qed@elt{#1}}\@temptokena\expandafter{\QED@stack}%
-    \xdef\QED@stack{\the\toks@\the\@temptokena}%
-  }%
-  \newcommand{\popQED}{%
-    \begingroup\let\qed@elt\popQED@elt \QED@stack\relax\relax\endgroup
-  }%
-  \def\popQED@elt#1#2\relax{#1\gdef\QED@stack{#2}}%
-  \newcommand{\qedhere}{%
-    \begingroup \let\mathqed\math@qedhere
-      \let\qed@elt\setQED@elt \QED@stack\relax\relax \endgroup
-  }%
-  \def\setQED@elt#1#2\relax{%
-    \ifmeasuring@
-    \else \iffirstchoice@ \gdef\QED@stack{\qed@elt{}#2}\fi
-    \fi
-    #1%
-  }%
-  \def\qed@warning{%
-    \PackageWarning{amsthm}{The \@nx\qedhere command may not work
-      correctly here}%
-  }%
-  \newcommand{\mathqed}{\quad\hbox{\qedsymbol}}%
-  \DeclareRobustCommand{\qed}{%
-    \ifmmode \mathqed
-    \else
-      \leavevmode\unskip\penalty9999 \hbox{}\nobreak\hfill
-      \quad\hbox{\qedsymbol}%
-    \fi
-  }
-  \newcommand{\openbox}{\leavevmode
-    \hbox to.77778em{%
-    \hfil\vrule
-    \vbox to.675em{\hrule width.6em\vfil\hrule}%
-    \vrule\hfil}}
-  \providecommand{\qedsymbol}{\openbox}
-
-\ExplSyntaxOn
-
-%---------------------------------------
-
-
-
 
   
 
      
-%---------------------------------------
-
-
-\bool_new:N \l_@@_swap_number_bool
-
-\def\swapnumbers { \bool_if:NTF \l_@@_swap_number_bool
-                                 \bool_set_false:N \bool_set_true:N
-                  \l_@@_swap_number_bool }
-
-%    \cs{ParseLaTeX2eTheorem} arguments:
-
-  
-
 
 
 
