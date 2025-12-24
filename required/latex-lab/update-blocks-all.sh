@@ -11,11 +11,12 @@ l3build save -cconfig-block -epdftex \
         blocks-user-keys-01 \
 	tagging-0097b \
         tagging-0767 \
-        tagging-0893
-
+        tagging-0893 \
+	tagging-0925
 
 l3build save -cconfig-block -epdftex,luatex \
 	blocks-000 \
+	blocks-alltt \
 	blocks-description-01b \
 	blocks-description-02b \
 	blocks-description-03 \
@@ -28,7 +29,7 @@ l3build save -cconfig-block -epdftex,luatex \
 	blocks-item-03 \
 	blocks-item-04 \
 	blocks-itemize-01b \
-    blocks-itemize-02 \
+	blocks-itemize-02 \
 	blocks-list-01 \
 	blocks-list-01b \
 	blocks-list-02b \
@@ -52,9 +53,10 @@ l3build save -cconfig-block -epdftex,luatex \
         gallery-III-with-sec \
 	hyperref-target \
         problem-blocks-tabbing \
-        ptag-001 \
 	tagging-0097 \
-	tagging-0730
+	tagging-0730 \
+	tagging-0962 \
+	tagging-0996
 
 
 exit
