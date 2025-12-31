@@ -33,7 +33,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltcounts.dtx}
-             [2025/03/01 v1.2b LaTeX Kernel (Counters)]
+             [2025/12/31 v1.2c LaTeX Kernel (Counters)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltcounts.dtx}
@@ -62,7 +62,7 @@
 %     {Create file from parts of ltmiscen and ltherest.}
 % \changes{v1.1a}{1994/05/19}{Extracted file from ltcntlen.}
 % \changes{v1.1d}{1996/04/23}{Documentation improvements}
-%
+% \changes{v1.2c}{2025/12/31}{Added \cs{aliascounter}}
 % \section{Counters and Lengths}
 % Commands for defining and using counters.
 % This file defines the following commands. In each case \marg{counter} may be
@@ -71,6 +71,9 @@
 % \DescribeMacro{\newcounter}
 % To define a new counter.
 %
+% \DescribeMacro{\newaliascounter}
+% To define an alias name for a counter.
+% 
 % \DescribeMacro{\setcounter}
 % To set the value of counters.
 %
@@ -153,7 +156,8 @@
 %              then |\thesection| might be defined by:\newline
 %                 |\def\thesection|\newline\hspace*{2em}
 %                    |{\@Roman{\c@chapter}-\@arabic{\c@section}}|\\
-%
+%  |\theHfoo|& Macro that is used to create destination names. It should give a unique
+%              value across the document for every |\refstepcounter|. 
 %  |\p@foo|  & Macro that expands to a printed `reference prefix' of
 %              counter foo.  Any |\ref| to a value created by counter
 %              foo will produce the expansion of |\p@foo\thefoo|  when
@@ -161,7 +165,9 @@
 %              for an extension of this mechanism.\\
 %  |\cl@foo| & List of counters to be reset when foo stepped.
 %              Has format
-%                  |\@elt{countera}\@elt{counterb}\@elt{counterc}|.
+%                  |\@elt{countera}\@elt{counterb}\@elt{counterc}|.\\
+%  |\alias@cnt@foo| & if foo is a alias counter created with |\newaliascounter| this
+%                  command contains the name of the root counter.                 
 %  \end{tabular}
 %  \end{center}
 %  For some environments the counter is named slightly differently,
@@ -252,6 +258,46 @@
 %    \end{macrocode}
 % \end{macro}
 %
+% \begin{macro}{\newaliascounter}
+% \changes{v1.2c}{2025/12/31}{New command \cs{newaliascounter}}
+% |\newaliascounter|\marg{aliasctr}\oarg{rootctr}|
+% Defines \meta{aliasctr} as an alias for the counter \meta{rootctr}.
+% The root counter can be itself be an alias counter (it is not 
+% recommended to chain counter names like this as keeping track of the 
+% representations can get tricky, but explicit tests to avoid
+% that seems unnecessary).
+% The various representation commands of the alias counter call the 
+% respective representations of the root. This means that if 
+% a representation of the root is redefined, e.g. to make
+% \cs{theH}\meta{counter} unique then the alias follows. 
+% It it possible to redefine an alias representation, 
+% but this then break the connection to the root representation. 
+% 
+% Every alias counter FOO has an associated command \cs{alias@ctr@FOO} which points to
+% the root. This allows to test if a counter is an alias counter and also allows to
+% find the root. 
+% 
+% We do not roleback the definition to avoid errors if packages use it 
+% that do not roleback.
+%    \begin{macrocode}
+\newcommand*{\newaliascounter}[2]{%
+    \@ifundefined{c@#2}{%
+      \@nocounterr{#2}%
+    }{%
+      \expandafter\@ifdefinable\csname c@#1\endcsname{%
+       \global\expandafter\let
+        \csname c@#1\expandafter\endcsname\csname c@#2\endcsname
+       \expandafter\edef\csname the#1\endcsname{\expandafter\noexpand\csname the#2\endcsname}%        
+       \expandafter\edef\csname theH#1\endcsname{\expandafter\noexpand\csname theH#2\endcsname}%        
+       \expandafter\edef\csname p@#1\endcsname{\expandafter\noexpand\csname p@#2\endcsname}%        
+       \expandafter\edef\csname cl@#1\endcsname{\expandafter\noexpand\csname cl@#2\endcsname}%
+       \expandafter\def\csname alias@ctr@#1\endcsname{#2}%
+      }%
+    }%
+}
+%    \end{macrocode}
+% \end{macro}
+% 
 % \begin{macro}{\value}
 %    |\value|\marg{ctr}
 %           produces the value of counter \meta{ctr}, for use with
@@ -337,18 +383,33 @@
 %  \changes{v1.1n}{2023/11/07}{Do not change \cs{the...} if already defined (gh/823)}
 %  \changes{v1.1o}{2024/09/20}{define theHfoo (used for internal links)}
 %  \changes{v1.1p}{2024/10/26}{Fully expand counter name in theHfoo commands (gh/1508)}
+%  \changes{v1.2c}{2025/12/31}{Add support for alias counter}
+%  Older definitions of \cs{@definecounter} called unconditionally \cs{newcount}. 
+%  This had the effect that connection to an alias counter could break if a user 
+%  did, e.g.,
+%  \begin{verbatim}
+%  \newcounter{theorem}
+%  \newaliascounter{lemma}{theorem}
+%  \newtheorem{theorem}{Theorem}
+%  \newtheorem{lemma}{Lemma}
+%  \end{verbatim}
+%  The command was therefore changed and now tests if the count already exist.
+%  If the counter to define is an already existing alias counter then we do not reset
+%  the representations and do not add it to \texttt{@ckpt}.
 %    \begin{macrocode}
 %</2ekernel>
-%<latexrelease>\IncludeInRelease{2024/11/01}{\@definecounter}
-%<latexrelease>                             {provide theHfoo commands}%
+%<latexrelease>\IncludeInRelease{2026/06/01}{\@definecounter}
+%<latexrelease>                             {add aliascounter}%
 %<*2ekernel|latexrelease>
-\def\@definecounter#1{\expandafter\newcount\csname c@#1\endcsname
+\def\@definecounter#1{%
+     \@ifundefined{c@#1}{\expandafter\newcount\csname c@#1\endcsname}{}%
      \setcounter{#1}\z@
-     \global\expandafter\let\csname cl@#1\endcsname\@empty
-     \@addtoreset{#1}{@ckpt}%
-     \global\expandafter\let\csname p@#1\endcsname\@empty
-     \expandafter\xdef\csname theH#1\endcsname{%
-       \noexpand\the\noexpand\value{#1}}%
+     \@ifundefined{alias@ctr@#1}
+      {\global\expandafter\let\csname cl@#1\endcsname\@empty
+       \@addtoreset{#1}{@ckpt}%
+       \global\expandafter\let\csname p@#1\endcsname\@empty
+       \expandafter\xdef\csname theH#1\endcsname{%
+         \noexpand\the\noexpand\value{#1}}}{}%
 %    \end{macrocode}
 %    If \cs{the\#1} is undefined or \cs{relax} we define it with the
 %    standard definition for counters, otherwise we warn. This will
@@ -366,6 +427,31 @@
      \fi}
 %<latexrelease>\EndIncludeInRelease
 %</2ekernel|latexrelease>
+%<latexrelease>\IncludeInRelease{2024/11/01}{\@definecounter}
+%<latexrelease>                             {provide theHfoo commands}%
+%<latexrelease>\def\@definecounter#1{\expandafter\newcount\csname c@#1\endcsname
+%<latexrelease>     \setcounter{#1}\z@
+%<latexrelease>     \global\expandafter\let\csname cl@#1\endcsname\@empty
+%<latexrelease>     \@addtoreset{#1}{@ckpt}%
+%<latexrelease>     \global\expandafter\let\csname p@#1\endcsname\@empty
+%<latexrelease>     \expandafter\xdef\csname theH#1\endcsname{%
+%<latexrelease>       \noexpand\the\noexpand\value{#1}}%
+%    \end{macrocode}
+%    If \cs{the\#1} is undefined or \cs{relax} we define it with the
+%    standard definition for counters, otherwise we warn. This will
+%    catch, for example, that somebody defines a counter named
+%    ``index'' conflicting with the \env{theindex} environment.
+%    \begin{macrocode}
+%<latexrelease>     \expandafter
+%<latexrelease>     \ifx\csname the#1\endcsname\relax
+%<latexrelease>       \expandafter
+%<latexrelease>       \gdef\csname the#1\expandafter\endcsname\expandafter
+%<latexrelease>              {\expandafter\@arabic\csname c@#1\endcsname}%
+%<latexrelease>     \else
+%<latexrelease>       \@latex@warning{Command `\string\the#1' already
+%<latexrelease>                       defined -- not changed}%
+%<latexrelease>     \fi}
+%<latexrelease>\EndIncludeInRelease
 %<latexrelease>\IncludeInRelease{0000/00/00}{\@definecounter}
 %<latexrelease>                             {provide theHfoo commands}%%
 %<latexrelease>\def\@definecounter#1{\expandafter\newcount\csname c@#1\endcsname
@@ -386,7 +472,15 @@
 %<*2ekernel>
 %    \end{macrocode}
 %  \end{macro}
-%
+% \begin{macro}{\@kernel@get@ctr@root}
+% A helper command to retrieve the root counter for messages.
+%    \begin{macrocode}
+\def\@kernel@get@ctr@root#1{%
+ \@ifundefined{alias@ctr@#1}{#1}
+   {\expandafter\@kernel@get@ctr@root\csname alias@ctr@#1\endcsname}} 
+%    \end{macrocode}
+% \end{macro}
+% 
 % \begin{macro}{\@addtoreset}
 %  \changes{v1.1o}{2024/09/20}{add the parent theHfoo if a counter is reset}
 %  \changes{v1.1p}{2024/10/26}{Fully expand counter name in theHfoo commands (gh/1508)}
@@ -395,18 +489,41 @@
 %  this representation is changed to include also the
 %  representation of the parent. This is not 100\% guaranteed to work
 %  but has been used this way by hyperref for many years without causing problems.
+%  \changes{v1.2c}{2025/12/31}{Support alias counters}
+%  Changing \cs{cl@counter} and \cs{theHcounter} isn't trivial to do 
+%  if the counter is an alias counter: e.g. only redefining \cs{theH}\meta{counter} from 
+%  the alias counter breaks the connection to the theH-representation of the 
+%  root counter. Redefining both \cs{theH}-representations could overwrite
+%  changes made by the user. If there is a chain of alias counter it gets even 
+%  more complicated to keep everything in sync. 
+%  So unlike the package \pkg{aliascnt} we avoid these complications and 
+%  do not allow alias counters as arguments to \cs{@addtoreset} and \cs{@removefromreset}.
 %    \begin{macrocode}
 %</2ekernel>
-%<latexrelease>\IncludeInRelease{2024/11/01}{\@addtoreset}
-%<latexrelease>                             {provide theHfoo commands}%
+%<latexrelease>\IncludeInRelease{2026/06/01}{\@addtoreset}
+%<latexrelease>                             {support alias counter}%
 %<*2ekernel|latexrelease>
-\def\@addtoreset#1#2{\expandafter\@cons\csname cl@#2\endcsname {{#1}}%
-  \expandafter\xdef\csname theH#1\endcsname{%
-    \expandafter\noexpand\csname theH#2\endcsname.%
-    \noexpand\the\noexpand\value{#1}}%
-}
+\def\@addtoreset#1#2{%
+  \@ifundefined{alias@ctr@#1}{%
+   \@ifundefined{alias@ctr@#2}
+     {\expandafter\@cons\csname cl@#2\endcsname {{#1}}%
+      \expandafter\xdef\csname theH#1\endcsname{%
+       \expandafter\noexpand\csname theH#2\endcsname.%
+        \noexpand\the\noexpand\value{#1}}}%
+     {\@latex@warning{Alias counters can not be used in a counter reset.\MessageBreak
+       Use '\@kernel@get@ctr@root{#2}' instead of '#2'.}}}
+   {\@latex@warning{Alias counters can not be used in a counter reset.\MessageBreak
+     Use '\@kernel@get@ctr@root{#1}' instead of '#1'.}}}
 %<latexrelease>\EndIncludeInRelease
 %</2ekernel|latexrelease>
+%<latexrelease>\IncludeInRelease{2024/11/01}{\@addtoreset}
+%<latexrelease>                             {provide theHfoo commands}%
+%<latexrelease>\def\@addtoreset#1#2{\expandafter\@cons\csname cl@#2\endcsname {{#1}}%
+%<latexrelease>  \expandafter\xdef\csname theH#1\endcsname{%
+%<latexrelease>    \expandafter\noexpand\csname theH#2\endcsname.%
+%<latexrelease>    \noexpand\the\noexpand\value{#1}}%
+%<latexrelease>}
+%<latexrelease>\EndIncludeInRelease
 %<latexrelease>\IncludeInRelease{0000/00/00}{\@addtoreset}
 %<latexrelease>                             {provide theHfoo commands}%%
 %<latexrelease>\def\@addtoreset#1#2{\expandafter\@cons\csname cl@#2\endcsname {{#1}}}
@@ -423,30 +540,59 @@
 %
 % \begin{macro}{\@removefromreset}
 %    \changes{v1.1k}{2018/03/08}{Interface added}
+%    \changes{v1.2c}{2025/12/31}{Support for alias counter}
 %    \begin{macrocode}
-%<latexrelease>\IncludeInRelease{2018-04-01}
-%<latexrelease>                 {\@removefromreset}{Add interfaces}%
+%<latexrelease>\IncludeInRelease{2026/06/01}{\@addtoreset}
+%<latexrelease>                             {support alias counter}%
 %<*2ekernel|latexrelease>
-%    \end{macrocode}
-%
-%    \begin{macrocode}
 \def\@removefromreset#1#2{%
 %    \end{macrocode}
 %    Even through this is internal and the programmer should know what
 %    he/she is doing we test here if counter |#2| is defined. If not,
 %    the execution would run into a tight loop.
+%    As in |\@addtoreset| do not allow alias counters as arguments.
 %    \begin{macrocode}
   \@ifundefined{c@#2}\relax
-  {\begingroup
-     \expandafter\let\csname c@#1\endcsname\@removefromreset
-     \def\@elt##1{%
-       \expandafter\ifx\csname c@##1\endcsname\@removefromreset
-       \else
-         \noexpand\@elt{##1}%
-       \fi}%
-     \expandafter\xdef\csname cl@#2\endcsname
-      {\csname cl@#2\endcsname}%
-    \endgroup}}
+  {\@ifundefined{alias@ctr@#1}{%
+     \@ifundefined{alias@ctr@#2}{%
+       \begingroup
+         \expandafter\let\csname c@#1\endcsname\@removefromreset
+         \def\@elt##1{%
+           \expandafter\ifx\csname c@##1\endcsname\@removefromreset
+           \else
+             \noexpand\@elt{##1}%
+           \fi}%
+         \expandafter\xdef\csname cl@#2\endcsname
+          {\csname cl@#2\endcsname}%
+        \endgroup}%
+       {\@latex@warning{Alias counters can not be removed from a reset.\MessageBreak
+       Use '\@kernel@get@ctr@root{#2}' instead of '#2'.}}} 
+     {\@latex@warning{Alias counters can not be removed from a reset.\MessageBreak
+       Use '\@kernel@get@ctr@root{#1}' instead of '#1'.}}}}
+%<latexrelease>\EndIncludeInRelease    
+%</2ekernel|latexrelease>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<latexrelease>\IncludeInRelease{2018-04-01}
+%<latexrelease>                 {\@removefromreset}{Add interfaces}%
+%<latexrelease>\def\@removefromreset#1#2{%
+%    \end{macrocode}
+%    Even through this is internal and the programmer should know what
+%    he/she is doing we test here if counter |#2| is defined. If not,
+%    the execution would run into a tight loop.
+%    \begin{macrocode}
+%<latexrelease>  \@ifundefined{c@#2}\relax
+%<latexrelease>  {\begingroup
+%<latexrelease>     \expandafter\let\csname c@#1\endcsname\@removefromreset
+%<latexrelease>     \def\@elt##1{%
+%<latexrelease>       \expandafter\ifx\csname c@##1\endcsname\@removefromreset
+%<latexrelease>       \else
+%<latexrelease>         \noexpand\@elt{##1}%
+%<latexrelease>       \fi}%
+%<latexrelease>     \expandafter\xdef\csname cl@#2\endcsname
+%<latexrelease>      {\csname cl@#2\endcsname}%
+%<latexrelease>    \endgroup}}
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -455,6 +601,7 @@
 %    \changes{v1.2a}{2025/01/22}{Guard against star alias.}
 %    Test if arg |#1| and |#2| are counters and if so execute |#3|.
 %    \begin{macrocode}
+%<*2ekernel|latexrelease>
 \begingroup\catcode`\*=11 \lowercase{\endgroup
 \def\@ifbothcounters#1#2#3{%
 %    \end{macrocode}
