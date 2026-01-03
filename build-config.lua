@@ -195,7 +195,7 @@ function fmt(engines,dest)
       .. os_pathsep .. texmfdir .. "//" .. (fmtsearch and os_pathsep or "")
       .. os_concat .. cmd .. " -etex -ini -output-directory=" .. unpackdir
       .. " " .. ini .. ".ini"
-      .. (hide and (" > " .. os_null) or ""))
+      .. (options["quiet"] and (" > " .. os_null) or ""))
     if errorlevel ~= 0 then return errorlevel end
 
     cp(ini .. ".fmt",unpackdir,dest)
