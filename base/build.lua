@@ -211,7 +211,9 @@ function bundleunpack ()
           -- of localdir w.r.t. unpackdir
           os_setenv .. " TEXINPUTS=" .. unpackdir .. os_concat ..
           unpackexe .. " " .. unpackopts .. " -output-directory=" .. unpackdir
-            .. " " .. unpackdir .. "/" .. j,"w"
+            .. " " .. unpackdir .. "/" .. j
+            .. (options["quiet"] and (" > " .. os_null) or ""),
+          "w"
         ):write(string.rep("y\n", 300)):close()
       if not success then
         return 1
