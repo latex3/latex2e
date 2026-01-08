@@ -193,7 +193,7 @@ specialtypesetting["latex-lab-unicode-math.dtx"] = {format = "lualatex"}
 -- specialtypesetting["documentmetadata-support.dtx"] = {format = "lualatex"}
 specialtypesetting["documentmetadata-support-doc.tex"] = {format = "lualatex"}
 specialtypesetting["documentmetadata-support-code.tex"] = {format = "lualatex"}
-
+specialtypesetting["latex-lab-enumitem.dtx"] = {format = "lualatex"}
 
 function tex(file,dir,mode)
   dir = dir or "."
