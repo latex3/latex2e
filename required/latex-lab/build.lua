@@ -27,6 +27,7 @@ typesetfiles_list = {
     "latex-lab-namespace.dtx",
     "latex-lab-sec.dtx",
     "latex-lab-context.dtx",
+    "latex-lab-enumitem.dtx",
   },
   {
     "latex-lab-graphic.dtx",
