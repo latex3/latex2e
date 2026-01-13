@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.99w",       --TAGVERSION
-    date          = "2025-10-31", --TAGDATE
+    version       = "0.99x",       --TAGVERSION
+    date          = "2026-01-12", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -469,7 +469,12 @@ local function __tag_mark_spaces (head)
       elseif glyph.next and (glyph.next.id==KERN) and not inside_math then
        local kern = glyph.next
        if kern.next and (kern.next.id== GLUE)  and (kern.next.width >0)
+       -- the attribute is also set on the kern in case the kern+glue is
+       -- discarded at a line break tagging issue #1102
+       -- TODO iterate back through all discardable nodes.
        then
+        nodesetattribute(kern,iwspaceattributeid,1)
+        nodesetattribute(kern,iwfontattributeid,glyph.font)
         nodesetattribute(kern.next,iwspaceattributeid,1)
         nodesetattribute(kern.next,iwfontattributeid,glyph.font)
        end
