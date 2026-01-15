@@ -12,6 +12,11 @@ ctanpkg = "latex-base"
 -- Location of main directory: use Unix-style path separators
 maindir = ".."
 
+checkdeps =
+  {
+    maindir .. "/required/firstaid",
+  }
+
 docfiledir = "./doc"
 
 -- Set up the file types needed here
