@@ -9,13 +9,14 @@
 \ProcessOptions \relax
 \LoadClass{l3doc}
 
+
+% load support for tagging, if \DocumentMetadata is used
+
+\IfDocumentMetadataT{\RequirePackage{latex-lab-testphase-l3doc}}
+
 % load some extra definitions for new documentation
 %
-\InputIfFileExists{ltxdoc-extra.ltx}
-           {\typeout{*************************************^^J%
-                     * Extra defs ltxdoc-extra.ltx used^^J%
-                     *************************************}}
-           {}
+\input{ltxdoc-extra.ltx}
 
 \endinput
            
