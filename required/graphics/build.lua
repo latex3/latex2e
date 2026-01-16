@@ -22,7 +22,8 @@ checkengines = {"etex","xetex"}
 checkdeps =
   {
     maindir .. "/base",
-    maindir .. "/required/tools"
+    maindir .. "/required/tools",
+    maindir .. "/required/firstaid"
   }
 
 typesetdeps =
