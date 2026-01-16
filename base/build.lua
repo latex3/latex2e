@@ -12,11 +12,6 @@ ctanpkg = "latex-base"
 -- Location of main directory: use Unix-style path separators
 maindir = ".."
 
-checkdeps =
-  {
-    maindir .. "/required/firstaid",
-  }
-
 docfiledir = "./doc"
 
 -- Set up the file types needed here
@@ -159,6 +154,7 @@ typesetdeps =
   {
     maindir .. "/required/graphics",
     maindir .. "/required/tools",
+    maindir .. "/required/firstaid",
     maindir .. "/required/amsmath"    -- for l3doc.cls :-(
   }
 unpackdeps  = {}
