@@ -1,8 +1,9 @@
 %
 % We are still waiting to find the time to consolidate ltxdoc, l3doc, etc, so for now this
-% is another class that loads l3doc + the extra bits from ltxdoc we want for newer dtx files.
+% is yet another internal class that loads l3doc + the extra bits from ltxdoc we want for newer dtx files.
 %
-% None of this is meant to stay, but ...
+% None of this is meant to stay, so this class is not supposed to be used outside of the kernel documentation!
+% It may get incompatible updates and it will vanish again, eventually.
 
 
 \DeclareOption*{\PassOptionsToClass{\CurrentOption}{l3doc}}
