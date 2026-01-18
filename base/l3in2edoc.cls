@@ -5,11 +5,7 @@
 % None of this is meant to stay, so this class is not supposed to be used outside of the kernel documentation!
 % It may get incompatible updates and it will vanish again, eventually.
 
-
-\DeclareOption*{\PassOptionsToClass{\CurrentOption}{l3doc}}
-\ProcessOptions \relax
-\LoadClass{l3doc}
-
+\LoadClassWithOptions{l3doc}
 
 % load support for tagging, if \DocumentMetadata is used
 
