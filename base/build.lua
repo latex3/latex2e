@@ -40,6 +40,7 @@ installfiles   =
   }
 sourcefiles    =
   {
+    "l3in2edoc.cls",         -- temp
     "lppl.tex",
     "ltnews.cls",
     "ltxguide.cls",
