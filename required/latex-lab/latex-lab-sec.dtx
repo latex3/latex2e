@@ -15,8 +15,8 @@
 %
 %    https://github.com/latex3/latex2e/issues
 %
-\def\ltlabsecdate{2025-10-20}
-\def\ltlabsecversion{0.84k}
+\def\ltlabsecdate{2026-01-06}
+\def\ltlabsecversion{0.84l}
 %    \end{macrocode}
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
@@ -50,6 +50,14 @@
 % The following code implements a first draft for the tagging of sectioning commands.
 % \end{abstract}
 %
+% \section{New implementation with templates}
+% 
+%  Various parts of this module are obsolete as the commands have been reimplemented
+%  in the module \texttt{latex-lab-sec-template} with templates. The tagging sockets
+%  are still relevant.
+%  
+%  In a later step both files will be merged.
+%  
 % \section{Limitations}
 %
 % Sectioning commands are in general not defined by the format but by the classes.
@@ -228,7 +236,12 @@
 \bool_set_true:N\l_@@_sec_Sect_bool
 %    \end{macrocode}
 % \end{variable}
-%
+% \begin{variable}{\l_@@_sec_tmpa_tl}
+% a temp variable
+%    \begin{macrocode}
+\tl_new:N     \l_@@_sec_tmpa_tl
+%    \end{macrocode}
+% \end{variable}
 % \begin{macro}{\@@_sec_begin:nn}
 % This starts a sectioning structure (the „Sect environment“).
 % Currently the default tag is either Sect or Part, depending on the level,
@@ -329,7 +342,8 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_sec_title_begin:nn #1 #2 %level, title
   {
-    \tag_struct_begin:n{tag=\UseStructureName{sec/#1/title},title={#2}}
+    \protected@edef\l_@@_sec_tmpa_tl{#2}
+    \tag_struct_begin:n{tag=\UseStructureName{sec/#1/title},title-o={\l_@@_sec_tmpa_tl}}
     \bool_set_true:N\l_@@_para_flattened_bool
     \tl_set:Nn\l_@@_para_tag_tl {\UseStructureName{sec/#1/titleline}}
   }
@@ -372,9 +386,11 @@
 %    \end{macrocode}
 % The handling of the title is not perfect. It would be better to pass it through
 % something like \cs{GetTitleString}. TODO.
+% \changes{0.84l}{2026-01-07}{use \cs{protected@edef} to avoid problem with conditionals}
 %    \begin{macrocode}
   {   
-    \tagstructbegin{tag=\UseStructureName{sec/#1/title},title-o={#4}}
+    \protected@edef\l_@@_sec_tmpa_tl {#4}
+    \tagstructbegin{tag=\UseStructureName{sec/#1/title},title-o={\l_@@_sec_tmpa_tl}}
     \cs_if_exist_use:N \@@_gincr_para_begin_int:
     \bool_if:NF #2
      { \tagstructbegin{tag=\UseStructureName{sec/#1/number}} }
@@ -578,171 +594,7 @@
 % We do not yet use keyval in the optional argument, as this requires latex-dev
 % and the naming of the keys and their key family is unclear.
 % \changes{v0.84f}{2024/10/04}{Added braces around optional arg (tagging/725)}
-%    \begin{macrocode}
-\AddToHook{class/after}
- {
-  \@ifundefined{chapter}
-    {
-%    \end{macrocode}
-% This redefines \cs{part} in article class.
-%    \begin{macrocode}
-     \@ifundefined{part}{}
-      {
-        \RenewDocumentCommand\part{ s O{#3} m }
-         {
-           \if@noskipsec \leavevmode \fi
-           \par
-           \addvspace{4ex}%
-           \@afterindentfalse
-%    \end{macrocode}
-% This are the tagging commands needed at the begin. They open a Part structure
-% and the structure for the title of the heading.
-%    \begin{macrocode}
-        % tagging start commands
-          \UseTaggingSocket{sec/end}{-1}
-          \UseTaggingSocket{sec/begin}{{-1}{tag=\UseStructureName{sec/-1}}}
-          \UseTaggingSocket{sec/title/begin}{{-1}{#2}}
-        % end tagging start commands
-%    \end{macrocode}
-% This adds a  manual target if the part is unnumbered or starred.
-% It replaces the hyperref patches.
-%    \begin{macrocode}
-           \bool_lazy_any:nT
-            {
-              { #1 }
-              {
-                \int_compare_p:nNn {\c@secnumdepth}<{-1}
-              }
-            }
-            {
-              \MakeLinkTarget[part]{}
-            }
-%    \end{macrocode}
-% The main call to the underlying commands.
-%    \begin{macrocode}
-          \IfBooleanTF
-            {#1}
-            { \@spart {#3} }
-            { \@part [{#2}]{#3} }
-%    \end{macrocode}
-% and now the closing command for the tagging of the title.
-%    \begin{macrocode}
-         \UseTaggingSocket{sec/title/end}
-         }
-       }
-    }
-%    \end{macrocode}
-% Redefinitions for book and report
-%    \begin{macrocode}
-    {
-     \RenewDocumentCommand\chapter{ s O{#3} m }
-      {
-        \if@openright\cleardoublepage\else\clearpage\fi
-        \thispagestyle{plain}%
-        \global\@topnum\z@
-        \@afterindentfalse
-%    \end{macrocode}
-% This are the tagging commands needed at the begin. They open a Sect structure
-% and the structure for the title of the heading.
-%    \begin{macrocode}
-        \UseTaggingSocket{sec/end}{0}
-        \UseTaggingSocket{sec/begin}{{0}{tag=\UseStructureName{sec/0}}}
-        \UseTaggingSocket{sec/title/begin}{{0}{#2}}
-%    \end{macrocode}
-% This adds a  manual target if the chapter is unnumbered or starred.
-% It replaces the hyperref patches.
-%    \begin{macrocode}
-        \bool_lazy_any:nT
-          {
-            { #1 }
-            {
-              \int_compare_p:nNn {\c@secnumdepth}<{0}
-            }
-            {
-              %in book target also needed in frontmatter
-              \bool_lazy_and_p:nn
-                { \cs_if_exist_p:c { @mainmattertrue } }
-                { ! \legacy_if_p:n { @mainmatter } }
-            }
-          }
-          {
-%    \end{macrocode}
-% The relation target-struct is stored internally by the MakeLinkTarget commands
-%    \begin{macrocode}
-            \MakeLinkTarget[chapter]{}
-          }
-%    \end{macrocode}
-% The main call to the underlying commands.
-%    \begin{macrocode}
-        \IfBooleanTF
-          {#1}
-          { \@schapter {#3} }
-          { \@chapter [{#2}]{#3} }
-%    \end{macrocode}
-% and now the closing command for the tagging of the title.
-%    \begin{macrocode}
-        \UseTaggingSocket{sec/title/end}
-      }
-%    \end{macrocode}
-% and similar for \cs{part}
-%    \begin{macrocode}
-     \RenewDocumentCommand\part{ s O{#3} m }
-      {
-        \if@openright
-          \cleardoublepage
-        \else
-          \clearpage
-        \fi
-        \thispagestyle{plain}%
-        \if@twocolumn
-          \onecolumn
-          \@tempswatrue
-        \else
-          \@tempswafalse
-        \fi
-        \null\vfil
-%    \end{macrocode}
-% These are the tagging commands needed at the begin. They open a Part structure
-% and the structure for the title of the heading.
-%    \begin{macrocode}
-       \UseTaggingSocket{sec/end}{-1}
-       \UseTaggingSocket{sec/begin}{{-1}{tag=\UseStructureName{sec/-1}}}
-       \UseTaggingSocket{sec/title/begin}{{-1}{#2}}
-%    \end{macrocode}
-% This adds a  manual target if the part is unnumbered or starred.
-% It replaces the hyperref patches.
-%    \begin{macrocode}
-        \bool_lazy_any:nT
-          {
-            { #1 }
-            {
-              \int_compare_p:nNn {\c@secnumdepth}<{-1}
-            }
-            {
-              %in book target also needed in frontmatter
-              \bool_lazy_and_p:nn
-                { \cs_if_exist_p:c { @mainmattertrue } }
-                { ! \legacy_if_p:n { @mainmatter } }
-            }
-          }
-          {
-            \MakeLinkTarget[part]{}
-          }
-%    \end{macrocode}
-% The main call to the underlying commands.
-%    \begin{macrocode}
-        \IfBooleanTF
-          {#1}
-          { \@spart {#3} }
-          { \@part [{#2}]{#3} }
-%    \end{macrocode}
-% and now the closing command for the tagging of the title.
-%    \begin{macrocode}
-        \UseTaggingSocket{sec/title/end}
-      }
-    }
- }
-%    \end{macrocode}
+% \changes{v0.84l}{2026/01/06}{Removed redefinition of \cs{chapter} and \cs{part}. Now done with templates.}
 %
 % \subsection{Sectioning commands based on \cs{@startsection}}
 %
