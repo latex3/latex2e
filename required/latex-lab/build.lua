@@ -26,7 +26,9 @@ typesetfiles_list = {
     "latex-lab-amsmath.dtx",
     "latex-lab-namespace.dtx",
     "latex-lab-sec.dtx",
+    "latex-lab-sec-template.dtx",
     "latex-lab-context.dtx",
+    "latex-lab-enumitem.dtx",
   },
   {
     "latex-lab-graphic.dtx",
@@ -181,6 +183,7 @@ specialtypesetting["latex-lab-namespace.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-new-or-1.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-new-or-2.dtx"] = {format = "lualatex"} -- error
 specialtypesetting["latex-lab-sec.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-sec-template.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-table.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-testphase.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-text.dtx"] = {format = "lualatex"}
@@ -192,7 +195,7 @@ specialtypesetting["latex-lab-unicode-math.dtx"] = {format = "lualatex"}
 -- specialtypesetting["documentmetadata-support.dtx"] = {format = "lualatex"}
 specialtypesetting["documentmetadata-support-doc.tex"] = {format = "lualatex"}
 specialtypesetting["documentmetadata-support-code.tex"] = {format = "lualatex"}
-
+specialtypesetting["latex-lab-enumitem.dtx"] = {format = "lualatex"}
 
 function tex(file,dir,mode)
   dir = dir or "."

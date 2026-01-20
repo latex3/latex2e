@@ -1,6 +1,6 @@
 % \iffalse meta-comment
 %
-% Copyright (C) 1993-2025
+% Copyright (C) 1993-2026
 %
 % The LaTeX Project and any individual authors listed elsewhere
 % in this file.
@@ -38,7 +38,7 @@
 %<driver> \ProvidesFile{longtable.drv}
 % \fi
 %         \ProvidesFile{longtable.dtx}
-          [2025-12-23 v4.25 Multi-page Table package (DPC)]
+          [2026-01-19 v4.26 Multi-page Table package (DPC)]
 %
 % \iffalse
 %<*driver>
@@ -1317,11 +1317,13 @@
 %       \tabskip\LTleft\halign to\hsize\bgroup
        \tabskip\z@ \@arstrut
 %    \end{macrocode}
+%    
 %    Insert the tagging socket to start the row and initialize the cell
 %    data for the row.
 % \changes{v4.19}{2023/12/16}{Support for tagged PDF}
 %    \begin{macrocode}
        \UseTaggingSocket{tbl/row/begin}%
+       \ArrayLoadedT { \@@_hook_use_protected:nV {tbl/row/begin} \g_@@_row_int }
 %    \end{macrocode}
 %
 % \changes{v4.19}{2023/12/16}{Managing cell indexes}
@@ -1335,6 +1337,16 @@
 % Find out how many columns we have (store in "\LT@cols").
 %    \begin{macrocode}
   \expandafter\LT@nofcols\LT@bchunk&\LT@nofcols
+%    \end{macrocode}
+%    This is the point at which other packages can add some initializations. Not
+%    100\% sure this is the best place---usage will have to decide if
+%    this needs moving earlier or later.
+% \changes{v4.26}{2026-01-15}{Add support hook}
+%    \begin{macrocode}
+  \ArrayLoadedT {
+     \exp_args:Nnno \hook_use:nnw {tbl/init} {2}
+                                  \g_@@_table_cols_tl {#2}
+  }
 %    \end{macrocode}
 % Get the saved row from "\LT@i"\ldots"\LT@ix" (from the
 % ".aux"  file), or make a new blank row.
@@ -1363,9 +1375,13 @@
 %    \end{macrocode}
 %
 % \changes{v4.19}{2023/12/16}{Support for tagged PDF}
+% \changes{v4.26}{2026-01-15}{Add support hook}
 %    \begin{macrocode}
       \tbl_if_row_was_started:T
           {
+            \ArrayLoadedT
+               { \@@_hook_use_protected:nV {tbl/row/end}
+                                           \g_@@_row_int }
             \UseTaggingSocket{tbl/row/end}
 %    \end{macrocode}
 %    The next setting prevents any of the additional \cs{cr}s at the end of the
@@ -1383,7 +1399,22 @@
 % \changes{v4.19}{2023/12/16}{Managing cell indexes}
 %    \begin{macrocode}
       \int_compare:nNnT \LT@rows < \LTchunksize
-         { \tbl_gincr_row_count: }   % next is row about to start
+         { \tbl_gincr_row_count:    % next is row about to start
+%    \end{macrocode}
+%    
+%    Finally, we call the hook the makes any initializations for a
+%    possibly upcoming row (there may not be any, but we don't know
+%    that at this point). As we are stil inside the \cs{noalign} but
+%    may want to issue a \cs{cline} or \cs{rowcolor} from within this
+%    hook we temporarily render \cs{noalign} a no-op.
+% \changes{v4.26}{2026-01-15}{Add support hook}
+%    \begin{macrocode}
+           \ArrayLoadedT
+             {
+               \cs_set_eq:NN \noalign \prg_do_nothing:
+               \@@_hook_use_protected:nV {tbl/row/init} \g_@@_row_int
+             }
+         }
     }%
   }%
 %    \end{macrocode}
@@ -2636,8 +2667,27 @@
 % \end{macro}
 %
 %
+% \subsection{Supporting hooks}
+%
+%    Since \pkg{longtable} is supposed to work without loading
+%    \pkg{array}, i.e., just with the \env{tabular} code from the
+%    kernel and that code has no hooks. We therefore do not run any
+%    hook if \pkg{array} is not loaded, because otherwise those
+%    explicitly used in the \pkg{longtable} code would run, but the
+%    corresponding ones that are only in the \pkg{array} code are not.
+%    By default we assume \pkg{array} is not loaded.
+%    \begin{macrocode}
+\let \ArrayLoadedT \@gobble
+%    \end{macrocode}
+%    If it is we change and the hooks get executed.
+%    \begin{macrocode}
+\AddToHook{package/array/after}{\let \ArrayLoadedT \@firstofone}
+%    \end{macrocode}
 %
 %
+%
+%
+% \subsection{Tagging support}
 %
 %    Some variables need for the tagging support.
 %    \begin{macrocode}

@@ -40,6 +40,7 @@ installfiles   =
   }
 sourcefiles    =
   {
+    "l3in2edoc.cls",         -- temp
     "lppl.tex",
     "ltnews.cls",
     "ltxguide.cls",
@@ -154,6 +155,7 @@ typesetdeps =
   {
     maindir .. "/required/graphics",
     maindir .. "/required/tools",
+    maindir .. "/required/firstaid",
     maindir .. "/required/amsmath"    -- for l3doc.cls :-(
   }
 unpackdeps  = {}
