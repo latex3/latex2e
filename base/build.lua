@@ -119,7 +119,7 @@ typesetfiles_list = {
   }
 }
 local doc_component_setting = os.getenv'LTX_DOC_COMPONENT'
-if doc_component_setting then
+if doc_component_setting and doc_component_setting ~= "" then
   typesetfiles = typesetfiles_list[math.tointeger(doc_component_setting)]
 else
   typesetfiles = {}
