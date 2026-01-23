@@ -114,6 +114,7 @@ typesetfiles_list = {
     "usrguide-historic.tex",
     "usrguide.tex",
     "latexchanges.tex",
+    "latex-cmds.tex",
     "*-doc.tex",
     "*-code.tex",
   }
