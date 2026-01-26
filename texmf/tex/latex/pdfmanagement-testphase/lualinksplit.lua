@@ -1,5 +1,5 @@
 --  This is file lualinksplit.lua
---  Version: 0.96x, 2025-11-12
+--  Version: 0.96y, 2026-01-23
 --
 --  Copyright (C) 2025 Marcel Krüger, The LaTeX Project
 --  
@@ -181,7 +181,7 @@ local function pop_link(linkstacks, linkstate, level, head, node)
       else
         free(node)
       end
-      tex.error(string.format("Link startet on level %i ended on level %i", top.level, level))
+      tex.error(string.format("Link started on level %i ended on level %i", top.level, level))
     end
     free(top.node_template)
     stack[link_count] = nil
