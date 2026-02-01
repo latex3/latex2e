@@ -171,8 +171,6 @@ function update_tag(file,content,tagname,tagdate)
   end
 end
 
-use_std_format = false
-
 -- Need to build format files
 function fmt(engines,dest)
 
@@ -207,9 +205,7 @@ function fmt(engines,dest)
 
   if dest ~= typesetdir and
     (not options["config"] or options["config"][1] ~= "config-TU") then
-    if not use_std_format then
-      cp("fonttext.cfg",supportdir,unpackdir)
-    end
+    cp("fonttext.cfg",supportdir,unpackdir)
   end
 
   -- Zap the custom hyphen.cfg when typesetting
