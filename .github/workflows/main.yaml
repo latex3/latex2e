@@ -5,17 +5,20 @@ on:
   # Whenever someone pushes to a branch in our repo
   push:
     branches:
-      - "**"
+      - main
+      - develop
   # Whenever a pull request is opened, reopened or gets new commits.
   pull_request:
-# This implies that for every push to a local branch in our repo for which a
-# pull request is open this runs twice. But it's important to ensure that pull
-# requests get tested even if their branch comes from a fork.
   workflow_dispatch:
     inputs:
       fail-fast:
         default: false
         description: 'Fail run on first error'
+        required: true
+        type: boolean
+      skip-docs:
+        default: false
+        description: 'Do not build documentation'
         required: true
         type: boolean
 
@@ -43,7 +46,7 @@ jobs:
   l3build:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: ${{ format('{0}', inputs.fail-fast) == '' || inputs.fail-fast }}
+      fail-fast: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.fail-fast) }}
       matrix:
         # include indicates that we want to set explicitly these combinations
         # and don't want full matrix testing.
@@ -158,7 +161,7 @@ jobs:
         run: ${{ matrix.extra_command }}
       - name: Run l3build
         working-directory: ${{ matrix.module }}
-        run: "l3build check -S -q --show-log-on-error${{ matrix.config && format(' -c {0}', matrix.config) || ''}}${{ matrix.engine && format(' -e {0}', matrix.engine) || ''}}${{ matrix.first && format(' --first {0}', matrix.first) || ''}}${{ matrix.last && format(' --last {0}', matrix.last) || ''}}"
+        run: "l3build check ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.fail-fast)) && '-H' || '-S' }} -q --show-log-on-error${{ matrix.config && format(' -c {0}', matrix.config) || ''}}${{ matrix.engine && format(' -e {0}', matrix.engine) || ''}}${{ matrix.first && format(' --first {0}', matrix.first) || ''}}${{ matrix.last && format(' --last {0}', matrix.last) || ''}}"
       # "/" is one of invalid characters in artifact names
       # see https://github.com/actions/toolkit/blob/ef77c9d60bdb03700d7758b0d04b88446e72a896/packages/artifact/src/internal/upload/path-and-artifact-name-validation.ts
       - name: Sanitize artifact name
@@ -182,26 +185,28 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: ${{ format('{0}', inputs.fail-fast) == '' || inputs.fail-fast }}
+      fail-fast: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.fail-fast) }}
       matrix:
         include:
           - module: base
-            environment: LTX_DOC_COMPONENT=1
+            component: 1
           - module: base
-            environment: LTX_DOC_COMPONENT=2
+            component: 2
           - module: base
-            environment: LTX_DOC_COMPONENT=3
+            component: 3
           - module: required/amsmath
           - module: required/cyrillic
           - module: required/firstaid
           - module: required/graphics
           - module: required/latex-lab
-            environment: LTX_DOC_COMPONENT=1
+            component: 1
           - module: required/latex-lab
-            environment: LTX_DOC_COMPONENT=2
+            component: 2
           - module: required/latex-lab
-            environment: LTX_DOC_COMPONENT=3
-    name: "Documentation: ${{ matrix.module }}"
+            component: 3
+          - module: required/tools
+    name: "Documentation: ${{ matrix.module }}${{ matrix.component && format(' ({0})', matrix.component) || ''}}"
+    if: ${{ !inputs.skip-docs }}
     needs: texlive-cache
     steps:
       # Boilerplate
@@ -216,16 +221,17 @@ jobs:
           key: ${{ needs.texlive-cache.outputs.cache_key }}
           fail-on-cache-miss: true
       - run: echo $HOME/texlive/bin/x86_64-linux >> $GITHUB_PATH
-      - if: ${{ matrix.environment }}
-        run: echo "${{ matrix.environment }}" >> $GITHUB_ENV
+      # LTX_DOC_COMPONENT is used by some of the build.lua files
+      - if: ${{ matrix.component }}
+        run: echo "LTX_DOC_COMPONENT=${{ matrix.component }}" >> "$GITHUB_ENV"
       - name: Run l3build
         working-directory: ${{ matrix.module }}
-        run: "l3build doc -q ${{ (format('{0}', inputs.fail-fast) == '' || inputs.fail-fast) && '-H ' || '' }}--show-log-on-error"
+        run: "l3build doc -q ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.fail-fast)) && '-H ' || '' }}--show-log-on-error"
       # Now we create the artifacts for the generated documentation
       - name: Sanitize artifact name
         shell: bash
         run: |
-          name="Documentation-${{ matrix.module }}${{ matrix.environment && format('-{0}', env.LTX_DOC_COMPONENT) || ''}}${{ matrix.config && format('-{0}', matrix.config)  || ''}}"
+          name="Documentation-${{ matrix.module }}${{ matrix.component && format('-{0}', matrix.component) || ''}}${{ matrix.config && format('-{0}', matrix.config)  || ''}}"
           # replace all "/" with "_"
           echo "artifact_name=${name//\//_}" >> "$GITHUB_ENV"
       - name: Archive documentation
@@ -254,7 +260,7 @@ jobs:
     # We don't want information for pull requests since for pull requests from local
     # branches we already send notifications when the branch test fails and pull requests
     # from forks can't access the username and password secrets required to send mails.
-    if: ${{ failure() && github.event_name != 'pull_request' }}
+    if: ${{ failure() && github.secret_source == 'Actions' }}
     steps:
       - name: Send mail
         # The explicit commit hash ensures that this can't be used by dawidd6 as a

@@ -23,7 +23,8 @@ checkdeps =
   {
     maindir .. "/base",
     maindir .. "/required/amsmath",
-    maindir .. "/required/graphics"
+    maindir .. "/required/graphics",
+    maindir .. "/required/firstaid"
   }
 
 checkruns = 3  -- some tests need 3 runs to settle!

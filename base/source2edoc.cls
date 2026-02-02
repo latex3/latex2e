@@ -2,7 +2,7 @@
 % This class is buggy and needs fixing
 
 \ProvidesClass{source2edoc}
-              [2024/02/14 v0.2e Quick hack to typeset source2.tex
+              [2026-01-16 v0.2f Quick hack to typeset source2.tex
                (not usable for anything else and buggy -- will vanish again)!]
 
 
@@ -227,6 +227,16 @@ Bug reports can be opened (category \texttt{#1}) at\\%
 
 % pages > 1000
 \renewcommand\@pnumwidth{2em}
+
+% load some extra definitions for new documentation
+%
+\InputIfFileExists{ltxdoc-extra.ltx}
+           {\typeout{*************************************^^J%
+                     * Extra defs ltxdoc-extra.ltx used^^J%
+                     *************************************}}
+           {}
+
+
 
 \InputIfFileExists{ltxdoc.cfg}
            {\typeout{*************************************^^J%

@@ -12,6 +12,12 @@ ctanpkg = "latex-amsmath"
 -- Location of main directory: use Unix-style path separators
 maindir = "../.."
 
+checkdeps =
+  {
+    maindir .. "/base",
+    maindir .. "/required/firstaid"
+  }
+
 -- Minor modifications to file types
 sourcefiles  = {"*.dtx", "*.ins", "amstex.sty","amsmath-2018-12-01.sty"}
 typesetfiles = {"*.dtx", "*.tex"}

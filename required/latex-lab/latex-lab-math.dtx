@@ -2,7 +2,7 @@
 %
 %% File: latex-lab-math.dtx
 %
-% Copyright (C) 2022-2025 The LaTeX Project
+% Copyright (C) 2022-2026 The LaTeX Project
 %
 % It may be distributed and/or modified under the conditions of the
 % LaTeX Project Public License (LPPL), either version 1.3c of this
@@ -12,21 +12,20 @@
 %    https://www.latex-project.org/lppl.txt
 %
 %
-% The development version of the bundle can be found below
+% The latex-lab bundle is developed in the LaTeX2e GitHub.
+% Issues may be reported at
 %
-%    https://github.com/latex3/latex2e/required/latex-lab
-%
-% for those people who are interested or want to report an issue.
+%    https://github.com/latex3/latex2e/issues
 %
 %
 
-\def\ltlabmathdate{2025-12-21}
-\def\ltlabmathversion{0.6y}
+\def\ltlabmathdate{2026-01-28}
+\def\ltlabmathversion{0.6z}
 %
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
-\documentclass[kernel]{l3doc}
-\usepackage{latex-lab-testphase-l3doc}
+\documentclass[kernel]{l3in2edoc}
+
 \EnableCrossrefs
 \CodelineIndex
 
@@ -50,19 +49,6 @@
 % \providecommand\class[1]{\texttt{#1.cls}}
 % \providecommand\pkg[1]{\texttt{#1}}
 %
-% \providecommand\hook[1]{\texttt{#1\DescribeHook[noprint]{#1}}}
-% \providecommand\socket[1]{\texttt{#1\DescribeSocket[noprint]{#1}}}
-% \providecommand\plug[1]{\texttt{#1\DescribePlug[noprint]{#1}}}
-%
-% \NewDocElement[printtype=\textit{socket},idxtype=socket,idxgroup=Sockets]{Socket}{socketdecl}
-% \NewDocElement[printtype=\textit{hook},idxtype=hook,idxgroup=Hooks]{Hook}{hookdecl}
-% \NewDocElement[printtype=\textit{plug},idxtype=plug,idxgroup=Plugs]{Plug}{plugdecl}
-%
-%
-% \ProvideDocElement[printtype=\textit{tag socket},idxtype=tag socket,
-%                    idxgroup=Tagging sockets]{TaggingSocket}{taggingsocketdecl}
-% \ProvideDocElement[printtype=\textit{tag plug},idxtype=tag plug,
-%                    idxgroup=Tagging Plugs]{TaggingPlug}{taggingplugdecl}
 %
 %
 % ^^A \car {...} for marginal comments
@@ -2278,6 +2264,7 @@
 %   tabulars. The function here is therefore set up as a variable starting
 %   point.
 % \changes{0.6t}{2025-08-27}{Use a loop to scan for \cs{)}}
+% \changes{0.6z}{2026-01-28}{Allow for alignment tokens}
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_grab_dollar:w { \@@_grab_dollar_delim:w }
 %    \end{macrocode}
@@ -2288,9 +2275,13 @@
   {
 %    \end{macrocode}
 %  We need to do processing first as this picks up \enquote{fake} math mode:
-%  that information is needed below.
+%  that information is needed below. The captured material \emph{could} contain
+%  |&| tokens, so we ensure that these do no cause an issue if we are inside
+%  an \tn{halign}.
 %    \begin{macrocode}
+    \group_align_safe_begin:
     \@@_process:nn { math } {#1}
+    \group_align_safe_end:
 %    \end{macrocode}
 %  We do not want math tagging in fakemath or when measuring,
 %  We also do not want math tagging if tagging has been suspended.
@@ -2413,14 +2404,15 @@
 %    \end{macrocode}
 % \end{variable}
 %
-% \begin{macro}{\@@_grab_loop_aux:}
+% \begin{macro}{\@@_grab_loop_init:}
+% \changes{0.6z}{2026-01-27}{Rename a function}
 % \begin{macro}{\@@_grab_loop:}
 %   The lead-off here establishes a group: we need that as we will have to
 %   be careful in the way \tn{cr} is handled and ensure this is only
 %   manipulated whilst grabbing. The main loop is then started.
 % \changes{0.6t}{2025-08-27}{Use a loop to scan for \cs{)}}
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_grab_loop_aux:
+\cs_new_protected:Npn \@@_grab_loop_init:
   {
     \group_begin:
       \tl_clear:N \l_@@_grabbed_tl
@@ -2465,9 +2457,14 @@
 %      \@@_grab_loop_\unskip:        ,
 %      \@@_grab_loop_\textonly@unskip:
 %   }
-%   Filter out the special cases: for performance reasons, use a hash table
-%   approach rather than a loop (\emph{cf.}~\pkg{collcell}).
 % \changes{0.6t}{2025-08-27}{Use a loop to scan for \cs{)}}
+% \changes{0.6z}{2026-01-28}{Allow for alignment tokens}
+% \begin{macro}{\@@_grab_loop_\end:n}
+% \changes{0.6z}{2026-01-28}{New macro}
+%   Filter out the special cases: for performance reasons, use a hash table
+%   approach rather than a loop (\emph{cf.}~\pkg{collcell}). To handle the
+%   case of a nested array or similar, an alignment safe group is added
+%   around the first occurrence of a nested environment.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_grab_loop_token:N #1
   {
@@ -2496,19 +2493,26 @@
 \cs_new_protected:cpn { @@_grab_loop_ \token_to_str:N \begin : }
   {
     \int_incr:N \l_@@_grab_env_int
+    \int_compare:nNnT \l_@@_grab_env_int = 1
+      { \group_align_safe_begin: }
     \@@_grab_loop_store:n { \begin }
   }
-\cs_new_protected:cpn { @@_grab_loop_ \token_to_str:N \end : }
+\cs_new_protected:cpe { @@_grab_loop_ \token_to_str:N \end : }
   {
-    \int_compare:nNnTF \l_@@_grab_env_int = 0
+    \exp_not:N \int_compare:nNnTF \exp_not:N \l_@@_grab_env_int = 0
        {
-         \@@_grab_loop_newline:
-         \end
+         \exp_not:N \@@_grab_loop_newline:
+         \exp_not:N \end
        }
-       {
-         \int_decr:N \l_@@_grab_env_int
-         \@@_grab_loop_store:n { \end }
-       }
+       { \exp_not:c { @@_grab_loop_ \token_to_str:N \end :n } }
+  }
+\cs_new_protected:cpn { @@_grab_loop_ \token_to_str:N \end :n } #1
+  {
+    \int_decr:N \l_@@_grab_env_int
+    \tl_put_right:Nn \l_@@_grabbed_tl { \end {#1} }
+    \int_compare:nNnT \l_@@_grab_env_int = 0
+      { \group_align_safe_end: }
+    \@@_grab_loop:
   }
 \tl_map_inline:nn { \ignorespaces \unskip \textonly@unskip }
   {
@@ -2516,6 +2520,7 @@
       { \@@_grab_loop: }
   }
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 %
@@ -3133,7 +3138,7 @@
  {
    \tl_put_right:Nn\@kernel@tabular@init
     {
-      \cs_set_protected:Npn \@@_grab_dollar:w { \@@_grab_loop_aux: }
+      \cs_set_protected:Npn \@@_grab_dollar:w { \@@_grab_loop_init: }
       \cs_set_protected:Npn \@@_grab_inline:w { $ }
     }
  }

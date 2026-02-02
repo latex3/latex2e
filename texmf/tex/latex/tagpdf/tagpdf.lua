@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.99w",       --TAGVERSION
-    date          = "2025-10-31", --TAGDATE
+    version       = "0.99y",       --TAGVERSION
+    date          = "2026-01-29", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -93,6 +93,7 @@ local structnumattributeid   = luatexbase.new_attribute ("g__tag_structnum_attr"
 local iwspaceOffattributeid = luatexbase.new_attribute ("g__tag_interwordspaceOff_attr")
 local iwspaceattributeid = luatexbase.new_attribute ("g__tag_interwordspace_attr")
 local iwfontattributeid  = luatexbase.new_attribute ("g__tag_interwordfont_attr")
+local softhyphenattribute = luatexbase.new_attribute ("l__tag_softhyphen_attr")
 local tagunmarkedbool= token.create("g__tag_tagunmarked_bool")
 local truebool       = token.create("c_true_bool")
 local softhyphenbool = token.create("g__tag_softhyphen_bool")
@@ -469,7 +470,12 @@ local function __tag_mark_spaces (head)
       elseif glyph.next and (glyph.next.id==KERN) and not inside_math then
        local kern = glyph.next
        if kern.next and (kern.next.id== GLUE)  and (kern.next.width >0)
+       -- the attribute is also set on the kern in case the kern+glue is
+       -- discarded at a line break tagging issue #1102
+       -- TODO iterate back through all discardable nodes.
        then
+        nodesetattribute(kern,iwspaceattributeid,1)
+        nodesetattribute(kern,iwfontattributeid,glyph.font)
         nodesetattribute(kern.next,iwspaceattributeid,1)
         nodesetattribute(kern.next,iwfontattributeid,glyph.font)
        end
@@ -907,8 +913,13 @@ do
       for n, ch, fid in node.traverse_glyph(disc.pre) do
         local props = properties[n]
         if softhyphen_fonts[fid] and ch == hyphen_char and props and props[is_soft_hyphen_prop] then
-          n.char = soft_hyphen_char
-          props.glyph_info = nil
+          if nodegetattribute(n,softhyphenattribute) then
+            n.char = soft_hyphen_char
+            props.glyph_info = nil
+          else
+            nodesetattribute(n,mctypeattributeid,-2147483647)
+            nodesetattribute(n,mccntattributeid,-2147483647)
+          end
         end
       end
     end

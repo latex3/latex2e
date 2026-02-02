@@ -12,7 +12,7 @@
 -- l3intarray.dtx  (with options: `lua')
 -- l3pdf.dtx  (with options: `lua')
 -- 
--- Copyright (C) 1990-2025 The LaTeX Project
+-- Copyright (C) 1990-2026 The LaTeX Project
 -- 
 -- It may be distributed and/or modified under the conditions of
 -- the LaTeX Project Public License (LPPL), either version 1.3c of
