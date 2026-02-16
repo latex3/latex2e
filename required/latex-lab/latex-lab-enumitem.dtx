@@ -9,8 +9,8 @@
 %
 %    https://www.latex-project.org/lppl.txt
 %
-\def\ltlabenumdate{2026-02-15}
-\def\ltlabenumversion{0.80d}
+\def\ltlabenumdate{2026-02-16}
+\def\ltlabenumversion{0.80e}
 
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
@@ -575,7 +575,12 @@
 % \setcounter{maxblocklevels}{7}
 % \DeclareInstance{block}{std-list-7}{display}{}
 % \end{verbatim}
-% but as enumitem doesn't allow more levels either the code does not force it. 
+% but as enumitem doesn't allow more levels either the code does not force it.
+%
+% Below is another implementation that supports arbitrary many
+%    levels. At some point wee need to decide what we want to do here
+%    and unify the code. Right now both sample implementations have
+%    their restrictions.
 %  
 % \begin{macro}{\newlist}
 %    \begin{macrocode}
@@ -596,12 +601,13 @@
 % \end{macro}
 % 
 % \begin{macro}{\@@_setup_itemize:nn}
+% \changes{v0.80e}{2026/02/16}{Allow spaces before the optional argument (tagging/1237)}
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_setup_itemize:nn #1#2 %#1 name of new list, #2 max levels
  {
     \DeclareInstanceCopy{blockenv}{#1}{itemize}
     \EditInstance{blockenv}{#1}{inner-instance=#1}
-    \NewDocumentEnvironment{#1}{!O{}}     
+    \NewDocumentEnvironment{#1}{O{}}     
      { \SimpleBlockEnv {#1} {max-inner-levels= \int_min:nn{\c@maxblocklevels}{#2},##1} }
      { \BlockEnvEnd }     
     \int_step_inline:nnn{1}{\int_min:nn{\c@maxblocklevels}{#2}}
@@ -625,13 +631,14 @@
 % \end{macro}
 % 
 % \begin{macro}{\@@_setup_description:nn}
+% \changes{v0.80e}{2026/02/16}{Allow spaces before the optional argument (tagging/1237)}
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_setup_description:nn #1#2
   {
     \DeclareInstanceCopy{blockenv}{#1}{description}
     \EditInstance{blockenv}{#1}{inner-instance=#1}
     \DeclareInstanceCopy{list}{#1}{description}
-    \NewDocumentEnvironment{#1}{!O{}}     
+    \NewDocumentEnvironment{#1}{O{}}     
      { \SimpleBlockEnv{#1} {max-inner-levels= \int_min:nn{\c@maxblocklevels}{#2},##1} }
      { \BlockEnvEnd }     
   }
@@ -639,12 +646,13 @@
 % \end{macro}
 % 
 % \begin{macro}{\@@_setup_enumerate:nn}
+% \changes{v0.80e}{2026/02/16}{Allow spaces before the optional argument (tagging/1237)}
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_setup_enumerate:nn #1#2
   {
     \DeclareInstanceCopy{blockenv}{#1}{enumerate}
     \EditInstance{blockenv}{#1}{inner-instance=#1}
-    \NewDocumentEnvironment{#1}{!O{}}     
+    \NewDocumentEnvironment{#1}{O{}}     
      { \SimpleBlockEnv {#1} {max-inner-levels= #2,##1} }
      { \BlockEnvEnd }     
     \int_step_inline:nnn{1}{#2}
@@ -662,6 +670,97 @@
   }
 %    \end{macrocode}
 % \end{macro}
+%
+%  
+% 
+%  \begin{macro}{\newlist}
+%    This is an alternative implementation (not necessarily better).
+% \changes{v0.80e}{2026/02/16}{Alternative implementation for \cs{newlist}}
+%    \begin{macrocode}
+\cs_set_protected:Npn \newlist #1#2#3 {
+  \DeclareDocumentEnvironment {#1} { !O{} }
+    { \SimpleBlockEnv {#1}{##1} } { \BlockEnvEnd }
+%
+  \DeclareInstanceCopy {blockenv} {#1} {#2}
+%
+%  If #3 > maxblocklevels add additional std-list instances as necessary  
+%
+  \int_compare:nNnT { \value{maxblocklevels} } < {#3}
+    {
+      \int_step_inline:nnn { \value{maxblocklevels} + 1 } {#3}
+        {
+	  \DeclareInstanceCopy {block} {std-list-##1} {std-list-\int_eval:n{ ##1 - 1 }}
+% not sure if we should set up those as well ...
+	  \DeclareInstanceCopy {block} {std-display-##1} {std-display-1}
+	  \DeclareInstanceCopy {block} {quote-##1}       {quote-1}
+	  \DeclareInstanceCopy {block} {quotation-##1}   {quotation-1}
+	  \DeclareInstanceCopy {block} {verbatim-##1}    {verbatim-1}
+        }
+      \setcounter{maxblocklevels}{#3}
+    }
+%
+  \IfInstanceExistsTF{list}{#2}   % no levels (as with description)
+    {
+      \EditInstance {blockenv} {#1} {
+ 	 name                  = #1
+        ,inner-instance        = #1 
+      }
+%
+      \DeclareInstanceCopy {list} {#1} {#2}
+    }
+    {
+      \int_new:c { g_@@_ #1 _depth_int }
+%
+      \EditInstance {blockenv} {#1} {
+  	 name                  = #1
+        ,inner-instance        = #1 
+        ,max-inner-levels      = #3
+        ,inner-level-counter:c = g_@@_ #1 _depth_int
+      }
+%
+      \int_step_inline:nn {#3}
+         { \@@_setup_enum_list_instance:nnn {#1}{#2}{##1} }
+    }
+%
+}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\cs_new:Npn \@@_setup_enum_list_instance:nnn #1#2#3 {
+  \IfInstanceExistsF{list}{#2-#3}
+    { \DeclareInstanceCopy {list} {#2-#3} {#2-\int_eval:n{#3-1}} }
+  \DeclareInstanceCopy {list} {#1-#3} {#2-#3}
+  \str_case:nnF { #2 }
+    {
+    
+      { enumerate }
+        {
+          \EditInstance {list} {#1-#3} {
+            counter:e    =       #1 \int_to_roman:n {#3} 
+           ,item-label:c = label #1 \int_to_roman:n {#3}
+          }
+          \newcounter { #1 \int_to_roman:n {#3} }
+	  \tl_new:c  { label #1 \int_to_roman:n {#3} }
+          \tl_set:cn { label #1 \int_to_roman:n {#3} } { \arabic* }
+        }
+      { itemize }
+        {
+          \EditInstance {list} {#1-#3} {
+             item-label:c = label #1 \int_to_roman:n {#3}
+          }
+   	  \tl_new:c  { label #1 \int_to_roman:n {#3} }
+          \tl_set:cn { label #1 \int_to_roman:n {#3} } { -- }
+	}
+    }
+    { \ERROR-#2-unknown }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%  
+% 
+%
+%  
 % 
 %\subsubsection{\cs{renewlist}}
 % 
