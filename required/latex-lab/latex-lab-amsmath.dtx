@@ -68,7 +68,7 @@
 % \subsection{File declaration}
 %    \begin{macrocode}
 \ProvidesFile{latex-lab-amsmath.ltx}
-        [2026-02-04 v0.1j amsmath adaptions]
+        [2026-02-19 v0.1k amsmath adaptions]
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -952,7 +952,7 @@
 % which leads to duplicated structures.
 %
 % \begin{macro}{\intertext@}
-% TODO: review and add sockets!
+% TODO: This is not working correctly, see https://github.com/latex3/tagging-project/issues/981
 %    \begin{macrocode}
 \def\intertext@{%
   \def\intertext##1{%
@@ -973,14 +973,12 @@
 %    \begin{macrocode}
         \tag_mc_end_push:
 %    \end{macrocode}
-% We are already in a par so we change now to text:
-%    \begin{macrocode}
-        \tagpdfsetup{para/tag=P}%
-%    \end{macrocode}
-% TODO why \cs{tagpdfparaOn} needed?
+%\changes{v0.1k}{2026-02-19}{Removed unneeded setup command}
+% In math para tagging is disabled so we activate it for the text:
 %    \begin{macrocode}
         \tagpdfparaOn
         \noindent\ignorespaces##1\par
+        \tagpdfparaOff
 %    \end{macrocode}
 % Restart the MC
 %    \begin{macrocode}
@@ -1017,28 +1015,29 @@
 % test is fine. If amstext is loaded earlier (in the kernel), this needs perhaps a change.
 % \changes{v0.1d}{2024/12/03}{Add tagging socket for luamml support}
 % \changes{v0.1i}{2025-09-29}{Additional braces to allow use in subscripts, tagging issue 995}
+% \changes{v0.1k}{2026-02-19}{Redefine \cs{text@} with luatex always}
 %    \begin{macrocode}
-   \tag_if_active:T
+   \sys_if_engine_luatex:TF
     {
-      \sys_if_engine_luatex:TF
-       {
-         \def\text@#1{{
-           \tag_socket_use:nnn {math/luamml/hbox}{}
-          {{%
-           \ifcase\mathstyle
-           \hbox{{#1}}\or
-           \hbox{{#1}}\or
-           \hbox{{#1}}\or
-           \hbox{{#1}}\or
-           \hbox{{\let\f@size\sf@size\selectfont#1}}\or
-           \hbox{{\let\f@size\sf@size\selectfont#1}}\or
-           \hbox{{\let\f@size\ssf@size\selectfont#1}}\or
-           \hbox{{\let\f@size\ssf@size\selectfont#1}}\or
-           \ERROR
-           \fi
-           \check@mathfonts
-         }}}}
-       }
+      \def\text@#1{{
+        \tag_socket_use:nnn {math/luamml/hbox}{}
+       {{%
+        \ifcase\mathstyle
+        \hbox{{#1}}\or
+        \hbox{{#1}}\or
+        \hbox{{#1}}\or
+        \hbox{{#1}}\or
+        \hbox{{\let\f@size\sf@size\selectfont#1}}\or
+        \hbox{{\let\f@size\sf@size\selectfont#1}}\or
+        \hbox{{\let\f@size\ssf@size\selectfont#1}}\or
+        \hbox{{\let\f@size\ssf@size\selectfont#1}}\or
+        \ERROR
+        \fi
+        \check@mathfonts
+      }}}}
+    }
+    {
+      \tag_if_active:T
        {
          \def\text@#1
           {{
@@ -1063,8 +1062,8 @@
             }
             \check@mathfonts
           }}
-       }
-    }
+      } 
+    }    
  }
 %    \end{macrocode}
 % \end{macro}
@@ -1076,31 +1075,46 @@
 % we switch to expl3-boxes.
 % \begin{macro}{\pbm@@,\pmb@}
 % \changes{0.1g}{2025-05-23}{correct box names, tagging issue #842}
+% TODO: this is wrong with mathml-SE tagging.
 %    \begin{macrocode}
-\AddToHook{package/amsbsy/after}
+\cs_new:Npn\__math_patch_amsbsy_pmb:
  {
-   \def\pmb@@#1#2#3{\leavevmode\hbox_set:Nn\l__math_tmpa_box{xxx#3}
+   \NewTaggingSocket{amsbsy/pmb}{2}
+   \NewTaggingSocketPlug{amsbsy/pmb}{default}
+    {
+      \tag_mc_end:\tag_mc_begin:n{artifact}
+      \tag_mc_reset_box:N##1
+      ##2
+      \tag_mc_end:
+      \tag_mc_begin:n{}
+    }
+   \AssignTaggingSocketPlug{amsbsy/pmb}{default} 
+   \def\pmb@@##1##2##3{\leavevmode\hbox_set:Nn\l__math_tmpa_box{##3}
       \dimen@-\box_wd:N\l__math_tmpa_box
       \kern-.5\ex@\box_use:N\l__math_tmpa_box
-      \tag_mc_end:\tag_mc_begin:n{artifact}
-      \tag_mc_reset_box:N\l__math_tmpa_box
-      \kern\dimen@\kern.25\ex@\raise.4\ex@\box_use:N\l__math_tmpa_box
-      \kern\dimen@\kern.25\ex@\box_use_drop:N\l__math_tmpa_box
-      \tag_mc_end:\tag_mc_begin:n{}
+      \UseTaggingSocket{amsbsy/pmb}{\l__math_tmpa_box}
+        {
+          \kern\dimen@\kern.25\ex@\raise.4\ex@\box_use:N\l__math_tmpa_box
+          \kern\dimen@\kern.25\ex@\box_use_drop:N\l__math_tmpa_box
+        }
     }
-   \def\pmb@#1#2{\hbox_set:Nn\l__math_tmpa_box{$\m@th#1{#2}$}
-     \setboxz@h{$\m@th#1\mkern.5mu$}\pmbraise@\wdz@
-     \binrel@{#2}
+   \def\pmb@##1##2{\hbox_set:Nn\l__math_tmpa_box{$\m@th##1{##2}$}
+     \setboxz@h{$\m@th##1\mkern.5mu$}\pmbraise@\wdz@
+     \binrel@{##2}
      \dimen@-\box_wd:N\l__math_tmpa_box
      \binrel@@{
        \mkern-.8mu\box_use:N\l__math_tmpa_box
-       \tag_mc_end:\tag_mc_begin:n{artifact}
-       \tag_mc_reset_box:N\l__math_tmpa_box
-       \kern\dimen@\mkern.4mu\raise\pmbraise@\box_use:N\l__math_tmpa_box
-       \kern\dimen@\mkern.4mu\box_use_drop:N\l__math_tmpa_box
-       \tag_mc_end:\tag_mc_begin:n{}
+       \UseTaggingSocket{amsbsy/pmb}{\l__math_tmpa_box}
+        {
+          \kern\dimen@\mkern.4mu\raise\pmbraise@\box_use:N\l__math_tmpa_box
+          \kern\dimen@\mkern.4mu\box_use_drop:N\l__math_tmpa_box
+        }
        }
     }
+  } 
+\AddToHook{package/amsbsy/after}
+  {
+    \__math_patch_amsbsy_pmb:
   }
 %    \end{macrocode}
 % \end{macro}
