@@ -101,6 +101,7 @@ typesetfiles_list = {
     "*.err",
     "lppl.tex",
     "cfgguide.tex",
+    "cmdguide.tex",
     "clsguide.tex",
     "clsguide-historic.tex",
     "cyrguide.tex",
@@ -114,7 +115,6 @@ typesetfiles_list = {
     "usrguide-historic.tex",
     "usrguide.tex",
     "latexchanges.tex",
-    "latex-cmds.tex",
     "*-doc.tex",
     "*-code.tex",
   }
