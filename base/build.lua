@@ -36,7 +36,8 @@ installfiles   =
     "nfssfont.tex",
     "sample2e.tex",
     "small2e.tex",
-    "testpage.tex"
+    "testpage.tex",
+    "glyphtounicode-cmex.tex"
   }
 sourcefiles    =
   {
