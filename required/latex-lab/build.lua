@@ -41,7 +41,6 @@ typesetfiles_list = {
     "latex-lab-mathpkg.dtx",
     "latex-lab-mathtools.dtx",
     "latex-lab-minipage.dtx",
-    "latex-lab-new-or-1.dtx",
     "latex-lab-new-or-2.dtx",
     "latex-lab-float.dtx",
     "latex-lab-firstaid.dtx",
@@ -182,7 +181,6 @@ specialtypesetting["latex-lab-mathpkg.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-mathtools.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-minipage.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-namespace.dtx"] = {format = "lualatex"}
-specialtypesetting["latex-lab-new-or-1.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-new-or-2.dtx"] = {format = "lualatex"} -- error
 specialtypesetting["latex-lab-sec.dtx"] = {format = "lualatex"}
 specialtypesetting["latex-lab-sec-template.dtx"] = {format = "lualatex"}
