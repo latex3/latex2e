@@ -26,6 +26,7 @@ local write_xml = require'luamml-xmlwriter'
 local make_root = require'luamml-convert'.make_root
 
 local save_result = require'luamml-tex'.save_result
+local store_row = require'luamml-table'.store_row
 local store_column = require'luamml-table'.store_column
 local store_tag = require'luamml-table'.store_tag
 local store_notag = require'luamml-table'.store_notag
@@ -212,7 +213,6 @@ funcid = luatexbase.new_luafunction'__luamml_amsmath_save_tag:'
 token.set_lua('__luamml_amsmath_save_tag:', funcid, 'protected')
 lua.get_functions_table()[funcid] = function()
   local nest = tex.nest.top
-  local chars = {}
   last_tag = to_text(nest.head)
 end
 
@@ -221,7 +221,6 @@ token.set_lua('__luamml_amsmath_save_tag_with_struct_elem:N', funcid, 'protected
 lua.get_functions_table()[funcid] = function()
   local struct_num = token.scan_int()
   local nest = tex.nest.top
-  local chars = {}
   last_tag = to_text(nest.head)
   last_tag[':structnum'] = struct_num
 end
@@ -237,6 +236,15 @@ lua.get_functions_table()[funcid] = function()
   end
 end
 
+funcid = luatexbase.new_luafunction'__luamml_amsmath_save_intertext_with_struct_elem:N'
+token.set_lua('__luamml_amsmath_save_intertext_with_struct_elem:N', funcid, 'protected')
+lua.get_functions_table()[funcid] = function()
+  local struct_num = token.scan_int()
+  local content = to_text(tex.nest.top.head)
+  content[':structnum'] = struct_num
+  store_row { [0] = 'mtr', { [0] = 'mtd', colspan = tex.count['maxfields@'] + 1, content } }
+end
+
 require'luamml-tex'.set_extract_eqno(function()
   if not last_tag then return end
   local tag = last_tag
@@ -249,6 +257,7 @@ require'luamml-tex'.set_extract_eqno(function()
     end
     mml = { [0] = 'mtable',
       displaystyle = 'true',
+      intent = ':system-of-equations',
       { [0] = 'mtr',
         { [0] = 'mtd', intent = ':equation-label', tag },
         mml,
