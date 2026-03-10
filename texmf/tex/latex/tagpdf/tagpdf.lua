@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.99y",       --TAGVERSION
-    date          = "2026-01-29", --TAGDATE
+    version       = "0.99z",       --TAGVERSION
+    date          = "2026-03-08", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -75,6 +75,7 @@ functions
  ltx.__tag.func.output_parenttree(): outputs the content of the parenttree
  ltx.__tag.func.pdf_object_ref(name,index): outputs the object reference for the object name
  ltx.__tag.func.markspaceon(), ltx.__tag.func.markspaceoff(): (de)activates the marking of positions for space chars
+ ltx.__tag.func.linkbin() returns the number of OBJR stored in the linkbin structure
  ltx.__tag.trace.show_mc_data (num,loglevel): shows ltx.__tag.mc[num] is the current log level is >= loglevel
  ltx.__tag.trace.show_all_mc_data (max,loglevel): shows a maximum about mc's if the current log level is >= loglevel
  ltx.__tag.trace.show_seq: shows a sequence (array)
@@ -1040,34 +1041,61 @@ function check_parent_child_rules (loglevel)
 
 ltx.__tag.func.check_parent_child_rules=check_parent_child_rules
 
-  if luatexbase.callbacktypes['linksplit'] then
-   luatexbase.add_to_callback('linksplit', function(start_link, position)
-     if start_link == nil then return end
-     local structnum =
-       node.get_attribute(start_link,luatexbase.attributes.g__tag_structnum_attr)
-     if structnum and structnum > -1 then
-      local s = ltx.__tag.tables['g__tag_struct_'..structnum..'_prop']['rolemap']
-      if s and (string.find(s,'Link') or string.find(s,'Reference')) then
-           local struct_insert_annot_shipout = token.create'__tag_struct_insert_annot_shipout:nnn'
-           local parentnum = tex.count['c@g__tag_parenttree_obj_int']
-           start_link.link_attr =
-              start_link.link_attr ..
+local linkbincnt = 0
+
+function ltx.__tag.func.linkbin()
+ return linkbincnt
+end
+
+if luatexbase.callbacktypes['linksplit'] then
+ luatexbase.add_to_callback('linksplit', function(start_link, position)
+   if start_link == nil then return end
+   local structnum =
+     node.get_attribute(start_link,luatexbase.attributes.g__tag_structnum_attr)
+   if structnum and structnum > -1 then
+    local s = ltx.__tag.tables['g__tag_struct_'..structnum..'_prop']['rolemap']
+    if s and (string.find(s,'Link') or string.find(s,'Reference')) then
+         local struct_insert_annot_shipout = token.create'__tag_struct_insert_annot_shipout:nnn'
+         local parentnum = tex.count['c@g__tag_parenttree_obj_int']
+         start_link.link_attr =
+            start_link.link_attr ..
+            ' /LTEX_position /' .. position ..
+            '/StructParent ' .. parentnum
+         tex.sprint(catlatex,struct_insert_annot_shipout,'{'..
+            structnum..'}{'..
+            start_link.objnum..' 0 R}{'..
+            parentnum ..'}')
+         -- the counter must be set explicitly as struct_insert_annot_shipout doesn't do it!
+         tex.setcount('global','c@g__tag_parenttree_obj_int',parentnum +1)
+          __tag_log(position .. " link part has object id " .. start_link.objnum .. " and structparent id " .. parentnum,2)
+    else
+        local linkbin = token.get_macro("c__tag_struct_link_bin_tl")
+        if linkbin then
+          local struct_insert_annot_shipout = token.create'__tag_struct_insert_annot_shipout:nnn'
+          local parentnum = tex.count['c@g__tag_parenttree_obj_int']
+          start_link.link_attr = string.gsub (start_link.link_attr, "/Contents%s+<%w+>","")
+          start_link.link_attr =
+            start_link.link_attr ..
               ' /LTEX_position /' .. position ..
-              '/StructParent ' .. parentnum
-           tex.sprint(catlatex,struct_insert_annot_shipout,'{'..
-              structnum..'}{'..
-              start_link.objnum..' 0 R}{'..
-              parentnum ..'}')
-           -- the counter must be set explicitly as struct_insert_annot_shipout doesn't do it!
-           tex.setcount('global','c@g__tag_parenttree_obj_int',parentnum +1)
-            __tag_log(position .. " link part has object id " .. start_link.objnum .. " and structparent id " .. parentnum,2)
-       else
-        __tag_log('Warning: Link not in Link or Reference structure element',0)
-        __tag_log('OBJR not created',0)
-        __tag_log('',0)
-       end
-     end
-   end, 'tagpdf')
-  end
+              '/StructParent ' .. parentnum .. '/Contents (artifact)'
+          tex.sprint(catlatex,struct_insert_annot_shipout,'{'..
+            linkbin..'}{'..
+            start_link.objnum..' 0 R}{'..
+            parentnum ..'}')
+          tex.setcount('global','c@g__tag_parenttree_obj_int',parentnum +1)
+          linkbincnt=linkbincnt+1
+          if linkbincnt == 1 then
+           __tag_log('Info: some Link annotation(s) are not in Link or Reference structure elements',0)
+           __tag_log('      moved into a container at the end of the structure tree\n',0)
+          end
+        else
+          __tag_log('Warning: Link not in Link or Reference structure element',0)
+          __tag_log('OBJR not created',0)
+          __tag_log('',0)
+        end
+    end
+   end
+ end, 'tagpdf')
+end
 -- 
 --  End of File `tagpdf.lua'.
