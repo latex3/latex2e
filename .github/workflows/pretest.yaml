@@ -1,8 +1,29 @@
-name: Automated testing with TeX Live pretest
+name: Automated testing with unusual TeX Live configuration
 
 # We only run when manually triggered
 on:
   workflow_dispatch:
+    inputs:
+      fail-fast:
+        default: false
+        description: 'Fail run on first error'
+        required: true
+        type: boolean
+      skip-docs:
+        default: false
+        description: 'Do not build documentation'
+        required: true
+        type: boolean
+      texlive-version:
+        default: 2026
+        description: 'TeX Live version to test against'
+        required: true
+        type: number
+      luatex-snapshot:
+        default: false
+        description: 'Test with snapshot version of LuaTeX'
+        required: true
+        type: boolean
 
 jobs:
   # Update the TeX Live tree if necessary
@@ -10,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Update TeX Live
     outputs:
-      cache_key: ${{ steps.texlive.outputs.cache_key }}
+      cache_key: ${{ github.event_name == 'workflow_dispatch' && inputs.luatex-snapshot && format('workflow-{0}-{1}', github.run_id, github.run_attempt) || steps.texlive.outputs.cache_key }}
     steps:
       # Boilerplate
       - name: Checkout repository
@@ -22,14 +43,28 @@ jobs:
           # List the required TeX Live packages in a separate file to allow reuse in
           # different workflows.
           package_file: .github/tl_packages
-          repository: https://pretest.math.hamburg/
-          cache_version: 0-pretest
+          texlive_version: ${{ github.event_name == 'workflow_dispatch' && inputs.texlive-version }}
+      - name: Install snapshot LuaTeX binary
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.luatex-snapshot }}
+        run: |
+          curl -O https://build.contextgarden.net/dl/luatex/x86_64-linux/luahbtex
+          chmod +x luahbtex
+          mv luahbtex $(which luahbtex)
+          fmtutil-sys --byengine luahbtex
+      - name: Save TeX Live to cache
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.luatex-snapshot }}
+        uses: actions/cache/save@v5
+        id: cache
+        with:
+          path: ~/texlive
+          key: workflow-${{ github.run_id }}-${{ github.run_attempt }}
   # The l3build job contains the actual work. We misuse the matrix mechanism to
   # create three jobs which only differ in minimal elements.
   # For tags we do not run this since we run the release job instead.
   l3build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.fail-fast) }}
       matrix:
         # include indicates that we want to set explicitly these combinations
         # and don't want full matrix testing.
@@ -44,6 +79,24 @@ jobs:
             config: build
             engine: luatex
             extra_command: kpsewhich -mktex=tfm -must-exist ecssdc10.tfm
+            last: m3expl009
+          - module: base
+            config: build
+            engine: luatex
+            extra_command: kpsewhich -mktex=tfm -must-exist ecssdc10.tfm
+            first: m3expl009
+            last: tlb0001
+          - module: base
+            config: build
+            engine: luatex
+            extra_command: kpsewhich -mktex=tfm -must-exist ecssdc10.tfm
+            first: tlb0001
+            last: tlcs01a
+          - module: base
+            config: build
+            engine: luatex
+            extra_command: kpsewhich -mktex=tfm -must-exist ecssdc10.tfm
+            first: tlcs01a
           - module: base
             config: config-1run
           - module: base
@@ -59,9 +112,9 @@ jobs:
           - module: base
             config: config-lthooks2
           - module: base
-            config: config-ltmarks
-          - module: base
             config: config-lttemplates
+          - module: base
+            config: config-ltmarks
           - module: required/amsmath
           - module: required/cyrillic
           - module: required/firstaid
@@ -73,6 +126,8 @@ jobs:
           - module: required/latex-lab
             config: config-math
           - module: required/latex-lab
+            config: config-math-luatex
+          - module: required/latex-lab
             config: config-OR-luatex
           - module: required/latex-lab
             config: config-sec
@@ -80,8 +135,10 @@ jobs:
             config: config-toc
           - module: required/latex-lab
             config: config-block
+            last: blocks-list-04
           - module: required/latex-lab
-            config: config-LM-tagging
+            config: config-block
+            first: blocks-list-04
           - module: required/latex-lab
             config: config-graphic
           - module: required/latex-lab
@@ -89,19 +146,25 @@ jobs:
           - module: required/latex-lab
             config: config-float
           - module: required/latex-lab
+            config: config-footnote
+          - module: required/latex-lab
             config: config-bib
+          - module: required/latex-lab
+            config: config-LM-tagging
           - module: required/latex-lab
             config: config-table-pdftex
           - module: required/latex-lab
             config: config-table-luatex
           - module: required/latex-lab
             config: config-title
+          - module: required/latex-lab
+            config: config-firstaid
           - module: required/tools
     name: "Tests: ${{ matrix.module }}\
       ${{ matrix.config && format(' - {0}', matrix.config) || ''}}\
-      ${{ matrix.engine && format(' - {0}', matrix.engine) || ''}}"
+      ${{ matrix.engine && format(' - {0}', matrix.engine) || ''}}\
+      ${{ (matrix.first || matrix.last) && format(' ({0} - {1})', matrix.first || '<first>', matrix.last || '<last>') || ''}}"
     needs: texlive-cache
-    continue-on-error: true
     steps:
       # Boilerplate
       - name: Checkout repository
@@ -119,9 +182,13 @@ jobs:
         run: ${{ matrix.extra_command }}
       - name: Run l3build
         working-directory: ${{ matrix.module }}
-        run: "l3build check -q
+        run: "l3build check
+          ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.fail-fast)) && '-H' || '-S' }}
+          -q --show-log-on-error
           ${{ matrix.config && format('-c {0}', matrix.config) || ''}}
-          ${{ matrix.engine && format('-e {0}', matrix.engine) || ''}}"
+          ${{ matrix.engine && format('-e {0}', matrix.engine) || ''}}
+          ${{ matrix.first && format('--first {0}', matrix.first) || ''}}
+          ${{ matrix.last && format('--last {0}', matrix.last) || ''}}"
       # "/" is one of invalid characters in artifact names
       # see https://github.com/actions/toolkit/blob/ef77c9d60bdb03700d7758b0d04b88446e72a896/packages/artifact/src/internal/upload/path-and-artifact-name-validation.ts
       - name: Sanitize artifact name
@@ -145,6 +212,7 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.fail-fast) }}
       matrix:
         include:
           - module: base
@@ -153,11 +221,20 @@ jobs:
             component: 2
           - module: base
             component: 3
-          - module: required
+          - module: required/amsmath
+          - module: required/cyrillic
+          - module: required/firstaid
+          - module: required/graphics
+          - module: required/latex-lab
+            component: 1
+          - module: required/latex-lab
+            component: 2
+          - module: required/latex-lab
+            component: 3
+          - module: required/tools
     name: "Documentation: ${{ matrix.module }}\
       ${{ matrix.component && format(' ({0})', matrix.component) || ''}}"
     needs: texlive-cache
-    continue-on-error: true
     steps:
       # Boilerplate
       - name: Checkout repository
@@ -176,13 +253,21 @@ jobs:
         run: echo "LTX_DOC_COMPONENT=${{ matrix.component }}" >> "$GITHUB_ENV"
       - name: Run l3build
         working-directory: ${{ matrix.module }}
-        run: l3build doc -q -H --show-log-on-error
+        run: "l3build doc -q
+          ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.fail-fast)) && '-H ' || '' }}
+          --show-log-on-error"
       # Now we create the artifacts for the generated documentation
+      - name: Sanitize artifact name
+        shell: bash
+        run: |
+          name="Documentation-${{ matrix.module }}${{ matrix.component && format('-{0}', matrix.component) || ''}}"
+          # replace all "/" with "_"
+          echo "artifact_name=${name//\//_}" >> "$GITHUB_ENV"
       - name: Archive documentation
         uses: actions/upload-artifact@v7
         with:
           # example names: "Documentation-base-1", "Documentation-required"
-          name: Documentation-${{ matrix.module }}${{ matrix.component && format('-{0}', matrix.component) || ''}}
+          name: ${{ env.artifact_name }}
           path: |
             **/*.pdf
             !build
