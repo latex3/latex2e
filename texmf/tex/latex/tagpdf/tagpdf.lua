@@ -25,7 +25,7 @@
 local ProvidesLuaModule = {
     name          = "tagpdf",
     version       = "0.99z",       --TAGVERSION
-    date          = "2026-03-08", --TAGDATE
+    date          = "2026-03-19", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
