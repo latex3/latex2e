@@ -385,11 +385,11 @@ local function radical_to_table(radical, sub, cur_style, text_families)
   local elem
   if kind == 'radical' or kind == 'uradical' then
     -- FIXME: Check that this is really a square root
-    elem, core = {[0] = 'msqrt', nucleus, }, nil
+    elem, core = {[0] = 'msqrt', nucleus, [':nodes'] = left[':nodes'], [':artifact'] = true}, nil
   elseif kind == 'uroot' then
     -- FIXME: Check that this is really a root
     -- UF 2024-12-04: force use of only one return value
-    elem, core = {[0] = 'mroot', nucleus, (kernel_to_table(radical.degree, 7, text_families))}, nil
+    elem, core = {[0] = 'mroot', nucleus, (kernel_to_table(radical.degree, 7, text_families)), [':nodes'] = left[':nodes'], [':artifact'] = true}, nil
   elseif kind == 'uunderdelimiter' then
     elem, core = {[0] = 'munder', left, nucleus}, left
   elseif kind == 'uoverdelimiter' then
@@ -410,6 +410,8 @@ local function fraction_to_table(fraction, sub, cur_style, text_families)
   local left = delim_to_table(fraction.left)
   local right = delim_to_table(fraction.right)
   local mfrac = {[0] = 'mfrac',
+    [':nodes'] = {fraction},
+    [':artifact'] = true,
     linethickness = fraction.width and fraction.width == 0 and 0 or nil,
     bevelled = fraction.middle and "true" or nil,
     num,
