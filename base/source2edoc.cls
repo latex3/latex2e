@@ -2,7 +2,7 @@
 % This class is buggy and needs fixing
 
 \ProvidesClass{source2edoc}
-              [2026-01-16 v0.2f Quick hack to typeset source2.tex
+              [2026-03-12 v0.2g Quick hack to typeset source2.tex
                (not usable for anything else and buggy -- will vanish again)!]
 
 
@@ -43,7 +43,7 @@
            \bool_if:NTF \l__codedoc_macro_var_bool {variable} {function}
            \int_compare:nNnTF \l__codedoc_tmpa_int = 1 {~is~} {s~are~}
            documented~on~page~
-           \exp_args:Nx \pageref { \l__codedoc_tmpa_tl } .
+           \exp_args:Ne \pageref { \l__codedoc_tmpa_tl } .
          }
       }
     \seq_gclear:N \g__codedoc_nested_names_seq
