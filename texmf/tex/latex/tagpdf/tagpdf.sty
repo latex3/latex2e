@@ -28,7 +28,7 @@
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: tagpdf.dtx
-\ProvidesExplPackage {tagpdf} {2026-01-29} {0.99y}
+\ProvidesExplPackage {tagpdf} {2026-04-11} {1.0a}
   { LaTeX kernel code for PDF tagging }
 
 \IfPDFManagementActiveF
@@ -198,6 +198,26 @@
       }
   }
 \cs_set_eq:NN \tag_start:n \tag_resume:n
+\cs_new_protected:Npn \__tag_activate_linkbin:
+  {
+   \sys_if_engine_luatex:T
+    {
+      \tagstructbegin{tag=Link,stash}
+      \tl_const:Ne \c__tag_struct_link_bin_tl {\int_use:N\c@g__tag_struct_abs_int}%
+      \tagstructend
+      \AddToHook{tagpdf/finish/before}[tagpdf/linkbin]
+       {
+         \par
+         \int_compare:nNnT {\directlua{tex.sprint(ltx.__tag.func.linkbin())}}>{0}
+          {
+            \tagstructbegin{tag=Artifact,title=Ignored~link~annotations}
+            \tag_struct_use_num:o{\c__tag_struct_link_bin_tl}
+            \tagstructend
+          }
+       }
+     }
+  }
+\AddToHook{begindocument/end}[tagpdf/linkbin]{\__tag_activate_linkbin:}
 \keys_define:nn { __tag / setup }
   {
     activate/mc     .bool_gset:N = \g__tag_active_mc_bool,
@@ -295,6 +315,8 @@
         }
      },
     activate/softhyphen     .default:n  = artifact,
+    activate/collect-link-artifacts/off .code:n =
+      {\RemoveFromHook{begindocument/end}[tagpdf/linkbin]},
     page/tabsorder       .choice:,
     page/tabsorder / row       .code:n =
       \pdfmanagement_add:nnn { Page } {Tabs}{/R},
@@ -312,6 +334,7 @@
     \file_input:n {tagpdf-luatex.def}
   }
 %% File: tagpdf-checks.dtx
+
 
 \msg_new:nnn { tag } {mc-nested} { nested~marked~content~found~-~mcid~#1 }
 \msg_new:nnn { tag } {mc-tag-missing} { MC-tag~missing;~#1~used~instead~-~mcid~#2 }
@@ -538,6 +561,12 @@
          \prg_return_false:
        }
   }
+\prg_new_conditional:Npnn\tag_if_in:n #1 {T,F,TF}
+ {
+   \seq_if_in:NnTF \g__tag_struct_roletag_stack_seq {#1}
+    {\prg_return_true:}
+    {\prg_return_false:}
+ }
 \prg_new_conditional:Npnn \__tag_check_if_active_mc: {T,F,TF}
   {
     \bool_lazy_and:nnTF { \g__tag_active_mc_bool } { \l__tag_active_mc_bool }
@@ -2235,7 +2264,9 @@
 \seq_new:N    \g__tag_struct_stack_seq
 \seq_gpush:Nn \g__tag_struct_stack_seq {1}
 \seq_new:N    \g__tag_struct_tag_stack_seq
+\seq_new:N    \g__tag_struct_roletag_stack_seq
 \seq_gpush:Nn \g__tag_struct_tag_stack_seq {{Root}{StructTreeRoot}}
+\seq_gpush:Nn \g__tag_struct_roletag_stack_seq {StructTreeRoot}
 \tl_new:N     \l__tag_struct_stack_parent_tmpa_tl
 \sys_if_engine_luatex:TF
  {
@@ -2610,7 +2641,7 @@
       {
         \prop_get:cnNF { g__tag_struct_#1_prop } {parentnum}\l__tag_tmpb_tl
           {
-            \prop_gput:cne { g__tag_struct_#1_prop } {parentnum}{1}
+            \prop_gput:cne { g__tag_struct_#1_prop } {parentnum}{2}
             \prop_gput:cne { g__tag_struct_#1_prop } {S}{/Artifact}
             \seq_if_empty:cF {g__tag_struct_kids_#1_seq}
               {
@@ -3292,6 +3323,8 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
           \l__tag_struct_roletag_NS_tl
         \seq_gpush:Ne \g__tag_struct_tag_stack_seq
           {{\g__tag_struct_tag_tl}{\l__tag_struct_roletag_tl}}
+        \seq_gpush:Ne \g__tag_struct_roletag_stack_seq
+          {\l__tag_struct_roletag_tl}
         \tl_gset:NV   \g__tag_struct_stack_current_tl \c@g__tag_struct_abs_int
         \__tag_struct_set_attribute:
         %\seq_show:N   \g__tag_struct_stack_seq
@@ -3375,6 +3408,7 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
     %\seq_show:N \g__tag_struct_stack_seq
 \__tag_check_if_active_struct:T
       {
+        \seq_gpop:NN   \g__tag_struct_roletag_stack_seq \l__tag_tmpa_tl
         \seq_gpop:NN   \g__tag_struct_tag_stack_seq \l__tag_tmpa_tl
         \seq_gpop:NNTF \g__tag_struct_stack_seq \l__tag_tmpa_tl
           {
@@ -3472,6 +3506,7 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
           }
       }
   }
+\cs_generate_variant:Nn\tag_struct_use_num:n {o}
 \cs_new:Npn \tag_struct_object_ref:n #1
  {
    \pdf_object_ref_indexed:nn {__tag/struct}{ #1 }
@@ -3785,7 +3820,6 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
 %% File: tagpdf-user.dtx
 
 
-
 \RenewDocumentCommand \tagpdfsetup { m }
   {
     \keys_set:nn { __tag / setup } { #1 }
@@ -4028,19 +4062,9 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
 \tl_new:N   \l__tag_para_tag_tl
 \tl_set:Nn  \l__tag_para_tag_tl { \l__tag_para_tag_default_tl }
 \tl_new:N   \l__tag_para_main_tag_tl
-\IfFormatAtLeastTF{2025-11-01}
- {
-   \tl_set:Nn  \l__tag_para_tag_default_tl { \UseStructureName {para/textblock} }
-   \tl_set:Nn  \l__tag_para_main_tag_tl    { \UseStructureName {para/semantic} }
- }
- {
-   \tl_set:Nn  \l__tag_para_tag_default_tl { text }
-   \tl_set:Nn  \l__tag_para_main_tag_tl    {text-unit}
- }
-
-\tl_if_exist:NF \l__tag_para_attr_class_tl
- {\tl_new:N \l__tag_para_attr_class_tl }
-\tl_new:N \l__tag_para_main_attr_class_tl
+\tl_set:Nn  \l__tag_para_tag_default_tl { \UseStructureName {para/textblock} }
+\tl_set:Nn  \l__tag_para_main_tag_tl    { \UseStructureName {para/semantic} }
+\tl_new:N   \l__tag_para_main_attr_class_tl
 
 \cs_new_protected:Npn \__tag_gincr_para_main_begin_int:
  {
@@ -4088,13 +4112,6 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
   {
     \tl_gset:Ne \g__tag_para_main_struct_tl {\int_use:N \c@g__tag_struct_abs_int }
   }
-\AddToHook{package/latex-lab-testphase-block/after}
- {
-   \tl_if_exist:NT \l_tag_para_attr_class_tl
-    {
-      \tl_set:Nn \l__tag_para_attr_class_tl { \l_tag_para_attr_class_tl }
-    }
-}
 \keys_define:nn { __tag / setup }
   {
     para/tagging      .bool_set:N = \l__tag_para_bool,
@@ -4145,99 +4162,11 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
         \tag_mc_end:
       }
   }
-\socket_if_exist:nF { tagsupport/para/begin }
- {
-    \NewTaggingSocket  {para/begin}{0}
-    \NewTaggingSocket  {para/end}{0}
-
-    \NewTaggingSocketPlug{para/begin}{plain}
-     {
-       \bool_if:NT \l__tag_para_bool
-         {
-           \bool_if:NF \l__tag_para_flattened_bool
-              {
-                \__tag_gincr_para_main_begin_int:
-                \tag_struct_begin:n
-                  {
-                    tag=\l__tag_para_main_tag_tl,
-                  }
-                \__tag_para_main_store_struct:
-              }
-            \__tag_gincr_para_begin_int:
-            \tag_struct_begin:n {tag=\l__tag_para_tag_tl}
-            \__tag_check_para_begin_show:nn {green}{}
-            \tag_mc_begin:n {}
-         }
-     }
-    \NewTaggingSocketPlug{para/begin}{block}
-     {
-       \bool_if:NT \l__tag_para_bool
-         {
-           \legacy_if:nF { @inlabel }
-             {
-               \__tag_check_typeout_v:n
-                 {==>~ @endpe = \legacy_if:nTF { @endpe }{true}{false} \on@line }
-               \legacy_if:nF { @endpe }
-                {
-                  \bool_if:NF \l__tag_para_flattened_bool
-                     {
-                       \__tag_gincr_para_main_begin_int:
-                       \tag_struct_begin:n
-                        {
-                         tag=\l__tag_para_main_tag_tl,
-                         attribute-class=\l__tag_para_main_attr_class_tl,
-                        }
-                       \__tag_para_main_store_struct:
-                     }
-                 }
-                \__tag_gincr_para_begin_int:
-                \__tag_check_typeout_v:n {==>~increment~ P \on@line }
-                \tag_struct_begin:n
-                  {
-                    tag=\l__tag_para_tag_tl
-                    ,attribute-class=\l__tag_para_attr_class_tl
-                  }
-                \__tag_check_para_begin_show:nn {green}{\PARALABEL}
-                \tag_mc_begin:n {}
-          }
-        }
-     }
-    \NewTaggingSocketPlug {para/end}{plain}
-      {
-        \bool_if:NT \l__tag_para_bool
-          {
-            \__tag_gincr_para_end_int:
-            \__tag_check_typeout_v:n {==>~increment~ /P \on@line }
-            \tag_mc_end:
-            \__tag_check_para_end_show:nn {red}{}
-            \tag_struct_end:
-            \bool_if:NF \l__tag_para_flattened_bool
-             {
-               \__tag_gincr_para_main_end_int:
-               \tag_struct_end:
-             }
-          }
-      }
+\AddToHook{begindocument/before}[tagpdf/para]
+  {
+    \AddToHook{para/begin}[tagpdf]{ \tag_socket_use:n { para/begin } }
+    \AddToHook{para/end}  [tagpdf]  { \tag_socket_use:n { para/end } }
   }
-\AssignTaggingSocketPlug { para/begin}{plain}
-\AssignTaggingSocketPlug { para/end}{plain}
-\AddToHook{para/begin}{ \tag_socket_use:n { para/begin } }
-\AddToHook{para/end}  { \tag_socket_use:n { para/end } }
-\AddToHook{package/latex-lab-testphase-block/after}
- {
-   \RemoveFromHook{para/begin}[tagpdf]
-   \RemoveFromHook{para/end}[latex-lab-testphase-block]
-   \AddToHook{para/begin}[tagpdf]
-    {
-      \socket_use:n { tagsupport/para/begin }
-    }
-  \AddToHook{para/end}[tagpdf]
-    {
-      \socket_use:n { tagsupport/para/end }
-    }
-  \socket_assign_plug:nn { tagsupport/para/begin}{block}
- }
-
 \AddToHook{enddocument/info}
   {
     \tag_if_active:F
@@ -4275,16 +4204,6 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
 \cs_new_protected:Npn\__tag_hook_kernel_after_head:{}
 \cs_new_protected:Npn\__tag_hook_kernel_before_foot:{}
 \cs_new_protected:Npn\__tag_hook_kernel_after_foot:{}
-\AddToHook{begindocument}
- {
-  \cs_if_exist:NT \@kernel@before@head
-   {
-     \tl_put_right:Nn \@kernel@before@head {\__tag_hook_kernel_before_head:}
-     \tl_put_left:Nn  \@kernel@after@head  {\__tag_hook_kernel_after_head:}
-     \tl_put_right:Nn \@kernel@before@foot {\__tag_hook_kernel_before_foot:}
-     \tl_put_left:Nn  \@kernel@after@foot  {\__tag_hook_kernel_after_foot:}
-   }
- }
 \NewTaggingSocketPlug{build/page/header}{tagpdf}
     {
       \__tag_hook_kernel_before_head:
@@ -4387,22 +4306,18 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
   }
 \AtBeginDocument
   {
-   \socket_if_exist:nT{tagsupport/parbox/before}
-     {
-      \NewTaggingSocketPlug{parbox/before}{tag/footer}
-        {
-         \tag_struct_begin:n{tag=Span}
-         \tag_mc_begin:n{}
-        }
+    \NewTaggingSocketPlug{parbox/before}{tag/footer}
+      {
+       \tag_struct_begin:n{tag=Span}
+       \tag_mc_begin:n{}
+      }
 
-      \NewTaggingSocketPlug{parbox/after}{tag/footer}
-        {
-         \tag_mc_end:
-         \tag_struct_end:
-        }
-     }
-   }
-
+    \NewTaggingSocketPlug{parbox/after}{tag/footer}
+      {
+       \tag_mc_end:
+       \tag_struct_end:
+      }
+  }
 \cs_new_protected:Npn \__tag_headfoot_tagged_begin:n #1
  {
    \AssignTaggingSocketPlug{parbox/before}{tag/footer}
@@ -4432,23 +4347,18 @@ firstkid .code:n = { \tl_set:Nn \l__tag_struct_addkid_tl {left} },
  }
 \keys_define:nn { __tag / setup }
  {
-   page/tag-header-footer .code:n =
+   page/tag-header-footer .choice:,
+   page/tag-header-footer/artifact .code:n =
     {
       \cs_set:Nn \__tag_hook_kernel_before_head: { \__tag_headfoot_tagged_begin:n {pagination}}
       \cs_set:Nn \__tag_hook_kernel_before_foot: { \__tag_headfoot_tagged_begin:n {pagination}}
       \cs_set_eq:NN \__tag_hook_kernel_after_head:  \__tag_headfoot_tagged_end:
       \cs_set_eq:NN \__tag_hook_kernel_after_foot:  \__tag_headfoot_tagged_end:
-    }
+    },
+   page/tag-header-footer .default:n = artifact,
  }
 \AddToHookNext{class/before}
  {
-   \cs_if_exist:NF \UseStructureName
-    {
-      \cs_new:Npn\UseStructureName#1
-       {
-         \cs:w l__tag_name_#1_tl\cs_end:
-       }
-    }
    \cs_if_exist:NF \l__tag_name_link_tl
     {
       \tl_new:N  \l__tag_name_link_tl

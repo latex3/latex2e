@@ -34,8 +34,8 @@
 %%% From File: ltcmd.dtx
 %
 %    \begin{macrocode}
-\def\ltcmdversion{v1.3i}
-\def\ltcmddate{2026-02-02}
+\def\ltcmdversion{v1.3k}
+\def\ltcmddate{2026-03-13}
 %    \end{macrocode}
 %
 %<*driver>
@@ -61,13 +61,945 @@
 % \changes{v1.0a}{2020/11/20}{Initial version derived from \texttt{xparse.dtx}}
 % \changes{v1.2a}{2023/08/19}{Removed commands that should have remained
 %   only in \texttt{xparse.dtx}}
+% \changes{v1.3j}{2026-02-3}{Add documentation as part of \texttt{cmdguide}
+%   work}
 %
-% Document commands should be created using the tools provided by this module:
-% \cs{NewDocumentCommand}, etc.\@, in almost all cases. This allows clean
-% separation of document-level syntax from code-level interfaces. Users have
-% a need to create new document commands, and as such a significant amount of
-% documentation for \pkg{ltcmd} is provided as part of \texttt{usrguide3}. Here,
-% additional material aimed at programmers is provided
+% \subsection{Overview}
+%
+% Creating document commands and environments using the \LaTeX3 toolset is based
+% around the idea that a common set of descriptions can be used to cover almost
+% all argument types used in real documents. Thus parsing is reduced to a simple
+% description of which arguments a command takes: this description provides the
+% \enquote{glue} between the document syntax and the implementation of the
+% command.
+%
+% First, we will describe the argument types, then move on to explain how these
+% can be used to create both document commands and environments. Various more
+% specialized features are then described, which allow an even richer application
+% of a simple interface set up.
+%
+% The details here are intended to help users create document commands in
+% general. More technical detail, suitable for \TeX{} programmers, is included
+% in \texttt{interface3}.
+%
+% \subsection{Describing argument types}
+%
+% In order to allow each argument to be defined independently, the parser does
+% not simply need to know the number of arguments for a function, but also the
+% nature of each one. This is done by constructing an \emph{argument
+% specification}, which defines the number of arguments, the type of each
+% argument and any additional information needed for the parser to read the user
+% input and properly pass it through to internal functions.
+%
+% The basic form of the argument specifier is a list of letters, where each
+% letter defines a type of argument. As will be described below, some of the
+% types need additional information, such as default values. The argument types
+% can be divided into two, those which define arguments that are mandatory
+% (potentially raising an error if not found) and those which define optional
+% arguments. The mandatory types
+% \begin{itemize}
+%   \item[\texttt{m}] A standard mandatory argument, which can either be a single token
+%     alone or multiple tokens surrounded by curly braces |{}|. Regardless of the
+%     input, the argument will be passed to the internal code without the outer
+%     braces. This is the type specifier for a normal \TeX{} argument.
+%   \item[\texttt{r}] Given as \texttt{r}\meta{token1}\meta{token2}, this denotes a
+%     \enquote{required} delimited argument, where the delimiters are
+%     \meta{token1} and \meta{token2}. If the opening delimiter \meta{token1} is
+%     missing, the default marker \cs{NoValue} will be inserted after a suitable
+%     error.
+%   \item[\texttt{R}] Given as \texttt{R}\meta{token1}\meta{token2}\marg{default},
+%     this is a \enquote{required} delimited argument as for~\texttt{r},
+%     but it has a user-definable recovery \meta{default} instead of
+%     \cs{NoValue}.
+%   \item[\texttt{v}] Reads an argument \enquote{verbatim}, between the following
+%     character and its next occurrence, in a way similar to the argument
+%     of the \LaTeXe{} command \cs{verb}. Thus a \texttt{v}-type argument
+%     is read between two identical characters, which cannot be any of |%|, |\|,
+%     |#|, |{|, |}| or \verb*| |. The verbatim argument can also be enclosed
+%     between braces, |{| and |}|. A command with a verbatim argument will
+%     produce an error when it appears within an argument of another command.
+%   \item[\texttt{b}] Only suitable in the argument specification of an
+%     environment, it denotes the body of the environment, between
+%     |\begin|\marg{environment} and |\end|\marg{environment}.  See
+%     Section~\ref{sec:cmd:body} for details.
+%   \item[\texttt{c}] Only suitable in the argument specification of an
+%     environment, it denotes collection of the environment verbatim, between
+%     |\begin|\marg{environment} and |\end|\marg{environment}.  See
+%     Section~\ref{sec:cmd:verbenv} for details.
+% \end{itemize}
+% The types which define optional arguments are:
+% \begin{itemize}
+%   \item[\texttt{o}] A standard \LaTeX{} optional argument, surrounded with square
+%     brackets, which will supply the special \cs{NoValue} marker if not given
+%     (as described later).
+%   \item[\texttt{d}] Given as \texttt{d}\meta{token1}\meta{token2}, an optional
+%     argument which is delimited by \meta{token1} and \meta{token2}. As with
+%     \texttt{o}, if no value is given the special marker \cs{NoValue} is
+%     returned.
+%   \item[\texttt{O}] Given as \texttt{O}\marg{default}, is like \texttt{o}, but returns
+%     \meta{default} if no value is given.
+%   \item[\texttt{D}] Given as \texttt{D}\meta{token1}\meta{token2}\marg{default}, it is
+%     as for \texttt{d}, but returns \meta{default} if no value is given.
+%     Internally, the \texttt{o}, \texttt{d} and \texttt{O} types are
+%     short-cuts to an appropriated-constructed \texttt{D} type argument.
+%   \item[\texttt{s}] An optional star, which will result in a value
+%     \cs{BooleanTrue} if a star is present and \cs{BooleanFalse}
+%     otherwise (as described later).
+%   \item[\texttt{t}] An optional \meta{token}, which will result in a value
+%     \cs{BooleanTrue} if \meta{token} is present and \cs{BooleanFalse}
+%     otherwise. Given as \texttt{t}\meta{token}.
+%   \item[\texttt{e}] Given as \texttt{e}\marg{tokens}, a set of optional
+%     \emph{embellishments}, each of which requires a \emph{value}.
+%     If an embellishment is not present, \cs{NoValue} is returned.  Each
+%     embellishment gives one argument, ordered as for the list of
+%     \meta{tokens} in the argument specification.  All \meta{tokens}
+%     must be distinct.
+%   \item[\texttt{E}] As for \texttt{e} but returns one or more \meta{defaults}
+%     if values are not given: \texttt{E}\marg{tokens}\marg{defaults}. See
+%     Section~\ref{sec:cmd:embellishment} for more details.
+% \end{itemize}
+%
+% \subsection{Modifying argument descriptions}
+%
+% In addition to the argument \emph{types} discussed above, the argument
+% description also gives special meaning to three other characters.
+%
+% First, \texttt{+} is used to make an argument long (to accept paragraph
+% tokens). In contrast to \cs{newcommand}, this applies on an
+% argument-by-argument basis. So modifying the example to
+% \enquote{\texttt{s o o +m O{default}}}
+% means that the mandatory argument is now \cs{long}, whereas the optional
+% arguments are not.
+%
+% Secondly, \texttt{!} is used to control whether spaces are allowed before
+% optional arguments. There are some subtleties to this, as \TeX{} itself
+% has some restrictions on where spaces can be \enquote{detected}: more detail
+% is given in Section~\ref{sec:cmd:opt-space}.
+%
+% Thirdly, \texttt{=} is used to declare that the following argument should
+% be interpreted as a series of keyvals. See Section~\ref{sec:cmd:keyval}
+% for more details.
+%
+% Finally, the character \texttt{>} is used to declare so-called
+% `argument processors', which can be used to modify the contents of an
+% argument before it is passed to the macro definition. The use of argument
+% processors is a somewhat advanced topic, (or at least a less commonly used
+% feature) and is covered in Section~\ref{sec:cmd:processors}.
+%
+% \subsection{Creating document commands and environments}
+%
+% \begin{function}
+%   {
+%     \NewDocumentCommand,
+%     \RenewDocumentCommand,
+%     \ProvideDocumentCommand,
+%     \DeclareDocumentCommand
+%   }
+%   \begin{syntax}
+%     \cs{NewDocumentCommand} \Arg{cmd} \Arg{arg spec} \Arg{code}
+%   \end{syntax}
+% \end{function}
+% This family of commands are used to create a \meta{cmd}. The argument
+% specification for the function is given by \meta{arg spec}, and the command
+% uses the \meta{code} with |#1|, |#2|, etc.\ replaced by the arguments found
+% by the parser.
+%
+% An example:
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\chapter{s o m}
+%      {%
+%        \IfBooleanTF{#1}%
+%          {\typesetstarchapter{#3}}%
+%          {\typesetnormalchapter{#2}{#3}}%
+%      }
+% \end{Verbatim}
+% would be a way to define a \cs{chapter} command which would essentially behave
+% like the current \LaTeXe{} command (except that it would accept an optional
+% argument even when a \texttt{*} was parsed). The \cs{typesetnormalchapter}
+% could test its first argument for being \cs{NoValue} to see if an optional
+% argument was present. (See Section~\ref{sec:cmd:special} for details of
+% \cs{IfBooleanTF} and testing for \cs{NoValue}.)
+%
+% The difference between the \cs{New...} \cs{Renew...}, \cs{Provide...}
+% and \cs{Declare...} versions is the behavior if \meta{cmd} is already
+% defined.
+% \begin{itemize}
+%  \item \cs{NewDocumentCommand} will issue an error if \meta{cmd}
+%    has already been defined.
+%  \item \cs{RenewDocumentCommand} will issue an error if \meta{cmd}
+%    has not previously been defined.
+%  \item \cs{ProvideDocumentCommand} creates a new definition for
+%    \meta{cmd} only if one has not already been given.
+%  \item \cs{DeclareDocumentCommand} will always create the new
+%    definition, irrespective of any existing \meta{cmd} with the
+%    same name.  This should be used sparingly.
+% \end{itemize}
+%
+% If the \meta{cmd} can't be provided as a single token but needs
+% \enquote{constructing}, you can use \cs{ExpandArgs} as explained in
+% Section~\ref{sec:preconstructing-csnames} which also gives an example
+% in which this is needed.
+%
+% \begin{function}
+%   {
+%     \NewDocumentEnvironment,
+%     \RenewDocumentEnvironment,
+%     \ProvideDocumentEnvironment,
+%     \DeclareDocumentEnvironment
+%   }
+%   \begin{syntax}
+%     \cs{NewDocumentEnvironment} \Arg{env} \Arg{arg spec} \Arg{beg-code} \Arg{end-code}
+%   \end{syntax}
+% \end{function}
+% These commands work in the same way as \cs{NewDocumentCommand}, etc.\@, but
+% create environments (\cs{begin}\Arg{env} \ldots{}
+% \cs{end}\Arg{env}). Both the \meta{beg-code} and \meta{end-code}
+% may access the arguments as defined by \meta{arg spec}. The arguments will be
+% given following \cs{begin}\Arg{env}. Any spaces at the start and end of the
+% \Arg{env} are removed before the definition takes place, thus
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentEnvironment{foo}
+% \end{Verbatim}
+% and
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentEnvironment{ foo }
+% \end{Verbatim}
+% both create the same \enquote{\texttt{foo}} environment.
+%
+% \subsection{Optional arguments}
+% \label{sec:cmd:opt}
+%
+% In contrast to commands created using \LaTeXe{}'s \cs{newcommand}, optional
+% arguments created using \cs{NewDocumentCommand} may safely be nested. Thus for
+% example, following
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\foo{om}{I grabbed `#1' and `#2'}
+%    \NewDocumentCommand\baz{o}{#1-#1}
+% \end{Verbatim}
+% using the command as
+% \begin{Verbatim}[gobble = 3]
+%    \foo[\baz[stuff]]{more stuff}
+% \end{Verbatim}
+% will print
+% \begin{quote}
+% I grabbed `stuff-stuff' and `more stuff'
+% \end{quote}
+% This is particularly useful when placing a command with an optional argument
+% \emph{inside} the optional argument of a second command.
+%
+% When an optional argument is followed by a mandatory argument with the same
+% delimiter, the parser issues a warning because the optional argument could not
+% be omitted by the user, thus becoming in effect mandatory. This can apply to
+% \texttt{o}, \texttt{d}, \texttt{O}, \texttt{D}, \texttt{s}, \texttt{t},
+% \texttt{e}, and \texttt{E} type arguments followed by \texttt{r} or
+% \texttt{R}-type required arguments.
+%
+% The default for \texttt{O}, \texttt{D} and \texttt{E} arguments can be
+% the result of grabbing another argument. Thus for example
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\foo{O{#2} m}
+% \end{Verbatim}
+% would use the mandatory argument as the default for the leading optional
+% one.
+%
+% \subsection{Spacing and optional arguments}
+% \label{sec:cmd:opt-space}
+%
+% \TeX{} will find the first argument after a function name irrespective of any
+% intervening spaces. This is true for both mandatory and optional arguments. So
+% |\foo[arg]| and \verb*|\foo [arg]| are equivalent. Spaces are also ignored when
+% collecting arguments up to the last mandatory argument to be collected (as it
+% must exist). So after
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\foo{m o m}{ ... }
+% \end{Verbatim}
+% the user input |\foo{arg1}[arg2]{arg3}| and \verb*|\foo{arg1} [arg2] {arg3}|
+% will both be parsed in the same way.
+%
+% The behavior of optional arguments \emph{after} any mandatory arguments is
+% selectable. The standard settings will allow spaces here, and thus with
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\foobar{m o}{ ... }
+% \end{Verbatim}
+% both |\foobar{arg1}[arg2]| and \verb*|\foobar{arg1} [arg2]| will find an
+% optional argument. This can be changed by giving the modified |!| in the
+% argument specification:
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\foobar{m !o}{ ... }
+% \end{Verbatim}
+% where \verb*|\foobar{arg1} [arg2]| will not find an optional argument.
+%
+% There is one subtlety here due to the difference in handling by \TeX{} of
+% `control symbols', where the command name is made up of a single
+% character, such as `\texttt{\textbackslash\textbackslash}'.
+% Spaces are not ignored by \TeX{} here,
+% and thus it is possible to require an optional argument directly follow such a
+% command. The most common example is the use of \texttt{\textbackslash\textbackslash}
+% in \pkg{amsmath} environments, which in the terms here would be defined as
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\\{!s !o}{ ... }
+% \end{Verbatim}
+%
+% Also notable when using optional arguments in the last position is that \TeX{}
+% will necessarily look ahead for the argument opening token. This means that
+% the value of |\inputlineno| will be `out by one' if such a trailing optional
+% argument is \emph{not} present and the command ends a line; it will be one
+% greater than the line number containing the last mandatory argument.
+%
+% \subsection{`Embellishments'}
+% \label{sec:cmd:embellishment}
+%
+% The \texttt{E}-type argument allows one default value per test token. This is
+% achieved by giving a list of defaults for each entry in the list, for example:
+% \begin{Verbatim}[gobble = 3]
+%    E{^_}{{UP}{DOWN}}
+% \end{Verbatim}
+% If the list of default values is \emph{shorter} than the list of test tokens,
+% the special \cs{NoValue} marker will be returned (as for the \texttt{e}-type
+% argument). Thus for example
+% \begin{Verbatim}[gobble = 3]
+%    E{^_}{{UP}}
+% \end{Verbatim}
+% has default \texttt{UP} for the |^| test character, but will return the
+% \cs{NoValue} marker as a default for |_|. This allows mixing of explicit
+% defaults with testing for missing values.
+%
+% \subsection{Testing special values}
+% \label{sec:cmd:special}
+%
+% Optional arguments make use of dedicated variables to return information about
+% the nature of the argument received.
+%
+% \begin{function}{\IfNoValueTF, \IfNoValueT, \IfNoValueF}
+%   \begin{syntax}
+%     \cs{IfNoValueTF} \Arg{arg} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+% \end{function}
+% The \cs{IfNoValue(TF)} tests are used to check if \meta{argument} (|#1|,
+% |#2|, \emph{etc.}) is the special \cs{NoValue} marker. For example
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\foo{o m}
+%      {%
+%        \IfNoValueTF {#1}%
+%          {\DoSomethingJustWithMandatoryArgument{#2}}%
+%          {\DoSomethingWithBothArguments{#1}{#2}}%
+%      }
+% \end{Verbatim}
+% will use a different internal function if the optional argument
+% is given than if it is not present.
+%
+% Note that three tests are available, depending on which outcome
+% branches are required: \cs{IfNoValueTF}, \cs{IfNoValueT} and
+% \cs{IfNoValueF}.
+%
+% As the \cs{IfNoValue(TF)} tests are expandable, it is possible to
+% test these values later, for example at the point of typesetting or
+% in an expansion context.
+%
+% When two optional arguments follow each other (a syntax we typically
+% discourage), it can make sense to allow users of the command to
+% specify only the second argument by providing an empty first
+% argument.
+% If you wish to test if an argument is blank or not, but are not
+% concerned with distinguishing an entirely absent argument from
+% an empty one, use the |O|~type specifier with the
+% conditional \cs{IfBlankTF} (described below).
+%
+% \begin{function}{\IfValueTF, \IfValueT, \IfValueF}
+%   \begin{syntax}
+%     \cs{IfValueTF} \Arg{arg} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+% \end{function}
+% The reverse form of the \cs{IfNoValue(TF)} tests are also available
+% as \cs{IfValue(TF)}. The context will determine which logical
+% form makes the most sense for a given code scenario.
+%
+% \begin{function}{\IfBlankTF, \IfBlankT, \IfBlankF}
+%   \begin{syntax}
+%     \cs{IfBlankTF} \Arg{arg} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+% \end{function}
+%
+% The \cs{IfNoValueTF} command chooses the \meta{true code} if the optional argument has not
+% been used at all (and it returns the special \cs{NoValue}
+% marker), but not if it has been given an empty value. In contrast
+% \cs{IfBlankTF} returns true if its argument is either truly empty or
+% only contains one or more normal blanks.
+% For example
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\foo{m!o}{\par #1:
+%      \IfNoValueTF{#2}
+%        {No optional}%
+%        {%
+%          \IfBlankTF{#2}
+%            {Blanks in or empty}%
+%            {Real content in}%
+%        }%
+%      \space argument!}
+%    \foo{1}[bar] \foo{2}[  ] \foo{3}[] \foo{4}[\space] \foo{5} [x]
+% \end{Verbatim}
+% results
+% in the following output:
+% \begin{quote}
+%   \NewDocumentCommand\foo{m!o}{\par #1:
+%     \IfNoValueTF{#2}{No optional}%
+%                 {\IfBlankTF{#2}{Blanks in or empty}%
+%                   {Real content in}}%
+%                 \space argument!}
+%   \foo{1}[bar] \foo{2}[  ] \foo{3}[] \foo{4}[\space] \foo{5} [x]
+% \end{quote}
+%
+% Note that the \cs{space} in (4) is considered real content---because it is
+% a command and not a \enquote{space} character---even though it results
+% in producing a space. You can also observe in (5) the effect of the
+% \texttt{!} specifier, preventing the last \cs{foo}
+% from interpreting \texttt{[x]} as its optional argument.
+%
+% \begin{variable}{\BooleanTrue, \BooleanFalse}
+% \end{variable}
+% The \texttt{true} and \texttt{false} flags set when searching for
+% an optional character (using \texttt{s} or \texttt{t\meta{char}}) have
+% names which are accessible outside of code blocks.
+%
+% \begin{function}{\IfBooleanTF, \IfBooleanT, \IfBooleanF}
+%   \begin{syntax}
+%     \cs{IfBooleanTF} \Arg{arg} \Arg{true code} \Arg{false code}
+%   \end{syntax}
+% \end{function}
+% Used to test if \meta{argument} (|#1|, |#2|, \emph{etc.}) is
+% \cs{BooleanTrue} or \cs{BooleanFalse}. For example
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\foo{sm}
+%      {%
+%        \IfBooleanTF {#1}%
+%          {\DoSomethingWithStar{#2}}%
+%          {\DoSomethingWithoutStar{#2}}%
+%      }
+% \end{Verbatim}
+% checks for a star as the first argument, then chooses the action to
+% take based on this information.
+%
+% \subsection{Auto-converting to key--value format}
+% \label{sec:cmd:keyval}
+%
+% Some document commands have a long history of accepting a `free text' optional
+% argument, for example \cs{caption} and the sectioning commands \cs{section},
+% etc. Introducing more sophisticated (keyval) options to these commands
+% therefore needs a method to interpret the optional argument \emph{either} as
+% free text \emph{or} as a series of keyvals. This needs to take place
+% during argument grabbing as there is a need for careful treatment of
+% braces to obtain the correct result.
+%
+% The \texttt{=} modifier is available to allow \pkg{ltcmd} to correctly
+% implement this process. The modifier guarantees that the argument will be
+% passed to further code as a series of keyvals. To do that, the \texttt{=}
+% should be followed by an argument containing the default key name. This is used
+% as the key in a key--value pair \emph{if} the \enquote{raw} argument does \emph{not}
+% have the correct form to be interpreted as a set of keyvals.
+%
+% Taking \cs{caption} as an example, with the demonstration implementation
+% \begin{Verbatim}[gobble = 3]
+%    \DeclareDocumentCommand\caption{s ={short-text} +O{#3} +m}
+%      {%
+%        \showtokens{Grabbed arguments:^^J(#2)^^Jand^^J(#3)}%
+%      }
+% \end{Verbatim}
+% the default key name is \texttt{short-text}. When the command \cs{caption} is
+% then used, if the optional argument is free text such as
+% \begin{Verbatim}[gobble = 3]
+%    \caption[Some short text]{A much longer and more detailed text for
+%      demonstration purposes}
+% \end{Verbatim}
+% then the output will be
+% \begin{Verbatim}[gobble = 3]
+%    Grabbed arguments:
+%    (short-text={Some short text})
+%    and
+%    (A much longer and more detailed text for demonstration purposes)
+% \end{Verbatim}
+% On the other hand, if the caption is given with a keyval-form argument
+% \begin{Verbatim}[gobble = 3]
+%    \caption[label = cap:demo]%
+%      {A much longer and more detailed text for demonstration purposes}
+% \end{Verbatim}
+% then this will be respected
+% \begin{Verbatim}[gobble = 3]
+%    Grabbed arguments:
+%    (label = cap:demo)
+%    and
+%    (A much longer and more detailed text for demonstration purposes)
+% \end{Verbatim}
+%
+% Interpretation as keyval form is determined by the presence of \texttt{=}
+% characters within the argument. Those in inline math mode (enclosed within
+% \verb|$...$| or \verb|\(...\)|) are ignored. An argument can be forced to be
+% read as keyvals by including an empty entry at the start
+% \begin{Verbatim}[gobble = 3]
+%    \caption[=,This is now a keyval]%
+%    % ...
+%    \caption[This is not $=$ keyval]%
+% \end{Verbatim}
+%
+% This empty entry is \emph{not} passed to the underlying code, so will not lead
+% to issues with keyval parsers that do not allow an empty key name. Any text-mode
+% \texttt{=} signs will need to be braced to avoid being misinterpreted: this
+% is likely most conveniently handled by bracing the entire argument
+% \begin{Verbatim}[gobble = 3]
+%    \caption[{Not = to a keyval!}]%
+% \end{Verbatim}
+% which will be passed correctly as
+% \begin{Verbatim}[gobble = 3]
+%    Grabbed arguments:
+%    (short-text = {Not = to a keyval!})
+% \end{Verbatim}
+%
+% If the argument is completely blank, the conversion results in an empty keyval
+% list, not \verb*|short-text = |. This reflects the fact that with a move toward
+% keyval processing, an empty argument is best modelled as an empty keyval list.
+% If the user does want an empty classical argument, using |[{}]| will work
+% with both the new processor code and older formats.
+%
+% \subsection{Argument processors}
+% \label{sec:cmd:processors}
+%
+% Argument processor are applied to an argument \emph{after} it has been grabbed
+% by the underlying system but before it is passed to \meta{code}. An argument
+% processor can therefore be used to regularize input at an early stage, allowing
+% the internal functions to be completely independent of input form. Processors
+% are applied to user input and to default values for optional arguments, but
+% \emph{not} to the special \cs{NoValue} marker.
+%
+% Each argument processor is specified by the syntax \texttt{>}\marg{processor}
+% in the argument specification. Processors are applied from right to left, so
+% that
+% \begin{Verbatim}[gobble = 3]
+%    >{\ProcessorB} >{\ProcessorA} m
+% \end{Verbatim}
+% would apply \cs{ProcessorA} followed by \cs{ProcessorB} to the tokens grabbed
+% by the \texttt{m} argument.
+%
+% \begin{function}{\SplitArgument}
+%   \begin{syntax}
+%     \cs{SplitArgument} \Arg{number} \Arg{token(s)}
+%   \end{syntax}
+% \end{function}
+% This processor splits the argument given at each occurrence of the
+% \meta{tokens} up to a maximum of \meta{number} tokens (thus
+% dividing the input into $\text{\meta{number}} + 1$ parts).
+% An error is given if too many \meta{tokens} are present in the
+% input. The processed input is placed inside
+% $\text{\meta{number}} + 1$ sets of braces for further use.
+% If there are fewer than \Arg{number} of \Arg{tokens} in the argument
+% then \cs{NoValue} markers are added at the end of the processed
+% argument.
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\foo{>{\SplitArgument{2}{;}} m}
+%      {\InternalFunctionOfThreeArguments#1}
+% \end{Verbatim}
+% If only a single character \meta{token} is used for the split, any
+% category code $13$ (active) character matching the \meta{token} will
+% be replaced before the split takes place.
+% Spaces are trimmed at each end of each item parsed.
+%
+% The \texttt{E} argument type is somewhat special, because with a single
+% \texttt{E} in the command declaration you may end up with several
+% arguments in a command (one formal argument per embellishment token).
+% Therefore, when an argument processor is applied to an
+% \texttt{e}/\texttt{E}-type
+% argument, all the arguments pass through that processor before being fed
+% to the \meta{code}.  For example, this command
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\foo{ >{\TrimSpaces} e{_^} }
+%      { [#1](#2) }
+% \end{Verbatim}
+% applies \cs{TrimSpaces} to both arguments.
+%
+% \begin{function}{\SplitList}
+%   \begin{syntax}
+%     \cs{SplitList} \Arg{token(s)}
+%   \end{syntax}
+% \end{function}
+% This processor splits the argument given at each occurrence of the
+% \meta{token(s)} where the number of items is not fixed. Each item is
+% then wrapped in braces within |#1|. The result is that the
+% processed argument can be further processed using a mapping function
+% (see below).
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\foo{>{\SplitList{;}} m}
+%      {\MappingFunction#1}
+% \end{Verbatim}
+% If only a single character \meta{token} is used for the split, it will
+% take account of the possibility that the \meta{token} has been made active
+% (category code~$13$) and will split at such tokens. 
+% Spaces are trimmed at each end of each item parsed. Exactly one set
+% of braces will be stripped if an entire item is surrounded by them,
+% i.e.~the following inputs and outputs result (each separate item as
+% a brace group).
+% \begin{Verbatim}[gobble = 3]
+%    a      ==> {a}
+%    {a}    ==> {a}
+%    {a}b   ==> {{a}b}
+%    a,b    ==> {a}{b}
+%    {a},b  ==> {a}{b}
+%    a,{b}  ==> {a}{b}
+%    a,{b}c ==> {a}{{b}c}
+% \end{Verbatim}
+%
+% \begin{function}{\ProcessList}
+%   \begin{syntax}
+%     \cs{ProcessList} \Arg{list} \Arg{token(s)}
+%   \end{syntax}
+% \end{function}
+% To support \cs{SplitList}, the function \cs{ProcessList} is available
+% to apply \meta{tokens} to every entry in a \meta{list}. The
+% \meta{tokens} can be arbitrary contents that should expect one argument
+% after it: the list entry. For example
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\foo{>{\SplitList{;}} m}
+%      {\ProcessList{#1}{\SomeDocumentCommand}}
+% \end{Verbatim}
+% or
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\foo{>{\SplitList{;}} m}
+%      {\ProcessList{#1}{Abc \SomeDocumentCommand}}
+% \end{Verbatim}
+%
+% \begin{function}{\ReverseBoolean}
+%   \begin{syntax}
+%     \cs{ReverseBoolean}
+%   \end{syntax}
+% \end{function}
+% This processor reverses the logic of \cs{BooleanTrue} and
+% \cs{BooleanFalse}, so that the example from earlier would become
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\foo{>{\ReverseBoolean} s m}
+%      {%
+%        \IfBooleanTF#1%
+%          {\DoSomethingWithoutStar{#2}}%
+%          {\DoSomethingWithStar{#2}}%
+%      }
+% \end{Verbatim}
+%
+% \begin{function}{\TrimSpaces}
+%   \begin{syntax}
+%     \cs{TrimSpaces}
+%   \end{syntax}
+% \end{function}
+% Removes any leading and trailing spaces (tokens with character code~$32$
+% and category code~$10$) for the ends of the argument. Thus for example
+% declaring a function
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand\foo{>{\TrimSpaces} m}
+%      {\showtokens{#1}}
+% \end{Verbatim}
+% and using it in a document as
+% \begin{flushleft}
+%   \verb=  =\verb*=\foo{ hello world }=
+% \end{flushleft}
+% will show `\verb*=hello world=' at the terminal, with the space at each
+% end removed. \cs{TrimSpaces} will remove multiple spaces from the ends of
+% the input in cases where these have been included such that the standard
+% \TeX{} conversion of multiple spaces to a single space does not apply.
+%
+% \subsection{Body of an environment}
+% \label{sec:cmd:body}
+%
+% While environments |\begin|\marg{environment}\ \dots{}\,|\end|\marg{environment}
+% are typically used in cases where the code implementing the \meta{environment}
+% does not need to access the contents of the environment (its \enquote{body}),
+% it is sometimes useful to have the body as a standard argument.
+%
+% This is achieved by ending the argument specification with~\texttt{b}, which is
+% a dedicated argument type for this situation. For instance
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentEnvironment{twice}{O{\ttfamily} +b}
+%      {#2#1#2} {}
+%    \begin{twice}[\itshape]
+%      Hello world!
+%    \end{twice}
+% \end{Verbatim}
+% typesets `Hello world!{\itshape Hello world!}'.
+%
+% The prefix |+| is used to allow multiple paragraphs in the environment's body.
+% Argument processors can also be applied to \texttt{b}~arguments. By default,
+% spaces are trimmed at both ends of the body: in the example there would
+% otherwise be spaces coming from the ends the lines after |[\itshape]| and
+% |world!|. Putting the prefix |!| before \texttt{b} suppresses space-trimming.
+%
+% When \texttt{b} is used in the argument specification, the last
+% argument of the environment declaration (e.g.,
+% \cs{NewDocumentEnvironment}), which consists of an \meta{end code} to
+% insert at |\end|\marg{environment}, is redundant since one can simply
+% put that code at the end of the \meta{start code}. Nevertheless this
+% (empty) \meta{end code} must be provided.
+%
+% Environments that use this feature can be nested.
+%
+% \subsection{Fully-expandable document commands\label{sec:ltcmd:expandable}}
+%
+% Document commands created using \cs{NewDocumentCommand}, etc.\@, are normally
+% created so that they do not expand unexpectedly. This is done using engine
+% features, so is more powerful than \LaTeXe{}'s \cs{protect} mechanism. There
+% are \emph{very rare} occasion when it may be useful to create functions using a
+% expansion-only grabber. This imposes a number of restrictions on the
+% nature of the arguments accepted by a function, and the code it implements.
+% This facility should only be used when \emph{necessary}.
+%
+% \begin{function}
+%   {
+%     \NewExpandableDocumentCommand,
+%     \RenewExpandableDocumentCommand,
+%     \ProvideExpandableDocumentCommand,
+%     \DeclareExpandableDocumentCommand
+%   }
+%   \begin{syntax}
+%     \cs{NewExpandableDocumentCommand} \Arg{cmd} \Arg{arg spec} \Arg{code}
+%   \end{syntax}
+% \end{function}
+% This family of commands is used to create a document-level \meta{cmd},
+% which will grab its arguments in a fully-expandable manner. The
+% argument specification for the function is given by \meta{arg spec},
+% and the \meta{cmd} will execute \meta{code}. In  general, \meta{code} will
+% also be fully expandable, although it is possible that this will
+% not be the case (for example, a function for use in a table might
+% expand so that \cs{omit} is the first non-expandable non-space token).
+%
+% Parsing arguments by pure expansion imposes a number of restrictions on
+% both the type of arguments that can be read and the error checking
+% available:
+% \begin{itemize}
+%   \item The last argument (if any are present) must be one of the
+%     mandatory types \texttt{m}, \texttt{r} or \texttt{R}.
+%   \item The \enquote{verbatim} argument type \texttt{v} is not available.
+%   \item Argument processors (using \texttt{>}) are not available.
+%   \item It is not possible to differentiate between, for example
+%     |\foo[| and |\foo{[}|: in both cases the \texttt{[} will be
+%     interpreted as the start of an optional argument. As a
+%     result, checking for optional arguments is less robust than
+%     in the standard version.
+% \end{itemize}
+%
+% \subsection{Commands at the start of tabular cells}
+%
+% Creating commands that are used at the start of tabular cells imposes
+% some restrictions on the underlying implementation. The standard \LaTeX{}
+% tabular environments (\texttt{tabular}, etc.)  use a mechanism which requires
+% that any command wrapping \cs{multicolumn} or similar must be
+% \enquote{expandable}. This is \emph{not} the case for commands created using
+% \cs{NewDocumentCommand}, etc., which as detailed in
+% Section~\ref{sec:ltcmd:expandable} use an engine feature which prevents
+% such \enquote{expansion}. Therefore, to create such wrappers for use at the start
+% of tabular cells, you must use \cs{NewExpandableDocumentCommand}, for example
+% \begin{Verbatim}[gobble = 3]
+%    \NewExpandableDocumentCommand\MyMultiCol{m}{\multicolumn{3}{c}{#1}}
+%    \begin{tabular}{lcr}
+%    a & b & c \\
+%    \MyMultiCol{stuff} \\
+%    \end{tabular}
+% \end{Verbatim}
+%
+% \subsection{Using the verbatim argument types}
+%
+% As described above, the \texttt{v}-type argument may be viewed as similar to
+% \cs{verb}. Before looking at exactly what that means, it is important to
+% highlight some key differences. Most notably, \emph{grabbing} a verbatim-like
+% argument is separate from \emph{typesetting} it: the latter is covered in the
+% next section.
+%
+% When grabbing a \texttt{v}-type argument, \LaTeX{} first uses the kernel
+% command \cs{dospecials} to turn off the \enquote{special} nature of characters.
+% It then makes both spaces and tabs \enquote{active}, so that they can be given
+% a custom definition. Any other characters are grabbed as-is: this means that if
+% any characters have been made \enquote{special} and are not listed in
+% \cs{dospecials}, an error will arise (see below).
+%
+% The characters that are grabbed as the argument are all those between two
+% identical: in contrast to \cs{verb}, the characters \texttt{\textbackslash},
+% |{|, |}| and |%| \emph{cannot} be used as the delimiter character. If any of
+% the grabbed tokens have \enquote{special} meaning, an error will be issued.
+%
+% For the \texttt{+v}-type argument, which allows line breaks within the
+% argument, newline characters are converted into \cs{obeyedline} commands. The
+% standard definition of \cs{obeyedline} is simple |\par|, thus allowing the
+% grabbed tokens to be used directly in typesetting. A local redefinition of
+% \cs{obeyedline} can be used to achieve other outputs. For example, to retain
+% blank lines whilst typesetting, one could use
+% \begin{Verbatim}[gobble = 3]
+%    \renewcommand*\obeyedline{\mbox{}\par}
+% \end{Verbatim}
+% More information about using these arguments in typesetting is in the following
+% subsection.
+%
+% Some additional details that may be useful for those with more \TeX{}
+% knowledge: do not worry if this does not make sense to you! Spaces and tabs are
+% stored as active characters. In $8$-bit engines, non-ASCII characters are
+% \enquote{active}, whilst other than the letters a--zA--Z, ASCII characters are
+% \enquote{other}. In Unicode engines, non-ASCII codepoints will be either
+% letters or \enquote{other}, based on the standard \LaTeX{} settings derived
+% from Unicode data. For token-based comparisons, it is likely that the active
+% spaces and tabs should be replaced: this can be done conveniently by expansion.
+%
+% \subsection{Typesetting verbatim-like material}
+%
+% In contrast to \cs{verb}, the \texttt{(+)v}-type argument is only about
+% \emph{grabbing} the argument, not \emph{typesetting} it. As such, features that
+% users often associate with \enquote{verbatim} are not automatically activated,
+% e.g., selecting a monospaced font. Material grabbed by the \texttt{v}-type
+% argument does not automatically suppress ligatures: with modern \TeX{} engines,
+% this largely can be done without the token manipulation which \cs{verb} uses.
+% (In \cs{verb}, ligatures are suppressed by making characters active and
+% inserting a zero-width kern before the character itself.)
+%
+% The \cs{verb} command also selects a monospaced font: this is not intrinsic to
+% verbatim material, so will need to be set up using for example \cs{ttfamily}.
+% Similarly, the \texttt{verbatim} environment sets up the meaning of \cs{par}
+% suitable for breaking lines.
+%
+% \subsection{Verbatim environments}
+% \label{sec:cmd:verbenv}
+%
+% In some cases, when grabbing the body of an environment you will want the
+% contents to be treated verbatim. This is available using the argument
+% specification~\texttt{c}. Like the \texttt{b} specification, this has to be the
+% last one. Thus for example
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentEnvironment{MyVerbatim}{!O{\ttfamily} c}
+%      {\begin{center} #1 #2\end{center}} {}
+%    \begin{MyVerbatim}[\ttfamily\itshape]
+%      % Some code is shown here
+%      $y = mx + c$
+%    \end{MyVerbatim}
+% \end{Verbatim}
+% will typeset verbatim the content, thus:
+% \NewDocumentEnvironment{MyVerbatim}{!O{\ttfamily} c}
+%   {\begin{center} #1 #2\end{center}} {}
+% \begin{MyVerbatim}[\ttfamily\itshape]
+%   % Some code is shown here
+%   $y = mx + c$
+% \end{MyVerbatim}
+%
+% Since grabbing the entire contents verbatim will result in there being no
+% \cs{par} tokens, newlines are always permitted: there is no need for a
+% |+|~modifier here. As for the \texttt{v} specification, newlines are stored as
+% \cs{obeyedline}. In a similar fashion to the \texttt{b}~specification, by
+% default \emph{newlines} are trimmed at both ends of the body. Putting the
+% prefix |!| before \texttt{c} suppresses this trimming.
+%
+% Collection of the body takes place on a line-by-line basis: content is
+% collected up to the end-of-line in the source, then examined before storage.
+% This means that the line ending the environment (containing in the example
+% above |\end{MyVerbatim}|) cannot have any text \emph{after} the end of the
+% environment. Text \emph{before} the end of environment is treated normally,
+% but note that there is no trailing \cs{obeyedline} added if there is text here.
+% Other than optional arguments, no text is allowed on the opening line of the
+% environment.
+%
+% Special handling is applied to a \texttt{o}, \texttt{O}, \texttt{d} or
+% \texttt{D}~specification argument immediately before an
+% \texttt{c}~specification. This means that when the optional argument is absent,
+% the first character of the next line will be read with the correctly applied
+% verbatim category code. Issues may arise if \emph{multiple} optional arguments
+% are used before a \texttt{c}~specification: this will only work reliably where
+% the optional tokens are \enquote{other} characters.
+%
+% For technical reasons, we recommend that spaces are \emph{not} ignored when
+% searching for an optional argument before an \texttt{c} specification: this can
+% be achieved by adding the \texttt{!} modifier as shown in the example.
+% However, this is left as a choice for the user.
+%
+% \subsection{Performance}
+%
+% For document commands where the argument specification is entirely
+% comprised of |m| or |+m| entries (or is entirely empty), the internal structure
+% created by \cs{NewDocumentCommand} is essentially as efficient 
+% as provided by |\newcommand(*)|. As such, document commands may replace
+% constructs arising from \cs{newcommand}, etc., without a need to be concerned
+% about performance. It should be noted that \cs{newcommand(*)} produces expandable
+% results, so the direct replacement is \cs{NewExpandableDocumentCommand};
+% in most cases, however, it is better to use \cs{NewDocumentCommand} to
+% give more robust structures.
+%
+% \subsection{Details about argument delimiters}
+%
+% In normal (non-expandable) commands, the delimited types look for the
+% initial delimiter by peeking ahead (using \pkg{expl3}'s |\peek_...|
+% functions) looking for the delimiter token.  The token has to have the
+% same meaning and \enquote{shape} of the token defined as delimiter.
+% There are three possible cases of delimiters: character tokens, control
+% sequence tokens, and active character tokens.  For all practical purposes
+% of this description, active character tokens will behave exactly as
+% control sequence tokens.
+%
+% \subsubsection{Character tokens}
+%
+% A character token is characterized by its character code, and its meaning
+% is the category code~(|\catcode|).  When a command is defined, the meaning
+% of the character token is fixed into the definition of the command and
+% cannot change.  A command will correctly see an argument delimiter if
+% the open delimiter has the same character and category codes as at the
+% time of the definition.  For example in:
+% \begin{Verbatim}[gobble = 3]
+%    \NewDocumentCommand { \foobar } { D<>{default} } {(#1)}
+%    \foobar <hello> \par
+%    \char_set_catcode_letter:N <
+%    \foobar <hello>
+% \end{Verbatim}
+% the output would be:
+% \begin{Verbatim}[gobble = 3]
+%    (hello)
+%    (default)<hello>
+% \end{Verbatim}
+% as the open-delimiter |<| changed in meaning between the two calls to
+% |\foobar|, so the second one doesn't see the |<| as a valid delimiter.
+% Commands assume that if a valid open-delimiter was found, a matching
+% close-delimiter will also be there.  If it is not (either by being
+% omitted or by changing in meaning), a low-level \TeX{} error is raised
+% and the command call is aborted.
+%
+% \subsubsection{Control sequence tokens}
+%
+% A control sequence (or control character) token is characterized by
+% its name, and its meaning is its definition.
+% A token cannot have two different meanings at the same time.
+% When a control sequence is defined as delimiter in a command,
+% it will be detected as delimiter whenever the control sequence name
+% is found in the document regardless of its current definition.
+% For example in:
+% \begin{Verbatim}[gobble = 3]
+%    \cs_set:Npn \x { abc }
+%    \NewDocumentCommand { \foobar } { D\x\y{default} } {(#1)}
+%    \foobar \x hello\y \par
+%    \cs_set:Npn \x { def }
+%    \foobar \x hello\y
+% \end{Verbatim}
+% the output would be:
+% \begin{Verbatim}[gobble = 3]
+%    (hello)
+%    (hello)
+% \end{Verbatim}
+% with both calls to the command seeing the delimiter |\x|.
+%
+% \subsection{Creating new argument processors}
+%
+% \begin{variable}{\ProcessedArgument}
+% \end{variable}
+% Argument processors allow manipulation of a grabbed argument before it is
+% passed to the underlying code. New processor implementations may be created
+% as functions which take one trailing argument, and which leave their result in
+% the \cs{ProcessedArgument} variable. For example, \cs{ReverseBoolean} is
+% defined as
+% \begin{Verbatim}[gobble = 3]
+%    \ExplSyntaxOn
+%    \cs_new_protected:Npn \ReverseBoolean #1
+%      {
+%        \bool_if:NTF #1
+%          { \tl_set:Nn \ProcessedArgument { \c_false_bool } }
+%          { \tl_set:Nn \ProcessedArgument { \c_true_bool } }
+%      }
+%    \ExplSyntaxOff
+% \end{Verbatim}
+% [As an aside: the code is written in \pkg{expl3}, so we don't have to
+%   worry about spaces creeping into the definition.]
 %
 % \MaybeStop{}
 %
@@ -83,7 +1015,8 @@
 %
 % \changes{v1.0b}{2021/03/18}{Use \cs{NewModuleRelease}.}
 % \changes{v1.0e}{2021/05/24}{Use \cs{msg_...} instead of \cs{__kernel_msg...}}
-%
+% \changes{v1.3k}{2026-03-12}{Switch from \texttt{x}- to \texttt{e}-type
+%   expansion in expl3 code}
 %
 % \pkg{ltcmd} code contains an |^^@| character, which usually has
 % catcode~15, so \cs{IncludeInRelease} will break when this code is
@@ -421,7 +1354,7 @@
   {
     \cs_if_exist:NTF #1
       {
-        \msg_info:nnxx { cmd } { redefine }
+        \msg_info:nnee { cmd } { redefine }
           { \token_to_str:N #1 } { \tl_to_str:n {#2} }
       }
       {
@@ -429,10 +1362,10 @@
           { \cs_if_exist_p:c { \cs_to_str:N #1 ~ code } }
           { \cs_if_exist_p:c { \cs_to_str:N #1 ~ defaults } }
           {
-            \msg_warning:nnx { cmd } { unsupported-let }
+            \msg_warning:nne { cmd } { unsupported-let }
               { \token_to_str:N #1 }
           }
-        \msg_info:nnxx { cmd } { define-command }
+        \msg_info:nnee { cmd } { define-command }
           { \token_to_str:N #1 } { \tl_to_str:n {#2} }
       }
     \bool_set_false:N \l_@@_environment_bool
@@ -446,7 +1379,7 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_declare_cmd_internal:Nnnn #1#2#3#4
   {
-    \tl_set:Nx \l_@@_function_tl { \cs_to_str:N #1 }
+    \tl_set:Ne \l_@@_function_tl { \cs_to_str:N #1 }
     \@@_normalize_arg_spec:n {#2}
     \exp_args:No \@@_prepare_signature:n \l_@@_arg_spec_tl
     \@@_declare_cmd_code:Nnn #1 {#2} {#3}
@@ -510,7 +1443,7 @@
         { ! \tl_if_blank_p:e { \@@_all_m_check:n {#2} } }
       }
       {
-        \tl_set:Nx \l_@@_fn_tl
+        \tl_set:Ne \l_@@_fn_tl
           { \exp_not:c { \l_@@_function_tl \c_space_tl } }
         \bool_if:NTF \l_@@_grab_expandably_bool
           { \@@_declare_cmd_code_expandable:Nnn }
@@ -563,7 +1496,7 @@
     \cs_generate_from_arg_count:cNnn
       { \l_@@_function_tl \c_space_tl code }
       \cs_set_protected:Npn \l_@@_current_arg_int {#3}
-    \cs_set_protected_nopar:Npx #1
+    \cs_set_protected_nopar:Npe #1
       {
         \bool_if:NTF \l_@@_environment_bool
           {
@@ -609,7 +1542,7 @@
       \l_@@_current_arg_int {#3}
     \bool_if:NT \l_@@_defaults_bool
       {
-        \use:x
+        \use:e
           {
             \cs_generate_from_arg_count:cNnn
               { \l_@@_function_tl \c_space_tl defaults }
@@ -618,7 +1551,7 @@
           }
       }
     \bool_if:NTF \l_@@_expandable_bool
-      { \cs_set_nopar:Npx } { \cs_set_protected_nopar:Npx } #1
+      { \cs_set_nopar:Npe } { \cs_set_protected_nopar:Npe } #1
       {
         \exp_not:N \@@_start_expandable:nNNNNn
           { \exp_not:n {#2} }
@@ -639,12 +1572,12 @@
       {
         \bool_if:NT \l_@@_some_short_bool
           {
-            \cs_set_nopar:cpx { \l_@@_function_tl \c_space_tl \c_space_tl }
+            \cs_set_nopar:cpe { \l_@@_function_tl \c_space_tl \c_space_tl }
               ##1##2 { ##1 {##2} }
           }
-        \cs_set:cpx
+        \cs_set:cpe
       }
-      { \cs_set_nopar:cpx }
+      { \cs_set_nopar:cpe }
           { \l_@@_function_tl \c_space_tl } ##1##2 { ##1 {##2} }
   }
 %    \end{macrocode}
@@ -717,7 +1650,7 @@
     \exp_args:Nc \@@_declare_cmd_internal:Nnnn { environment~ #1 } {#2}
       {#3}
       {
-        \cs_set_nopar:cpx { environment~ #1 ~end }
+        \cs_set_nopar:cpe { environment~ #1 ~end }
           { \exp_not:c { environment~ #1 ~end~aux } }
         \cs_generate_from_arg_count:cNnn
           { environment~ #1 ~end~aux~ } \cs_set:Npn
@@ -728,7 +1661,7 @@
   }
 \cs_new_protected:Npn \@@_set_environment_end:n #1
   {
-    \cs_set_nopar:cpx { environment~ #1 ~end~aux }
+    \cs_set_nopar:cpe { environment~ #1 ~end~aux }
       {
         \exp_not:c { environment~ #1 ~end~aux~ }
         \exp_not:o \l_@@_args_tl
@@ -765,7 +1698,7 @@
       { environment~ \l_@@_environment_str \c_space_tl code }
       {#1}
   }
-\cs_new_protected:Npx \@@_start:nNNnnn #1#2#3
+\cs_new_protected:Npe \@@_start:nNNnnn #1#2#3
   {
     \exp_not:c { xparse~function~is~not~expandable }
     \exp_not:N \conditionally@traceoff
@@ -843,7 +1776,7 @@
   }
 \cs_new_protected:Npn \@@_defaults_aux:
   {
-    \tl_set:Nx \l_@@_args_ii_tl
+    \tl_set:Ne \l_@@_args_ii_tl
       { \exp_after:wN \@@_tmp:w \l_@@_args_i_tl }
     \tl_if_eq:NNT \l_@@_args_ii_tl \l_@@_args_i_tl
       { \use_none_delimit_by_q_recursion_stop:w }
@@ -851,13 +1784,14 @@
   }
 \cs_new_protected:Npn \@@_defaults_error:w \q_recursion_stop
   {
-    \msg_error:nnx { cmd } { default-loop }
+    \msg_error:nne { cmd } { default-loop }
       { \@@_environment_or_command: }
   }
 %    \end{macrocode}
 %
 % \changes{v1.1e}{2023/05/26}
 %         {Use simpler variant \cs{cs_generate_from_arg_count:NNno}}
+%  \changes{v1.3k}{2026-03-13}{Tidy up variants}
 %   To construct \cs{@@_tmp:w}, first go through the arguments
 %   found and the corresponding defaults, building a token list with
 %   |{#|\meta{arg number}|}| for arguments found in the input (whose
@@ -874,7 +1808,6 @@
     \cs_generate_from_arg_count:NNno \@@_tmp:w \cs_set:Npn
       \l_@@_current_arg_int \l_@@_tmpa_tl
   }
-\cs_generate_variant:Nn \cs_generate_from_arg_count:NNnn { NNno }
 \cs_new_protected:Npn \@@_defaults_def:nn
   {
     \int_incr:N \l_@@_current_arg_int
@@ -882,7 +1815,7 @@
   }
 \cs_new_protected:Npn \@@_defaults_def:nnn #1#2#3
   {
-    \tl_put_right:Nx \l_@@_tmpa_tl
+    \tl_put_right:Ne \l_@@_tmpa_tl
       {
         {
           \exp_not:N \exp_not:n
@@ -1083,7 +2016,7 @@
       \q_recursion_tail \q_recursion_tail \q_recursion_tail \q_recursion_stop
     \int_compare:nNnT \l_@@_current_arg_int > 9
       {
-        \msg_error:nnxx { cmd } { too-many-args }
+        \msg_error:nnee { cmd } { too-many-args }
           { \@@_environment_or_command: } { \tl_to_str:n {#1} }
         \@@_bad_def:wn
       }
@@ -1091,7 +2024,7 @@
       {
         \tl_if_empty:NF \l_@@_last_delimiters_tl
           {
-            \msg_error:nnxx { cmd } { expandable-ending-optional }
+            \msg_error:nnee { cmd } { expandable-ending-optional }
               { \iow_char:N \\ \l_@@_function_tl } { \tl_to_str:n {#1} }
             \@@_bad_def:wn
           }
@@ -1115,11 +2048,11 @@
             { \str_if_eq_p:nn {#1} { u } }
           }
           {
-            \msg_error:nnxx { cmd } { xparse-arg-type }
+            \msg_error:nnee { cmd } { xparse-arg-type }
               { \@@_environment_or_command: } { \tl_to_str:n {#1} }
           }
           {
-            \msg_error:nnxx { cmd } { unknown-argument-type }
+            \msg_error:nnee { cmd } { unknown-argument-type }
               { \@@_environment_or_command: } { \tl_to_str:n {#1} }
           }
         \@@_bad_def:wn
@@ -1190,11 +2123,11 @@
     \quark_if_recursion_tail_stop_do:nn {#2} { \@@_bad_arg_spec:wn }
     \bool_if:NT \l_@@_expandable_bool
       {
-        \msg_error:nnxx { cmd } { processor-in-expandable }
+        \msg_error:nnee { cmd } { processor-in-expandable }
           { \iow_char:N \\ \l_@@_function_tl } { \tl_to_str:n {#1} }
         \@@_bad_def:wn
       }
-    \tl_put_right:Nx \l_@@_arg_spec_tl { > { \tl_trim_spaces:n {#1} } }
+    \tl_put_right:Ne \l_@@_arg_spec_tl { > { \tl_trim_spaces:n {#1} } }
     \int_decr:N \l_@@_current_arg_int
     \bool_set_false:N \l_@@_grab_expandably_bool
     \@@_normalize_arg_spec_loop:n {#2}
@@ -1221,13 +2154,13 @@
       {
         \bool_if:NT \l_@@_expandable_bool
           {
-            \msg_error:nnxx { cmd } { keyval-in-expandable }
+            \msg_error:nnee { cmd } { keyval-in-expandable }
               { \iow_char:N \\ \l_@@_function_tl } { \tl_to_str:n {#1} }
             \@@_bad_def:wn
           }
         \bool_set_true:N \l_@@_suppress_strip_bool
         \bool_set_false:N \l_@@_grab_expandably_bool
-        \tl_put_right:Nx \l_@@_arg_spec_tl
+        \tl_put_right:Ne \l_@@_arg_spec_tl
           { = { \tl_trim_spaces:n {#1} } }
       }
   }
@@ -1236,7 +2169,7 @@
     \quark_if_recursion_tail_stop_do:nn {#2} { \@@_bad_arg_spec:wn }
     \bool_if:NT #3
       {
-        \msg_error:nnxx { cmd } { two-markers }
+        \msg_error:nnee { cmd } { two-markers }
           { \@@_environment_or_command: } { #1 }
         \@@_bad_def:wn
       }
@@ -1304,7 +2237,7 @@
   {
     \quark_if_recursion_tail_stop_do:Nn #1 { \@@_bad_arg_spec:wn }
     \@@_single_token_check:n {#1} \@@_allowed_token_check:N #1
-    \tl_put_right:Nx \l_@@_arg_spec_tl
+    \tl_put_right:Ne \l_@@_arg_spec_tl
       {
         \bool_if:NT \l_@@_obey_spaces_bool { ! }
         t \exp_not:n {#1}
@@ -1377,14 +2310,14 @@
   {
     \bool_if:NF \l_@@_environment_bool
       {
-        \msg_error:nnxx { cmd } { invalid-command-arg }
+        \msg_error:nnee { cmd } { invalid-command-arg }
           { \@@_environment_or_command: } {#2}
         \@@_bad_def:wn
       }
     \tl_clear:N \l_@@_last_delimiters_tl
     \@@_add_arg_spec:n {#2}
     \quark_if_recursion_tail_stop:n {#1}
-    \msg_error:nnxxx { cmd } { arg-after-body }
+    \msg_error:nneee { cmd } { arg-after-body }
       {#2}
       { \@@_environment_or_command: }
       { \tl_to_str:n {#1} }
@@ -1403,7 +2336,7 @@
   {
     \tl_trim_spaces_apply:nN {#1} \tl_if_single_token:nF
       {
-        \msg_error:nnxx { cmd } { not-single-token }
+        \msg_error:nnee { cmd } { not-single-token }
           { \@@_environment_or_command: } { \tl_to_str:n {#1} }
         \@@_bad_def:wn
       }
@@ -1435,7 +2368,7 @@
             { \use_none:n }
         }
       {
-        \msg_error:nnxxx { cmd } { forbidden-group-token }
+        \msg_error:nneee { cmd } { forbidden-group-token }
           { \@@_environment_or_command: } { \tl_to_str:n {#1} }
           {
             \token_if_eq_meaning:NNTF #1 \c_group_begin_token
@@ -1455,7 +2388,7 @@
   {
     \bool_if:NT \l_@@_expandable_bool
       {
-        \msg_error:nnxx { cmd } { invalid-expandable-arg }
+        \msg_error:nnee { cmd } { invalid-expandable-arg }
           { \iow_char:N \\ \l_@@_function_tl } { \tl_to_str:n {#1} }
         \@@_bad_def:wn
       }
@@ -1467,7 +2400,7 @@
       {
         \tl_if_empty:NF \l_@@_last_delimiters_tl
           {
-            \msg_error:nnxx { cmd } { invalid-after-optional-expandably }
+            \msg_error:nnee { cmd } { invalid-after-optional-expandably }
               { \iow_char:N \\ \l_@@_function_tl } { \tl_to_str:n {#1} }
             \@@_bad_def:wn
           }
@@ -1488,7 +2421,7 @@
       {
         \tl_if_eq:nnT {##1} {#1}
           {
-            \msg_warning:nnxx { cmd } { optional-mandatory }
+            \msg_warning:nnee { cmd } { optional-mandatory }
               {#2} {#3}
           }
       }
@@ -1502,7 +2435,7 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_bad_arg_spec:wn #1 \@@_break_point:n #2
   {
-    \msg_error:nnxx { cmd } { bad-arg-spec }
+    \msg_error:nnee { cmd } { bad-arg-spec }
       { \@@_environment_or_command: } { \tl_to_str:n {#2} }
   }
 \cs_new_protected:Npn \@@_bad_def:wn #1 \@@_break_point:n #2 { }
@@ -1534,7 +2467,7 @@
       {
         \bool_if:NT \l_@@_expandable_bool
           {
-            \msg_error:nnx { cmd } { long-short-mix }
+            \msg_error:nne { cmd } { long-short-mix }
               { \iow_char:N \\ \l_@@_function_tl }
             \@@_bad_def:wn
           }
@@ -1543,7 +2476,7 @@
     \bool_if:NTF \l_@@_long_bool
       { \bool_set_true:N \l_@@_some_long_bool }
       { \bool_set_true:N \l_@@_some_short_bool }
-    \tl_put_right:Nx \l_@@_arg_spec_tl
+    \tl_put_right:Ne \l_@@_arg_spec_tl
       {
         \bool_lazy_and:nnT
           { \l_@@_long_bool }
@@ -1559,7 +2492,7 @@
   {
     \bool_if:NT \l_@@_some_obey_spaces_bool
       {
-        \msg_error:nnxx { cmd } { invalid-bang }
+        \msg_error:nnee { cmd } { invalid-bang }
           { \@@_environment_or_command: }
           {
             \bool_if:NTF \l_@@_obey_spaces_bool
@@ -1767,7 +2700,7 @@
   {
     \@@_flush_m_args:
     \@@_add_default_E:nn {#1} {#2}
-    \use:x
+    \use:e
       {
         \@@_replicate_processor:nn { \tl_count:n {#1} }
           { \exp_not:o \l_@@_process_one_tl }
@@ -1812,7 +2745,7 @@
 \cs_new_protected:Npn \@@_replicate_processor:nn #1 #2
   {
     \int_compare:nNnF {#1} > { 1 } { \use_none:nnn }
-    \tl_set:Nx \l_@@_process_one_tl
+    \tl_set:Ne \l_@@_process_one_tl
       {
         \exp_not:n { \exp_not:n {#2} \if_false: { \fi: } }
         \prg_replicate:nn { #1 - 2 }
@@ -1897,9 +2830,9 @@
   {
     \int_compare:nNnT \l_@@_m_args_int > 0
       {
-        \tl_put_right:Nx \l_@@_signature_tl
+        \tl_put_right:Ne \l_@@_signature_tl
           { \exp_not:c { @@_grab_m_ \int_use:N \l_@@_m_args_int :w } }
-        \tl_put_right:Nx \l_@@_process_all_tl
+        \tl_put_right:Ne \l_@@_process_all_tl
           { \prg_replicate:nn { \l_@@_m_args_int } { { } } }
       }
     \int_zero:N \l_@@_m_args_int
@@ -1922,7 +2855,7 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_add_grabber:N #1
   {
-    \tl_put_right:Nx \l_@@_signature_tl
+    \tl_put_right:Ne \l_@@_signature_tl
       {
         \exp_not:c
           {
@@ -1950,7 +2883,7 @@
     \bool_set_false:N \l_@@_obey_spaces_bool
     \bool_set_false:N \l_@@_suppress_strip_bool
     \bool_set_false:N \l_@@_verb_safe_bool
-    \tl_put_right:Nx \l_@@_process_all_tl
+    \tl_put_right:Ne \l_@@_process_all_tl
       {
         {
           \if_charcode:w E #1 \use_i:nn \fi:
@@ -2046,8 +2979,8 @@
 \cs_new_protected:Npn \@@_add_expandable_type_D_aux:NNN #1#2#3
   {
     \bool_if:NTF \l_@@_long_bool
-      { \cs_set:cpx }
-      { \cs_set_nopar:cpx }
+      { \cs_set:cpe }
+      { \cs_set_nopar:cpe }
       { \l_@@_expandable_aux_name_tl } ##1 ##2 #2 ##3 \q_@@ ##4 #3
       { ##1 {##2} {##3} {##4} }
     \@@_add_expandable_grabber:nn {#1}
@@ -2059,8 +2992,8 @@
 \cs_new_protected:Npn \@@_add_expandable_type_D_aux:NN #1#2
   {
     \bool_if:NTF \l_@@_long_bool
-      { \cs_set:cpx }
-      { \cs_set_nopar:cpx }
+      { \cs_set:cpe }
+      { \cs_set_nopar:cpe }
       { \l_@@_expandable_aux_name_tl } ##1 #2 ##2 #2
       { ##1 {##2} }
     \@@_add_expandable_grabber:nn { #1_alt }
@@ -2104,7 +3037,7 @@
 \cs_new_protected:Npn \@@_add_expandable_type_E_aux:n #1
   {
     \@@_get_grabber:NN #1 \l_@@_tmpa_tl
-    \tl_put_right:Nx \l_@@_tmpb_tl
+    \tl_put_right:Ne \l_@@_tmpb_tl
       { \exp_not:o \l_@@_tmpa_tl \exp_not:N #1 }
   }
 %    \end{macrocode}
@@ -2158,7 +3091,7 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_add_expandable_grabber:nn #1#2
   {
-    \tl_put_right:Nx \l_@@_signature_tl
+    \tl_put_right:Ne \l_@@_signature_tl
       { \exp_not:c { @@_expandable_grab_ #1 :w } #2 }
   }
 %    \end{macrocode}
@@ -2237,7 +3170,7 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_copy:NN #1 #2
   {
-    \use:x
+    \use:e
       {
         \int_set:Nn \tex_escapechar:D { 92 }
         \exp_not:N \@@_cmd_type_cases:NnnnnnF \exp_not:N #2
@@ -2307,7 +3240,7 @@
   {
     \cs_set_eq:cc { #1 ~ code } { #2 ~ code }
     \@@_set_eq_if_exist:cc { #1 ~ defaults } { #2 ~ defaults }
-    \cs_set_protected_nopar:Npx #3
+    \cs_set_protected_nopar:Npe #3
       { \exp_after:wN \@@_copy_command:NnNNnnnn #4 {#1} }
   }
 \cs_new:Npn \@@_copy_command:NnNNnnnn #1 #2 #3 #4 #5 #6 #7 #8
@@ -2362,7 +3295,7 @@
     \@@_set_eq_if_exist:cc { #1 ~ defaults } { #2 ~ defaults }
     \exp_after:wN \@@_copy_expandable_signature:NnNNNNnnn #4 {#1} {#2}
     \token_if_protected_macro:NTF #4
-      { \cs_set_protected_nopar:Npx }{ \cs_set_nopar:Npx }
+      { \cs_set_protected_nopar:Npe }{ \cs_set_nopar:Npe }
       #3
       { \exp_after:wN \@@_copy_expandable:NnNNNNnnn #4 {#1} {#2} }
   }
@@ -2455,14 +3388,14 @@
     \int_incr:N \l_@@_current_arg_int
     \exp_after:wN \@@_copy_parse_grabber:w \token_to_str:N #3 {#1} {#2}
   }
-\use:x
+\use:e
   {
-    \cs_new_protected:Npn \exp_not:N \@@_copy_parse_grabber:w ##1
-        \tl_to_str:n { expandable_grab_ } ##2 \tl_to_str:n { :w }
+    \cs_new_protected:Npn \exp_not:N \@@_copy_parse_grabber:w #1
+        \tl_to_str:n { expandable_grab_ } #2 \tl_to_str:n { :w }
       {
-        \tl_put_right:Nx \exp_not:N \l_@@_tmpa_tl
-          { \exp_not:N \exp_not:c { @@_expandable_grab_##2:w } }
-        \exp_not:N \cs_if_exist_use:cF { @@_copy_grabber_##2:w }
+        \tl_put_right:Ne \exp_not:N \l_@@_tmpa_tl
+          { \exp_not:N \exp_not:c { @@_expandable_grab_#2:w } }
+        \exp_not:N \cs_if_exist_use:cF { @@_copy_grabber_#2:w }
           { \@@_cant_copy:nwn { unknown-type } }
       }
   }
@@ -2482,7 +3415,7 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_copy_grabber_D:w #1 #2 #3 #4 #5
   {
-    \tl_put_right:Nx \l_@@_tmpa_tl
+    \tl_put_right:Ne \l_@@_tmpa_tl
       {
         \exp_not:c { #1 ~ (arg ~ \int_use:N \l_@@_current_arg_int ) }
         \exp_not:n { #4 #5 }
@@ -2553,7 +3486,7 @@
     \cs_set_eq:cc { environment~ #1 ~ code } { environment~ #2 ~ code }
     \@@_set_eq_if_exist:cc
       { environment~ #1 ~ defaults } { environment~ #2 ~ defaults }
-    \cs_set_protected_nopar:cpx { environment~ #1 }
+    \cs_set_protected_nopar:cpe { environment~ #1 }
       { \exp_after:wN \@@_copy_environment:Nnnnnnn #4 {#1} }
     \cs_set_eq:cc {#1} { environment~ #1 }
   }
@@ -2581,7 +3514,7 @@
   }
 \cs_new_protected:Npn \@@_copy_environment_end_aux:nnNN #1 #2 #3 #4
   {
-    \cs_set_nopar:cpx { environment~ #1 ~end }
+    \cs_set_nopar:cpe { environment~ #1 ~end }
       { \exp_not:c { environment~ #1 ~end~aux } }
     \cs_set_eq:cc
       { environment~ #1 ~end~aux~ } { environment~ #2 ~end~aux~ }
@@ -2596,7 +3529,7 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_check_end:Nn #1 #2
   {
-    \tl_set:Nx #1 { \@@_check_end:n {#2} }
+    \tl_set:Ne #1 { \@@_check_end:n {#2} }
     \token_if_eq_meaning:NNT #1 \q_nil
       { \@@_cant_copy:nwn { invalid-end } }
   }
@@ -2645,7 +3578,7 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_show:N #1
   {
-    \use:x
+    \use:e
       {
         \int_set:Nn \tex_escapechar:D { 92 }
         \exp_not:N \@@_cmd_type_cases:NnnnnnF \exp_not:N #1
@@ -2671,7 +3604,7 @@
 %     \@@_show_optimized:N,
 %     \@@_show_command_aux:NnNNn,
 %     \@@_show_environment:N,
-%     \@@_show:x,
+%     \@@_show:e,
 %   }
 %   These commands just expand the command once to reveal its innards,
 %   then pass the type of command, the control sequence, the signature,
@@ -2681,7 +3614,7 @@
   { \exp_after:wN \@@_show_command:NnNNwN #1 \q_@@ #1 }
 \cs_new_protected:Npn \@@_show_command:NnNNwN #1 #2 #3 #4 #5 \q_@@ #6
   {
-    \@@_show_command_aux:NnNNn \tl_show:x
+    \@@_show_command_aux:NnNNn \tl_show:e
       { document~command } #6 #4 {#2}
   }
 \cs_new_protected:Npn \@@_show_expandable:N #1
@@ -2706,7 +3639,7 @@
 %<latexrelease>  {Distinguish~non-expandable~document~commands}
 \cs_new_protected:Npn \@@_show_expandable:NnNNNNnN #1 #2 #3 #4 #5 #6 #7 #8
   {
-    \exp_args:NNe \@@_show_command_aux:NnNNn \tl_show:x
+    \exp_args:NNe \@@_show_command_aux:NnNNn \tl_show:e
       { \token_if_protected_macro:NF #8 { expandable~ } document~command }
       #8 #5 {#2}
   }
@@ -2788,7 +3721,6 @@
         \cs_replacement_spec:N #1
       }
   }
-\cs_generate_variant:Nn \tl_count:n { e }
 %    \end{macrocode}
 %
 %   We can reuse most of the above to show an environment, except that
@@ -2806,7 +3738,7 @@
 \cs_new_protected:Npn \@@_show_environment:N #1
   {
     \exp_after:wN \@@_show_environment:Nnnw #1 \q_@@
-    \tl_show:x
+    \tl_show:e
       {
         \token_to_str:N \end { \cs_to_str:N #1 } : \iow_newline:
         -> \exp_args:Nc \cs_replacement_spec:N
@@ -2815,9 +3747,9 @@
   }
 \cs_new_protected:Npn \@@_show_environment:Nnnw #1 #2 #3 #4 \q_@@
   {
-    \use:x
+    \use:e
       {
-        \@@_show_command_aux:NnNNn \@@_show:x { document~environment }
+        \@@_show_command_aux:NnNNn \@@_show:e { document~environment }
           { \exp_not:N \begin {#3} }
           \exp_not:c { environment~ #3 ~ code }
           {#2}
@@ -2825,16 +3757,16 @@
   }
 \cs_if_exist:NTF \iow_show:e
   {
-    \cs_new_protected:Npn \@@_show:x #1
+    \cs_new_protected:Npn \@@_show:e #1
       { \iow_show:e { > ~ #1 . \iow_newline: } }
   }
   {
-    \cs_new_protected:Npn \@@_show:x #1
-      { \iow_term:x { > ~ #1 . \iow_newline: } }
+    \cs_new_protected:Npn \@@_show:e #1
+      { \iow_term:e { > ~ #1 . \iow_newline: } }
   }
 \cs_new_protected:Npn \@@_show_environment_end:N #1
   {
-    \exp_args:NNx \@@_check_end:Nn \l_@@_tmpa_tl { \cs_to_str:N #1 }
+    \exp_args:NNe \@@_check_end:Nn \l_@@_tmpa_tl { \cs_to_str:N #1 }
     \exp_args:Nc \@@_show_environment:N { \l_@@_tmpa_tl }
   }
 %    \end{macrocode}
@@ -2877,7 +3809,7 @@
 %   (this adds indentation and the argument number to
 %   \cs{l_@@_tmpb_tl}), then checks if a special token list
 %   \cs[no-index]{c_@@_show_type_\meta{type}_tl} exists.  If it doesn't,
-%   the current argument is a ``simple'' type which needs no extra
+%   the current argument is a \enquote{simple} type which needs no extra
 %   processing.  Otherwise, call a specific function depending on the
 %   value of said token list.
 %    \begin{macrocode}
@@ -3005,14 +3937,14 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_split_start_item:
   {
-    \tl_set:Nx \l_@@_tmpb_tl
+    \tl_set:Ne \l_@@_tmpb_tl
       { ~ \c_space_tl \c_hash_str \int_use:N \l_@@_current_arg_int : }
   }
 \cs_new_protected:Npn \@@_split_add_item:n #1
-  { \tl_put_right:Nx \l_@@_tmpb_tl { \tl_to_str:n {#1} } }
+  { \tl_put_right:Ne \l_@@_tmpb_tl { \tl_to_str:n {#1} } }
 \cs_new_protected:Npn \@@_split_end_item:n #1
   {
-    \tl_put_right:Nx \l_@@_tmpa_tl
+    \tl_put_right:Ne \l_@@_tmpa_tl
       { \l_@@_tmpb_tl \tl_to_str:n {#1} \iow_newline: }
     \tl_clear:N \l_@@_tmpb_tl
     \int_incr:N \l_@@_current_arg_int
@@ -3091,7 +4023,7 @@
   }
 \cs_new_protected:Npn \@@_grab_b_end:Nw #1#2 \@@_run_code:
   {
-    \tl_set:Nx \l_@@_args_tl
+    \tl_set:Ne \l_@@_args_tl
       {
         \exp_not:V \l_@@_saved_args_tl
         { \exp_after:wN #1 \l_@@_args_tl }
@@ -3341,7 +4273,7 @@
           } %
       \exp_args:NNNo \group_end: %
       \tl_set:Nn \l_@@_v_arg_tl { \l_@@_v_arg_tl } %
-      \@@_add_arg:x %
+      \@@_add_arg:e %
         { %
           \bool_if:NTF \l_@@_obey_spaces_bool %
             { \exp_not:V } %
@@ -3555,7 +4487,7 @@
               \q_nil ##2 \q_@@ \ERROR
           }
           {
-            \tl_put_right:Nx \l_@@_nesting_a_tl
+            \tl_put_right:Ne \l_@@_nesting_a_tl
               { \@@_grab_D_nested:w \q_nil ##2 \q_stop }
             \tl_if_in:NnTF \l_@@_nesting_b_tl {#1}
               {
@@ -3679,7 +4611,7 @@
           {
             \prop_get:NnNF \l_@@_tmp_prop {####1} \l_@@_tmpb_tl
               { \tl_set:Nn \l_@@_tmpb_tl { \NoValue } }
-            \tl_put_right:Nx \l_@@_args_tl
+            \tl_put_right:Ne \l_@@_args_tl
               { { \exp_not:V \l_@@_tmpb_tl } }
           }
         \l_@@_signature_tl \@@_run_code:
@@ -3794,7 +4726,7 @@
     \exp_after:wN \cs_set_eq:NN \l_@@_fn_tl \@@_grab_m_aux:Nnnnnnnnn
     \l_@@_fn_tl \prg_do_nothing:
   }
-\cs_new_protected:cpx { @@_grab_m_9:w }
+\cs_new_protected:cpe { @@_grab_m_9:w }
   {
     \exp_not:c { @@_grab_m_5:w }
     \exp_not:c { @@_grab_m_4:w }
@@ -3829,7 +4761,7 @@
     \@@_peek_nonspace_remove:NTF #1
       { \@@_grab_D_call:Nw #1 }
       {
-        \msg_error:nnxx { cmd } { missing-required }
+        \msg_error:nnee { cmd } { missing-required }
           { \@@_environment_or_command: }
           { \token_to_str:N #1 }
         \@@_add_arg:n { \NoValue }
@@ -3997,7 +4929,7 @@
 \cs_new_protected:Npn \@@_grab_v_aux_loop_end:
   {
     \@@_grab_v_group_end:
-    \@@_add_arg:x { \tl_tail:N \l_@@_v_arg_tl }
+    \@@_add_arg:e { \tl_tail:N \l_@@_v_arg_tl }
   }
 %    \end{macrocode}
 % \end{macro}
@@ -4024,7 +4956,7 @@
 %   convert that token to a string, and remove the result as a
 %   normal undelimited argument.
 %    \begin{macrocode}
-\cs_new_protected:Npx \@@_grab_v_bgroup:
+\cs_new_protected:Npe \@@_grab_v_bgroup:
   {
     \exp_not:N \@@_grab_v_aux_catcodes:
     \exp_not:n { \int_set:Nn \l_@@_v_nesting_int { 1 } }
@@ -4104,14 +5036,14 @@
     \exp_after:wN \exp_after:wN \exp_after:wN
       \peek_meaning_remove:NTF \char_generate:nn { \tex_endlinechar:D } { 6 }
       {
-        \msg_error:nnxxx { cmd } { verbatim-nl }
+        \msg_error:nneee { cmd } { verbatim-nl }
           { \@@_environment_or_command: }
           { \tl_to_str:N \l_@@_v_arg_tl }
           { \tl_to_str:n {#1} }
         \@@_add_arg:n { \NoValue }
       }
       {
-        \msg_error:nnxxx { cmd } { verbatim-tokenized }
+        \msg_error:nneee { cmd } { verbatim-tokenized }
           { \@@_environment_or_command: }
           { \tl_to_str:N \l_@@_v_arg_tl }
           { \tl_to_str:n {#1} }
@@ -4132,7 +5064,7 @@
 %<latexrelease>  {Use~more~std~catcodes}
 \cs_new_protected:Npn \@@_grab_v_aux_put:N #1
   {
-    \tl_put_right:Nx \l_@@_v_arg_tl
+    \tl_put_right:Ne \l_@@_v_arg_tl
       {
         \int_compare:nNnTF {`#1} = \tex_endlinechar:D
           { \exp_not:N \obeyedline }
@@ -4183,7 +5115,7 @@
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{\@@_add_arg:n, \@@_add_arg:V, \@@_add_arg:o, \@@_add_arg:x}
+% \begin{macro}{\@@_add_arg:n, \@@_add_arg:V, \@@_add_arg:o, \@@_add_arg:e}
 %   When an argument is found it is stored, then further arguments are
 %   grabbed by calling \cs{l_@@_signature_tl}.
 %    \begin{macrocode}
@@ -4192,7 +5124,7 @@
     \tl_put_right:Nn \l_@@_args_tl { {#1} }
     \l_@@_signature_tl \@@_run_code:
   }
-\cs_generate_variant:Nn \@@_add_arg:n { V , o , x }
+\cs_generate_variant:Nn \@@_add_arg:n { V , o , e }
 %    \end{macrocode}
 % \end{macro}
 %
@@ -4643,7 +5575,7 @@
       {
         \int_compare:nNnTF {#1} > { #2 + 1 }
           {
-            \tl_set:Nx \ProcessedArgument
+            \tl_set:Ne \ProcessedArgument
               {
                 \exp_last_unbraced:NnNo
                   \@@_split_argument_aux:n
@@ -4652,12 +5584,12 @@
                   \ProcessedArgument
                   \q_stop
               }
-            \msg_error:nnxxx { cmd } { arg-split }
+            \msg_error:nneee { cmd } { arg-split }
               { \tl_to_str:n {#3} } { \int_eval:n { #2 + 1 } }
               { \tl_to_str:n {#4} }
           }
           {
-            \tl_put_right:Nx \ProcessedArgument
+            \tl_put_right:Ne \ProcessedArgument
               {
                 \prg_replicate:nn { #2 + 1 - (#1) }
                   { { \NoValue } }
@@ -4687,7 +5619,7 @@
 %   This one is almost trivial.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_trim_spaces:n #1
-  { \tl_set:Nx \ProcessedArgument { \tl_trim_spaces:n {#1} } }
+  { \tl_set:Ne \ProcessedArgument { \tl_trim_spaces:n {#1} } }
 %    \end{macrocode}
 % \end{macro}
 %
@@ -4736,7 +5668,7 @@
     \bool_lazy_and:nnTF
       { \tl_if_head_is_group_p:n {#1} }
       { \tl_if_blank_p:o { \use_none:n #1 } }
-      { \tl_set:Nx \ProcessedArgument { #2 = { \exp_not:n #1 } } }
+      { \tl_set:Ne \ProcessedArgument { #2 = { \exp_not:n #1 } } }
       {
         \tl_if_blank:nTF {#1}
           { \tl_clear:N \ProcessedArgument }
@@ -4907,10 +5839,10 @@
       \tl_if_single_token:nTF {#1}
         {
           \int_set:Nn \tex_escapechar:D { 92 }
-          \exp_args:Nx \tl_if_empty:nTF
+          \exp_args:Ne \tl_if_empty:nTF
             { \exp_args:No \str_tail:n { \token_to_str:N #1 } }
             {
-              \exp_args:Nx \char_set_lccode:nn
+              \exp_args:Ne \char_set_lccode:nn
                 { ` \str_head:n {#1} } { `? }
               \tex_lowercase:D { \tl_if_eq:nnTF {#1} } { ? }
                 { \group_end: \use_iii:nnn }
@@ -4920,11 +5852,11 @@
         }
         { \group_end: \use_ii:nnn }
       {
-        \msg_error:nnxx { cmd } { not-definable }
+        \msg_error:nnee { cmd } { not-definable }
           { \tl_to_str:n {#1} } { \token_to_str:N #2 }
       }
       {
-        \msg_error:nnxx { cmd } { not-one-token }
+        \msg_error:nnee { cmd } { not-one-token }
           { \tl_to_str:n {#1} } { \token_to_str:N #2 }
       }
     }
@@ -4946,7 +5878,7 @@
   {
     \group_begin:
       \int_set:Nn \tex_escapechar:D { 92 }
-      \exp_args:Nx \tl_if_empty:nTF
+      \exp_args:Ne \tl_if_empty:nTF
           { \exp_args:No \str_tail:n { \token_to_str:N #1 } }
         { \group_end: \use_ii:nn }
         { \group_end: \use_i:nn }
@@ -5425,7 +6357,7 @@
 %
 % Intended more for information.
 %    \begin{macrocode}
-\msg_new:nnn { cmd } { define-command }    % should be just ``define'' but dep in xparse
+\msg_new:nnn { cmd } { define-command }    % should be just `define' but dep in xparse
   {
     Defining~command~#1~
     with~sig.~'#2'~\msg_line_context:.
@@ -5495,7 +6427,7 @@
       {
         \cs_if_exist:NTF #1
           {
-            \msg_error:nnxx { cmd } { already-defined }
+            \msg_error:nnee { cmd } { already-defined }
               { \use:nnn \token_to_str:N #1 { } }
               { \token_to_str:N \NewDocumentCommand }
           }
@@ -5509,7 +6441,7 @@
         \cs_if_exist:NTF #1
           { \@@_declare_cmd:Nnn #1 {#2} {#3} }
           {
-            \msg_error:nnxx { cmd } { undefined }
+            \msg_error:nnee { cmd } { undefined }
               { \use:nnn \token_to_str:N #1 { } }
               { \token_to_str:N \RenewDocumentCommand }
           }
@@ -5568,13 +6500,13 @@
   {
     \cs_if_exist:cTF {#1}
       {
-        \msg_error:nnx { cmd } { env-already-defined } {#1}
+        \msg_error:nne { cmd } { env-already-defined } {#1}
         \use_none:nnn
       }
       {
         \cs_if_exist:cTF { end #1 }
           {
-            \msg_error:nnx { cmd } { env-end-already-defined } {#1}
+            \msg_error:nne { cmd } { env-end-already-defined } {#1}
             \use_none:nnn
           }
           { \@@_declare_env:nnnn {#1} }
@@ -5585,7 +6517,7 @@
     \cs_if_exist:cTF {#1}
       { \@@_declare_env:nnnn {#1} }
       {
-        \msg_error:nnx { cmd } { env-undefined } {#1}
+        \msg_error:nne { cmd } { env-undefined } {#1}
         \use_none:nnn
       }
   }
@@ -5652,7 +6584,7 @@
       {
         \cs_if_exist:NTF #1
           {
-            \msg_error:nnxx { cmd } { already-defined }
+            \msg_error:nnee { cmd } { already-defined }
               { \use:nnn \token_to_str:N #1 { } }
               { \token_to_str:N \NewExpandableDocumentCommand }
           }
@@ -5666,7 +6598,7 @@
         \cs_if_exist:NTF #1
           { \@@_declare_expandable_cmd:Nnn #1 {#2} {#3} }
           {
-            \msg_error:nnxx { cmd } { undefined }
+            \msg_error:nnee { cmd } { undefined }
               { \use:nnn \token_to_str:N #1 { } }
               { \token_to_str:N \RenewExpandableDocumentCommand }
           }
@@ -5787,7 +6719,6 @@
 \cs_new:Npn \IfValueTF #1#2#3 { \tl_if_novalue:nTF {#1} {#3} {#2} }
 %    \end{macrocode}
 % \end{macro}
-%
 %
 % \begin{macro}{\IfBlankT, \IfBlankF, \IfBlankTF}
 %   Another simple re-naming.
