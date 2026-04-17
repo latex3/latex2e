@@ -1,12 +1,12 @@
 -- 
---  This is file `l3backend-testphase.lua',
+--  This is file `l3backend-pdf.lua',
 --  generated with the docstrip utility.
 -- 
 --  The original source files were:
 -- 
---  l3backend-testphase.dtx  (with options: `lua')
+--  l3backend-pdfmanagement.dtx  (with options: `lua')
 --  
---  Copyright (C) 2019-2025 The LaTeX Project
+--  Copyright (C) 2019-2026 The LaTeX Project
 --  
 --  It may be distributed and/or modified under the conditions of
 --  the LaTeX Project Public License (LPPL), either version 1.3c of
@@ -18,8 +18,7 @@
 --  This file is part of the "LaTeX PDF management bundle" (The Work in LPPL)
 --  and all files in that bundle must be distributed together.
 --  
---  File: l3backend-testphase.dtx
-
+--  File: l3backend-pdfmanagement.dtx
 
 
 
@@ -141,4 +140,4 @@ function ltx.pdf.object_ref (objname)
  end
 end
 -- 
---  End of File `l3backend-testphase.lua'.
+--  End of File `l3backend-pdf.lua'.

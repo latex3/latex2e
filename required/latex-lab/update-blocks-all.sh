@@ -15,7 +15,6 @@ l3build save -cconfig-block -epdftex \
 	tagging-0925
 
 l3build save -cconfig-block -epdftex,luatex \
-	blocks-000 \
 	blocks-alltt \
 	blocks-description-01b \
 	blocks-description-02b \

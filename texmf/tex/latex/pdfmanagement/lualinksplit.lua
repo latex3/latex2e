@@ -1,5 +1,5 @@
 --  This is file lualinksplit.lua
---  Version: 0.96y, 2026-01-23
+--  Version: 0.96z, 2026-04-15
 --
 --  Copyright (C) 2025 Marcel Krüger, The LaTeX Project
 --  
@@ -10,7 +10,7 @@
 --  
 --     https://www.latex-project.org/lppl.txt
 --  
---  This file is part of the "LaTeX PDF management testphase bundle" (The Work in LPPL)
+--  This file is part of the "LaTeX PDF management bundle" (The Work in LPPL)
 --  and all files in that bundle must be distributed together.
 
 --[[
