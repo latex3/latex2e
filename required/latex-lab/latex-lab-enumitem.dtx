@@ -595,8 +595,13 @@
 %    \end{macrocode}
 % TODO: message
 %    \begin{macrocode}
-    {\typeout{unknown~list~type~#2}}  
+    {\typeout{unknown~list~type~#2} 
  }
+%    \end{macrocode}
+%    TODO: For supporting \cs{setlist} we need to set up \cs{enitdp@#1} if we 
+%    use this implementation.
+ }
+%
 %    \end{macrocode}
 % \end{macro}
 % 
@@ -722,6 +727,11 @@
          { \@@_setup_enum_list_instance:nnn {#1}{#2}{##1} }
     }
 %
+%    \end{macrocode}
+%    For supporting \cs{setlist} we need to set up \cs{enitdp@#1}
+%    \begin{macrocode}
+  \cs_set_eq:cc { enitdp@#1 } { g_@@_ #1 _depth_int }
+%
 }
 %    \end{macrocode}
 %    
@@ -763,20 +773,238 @@
 %  
 % 
 %\subsubsection{\cs{renewlist}}
-% 
+%
+%
+%
 %\subsubsection{\cs{setlist}}
-% 
+%
+%    For emulating \cs{setlist} I lifted most of the code directly
+%    from \pkg{enumitem} for now and made only minimal
+%    adjustments. Size-dependent settings via \verb=<...>= is not
+%    supported.
+%
+%    TODO: rewrite in \pkg{expl3}.
+%    TODO: decide if we want to emulate size-dependent settings
+%
 %    \begin{macrocode}
-\NewDocumentCommand\setlist{O{}m}{} %dummy for now
+\ExplSyntaxOff
+\makeatletter
 %    \end{macrocode}
+%
+%    \begin{macrocode}
+\newcommand\setlist{%
+  \@ifstar{\enit@setlist\@ne}{\enit@setlist\z@}}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\def\enit@setlist#1{%
+  \@ifnextchar<%
+    {\enit@setlist@q#1}%
+    {\let\enit@forsize\@empty\enit@setlist@n#1}}
+%    \end{macrocode}
+%
+%    Size-dependent settings are not supported at all.
+%    \begin{macrocode}
+\def\enit@setlist@q#1<#2>{%
+  \enit@error
+      {Size feature not implemented}%
+      {Size dependent setting is not available in the emulation}%
+  %    {Activate this feature with options 'sizes'}%
+  %    {Size dependent setting with \string<\string> must be\MessageBreak
+  %     explicitly activated with the package option 'sizes'}}
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\def\enit@setlist@n#1{%
+  \@ifnextchar[{\enit@setlist@x#1}{\enit@setlist@i#1\@empty}}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+% Let's accept \setlist[]*{}, too, because an error in <=3.5.1
+
+\def\enit@setlist@x#1[#2]{%
+  \@ifstar{\enit@setlist@i\@ne{#2}}{\enit@setlist@i#1{#2}}}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\def\enit@setlist@i#1#2#3{%
+  \let\enit@eltnames\relax
+  \let\enit@b\@empty
+  \let\enit@eltlevels\relax
+  \let\enit@c\@empty
+  \protected@edef\enit@a{#2}%
+  \@for\enit@a:=\enit@a\do{% the 2nd enit@a is first expanded
+    \enit@ifunset{enitdp@\enit@meaning\enit@a}%
+      {\edef\enit@c{\enit@c\enit@eltlevels{\enit@a}}}%
+      {\edef\enit@b{\enit@b\enit@eltnames{\enit@a}}}}%
+  \ifx\enit@b\@empty
+     \def\enit@b{\enit@eltnames{list}}%
+  \fi
+  \ifx\enit@c\@empty
+     \def\enit@c{\enit@eltlevels{0}}%
+  \fi
+  \def\enit@eltnames##1{%
+    \def\enit@a{##1}%
+    \enit@c}%
+  \def\enit@eltlevels##1{%
+    \enit@saveset\enit@a{##1}#1{#3}}%
+  \enit@b}%
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\let\c@enit@cnt\@tempcnta
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\def\enit@meaning{\expandafter\strip@prefix\meaning}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\long\def\enit@afterelse#1\else#2\fi{\fi#1}
+\long\def\enit@afterfi#1\fi{\fi#1}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\def\enit@error{\PackageError{enumitem}}  
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\def\enit@ifunset#1{%
+   \ifcsname#1\endcsname
+     \expandafter\ifx\csname#1\endcsname\relax
+       \enit@afterelse\expandafter\@firstoftwo
+     \else
+       \enit@afterfi\expandafter\@secondoftwo
+     \fi
+   \else
+     \expandafter\@firstoftwo
+   \fi
+}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\def\enit@saveset#1#2#3#4{%
+  \setcounter{enit@cnt}{#2}%
+  \ifx\enit@forsize\@empty
+    \ifcase#3%
+      \expandafter
+      \def\csname enit@@#1\romannumeral\c@enit@cnt\endcsname{#4}%
+    \or
+      \expandafter\let\expandafter\enit@b
+        \csname enit@@#1\romannumeral\c@enit@cnt\endcsname
+      \ifx\enit@b\relax
+        \let\enit@b\@empty
+      \fi
+      \expandafter\def
+        \csname enit@@#1\romannumeral\c@enit@cnt\expandafter\endcsname
+        \expandafter{\enit@b,#4}%
+    \fi
+  \else
+    \ifcase#3%
+      \enit@ifunset{enit@@#1\romannumeral\c@enit@cnt}%
+        {\expandafter\let
+         \csname enit@@#1\romannumeral\c@enit@cnt\endcsname\@empty}%
+        {}%
+      \expandafter\let\expandafter\enit@b
+        \csname enit@@#1\romannumeral\c@enit@cnt @@sizes\endcsname
+      \ifx\enit@b\relax
+        \let\enit@b\@empty
+      \fi
+      \toks@\expandafter{\enit@b}%
+      \edef\enit@b{\the\toks@\enit@forsize\enit@keys@sizes}%
+      \expandafter\def
+        \csname enit@@#1\romannumeral\c@enit@cnt @@sizes\expandafter\endcsname
+        \expandafter{\enit@b{#4}}%
+    \else
+      \enit@error{* and \string<\string> are not compatible}%
+        {Use either * or angles, but not both.}%
+    \fi
+\fi}
+%    \end{macrocode}
+%
+%    The \pkg{enumitem} code uses \texttt{enitdp@\meta{name}} to refer
+%    to the list level counter of the \meta{name} list. So we do need
+%    that around for each standard list and provide one when making a
+%    new list with \cs{newlist}.
+%
+%    TODO: check how to do this when making new lists directly.
+%    \begin{macrocode}
+\let\enitdp@enumerate\@enumdepth
+\let\enitdp@itemize\@itemdepth
+\newcount\enitdp@description
+%    \end{macrocode}
+%
+%    To put keys set with \cs{setlist} into the keyp processing of
+%    \insttype{blockenv} instances we sneak them in as if they are
+%    given in the optional argument. For this we evaluate
+%    \cs{enit@@list} (produced by \verb=\setlist{...}=),
+%    \cs{enit@@list\meta{roman num}} (produced by \verb=\setlist[num]{...}=),
+%    \cs{enit@@\meta{name}} (produced by \verb=\setlist[name]{...}=), and
+%    \cs{enit@@\meta{name}\meta{roman num} (produced by
+%    \verb=\setlist[name,num]{...}=)
+%    in that order and collect all key settings stored in them and
+%    stored them in \cs{UnusedTemplateKeys} which is then used at the
+%    start of the \insttype{blockenv} template.
+%    \begin{macrocode}
+\AddToHookWithArguments{blockenv}{%
+%    \end{macrocode}
+%    If \verb=\enitdp@#1= is undefined the current \insttype{blockenv}
+%    is not a list, so we bail out.
+%    \begin{macrocode}
+  \enit@ifunset{enitdp@#1}{}%
+  {%
+%    \end{macrocode}
+%    Otherwise put the current list level in \cs{@tempcnta} and then
+%    evaluate the four storage places for keys.
+%    \begin{macrocode}
+   \@tempcnta\csname enitdp@#1\endcsname
+   \advance\@tempcnta\@ne
+   \enit@setkeys{list}%
+   \enit@setkeys{list\romannumeral\@tempcnta}%
+   \enit@setkeys{#1}%
+   \enit@setkeys{#1\romannumeral\@tempcnta}%
+  }%
+}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\ExplSyntaxOn
+%    \end{macrocode}
+%    Evaluation means checking if \cs{enit@@#1} exists and if so add
+%    its content to \cs{UnusedTemplateKeys} followed by a comma.
+%    Thus, if there aren't any keys then \cs{UnusedTemplateKeys}
+%    remains empty. Otherwise it ends in a comma so that the
+%    \insttype{blockenv} template can safely append any keys from the
+%    document to make the full list of keys to be evaluated by the
+%    template instance.
+%    \begin{macrocode}
+\cs_new_protected:Npn \enit@setkeys #1 {
+  \enit@ifunset {enit@@#1} {}
+    {
+      \tl_set:Ne \UnusedTemplateKeys
+         {
+           \exp_not:o \UnusedTemplateKeys
+           \exp_not:v {enit@@#1}
+           ,
+         }
+    }
+}
+\makeatother
+%    \end{macrocode}
+%
 % 
 %\subsubsection{\cs{setlistdepth}}
 % 
+% 
 %\subsubsection{\cs{AddEnumerateCounter}}
+% 
 % 
 %\subsubsection{\cs{SetEnumitemSize}}
 % 
+% 
 %\subsubsection{\cs{restartlist}}
+% 
 % 
 %    \begin{macrocode}
 %</package>
