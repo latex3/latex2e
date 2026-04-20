@@ -151,28 +151,16 @@
 %    \end{macrocode}
 % \end{macro}
 % 
-% \begin{variable}{\l_@@_bib_citekey_tl}
-%  We can't pass the cite key everywhere as argument so we store it:
-%    \begin{macrocode}
-\tl_new:N\l_@@_bib_citekey_tl
-%    \end{macrocode}
-% \end{variable}
 % 
 %\subsection{Handling the bibliography}
 % \begin{macro}{\@lbibitem}
-% The item command if an optional argument is used. 
+% This is the command used if \cs{bibitem} has an optional argument. 
 % 
-% We only prepend some code. 
-%    \begin{macrocode}
-\AddToHookWithArguments{cmd/@lbibitem/before}
- {
-%    \end{macrocode} 
-% we store the target name for the label.
-%    \begin{macrocode} 
-   \tl_set:Nn\l_@@_bib_citekey_tl{#2}
- }  
-%    \end{macrocode}
-% The target is now added by the block code. We only need to change the name.
+% The link target is now added by the block code in the \cs{item} command (as long as the
+% bibliography is built as a list). 
+% We only need to change the name.
+% This also works if hyperref is not loaded as also the kernel \cs{MakeLinkTarget} contains
+% the \texttt{target/setname/after} hook. 
 % 
 %    \begin{macrocode}  
 \AddToHookWithArguments{cmd/@lbibitem/before}[latex-lab-testphase-bib/target]
@@ -180,7 +168,7 @@
    \ExpandArgs{e}\NextLinkTarget{cite.#2\@extra@b@citeb}
  }
 %    \end{macrocode} 
-% we make a copy to be able to reinstate the definition. This is e.g.
+% We make a copy to be able to reinstate the definition. This is e.g.
 % currently needed with hyperref.
 %    \begin{macrocode}
 \let\@kernel@copy@lbibitem\@lbibitem       
@@ -189,17 +177,6 @@
 % 
 % \begin{macro}{\@bibitem}
 % Similar for \cs{@bibitem}. 
-% TODO: If hyperref is loaded we will get a second target from the refstepcounter,
-% but this is ignored for now. 
-%    \begin{macrocode}
-\AddToHookWithArguments{cmd/@bibitem/before}
- {
-%    \end{macrocode}
-% we store the target name for the label.
-%    \begin{macrocode} 
-   \tl_set:Nn\l_@@_bib_citekey_tl{#1}
- }  
-%    \end{macrocode}
 %
 % The target is added by the block code. We only need to change the name.
 %    \begin{macrocode}   
@@ -230,13 +207,39 @@
      }% 
 \let\@kernel@copy@bibcite\bibcite         
 %    \end{macrocode}
-% Now we add the tagging structure.
+% Now we add the tagging structure. The target is in the itemlabel structure,
+% so we extend the tagpdf command to retrieve the parent structure.
+% TODO: move this to tagpdf and delete here.
+%    \begin{macrocode}
+\cs_if_exist:NF \__tag_struct_gput_data_ref_dest_parent:nn
+ {
+   \cs_new_protected:Npn \__tag_struct_gput_data_ref_dest_parent:nn #1 #2
+     {
+       \__tag_struct_gput_data_ref_aux:nnn {#1}{dest_parent}{#2}
+     }
+   \cs_new_protected:Npn \__tag_struct_Ref_dest_parent:nN #1 #2 %#1 a dest name
+     { 
+       \prop_get:NnNTF \g__tag_struct_dest_num_prop {#1} \l__tag_tmpb_tl
+         { %do not overwrite tmpa!
+           \prop_get:cnN 
+            { g__tag_struct_\l__tag_tmpb_tl _prop }{parentnum}\l__tag_tmpb_tl         
+           \tl_put_right:Ne#2
+             {
+               \c_space_tl\tag_struct_object_ref:e{ \l__tag_tmpb_tl }
+             }
+         }
+         {
+           \msg_warning:nnn {tag}{struct-Ref-unknown}{Destination~'#1'}
+         }
+     }
+   }
+%    \end{macrocode}
 %    \begin{macrocode}
 \AddToHookWithArguments{bibcite/before}
   {
     \tag_mc_end_push:
     \tagstructbegin{tag=\UseStructureName{cite}}
-    \tag_struct_gput:nne{\tag_get:n{struct_num}}{ref_dest}{cite.#1\@extra@b@citeb}
+    \tag_struct_gput:nne{\tag_get:n{struct_num}}{ref_dest_parent}{cite.#1\@extra@b@citeb}
     \tagmcbegin{}
   }
 \AddToHookWithArguments{bibcite/after}[tag]
@@ -260,31 +263,32 @@
 %    \end{macrocode}
 %
 % \subsection{Natbib and biblatex support}
-%  When hyperref is loaded, both natbib and biblatex use \cs{hyper@natlinkstart}
-%  and \cs{hyper@natlinkend} to handle the links. We can use the generic hooks to 
-%  add the tagging code (and the link code from hyperref).
-%  We need in part different code for both systems: 
-%  with biblatex we have to take care that only the first
-%  structure sets a label, and if 
-%  hyperref is not loaded (or deactivated) we will need additional code
-%  but this currently doesn't exist.
+%  Both natbib and biblatex use \cs{hyper@natlinkstart}, \cs{hyper@natlinkend} 
+%  and \cs{hyper@natanchorstart} to handle the links and anchors. The commands can be also
+%  used to handle tagging, both if hyperref is loaded and if not. We only need to ensure
+%  that they use \cs{\MakeLinkTarget} also if hyperref is not active (and that hyperref
+%  does not overwrite that again if used).
+%  
+%  natbib calls \verb+\hyper@natanchorstart{key\@extra@b@citeb}+. With hyperref loaded this
+%  gives the anchor \verb+cite.key\@extra@b@citeb+.
+%  biblatex calls \verb+\hyper@natanchorstart{\the\c@refsection @\abx@field@entrykey}+
+%  and this gives \verb+cite.\the\c@refsection @\abx@field@entrykey+.
+%  
 %  We assume that no document loads both package -- that will probably break.
 %    \begin{macrocode}
 \newcommand\hyper@natlinkstart[1]{}
 \newcommand\hyper@natlinkend{}
+\newcommand\hyper@natanchorstart[1]{}
 %    \end{macrocode}
-% With natbib we need to change the hooks to avoid duplicated target as it sets
-% the anchor too. We can not simply empty \cs{hyper@natanchorstart} as that is 
-% used by biblatex.
+% We overwrite the anchor command at begin document so that this is also used with hyperref.
 %    \begin{macrocode}
-\AddToHook{package/natbib/after}
- {
-   \RemoveFromHook{cmd/@bibitem/before} [latex-lab-testphase-bib/target]
-   \RemoveFromHook{cmd/@lbibitem/before}[latex-lab-testphase-bib/target]
- }
+\AtBeginDocument{\renewcommand\hyper@natanchorstart[1]{\MakeLinkTarget*{cite.#1}}}
 %    \end{macrocode}
-% This can be shared by both packages: it will work with natbib with and without hyperref.
-% With biblatex it will work without hyperref as long as \cs{@extra@b@citeb} is empty
+%
+% The code for the citations can be shared by both packages, as they both use the
+% natbib hooks. 
+% The structure this references is currently the
+% itemlabel for natbib, and the itembody for biblatex. TODO: move this up one level.
 % \changes{0.81f}{2026-04-10}{Remove \cs{@extra@b@citeb}, tagging issue \#1282}
 %    \begin{macrocode}
 \AddToHookWithArguments{cmd/hyper@natlinkstart/before}
@@ -292,7 +296,7 @@
    \leavevmode
    \tag_mc_end_push:
    \tag_struct_begin:n{tag=\UseStructureName{cite}}
-   \tag_struct_gput:nne{\tag_get:n{struct_num}}{ref_dest}{cite.#1}
+   \tag_struct_gput:nne{\tag_get:n{struct_num}}{ref_dest_parent}{cite.#1}
    \tag_mc_begin:n{}
  }
 \AddToHook{cmd/hyper@natlinkend/after}
@@ -303,6 +307,7 @@
  }
       
 %    \end{macrocode}
+%
 % if hyperref is loaded we have to revert its definition of the natbib hooks
 % and add its code through the generic hooks. 
 % TODO: remove once hyperref supports that directly.
@@ -328,30 +333,6 @@
       }
   }
     
-%    \end{macrocode}
-% and now special biblatex code. The list item code has to test if the 
-% anchor is already known:
-%    \begin{macrocode}
-\AddToHook{cmd/blx@bibinit/after}
-  {
-    \cs_set:Npn \__block_list_item_begin:
-     { 
-       \xifinlist{\the\c@refsection @\abx@field@entrykey}{\blx@anchors}
-        {
-          \tag_struct_begin:n
-           {
-            tag=\UseStructureName{block/list/item},
-           }
-        }   
-        {
-          \tag_struct_begin:n
-           {
-            tag=\UseStructureName{block/list/item},
-            label= cite.\the\c@refsection @\abx@field@entrykey
-           }
-        }   
-     }
-  }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
