@@ -15,8 +15,8 @@
 %
 %    https://github.com/latex3/latex2e/issues
 %
-\def\ltlabtikzdate{2026-01-20}
-\def\ltlabtikzversion{0.80e}
+\def\ltlabtikzdate{2026-04-23}
+\def\ltlabtikzversion{0.80f}
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
 \documentclass[kernel]{l3in2edoc}
@@ -65,7 +65,59 @@
 % is used. The patches of \tikzname\ commands can be suppressed by removing the
 % code with the label \texttt{latex-lab-testphase-tikz} from the hook 
 % \texttt{package/tikz/after} before loading \tikzname.
+% 
+% The module implements a number of keys that can be used both in \cs{tikzset} and in the 
+% optional argument of \texttt{tikzpicture} and \cs{tikz}.
+% 
+% \begin{description}
+%  \item[\texttt{alt}] This key switches to the illustrative mode. Its value is the 
+%  alternative text. If no value is given the alternative text variable is not changed, 
+%  \texttt{alt=} will empty the text variable.
+%  \item[\texttt{actualtext}] This switches to the actualtext mode.
+%  This is useful for small graphics that represent single chars or a short word like a 
+%  logo. If \texttt{actualtext} is used, the graphics is not enclosed in \texttt{Figure}
+%  structure but in a \texttt{Span} structure and no \texttt{/BBox} attribute is added.%
+%  \footnote{This in accordance with (the draft of) PDF/UA-2 but violates perhaps PDF/UA-1.}
+%  \item[\texttt{artifact}] This tags the graphic as an artifact.
+%  \item[\texttt{tagging-setup}] This key takes as argument a key-list,
+%  which can contain the following keys:
+%   \begin{description}
+%    \item[\texttt{alt=\meta{text}}] This a second way to tag the graphic as figure with
+%    alternative text. \texttt{alt} without value will tag as figure but not change
+%    the text variable, \texttt{alt=} will empty the text variable.
+%    \item[\texttt{actualtext=\meta{text}}] This a second way to tag the graphic as a
+%    symbol with actualtext.  
+%    \item[\texttt{artifact}] This a second way to tag the graphic as artifact. 
+%    \item[\texttt{text}] This switches to text mode.
+%    \item[\texttt{off}] When used tagging will be stopped completely. It is then the 
+%   responsibility of the surrounding code to add appropriate tagging commands.
+%   \item[\texttt{tag=\meta{name}}] This switches to the illustrative mode but uses
+%   \meta{name} as tag name in the structure instead of the default \texttt{Figure}. 
+%   This can for example be used to tag an image of a formula with \texttt{Formula}.
+%   The key typically should be combined with an suitable alt key:
+%   \begin{verbatim}
+%   \begin{tikzpicture}[tagging-setup={alt=math,tag=Formula}]
+%   \end{verbatim}
+%   \end{description}   
+%  \end{description}
 %
+%  It is possible to define new keys to change the tagging setup. 
+%  As they should be processed earlier than normal tikz keys, 
+%  they must be part of a special family:
+%  
+%  \begin{verbatim}
+%  \tikzset 
+%   {
+%     my alt/.style 2 args={alt=`#1' is for #2,},
+%     my alt/.belongs to family=/tikz/tagging-setup,
+%   }
+%   \begin{tikzpicture}[my alt={A}{ardvaark}]
+%   ...
+%   \end{tikzpicture}
+%   \end{verbatim}
+%
+%  \changes{v0.80f}{2026-02-27}{Use \texttt{pgfkeys} for setup.}
+%  \changes{v0.80f}{2026-02-27}{Use symbolic names.}
 % \begin{implementation}
 % \section{Implementation}
 %    \begin{macrocode}
@@ -109,12 +161,14 @@
 % \begin{plugdecl}{default (tagsupport/tikz/picture/init)}
 % The init socket takes a list of keys, processes the known keys to setup tagging options
 % and then assigns the plugs.
-% TODO: correct module name? 
-% TODO: tikz should probably use pgfkeys, but as l3keys are easier for me \ldots
+%
 %    \begin{macrocode}
 \NewTaggingSocketPlug{tikz/picture/init}{default}
   {
-    \keys_set_known:nn { tikz / tagging } {#1}  
+    \pgfkeyssavekeyfilterstateto\tikz@temp@tagging@saved@filterstate
+    \pgfkeysinstallkeyfilter{/pgf/key~filters/active~families}{}
+    \pgfqkeysactivatesinglefamilyandfilteroptions{/tikz/tagging-setup}{/tikz}{#1}
+    \tikz@temp@tagging@saved@filterstate  
   }
 \AssignTaggingSocketPlug{tikz/picture/init}{default}
 %    \end{macrocode}
@@ -128,11 +182,10 @@
 %    \begin{macrocode}
 \NewTaggingSocketPlug{tikz/picture/begin}{text}
   {
-   \ifvmode
+   \mode_if_vertical:T
     {
-     \if@inlabel \leavevmode \else \tag_socket_use:n{para/begin}\fi
-    }
-   \fi
+     \legacy_if:nTF {@inlabel} {\leavevmode} {\tag_socket_use:n{para/begin}}
+    }    
    \tag_mc_end_push:
    \tagmcbegin{artifact}
 %    \end{macrocode}
@@ -168,18 +221,14 @@
 %    \begin{macrocode}
 \NewTaggingSocketPlug{tikz/picture/begin}{alt}
   {
-    \ifvmode
-     {
-      \if@inlabel \leavevmode \else \tag_socket_use:n{para/begin}\fi
-     }
-    \fi
+   \mode_if_vertical:T
+    {
+     \legacy_if:nTF {@inlabel} {\leavevmode} {\tag_socket_use:n{para/begin}}
+    }   
     \tag_mc_end_push:
-%    \end{macrocode}
-% TODO: The structure name should be adaptable, similar to the generic implementation
-%    \begin{macrocode}
     \tag_struct_begin:n
      {
-      tag=Figure,
+      tag=\UseStructureName{graphic},
       alt=\l__tikz_tagging_alt_tl
      }
     \pgfrememberpicturepositiononpagetrue
@@ -237,13 +286,14 @@
 %    \begin{macrocode}
 \NewTaggingSocketPlug{tikz/picture/begin}{actualtext}
   {
-   \ifvmode
+   \mode_if_vertical:T
     {
-     \if@inlabel \leavevmode \else \tag_socket_use:n{para/begin}\fi
-    }
-   \fi
+     \legacy_if:nTF {@inlabel} {\leavevmode} {\tag_socket_use:n{para/begin}}
+    }   
    \tag_mc_end_push:
-   \tag_struct_begin:n{tag=Span,actualtext=\l__tikz_tagging_actualtext_tl}
+   \tag_struct_begin:n
+     {tag=\UseStructureName{graphic/symbol},
+      actualtext=\l__tikz_tagging_actualtext_tl}
    \tag_mc_begin:n{}
   }
 
@@ -262,13 +312,12 @@
 %    \begin{macrocode}
 \NewTaggingSocketPlug{tikz/picture/begin}{artifact}
   {
-    \ifvmode
+    \mode_if_vertical:T
      {
-      \if@inlabel \leavevmode \else \tag_socket_use:n{para/begin}\fi
-     }
-    \fi
+      \legacy_if:nTF {@inlabel} {\leavevmode} {\tag_socket_use:n{para/begin}}
+     }  
     \tag_mc_end_push:
-    \tag_mc_begin:n{artifact}
+    \tag_mc_begin:n {artifact}
   }
 
 \NewTaggingSocketPlug{tikz/picture/end}{artifact}
@@ -299,7 +348,7 @@
 \NewTaggingSocketPlug{tikz/picture/text/end}{default}
   {
    \tag_mc_end:
-   \tag_mc_begin:n{artifact}
+   \tag_mc_begin:n {artifact}
   }
 \AssignTaggingSocketPlug{tikz/picture/text/begin}{default}
 \AssignTaggingSocketPlug{tikz/picture/text/end}{default}
@@ -316,7 +365,7 @@
  {
    \AddToHookWithArguments{cmd/tikz@picture/before}
      {
-       \tag_socket_use:nn{tikz/picture/init}{#1}
+       \tag_socket_use:nn {tikz/picture/init} {#1}
        \tag_socket_use:n {tikz/picture/begin}
      }
 %    \end{macrocode}
@@ -326,15 +375,15 @@
 %    \begin{macrocode}
   \AddToHookWithArguments{cmd/pgfpicture/before}
      {
-       \tag_suspend:n{\pgfpicture}
+       \tag_suspend:n {\pgfpicture}
      }       
 %    \end{macrocode}
 % The end socket is in the \cs{endpgfpicture} command.
 %    \begin{macrocode}
    \AddToHook{cmd/endpgfpicture/after}
      {
-       \tag_resume:n{\pgfpicture}
-       \tag_socket_use:n{tikz/picture/end}
+       \tag_resume:n {\pgfpicture}
+       \tag_socket_use:n {tikz/picture/end}
      }
   }
 %    \end{macrocode}
@@ -343,121 +392,94 @@
 % \subsection{User interface: Keys to change the tagging behaviour}
 % These keys will be processed directly at the begin of the picture commands
 % to change the tagging behaviour. 
-% They are specific to tikz and should probably better be implemented with
-% pgfkeys \ldots.
+% They are specific to tikz and so are implemented with pgfkeys.
+% \begin{variable}{\l__tikz_tagging_alt_tl,\l__tikz_tagging_actualtext_tl}
+% The variables that hold the text alternatives.
 %    \begin{macrocode}
 \tl_new:N  \l__tikz_tagging_alt_tl
 \tl_set:Nn \l__tikz_tagging_alt_tl {Alternative~text~missing!}
 \tl_new:N  \l__tikz_tagging_actualtext_tl
-
-\keys_define:nn { tikz / tagging }
-  {
-    alt        .code:n = 
-     {
-       \tl_set:Ne\l__tikz_tagging_alt_tl {\text_purify:n{#1}}       
-       \AssignTaggingSocketPlug{tikz/picture/begin}{alt}
-       \AssignTaggingSocketPlug{tikz/picture/end}{alt}
-       \def\pgfsys@begin@text{}
-       \def\pgfsys@end@text{}
-     },
-    actualtext .code:n = 
-     {
-       \tl_set:Ne\l__tikz_tagging_actualtext_tl {\text_purify:n{#1}}  
-       \AssignTaggingSocketPlug{tikz/picture/begin}{actualtext}
-       \AssignTaggingSocketPlug{tikz/picture/end}{actualtext}
-       \def\pgfsys@begin@text{}
-       \def\pgfsys@end@text{}    
-     },
-    artifact   .code:n = 
-     {
-       \AssignTaggingSocketPlug{tikz/picture/begin}{artifact}
-       \AssignTaggingSocketPlug{tikz/picture/end}{artifact}
-       \def\pgfsys@begin@text{}
-       \def\pgfsys@end@text{}
-     },
-    tagging-setup .multichoice:,
-    tagging-setup / text .code:n =
-     {
-       \AssignTaggingSocketPlug{tikz/picture/begin}{text}
-       \AssignTaggingSocketPlug{tikz/picture/end}{text}
-     },
-    tagging-setup / unknown .code:n= 
-      {
-        \keys_set:nn { tag/graphic }{#1}
-      }        
-  }
 %    \end{macrocode}
-% 
-%   
-% \subsection{Key definitions for \tikzname}
+% \end{variable}
+%
 %    \begin{macrocode}
 \AddToHook{package/tikz/after}
   {
 %    \end{macrocode}
-% we add a dummy definition for alt, actualtext and artifact key to avoid errors,
-% and to allow to set the variables outside the tikzpicture.
+% The tagging keys must be set earlier than the normal processing
+% of \tikzname\ keys. We implement that with a family and filter the
+% relevant keys in the init socket, this means that the keys will be processed
+% again when tikz does its normal processing but there is no good way to avoid that
+% without changing various tikz internals.
 %    \begin{macrocode}
-   \tikzset
+    \pgfqkeys{/tikz}
      {
-      alt/.code=
-       {         
-         \tl_set:Ne\l__tikz_tagging_alt_tl {\text_purify:n{#1}}
+      tagging-setup/.is~family,
+%    \end{macrocode}
+% The short versions are forwarded to the longer one
+%    \begin{macrocode}
+      alt/.forward~to=/tikz/tagging-setup/alt,
+      alt/.belongs~to~family=/tikz/tagging-setup, 
+      actualtext/.forward~to=/tikz/tagging-setup/actualtext,
+      actualtext/.belongs~to~family=/tikz/tagging-setup,
+      artifact/.forward~to=/tikz/tagging-setup/artifact,
+      artifact/.belongs~to~family=/tikz/tagging-setup,
+%    \end{macrocode}
+% The tagging-setup key.    
+%    \begin{macrocode}
+      tagging-setup/.code=\pgfqkeys{/tikz/tagging-setup}{#1},
+      tagging-setup/.belongs~to~family=/tikz/tagging-setup,
+      tagging-setup/text/.code =
+       {
+         \AssignTaggingSocketPlug{tikz/picture/begin}{text}
+         \AssignTaggingSocketPlug{tikz/picture/end}{text}
+       }, 
+      tagging-setup/text/.belongs~to~family=/tikz/tagging-setup, 
+      tagging-setup/alt/.code =
+       {
+         \tl_if_eq:nnF{#1}{\pgfkeysnovalue}
+          {\tl_set:Ne\l__tikz_tagging_alt_tl {\text_purify:n{#1}}}          
          \AssignTaggingSocketPlug{tikz/picture/begin}{alt}
          \AssignTaggingSocketPlug{tikz/picture/end}{alt}
          \def\pgfsys@begin@text{}
-         \def\pgfsys@end@text{}  
-       },
-      actualtext/.code=
+         \def\pgfsys@end@text{}
+       },       
+      tagging-setup/alt/.belongs~to~family=/tikz/tagging-setup,  
+      tagging-setup/tag/.code =
        {
-         \tl_set:Ne \l__tikz_tagging_actualtext_tl {\text_purify:n{#1}}
-         \AssignTaggingSocketPlug{tikz/picture/begin}{actualtext}
-         \AssignTaggingSocketPlug{tikz/picture/end}{actualtext}
+         \AssignStructureRole{graphic}{#1}    
+         \AssignTaggingSocketPlug{tikz/picture/begin}{alt}
+         \AssignTaggingSocketPlug{tikz/picture/end}{alt}
          \def\pgfsys@begin@text{}
          \def\pgfsys@end@text{}
-       },
-      artifact/.code=
+       },       
+      tagging-setup/tag/.belongs~to~family=/tikz/tagging-setup,        
+      tagging-setup/actualtext/.code =
+       {
+          \tl_if_eq:nnF{#1}{\pgfkeysnovalue}
+           {\tl_set:Ne \l__tikz_tagging_actualtext_tl {\text_purify:n{#1}}}
+          \AssignTaggingSocketPlug{tikz/picture/begin}{actualtext}
+          \AssignTaggingSocketPlug{tikz/picture/end}{actualtext}
+          \def\pgfsys@begin@text{}
+          \def\pgfsys@end@text{}    
+       },           
+      tagging-setup/actualtext/.belongs~to~family=/tikz/tagging-setup,  
+      tagging-setup/artifact/.code =
        {
          \AssignTaggingSocketPlug{tikz/picture/begin}{artifact}
          \AssignTaggingSocketPlug{tikz/picture/end}{artifact}
          \def\pgfsys@begin@text{}
-         \def\pgfsys@end@text{} 
-       }
-     }  
-%    \end{macrocode}
-%
-% \subsection{\tikzname~ keys to switch the recipes}
-% Todo: alt and actualtext should be able to handle a value, but how
-% is that done in pgfkeys??
-%    \begin{macrocode}
-   \tikzset 
-     {
-       tagging-setup/.is~choice,
-       tagging-setup/text/.code =
+         \def\pgfsys@end@text{}
+       },
+      tagging-setup/artifact/.belongs~to~family=/tikz/tagging-setup,
+      tagging-setup/off/.code = 
         {
-          \AssignTaggingSocketPlug{tikz/picture/begin}{text}
-          \AssignTaggingSocketPlug{tikz/picture/end}{text}
-        }, 
-       tagging-setup/alt/.code =
-        {
-          \AssignTaggingSocketPlug{tikz/picture/begin}{alt}
-          \AssignTaggingSocketPlug{tikz/picture/end}{alt}
+          \AssignTaggingSocketPlug{tikz/picture/begin}{noop}
+          \AssignTaggingSocketPlug{tikz/picture/end}{noop}
           \def\pgfsys@begin@text{}
           \def\pgfsys@end@text{}
-        },       
-       tagging-setup/actualtext/.code =
-        {
-           \AssignTaggingSocketPlug{tikz/picture/begin}{actualtext}
-           \AssignTaggingSocketPlug{tikz/picture/end}{actualtext}
-           \def\pgfsys@begin@text{}
-           \def\pgfsys@end@text{}    
-        },           
-       tagging-setup/artifact/.code =
-        {
-          \AssignTaggingSocketPlug{tikz/picture/begin}{artifact}
-          \AssignTaggingSocketPlug{tikz/picture/end}{artifact}
-          \def\pgfsys@begin@text{}
-          \def\pgfsys@end@text{}
-        },
+        },  
+      tagging-setup/off/.belongs~to~family=/tikz/tagging-setup,  
      }
  }
 %    \end{macrocode}
