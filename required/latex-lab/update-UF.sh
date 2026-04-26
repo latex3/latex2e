@@ -1,17 +1,8 @@
-l3build save -eluatex,pdftex documentmetadata-support-000 documentmetadata-support-001 standard-a4f documentmetadata-tagging tagging-status documentmetadata-latest
-l3build save -c config-OR scrartcl-001 tagging-002-longtable memoir-001
-l3build save -c config-math mathml-AF-ex1-keys mtag-008-gh765 mathcapture-tag-001
-l3build save -c config-math-luatex label-multline-pdf structelem-text mathml-luamml-2 lua-uni-varlim-commands varlim-commands label-align-pdf mathml-luamml-3 mathml-luamml-4 amsmath-mbox structelem-array-partly-faulty structelem-sqrt-frac mtag-008-gh765 structelem-mbox math-20-structelem labelled-align-pdf label-flalign-pdf array label-alignat-pdf mathml-luamml-MSFT lua-uni-structelem-sqrt-frac label-xalignat-pdf math-20-alt-noluamml fakemath label-gather-pdf
-l3build save -c config-OR-luatex scrartcl-001 test1 test9 footmisc-003 memoir-001 test3 test11-series test10 test8 test6 footmisc-004 test7 test2 test-tnote-setup test-minipage test5 footmisc-009-multiple-tagging test4 footmisc-012-side-hyperref
- l3build save -eluatex,pdftex -c config-sec test-book-structure-dest test-suppress-sect test-book-3 test-gh787 test-book-tagging-off test-book-1 test-sec-keys test-book-2 test-article-1 test-stop-sect-pdf
- l3build save -eluatex,pdftex -c config-toc toc-ex-article-no-tagging-hyperref toc-manual-addcontentsline toc-ex-book-no-hyperref toc-ex-article-hyperref-1 toc-ex-article-hyperref-2 toc-ex-book-hyperref-1 toc-ex-article-no-hyperref toc-ex-article-no-tagging toc-ex-article-hyperref-3 toc-ex-book-tocdepth
- l3build save -eluatex,pdftex -c config-block aliasctr-test-amsthm-block aliasctr-test-amsthm-cleveref-block aliasctr-test-block hyperref-target blocks-theorem-04
- l3build save -eluatex,pdftex -c config-graphic tikz-005 tikz-006 tikz-002 tikz-007 tikz-003 tikz-004 graphic-rotating tikz-001
-l3build save -eluatex,pdftex -c config-minipage minipage-004-hyperref minipage-006-gh723
-l3build save -eluatex,pdftex -c config-float float-013-new marginpar-03 float-012-unknown float-sidewaystable float-004 marginpar-01 float-015-defer marginpar-04-gh-444 float-014-defer float-tagging-off
- l3build save -c config-footnote footmisc-012-side-hyperref footmisc-006 footmisc-003 footmisc-004 footmisc-009-multiple-tagging
-l3build save -eluatex,pdftex -c config-bib bib-010-natbib bib-002 bib-009 bib-005 bib-006 bib-007-natbib bib-008-natbib bib-004
-l3build save -c config-table-pdftex table-026-minipage-37 table-014-pbox table-010-longtable-pdf2 table-013-longtable-hyperref table-009-pdf table-014-pbox-longtable table-025 table-011-endheadbox table-023-multirow table-024-multirow table-020-rowheader table-027-longtable-554 table-000 table-010-longtable-pdf table-001-pdf
-l3build save -c config-table-luatex table-001-pdf table-009-pdf table-010-longtable-pdf table-014-pbox table-011-endheadbox table-010-longtable-pdf2 table-000 tagging-965 table-013-longtable-hyperref table-014-pbox-longtable
-l3build save -eluatex,pdftex -c config-title title-009 title-004 title-006 title-007 title-002 title-008 title-005 title-003
-l3build save -c config-firstaid test-amsthm test-blindtext firstaid-amsproc test-amsart-title test-booktabs test-fancyvrb firstaid-amsbook test-ltugboat test-cleveref
+l3build save -c config-OR footmisc-005-tagging-off footmisc-005 tagging-001
+l3build save -c config-math mathcapture-tag-001 mtag-005-intertext
+l3build save -c config-OR-luatex footmisc-013-scrartcl footmisc-009-multiple-tagging test5 tagging-001 footmisc-011-para memoir-001 footmisc-012-side-hyperref test9 scrartcl-001 footmisc-012-side test2 test8 test-tnote-setup test6 test-minipage test1 test3 test4 test11-series footmisc-010-setspace footmisc-005 footmisc-004 test7 footmisc-010-setspace-tagging test10 footmisc-009-multiple footmisc-003
+l3build save -eluatex,pdftex -c config-minipage minipage-005-footnote
+l3build save -c config-footnote footmisc-012-side footmisc-floats-001 footmisc-011-para footmisc-012-side-hyperref footmisc-003 footmisc-floats-000 footmisc-floats-004 tagging-845 footmisc-008-pdfcol footmisc-009-multiple footnote-float-above footmisc-002 footmisc-floats-003 footmisc-006 footmisc-009-multiple-tagging footmisc-floats-abovefloats-flushbottom footmisc-004 footmisc-floats-abovefloats footmisc-floats-005 footmisc-010-setspace footmisc-floats-002 footmisc-013-scrartcl footmisc-010-setspace-tagging footmisc-005 footmisc-007-rollback
+l3build save -c config-table-pdftex table-005 table-000
+l3build save -c config-table-luatex table-005 table-000
+l3build save -c config-title -e luatex,pdftex title-001 title-004 title-002 title-007 title-005 title-006 title-009 title-003 title-008
