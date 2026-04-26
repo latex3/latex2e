@@ -33,7 +33,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltfinal.dtx}
-             [2026/02/25 v2.3j LaTeX Kernel (Final Settings)]
+             [2026-04-16 v2.3l LaTeX Kernel (Final Settings)]
 % \iffalse
 \documentclass{ltxdoc}
 \GetFileInfo{ltfinal.dtx}
@@ -92,7 +92,8 @@
 % \changes{v2.0r}{2016/10/15}{Require e\TeX{}}
 % \changes{v2.0s}{2016/10/15}{Tidy up status of char 127}
 % \changes{v2.2i}{2020/08/21}{Integration of new hook management interface}
-%
+% \changes{v2.3k}{2026-03-12}{Switch from \texttt{x}- to \texttt{e}-type
+%   expansion in expl3 code}
 %
 %
 %
@@ -664,61 +665,76 @@
 %    \end{macrocode}
 %
 %   For pdf\TeX\ preload and enable automatic glyph to Unicode mapping
-%   for more reliable copy and paste support.
+%   for more reliable copy and paste support. Since v1.40.22, this data is
+%   dumped into the format so is simply loaded directly. For older engines,
+%   the same method as Lua\TeX{} is used (see below).
 %   \changes{v2.2l}{2021/01/21}{Load glyphtounicode.tex for pdf\TeX}
 %   \changes{v2.2m}{2021/02/25}{Improve speed of ToUnicode everyjob loading code}
 %   
-%  For lua\TeX{} |\pdfextension glyphtounicode| would error in dvi-mode. As the outputmode
-%  can be changed in the preamble we have to test in the definition.
+%  For lua\TeX{} |\pdfextension glyphtounicode| would error in dvi-mode. As the
+%  outputmode can be changed in the preamble we have to test in the definition.
+%  Lua\TeX{} does not dump this information into the format, so we need to load
+%  it in the \cs{everyjob} hook. We can't use \cs{input} there, as it would
+%  set the \cs{jobname} in the event of the run being started without loading
+%  a file. We also don't want to put all of the tokens from the files
+%  \emph{directly} in the hook, so we save to a macro. We need to read with
+%  spaces \enquote{present} as this is part of the syntax of the primitive,
+%  so need \cs{ExplSyntaxOff} in the setup for \cs{file_get:nnN}.
 %  
 %  For other engines we provide the two commands with noop definitions
 %  \changes{v2.3j}{2026-02-25}{Define \cs{pdfglyphtounicode} for lua\TeX}
 %  \changes{v2.3j}{2026-02-25}{Load and enable glyphtounicode.tex for lua\TeX in PDF mode}
-%  \changes{v2.3j}{2026-02-25}{Provide noop definitions for the other engines} 
+%  \changes{v2.3j}{2026-02-25}{Provide noop definitions for the other engines}
+%  \changes{v2.3l}{2026-04-16}{Revise glyphtounicode loading to reduce tokens
+%    in \cs{everyjob}}
 %    \begin{macrocode}
 %</2ekernel>
 %<*2ekernel|latexrelease>
 %<latexrelease>\IncludeInRelease{2026/06/01}%
 %<latexrelease>                 {\pdfgentounicode}{Preload glyphtounicode}%
-\ifx \pdfgentounicode \@undefined \else
+\ifdefined\directlua
+  \protected\def\pdfglyphtounicode{%
+    \ifnum\outputmode=1 %
+     \expandafter\@firstofone 
+    \else 
+     \expandafter\@gobblethree 
+    \fi
+     {\pdfextension glyphtounicode}%
+  }
+  \protected\edef\pdfgentounicode{\pdfvariable gentounicode}
+\fi
+\ifdefined\pdfgentounicode
 %<*2ekernel>
   \ifnum 0=0%
     \ifdefined\pdftexversion
 % \pdftexversion<140 does not have \pdfgentounicode, so we only check higher values
       \ifnum \pdftexversion=140 \ifnum\pdftexrevision<22 1\fi\fi
+    \else 1%
     \fi
     \relax
 %</2ekernel>
-    \input glyphtounicode
-    \input glyphtounicode-cmex
+    \input glyphtounicode %
+    \input glyphtounicode-cmex %
 %<*2ekernel>
   \else
-    \begingroup
-      \everyeof{\noexpand}\endlinechar-1
-      \edef\x{\endgroup
-        \everyjob{\the\everyjob\@@input glyphtounicode \@@input glyphtounicode-cmex }%
-    }\x
+    \ExplSyntaxOn
+      \file_get:nnN { glyphtounicode } { \ExplSyntaxOff }
+        \@@data@glyphtounicode
+      \file_get:nnN { glyphtounicode-cmex } { \ExplSyntaxOff }
+        \@@data@glyphtounicode@cmex
+    \ExplSyntaxOff
+    \everyjob\expandafter{%
+       \the\everyjob
+       \@@data@glyphtounicode
+       \@@data@glyphtounicode@cmex
+     }
   \fi
 %</2ekernel>
-  \pdfgentounicode=1
-\fi
-\ifx\directlua\undefined \else
-  \protected\def\pdfglyphtounicode 
-   {\ifnum\outputmode=1 
-     \expandafter \@firstofone 
-    \else 
-     \expandafter\@gobblethree 
-    \fi
-   {\pdfextension glyphtounicode}}
-  \protected\edef\pdfgentounicode {\pdfvariable gentounicode} 
-   \ifnum\outputmode=1   
-    \begingroup
-     \everyeof{\noexpand}\endlinechar-1
-      \edef\x{\endgroup
-        \everyjob{\the\everyjob\@@input glyphtounicode \@@input glyphtounicode-cmex }%
-       }\x
-      \pdfvariable gentounicode=1
-   \fi    
+  \ifdefined\directlua
+    \pdfvariable gentounicode=1 %
+  \else
+    \pdfgentounicode=1 %
+  \fi
 \fi
 %    \end{macrocode}
 % For other engines we provide the two commands with noop definitions
@@ -1210,11 +1226,11 @@
     \cs_set_nopar:Npn \reserved@b { first }
     \tl_if_blank:nTF {#2}
       {
-        \str_set:Nx \reserved@a
+        \str_set:Ne \reserved@a
           { \BCPdata { casing } }
         \str_if_empty:NT \reserved@a
           {
-            \str_set:Nx \reserved@a
+            \str_set:Ne \reserved@a
               { \BCPdata { language } }
           }
       }
