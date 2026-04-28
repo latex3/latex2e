@@ -1,0 +1,812 @@
+%%
+%% This is file `new-attachfile.sty',
+%% generated with the docstrip utility.
+%%
+%% The original source files were:
+%%
+%%
+%% This is a generated file.
+%%
+%% Project: new-attachfile,
+%% Version: 2020-04-29, 0.1
+%%
+%%
+%% This work may be distributed and/or modified under the
+%% conditions of the LaTeX Project Public License, either
+%% version 1.3c of this license or (at your option) any later
+%% version. This version of this license is in
+%%    https://www.latex-project.org/lppl/lppl-1-3c.txt
+%% and the latest version of this license is in
+%%    https://www.latex-project.org/lppl.txt
+%% and version 1.3 or later is part of all distributions of
+%% LaTeX version 2005/12/01 or later.
+%%
+%% This work has the LPPL maintenance status "maintained".
+%%
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{new-attachfile}%
+  [2020/06/26 v0.2 Attach files into PDF (HO/UF)]%
+\RequirePackage{pdfmanagement}
+\RequirePackage{iftex}[2019/11/07]
+\RequirePackage{keyval}
+\RequirePackage{color}
+\RequirePackage{infwarerr}[2010/04/08]
+\RequirePackage{ltxcmds}[2010/04/26]
+\RequirePackage{kvoptions}[2009/07/21]
+\RequirePackage{pdftexcmds}[2010/04/01]
+\RequirePackage{pdfescape}[2007/11/11]
+\RequirePackage{hyperref}
+\RequirePackage{hycolor}[2008/07/29]
+\RequirePackage{l3color,l3draw,l3pdffile,bitset,xparse}
+
+
+% pattern matching removed. Perhaps later with regex ...
+
+% setup commands / options
+%document options, handle later
+\SetupKeyvalOptions{%
+  family=AtFi,%
+  prefix=atfi@%
+}
+\DeclareBoolOption{draft}
+\DeclareComplementaryOption{final}{draft}
+
+% need a
+\DeclareRobustCommand{\atfi@pdfstringdef}[2]{%
+  \pdfstringdef\atfi@temp@string{#2}%
+  \edef#1{\atfi@temp@string}%
+}
+
+
+% keyval setup is stored in a list. It should be executed locally to be
+% able to change the dictionaries in a group
+
+\ExplSyntaxOn
+% message
+\cs_new:Npn \__atfi_clist_display:n #1 {*~#1\\}
+\msg_new:nnn
+  { atfi }
+  { unknown-choice }
+  {
+    Value~'#3'~is~invalid~for~key~'#1'.\\
+    The~key~accepts~only~the~choices\\
+    \clist_map_function:nN { #2 }\__atfi_clist_display:n
+    An~empty~value~removes~the~setting.
+  }
+
+\msg_new:nnn
+  { atfi }
+  { no-bool }
+  {
+    Value~'#2'~is~invalid~for~key~'#1'.\\
+    The~key~accepts~only~the~choices\\
+    *~true\\
+    *~false \\
+    No~value~is~equivalent~to~using~`true`.
+  }
+
+\msg_new:nnn
+  { atfi }
+  { file-name-exist }
+  {
+    The name~#1~has~already~been~used.\\
+    File~\tl_to_str:n{#2}~will~not~be~embedded.\\
+  }
+% variables
+% probably generic ....
+\pdfdict_new:nn {l}   {annot/FileAttachment}
+\pdfdict_put:nnn {annot/FileAttachment}{Subtype}{/FileAttachment}
+\pdfdict_new:nn  {l} {annot/FileAttachment/AP} % appearance
+
+%
+\color_set:nnn {__atfi_annot_color}{rgb}{1,0.9255,0.7765}
+\bitsetReset {__atfi_annotFlags} %
+
+\tl_new:N \l__atfi_tmpa_tl
+% key-val
+
+\tl_new:N   \l__atfi_setup_keys_tl
+\tl_new:N   \l__atfi_filename_tl
+
+\tl_new:N   \l__atfi_annot_icon_tl
+\tl_new:N   \l__atfi_annot_color_tl
+\clist_new:N   \g__atfi_file_afrelationship_clist
+\clist_gset:Nn \g__atfi_file_afrelationship_clist
+  {
+    Source, Data, Alternative, Supplement,
+    EncryptedPayload, FormData, Schema,
+    Unspecified (default)
+  }
+\fp_new:N   \l__atfi_annot_scale_fp
+\bool_new:N \l__atfi_annot_print_bool
+\bool_new:N \l__atfi_annot_appearance_bool
+\bool_set_true:N \l__atfi_annot_appearance_bool
+
+\NewDocumentCommand\attachfilesetup { m }
+ {
+   \tl_put_right:Nn \l__atfi_setup_keys_tl {, #1 }
+ }
+
+% defaults:
+
+\attachfilesetup
+  {
+    ,icon=PushPin
+    ,date=\file_timestamp:n{\jobname.log}
+  }
+
+% replace later
+\cs_new_protected:Npn \atfi@setup #1
+  {
+    \keys_set:nn {atfi} { #1 }
+  }
+
+
+\keys_define:nn { atfi }
+  {
+    ,mimetype  .code:n   =
+      {
+        \tl_if_empty:nTF { #1 }
+          {
+            \pdfdict_remove:nn {file}{Subtype}
+          }
+          {
+            \pdfdict_put:nne   {file}{Subtype}{\pdf_name_from_unicode_e:n{#1} }
+          }
+      }
+    ,mimetype  .groups:n = { embed }
+    ,filename .code:n =
+      {
+        \tl_if_empty:nF { #1 }
+          {
+           \pdf_string_from_unicode:nnN {string-hex}  { #1 } \l__atfi_filename_tl %variable
+           \pdfdict_put:nne { file/FileSpec } {F}  { \l__atfi_filename_tl }
+           \pdfdict_put:nne { file/FileSpec } {UF} { \l__atfi_filename_tl }
+          }
+      }
+    ,filename .groups:n = {embed}
+    ,afrelationship .choices:nn =
+      {Source, Data, Alternative, Supplement, EncryptedPayload, FormData, Schema, Unspecified }
+      {
+        \pdfdict_put:nne { file/FileSpec } {AFRelationship }  { \pdf_name_from_unicode_e:n {#1} }
+      }
+    ,afrelationship .default:n = { Unspecified }
+    ,afrelationship / .code:n =
+      {
+        \pdfdict_remove:nn { file/FileSpec } {AFRelationship }
+      }
+    ,afrelationship  / unknown .code:n =
+      {
+        \msg_warning:nneee { atfi } { unknown-choice }
+         { afrelationship }
+         { \g__atfi_file_afrelationship_clist }
+         { \exp_not:n {#1} }
+      }
+    ,new-afrelationship .code:n =
+      {
+        \clist_gput_right:Nn \g__atfi_file_afrelationship_clist { #1~(user~defined) }
+        \keys_define:nn { atfi }
+          {
+            afrelationship / #1 .code:n =
+              {
+                \pdfdict_put:nne
+                  { file/FileSpec }
+                  {AFRelationship }
+                  { \pdf_name_from_unicode_e:n {#1} }
+              }
+          }
+      }
+    %ucfilespec -> embed step
+    %checksum   -> bool to suppress the checksum
+    %creationdate ->additional /CreationDate in FileSpec-dict
+    %moddate    -> boolean to suppress /ModDate in FileSpec
+   ,moddate  .code:n   =
+      {
+        \tl_if_empty:nTF { #1 }
+          {
+            \pdfdict_remove:nn {file/FileSpec}{ModDate}
+          }
+          {
+            \pdfdict_put:nne   {file}{ModDate}{\pdf_string_from_unicode:nnN {string}{#1} } %or print??
+          }
+      }
+    ,moddate  .groups:n  = { embed }
+    ,icon     .choices:nn =
+      { Data, Graph, PushPin, Tag }
+      {
+        \tl_set:Nn \l__atfi_annot_icon_tl { #1 }
+        \pdfdict_put:nnn { annot/FileAttachment }{ Name }{ #1 }
+      }
+    ,icon / unknown .code:n =
+      {
+        \msg_warning:nneee { atfi } { unknown-choice }
+          { icon }
+          { Data, Graph, PushPin, Tag }
+          { \exp_not:n {#1} }
+      }
+    ,icon     .groups:n =  { annot }
+    %         initial: PushPin, but should be set only in the command
+    ,color    .tl_set:N = \l__atfi_annot_color_tl
+    ,color    .groups:n =  { annot }
+    ,color    .initial:n = { __atfi_annot_color }
+    %color    -> attach step, affects icon
+    %         decide allowed syntax of expressions ...
+    %         initial: 1 0.9255 0.7765
+
+    %% annotation dict (attach step)
+    ,date     .code:n  =
+      {  % escaping??
+         \pdfdict_put:nnn {annot/FileAttachment}{M}{(#1)}
+      }
+    %annotname /NM (..) (unique name)
+    %          no initial value
+    ,annotname    .code:n    =
+      {
+        %code to sanitize the value
+        %need an expl3 variant ...
+        \atfi@pdfstringdef\l__atfi_tmpa_tl { #1 }
+        \pdfdict_put:nne {annot/FileAttachment}{NM}{(\l__atfi_tmpa_tl)}
+      }
+    ,annotname    .groups:n =  { annot }
+    %          no initial value
+    ,author    .code:n    =
+      {
+        %code to sanitize the value
+        %need an expl3 variant ...
+        \atfi@pdfstringdef\l__atfi_tmpa_tl { #1 }
+        \pdfdict_put:nne {annot/FileAttachment}{T}{(\l__atfi_tmpa_tl)}
+      }
+    ,author     .groups:n =  { annot }
+    %          no initial value
+
+    % description /Contents
+    ,description    .code:n    =
+      {
+        %code to sanitize the value
+        %need an expl3 variant ...
+        \atfi@pdfstringdef\l__atfi_tmpa_tl { #1 }
+        \pdfdict_put:nne {annot/FileAttachment}{Contents}{(\l__atfi_tmpa_tl)}
+      }
+    ,description     .groups:n =  { annot }
+
+    ,subject    .code:n    =
+      {
+      %code to sanitize the value
+        %need an expl3 variant ...
+        \atfi@pdfstringdef\l__atfi_tmpa_tl { #1 }
+        \pdfdict_put:nnn {annot/FileAttachment}{Subj}{(\l__atfi_tmpa_tl)}
+      }
+    ,subject     .groups:n =  { annot }
+    ,appearance  .bool_set:N = \l__atfi_annot_appearance_bool
+    ,appearance  .groups:n =  { annot }
+    % appearance: decides if the appearance dict is insert. drop?
+    ,print .choice:
+    ,print / false .code:n =
+      {
+        \bool_set_false:N \__atfi_annot_print_bool
+        \bitsetClear { __atfi_annotFlags }{\prop_item:Nn\c_pdfannot_annot_flags_prop {Print}}
+        \pdfdict_put:nne {annot/FileAttachment}{F}{\bitsetGetDec { __atfi_annotFlags }}
+      }
+    ,print / true .code:n =
+      {
+        \bool_set_true:N \__atfi_annot_print_bool
+        \bitsetSet { __atfi_annotFlags }{\prop_item:Nn\c_pdfannot_annot_flags_prop {Print}}
+        \pdfdict_put:nne {annot/FileAttachment}{F}{\bitsetGetDec { __atfi_annotFlags }}
+      }
+    ,print    .default:n = true
+    ,print / unknown .code:n =
+     {
+       \msg_warning:nnee { atfi} { no-bool }
+         { print }
+         { \exp_not:n {#1} }
+     }
+    ,print .groups:n = { annot }
+    % print: sets /F flag, also boolean used in the no-XXX command
+    ,zoom .choice:
+    ,zoom / false .code:n =
+      {
+        \bool_set_false:N \__atfi_annot_zoom_bool
+        \bitsetSet { __atfi_annotFlags }{\prop_item:Nn\c_pdfannot_annot_flags_prop {NoZoom}}
+        \pdfdict_put:nne {annot/FileAttachment}{F}{\bitsetGetDec { __atfi_annotFlags }}
+      }
+    ,zoom / true .code:n =
+      {
+        \bool_set_true:N \__atfi_annot_zoom_bool
+        \bitsetClear { __atfi_annotFlags }{\prop_item:Nn\c_pdfannot_annot_flags_prop {NoZoom}}
+        \pdfdict_put:nne {annot/FileAttachment}{F}{\bitsetGetDec { __atfi_annotFlags }}
+      }
+    ,zoom / unknown .code:n =
+     {
+       \msg_warning:nnee { atfi} { no-bool }
+         { zoom }
+         { \exp_not:n {#1} }
+     }
+    ,print .groups:n = { annot }
+    ,scale .fp_set:N = \l__atfi_annot_scale_fp
+    ,scale .initial:n = 1
+  }
+
+
+\ExplSyntaxOff
+
+% more colors?
+%\define@key{AtFi}{color}{%
+%  \HyColor@AttachfileColor{#1}%
+%          \atfi@color@tex\atfi@color@inline\atfi@color@annot
+%          {attachfile2}{color}%
+%}
+
+
+\ProcessKeyvalOptions*
+%\def\atfi@DisableOption{%
+%  \DisableKeyvalOption[action=error,package=attachfile2]{AtFi}%
+%}
+
+\ExplSyntaxOn
+\NewDocumentCommand \notextattachfile { O{} m }
+  {
+    \group_begin:
+    % groups?
+    \keys_set:no {atfi} { \l__atfi_setup_keys_tl }
+    \keys_set:n  {atfi} { #1 }
+    \bool_if:NTF \l__atfi_annot_print_bool
+      {
+        \mode_leave_vertical:
+        \group_begin:
+        \exp_args:NV \color_select:n \l__atfi_annot_color_tl
+        #2\strut
+        \group_end:
+      }
+      {
+        \phantom{#2\strut}
+      }
+    \group_end:
+  }
+\ExplSyntaxOff
+%\atfi@DisableOption{draft}%
+%\atfi@DisableOption{final}%
+\ifatfi@draft
+  \def\atfi@dummy@pushpin{%
+    \raisebox{-1.25bp}{\parbox[b][14bp]{24bp}{}}%
+  }%
+  \DeclareRobustCommand{\textattachfile}[3][]{%
+    \notextattachfile[{#1}]{#3}%
+  }%
+  \DeclareRobustCommand{\noattachfile}[1][]{%
+    \notextattachfile[{#1}]{\atfi@dummy@pushpin}%
+  }%
+  \DeclareRobustCommand{\attachfile}[2][]{%
+    \noattachfile[{#1}]%
+  }%
+   \expandafter\endinput
+\fi
+
+\ExplSyntaxOn
+% embed the file and create the filespec dictionary:
+\cs_new_protected:Npn \__atfi_file_embed:nnn #1 #2 #3 % #1 keys, #2 symbolic name, #3 file name
+  {
+    \pdf_object_if_exist:nTF { g__atfi_file_obj_#2 }
+      {
+        % message ...
+        \msg_warning:nnnn {atfi}{name-exist}{#2}{#3}
+      }
+      {
+       \group_begin:
+       %keys for dict entries ...
+       \keys_set_groups:nnV {atfi}{embed} \l__atfi_setup_keys_tl
+       \keys_set_groups:nnn {atfi}{embed} {#1}
+       \pdffile_embed_file:nnN { g__atfi_file_obj_#2 }{ #3 } %!!!!!!!!!!!syntax
+       \group_end:
+      }
+  }
+
+% create the appearance xform:
+\cs_new_protected:Npn \__atfi_annot_xform_appearance:n #1
+  {
+    \pdfxform_if_exist:nF { g__atfi_annot_iconxform_#1 }
+      {
+        \pdfxform_new:nnn
+          { g__atfi_annot_iconxform_#1 }
+          { } % attributes?
+          { \use:c { __atfi_annot_print_icon_#1 } }
+      }
+  }
+
+
+\cs_new_protected:Npn \__atfi_annot:n #1 {}%#1 symbolic object name from
+\def\atfi@insert@file@annot#1
+  {
+    \rule{0pt}{0pt}%
+    \pdfdict_put:nne
+          { annot/FileAttachment }
+          {FS}
+          {\pdf_object_ref:n{g__atfi_file_obj_#1}}
+    \bool_if:NT \l__atfi_annot_appearance_bool
+      {
+        \pdfdict_put:nne
+          { annot/FileAttachment/AP }
+          { N }
+          { \pdfxform_ref:n { g__atfi_annot_iconxform_\l__atfi_annot_icon_tl } }
+        \pdfdict_put:nne
+          { annot/FileAttachment/AP }
+          { R }
+          { \pdfxform_ref:n { g__atfi_annot_iconxform_\l__atfi_annot_icon_tl } }
+        \pdfdict_put:nne
+          { annot/FileAttachment/AP }
+          { D }
+          { \pdfxform_ref:n { g__atfi_annot_iconxform_\l__atfi_annot_icon_tl } }
+       }
+     \pdfannot_box:nnnn
+        {
+          \fp_to_dim:n
+            {
+              \l__atfi_annot_scale_fp *
+              \pdfxform_wd:n{g__atfi_annot_iconxform_\l__atfi_annot_icon_tl}
+            }
+        }
+        {
+          \fp_to_dim:n
+            {
+              \l__atfi_annot_scale_fp *
+              \pdfxform_ht:n{g__atfi_annot_iconxform_\l__atfi_annot_icon_tl}
+            }
+        }
+        {
+          \fp_to_dim:n
+            {
+              \l__atfi_annot_scale_fp *
+              \pdfxform_dp:n{g__atfi_annot_iconxform_\l__atfi_annot_icon_tl}
+            }
+        }
+        {
+          \pdfdict_use:n {annot/FileAttachment}
+          \bool_if:NT \l__atfi_annot_appearance_bool
+            {
+              /AF
+                <<
+                  \pdfdict_use:n {annot/FileAttachment/AF}
+                >>
+            }
+
+         /FS~ \pdf_object_ref:n{atfi@fileobj@#1}%
+     }%
+  }
+\ExplSyntaxOff
+
+\newcommand*{\attachfile@file}[2][]{%
+  \EdefUnescapeHex\atfi@filename{#2}%
+  \ifx\atfi@filename\ltx@empty
+    \PackageError{attachfile2}{Empty file name}\@ehc
+  \else
+    \@namedef{atfi@file@\atfi@filename}{#1}%
+  \fi
+}
+
+
+
+
+\def\atfi@attachfile#1#2{%
+  \atfi@setup{#1}%
+  \atfi@embedfile{#2}%
+
+  %\atfi@flags@to@int %flags are set in setup
+  \atfi@insert@file@annot{#2}%
+  \endgroup
+}
+
+\ExplSyntaxOn
+
+\def\atfi@textattachfile#1#2{%
+    \endgroup
+    \atfi@textattachfile@i{#1}{#2}%
+}
+\def\atfi@textattachfile@i#1#2#3{%
+    \atfi@setup{#1}%
+    \atfi@embedfile{#2}%
+    \atfi@set@appearance{%
+      \leavevmode
+      \begingroup
+        \HyColor@UseColor\atfi@color@tex
+        #3\strut
+      \endgroup
+    }%
+    %\atfi@flags@to@int
+    \atfi@insert@file@annot{#2}%
+  \endgroup
+}
+\DeclareRobustCommand{\attachfile}[2][]
+  {
+    \group_begin:
+    % keys #1
+    %\tl_to_str for #2?? file_name??
+    \atfi@attachfile{}{#2}%
+    \group_end
+  }
+
+\DeclareRobustCommand{\textattachfile}[3][]
+  {
+    \group_begin:
+    % keys #1
+    \atfi@textattachfile{#2}{#3}%
+    \group_end:
+  }
+
+\DeclareRobustCommand{\noattachfile}[1][]
+  {
+    \group_begin:
+    % key #1
+    \__atfi_annot_store_appearancebox: %????
+    \bool_if:NTF \l__atfi_annot_print_bool
+      {
+        \pdfxform_use:n { atfi@appearancebox\l__atfi_annot_icon_tl } %icon, is use meant here??
+      }
+      {
+        \makebox[\atfi@appearancewidth]{}% \strut?
+      }
+    \group_end:
+  }
+
+%data for the icons
+
+
+%\cs_new_protected:Npn \__atfi_color_to_rgb_seq:nN #1 #2 % #1 name #2 seq
+% {
+%   %\tl_set_eq:NN \l__color_ori_fixed_model_tl \l_color_fixed_model_tl
+%   %\tl_set:Nn \l_color_fixed_model_tl {rgb}
+%   %\color_parse:nN {#1}\l_tmpa_tl
+%   \color_export:nnN {red}{space-sep-rgb}\l_tmpa_tl
+%   \seq_set_split:NnV #2 { ~ }\l_tmpa_tl
+%   %\seq_pop_left:NN #2 \l_tmpa_tl
+%   %\tl_set_eq:NN  \l_color_fixed_model_tl \l__color_ori_fixed_model_tl
+% }
+%\cs_generate_variant:Nn \__atfi_color_to_rgb_seq:nN {oN}
+%\cs_new:Npn \__atfi_arg_braced:n #1 {{#1}}
+
+\cs_new_protected:Npn \l__atfi_annot_icon_Graph_tl
+  {
+    \__draw_backend_scope_begin:
+    \__draw_backend_color_fill_gray:n {0.5}
+    \__draw_backend_rectangle:nnnn {1.1133bp}{0bp}{20.7202bp}{18.2754bp}
+    \__draw_backend_fill:
+    \__draw_backend_literal:e {0~i} %???
+    \__draw_backend_linewidth:n {0.5bp}
+    \__draw_backend_miterlimit:n {4bp}
+
+    \__draw_backend_color_fill_gray:n {1}
+    %\__draw_backend_color_stroke_gray:n {0}
+    \__draw_backend_rectangle:nnnn {0.25bp} {1.6453bp} {20.145bp} {17.7715bp}
+    \__draw_backend_fillstroke:
+
+    \__draw_backend_color_fill_gray:n {0}
+    \__draw_backend_rectangle:nnnn {2.7319bp}{4.1367bp}{3.9571bp}{13.8867bp}
+    \__draw_backend_fill:
+    \__draw_backend_rectangle:nnnn {8.7031bp}{4.1367bp}{3.9571bp}{9.8867bp}
+    \__draw_backend_fill:
+    \__draw_backend_rectangle:nnnn {14.7471bp}{4.1367bp}{3.9571bp}{11.8867bp}
+    \__draw_backend_fill:
+
+    \exp_args:No\color_export:nnN {\l__atfi_annot_color_tl}{space-sep-rgb}\l_tmpa_tl
+    \exp_args:No \__draw_backend_color_fill_rgb:n {\l_tmpa_tl}
+    \__draw_backend_rectangle:nnnn {1.689bp}{3.0938bp}{3.9571bp}{13.8867bp}
+    \__draw_backend_fill:
+    \__draw_backend_rectangle:nnnn {7.6602bp}{3.0938bp}{3.9571bp}{9.8867bp}
+    \__draw_backend_fill:
+    \__draw_backend_rectangle:nnnn {13.7041bp}{3.0938bp}{3.9571bp}{11.8867bp}
+    \__draw_backend_fill:
+    \__draw_backend_scope_end:
+  }
+
+\cs_new_protected:Npn {\l__atfi_annot_icon_Paperclip_tl}
+  {
+    \__draw_backend_scope_begin:
+    \__draw_backend_color_stroke_gray:n {0.75}
+    \__draw_backend_literal:e {0~i} %???
+    \__draw_backend_linewidth:n {2.5bp}
+    \__draw_backend_cap_round:
+    \__draw_backend_miterlimit:n {4}
+    \__draw_backend_moveto:nn {1.9619bp} {11.7559bp}
+    \__draw_backend_literal:e {1.9619~3.3037~1.9619~2.5059~v}
+    \__draw_backend_literal:e {1.9619~1.707~4.0947~1.25~y}
+    \__draw_backend_lineto:nn {7.4141bp} {1.25bp}
+    \__draw_backend_literal:e {9.4292~1.8223~9.4292~3.3066~v}
+    \__draw_backend_literal:e {9.4292~4.79~9.4292~16.8945~y}
+    \__draw_backend_literal:e {9.7852~18.1514~8.481~18.1514~v}
+    \__draw_backend_literal:e {7.1768~18.1514~5.1616~18.1514~y}
+    \__draw_backend_literal:e {3.8574~17.9209~3.8574~16.8945~v}
+    \__draw_backend_literal:e {3.8574~15.8652~3.8574~6.6172~y}
+    \__draw_backend_literal:e {4.3325~5.418~5.1025~5.418~v}
+    \__draw_backend_literal:e {5.8726~5.418~6.5845~5.418~y}
+    \__draw_backend_literal:e {7.6812~5.6455~7.6812~6.4736~v}
+    \__draw_backend_literal:e {7.6812~7.3027~7.6812~11.5264~y}
+    \__draw_backend_stroke:
+    \__draw_backend_color_stroke_gray:n {0}
+    \__draw_backend_moveto:nn {1.2495bp} {12.4404bp}
+    \__draw_backend_literal:e {1.2495~3.9883~1.2495~3.1895~v}
+    \__draw_backend_literal:e {1.2495~2.3906~3.3833~1.9326~y}
+    \__draw_backend_lineto:nn {6.7026bp}{1.9326bp}
+    \__draw_backend_literal:e {8.7178~2.5068~8.7178~3.9902~v}
+    \__draw_backend_literal:e {8.7178~5.4736~8.7178~17.5781~y}
+    \__draw_backend_literal:e {9.0732~18.834~7.769~18.834~v}
+    \__draw_backend_literal:e {6.4653~18.834~4.4497~18.834~y}
+    \__draw_backend_literal:e {3.146~18.6055~3.146~17.5781~v}
+    \__draw_backend_literal:e {3.146~16.5498~3.146~7.3018~y}
+    \__draw_backend_literal:e {3.6201~6.1016~4.3911~6.1016~v}
+    \__draw_backend_literal:e {5.1611~6.1016~5.873~6.1016~y}
+    \__draw_backend_literal:e {6.9692~6.3301~6.9692~7.1572~v}
+    \__draw_backend_literal:e {6.9692~7.9863~6.9692~12.21~y}
+    \__draw_backend_stroke:
+    \exp_args:No\color_export:nnN {\l__atfi_annot_color_tl}{space-sep-rgb}\l_tmpa_tl
+    \exp_args:No \__draw_backend_color_stroke_rgb:n {\l_tmpa_tl}
+    \__draw_backend_linewidth:n {1bp}
+    \__draw_backend_moveto:nn {1.2495bp} {12.4404bp}
+    \__draw_backend_literal:e {1.2495~3.9883~1.2495~3.1895~v}
+    \__draw_backend_literal:e {1.2495~2.3906~3.3833~1.9326~y}
+    \__draw_backend_lineto:nn {6.7026bp}{1.9326bp}
+    \__draw_backend_literal:e {8.7178~2.5068~8.7178~3.9902~v}
+    \__draw_backend_literal:e {8.7178~5.4736~8.7178~17.5781~y}
+    \__draw_backend_literal:e {9.0732~18.834~7.769~18.834~v}
+    \__draw_backend_literal:e {6.4653~18.834~4.4497~18.834~y}
+    \__draw_backend_literal:e {3.146~18.6055~3.146~17.5781~v}
+    \__draw_backend_literal:e {3.146~16.5498~3.146~7.3018~y}
+    \__draw_backend_literal:e {3.6201~6.1016~4.3911~6.1016~v}
+    \__draw_backend_literal:e {5.1611~6.1016~5.873~6.1016~y}
+    \__draw_backend_literal:e {6.9692~6.3301~6.9692~7.1572~v}
+    \__draw_backend_literal:e {6.9692~7.9863~6.9692~12.21~y}
+    \__draw_backend_stroke:
+    \__draw_backend_scope_end:
+    }
+
+
+
+\cs_new_protected:Npn \l__atfi_annot_icon_PushPin_tl
+  {
+     \__draw_backend_scope_begin:
+     \__draw_backend_linewidth:n {1bp}
+     \__draw_backend_moveto:nn {1bp} {6bp}
+     \__draw_backend_lineto:nn {11bp}{6bp}
+     \__draw_backend_lineto:nn {11bp}{13bp}
+     \__draw_backend_lineto:nn {12bp}{13bp}
+     \__draw_backend_lineto:nn {14bp}{11bp}
+     \__draw_backend_lineto:nn {21bp}{11bp}%
+     \__draw_backend_lineto:nn {22bp}{12bp}
+     \__draw_backend_lineto:nn {23bp}{12bp}
+     \__draw_backend_lineto:nn {23bp}{2bp}
+     \__draw_backend_lineto:nn {22bp}{2bp}
+     \__draw_backend_lineto:nn {21bp}{3bp}
+     \__draw_backend_lineto:nn {14bp}{3bp}
+     \__draw_backend_lineto:nn {12bp}{1bp}
+     \__draw_backend_lineto:nn {11bp}{1bp}
+     \__draw_backend_lineto:nn {11bp}{6bp}
+     \exp_args:No\color_export:nnN {\l__atfi_annot_color_tl}{space-sep-rgb}\l_tmpa_tl
+     \exp_args:No \__draw_backend_color_fill_rgb:n {\l_tmpa_tl}
+     \__draw_backend_color_stroke_gray:n {0}
+     \__draw_backend_fillstroke:
+     \__draw_backend_color_stroke_gray:n {0.5}
+     \__draw_backend_moveto:nn {0bp} {7bp}
+     \__draw_backend_lineto:nn {10bp}{7bp}
+     \__draw_backend_lineto:nn {10bp}{8bp}
+     \__draw_backend_lineto:nn {1bp}{8bp}
+     \__draw_backend_stroke:
+     \__draw_backend_color_stroke_gray:n {1}
+     \__draw_backend_moveto:nn {12bp} {12bp}
+     \__draw_backend_lineto:nn {14bp}{10bp}
+     \__draw_backend_lineto:nn {22bp}{10bp}
+     \__draw_backend_lineto:nn {22bp}{11bp}
+     \__draw_backend_stroke:
+     \__draw_backend_scope_end:
+  }
+
+\cs_new_protected:Npn \l__atfi_annot_icon_Tag_tl
+  {
+    \__draw_backend_scope_begin:
+    \__draw_backend_color_fill_gray:n {0.5}
+    \__draw_backend_moveto:nn {10.0542bp} {14.9873bp}
+    \__draw_backend_lineto:nn {24.27bp}{14.9873bp}
+    \__draw_backend_lineto:nn {25.252bp}{14.0059bp}
+    \__draw_backend_lineto:nn {25.252bp}{1.1455bp}
+    \__draw_backend_lineto:nn {24.1064bp}{0bp}
+    \__draw_backend_lineto:nn {9.9609bp}{0bp}
+    \__draw_backend_lineto:nn {6.0327bp}{6.0088bp}
+    \__draw_backend_lineto:nn {6.0327bp}{9.002bp}
+    \__draw_backend_lineto:nn {10.0542bp}{14.9873bp}
+    \__draw_backend_moveto:nn {9.3994bp} {9.376bp}
+    \__draw_backend_curveto:nnnnnn{8.5215bp}{9.376bp}{7.8096bp}{8.5596bp}{7.8096bp}{7.5527bp}
+    \__draw_backend_curveto:nnnnnn{7.8096bp}{6.5449bp}{8.5215bp}{5.7285bp}{9.3994bp}{5.7285bp}
+    \__draw_backend_curveto:nnnnnn{10.2778bp}{5.7285bp}{10.9897bp}{6.5449bp}{10.9897bp}{7.5527bp}
+    \__draw_backend_curveto:nnnnnn{10.9897bp}{8.5596bp}{10.2778bp}{9.376bp}{9.3994bp}{9.376bp}
+    \__draw_backend_closepath:
+    \__draw_backend_fill:
+    \__draw_backend_literal:e {0~i} %???
+    \__draw_backend_linewidth:n {0.5bp}
+    \__draw_backend_miterlimit:n {4}
+    \__draw_backend_join_round:
+    \__draw_backend_moveto:nn {8.5107bp} {16.5313bp}
+    \__draw_backend_lineto:nn  {22.7266bp}{16.5313bp}
+    \__draw_backend_lineto:nn  {23.7085bp}{15.5488bp}
+    \__draw_backend_lineto:nn  {23.7085bp}{2.6895bp}
+    \__draw_backend_lineto:nn  {22.563bp}{1.543bp}
+    \__draw_backend_lineto:nn  {8.4175bp}{1.543bp}
+    \__draw_backend_lineto:nn  {4.4893bp}{7.5527bp}
+    \__draw_backend_lineto:nn  {4.4893bp}{10.5449bp}
+    \__draw_backend_lineto:nn  {8.5107bp}{16.5313bp}
+    \__draw_backend_moveto:nn  {7.856bp}{10.9199bp}
+    \__draw_backend_curveto:nnnnnn{6.978bp}{10.9199bp}{6.2661bp}{10.1035bp}{6.2661bp}{9.0957bp}
+    \__draw_backend_curveto:nnnnnn{6.2661bp}{8.0879bp}{6.978bp}{7.2715bp}{7.856bp}{7.2715bp}
+    \__draw_backend_curveto:nnnnnn{8.7344bp}{7.2715bp}{9.4463bp}{8.0879bp}{9.4463bp}{9.0957bp}
+    \__draw_backend_curveto:nnnnnn{9.4463bp}{10.1035bp}{8.7344bp}{10.9199bp}{7.856bp}{10.9199bp}
+    \__draw_backend_closepath:
+    \exp_args:No\color_export:nnN {\l__atfi_annot_color_tl}{space-sep-rgb}\l_tmpa_tl
+    \exp_args:No \__draw_backend_color_fill_rgb:n {\l_tmpa_tl}
+    \__draw_backend_color_stroke_gray:n {0}
+    \__draw_backend_fillstroke:
+    \__draw_backend_linewidth:n {1bp}
+    \__draw_backend_moveto:nn{12.3291bp}{12.2656bp}
+    \__draw_backend_lineto:nn{21.1206bp}{12.2656bp}
+    \__draw_backend_stroke:
+    \__draw_backend_moveto:nn{12.3291bp}{9.1797bp}
+    \__draw_backend_lineto:nn{21.1206bp}{9.1797bp}
+    \__draw_backend_stroke:
+    \__draw_backend_moveto:nn{12.3291bp}{6.1875bp}
+    \__draw_backend_lineto:nn{21.1206bp}{6.1875bp}
+    \__draw_backend_stroke:
+    \__draw_backend_linewidth:n {0.5bp}
+    \__draw_backend_moveto:nn{0bp}{9.0488bp}
+    \__draw_backend_lineto:nn{6.2661bp}{9.0957bp}
+    \__draw_backend_stroke:
+    \__draw_backend_moveto:nn {1.4028bp}{5.2148bp}
+    \__draw_backend_lineto:nn {1.4028bp}{9.6094bp}
+    \__draw_backend_literal:e {1.6831~10.6387~2.4316~10.6387~v}
+    \__draw_backend_literal:e {3.6475~10.6387~3.5542~9.0488~y}
+    \__draw_backend_stroke:
+    \__draw_backend_scope_end:
+  }
+
+\cs_new_protected:Npn \__atfi_annot_print_icon_Graph:
+  {
+    \raisebox{-1.5bp}
+      {
+        \parbox[b][20bp]{22bp}
+          {
+            \rule{0pt}{0pt}\l__atfi_annot_icon_Graph_tl
+          }
+      }
+  }
+
+\cs_new_protected:Npn \__atfi_annot_print_icon_Paperclip:
+  {
+    \raisebox{-1.25bp}
+      {
+        \parbox[b][21bp]{12bp}
+          {
+            \rule{0pt}{0pt}\l__atfi_annot_icon_Paperclip_tl
+          }
+      }
+  }
+
+\cs_new_protected:Npn \__atfi_annot_print_icon_PushPin:
+  {
+    \raisebox{-1.25bp}
+      {
+        \parbox[b][14bp]{24bp}
+          {
+            \rule{0pt}{0pt}\l__atfi_annot_icon_PushPin_tl
+          }
+      }
+   }
+
+
+\cs_new_protected:Npn \__atfi_annot_print_icon_Tag:
+  {
+    \raisebox{-1.6bp}
+      {
+        \parbox[b][17bp]{25bp}
+          {
+            \rule{0pt}{0pt}\l__atfi_annot_icon_Tag_tl
+          }
+      }
+   }
+
+
+\endinput
+%%
+%% End of file `new-attachfile.sty'.
