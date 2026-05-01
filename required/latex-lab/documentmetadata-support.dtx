@@ -18,8 +18,8 @@
 % for those people who are interested or want to report an issue.
 %
 %    \begin{macrocode}
-\def\documentmetadatasupportversion{1.1a}
-\def\documentmetadatasupportdate{2026-04-23}
+\def\documentmetadatasupportversion{1.1b}
+\def\documentmetadatasupportdate{2026-05-02}
 %    \end{macrocode}
 %
 %
@@ -159,6 +159,8 @@
 % \DescribeMkey{backend}
 % \DescribeMkey{pdfversion}
 % \DescribeMkey{uncompress}
+% \DescribeMkey{language}
+% \DescribeMkey{otherlanguages}
 % \DescribeMkey{lang}
 % \DescribeMkey{pdfstandard}
 % \DescribeMkey{xmp}
@@ -183,11 +185,54 @@
 %    \item[\texttt{uncompress}] (no value) Forces an uncompressed pdf
 %      --- mainly for debugging purposes. Do not unnecessarily set it in normal production 
 %      because it increases the size of the final PDF considerably.
+%    
+%    \item[\texttt{language}]
+%    The language key should be used to set the main language of the 
+%    document. The value is given in BCP~47 format, 
+%    so, e.g, \texttt{languade=de-DE} or \texttt{language=fr}. 
+%    The value is stored in the document properties and can be retrieved (expandably) with
+%    \verb+\GetDocumentProperty{document/language}+. 
+%  
+%    The key does \emph{not} changes the language setup of a document: it doesn't change the
+%    hyphenation patters or the fix names or forces the loading of language package. 
+%    The expectation is that packages that need to know the document language, like babel or 
+%    polyglossia read the value and react accordingly. 
+%    The BCP~47 value,e.g., can be parsed with \cs{text_bcp_parse:n} which produces 
+%    7 brace groups, see interface3. 
+%    To extract, for example, the main language in the first group this code could be used:
+%    \begin{verbatim}
+%    \cs_generate_variant:Nn\text_bcp_parse:n{e}
+%    \tl_set:Ne\mainlanguage
+%     {\exp_last_unbraced:Ne\use_i:nnnnnnn
+%      {\text_bcp_parse:e{\GetDocumentProperty{document/language}}}}
+%    \end{verbatim}
+%    
+%   
+%    The key updates the default \cs{BCPdata} command to use with the give language value
+%    Note that this can lead to empty fields for region or script, if, e.g., only 
+%    \texttt{language=de} instead of \texttt{language=de-Latn-AT} is used. 
+%    This is only relevant if neither babel nor polyglossia
+%    are used as both packages overwrite the \cs{BCPdata} command with their own version.
 %
+%    The value of the language key is also used to set the \texttt{/Lang} key in the PDF. 
+%    If a different (shorter) value is wanted there, an optional argument can be used:
+%    \verb+language=[de]{de-DE}+, or the \texttt{lang} key can be 
+%     used to overwrite the value: \verb+language=de-DE,lang=de+
+%
+%     \item[\texttt{otherlanguage}] 
+%     The \texttt{otherlanguages} key can be used to declare more languages that are used 
+%     in the document. The argument is a comma list of languages in BCP~47 format:
+%     \verb+otherlanguages={fr,en-US,ar}. 
+%     The comma list is stored in the document properties and can be retrieved 
+%     (expandably) with \verb+\GetDocumentProperty{document/otherlanguages}+. 
+%     As with the \texttt{language} key the expectation is, that language packages
+%     read the value and react accordingly.
+% 
 %    \item[\texttt{lang}] Explicitly sets the Lang entry in the Catalog,
 %     e.g., \texttt{lang=de-DE}. If not given, the value of \verb+\BCPdata{language}+
 %     or \verb+ \BCPdata{main.language}+ at the beginning of the document is used (these
 %     commands are set by \pkg{babel}, the default value is |en-US|).
+%     The key is implicitly set if the \texttt{language} key is used.
 %
 %    \item[\texttt{pdfstandard}] Choice key to set the pdf standard.
 %      Currently |A-1b|, |A-2a|, |A-2b|, |A-2u|, |A-3a|, |A-3b|, |A-3u|, |A-4|, |A-4E|
@@ -443,6 +488,24 @@
         \keys_set_exclude_groups:nnn  { document / metadata } { init,pdf } { #1 }
 %    \end{macrocode}
 % Finally we setup the language default.
+% If the \texttt{language} key hasn't be set yet, we set it directly
+% either to the value of the \texttt{lang} key or to en-US.
+%    \begin{macrocode}
+        \tl_if_empty:eTF{\GetDocumentProperty{document/language}}
+         {
+           \tl_set:Ne\l_@@_tmpa_tl{\GetDocumentProperty{document/lang}}
+           \tl_if_empty:NTF\l_@@_tmpa_tl
+            {\AddToDocumentProperties[document]{language}{en-latn-US}} 
+            {
+             \keys_set:ne{document/metadata}{language=\l_@@_tmpa_tl}
+             \@@_update_BCPdata:
+            }           
+         }
+         {
+           \@@_update_BCPdata:
+         }
+%    \end{macrocode}
+% At last we setup the lang default.
 % This is done after the begindocument hook so that it can pick up settings
 % from babel. If the Catalog dictionary already contains a lang value we do nothing,
 % otherwise we use the value stored in \cs{BCPdata}, either the main language
@@ -634,6 +697,71 @@
 %\changes{1.0u}{2025/10/09}{Added check-tagging-status}
 %\changes{1.0v}{2025/10/12}{Extend check-tagging-status to libraries}
 %\changes{1.0z}{2026-04-22}{Removed duplicated key definitions that are already done in pdfmanagement-init}
+% Helper command for the language key
+% \begin{macro}{\@@_update_BCPdata:n}
+% This command updates the \cs{BCPdata} command.
+%    \begin{macrocode}
+\cs_generate_variant:Nn \text_bcp_parse:n {e}
+\cs_new_protected:Npn\@@_update_BCPdata: 
+ {
+   \tl_set:Ne\l_@@_tmpa_tl { \text_bcp_parse:e{\GetDocumentProperty{document/language}} }
+   \use:e
+    {
+     \exp_not:N\renewcommand*\exp_not:N\BCPdata[1]
+      {
+       \exp_not:N \str_case:nn {##1}
+        {
+         { language } %was en
+           { \exp_last_unbraced:No\use_i:nnnnnnn { \l_@@_tmpa_tl} }
+         { region }   %was US 
+           { \exp_last_unbraced:No\use_iv:nnnnnnn { \l_@@_tmpa_tl} }
+         { script }   %was Latn
+           { \exp_last_unbraced:No\use_iii:nnnnnnn { \l_@@_tmpa_tl} }
+         { tag }      %was en-US 
+           { \exp_last_unbraced:No\use_i:nnnnnnn { \l_@@_tmpa_tl}- 
+             \exp_last_unbraced:No\use_iv:nnnnnnn { \l_@@_tmpa_tl}
+           }
+        }
+      }
+   }
+ }
+%    \end{macrocode}
+% \end{macro}
+
+% \begin{macro}{\@@_language_set:n,\@@_language_set_aux:wn}
+% Command to handle the optional argument of the \texttt{language} key
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_language_set:n #1
+ {
+   \tl_if_head_eq_charcode:nNTF {#1}[ %]
+    {
+      \@@_language_set_aux:wn  #1
+    }
+    {
+      \AddToDocumentProperties[document]{language}{#1}
+      \keys_set:ne{document/metadata}{lang={#1}}
+    }
+ }
+
+\cs_new_protected:Npn \@@_language_set_aux:wn [#1] #2
+  {
+     \AddToDocumentProperties[document]{language}{#2}
+     \keys_set:ne{document/metadata}{lang={#1}}
+  }
+%    \end{macrocode}
+% \end{macro}
+% The key definition:
+% \changes{1.1b}{2026-05-02}{Add keys \texttt{language} and \texttt{otherlanguages}.}
+%    \begin{macrocode}
+\keys_define:nn { document / metadata }
+ {
+   language      .code:n = 
+    {
+      \@@_language_set:n {#1}
+    },
+   otherlanguages.code:n = {\AddToDocumentProperties [document]{otherlanguages}{#1}},
+ }
+%    \end{macrocode}
 %    \begin{macrocode}
 \keys_define:nn { document / metadata }
   {
