@@ -10,6 +10,8 @@ ctanpkg = "latex-lab"
 
 maindir = "../.."
 
+use_std_format = true
+
 -- Minor modifications to file types
 installfiles = {
                  "*.ltx",

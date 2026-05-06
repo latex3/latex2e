@@ -25,7 +25,8 @@ local has_relevant_attributes = mlist_to_mml.has_relevant_attributes
 
 local mappings = require'luamml-legacy-mappings'
 local write_xml = require'luamml-xmlwriter'
-local write_struct = require'luamml-structelemwriter'
+local write_struct = require'luamml-structelemwriter'.write
+local restore_struct = require'luamml-structelemwriter'.restore_after_math
 
 local filename_token = token.create'l__luamml_filename_tl'
 local label_token = token.create'l__luamml_label_tl'
@@ -193,6 +194,7 @@ local function save_result(xml, display, structelem)
   end
   if tex.count.l__luamml_flag_int & 8 == 8 then
     write_struct(mlist_result)
+    restore_struct()
   end
   return mlist_result
 end
