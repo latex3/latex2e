@@ -156,6 +156,10 @@ function update_tag(file,content,tagname,tagdate)
   end
   -- Special case for ltvers.dtx: only in base but 'quick'
   if file == "ltvers.dtx" then
+    local tag = match(tagname,"^(.*):([^:]*)$") 
+    content = gsub(content,
+      "\n   {" .. iso .. "}\n",
+      "\n   {" .. tag .. "}\n")
     content = gsub(content,
       "\\patch@level{%-?%d}",
       "\\patch@level{" .. rev .. "}")
@@ -166,6 +170,8 @@ function update_tag(file,content,tagname,tagdate)
     return update_tag_l3(file,content,tag)
   end
 end
+
+use_std_format = false
 
 -- Need to build format files
 function fmt(engines,dest)
@@ -191,7 +197,7 @@ function fmt(engines,dest)
       .. os_pathsep .. texmfdir .. "//" .. (fmtsearch and os_pathsep or "")
       .. os_concat .. cmd .. " -etex -ini -output-directory=" .. unpackdir
       .. " " .. ini .. ".ini"
-      .. (hide and (" > " .. os_null) or ""))
+      .. (options["quiet"] and (" > " .. os_null) or ""))
     if errorlevel ~= 0 then return errorlevel end
 
     cp(ini .. ".fmt",unpackdir,dest)
@@ -201,7 +207,9 @@ function fmt(engines,dest)
 
   if dest ~= typesetdir and
     (not options["config"] or options["config"][1] ~= "config-TU") then
-    cp("fonttext.cfg",supportdir,unpackdir)
+    if not use_std_format then
+      cp("fonttext.cfg",supportdir,unpackdir)
+    end
   end
 
   -- Zap the custom hyphen.cfg when typesetting

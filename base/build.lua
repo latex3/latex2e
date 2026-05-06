@@ -36,10 +36,12 @@ installfiles   =
     "nfssfont.tex",
     "sample2e.tex",
     "small2e.tex",
-    "testpage.tex"
+    "testpage.tex",
+    "glyphtounicode-cmex.tex"
   }
 sourcefiles    =
   {
+    "l3in2edoc.cls",         -- temp
     "lppl.tex",
     "ltnews.cls",
     "ltxguide.cls",
@@ -100,6 +102,7 @@ typesetfiles_list = {
     "*.err",
     "lppl.tex",
     "cfgguide.tex",
+    "cmdguide.tex",
     "clsguide.tex",
     "clsguide-historic.tex",
     "cyrguide.tex",
@@ -154,6 +157,7 @@ typesetdeps =
   {
     maindir .. "/required/graphics",
     maindir .. "/required/tools",
+    maindir .. "/required/firstaid",
     maindir .. "/required/amsmath"    -- for l3doc.cls :-(
   }
 unpackdeps  = {}
@@ -211,7 +215,9 @@ function bundleunpack ()
           -- of localdir w.r.t. unpackdir
           os_setenv .. " TEXINPUTS=" .. unpackdir .. os_concat ..
           unpackexe .. " " .. unpackopts .. " -output-directory=" .. unpackdir
-            .. " " .. unpackdir .. "/" .. j,"w"
+            .. " " .. unpackdir .. "/" .. j
+            .. (options["quiet"] and (" > " .. os_null) or ""),
+          "w"
         ):write(string.rep("y\n", 300)):close()
       if not success then
         return 1

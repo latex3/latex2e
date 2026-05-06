@@ -12,12 +12,18 @@ ctanpkg = "latex-amsmath"
 -- Location of main directory: use Unix-style path separators
 maindir = "../.."
 
+checkdeps =
+  {
+    maindir .. "/base",
+    maindir .. "/required/firstaid"
+  }
+
 -- Minor modifications to file types
 sourcefiles  = {"*.dtx", "*.ins", "amstex.sty","amsmath-2018-12-01.sty"}
 typesetfiles = {"*.dtx", "*.tex"}
 
--- Allow for TU test
-checkconfigs = {"build","config-TU"}
+-- Allow for TU test and tests that need amsthm, for example
+checkconfigs = {"build","config-TU","config-search"}
 
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")

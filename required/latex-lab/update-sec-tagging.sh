@@ -8,4 +8,5 @@ l3build save -epdftex,luatex -cconfig-sec \
      test-suppress-sect\
      test-gh725-opt-arg\
      test-gh777-sec-end\
-     test-gh787
+     test-gh787 \
+     test-book-tagging-off

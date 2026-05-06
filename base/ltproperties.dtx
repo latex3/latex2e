@@ -30,10 +30,10 @@
 %<*driver> 
 % \fi
 \ProvidesFile{ltproperties.dtx}
-             [2024/11/28 v1.0i LaTeX Kernel (Properties)]
+             [2026-03-12 v1.0m LaTeX Kernel (Properties)]
 % \iffalse
 %
-\documentclass[full]{l3doc}
+\documentclass[full]{l3in2edoc}
 \GetFileInfo{ltproperties.dtx}
 
 \EnableCrossrefs
@@ -206,6 +206,18 @@
 %   If \meta{property} has not been declared with |\property_new:nnnn| 
 %   an error is issued. The command raises an internal, expandable, local flag 
 %   if the reference can not be resolved.
+% \end{function}
+% 
+% \begin{function}[EXP,added=2025-11-20]{\property_item:nn,\property_item:ee}
+%   \begin{syntax}
+%      \cs{property_item:nn} \Arg{label} \Arg{property}
+%   \end{syntax}
+%      
+%   Retrieves the value of the \meta{property} for the \meta{label} like
+%   |\property_ref:nn| but the result is returned within the |\unexpanded| primitive 
+%   (|\exp_not:n|), which means that the \meta{value} does not expand further 
+%   when appearing in an \texttt{e}-type or \texttt{x}-type argument expansion. This allows for example
+%   to handle values containing user commands which are not safe in an expansion context.    
 % \end{function}
 % 
 % \begin{function}[EXP]{\property_ref:nnn,\property_ref:een}
@@ -469,6 +481,9 @@
 %<latexrelease>                 {Cross-referencing~properties}
 %    \end{macrocode}
 %
+% \changes{v1.0m}{2026-03-12}{Switch from \texttt{x}- to \texttt{e}-type
+%   expansion in expl3 code}
+%
 % The approach here is based closely on that from \pkg{zref}; separate out
 % lists of properties and the properties themselves, so the latter can be
 % used multiple times and in varying combinations. 
@@ -489,12 +504,13 @@
 %   last entry is done using text so needs a check. We could use a set of
 %   |prop| here, but as we never need to map or copy the lists, we can gain
 %   performance using the hash table approach.
+%   \changes{v1.0j}{2025-08-01}{correct name of shipout boolean}
 %    \begin{macrocode}
 \cs_new_protected:Npn \property_new:nnnn #1#2#3#4
   {
     \cs_if_free:cTF { @@_code_ #1 : }
       {
-        \exp_args:Nx \@@_gset:nnnn { \tl_to_str:n {#1} }
+        \exp_args:Ne \@@_gset:nnnn { \tl_to_str:n {#1} }
          {#2} {#3} {#4}
       }
       {
@@ -511,13 +527,13 @@
     \cs_gset:cpn { @@_code_ #1 : } {#4}
     \tl_gclear_new:c { g_@@_default_ #1 _tl }
     \tl_gset:cn { g_@@_default_ #1 _tl } {#3}
-    \bool_if_exist:cF { g_@@_shipout_ #1 _tl }
-      { \bool_new:c { g_@@_shipout_ #1 _tl } }
+    \bool_if_exist:cF { g_@@_shipout_ #1 _bool }
+      { \bool_new:c { g_@@_shipout_ #1 _bool } }
     \str_case:nnF {#2}
       {
-        { now } { { \bool_gset_false:c { g_@@_shipout_ #1 _tl } } }
+        { now } { { \bool_gset_false:c { g_@@_shipout_ #1 _bool } } }
         { shipout }
-          { \bool_gset_true:c { g_@@_shipout_ #1 _tl } }
+          { \bool_gset_true:c { g_@@_shipout_ #1 _bool } }
       }
       { \msg_error:nnnn { property } { unknown-setpoint } {#1} {#2} }
   }
@@ -586,7 +602,7 @@
       {
         {#1}
         {
-          \bool_if:cTF { g_@@_shipout_ #1 _tl }
+          \bool_if:cTF { g_@@_shipout_ #1 _bool }
             { \exp_not:c }
             { \use:c }
               { @@_code_ #1 : }
@@ -670,6 +686,21 @@
 %    \end{macrocode}
 % \end{macro}
 % 
+% \begin{macro}{\property_item:nn,\property_item:ee}
+% Retrieve the value but wrap it into an \cs{exp_not:n} to avoid further expansion.
+% \changes{v1.0l}{2025-11-20}{added \cs{property_item:nn}, gh1194}
+%    \begin{macrocode}
+\cs_new:Npn \property_item:nn #1#2
+ {
+  \tl_if_exist:cTF { g_@@_label_ \tl_to_str:n {#1} _ \tl_to_str:n {#2} _tl }
+   {
+     \exp_not:v { g_@@_label_ \tl_to_str:n {#1} _ \tl_to_str:n {#2} _tl }
+   }  
+   { \tl_use:c { g_@@_default_ \tl_to_str:n {#2} _tl } }
+ }
+\cs_generate_variant:Nn\property_item:nn{ee} 
+%    \end{macrocode}
+% \end{macro}
 % \begin{macro}[EXP]{\RefProperty}
 %   Search for the label/property combination, and if not found fall back
 %   to the default of the property or the given default.
@@ -827,7 +858,9 @@
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{\property_ref_undefined_warn:n}
+% \begin{macro}{\property_ref_undefined_warn:n,
+%               \property_ref_undefined_warn:e}
+%   \changes{v1.0k}{2025-09-05}{Add missing |e| variant (gh/1854)}
 %    \begin{macrocode}
 \cs_new_protected:Npn \property_ref_undefined_warn:n #1 %#1 label
   {
@@ -837,6 +870,7 @@
        \@latex@warning{Reference~`#1'~on~page~\thepage\space undefined}%
     }         
   }
+\cs_generate_variant:Nn \property_ref_undefined_warn:n {e}
 %    \end{macrocode}
 % \end{macro}
 %
@@ -905,7 +939,7 @@
 %    \end{macrocode}
 % \end{variable}
 %
-% \begin{variable}{target}
+% \begin{variable}{pagetarget}
 %    \begin{macrocode}
 \newcommand\@currentHpage{}
 \property_new:nnnn  { pagetarget } { shipout } { } { \@currentHpage }
