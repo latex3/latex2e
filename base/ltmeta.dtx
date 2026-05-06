@@ -16,7 +16,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltmeta.dtx}
-             [2026-04-22 v1.0e LaTeX Kernel (Document Metadata)]
+             [2026-05-06 v1.0f LaTeX Kernel (Document Metadata)]
 % \iffalse
 %
 \documentclass{l3in2edoc}
@@ -173,22 +173,84 @@
 % \changes{v1.0b}{2022/05/17}{Default definition for targets added}
 % \changes{v1.0c}{2024/09/21}{Added tagging support}
 % \changes{v1.0e}{2026/04/22}{Add hook to change target name and use it in \cs{NextLinkTarget}}
+% \changes{v1.0f}{2026/05/06}{Add \cs{SaveLastSkip} and \cs{RestoreLastSkip} to better mimic hyperref's spacing behaviour, gh/2070}
+% \changes{v1.0f}{2026/05/06}{Use \cs{latelua} to mimic a whatsits to avoid spurious warning, gh/2070}
 %  \begin{macro}{\MakeLinkTarget}
 %  \begin{macro}{\LinkTargetOn}
 %  \begin{macro}{\LinkTargetOff}
 %  \begin{macro}{\NextLinkTarget}
 %    \begin{macrocode}
-%<latexrelease>\IncludeInRelease{2024/11/01}%
+%<latexrelease>\IncludeInRelease{2026/06/01}%
 %<latexrelease>                 {\MakeLinkTarget}{Record target name for tagging support}%
 \ExplSyntaxOn
+%    \end{macrocode}
+% luatex complains about non-PDF specials if \cs{special} is used, so we use \cs{latelua} instead
+% to create an empty whatits node.
+%    \begin{macrocode}
+\ifx\directlua\@undefined
+ \def\@kernel@whatsits{\special{}}
+\else
+ \def\@kernel@whatsits{\latelua{}}
+\fi 
+%    \end{macrocode}
+% This definition is copied from \pkg{hyperref}, only the command names are changed. It is the code
+% \pkg{hyperref} uses around anchors/destination to avoid that they affect the spacing. % 
+%    \begin{macrocode}
+\let\RestoreLastSkip\relax
+\def\SaveLastSkip{%
+  \let\RestoreLastSkip\relax
+  \ifvmode
+    \ifdim\lastskip=\z@
+      \ifnum\lastnodetype=11 %
+        \let\RestoreLastSkip\nobreak
+      \else
+        \let\RestoreLastSkip\relax
+      \fi
+    \else
+      \begingroup
+        \skip@=-\lastskip
+        \edef\x{%
+          \endgroup
+          \def\noexpand\RestoreLastSkip{%
+            \noexpand\ifvmode
+              \noexpand\nobreak
+              \vskip\the\skip@
+              \vskip\the\lastskip\relax
+            \noexpand\fi
+          }%
+        }%
+      \x
+    \fi
+  \else
+    \ifhmode
+      \ifdim\lastskip=\z@
+        \let\RestoreLastSkip\nobreak
+      \else
+        \begingroup
+          \skip@=-\lastskip
+          \edef\x{%
+            \endgroup
+            \def\noexpand\RestoreLastSkip{%
+              \noexpand\ifhmode
+                \noexpand\nobreak
+                \hskip\the\skip@
+                \hskip\the\lastskip\relax
+              \noexpand\fi
+            }%
+          }%
+        \x
+      \fi
+    \fi
+  \fi
+}
 \hook_new:n{target/setname/after}
 \int_new:N\g__kernel_target_int
 \NewDocumentCommand\MakeLinkTarget{sO{}m}{%
   \ifvmode
-    \special{}%
+    \SaveLastSkip\@kernel@whatsits\RestoreLastSkip%
   \else
     \@savsf\spacefactor
-    \smash{}%
+    \SaveLastSkip\smash{}\RestoreLastSkip%
     \spacefactor\@savsf
   \fi
   \IfBooleanTF {#1}
@@ -203,6 +265,30 @@
   \UseTaggingSocket{recordtarget} 
    }
 \ExplSyntaxOff   
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{2024/11/01}%
+%<latexrelease>                 {\MakeLinkTarget}{Record target name for tagging support}%
+%<latexrelease>\ExplSyntaxOn
+%<latexrelease>\NewDocumentCommand\MakeLinkTarget{sO{}m}{%
+%<latexrelease>  \ifvmode
+%<latexrelease>    \special{}%
+%<latexrelease>  \else
+%<latexrelease>    \@savsf\spacefactor
+%<latexrelease>    \smash{}%
+%<latexrelease>    \spacefactor\@savsf
+%<latexrelease>  \fi
+%<latexrelease>  \IfBooleanTF {#1}
+%<latexrelease>   {
+%<latexrelease>     \tl_gset:Ne \@currentHref {#3}
+%<latexrelease>   }
+%<latexrelease>   {
+%<latexrelease>     \int_gincr:N\g__kernel_target_int
+%<latexrelease>     \tl_gset:Ne \@currentHref {target*.\int_use:N\g__kernel_target_int}
+%<latexrelease>   }
+%<latexrelease>  \hook_use:n{target/setname/after} 
+%<latexrelease>  \UseTaggingSocket{recordtarget} 
+%<latexrelease>   }
+%<latexrelease>\ExplSyntaxOff   
 %<latexrelease>\EndIncludeInRelease
 %<latexrelease>\IncludeInRelease{2022/06/01}%
 %<latexrelease>                 {\MakeLinkTarget}{Record target name for tagging support}%
