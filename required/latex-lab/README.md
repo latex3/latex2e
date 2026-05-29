@@ -1,6 +1,6 @@
 # LaTeX laboratory
 
-Release 2025-11-01a
+Release 2026-06-01 pre-release 2
 
 ## Overview
 

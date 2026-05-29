@@ -1,8 +1,8 @@
 --[[
-   This file returns a number of helper functions used when tagging 
+   This file returns a number of helper functions used when tagging
    table-like math.
-   
-   The returned functions are 
+
+   The returned functions are
     * store_column (startmath)
     * store_column_xml (mml, display)
     * store_tag (xml)    (this adds the intent :equation-label')
@@ -11,10 +11,10 @@
     * get_table ()
 
    It adds a function to the callback
-   * hpack_filter. 
+   * hpack_filter.
    This function is executed if groupcode == fin_row, so at the end of alignment rows.
-   
-   The file is loaded by luamml-amsmath and luamml-array. 
+
+   The file is loaded by luamml-amsmath and luamml-array.
 --]]
 
 --TODO: why are they loaded? None of the functions is used.
@@ -86,12 +86,26 @@ end
 local function store_notag(xml)
   local mml_row = store_get_row()
   xml.intent = ':no-equation-label'
-  table.insert(mml_row, 1, xml)  
+  table.insert(mml_row, 1, xml)
 end
 
 local function set_row_attribute(name, value)
   local mml_row = store_get_row()
   mml_row[name] = value
+end
+
+local function store_row(xml)
+  local props = properties[tex.lists.align_head]
+  if not props then
+    props = {}
+    properties[tex.lists.align_head] = props
+  end
+  local mml_table = props.mathml_table_node_table
+  if not mml_table then
+    mml_table = {[0] = 'mtable'}
+    props.mathml_table_node_table = mml_table
+  end
+  table.insert(mml_table, xml)
 end
 
 luatexbase.add_to_callback('hpack_filter', function(_, group)
@@ -104,17 +118,7 @@ luatexbase.add_to_callback('hpack_filter', function(_, group)
   if not mml_row then return true end
   props.mathml_row = nil
 
-  props = properties[tex.lists.align_head]
-  if not props then
-    props = {}
-    properties[tex.lists.align_head] = props
-  end
-  local mml_table = props.mathml_table_node_table
-  if not mml_table then
-    mml_table = {[0] = 'mtable'}
-    props.mathml_table_node_table = mml_table
-  end
-  table.insert(mml_table, mml_row)
+  store_row(mml_row)
   return true
 end, 'mathml amsmath processing')
 
@@ -132,6 +136,7 @@ return {
   store_column_xml = store_column_xml,
   store_tag = store_tag,
   store_notag = store_notag,
+  store_row = store_row,
   set_row_attribute = set_row_attribute,
   get_table = get_table,
 }

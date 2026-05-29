@@ -24,8 +24,8 @@
 
 local ProvidesLuaModule = {
     name          = "tagpdf",
-    version       = "0.99v",       --TAGVERSION
-    date          = "2025-10-02", --TAGDATE
+    version       = "1.0c",       --TAGVERSION
+    date          = "2026-05-17", --TAGDATE
     description   = "tagpdf lua code",
     license       = "The LATEX Project Public License 1.3c"
 }
@@ -75,6 +75,7 @@ functions
  ltx.__tag.func.output_parenttree(): outputs the content of the parenttree
  ltx.__tag.func.pdf_object_ref(name,index): outputs the object reference for the object name
  ltx.__tag.func.markspaceon(), ltx.__tag.func.markspaceoff(): (de)activates the marking of positions for space chars
+ ltx.__tag.func.linkbin() returns the number of OBJR stored in the linkbin structure
  ltx.__tag.trace.show_mc_data (num,loglevel): shows ltx.__tag.mc[num] is the current log level is >= loglevel
  ltx.__tag.trace.show_all_mc_data (max,loglevel): shows a maximum about mc's if the current log level is >= loglevel
  ltx.__tag.trace.show_seq: shows a sequence (array)
@@ -93,6 +94,7 @@ local structnumattributeid   = luatexbase.new_attribute ("g__tag_structnum_attr"
 local iwspaceOffattributeid = luatexbase.new_attribute ("g__tag_interwordspaceOff_attr")
 local iwspaceattributeid = luatexbase.new_attribute ("g__tag_interwordspace_attr")
 local iwfontattributeid  = luatexbase.new_attribute ("g__tag_interwordfont_attr")
+local softhyphenattribute = luatexbase.new_attribute ("l__tag_softhyphen_attr")
 local tagunmarkedbool= token.create("g__tag_tagunmarked_bool")
 local truebool       = token.create("c_true_bool")
 local softhyphenbool = token.create("g__tag_softhyphen_bool")
@@ -469,7 +471,12 @@ local function __tag_mark_spaces (head)
       elseif glyph.next and (glyph.next.id==KERN) and not inside_math then
        local kern = glyph.next
        if kern.next and (kern.next.id== GLUE)  and (kern.next.width >0)
+       -- the attribute is also set on the kern in case the kern+glue is
+       -- discarded at a line break tagging issue #1102
+       -- TODO iterate back through all discardable nodes.
        then
+        nodesetattribute(kern,iwspaceattributeid,1)
+        nodesetattribute(kern,iwfontattributeid,glyph.font)
         nodesetattribute(kern.next,iwspaceattributeid,1)
         nodesetattribute(kern.next,iwfontattributeid,glyph.font)
        end
@@ -532,7 +539,7 @@ default_space_char.font  = default_fontid
 local function __tag_font_has_space (fontid)
  t= fonts.hashes.identifiers[fontid]
  if luaotfload.aux.slot_of_name(fontid,"space")
-    or t.characters and t.characters[32] and t.characters[32]["unicode"]==32
+    or t and t.characters and t.characters[32] and t.characters[32]["unicode"]==32
  then
     return true
  else
@@ -907,8 +914,13 @@ do
       for n, ch, fid in node.traverse_glyph(disc.pre) do
         local props = properties[n]
         if softhyphen_fonts[fid] and ch == hyphen_char and props and props[is_soft_hyphen_prop] then
-          n.char = soft_hyphen_char
-          props.glyph_info = nil
+          if nodegetattribute(n,softhyphenattribute) then
+            n.char = soft_hyphen_char
+            props.glyph_info = nil
+          else
+            nodesetattribute(n,mctypeattributeid,-2147483647)
+            nodesetattribute(n,mccntattributeid,-2147483647)
+          end
         end
       end
     end
@@ -1029,34 +1041,61 @@ function check_parent_child_rules (loglevel)
 
 ltx.__tag.func.check_parent_child_rules=check_parent_child_rules
 
-  if luatexbase.callbacktypes['linksplit'] then
-   luatexbase.add_to_callback('linksplit', function(start_link, position)
-     if start_link == nil then return end
-     local structnum =
-       node.get_attribute(start_link,luatexbase.attributes.g__tag_structnum_attr)
-     if structnum and structnum > -1 then
-      local s = ltx.__tag.tables['g__tag_struct_'..structnum..'_prop']['rolemap']
-      if s and (string.find(s,'Link') or string.find(s,'Reference')) then
-           local struct_insert_annot_shipout = token.create'__tag_struct_insert_annot_shipout:nnn'
-           local parentnum = tex.count['c@g__tag_parenttree_obj_int']
-           start_link.link_attr =
-              start_link.link_attr ..
+local linkbincnt = 0
+
+function ltx.__tag.func.linkbin()
+ return linkbincnt
+end
+
+if luatexbase.callbacktypes['linksplit'] then
+ luatexbase.add_to_callback('linksplit', function(start_link, position)
+   if start_link == nil then return end
+   local structnum =
+     node.get_attribute(start_link,luatexbase.attributes.g__tag_structnum_attr)
+   if structnum and structnum > -1 then
+    local s = ltx.__tag.tables['g__tag_struct_'..structnum..'_prop']['rolemap']
+    if s and (string.find(s,'Link') or string.find(s,'Reference')) then
+         local struct_insert_annot_shipout = token.create'__tag_struct_insert_annot_shipout:nnn'
+         local parentnum = tex.count['c@g__tag_parenttree_obj_int']
+         start_link.link_attr =
+            start_link.link_attr ..
+            ' /LTEX_position /' .. position ..
+            '/StructParent ' .. parentnum
+         tex.sprint(catlatex,struct_insert_annot_shipout,'{'..
+            structnum..'}{'..
+            start_link.objnum..' 0 R}{'..
+            parentnum ..'}')
+         -- the counter must be set explicitly as struct_insert_annot_shipout doesn't do it!
+         tex.setcount('global','c@g__tag_parenttree_obj_int',parentnum +1)
+          __tag_log(position .. " link part has object id " .. start_link.objnum .. " and structparent id " .. parentnum,2)
+    else
+        local linkbin = token.get_macro("c__tag_struct_link_bin_tl")
+        if linkbin then
+          local struct_insert_annot_shipout = token.create'__tag_struct_insert_annot_shipout:nnn'
+          local parentnum = tex.count['c@g__tag_parenttree_obj_int']
+          start_link.link_attr = string.gsub (start_link.link_attr, "/Contents%s+<%w+>","")
+          start_link.link_attr =
+            start_link.link_attr ..
               ' /LTEX_position /' .. position ..
-              '/StructParent ' .. parentnum
-           tex.sprint(catlatex,struct_insert_annot_shipout,'{'..
-              structnum..'}{'..
-              start_link.objnum..' 0 R}{'..
-              parentnum ..'}')
-           -- the counter must be set explicitly as struct_insert_annot_shipout doesn't do it!
-           tex.setcount('global','c@g__tag_parenttree_obj_int',parentnum +1)
-            __tag_log(position .. " link part has object id " .. start_link.objnum .. " and structparent id " .. parentnum,2)
-       else
-        __tag_log('Warning: Link not in Link or Reference structure element',0)
-        __tag_log('OBJR not created',0)
-        __tag_log('',0)
-       end
-     end
-   end, 'tagpdf')
-  end
+              '/StructParent ' .. parentnum .. '/Contents (artifact)'
+          tex.sprint(catlatex,struct_insert_annot_shipout,'{'..
+            linkbin..'}{'..
+            start_link.objnum..' 0 R}{'..
+            parentnum ..'}')
+          tex.setcount('global','c@g__tag_parenttree_obj_int',parentnum +1)
+          linkbincnt=linkbincnt+1
+          if linkbincnt == 1 then
+           __tag_log('Info: some Link annotation(s) are not in Link or Reference structure elements',0)
+           __tag_log('      moved into a container at the end of the structure tree\n',0)
+          end
+        else
+          __tag_log('Warning: Link not in Link or Reference structure element',0)
+          __tag_log('OBJR not created',0)
+          __tag_log('',0)
+        end
+    end
+   end
+ end, 'tagpdf')
+end
 -- 
 --  End of File `tagpdf.lua'.

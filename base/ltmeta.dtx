@@ -1,7 +1,7 @@
 % \iffalse meta-comment
 %
 %% File: ltmeta.dtx
-%% Copyright (C) 2021-2025
+%% Copyright (C) 2021-2026
 %% Frank Mittelbach, The LaTeX Project
 %
 % It may be distributed and/or modified under the conditions of the
@@ -16,10 +16,10 @@
 %<*driver>
 % \fi
 \ProvidesFile{ltmeta.dtx}
-             [2025/03/01 v1.0d LaTeX Kernel (Document Metadata)]
+             [2026-05-27 v1.0g LaTeX Kernel (Document Metadata)]
 % \iffalse
 %
-\documentclass{l3doc}
+\documentclass{l3in2edoc}
 \GetFileInfo{ltmeta.dtx}
 
 \EnableCrossrefs
@@ -98,6 +98,49 @@
 %    The full set of keys currently supported is documented in \texttt{documentmetadata-support.pdf}
 %    for now.
 %
+% \subsection{Storing and retrieving document properties}
+%
+% We provide a storage container where classes, packages and users can store
+% properties and metadata about the current document which may be of interest to 
+% other packages or to the user. This data can then be retrieved as necessary 
+% by packages or by the document author.
+%
+% The properties are stored with a key \meta{label}\texttt{/}\meta{property}. 
+% The values can be retrieved expandably.
+%
+% \begin{function}{\AddToDocumentProperties}
+% \begin{syntax}
+%  \cs{AddToDocumentProperties}\oarg{label}\Arg{property}\Arg{value}
+% \end{syntax}
+% This stores \meta{value} under the key \meta{label}/\meta{property}.
+% By default \meta{label} is the current package name |\@currname|. If another
+% label is chosen, it should be one which avoids clashes with other packages
+% using the container. The label |document| is used by the PDF management and by the
+% \LaTeX{} kernel and so reserved.
+% If the key \meta{label}/\meta{property} already exists in the container, its value
+% is overwritten without warning or error. 
+% \end{function}
+%
+% \begin{function}{\GetDocumentProperty}
+% \begin{syntax}
+%  \cs{GetDocumentProperty}\Arg{label/property}
+% \end{syntax}
+% Expands to the \meta{value} corresponding to \meta{label/property}
+% in the container. If \meta{label/property} is missing,
+% this has an empty expansion. In particular, there is no error!
+% The result is returned within \cs{exp_not:n}, which means
+% that the \meta{value} does not expand further
+% when appearing in an e-type or x-type argument expansion.
+% \end{function}
+%
+%
+% \begin{function}{\ShowDocumentProperties,\LogDocumentProperties}
+% \begin{syntax}
+%  \cs{ShowDocumentProperties}\\
+%  \cs{LogDocumentProperties}
+% \end{syntax}
+% This shows/logs the current content of the container.
+% \end{function}
 %
 % \StopEventually{\setlength\IndexMin{200pt}  \PrintIndex  }
 %
@@ -105,7 +148,7 @@
 % \section{The Implementation}
 %
 %
-%
+% \subsection{\cs{DocumentMetadata}}
 %    \begin{macrocode}
 %<*2ekernel|latexrelease>
 %    \end{macrocode}
@@ -160,26 +203,156 @@
 }
 %    \end{macrocode}
 %
+% \subsection{Document properties}
+% \changes{1.0g}{2026-05-27}{Add commands related to document properties container}
+% 
+% The container for the document properties is a prop:
+% 
+% \begin{variable}{\g__kernel_documentproperties_prop}
+%    \begin{macrocode}
+\ExplSyntaxOn
+   \prop_new:N \g__kernel_documentproperties_prop 
+%    \end{macrocode}
+% \end{variable}
+% \begin{macro}{\AddToDocumentProperties}
+%    \begin{macrocode}
+\NewDocumentCommand\AddToDocumentProperties{O{\@currname}mm}
+  {    
+    \prop_gput:Nen \g__kernel_documentproperties_prop
+      {
+        \tl_if_blank:eTF {#1}{top-level/}{#1/} #2
+      }
+      { #3}
+  }
+%    \end{macrocode}
+% \end{macro}
+% 
+% \begin{macro}[EXP]{\GetDocumentProperty}
+%    \begin{macrocode}
+\cs_new:Npn\GetDocumentProperty #1
+  {
+    \prop_item:Nn \g__kernel_documentproperties_prop {#1}
+  }
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{\ShowDocumentProperties,\LogDocumentProperties}
+%    \begin{macrocode}
+\msg_new:nnn  { latex2e } { show-properties }
+  {
+    The~following~document~properties~have~been~stored:
+    #1
+  }
+\NewDocumentCommand\ShowDocumentProperties {}
+  {
+    \msg_show:nne {latex2e}{show-properties}
+      {
+        \prop_map_function:NN \g__kernel_documentproperties_prop \msg_show_item:nn
+      }
+  }
+\NewDocumentCommand\LogDocumentProperties {}
+  {
+    \msg_log:nne {latex2e}{show-properties}
+      {
+        \prop_map_function:NN \g__kernel_documentproperties_prop \msg_show_item:nn
+      }
+  }
+\ExplSyntaxOff  
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Targets}
 %   To allow package and class author to support for document links
 %   we provide also the new interface commands of the hyperref package
 %   for the creation of targets.
+%   The commands are not only useful for document links: 
+%   When tagging is active the commands can also be used to reference structures.
+%   This is done in the \texttt{recordtarget} socket, which records the target name.
+%   Both for links and structure references it can be useful to change the name of the 
+%   next target. We therefore insert a hook \texttt{target/setname/after} after the name
+%   has be set. This hook is used in the \cs{NextLinkTarget} command to adapt the target name
+%   \cs{@currentHref}. 
 % \changes{v1.0b}{2022/05/17}{Default definition for targets added}
 % \changes{v1.0c}{2024/09/21}{Added tagging support}
+% \changes{v1.0e}{2026/04/22}{Add hook to change target name and use it in \cs{NextLinkTarget}}
+% \changes{v1.0f}{2026/05/06}{Add \cs{SaveLastSkip} and \cs{RestoreLastSkip} to better mimic 
+%     hyperref's spacing behavior, gh/2070}
+% \changes{v1.0f}{2026/05/06}{Use \cs{latelua} to mimic a whatsit to avoid spurious warning, gh/2070}
 %  \begin{macro}{\MakeLinkTarget}
 %  \begin{macro}{\LinkTargetOn}
 %  \begin{macro}{\LinkTargetOff}
 %  \begin{macro}{\NextLinkTarget}
 %    \begin{macrocode}
-%<latexrelease>\IncludeInRelease{2024/11/01}%
+%<latexrelease>\IncludeInRelease{2026/06/01}%
 %<latexrelease>                 {\MakeLinkTarget}{Record target name for tagging support}%
 \ExplSyntaxOn
+%    \end{macrocode}
+% luatex complains about non-PDF specials if \cs{special} is used, so we use \cs{latelua} instead
+% to create an empty whatsit node.
+%    \begin{macrocode}
+\ifx\directlua\@undefined
+ \def\@kernel@whatsit{\special{}}
+\else
+ \def\@kernel@whatsit{\latelua{}}
+\fi 
+%    \end{macrocode}
+% This definition is copied from \pkg{hyperref}, only the command names are changed. It is the code
+% \pkg{hyperref} uses around anchors/destination to avoid that they affect the spacing.  
+%    \begin{macrocode}
+\let\RestoreLastSkip\relax
+\def\SaveLastSkip{%
+  \let\RestoreLastSkip\relax
+  \ifvmode
+    \ifdim\lastskip=\z@
+      \ifnum\lastnodetype=11 %
+        \let\RestoreLastSkip\nobreak
+      \else
+        \let\RestoreLastSkip\relax
+      \fi
+    \else
+      \begingroup
+        \skip@=-\lastskip
+        \edef\x{%
+          \endgroup
+          \def\noexpand\RestoreLastSkip{%
+            \noexpand\ifvmode
+              \noexpand\nobreak
+              \vskip\the\skip@
+              \vskip\the\lastskip\relax
+            \noexpand\fi
+          }%
+        }%
+      \x
+    \fi
+  \else
+    \ifhmode
+      \ifdim\lastskip=\z@
+        \let\RestoreLastSkip\nobreak
+      \else
+        \begingroup
+          \skip@=-\lastskip
+          \edef\x{%
+            \endgroup
+            \def\noexpand\RestoreLastSkip{%
+              \noexpand\ifhmode
+                \noexpand\nobreak
+                \hskip\the\skip@
+                \hskip\the\lastskip\relax
+              \noexpand\fi
+            }%
+          }%
+        \x
+      \fi
+    \fi
+  \fi
+}
+\hook_new:n{target/setname/after}
 \int_new:N\g__kernel_target_int
 \NewDocumentCommand\MakeLinkTarget{sO{}m}{%
   \ifvmode
-    \special{}%
+    \SaveLastSkip\@kernel@whatsit\RestoreLastSkip
   \else
     \@savsf\spacefactor
-    \smash{}%
+    \SaveLastSkip\smash{}\RestoreLastSkip
     \spacefactor\@savsf
   \fi
   \IfBooleanTF {#1}
@@ -190,9 +363,34 @@
      \int_gincr:N\g__kernel_target_int
      \tl_gset:Ne \@currentHref {target*.\int_use:N\g__kernel_target_int}
    }
+  \hook_use:n{target/setname/after} 
   \UseTaggingSocket{recordtarget} 
    }
 \ExplSyntaxOff   
+%<latexrelease>\EndIncludeInRelease
+%<latexrelease>\IncludeInRelease{2024/11/01}%
+%<latexrelease>                 {\MakeLinkTarget}{Record target name for tagging support}%
+%<latexrelease>\ExplSyntaxOn
+%<latexrelease>\NewDocumentCommand\MakeLinkTarget{sO{}m}{%
+%<latexrelease>  \ifvmode
+%<latexrelease>    \special{}%
+%<latexrelease>  \else
+%<latexrelease>    \@savsf\spacefactor
+%<latexrelease>    \smash{}%
+%<latexrelease>    \spacefactor\@savsf
+%<latexrelease>  \fi
+%<latexrelease>  \IfBooleanTF {#1}
+%<latexrelease>   {
+%<latexrelease>     \tl_gset:Ne \@currentHref {#3}
+%<latexrelease>   }
+%<latexrelease>   {
+%<latexrelease>     \int_gincr:N\g__kernel_target_int
+%<latexrelease>     \tl_gset:Ne \@currentHref {target*.\int_use:N\g__kernel_target_int}
+%<latexrelease>   }
+%<latexrelease>  \hook_use:n{target/setname/after} 
+%<latexrelease>  \UseTaggingSocket{recordtarget} 
+%<latexrelease>   }
+%<latexrelease>\ExplSyntaxOff   
 %<latexrelease>\EndIncludeInRelease
 %<latexrelease>\IncludeInRelease{2022/06/01}%
 %<latexrelease>                 {\MakeLinkTarget}{Record target name for tagging support}%
@@ -207,7 +405,8 @@
 %<latexrelease>\EndIncludeInRelease
 \NewDocumentCommand\LinkTargetOn{}{}
 \NewDocumentCommand\LinkTargetOff{}{}
-\NewDocumentCommand\NextLinkTarget{m}{}
+\NewDocumentCommand\NextLinkTarget{m}{%
+  \AddToHookNext{target/setname/after}{\xdef\@currentHref {#1}}}
 %    \end{macrocode}
 %  \end{macro}
 %  \end{macro}
