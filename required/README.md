@@ -8,7 +8,7 @@ The set comprises:
 
  - `amsmath`: mathematical support from the AMS (these days maintained by the LaTeX team);
  - `cyrillic`: Standard LaTeX support for using Cyrillic alphabet fonts;
- - `graphics`: The standard LaTeX graphics and colour packages; and
+ - `graphics`: The standard LaTeX graphics and color packages; and
  - `tools`: Basic LaTeX tools.
 
 Also part of the "required" set of bundles is
