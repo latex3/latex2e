@@ -41,10 +41,11 @@ if luaotfload and luaotfload.set_transparent_colorstack then
     token.new(0, 1),
     'backend',
     token.new(0, 2),
-    token.create'l_tmpa_tl',
+    token.create'l__color_tmp_tl',
     token.create'exp_after:wN',
-    token.create'__color_select:nn',
-    token.create'l_tmpa_tl',
+    token.create'__color_select_aux:nnN',
+    token.create'l__color_tmp_tl',
+    token.create'l__color_tmp_tl',
     token.new(0, 2),
   }
   local group_end = token.create'group_end:'
