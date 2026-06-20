@@ -248,7 +248,7 @@ local function write_elem(tree, stash)
   end
 
   attrs = attrs and attributes[attrs]
-  tex.sprint(-2, struct_begin, lbrace, 'tag=', tree[0], '/mathml') -- 'tag=mo/mathml' is supported syntax
+  tex.sprint(-2, struct_begin, lbrace, 'tag=', lbrace, tree[0], '/mathml', rbrace) -- 'tag=mo/mathml' is supported syntax
   if stash then tex.sprint(-2, stash) end
   if attrs then tex.sprint(-2, ', attribute=' .. attrs) end
   tex.sprint(rbrace)
@@ -262,9 +262,9 @@ local function write_elem(tree, stash)
         tex.sprint(-2, mc_begin, lbrace, 'artifact', rbrace)
       elseif tree[':actual'] then
         tex.sprint(-2, mc_begin, lbrace, 'tag=Span,actualtext=')
-        tex.cprint(12, tree[':actual'], rbrace)
+        tex.cprint(12, lbrace, tree[':actual'], rbrace, rbrace)
       else
-        tex.sprint(-2, mc_begin, lbrace, 'tag=', tree[0], rbrace)
+        tex.sprint(-2, mc_begin, lbrace, 'tag=', lbrace, tree[0], rbrace, rbrace)
       end
       -- NOTE: This will also flush all previous sprint's... That's often annoying, but in this
       -- case actually intentional.
