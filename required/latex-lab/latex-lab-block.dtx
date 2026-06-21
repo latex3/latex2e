@@ -9,8 +9,8 @@
 %
 %    https://www.latex-project.org/lppl.txt
 %
-\def\ltlabblockdate{2026-06-13}
-\def\ltlabblockversion{1.0d}
+\def\ltlabblockdate{2026-06-15}
+\def\ltlabblockversion{1.0e}
 
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2,lang=en}
@@ -262,6 +262,8 @@
 % 
 % \begin{TemplateDescription}{blockenv}{std}
 %
+% \changes{1.0e}{2026-06-15}{Key standalone added to template}
+%
 %  \TemplateKey{name}{tokenlist}
 %              {Name of the environment used in tracing and error messages.}{}
 %  \TemplateKey{tag-name}{tokenlist}
@@ -273,8 +275,14 @@
 %              {An explicit tag class attribute.}{\meta{empty}}
 %  \TemplateKey{tagging-recipe}{tokenlist}
 %              {Defines the way tagging is done. Currently the values
-%               \keyvalue{basic}, \keyvalue{standard}, and \keyvalue{list}
-%               are supported.}{standard}
+%               \keyvalue{basic}, \keyvalue{standard},
+%               \keyvalue{list}, and \keyvalue{standalone}
+%               are supported. The latter implies that the key
+%               \key{standalone} is set to true}{standard}
+%  \TemplateKey{standalone}{boolean}
+%              {If true, surrounds the environment implicitly with
+%               \cs{par} commands. Forced to true when
+%               \key{tagging-recipe} is \keyvalue{standalone}.}{false}
 %  \TemplateKey{transparent-level}{boolean}{Is this \insttype{blockenv}
 %               transparent for any blocks nested inside?}{false}
 %  \TemplateKey{legacy-code}{tokenlist}
@@ -1898,6 +1906,7 @@
 %     name                = theorem-like
 %    ,tag-name            = \UseStructureName{block/theorem-like}
 %    ,tagging-recipe      = standalone
+%    ,standalone          = true
 %    ,transparent-level   = true
 %    ,block-instance:e    = thm-
 %                         \IfInstanceExistsTF{block}
@@ -2159,6 +2168,7 @@
   ,tag-name             = \UseStructureName{block/proof}
   ,tag-attr-class       =
   ,tagging-recipe       = standalone
+  ,standalone           = true
   ,inner-level-counter  =
   ,transparent-level    = true
   ,legacy-code          =
@@ -2908,11 +2918,11 @@
 %    Some extra debugging lines, but commented out for now.
 %    \begin{macrocode}
 \def\@endpefalse{
-%  \@@_debug_typeout:n { @endpe~ :=~ \if@endpe true \else false \fi -> false \on@line }
+  \@@_debug_endpe_typeout:n { @endpe~ :=~ \if@endpe true \else false \fi -> false \on@line }
   \global\let\if@endpe\iffalse
 }
 \def\@endpetrue {%
-%  \@@_debug_typeout:n { @endpe~ :=~ \if@endpe true \else false \fi -> true \on@line }
+  \@@_debug_endpe_typeout:n { @endpe~ :=~ \if@endpe true \else false \fi -> true \on@line }
   \global\let\if@endpe\iftrue
   \ifnum\currentgrouptype =14        % semi-simple group
     \aftergroup\propagate@doendpe
@@ -2925,7 +2935,11 @@
     \fi
   \fi
 }
-
+%    \end{macrocode}
+%    For checking the \texttt{@endpe} logic, we have something we can
+%    turn into a typeout in tests:
+%    \begin{macrocode}
+\cs_new_eq:NN \@@_debug_endpe_typeout:n \use_none:n
 %    \end{macrocode}
 %  \end{macro}
 
@@ -2961,7 +2975,7 @@
 %    \begin{macrocode}
        \legacy_if:nTF { @endpe }
          {
-%           \typeout{===>~ handle~ @endpe}
+           \@@_debug_endpe_typeout:n {===>~ handle~ @endpe}
 %    \end{macrocode}
 %    If the display block currently ending was \enquote{flattened}
 %    (i.e., uses simplified paragraphs that are not tagged by a
@@ -2988,7 +3002,7 @@
              }
          }
          {
-%           \typeout{===>~ @endpe~ already~ handled}
+           \@@_debug_endpe_typeout:n{===>~ @endpe~ already~ handled}
          }
       }
   }
@@ -3228,6 +3242,7 @@
   ,inner-instance         : tokenlist =
   ,tagging-suppress-paras : boolean = false
   ,final-code             : tokenlist = \ignorespaces
+  ,standalone             : boolean = false
 }
 %    \end{macrocode}
 %  \end{template}
@@ -3522,6 +3537,7 @@
   ,inner-instance-type    = \l_@@_inner_instance_type_tl
   ,inner-instance         = \l_@@_inner_instance_tl
   ,final-code             = \l_@@_final_code_tl 
+  ,standalone             = \l_@@_standalone_bool
 }
 {
   \template_debug_typeout:n{~\space template:~ 'std;~
@@ -3565,6 +3581,35 @@
 %    in one go.
 %    \begin{macrocode}
   \SetKnownTemplateKeys {blockenv} {std} \UnusedTemplateKeys
+%    \end{macrocode}
+%     The tagging recipe \texttt{standalone} implies that the
+%    \key{standalone} key is set to \texttt{true}.
+% \changes{1.0e}{2026-06-15}{@endpe handling adjusted}
+%    \begin{macrocode}
+  \tl_if_eq:NnT \l_@@_tagging_recipe_tl { standalone }
+     { \bool_set_true:N \l__block_standalone_bool }
+%    \end{macrocode}
+%    If this is a standalone environment we ensure that there is an implicit
+%    \cs{par} before and after:
+%    \begin{macrocode}
+  \bool_if:NTF \l_@@_standalone_bool
+       {
+         \@@_debug_endpe_typeout:n {===>~ standalone = true}
+%    \end{macrocode}
+%    We can't simply issue a \cs{par} because the current environment
+%    may have set \key{tagging-suppress-paras} in which case a
+%    \cs{par} would not close the outer semantic para structure. We
+%    therefore temporarily set this boolean to false.
+% \changes{1.0e}{2026-06-15}{@endpe handling adjusted}
+%    \begin{macrocode}
+         \bool_set_eq:NN \l_@@_flattened_bool \l__tag_para_flattened_bool
+         \bool_set_false:N  \l__tag_para_flattened_bool
+         \par
+         \bool_set_eq:NN \l__tag_para_flattened_bool \l_@@_flattened_bool
+       }
+       {
+         \@@_debug_endpe_typeout:n {===>~ standalone = true}
+       }
 %    \end{macrocode}
 %    We need to know later if we have nested \insttype{blockenv}s
 %    inside a flattened environment. Whenever we start a new
@@ -3753,6 +3798,15 @@
 }
 %    \end{macrocode}
 %  \end{template}
+%
+%
+%  \begin{macro}{\l_@@_flattened_bool}
+% \changes{1.0e}{2026-06-15}{Macro added}
+%    Temp variable for standalone handling.
+%    \begin{macrocode}
+\bool_new:N \l_@@_flattened_bool
+%    \end{macrocode}
+%  \end{macro}
 %
 %
 %  \begin{hookdecl}{blockenv}
@@ -3952,13 +4006,39 @@
 %    should be added only if the paragraph ends here and not if it
 %    continues, so this need some further cleanup.\fmi{decide}
 %    
-%    Finally, we have a socket that handles the \tn{par} handling
-%    after the block. Normally, we use it with the \plug{on} plug (check for a
-%    following \tn{par}) but in the case of standalone environments we
-%    assign it the \plug{off} plug.
+%    Finally, we have the code that does the \tn{par} handling
+%    after the block. Normally, we continue the semantic paragraph,
+%    i.e., set \cs{@endpetrue} but there are some exceptions:
 %
+%    If this is a standalone environment we need to issue a \cs{par},
+%    but that has to happen after the environment in case the current
+%    blockenv has a special definition for \cs{par}.    
+% \changes{1.0e}{2026-06-15}{@endpe handling adjusted}
 %    \begin{macrocode}
-  \socket_use:n {block/endpe}
+    \bool_if:NT \l__@@_standalone_bool { \aftergroup \par }
+%    \end{macrocode}
+%    If the \key{tagging-recipe} is \keyvalue{noop} we do not set
+%    \texttt{@endpe} at all so its value is whatever it was set to in
+%    the body of the environment (which may have ended in a list, for
+%    example). 
+%    \begin{macrocode}
+    \tl_if_eq:NnF \l_@@_tagging_recipe_tl { noop }
+       {
+%    \end{macrocode}
+%    If the \key{tagging-recipe} is \keyvalue{standalone} we set it to
+%    false. This is necessary because the \cs{par} is put in with
+%    \cs{aftergroup} and there is a subtle racing condition with the
+%    way the \texttt{@endpe} setting propagates out of groups (also
+%    using \cs{aftergroup}. As a result it would be again true after
+%    this implicit empty line resulting in havoc.
+%    \begin{macrocode}
+         \tl_if_eq:NnTF \l_@@_tagging_recipe_tl { standalone }
+            \@endpefalse
+%    \end{macrocode}
+%    For all other recipes we can safely set it to true.
+%    \begin{macrocode}
+            \@endpetrue
+       }
 }
 %    \end{macrocode}
 %
@@ -3995,31 +4075,6 @@
 %  \end{macro}
 %
 %
-%
-% \begin{socketdecl}{block/endpe}
-%    This socket is responsible for the end environment \tn{par}
-%    handling. We define two plugs for it (\plug{on} and \plug{off}).
-%    \begin{macrocode}
-\socket_new:nn {block/endpe} {0}
-%    \end{macrocode}
-% \end{socketdecl}
-%
-% \begin{plugdecl}{on,off}
-%    The plugs set the legacy \texttt{@endpe} switch. This must always
-%    happen because block environments with different settings can be nested
-%    and should not inherit the setting from the outer environment.
-%
-%    We can't use \cs{legacy_if_gset_true:n} because this is now doing
-%    more than setting the legacy switch:
-%    \begin{macrocode}
-\socket_new_plug:nnn{block/endpe} {on}  { \@endpetrue  }
-\socket_new_plug:nnn{block/endpe} {off} { \@endpefalse }
-%    \end{macrocode}
-%
-%    \begin{macrocode}
-\socket_assign_plug:nn{block/endpe}{on}
-%    \end{macrocode}
-% \end{plugdecl}
 %
 %
 %
@@ -6100,6 +6155,12 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_inner_end: {
   \@@_debug_typeout:n{block-end \on@line}
+%    \end{macrocode}
+%    If there is an open request for \texttt{@endpe} handling still
+%    open (from material in the environment body) then a semantic para
+%    is still open and we have to close it before closing the inner
+%    structure.
+%    \begin{macrocode}
   \legacy_if:nT { @endpe }
     {
       \UseTaggingSocket{para/semantic/end}
@@ -6278,7 +6339,6 @@
                                               \prg_do_nothing:
    \let \__kernel_displayblock_begin:          \prg_do_nothing:
    \let \__kernel_displayblock_end:            \prg_do_nothing:
-   \socket_assign_plug:nn{block/endpe}{noop}
  }
 %    \end{macrocode}
 % \end{macro}
@@ -6302,10 +6362,6 @@
                                               \@@_beginpar_vmode:
   \let \__kernel_displayblock_begin:          \prg_do_nothing:
   \let \__kernel_displayblock_end:            \prg_do_nothing:
-%    \end{macrocode}
-%    End environment \tn{par} handling:
-%    \begin{macrocode}
-  \socket_assign_plug:nn{block/endpe}{on}
 }
 %    \end{macrocode}
 %  \end{macro}
@@ -6323,13 +6379,6 @@
                                               \prg_do_nothing:
   \cs_set_eq:NN \__kernel_displayblock_begin: \@@_inner_begin:
   \cs_set_eq:NN \__kernel_displayblock_end:   \@@_inner_end:
-%    \end{macrocode}
-%    End environment \tn{par} handling:
-%  \changes{v0.9q}{2026/04/11}{Use \cs{@endpefalse} in
-%    \texttt{standalone} recipe}
-%    \begin{macrocode}
-  \@endpefalse
-  \socket_assign_plug:nn{block/endpe}{off}
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
@@ -6371,10 +6420,6 @@
                                               \@@_beginpar_vmode:
   \cs_set_eq:NN \__kernel_displayblock_begin: \@@_inner_begin:
   \cs_set_eq:NN \__kernel_displayblock_end:   \@@_inner_end:
-%    \end{macrocode}
-%    End environment \tn{par} handling:
-%    \begin{macrocode}
-  \socket_assign_plug:nn{block/endpe}{on}
 %    \end{macrocode}
 %    
 %  \changes{v0.9g}{2025/06/30}{ (tagging/925)}
@@ -6431,10 +6476,6 @@
 %    \begin{macrocode}
   \cs_set_eq:NN \__kernel_list_item_begin:    \@@_list_item_begin:
   \cs_set_eq:NN \__kernel_list_item_end:      \@@_list_item_end:
-%    \end{macrocode}
-%    End environment \tn{par} handling:
-%    \begin{macrocode}
-  \socket_assign_plug:nn{block/endpe}{on}
 %    \end{macrocode}
 %
 %    Handle the tag name and attribute classes using the key values
@@ -6828,6 +6869,7 @@
         ,tag-name             = \UseStructureName{block/theorem-like}
         ,tag-attr-class       =
         ,tagging-recipe       = standalone
+        ,standalone           = true
         ,inner-level-counter  =
         ,transparent-level    = true
         ,legacy-code          =
