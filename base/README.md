@@ -72,7 +72,7 @@ Release distribution is carried out only through the CTAN archives.
 Requirements
 ------------
 
-The LaTeX kernel requires the e-TeX extensions to TeX, which were finalised
+The LaTeX kernel requires the e-TeX extensions to TeX, which were finalized
 in the late 1990s and are available in modern TeX-derived engines. It also
 requires a set of common post-e-TeX extensions, generally known as the
 pdfTeX additions. These are available in all modern TeX engines.
