@@ -1,6 +1,5 @@
 --[[
    This file defines the luafunctions
-   * \__luamml_annotate_begin:
    * \__luamml_annotate_end:we
    * \__luamml_annotate_end:e
 
@@ -16,6 +15,7 @@
    TODO: should annotate() error if there are no noads in the argument?
 --]]
 
+local finish_flattened_mathgroup = require'luamml-flattened-mathgroup'.finish
 local nest = tex.nest
 
 local properties = node.get_properties_table()
@@ -62,7 +62,6 @@ end
         For more complicated math structures (e.g. square roots) on the other hand
         annotations should usually affect the whole noad and not just
         the nucleus (which would be e.g. 2 in \sqrt{2}.
-      * offset, 0< int <= noad count: decides on which noad the annotation is stored.
       * mathml, table: contains the mathml representation.
         See luamml-algorithm.tex for examples how the table should look like.
         Stored as `mathml_table` in the annotation.
@@ -88,112 +87,51 @@ local function annotate()
     return 0
   end
   annotation = annotation()
-  local nesting = nest.top
-  local props = properties[nesting.head]
-  -- `luamml__annotate_context` is initialized below in `__luamml_annotate_begin:`
-  -- and has two (optional) fields:
-  -- `head` contains a pointer to the tail of current list.
-  -- `prev` contains data of previous annotate commands in the same list.
-  local current = props and props.luamml__annotate_context
-  if current then
-    current, props.luamml__annotate_context = current.head, current.prev
-  else
-    tex.error('Mismatched LuaMML annotation',
-      {'Something odd happened. Maybe you forgot braces around an annotated symbol in a subscript or superscript?'})
-    return 0
+  local marked = finish_flattened_mathgroup()
+  if annotation.nucleus then
+    marked = marked.nucleus
   end
-  local after = nesting.tail
-  local count, offset = 0, annotation.offset
-  local marked
-  -- TODO should this error or silently return?
-  if current == after then
-    tex.error'Empty LuaMML annotation'
-  else
-    repeat
-      current = current.next
-      count = count + 1
-      if count == offset then
-        marked = current
-      elseif offset or current ~= after then
-        local props = properties[current]
-        if not props then
-          props = {}
-          properties[current] = props
-        end
-        props.mathml_table, props.mathml_core = nil, false
+  if not marked then
+    tex.error'Unable to annotate nucleus of node without nucleus'
+    return
+  end
+  local props = properties[marked]
+  if not props then
+    props = {}
+    properties[marked] = props
+  end
+  if annotation.mathml ~= nil or annotation.core ~= nil then
+    props.mathml_table, props.mathml_core, props.mathml_filter = annotation.mathml, annotation.core, nil
+  end
+  if annotation.struct ~= nil then
+    local saved = props.mathml_filter
+    local struct = annotation.struct
+    function props.mathml_filter(mml, core)
+      mml[':struct'] = struct
+      if saved then
+        return saved(mml, core)
+      else
+        return mml, core
       end
-    until current == after
-    if offset and not marked then
-      tex.error'Invalid offset in LuaMML annotation'
-    end
-    marked = marked or current
-    if annotation.nucleus then
-      marked = marked.nucleus
-    end
-    if marked then
-      local props = properties[marked]
-      if not props then
-        props = {}
-        properties[marked] = props
-      end
-      if annotation.mathml ~= nil or annotation.core ~= nil then
-        props.mathml_table, props.mathml_core, props.mathml_filter = annotation.mathml, annotation.core, nil
-      end
-      if annotation.struct ~= nil then
-        local saved = props.mathml_filter
-        local struct = annotation.struct
-        function props.mathml_filter(mml, core)
-          mml[':struct'] = struct
-          if saved then
-            return saved(mml, core)
-          else
-            return mml, core
-          end
-        end
-      end
-      if annotation.structnum ~= nil then
-        local saved = props.mathml_filter
-        local structnum = annotation.structnum
-        function props.mathml_filter(mml, core)
-          mml[':structnum'] = structnum
-          if saved then
-            return saved(mml, core)
-          else
-            return mml, core
-          end
-        end
-      end
-      flatten_mathml_properties(props)
-    else
-      tex.error'Unable to annotate nucleus of node without nucleus'
     end
   end
-  return count
+  if annotation.structnum ~= nil then
+    local saved = props.mathml_filter
+    local structnum = annotation.structnum
+    function props.mathml_filter(mml, core)
+      mml[':structnum'] = structnum
+      if saved then
+        return saved(mml, core)
+      else
+        return mml, core
+      end
+    end
+  end
+  flatten_mathml_properties(props)
 end
 
 local function annotate_attribute(key, value, change_core)
-  local nesting = nest.top
-  local props = properties[nesting.head]
-  -- See above for `luamml__annotate_context`, the mechanism is shared with regular annotations.
-  local current = props and props.luamml__annotate_context
-  if current then
-    current, props.luamml__annotate_context = current.head, current.prev
-  else
-    tex.error('Mismatched LuaMML annotation',
-      {'Something odd happened. Maybe you forgot braces around an annotated symbol in a subscript or superscript?'})
-    return 0
-  end
-  local after = nesting.tail
-  if current == after then
-    tex.error'Empty LuaMML attribute list'
-  end
-  local marked = current.next
-  if marked ~= after then
-    tex.error("Multiple math nodes in LuaMML attribute list. The attribute will be ignored.",
-      {"There was an attempt to add an attribute to a list of multiple nodes. Since the list will usually not result \z
-      in a single MathML node, this is not allowed. Maybe try adding braces around the argument?"})
-    return
-  end
+  local marked = finish_flattened_mathgroup()
   if marked.id == simple_noad and not (marked.sub or marked.sup) then
     marked = marked.nucleus
   end
@@ -218,29 +156,6 @@ local function annotate_attribute(key, value, change_core)
   flatten_mathml_properties(props)
 end
 
---[[ Documentation for luafunction \__luamml_annotate_begin:
-     This function initialize an annotation.
-     It stores in the properties of head of the current list
-     the current tail node and previous annotate context of previous
-     annotations in the same list.
---]]
-
-local funcid = luatexbase.new_luafunction'__luamml_annotate_begin:'
-token.set_lua('__luamml_annotate_begin:', funcid, 'protected')
-lua.get_functions_table()[funcid] = function()
-  local top = nest.top
-  local temp = top.head
-  local props = properties[temp]
-  if not props then
-    props = {}
-    properties[temp] = props
-  end
-  props.luamml__annotate_context = {
-    prev = props.luamml__annotate_context,
-    head = top.tail,
-  }
-end
-
 --[[ Documentation for luafunction \__luamml_annotate_end:we
      This function calls annotate(). Additionally it compares
      its first argument (a number) with the count of noads done by
@@ -251,16 +166,8 @@ end
 funcid = luatexbase.new_luafunction'__luamml_annotate_end:we'
 token.set_lua('__luamml_annotate_end:we', funcid, 'protected')
 lua.get_functions_table()[funcid] = function()
-  local count = token.scan_int()
-  local real_count = annotate()
-  if count ~= real_count then
-    tex.error('Incorrect count in LuaMML annotation', {
-        'A LuaMML annotation was discovered with an explicit count \z
-        which was not the same as the number of top-level nodes annotated.',
-        string.format('This can be fixed by changing the supplied count from %i to %i \z
-          or by omitting the count value entirely.', count, real_count)
-    })
-  end
+  local _ = token.scan_int()
+  annotate()
 end
 
 --[[ Documentation for luafunction \__luamml_annotate_end:e

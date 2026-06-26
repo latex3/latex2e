@@ -265,7 +265,8 @@ luatexbase.add_to_callback('pre_mlist_to_hlist_filter', function(mlist, style)
     end
   end
   return true
-end, 'dump_list')
+end, 'luamml.to_mathml')
+luatexbase.declare_callback_rule('pre_mlist_to_hlist_filter', 'luamml.to_mathml', 'before', 'luamml.mathflatten')
 
 --[[ Documentation of luafunction luamml_get_last_mathml_stream:e
     this creates a stream object with mathml from the last equation. It should be used after
