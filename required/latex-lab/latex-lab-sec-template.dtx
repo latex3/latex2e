@@ -18,7 +18,7 @@
 %    https://github.com/latex3/latex2e/issues
 %
 \def\ltlabsecIIdate{2026-06-26}
-\def\ltlabsecIIversion{0.9g}
+\def\ltlabsecIIversion{0.9h}
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
 
@@ -42,6 +42,7 @@
 %
 %
 % \newcommand\key[1]{\texttt{#1}}
+% \newcommand\keyvalue[1]{\texttt{#1}}
 %
 %
 % \NewDocumentCommand\fmi{sO{}m}
@@ -536,6 +537,8 @@
 %
 % \begin{TemplateDescription}{heading}{\meta{all}}
 %
+% \changes{0.9h}{2026-06-21}{Support \texttt{column-spanning} key (tagging/1436)}
+%
 %  \TemplateKey{name}{tokenlist}
 %              {Referenceable name of the heading instance. String that
 %               is acceptable in csnames for use in building counter
@@ -576,6 +579,16 @@
 %    putting the heading on a page by its own, or arrange for
 %    paragraph handling of a following paragraph, etc.}
 %              {}
+%
+%
+%  \TemplateKey{column-spanning}{boolean}
+%              {If true produces a heading that spans columns in
+%               \texttt{twocolumn} typesetting.  Requires
+%               \key{placement} \texttt{=} \keyvalue{top} (and adjusts
+%               if necessary) and only has an effect
+%               if the columns are produced via the \texttt{twocolumn}
+%               class option and not when using \env{multicol}. This
+%               might get extended when we refactor the OR handling.}{false}
 %
 %  \TemplateKey{prefix}{tokenlist}
 %              {A fixed string, such as \enquote{Chapter}, that can be
@@ -1543,19 +1556,21 @@
 %  \begin{template}{heading display}
 %    The \texttt{display} template produces a display heading, i.e.,
 %    one that has vertical space before and after it.
+% \changes{0.9h}{2026-06-21}{Support \texttt{column-spanning} key (tagging/1436)}
 %    \begin{macrocode}
 \DeclareTemplateInterface{heading}{display}{9}
 {
-  , name          : tokenlist
-  , parent-name   : tokenlist
-  , reset-counter : tokenlist
-  , level         : integer = 0
+  , name            : tokenlist
+  , parent-name     : tokenlist
+  , reset-counter   : tokenlist
+  , level           : integer = 0
 %    \end{macrocode}
 %    The \key{placement} key sets default values for the keys
 %    \key{start-code} and \key{final-code}.
 %    \begin{macrocode}
-  , placement     : choice {page , top , normal } = normal
-  , mark-cmd      : function(1) =
+  , placement       : choice {page , top , normal } = normal
+  , column-spanning : boolean = false
+  , mark-cmd        : function(1) =
   %
   % many more keys for layout settings are missing for now
   , para-indent   : choice { true , false } = false
@@ -1690,6 +1705,15 @@
         ,normal = \@@_debug_typeout:n{ A~ normal~ heading }
                   \tl_set:Nn \l_@@_placement_tl { normal }
                     }
+%    \end{macrocode}
+%    
+% \changes{0.9h}{2026-06-21}{Support \texttt{column-spanning} key
+%    (tagging/1436)}
+%    \begin{macrocode}
+  , column-spanning = \l_@@_column_spanning_bool
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
   , mark-cmd      = \@@_mark_cmd:n
 %    \end{macrocode}
 %    For now we make use of the legacy coding for indentation of
@@ -1751,6 +1775,28 @@
 %   usually what I need.}
 %    \begin{macrocode}
   \tl_if_empty:oF {#1} { \SetTemplateKeys{heading}{display}{#1} }
+%    \end{macrocode}
+%
+%    If \key{column-spanning} is requested but we are not typesetting
+%    in two columns we turn it off to avoid using \cs{@topnewpage} as
+%    this would be wrong. Otherwise we check the placement value and
+%    adjust it if necessary.
+% \changes{0.9h}{2026-06-21}{Support \texttt{column-spanning} key
+%    (tagging/1436)}
+%    \begin{macrocode}
+  \bool_if:NT \l_@@_column_spanning_bool
+       {
+         \if@twocolumn
+           \str_if_eq:VnF \l_@@_placement_tl {top}
+             {
+               \@@_debug_typeout:n {column-spanning~ requires~
+                 placement=top.~ Adjusted!}
+               \tl_set:Nn \l_@@_placement_tl {top}
+             }
+         \else
+           \bool_set_false:N \l_@@_column_spanning_bool
+         \fi
+       }
 %    \end{macrocode}
 %    Based on the \key{placement} key we set up \cs{l_@@_start_code_tl}
 %    and \cs{l_@@_final_code_tl}. These two variables can also be set
@@ -1846,6 +1892,24 @@
   \@@_debug_typeout:n{use~ 'headformat'~instance:~
                        \l_@@_headformat_instance_tl }
   \use:e {
+%    \end{macrocode}
+%    
+%    As long as we don't have a decent interface for the OR we have to
+%    use \cs{@topnewpage} for getting spanning headings (which means
+%    we are really using a top float box. That in turn means we have
+%    to get all the vertical spacing and so inside this box so there
+%    is a lot of back and forth based on the value of
+%    \cs{l_@@_column_spanning_bool} for now.
+% \changes{0.9h}{2026-06-21}{Support \texttt{column-spanning} key
+%    (tagging/1436)}
+%    \begin{macrocode}
+    \bool_if:NT \l_@@_column_spanning_bool
+         { \exp_not:n {
+             \@topnewpage [
+             \dim_compare:nNnF{\l_@@_after_penalty_skip}={0pt}
+                 { \vspace*    \l_@@_after_penalty_skip }
+           }
+         }
     \UseInstance{headformat} { \l_@@_headformat_instance_tl }
                 { \exp_not:o \UnusedTemplateKeys }
                 { \exp_not:o { \l_@@_typeset_prefix_tl } }
@@ -1853,6 +1917,20 @@
                 { \exp_not:n { #3 } }
                 { \exp_not:o { \use_i:nn  #9 } }
                 { \exp_not:o { \use_ii:nn  #9 } }
+%    \end{macrocode}
+%    
+% \changes{0.9h}{2026-06-21}{Support \texttt{column-spanning} key
+%    (tagging/1436)}
+%    \begin{macrocode}
+    \bool_if:NT \l_@@_column_spanning_bool
+         {
+           \skip_vertical:N \l_@@_after_skip
+%    \end{macrocode}
+%    Add the final vspace after the heading and close the
+%    \cs{@topnewpage} which has an optional argument.
+%    \begin{macrocode}
+           ]
+         }
   }
  %
 % --- handle marks, toc-entry, bookmark, nameref, and label
@@ -1864,8 +1942,18 @@
 % Restore \texttt{secnumdepth}
 %    \begin{macrocode}
   \int_gset:Nn\c@secnumdepth{\l_@@_saved_secnumdepth_tl}
-  \par \nobreak
-  \skip_vertical:N \l_@@_after_skip
+  \par 
+%    \end{macrocode}
+%    If we have a spanning heading then the vertical skip is handled
+%    inside \cs{@topnewpage} and not here.
+% \changes{0.9h}{2026-06-21}{Support \texttt{column-spanning} key
+%    (tagging/1436)}
+%    \begin{macrocode}
+  \bool_if:NF \l_@@_column_spanning_bool
+       {
+         \nobreak
+         \skip_vertical:N \l_@@_after_skip
+       }
 % --- prepare next paragraph (defaults to \cs{@afterheading}
 %
   \l_@@_final_code_tl
@@ -1877,7 +1965,7 @@
 %
 %
 %
-%  \begin{macro}{}
+%  \begin{macro}{\if@openright}
 %
 %    \begin{macrocode}
 \AddToHook{begindocument}{
@@ -1917,6 +2005,15 @@
         ,normal = \@@_debug_typeout:n{ A~ normal~ heading }
                   \tl_set:Nn \l_@@_placement_tl { normal }
                     }
+%    \end{macrocode}
+%    
+% \changes{0.9h}{2026-06-21}{Support \texttt{column-spanning} key
+%    (tagging/1436)}
+%    \begin{macrocode}
+  , column-spanning = \l_@@_column_spanning_bool
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
   , mark-cmd       = \@@_mark_cmd:n
 %    \end{macrocode}
 %    In a runin heading you can't set up paragraph indentation of the
@@ -1973,6 +2070,17 @@
 %    \begin{macrocode}
   \tl_set_eq:Nc \theheading { the \l_@@_name_tl }
   \tl_if_empty:oF {#1} { \SetTemplateKeys{heading}{runin}{#1} }
+%    \end{macrocode}
+%    For now we don't support column-spanning in this template.
+% \changes{0.9h}{2026-06-21}{Support \texttt{column-spanning} key
+%    (tagging/1436)}
+%    \begin{macrocode}
+  \bool_if:NT \l_@@_column_spanning_bool
+    {
+        \@@_debug_typeout:n {column-spanning~ is~
+              not~ (yet)~ supported~ for~ runin~ headings!}
+        \bool_set_false:N \l_@@_column_spanning_bool
+    }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -2411,9 +2519,17 @@
 %    If \cs{l_@@_start_code_tl} holds code, we assume that it handles
 %    pagination, e.g., a \cs{clearpage}, etc. We therefore only add
 %    the skip that would follow the penalty.
+%
+%    And we do nothing at all when we have a spanning heading. Then
+%    this vspace is done inside \cs{@topnewpage}.
+% \changes{0.9h}{2026-06-21}{Support \texttt{column-spanning} key
+%    (tagging/1436)}
 %    \begin{macrocode}
-       \dim_compare:nNnF{\l_@@_after_penalty_skip}={0pt}
-          { \vspace*    \l_@@_after_penalty_skip }
+       \bool_if:NF \l_@@_column_spanning_bool
+            {
+              \dim_compare:nNnF{\l_@@_after_penalty_skip}={0pt}
+                  { \vspace*    \l_@@_after_penalty_skip }
+            }
      }
 }
 %    \end{macrocode}
@@ -2627,6 +2743,7 @@
   , name           = chapter
   , level          = 0
   , placement      = top
+  , column-spanning = true
   , after-penalty-vspace = 50pt
   , after-vspace   = 40pt
   , prefix         = \@chapapp
