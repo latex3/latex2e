@@ -538,6 +538,7 @@ default_space_char.char  = 32
 default_space_char.font  = default_fontid
 local function __tag_font_has_space (fontid)
  t= fonts.hashes.identifiers[fontid]
+ if not t then return false end
  if luaotfload.aux.slot_of_name(fontid,"space")
     or t and t.characters and t.characters[32] and t.characters[32]["unicode"]==32
  then
@@ -913,8 +914,8 @@ do
     for disc, sub in node.traverse_id(DISC, head) do
       for n, ch, fid in node.traverse_glyph(disc.pre) do
         local props = properties[n]
-        if softhyphen_fonts[fid] and ch == hyphen_char and props and props[is_soft_hyphen_prop] then
-          if nodegetattribute(n,softhyphenattribute) then
+        if ch == hyphen_char and props and props[is_soft_hyphen_prop] then
+          if nodegetattribute(n,softhyphenattribute) and softhyphen_fonts[fid] then
             n.char = soft_hyphen_char
             props.glyph_info = nil
           else
