@@ -17,7 +17,7 @@
 %
 %    https://github.com/latex3/latex2e/issues
 %
-\def\ltlabsecIIdate{2026-08-04}
+\def\ltlabsecIIdate{2026-08-05}
 \def\ltlabsecIIversion{0.9k}
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
@@ -2140,55 +2140,144 @@
 %    \cs{filbreak} command. After use it sets
 %    \cs{sec_add_penalty_with_possible_fil:n} back to \cs{addpenalty}.
 %
+%    They have public names so that they can be used in other heading
+%    templates outside of this module.
 % \changes{0.9k}{2026-08-04}{Support \texttt{placement=ragged} (github/1844)}
 %    \begin{macrocode}
-%FMi
 \cs_new_protected:Npn \sec_add_penalty_with_fil:n #1 {
   \@@_debug_typeout:n{apply~ ragged~ bottom~ fil}
 %    \end{macrocode}
 %    Next code is straight from \cs{addpenalty} except that the
 %    generated \cs{penalty} is surrounded by \cs{vfil} and \cs{vfilneg}.
 %    \begin{macrocode}
-  \dim_compare:nNnTF \tex_lastskip:D = \c_zero_dim
-    { \vfil \penalty #1 \vfilneg }
-    { 
-      \@tempskipb\tex_lastskip:D
-      \group_begin:
-      \@tempskipa\@tempskipb
-      \advance \@tempskipb
-      \dim_compare:nNnTF \prevdepth > \maxdepth
-        \maxdepth
-        { \dim_compare:nNnTF \prevdepth = { -\@m\p@ }
-             \c_zero_dim
-             \prevdepth
-        }
-       \vskip -\@tempskipb
-       \vfil \penalty #1 \vfilneg
-       \dim_compare:nNnF \@tempskipa=\@tempskipb
-         {
-           \advance\@tempskipb -\@tempskipa
-         }
-       \vskip \@tempskipb
-       \vskip \@tempskipa
-       \group_end:
-    }
+  \addpenaltywithfil { #1 }
 %    \end{macrocode}
-%    
+%    The reset so that next time \cs{addpenalty is used again.
 %    \begin{macrocode}
-  \cs_set_eq:NN \sec_add_penalty_with_possible_fil:n
-                \addpenalty
+  \cs_set_eq:NN
+    \sec_add_penalty_with_possible_fil:n
+    \addpenalty
 }
 %    \end{macrocode}
 %    By default \cs{sec_add_penalty_with_possible_fil:n} is the same
 %    as \cs{addpenalty}. If you set it to
 %    \cs{sec_add_penalty_with_fil:n} then it uses the "filbreak"
-%    mechanism and afterwards resets itself to its defaul definition.
+%    mechanism and afterwards resets itself to its default definition.
 %    \begin{macrocode}
 \cs_set_eq:NN
   \sec_add_penalty_with_possible_fil:n
   \addpenalty
 %    \end{macrocode}
 %  \end{macro}
+%
+%
+%
+%  \begin{macro}{\__kernel_add_penalty:n,
+%                \addpenalty,\addpenaltywithfil}
+%    
+%    Next code is for inclusion in the kernel.  It is basically the
+%    code from \LaTeXs{}'s \cs{addpenalty} but with a slightly
+%    different argument so that you have to supply
+%    \verb=\penalty #1\relax= to mimic \cs{addpenalty} and
+%    \verb=\vfil \penalty #1\vfilneg= to produce a penalty generating
+%    a filbreak, i.e., a break where the previous page is ragged bottom.
+%    \begin{macrocode}
+\cs_new_protected:Npn \__kernel_add_penalty:n #1 {
+%    \end{macrocode}
+%    Don't add anything at the start of a minipage or when
+%    \texttt{@nobreak} is set (i.e., directly after a heading).
+%    \begin{macrocode}
+  \mode_if_horizontal:T
+    { \mode_if_inner:TF { \@LRmoderr }{ \par } }  
+  \legacy_if:nF { @minipage }
+    { \legacy_if:nF { @nobreak }
+        {
+%    \end{macrocode}
+%    The rest is also from \cs{addpenalty} except that we have to give
+%    \cs{penalty} explicitly as part of the argument.
+%  
+%    If there wasn't any previous skip or only a zero-sized one simply
+%    set the penalty.
+%    \begin{macrocode}
+          \@tempskipa \tex_lastskip:D
+          \dim_compare:nNnTF \@tempskipa = \c_zero_dim
+            { #1 }
+%    \end{macrocode}
+%    Otherwise start a group and copy the last skip value also into \cs{@tempskipb}
+%    \begin{macrocode}
+            { 
+              \group_begin:
+                \@tempskipb \@tempskipa
+%    \end{macrocode}
+%    Then add to it the current \cs{prevdepth} unless it is
+%    \texttt{-1000pt} (which means it should be suppressed) or if it
+%    is unusually large, in which case add \cs{maxdepth} instead.
+%    \begin{macrocode}
+                \skip_add:Nn \@tempskipb
+                   {
+                     \dim_compare:nNnTF \prevdepth > \maxdepth
+                       \maxdepth
+                       { \dim_compare:nNnTF \prevdepth = { -1000pt }
+                            \c_zero_dim
+                            \prevdepth
+                       }
+                   }
+%    \end{macrocode}
+%    This is the amount we have to back up in order to position us
+%    vertically where the bottom of the page would be if a natural
+%    break would happen
+%    \begin{macrocode}
+                \vskip -\@tempskipb
+%    \end{macrocode}
+%    That is then the point where we have to add the explicit penalty
+%    or the filbreak code.
+%    \begin{macrocode}
+                #1
+%    \end{macrocode}
+%    After the penalty (and after a possible \cs{vfilneg}) we have to
+%    readd what we back up but that isn't as trivial as one might
+%    think.
+%       
+%    First we have to move forward by whaever amount we backed up due
+%    to \cs{prevdepth} because going forward the \cs{prevdepth} will
+%    be zero.   
+%    \begin{macrocode}
+                \dim_compare:nNnF \@tempskipa=\@tempskipb
+                  {
+                    \advance\@tempskipb -\@tempskipa
+                    \vskip \@tempskipb
+                  }
+%    \end{macrocode}
+%    Finally we have to reinsert what we saved as \cs{lastskip},
+%    because that is what any following \cs{addvspace} should see to
+%    make its calculations from.
+%    \begin{macrocode}
+                \vskip \@tempskipa
+              \group_end:
+            }
+        }
+    }
+}
+%    \end{macrocode}
+%    Redeimplement \cs{addpenalty} using the above macro:
+%    \begin{macrocode}
+\cs_set_protected:Npn \addpenalty #1 {
+  \__kernel_add_penalty:n { \penalty #1 \scan_stop: }
+}
+%    \end{macrocode}
+%    And a new command to add a penalty with some \cs{vfil} around
+%    it. They cancel each other if no break is taken.
+%    \begin{macrocode}
+\cs_new_protected:Npn \addpenaltywithfil #1 {
+  \__kernel_add_penalty:n { \vfil \penalty #1 \vfilneg }
+}
+%    \end{macrocode}
+%    
+%  \end{macro}
+%
+%
+%
+%
 %
 %  \begin{macro}{\if@openright}
 %
@@ -2987,8 +3076,8 @@
   , title-decls    = \Huge
   , headformat-instance = chapter
   , mark-cmd       = \chaptermark {#1}
-  , contents-extra = \addtocontents{lof}{\protect\addvspace{10\p@}}
-                     \addtocontents{lot}{\protect\addvspace{10\p@}}
+  , contents-extra = \addtocontents{lof}{\protect\addvspace{10pt}}
+                     \addtocontents{lot}{\protect\addvspace{10pt}}
 }
 %    \end{macrocode}
 %  \end{instance}
