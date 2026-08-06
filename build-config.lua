@@ -162,7 +162,7 @@ function update_tag(file,content,tagname,tagdate)
       "\n   {" .. tag .. "}\n")
     content = gsub(content,
       "\\patch@level{%-?%d}",
-      "\\patch@level{" .. rev .. "}")
+      "\\patch@level{" .. (main_branch and "" or "-") .. rev .. "}")
   end
   if tag_format == "LaTeX2e" then
     return update_tag_ltx(file,content,tag)
