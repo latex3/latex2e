@@ -2190,9 +2190,9 @@
 %    compatibility we aren't doing this either.
 % \changes{v0.9o}{2026/02/16}{Allow spaces before the optional argument (tagging/1237)}
 %    \begin{macrocode}
-\NewDocumentEnvironment{proof}{ ={note}o }
-   { \pushQED{\qed}%
-     \ParseLaTeXeTheoremlike {proof} \BooleanTrue {#1} }
+\NewDocumentEnvironment{proof}{ ={optarg}o }
+   { \pushQED{\qed}
+     \ParseLaTeXeTheoremlike {proof} \BooleanTrue {#1}  }
    { \popQED \BlockEnvEnd }
 %    \end{macrocode}
 %  \end{environment}
@@ -2846,16 +2846,17 @@
 %  \begin{macro}{\SetTemplateKeys}
 %    Same kind of extension for \cs{SetTemplateKeys}:
 %    \begin{macrocode}
-\cs_set_protected:Npn \SetTemplateKeys #1#2#3
-  {
-    \tl_if_empty:oF {#3}
-      {
-        \tl_if_novalue:nF {#3}
-          {
-            \keys_set:no { template / #1 / #2 } {#3}
-          }
-      }
-  }
+\cs_set_protected:Npn \SetTemplateKeys #1#2#3 {
+    \SetKnownTemplateKeys {#1}{#2}{#3}
+%FMi    
+    \tl_if_empty:NF \UnusedTemplateKeys
+       {
+         \msg_error:nneo { block } { unknown-keys }
+             { current~ template~ instance }  % we don't know which
+             \UnusedTemplateKeys
+       }
+    \tl_set_eq:NN  \UnusedTemplateKeys \c_empty_tl
+}
 %    \end{macrocode}
 %  \end{macro}
 %
@@ -3418,16 +3419,20 @@
 {
   ,title             : tokenlist = \proofname
   ,punct             : tokenlist = .
-  ,order             : commalist = {title,punct}
+  ,note              : tokenlist = \NoValue
+  ,separator         : tokenlist = \ 
+  ,order             : commalist = {title,separator,note,punct}
   ,caption-placement : choice {chained,unchained,standalone} = unchained
   ,caption-unbreakable : boolean = false
   ,before-hspace     : skip = 0pt 
   ,after-hspace      : skip = 5pt 
   ,caption-decls     : tokenlist =
   ,title-decls       : tokenlist = 
+  ,note-decls        : tokenlist = 
   ,punct-decls       : tokenlist = 
   ,title-format      : function{1} = #1
   ,punct-format      : function{1} = #1
+  ,note-format       : function{1} = #1
   ,body-decls        : tokenlist =
 }
 %    \end{macrocode}
@@ -5718,7 +5723,9 @@
 \DeclareTemplateCode{captionedtext}{proof}{4}
 {
   ,title         = \l_@@_title_tl
+  ,note          = \l_@@_note_tl
   ,punct         = \l_@@_punct_tl
+  ,separator     = \l_@@_separator_tl 
   ,order         = \l_@@_order_clist
   ,caption-placement = {
      chained    = \bool_gset_false:N \g_@@_label_standalone_bool
@@ -5733,8 +5740,10 @@
   ,after-hspace  = \l_@@_caption_after_skip
   ,caption-decls = \l_@@_caption_decls_tl
   ,title-decls   = \l_@@_title_decls_tl
+  ,note-decls    = \l_@@_note_decls_tl
   ,punct-decls   = \l_@@_punct_decls_tl
   ,title-format  = \@@_title_format:n
+  ,note-format   = \@@_note_format:n
   ,punct-format  = \@@_punct_format:n
   ,body-decls    = \l_@@_body_decls_tl
 }
@@ -5773,7 +5782,7 @@
             %%FMi
             \template_process_order_clist:nnn
                      { block }{ order }
-                     { punct, title }
+                     { note, punct, title, separator }
             \skip_horizontal:n { \l_@@_caption_after_skip }
           }
     }
@@ -5805,6 +5814,8 @@
 %    \begin{macrocode}
   \@@_debug_typeout:n{template:captionedtext:proof~end}
 }
+
+\errorcontextlines=1000
 %    \end{macrocode}
 % \end{template}  
 %
@@ -6790,12 +6801,12 @@
 %     of the environment (tagging/1476)}
 %    \begin{macrocode}
         { 
-          \NewDocumentEnvironment{#2}{ ={note}o }
+          \NewDocumentEnvironment{#2}{ ={optarg}o }
              { \ParseLaTeXeTheoremlike {#2} \BooleanTrue {##1} }
              { \BlockEnvEnd }
         }
         { 
-          \NewDocumentEnvironment{#2}{ ={note}o }
+          \NewDocumentEnvironment{#2}{ ={optarg}o }
              { \ParseLaTeXeTheoremlike {#2} \BooleanFalse {##1} }
              { \BlockEnvEnd }
         }
@@ -6947,8 +6958,8 @@
 %    following declaration:
 %    \begin{macrocode}
 \keys_define:nn {blockenv} {
-  , note        .tl_set:N  = \l_@@_note_tl
-  , note        .groups:n  = { interface }
+  , optarg    .tl_set:N  = \l_@@_optarg_tl
+  , optarg    .groups:n  = { interface }
 }
 %    \end{macrocode}
 %    
@@ -6961,10 +6972,10 @@
 %    \end{macrocode}
 %    Normally, no note is provided, so that's the starting point:
 %    \begin{macrocode}
-  \tl_set:Nn \l_@@_note_tl { \NoValue }
+  \tl_set:Nn \l_@@_optarg_tl { \NoValue }
 %    \end{macrocode}
 %    Then we check \texttt{\#3} if it contains a key/val list
-%    containing \key{note}. This then sets \cs{l_@@_note_tl} and puts
+%    containing \key{note}. This then sets \cs{l_@@_optarg_tl} and puts
 %    all other key/vals in \cs{l_@@_instance_keys_tl}. Otherwise the
 %    complete key/val list ends up there.
 %    \begin{macrocode}
@@ -6981,7 +6992,13 @@
     \exp_not:N \BlockEnv { #1 }
         { \exp_not:o \l_@@_instance_keys_tl }
         { #2 }
-        { \exp_not:o \l_@@_note_tl }
+%    \end{macrocode}
+%    We put the contents of \cs{l_@@_optarg_tl} in the title
+%    argument. For normal \insttype{thmlike} environments this is the
+%    right place, for the \env{proof} environment we have to move it
+%    from there to overwrite the \cs{proofname}.
+%    \begin{macrocode}
+        { \exp_not:o \l_@@_optarg_tl }
   }
 %    \end{macrocode}
 %    We don't have any use for the last argument (the sub-caption) in
