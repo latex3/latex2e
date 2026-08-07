@@ -17,8 +17,8 @@
 %
 %    https://github.com/latex3/latex2e/issues
 %
-\def\ltlabtemplatedate{2026-08-06}
-\def\ltlabtemplateversion{0.6b}
+\def\ltlabtemplatedate{2026-08-07}
+\def\ltlabtemplateversion{0.6c}
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
 
@@ -66,7 +66,9 @@
 %
 %
 % \begin{abstract}
-%    Explain the concepts and requirements for \enquote{order} keys in templates.
+%    This module contains code for the kernel implementation of
+%    templates (in \texttt{lttemplate.dtx}). After suitable testing
+%    this will be moved there. 
 % \end{abstract}
 %
 %
@@ -75,11 +77,6 @@
 %
 %
 % \begin{documentation}
-%
-%
-%
-%
-%
 %
 % \section{Handling \meta{order} keys in a generic way}
 %
@@ -385,17 +382,17 @@
 %      beginning, e.g., closes the MC if none was open at the
 %      start.
 %   \end{itemize}
-
+%
 %    In addition it is also possible to surround individual items from
 %    the \meta{order} list with a structure element, e.g., a
-%    \struct{text-fragment} or an \struct{Artifact}. In this case, the current MC is ended,
-%    the structure and a new MC are started, then the item is
-%    typeset. Afterwards the MC and the structure are closed and the
-%    next item in the list then opens a new MC to be used for the
-%    remainder of the \meta{order} list.\footnote{Perhaps a better
-%    approach would be to use dedicated sockets generated from the
-%    \meta{item} name. That would give more flexibility that may be
-%    needed.}
+%    \struct{text-fragment} or an \struct{Artifact}. In this case, the
+%    current MC is ended, the structure and a new MC are started, then
+%    the item is typeset. Afterwards the MC and the structure are
+%    closed and the next item in the list then opens a new MC to be
+%    used for the remainder of the \meta{order} list.\footnote{Perhaps
+%    a better approach would be to use dedicated sockets generated
+%    from the \meta{item} name. That would give more flexibility that
+%    may be needed.}
 %
 %    For this to work the desired structure name needs to be stored in
 %    the token list
@@ -511,6 +508,26 @@
 %    when necessary.
 % \end{function}
 %
+%
+% \section{Other code updates/extensions}
+%
+%    \cs{SetKnownTemplateKeys} is updated to do nothing (i.e., not
+%    start key parsing)) if the argument is empty or contains
+%    \cs{NoValue} (after one expansion). These are typical scenarios,
+%    e.g., when a key list is passed in as \cs{UnusedTemplateKeys}. If
+%    the argument contains a key/value list without any indirection
+%    then an \texttt{o}-expansion will expand the first letter of the
+%    first key so no harm is done.
+%
+%    \cs{SetTemplateKeys} was changed to use \cs{SetKnownTemplateKeys}
+%    and then test \cs{UnusedTemplateKeys} instead of using the
+%    low-level mechanism, because the latter exposes internals of the
+%    implementation in its error message when an unknown key is
+%    encountered as it shows the full path of the key.
+%
+%    The command \cs{@@_template_debug_typeout:n} was made public
+%    because template may want to issue debugging messages that are
+%    activated when \cs{DebugTemplatesOn} is used. 
 % \end{documentation}
 %
 % \MaybeStop{}
@@ -1031,6 +1048,78 @@
 %    \end{macrocode}
 %    
 %    
+%
+%
+%    
+%
+% \section{Other code updates/extensions}
+%    
+% \subsection{Augmented \cs{SetKnownTemplateKeys}}
+%
+%
+%  \begin{macro}{\SetKnownTemplateKeys}
+%    A key/val list passed to  \cs{SetKnownTemplateKeys} can either be
+%    empty (in which we do not want to start up the parsing machinery)
+%    or it could be \cs{NoValue} in which we do not want to do that
+%    either. The latter can happen, for example, with \env{verbatim}
+%    where we define the optional argument with
+%    \verb/={late-legacy-code} !o/ so that people can write
+%    \verb/\begin{verbatim}[\small]/ a syntax promoted by the TUGboat
+%    class.
+%    \begin{macrocode}
+\cs_set_protected:Npn \SetKnownTemplateKeys #1#2#3
+  {
+%    \end{macrocode}
+%    An \enquote{empty} argument (or rather one that is empty after one
+%    expansion) is the most likely case so we test for this first.
+%    \begin{macrocode}
+    \tl_if_empty:oTF {#3}
+      {
+        \tl_set_eq:NN  \UnusedTemplateKeys \c_empty_tl
+      }
+      {
+        \tl_if_novalue:nTF {#3}
+          {
+            \tl_set_eq:NN  \UnusedTemplateKeys \c_empty_tl
+          }
+          {
+            \keys_set_known:noN { template / #1 / #2 } {#3}
+                                \UnusedTemplateKeys
+          }
+      }
+  }
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%  \begin{macro}{\SetTemplateKeys}
+%    Same kind of extension for \cs{SetTemplateKeys}:
+%    \begin{macrocode}
+\cs_set_protected:Npn \SetTemplateKeys #1#2#3 {
+    \SetKnownTemplateKeys {#1}{#2}{#3}
+%FMi    
+    \tl_if_empty:NF \UnusedTemplateKeys
+       {
+         \msg_error:nneo { block } { unknown-keys }
+             { current~ template~ instance }  % we don't know which
+             \UnusedTemplateKeys
+       }
+    \tl_set_eq:NN  \UnusedTemplateKeys \c_empty_tl
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+% \subsection{Tracing templates and instances}
+%
+%  \begin{macro}{\template_debug_typeout:n}
+%    I guess that tracing macro is needed in several modules, so
+%    should become public (or at least kernel).
+%    \begin{macrocode}
+\cs_new_protected:Npn \template_debug_typeout:n { \__template_debug_typeout:n }
+%    \end{macrocode}
+%  \end{macro}
+%
 %
 %
 %    \begin{macrocode}
