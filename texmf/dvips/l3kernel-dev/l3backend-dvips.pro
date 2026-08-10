@@ -15,7 +15,7 @@
 %% 
 %%    https://www.latex-project.org/lppl.txt
 %% 
-%% This file is part of the "l3backend bundle" (The Work in LPPL)
+%% This file is part of the "l3kernel bundle" (The Work in LPPL)
 %% and all files in that bundle must be distributed together.
 %% 
 %% File: l3backend-header.dtx
