@@ -17,8 +17,8 @@
 %
 %    https://github.com/latex3/latex2e/issues
 %
-\def\ltlabtemplatedate{2026-08-07}
-\def\ltlabtemplateversion{0.6c}
+\def\ltlabtemplatedate{2026-08-14}
+\def\ltlabtemplateversion{0.6d}
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
 
@@ -265,7 +265,34 @@
 %    separation, e.g., a newline plus some vertical spacing.
 %
 %
-% \subsection{Grouping keys in the \meta{order} key clist}
+% \subsection{The special \texttt{|} item in the \meta{order} key clist}
+%
+%    Separators before an item that has \cs{NoValue}  as its value are
+%    dropped, but in some cases some or all of the separators
+%    following should also be dropped in that case. For example, in a
+%    order list
+%\begin{verbatim}
+%    order = {prefix, separator-1, number, ...
+%\end{verbatim}
+%    one normally doesn't want a space in front of the \texttt{number}
+%    if there is no \texttt{prefix}. To implement such scenarios
+%    easily, one can use the special item \texttt{|} which has the
+%    following effect: it drops all collected separators if the
+%    last data item was dropped. For example, if we have
+%\begin{verbatim}
+%    order = {prefix, separator-1, | , separator-2, number, ...
+%\end{verbatim}
+%    and \texttt{prefix} was \cs{NoValue} then \texttt{separator-1} is
+%    dropped but \texttt{separator-2} is kept unless \texttt{number}
+%    is also \cs{NoValue}.
+%
+%    For even more granular control, there is also
+%    \cs{IfValueLastOrderItemTF} which can be used inside a separator
+%    to produce different actions depending on whether or not the last
+%    data had a value.
+%
+%
+% \subsection{Grouping items in the \meta{order} key clist}
 %
 %    In some cases it is necessary to group some items in the \meta{order}
 %    clist, e.g., to indicate that the \texttt{prefix} and the
@@ -610,9 +637,18 @@
         }
       }
 %    \end{macrocode}
-%    Save the list of allowed items for checking later.
+%    To support the special \texttt{|} value in any order list we need
+%    to announce it to the algorithm. The flag used for this is a
+%    token list that has the current module in its name, so we do this
+%    here, because there is no point in making the template writer add
+%    this.
 %    \begin{macrocode}
-  \clist_set:Nn \l_@@_allowed_items_clist { #3 }
+  \tl_clear_new:c { l _ _ #1_|_tl }
+%    \end{macrocode}
+%    Also initialize the boolean that tells us of the last data item
+%    had a value.
+%    \begin{macrocode}
+  \bool_gset_true:N\g_@@_order_item_novalue_bool
 %    \end{macrocode}
 %  
 %    Loop through the comma list stored in the order key and process
@@ -620,7 +656,9 @@
 %    but we write it as
 %    \verb*=l _ _ #...= in the code to avoid bogus warnings from
 %   \texttt{l3doc} about using private names from other modules. We do
-%    the same for other construct variables. 
+%    the same for other construct variables. Argument \texttt{\#3}
+%    holds the list of allowed items to which we add \texttt{|}
+%    because that should be always allowed.
 %    \begin{macrocode}
   \clist_map_inline:cn {l _ _ #1_#2_clist }
         { \clist_if_in:nnTF { | , #3 } { ##1 }
@@ -634,8 +672,7 @@
 %    came from.
 %    \begin{macrocode}
             \cs_if_exist:cTF { l _ _ #1_##1_tl }
-               {
-                 \exp_args:Ncc
+               { \exp_args:Ncc
                  \@@_process_order_key:NNnnn
                    { l _ _ #1_##1_tl }
                    { l _ _ #1_##1_tag_tl }
@@ -644,15 +681,15 @@
                    { #2 }
                }
 %    \end{macrocode}
-%    If the token list doesn't exist or the item is not in the
-%    \cs{l_@@_allowed_items_clist} we raise an error:
+%    If the token list doesn't exist we raise an error:
 %    \begin{macrocode}
                { \msg_error:nnnn { template } { unknown-key-value }
                                 { #2 } { ##1 }
                }
            }
 %    \end{macrocode}
-%    If the item was not in the allowed list we raise the same error.
+%    If the item was not in the allowed list (i.e.,
+%    \texttt{|, \#3}) we raise the same error.
 %    \begin{macrocode}
            { \msg_error:nnnn { template } { unknown-key-value }
                                { #2 } { ##1 }
@@ -677,7 +714,7 @@
 %    matches in other templates that also use the item name but
 %    without setting up default declarations for customization.
 %    \begin{macrocode}
-  \clist_map_inline:Nn \l_@@_allowed_items_clist
+  \clist_map_inline:nn {#3}
     {
 %    \end{macrocode}
 %    The list may contain group items starting with \texttt{<} and for
@@ -721,20 +758,37 @@
 %  \end{macro}
 %    
 %    
-%  \begin{macro}{\l_@@_allowed_items_clist}
-%    Internal variable to hold the allow items.
-%    \begin{macrocode}
-\clist_new:N \l_@@_allowed_items_clist
-%    \end{macrocode}
-%  \end{macro}
 %    
 %    
 %  \begin{macro}{\g_@@_order_item_novalue_bool}
-%    
+%    We keep track of whether or not the last data item had a value
+%    through a global boolean.
 %    \begin{macrocode}
 \bool_new:N \g_@@_order_item_novalue_bool
 %    \end{macrocode}
 %  \end{macro}
+%    
+%    
+%    
+%  \begin{macro}{\IfValueLastOrderItemTF,
+%    \IfValueLastOrderItemT,\IfValueLastOrderItemF}
+%    conditionals for use in separator values (or even data item
+%    values) to do some conditional processing based whether or not
+%    the last item had a value.
+%    \begin{macrocode}
+\cs_new_protected:Npn \IfValueLastOrderItemTF {
+  \bool_if:NTF \g_@@_order_item_novalue_bool
+}
+\cs_new_protected:Npn \IfValueLastOrderItemT {
+  \bool_if:NT \g_@@_order_item_novalue_bool
+}
+\cs_new_protected:Npn \IfValueLastOrderItemF {
+  \bool_if:NF \g_@@_order_item_novalue_bool
+}
+%    \end{macrocode}
+%  \end{macro}
+%    
+%    
 %    
 %  \begin{macro}{\template_new_order_separator:n}
 %    Declare a new separator item that can be used with any order
@@ -887,14 +941,17 @@
                   { -~ dropping~ collected~ separators }
             }
             \tl_gclear:N \g_@@_collected_separators_tl
+%    \end{macrocode}
+%    Current item has no value so update the boolean tracking that.
+%    \begin{macrocode}
+            \bool_gset_true:N \g_@@_order_item_novalue_bool
           }
 %    \end{macrocode}
 %    If the item has a real value (including an empty one) we insert all
 %    collected separators and then typeset the item in a group to keep
 %    formatting changes local.
 %    \begin{macrocode}
-          {
-            \@@_insert_collected_separators:
+          { \@@_insert_collected_separators:
             \group_begin:
 %    \end{macrocode}
 %    The token list variable for the tag name in \verb=#2= may not
@@ -959,6 +1016,13 @@
                   \tag_mc_begin:n {}
                 }
             \group_end:
+%    \end{macrocode}
+%    Current item had a value so update the boolean tracking that.
+%    \begin{macrocode}
+            \bool_gset_false:N \g_@@_order_item_novalue_bool
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
 \checkstatus{After~ #4}
           }
      }
@@ -970,15 +1034,19 @@
 %    
 %    
 %  \begin{macro}{\@@_process_special_order_|:nn}
-%    
+%    We need this internal command to tell the algorithm that
+%    \texttt{|} is a special item in the order list.
+%
+%    It checks if collected separators should be dropped andd if so
+%    does that.
 %    \begin{macrocode}
 \cs_set:cpn { @@_process_special_order_|:nn } #1#2 {
   \bool_if:NT \g_@@_order_item_novalue_bool
-    {
-      \@@_debug_typeout:n {\@spaces |~ seen
+    { \@@_debug_typeout:n {\@spaces |~ seen~
               \tl_if_empty:NF
                   \g_@@_collected_separators_tl
-                  { -~ dropping~ collected~ separators }
+                    { -~ dropping~ collected~ separators }
+      }
       \tl_gclear:N \g_@@_collected_separators_tl
     }
 }
@@ -1060,7 +1128,8 @@
   \tl_new:c { l _ _ #1_#2_decls_tl }
 %    \end{macrocode}
 %    We also need the following two token lists to be defined to keep
-%    the algorithm happy:
+%    the algorithm happy: they serve as a flag that this item is allowed
+%    in the order key value.
 %    \begin{macrocode}
   \tl_new:c { l _ _ #1_<#2_tl }
   \tl_new:c { l _ _ #1_#2>_tl }
