@@ -16,7 +16,7 @@
 -- 
 --    https://www.latex-project.org/lppl.txt
 -- 
--- This file is part of the "l3backend bundle" (The Work in LPPL)
+-- This file is part of the "l3kernel bundle" (The Work in LPPL)
 -- and all files in that bundle must be distributed together.
 -- 
 -- File: l3backend-color.dtx
@@ -43,8 +43,7 @@ if luaotfload and luaotfload.set_transparent_colorstack then
     token.new(0, 2),
     token.create'l__color_tmp_tl',
     token.create'exp_after:wN',
-    token.create'__color_select_aux:nnN',
-    token.create'l__color_tmp_tl',
+    token.create'__color_select_auxi:nn',
     token.create'l__color_tmp_tl',
     token.new(0, 2),
   }
