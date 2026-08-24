@@ -18,7 +18,7 @@
 %    https://github.com/latex3/latex2e/issues
 %
 \def\ltlabsecIIdate{2026-08-08}
-\def\ltlabsecIIversion{0.9l}
+\def\ltlabsecIIversion{0.9m}
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
 
@@ -3402,6 +3402,20 @@
     \@@_debug_typeout:n{Info:~ setting~ up~ instances~ for~
                        legacy~ \string\@startsection}
 %    \end{macrocode}
+%    \cs{@startsection} supported the use of a macro
+%    with one argument as the last token in its \meta{style}
+%    argument, for example, \cs{MakeUppercase} to make the whole title
+%    uppercase. To support that we need to take a look at \texttt{\#6}
+%    and if that ends in such a macro split it off, so that we can put
+%    the first tokens into \key{heading-decls} and this last token
+%    into \key{title-format}. This is what the next call prepares for:
+% \changes{0.9m}{2026-08-12}{Split style argument of
+%    \cs{@startsection} based off type of last token (tagging/1521)}
+%    \begin{macrocode}
+    \@@_prep_decls_and_format_from_tl:nNN {#6}
+       \l_@@_heading_decls_tl
+       \l_@@_title_format_tl
+%    \end{macrocode}
 %    In the \LaTeXe{} logic a negative \#4 means we do not indent the
 %    following paragraph \ldots
 %
@@ -3434,18 +3448,14 @@
 %    \end{macrocode}
 %    Argument \texttt{\#6} contains the declarations for the whole
 %    heading but it is allowed that the last token is a macro with one
-%    argument that receives the heading text as its argument. We
-%    therefore put everything into \key{title-format} to allow for
-%    that case. But this means it only applies to the title text and
-%    not to the whole heading. We therefore also put it into
-%    \key{heading-decls} but ensure that the last token (if it is a
-%    macro with one argument) receives an empty argument.
+%    argument that receives the heading text as its argument.
+%    This is why we have split off the last token above, in case it
+%    contained a macro with one argument. That token is then used as
+%    the \key{title-format}.           
 %    \begin{macrocode}
-         , heading-decls = \exp_not:n {#6} {}
-         , title-format  = \exp_not:n {#6} {##1}
+         , heading-decls = \exp_not:o \l_@@_heading_decls_tl
+         , title-format:o = \l_@@_title_format_tl {##1}
 %    \end{macrocode}
-% we also do the declarations in \texttt{title-format} to handle
-% settings which ends, e.g., with \cs{MakeUppercase},
 %    \begin{macrocode}
          , headformat-instance = #1-@startsection
       }}
@@ -3453,7 +3463,6 @@
 %    We can expect that the instance \texttt{\#1-@startsection} is not
 %    set up by the user if \texttt{\#1-@startsection} isn't, so no check.
 %    \begin{macrocode}
-      \DeclareInstance{headformat}{#1-@startsection}{hang}{heading-indent = #3}
     \else
       \@tempskipb=-\@tempskipb
       \use:e {
@@ -3463,17 +3472,96 @@
          , mark-cmd      = \exp_not:c {#1mark} {##1}
          , before-vspace = \the\@tempskipa
          , after-vspace  = \the\@tempskipb
-         , heading-decls = \exp_not:n {#6} {}
-         , title-format  = \exp_not:n {#6} {##1}
+         , heading-decls = \exp_not:o \l_@@_heading_decls_tl
+         , title-format:o = \l_@@_title_format_tl {##1}
          , headformat-instance = #1-@startsection
       }}
-      \DeclareInstance{headformat}{#1-@startsection}{runin}{heading-indent = #3}
     \fi
+    \DeclareInstance{headformat}{#1-@startsection}{hang}{heading-indent = #3}
   }
   \ParseLaTeXeHeading {#1-@startsection}{#7}{#8}{#9}
 }
 %    \end{macrocode}
 %  \end{macro}
+%
+%
+%
+%  \begin{macro}{\@@_prep_decls_and_format_from_tl:nNN}
+%    Examine \texttt{\#1}. If the last token is a macro with one
+%    argument put it in \texttt{\#3} and the remainder of \texttt{\#1}
+%    into \texttt{\#2}.
+%    Otherwise, put \cs{use:n} in \texttt{\#3} and all of \texttt{\#1}
+%    in \texttt{\#2}.
+% \changes{0.9m}{2026-08-12}{Provide command to split off last token of
+%    a token list if it is a macro with one argument (tagging/1521)}
+%    \begin{macrocode}
+\cs_new:Npn \@@_prep_decls_and_format_from_tl:nNN #1#2#3
+  { \tl_set:Nn #3 { \use:n }
+    \exp_args:Ne
+    \@@_prep_decls_and_auxi:nnNN
+        { \tl_reverse:n {#1} } {#1} #2 #3
+  }
+\cs_new:Npn \@@_prep_decls_and_auxi:nnNN #1#2#3#4
+  { \tl_if_head_is_N_type:nTF {#1}
+      { \@@_prep_decls_and_auxii:nNwNN {#2} #1 \q_stop #3 #4 }
+      { \tl_set:Nn #3 {#2} }
+  }
+\cs_new:Npn \@@_prep_decls_and_auxii:nNwNN #1#2#3 \q_stop #4 #5
+  {
+    \token_if_macro:NTF #2
+      { \exp_args:Ne
+        \@@_prep_decls_and_auxiii:nnNnNN
+          { \cmd_arg_spec:N #2 } {#1} #2 {#3} #4 #5
+      }
+      { \tl_set:Nn #4 {#1} }
+  }
+\cs_new:Npn \@@_prep_decls_and_auxiii:nnNnNN #1#2#3#4#5#6 {
+  \bool_lazy_any:nTF
+    {
+%    \end{macrocode}
+%    This tests for macros with one argument and defined by \cs{def}
+%    or similar.
+%    \begin{macrocode}
+      { \str_if_eq_p:ee { \cs_parameter_spec:N #3 } { \c_hash_str 1 } }
+%    \end{macrocode}
+%    For those defined with \cs{NewDocumentCommand} we need to look at
+%    the signature instead. We also accept macros with one optional
+%    argument first followed by a mandatory one.
+%    \begin{macrocode}
+      { \str_if_eq_p:nn {#1} { m } }
+      { \str_if_eq_p:nn {#1} { +m } }
+      { \str_if_eq_p:nn {#1} { O{} m } }
+      { \str_if_eq_p:nn {#1} { O{} +m } }
+%    \end{macrocode}
+%    Another possibility are macros declared with \cs{RobustCommand}.
+%    \begin{macrocode}
+      { \bool_lazy_and_p:nn
+          { \cs_if_exist_p:c { \cs_to_str:N #3 \c_space_tl } }
+          { \str_if_eq_p:ee
+              { \cs_parameter_spec:c { \cs_to_str:N #3 \c_space_tl } }
+              { \c_hash_str 1 }
+          }
+      }
+      { \bool_lazy_and_p:nn
+          { \cs_if_exist_p:c { \token_to_str:N #3 \c_space_tl } }
+          { \str_if_eq_p:ee
+              { \cs_parameter_spec:c { \token_to_str:N #3 \c_space_tl } }
+              { [ \c_hash_str 1 ] \c_hash_str 2 }
+          }
+      }
+    }
+    { \tl_set:Ne #5 { \tl_reverse:n {#4} }
+      \tl_set:Nn #6 {#3}
+    }
+    { \tl_set:Nn #5 {#2} }
+}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\cs_generate_variant:Nn \cs_parameter_spec:N { c }
+%    \end{macrocode}
+%  \end{macro}
+%
 %
 % Some classes redefine \cs{@startsection} and then our redefinition is lost. So we
 % reinstate it
