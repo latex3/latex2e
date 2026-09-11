@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{calc}
-\ProvidesExplClass{l3doc}{2026-08-10}{}
+\ProvidesExplClass{l3doc}{2026-09-09}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -111,14 +111,14 @@
 \cs_new_protected:Npn \__codedoc_trim_right:Nn #1#2
   {
     \cs_set:Npn \__codedoc_tmp:w ##1 #2 ##2 \q_stop { \exp_not:n {##1} }
-    \__kernel_tl_set:Nx #1 { \exp_after:wN \__codedoc_tmp:w #1 #2 \q_stop }
+    \__kernel_tl_set:Nx #1 { \exp_after:w \__codedoc_tmp:w #1 #2 \q_stop }
   }
 \cs_generate_variant:Nn \__codedoc_trim_right:Nn { No }
 \prg_new_protected_conditional:Npnn \__codedoc_str_if_begin:nn #1#2 { TF , T , F }
   {
     \tl_if_in:ooTF
-      { \exp_after:wN \scan_stop: \tl_to_str:n {#1} }
-      { \exp_after:wN \scan_stop: \tl_to_str:n {#2} }
+      { \exp_after:w \scan_stop: \tl_to_str:n {#1} }
+      { \exp_after:w \scan_stop: \tl_to_str:n {#2} }
       { \prg_return_true: }
       { \prg_return_false: }
   }
@@ -227,7 +227,7 @@
   {
     \cs_new:Npn \__codedoc_split_function_do:nn ##1
       {
-        \exp_after:wN \__codedoc_split_function_auxi:w
+        \exp_after:w \__codedoc_split_function_auxi:w
         \tl_to_str:n {##1} \q_mark \c_true_bool
         #1 \q_mark \c_false_bool
         \q_stop
@@ -912,7 +912,7 @@
       {
         \tl_if_empty:eTF
           {
-            \exp_after:wN \__codedoc_if_macro_internal_aux:w
+            \exp_after:w \__codedoc_if_macro_internal_aux:w
             \tl_to_str:n { #1 ~ __ }
           }
           { \prg_return_false: } { \prg_return_true: }
@@ -1152,7 +1152,8 @@
   }
 \cs_new_protected:Npn \__codedoc_function_index:n #1
   {
-    \seq_gput_right:Nn \g_doc_functions_seq {#1}
+    \__codedoc_if_macro_internal:nF {#1}
+      { \seq_gput_right:Nn \g_doc_functions_seq {#1} }
     \__codedoc_special_index:nn {#1} { usage }
   }
 \cs_generate_variant:Nn \__codedoc_function_index:n { e }
@@ -1384,7 +1385,7 @@
       {
         \seq_gput_right:Ne \g__codedoc_nested_names_seq
           {
-            \exp_after:wN \__codedoc_macro_save_names_aux:w
+            \exp_after:w \__codedoc_macro_save_names_aux:w
               \l__codedoc_macro_documented_tl \q__codedoc_stop
           }
       }
@@ -2021,8 +2022,12 @@
                   { \iow_newline: > ~ ##1 }
               }
               {
-                \tl_put_right:Ne \l__codedoc_doc_undef_tl
-                  { \iow_newline: ! ~ ##1 }
+                \exp_args:Nne \tl_if_head_eq_charcode:nNT {##1}
+                  { \c_backslash_str }
+                  {
+                    \tl_put_right:Ne \l__codedoc_doc_undef_tl
+                      { \iow_newline: ! ~ ##1 }
+                  }
               }
           }
         \seq_map_inline:Nn \g_doc_macros_seq
@@ -2359,7 +2364,7 @@
     \cs_set:Npn \__codedoc_tmpa:w ##1 #1 ##2 \q_stop
       { \exp_not:n {##1} }
     \__kernel_tl_set:Nx \l__codedoc_index_module_tl
-      { \exp_after:wN \__codedoc_tmpa:w \l__codedoc_index_module_tl #1 \q_stop }
+      { \exp_after:w \__codedoc_tmpa:w \l__codedoc_index_module_tl #1 \q_stop }
   }
 \cs_new_protected:Npn \__codedoc_key_drop_underscores:
   {
