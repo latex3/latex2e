@@ -129,6 +129,8 @@ else
     table.move(files, 1, #files, #typesetfiles + 1, typesetfiles)
   end
 end
+-- Build format for pdfTeX and LuaTeX
+function docinit_hook() return fmt({"pdftex","luatex"},typesetdir) end
 
 -- Files that should be removed after running a test
 dynamicfiles = {"*.tst", "properties-003-rerun.aux"}
