@@ -54,7 +54,7 @@ function tex(file,dir,cmd,mode)
     '" "\\input ' .. file .. '"',
     dir,{"TEXINPUTS","TEXFORMATS","LUAINPUTS"})
 end
--- This means we need to use "pdftex" not "pdftex"
+-- This means we need to use "pdftex" not "pdflatex"
 typesetexe = typesetexe or "pdftex"
 
 -- Build TDS-style zips
