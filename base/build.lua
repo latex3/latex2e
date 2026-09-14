@@ -232,7 +232,8 @@ specialtypesetting = specialtypesetting or {}
 specialtypesetting["ltnews.tex"] = {cmd = "luatex"}
 -- We have to do this for all the numbered issues as well, as they are not
 -- generated from the main ltnews.tex file but are separate files
-for i = 1,44 do
+-- Set up sufficiently large it should never need to be adjusted :-)
+for i = 1,100 do
   specialtypesetting["ltnews" .. string.format("%02d",i) .. ".tex"] = {cmd = "luatex"}
 end
 
