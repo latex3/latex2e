@@ -34,7 +34,7 @@
 % newsletters, or as an example of how simple newsletters can be set
 % with LaTeX.  The changes log is at the end of the file.
 
-% Copyright 1994-2006
+% Copyright 1994-2026
 % Alan Jeffrey and the LaTeX Project.
 
 % This is a LaTeX2e document class.
