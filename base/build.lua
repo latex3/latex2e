@@ -158,7 +158,8 @@ typesetdeps =
     maindir .. "/required/graphics",
     maindir .. "/required/tools",
     maindir .. "/required/firstaid",
-    maindir .. "/required/amsmath"    -- for l3doc.cls :-(
+    maindir .. "/required/amsmath",  -- for l3doc.cls :-(
+    maindir .. "/required/latex-lab" -- For the news
   }
 unpackdeps  = {}
 
