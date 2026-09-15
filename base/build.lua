@@ -158,7 +158,8 @@ typesetdeps =
     maindir .. "/required/graphics",
     maindir .. "/required/tools",
     maindir .. "/required/firstaid",
-    maindir .. "/required/amsmath"    -- for l3doc.cls :-(
+    maindir .. "/required/amsmath",  -- for l3doc.cls :-(
+    maindir .. "/required/latex-lab" -- For the news
   }
 unpackdeps  = {}
 
@@ -227,8 +228,21 @@ function bundleunpack ()
   return 0
 end
 
+-- Due to our need to set up the format, we pass the exe here not the cmd
+specialtypesetting = specialtypesetting or {}
+specialtypesetting["ltnews.tex"] = {cmd = "luatex"}
+-- We have to do this for all the numbered issues as well, as they are not
+-- generated from the main ltnews.tex file but are separate files
+-- Set up sufficiently large it should never need to be adjusted :-)
+for i = 1,100 do
+  specialtypesetting["ltnews" .. string.format("%02d",i) .. ".tex"] = {cmd = "luatex"}
+end
+
 -- Load the common settings for the LaTeX2e repo
 dofile (maindir .. "/build-config.lua")
+
+-- Build format for pdfTeX and LuaTeX
+function docinit_hook() return fmt({"pdftex","luatex"},typesetdir) end
 
 -- Suppress makeindex tree other than formal releases
 if not main_branch then

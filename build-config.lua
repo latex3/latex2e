@@ -42,14 +42,20 @@ typesetsuppfiles = typesetsuppfiles or
   {"color.cfg", "graphics.cfg", "ltxdoc.cfg", "ltxguide.cfg"}
 
 -- Ensure the local format file is used
-function tex(file,dir,mode)
+function tex(file,dir,cmd,mode)
   dir = dir or "."
+  cmd = cmd or typesetexe
+  local fmt = string.gsub(cmd,"tex","latex")
+  if cmd == "luatex" then cmd = "luahbtex" end
   mode = mode or "nonstopmode"
-  return runcmd(
-    'pdftex -fmt=pdflatex -interaction=' .. mode .. ' -jobname="' ..
-      string.match(file,"^[^.]*") .. '" "\\input ' .. file .. '"',
+  return runcmd(cmd .. " -fmt=" .. fmt ..
+    ' -interaction=' .. mode ..
+    ' -jobname="' .. string.match(file,"^[^.]*") ..
+    '" "\\input ' .. file .. '"',
     dir,{"TEXINPUTS","TEXFORMATS","LUAINPUTS"})
 end
+-- This means we need to use "pdftex" not "pdflatex"
+typesetexe = typesetexe or "pdftex"
 
 -- Build TDS-style zips
 packtdszip = true
@@ -244,9 +250,9 @@ end
 function docinit_hook() return fmt({"pdftex"},typesetdir) end
 
 -- Shorten second run
-function typeset(file,dir)
+function typeset(file,dir,exe)
   dir = dir or "."
-  local errorlevel = tex(file,dir)
+  local errorlevel = tex(file,dir,exe)
   if errorlevel ~= 0 then
     return errorlevel
   end
@@ -258,10 +264,10 @@ function typeset(file,dir)
   for i = 2,typesetruns - 1 do
 -- we have to run tex first then then index otherwise the index isn't run on the second last run!
     errorlevel =
-      tex(file,dir,"batchmode") +
+      tex(file,dir,exe,"batchmode") +
       makeindex(name,dir,".glo",".gls",".glg",glossarystyle) +
       makeindex(name,dir,".idx",".ind",".ilg",indexstyle)
     if errorlevel ~= 0 then return errorlevel end
   end
-  return tex(file,dir)
+  return tex(file,dir,exe)
 end
