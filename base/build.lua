@@ -108,6 +108,7 @@ typesetfiles_list = {
     "cyrguide.tex",
     "encguide.tex",
     "fntguide.tex",
+    "interface2.tex",
   }, {
     "ltnews.tex",
     "ltnews??.tex",
