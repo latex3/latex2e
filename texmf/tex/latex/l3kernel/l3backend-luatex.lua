@@ -42,7 +42,7 @@ if luaotfload and luaotfload.set_transparent_colorstack then
     'backend',
     token.new(0, 2),
     token.create'l__color_tmp_tl',
-    token.create'exp_after:wN',
+    token.create'exp_after:w',
     token.create'__color_select_auxi:nn',
     token.create'l__color_tmp_tl',
     token.new(0, 2),

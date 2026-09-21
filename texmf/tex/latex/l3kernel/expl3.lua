@@ -522,7 +522,7 @@ local put_next = token.put_next
 local intarray_marker = token_create_safe'__intarray:w'
 local use_none = token_create_safe'use_none:n'
 local use_i = token_create_safe'use:n'
-local expand_after_scan_stop = {token_create_safe'exp_after:wN',
+local expand_after_scan_stop = {token_create_safe'exp_after:w',
                                 token_create_safe'scan_stop:'}
 local comma = token_create(string.byte',')
 local __intarray_table do
