@@ -110,7 +110,12 @@ typesetfiles_list = {
     "fntguide.tex",
   }, {
     "ltnews.tex",
-    "ltnews??.tex",
+    "ltnews0?.tex",
+    "ltnews1?.tex",
+    "ltnews2?.tex",
+  }, {
+    "ltnews3?.tex",
+    "ltnews4?.tex",
     "ltx3info.tex",
     "modguide.tex",
     "usrguide-historic.tex",
