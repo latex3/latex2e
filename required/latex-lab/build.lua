@@ -26,6 +26,8 @@ typesetfiles_list = {
     "blocks-doc.tex",
     "documentmetadata-support-code.tex",
     "documentmetadata-support-doc.tex",
+  },
+  {
     "latex-lab-amsmath.dtx",
     "latex-lab-context.dtx",
     "latex-lab-enumitem.dtx",
