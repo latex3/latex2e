@@ -71,7 +71,6 @@ textfiles =
     "lppl-1-1.txt",
     "lppl-1-2.txt",
   }
-typesetsuppfiles = { "ltnews??.tex" }  -- needed to be there for ltnews.tex
 typesetfiles_list = {
   {
     "source2e.tex", -- Has to be first: source2e.ist creation!
@@ -248,7 +247,10 @@ end
 dofile (maindir .. "/build-config.lua")
 
 -- Build format for pdfTeX and LuaTeX
-function docinit_hook() return fmt({"pdftex","luatex"},typesetdir) end
+function docinit_hook() 
+    cp("ltnews??.tex",docfiledir,typesetdir)
+    return fmt({"pdftex","luatex"},typesetdir)
+end
 
 -- Suppress makeindex tree other than formal releases
 if not main_branch then
