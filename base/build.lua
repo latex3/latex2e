@@ -71,7 +71,7 @@ textfiles =
     "lppl-1-1.txt",
     "lppl-1-2.txt",
   }
-typesetsourcefiles = { "ltnews??.tex" }  -- needed to be there for ltnews.tex
+typesetsuppfiles = { "ltnews??.tex" }  -- needed to be there for ltnews.tex
 typesetfiles_list = {
   {
     "source2e.tex", -- Has to be first: source2e.ist creation!
