@@ -108,13 +108,14 @@ typesetfiles_list = {
     "cyrguide.tex",
     "encguide.tex",
     "fntguide.tex",
-  }, {
     "ltnews.tex",
+  }, {
     "ltnews0?.tex",
     "ltnews1?.tex",
-    "ltnews2?.tex",
   }, {
+    "ltnews2?.tex",
     "ltnews3?.tex",
+  }, {
     "ltnews4?.tex",
     "ltx3info.tex",
     "modguide.tex",
@@ -248,7 +249,7 @@ dofile (maindir .. "/build-config.lua")
 
 -- Build format for pdfTeX and LuaTeX
 function docinit_hook() 
-    cp("ltnews??.tex",docfiledir,typesetdir)
+    cp("ltnews??.tex",docfiledir,typesetdir)     -- needed to be there for ltnews.tex
     return fmt({"pdftex","luatex"},typesetdir)
 end
 
