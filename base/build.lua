@@ -251,6 +251,7 @@ dofile (maindir .. "/build-config.lua")
 -- Build format for pdfTeX and LuaTeX
 function docinit_hook() 
     cp("ltnews??.tex",docfiledir,typesetdir)     -- needed to be there for ltnews.tex
+    cp("interface2-unsorted.tex",docfiledir,typesetdir)     -- needed to be there for interface2
     return fmt({"pdftex","luatex"},typesetdir)
 end
 
