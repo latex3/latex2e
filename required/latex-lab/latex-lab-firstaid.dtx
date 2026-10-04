@@ -15,8 +15,8 @@
 %
 %    https://github.com/latex3/latex2e/issues
 %
-\def\ltlabfirstaiddate{2026-09-22}
-\def\ltlabfirstaidversion{0.86g}
+\def\ltlabfirstaiddate{2026-10-01}
+\def\ltlabfirstaidversion{0.86h}
 
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
@@ -137,7 +137,58 @@
 %
 % \subsection{AMS classes}
 % 
-%    Instead of putting the first aid code into the format we now
+%    Unfortunately, the AMS classs contain a full inline copy of
+%    \pkg{amsthm} inside the class (thanks to \pkg{dostrip}) and they
+%    use \cs{newcommand}, sigh.
+%
+%    Thus, to make the new code work with these classes we have to hide
+%    some definitions, load the class and only afterwards restore our
+%    own versions.
+%
+%    So first save some of the problematical definitions under some
+%    other names (quite a handful):
+%    \begin{macrocode}
+\let \@kernel@newtheorem      \newtheorem
+\let \@kernel@newtheoremstyle \newtheoremstyle
+\let \@kernel@theoremstyle    \theoremstyle
+\let \@kernel@proof           \proof
+\let \@kernel@endproof        \endproof
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\def\undefine@thm@macros{
+  \let \newtheoremstyle \relax
+  \let \theoremstyle    \relax
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \let \proof           \relax
+  \let \endproof        \relax
+%    \end{macrocode}
+%    These we also have to undefine but there is no need to restore
+%    them later (our definitions are identical to those in the
+%    classes) we only have to avoid that \cs{newcommand} generates an
+%    error when the class is loaded.
+%    \begin{macrocode}
+  \let \pushQED    \relax
+  \let \popQED     \relax
+  \let \qedhere    \relax
+  \let \mathqed    \relax
+  \let \openbox    \relax
+}
+%    \end{macrocode}
+%    
+%    Then undefine them just before the class gets loaded:
+%    \begin{macrocode}
+\AddToHook{class/amsart/before} [block]{ \undefine@thm@macros }
+\AddToHook{class/amsbook/before}[block]{ \undefine@thm@macros }
+\AddToHook{class/amsproc/before}[block]{ \undefine@thm@macros }
+%    \end{macrocode}
+%    After the class got loaded we restore the saved versions.
+%
+%    Most of the first aid code for the AMS classes needs to be applied after
+%    the class got loaded.
+%    Instead of putting all the code in hooks and thus into the format we now
 %    write it to files that are loaded after the class has been loaded.
 %    \begin{macrocode}
 \AddToHook{class/amsbook/after}[latex-lab-firstaid]{\input{latex-lab-firstaid-amsbook.ltx}}
@@ -150,6 +201,19 @@
 %<*amscls>
 \ExplSyntaxOn
 %    \end{macrocode}
+%    
+%    Let us first restore the thmlike macros while this is fresh on
+%    our mind.  Note that we don't have to restore all the QED-related
+%    commands as ours are identical to those defined by the AMS.
+%    \begin{macrocode}
+  \let \newtheorem      \@kernel@newtheorem  
+  \let \newtheoremstyle \@kernel@newtheoremstyle
+  \let \theoremstyle    \@kernel@theoremstyle
+  \let \proof           \@kernel@proof
+  \let \endproof        \@kernel@endproof
+%    \end{macrocode}
+%    
+%    
 %    
 %    The amsart, amsbook and amsproc classes do not use \cs{@author}
 %    to store the author list but a command \cs{authors}. To be able
@@ -199,20 +263,46 @@
 %    classes have their own implementation of the command that we need
 %    to overwrite as well.
 %
-%    Provide a saved version of the \cs{newtheoremstyle} code in the
-%    format to be able to reinstall it after the class got loaded.
 %    \begin{macrocode}
-%</amscls>
-%<+package> \cs_set_eq:NN \newtheoremstyle@saved \newtheoremstyle
-%<*amscls>
-%    \end{macrocode}
-%
-%    Then reinstall it and also change the default for the vertical space.
-%    \begin{macrocode}
-\cs_set_eq:NN \newtheoremstyle \newtheoremstyle@saved 
 \tl_set:Nn \newtheoremstyle@vspace@default {
   .5\baselineskip \@plus  .2\baselineskip \@minus .2\baselineskip
 }
+%    \end{macrocode}
+%
+%    The above takes care of newly defined theoremstyles, but the
+%    default ones are already defined in the class so we have to
+%    adjust their settings directly.
+% \changes{0.86h}{2026-10-01}{Provide correct theorem-like defaults
+%    for AMS classes (tagging/1632)}
+%    \begin{macrocode}
+\EditInstance{block}{thm-plain-1}
+  { begin-vspace =  \newtheoremstyle@vspace@default }
+\DeclareInstanceCopy{block}{thm-plain-2}{thm-plain-1}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\EditInstance{block}{thm-remark-1}
+  { begin-vspace =  \newtheoremstyle@vspace@default }
+\DeclareInstanceCopy{block}{thm-remark-2}{thm-remark-1}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\EditInstance{block}{thm-definition-1}
+  { begin-vspace =  \newtheoremstyle@vspace@default }
+\DeclareInstanceCopy{block}{thm-definition-2}{thm-definition-1}
+%    \end{macrocode}
+%
+%    Beside the spacing the thmstyles also differ from the default
+%    (but not for \texttt{amsart.cls}):
+%    \begin{macrocode}
+%<*amsbook,amsproc>
+\EditInstance{thmstyle}{plain}
+  { before-hspace =  \parindent , caption-decls = \scshape }
+\EditInstance{thmstyle}{remark}
+  { before-hspace =  \parindent , caption-decls = \scshape }
+\EditInstance{thmstyle}{definition}
+  { before-hspace =  \parindent , caption-decls = \scshape }
+%</amsbook,amsproc>
 %    \end{macrocode}
 %
 %
