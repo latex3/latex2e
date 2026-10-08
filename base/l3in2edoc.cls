@@ -4,7 +4,7 @@
 %
 % None of this is meant to stay, so this class is not supposed to be used outside of the kernel documentation!
 % It may get incompatible updates and it will vanish again, eventually.
-\ProvidesClass{l3in2edoc}[2026-01-20 v1.0 Internal LaTeX documentation class based on l3doc]
+\ProvidesClass{l3in2edoc}[2026-10-08 v1.1 Internal LaTeX documentation class based on l3doc]
 
 \LoadClassWithOptions{l3doc}
 
@@ -51,5 +51,21 @@
       }%
   }
   {\par\bigskip}
+
+% support \DescribeMacro with l3doc
+\def\@doc@describe#1#2{%
+   \ifdoc@noprint\else
+     \marginpar{\raggedleft
+                \strut
+                 \label{doc/function//\expandafter\@gobble\string#2}%
+                 \doc@providetarget
+                \@nameuse{PrintDescribe#1}{#2}}%
+   \fi
+   \ifdoc@noindex\else
+     \@nameuse{Special#1Index}{#2}%
+   \fi
+ \@esphack
+ \endgroup
+ \ignorespaces}
 \endinput
            
