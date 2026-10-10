@@ -36,7 +36,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{lttemplates.dtx}
-  [2026-10-07 v1.0n LaTeX Kernel (Prototype document functions)]
+  [2026-10-09 v1.0n LaTeX Kernel (Prototype document functions)]
 % \iffalse
 \documentclass{l3in2edoc}
 \GetFileInfo{lttemplates.dtx}
@@ -1023,11 +1023,13 @@
 %
 % \begin{variable}
 %   {
-%     \l_@@_keytypes_prop ,
-%     \l_@@_key_order_seq ,
-%     \l_@@_values_prop   ,
+%     \l_@@_keytypes_prop  ,
+%     \l_@@_key_order_seq  ,
+%     \l_@@_values_prop    ,
 %     \l_@@_vars_prop
-%   }  
+%   }
+% \begin{variable}{\l_@@_value_order_seq} 
+% \changes{2026-10-09}{v1.0n}{New variable} 
 %   To avoid needing too many difficult-to-follow csname assignments,
 %   various scratch token registers are used to build up data, which is
 %   then transferred
@@ -1035,8 +1037,10 @@
 \prop_new:N \l_@@_keytypes_prop
 \seq_new:N \l_@@_key_order_seq
 \prop_new:N \l_@@_values_prop
+\seq_new:N \l_@@_value_order_seq
 \prop_new:N \l_@@_vars_prop
 %    \end{macrocode}
+% \end{variable}
 % \end{variable}
 %
 % \begin{variable}{\l_@@_msg_prop}
@@ -1763,14 +1767,6 @@
         \prop_put:NVe \l_@@_msg_prop \l_@@_key_name_tl
           { \exp_not:n {#2} { \exp_not:V \l_@@_key_name_tl } }
       }
-    \exp_args:Nne \@@_parse_vars_elt_key:nn {#1}
-      {
-        .code:n =
-          {
-            \exp_not:n {#2} { \exp_not:V \l_@@_key_name_tl }
-            \keys_set:nn { template / #1 } \exp_not:n { {#3} }
-          }
-      }
   }
 %    \end{macrocode}
 % \end{macro}
@@ -1876,7 +1872,7 @@
 % \changes{2026-06-24}{v1.0k}{New function to support use of \texttt{name}}
 % \begin{macro}{\@@_parse_vars_elt_auxv:nnn, \@@_parse_vars_elt_auxv:enn}
 % \changes{2026-06-24}{v1.0k}{New function to support use of \texttt{name}}
-% \begin{macro}{\@@_parse_vars_elt_key:nn}
+% \changes{2026-10-09}{v1.0n}{Remove \pkg{l3keys} creation} 
 %   The actual storage part here is very simple: the storage bin name
 %   is placed into the property list. At the same time, a comparison is
 %   made with the keytypes defined earlier: if there is a mismatch then
@@ -1952,25 +1948,13 @@
       {
         \cs_if_exist:NF #1
           { \use:c { \@@_map_var_type: _new:N } #1 }
-        \@@_parse_vars_elt_key:nn {#2}
-          {
-            . \@@_map_var_type:
-              _ \str_if_eq:nnT {#2} { global } { g } set:N
-                = \exp_not:N #1
-          }
         \prop_put:NVn \l_@@_vars_prop
           \l_@@_key_name_tl {#3#1}
       }
       { \msg_error:nnn { template } { bad-variable } {#3#1} }
   }
 \cs_generate_variant:Nn \@@_parse_vars_elt_auxv:nnn { e }
-\cs_new_protected:Npn \@@_parse_vars_elt_key:nn #1#2
-  {
-    \keys_define:ne { template / #1 }
-      { \l_@@_key_name_tl #2 }
-  }
 %    \end{macrocode}
-% \end{macro}
 % \end{macro}
 % \end{macro}
 % \end{macro}
@@ -1992,32 +1976,11 @@
   {
     \cs_if_exist:NF #1
       { \cs_new:Npn #1 { } }
-    \@@_parse_vars_elt_key:nn {#2}
-      {
-        .code:n =
-          {
-            \cs_generate_from_arg_count:NNnn
-              \exp_not:N #1
-              \exp_not:c
-                { cs_ \str_if_eq:nnT {#3} { global } { g } set:Npn }
-              { \exp_not:V \l_@@_keytype_arg_tl }
-              {##1}
-          }
-      }
     \prop_put:NVn \l_@@_vars_prop
       \l_@@_key_name_tl {#3#1}
   }
 \cs_new_protected:Npn \@@_parse_vars_instance:nnn #1#2#3
   {
-    \@@_parse_vars_elt_key:nn {#2}
-      {
-        .code:n =
-          {
-            \exp_not:c
-              { cs_ \str_if_eq:nnT {#3} { global } { g } set:Npn }
-              \exp_not:N #1 { \UseInstance {##1} }
-          }
-      }
     \prop_put:NVn \l_@@_vars_prop
       \l_@@_key_name_tl {#3#1}
   }
@@ -2167,38 +2130,65 @@
 % \end{macro}
 %
 % \begin{macro}{\@@_parse_values:nnn}
+% \changes{2026-10-09}{v1.0n}{Support selectable behavior for unknown keys}
+% \begin{macro}{\@@_parse_known_values:nnn}
+% \changes{2026-10-09}{v1.0n}{New function}
+% \begin{macro}{\@@_parse_values:NNnnn}
+% \changes{2026-10-09}{v1.0n}{New function}
 %   The routine to parse values is the same for both editing a
 %   template and setting up an instance. So the code here does only the
-%   minimum necessary for reading the values.
+%   minimum necessary for reading the values. To allow code sharing, there
+%   are two code paths for a missing key: error here or store the information
+%   for later processing.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_parse_values:nnn #1#2#3
+\cs_new_protected:Npn \@@_parse_values:nnn
+  { \@@_parse_values:NNnnn \use_i:nn \@@_parse_unknown_error:Vn }
+\cs_new_protected:Npn \@@_parse_known_values:nnn
+  { \@@_parse_values:NNnnn \use_ii:nn \@@_parse_unknown_store:Vn }
+\cs_new_protected:Npn \@@_parse_values:NNnnn #1#2#3#4#5
   {
-    \@@_recover_keytypes:nn {#1} {#2}
-    \keyval_parse:NNn
-      \@@_parse_values_elt:n \@@_parse_values_elt:nn {#3}
+    \@@_recover_keytypes:nn {#3} {#4}
+    \seq_clear:N \l_@@_value_order_seq
+    \keyval_parse:nnn
+      { \@@_parse_values_elt:NNn #1#2 }
+      { \@@_parse_values_elt:Nnn #2 }
+      {#5}
+  }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+% \end{macro}
+%
+% \begin{macro}{\@@_parse_values_elt:NNn}
+% \changes{2026-10-09}{v1.0n}{Permit missing value for boolean keys}
+%   Almost key needs a value, so this is just an error routine other than
+%   for booleans.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_parse_values_elt:NNn #1#2#3
+  {
+    \prop_get:NnN \l_@@_keytypes_prop {#3} \l_@@_tmp_tl
+    \str_if_eq:VnTF \l_@@_tmp_tl { boolean }
+      { \@@_parse_values_elt:Nnn #2 {#3} { true } }
+      {
+        #1
+          {
+            \bool_set_true:N \l_@@_error_bool
+            \msg_error:nnn { template } { key-no-value } {#3}
+          }
+          { \clist_put_right:Nn \UnusedTemplateKeys {#3} }
+      }
   }
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{\@@_parse_values_elt:n}
-%   Every key needs a value, so this is just an error routine.
-%    \begin{macrocode}
-\cs_new_protected:Npn \@@_parse_values_elt:n #1
-  {
-    \bool_set_true:N \l_@@_error_bool
-    \msg_error:nnn { template } { key-no-value } {#1}
-  }
-%    \end{macrocode}
-% \end{macro}
-%
-% \begin{macro}{\@@_parse_values_elt:nn}
+% \begin{macro}{\@@_parse_values_elt:Nnn}
 % \begin{macro}{\@@_parse_values_elt_aux:w}
 % \changes{2025-07-08}{v1.0f}{New macro}
 % \begin{macro}{\@@_parse_values_elt_auxi:n}
 % \changes{2025-07-08}{v1.0f}{Allow for value expansion}
 % \changes{2026-08-14}{v1.0l}{Revise value setting}
 % \changes{2026-10-07}{v1.0n}{Rename function}
-% \begin{macro}{\@@_parse_values_elt_auxii:n}
+% \begin{macro}{\@@_parse_values_elt_auxii:Nn}
 % \changes{2026-10-07}{v1.0n}{New function}
 % \begin{macro}{\@@_parse_values_elt_auxiii:w}
 % \changes{2026-10-07}{v1.0n}{New function}
@@ -2210,9 +2200,11 @@
 %   }
 % \changes{2025-07-08}{v1.0f}{New macro}
 % \changes{2026-10-07}{v1.0n}{Rename function}
+% \changes{2026-10-08}{v1.0n}{Record value order}
 % \begin{macro}{\@@_parse_values_set:N, \@@_parse_values_set:c}
 % \changes{2025-07-08}{v1.0f}{New macro}
 % \changes{2026-10-07}{v1.0n}{Rename function}
+% \changes{2026-10-08}{v1.0n}{Record value order}
 % \begin{macro}
 %   {
 %     \@@_parse_values_add:n, \@@_parse_values_add:o,
@@ -2225,19 +2217,19 @@
 %   To store the value, find the keytype then call the saving function.
 %   These need the current key name, stored in \cs{l_@@_key_name_tl}.
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_parse_values_elt:nn #1#2
+\cs_new_protected:Npn \@@_parse_values_elt:Nnn #1#2#3
   {
     \use:e
       {
         \@@_parse_values_elt_aux:w
-          \tl_trim_spaces:e { \tl_to_str:n { #1 : n : } }
+          \tl_trim_spaces:e { \tl_to_str:n { #2 : n : } }
           \exp_not:N \q_stop
       }
     \prop_get:NVNTF \l_@@_keytypes_prop \l_@@_key_name_tl
       \l_@@_tmp_tl
       { \@@_parse_values_elt_auxi:nn { set } }
-      { \@@_parse_values_elt_auxii:n }
-        {#2}
+      { \@@_parse_values_elt_auxii:Nn #1 }
+        {#3}
   }
 \use:e
   {
@@ -2262,33 +2254,38 @@
 %   Hunt for a trailing |+|: this allows the |+=| syntax, treating the
 %   token as part of the mid-part not the key name. 
 %    \begin{macrocode}
-\cs_new_protected:Npn \@@_parse_values_elt_auxii:n #1
+\cs_new_protected:Npn \@@_parse_values_elt_auxii:Nn #1#2
   {
     \exp_after:wN \@@_parse_values_elt_auxiii:w
-      \l_@@_key_name_tl \q_nil + \q_nil \q_stop {#1}
+      \l_@@_key_name_tl \q_nil + \q_nil \q_stop {#2} #1
   }
-\cs_new_protected:Npn \@@_parse_values_elt_auxiii:w #1 + \q_nil #2 \q_stop #3
+\cs_new_protected:Npn \@@_parse_values_elt_auxiii:w #1 + \q_nil #2 \q_stop #3#4
   {
     \tl_if_empty:nTF {#2}
-      { \msg_error:nnV { template } { unknown-key } \l_@@_key_name_tl }
+      { #4 \l_@@_key_name_tl }
       {
         \tl_set:Ne \l_@@_key_name_tl { \tl_trim_spaces:n {#1} }
         \prop_get:NVNTF \l_@@_keytypes_prop \l_@@_key_name_tl
           \l_@@_tmp_tl
           {
             \@@_split_keytype_arg:V \l_@@_tmp_tl
-            \@@_parse_values_elt_auxi:nn { add } {#3}
+            \@@_parse_values_elt_auxi:nn { add }
           }
-          { \msg_error:nnV { template } { unknown-key } \l_@@_key_name_tl }
+          { #4 \l_@@_key_name_tl }
       }
+        {#3}
   }
 \cs_new_protected:Npn \@@_parse_values_set:n #1
-  { \prop_put:Non \l_@@_values_prop \l_@@_key_name_tl {#1} }
+  {
+    \seq_push:NV \l_@@_value_order_seq \l_@@_key_name_tl
+    \prop_put:Non \l_@@_values_prop \l_@@_key_name_tl {#1}
+  }
 \cs_generate_variant:Nn \@@_parse_values_set:n { o , V , v , e }
 \cs_new_eq:NN \@@_parse_values_set:N \@@_parse_values_set:n
 \cs_generate_variant:Nn \@@_parse_values_set:N  { c }
 \cs_new_protected:Npn \@@_parse_values_add:n #1
   {
+    \seq_push:NV \l_@@_value_order_seq \l_@@_key_name_tl
     \prop_get:NVNF \l_@@_values_prop \l_@@_key_name_tl
       \l_@@_tmp_tl
       { \tl_clear:N \l_@@_tmp_tl }
@@ -2329,6 +2326,12 @@
     \tl_put_right:Nn \l_@@_tmp_tl {#1}
     \prop_put:NVV \l_@@_values_prop \l_@@_key_name_tl \l_@@_tmp_tl
   }
+\cs_new_protected:Npn \@@_parse_unknown_error:nn #1#2
+  { \msg_error:nnn { template } { unknown-key } {#1} }
+\cs_generate_variant:Nn \@@_parse_unknown_error:nn { V }
+\cs_new_protected:Npn \@@_parse_unknown_store:nn #1#2
+  { \clist_put_right:Nn \UnusedTemplateKeys { #1 = {#2} } }
+\cs_generate_variant:Nn \@@_parse_unknown_store:nn { V }
 %    \end{macrocode}
 % \end{macro}
 % \end{macro}
@@ -2904,6 +2907,61 @@
 %    \end{macrocode}
 % \end{macro}
 %
+% \subsection{Ad hoc key setting}
+%
+% For (mainly) user-overrides at point of use. We aim to keep the key
+% structures \enquote{inside} \pkg{lttemplates}.
+%
+% \begin{macro}
+%   {
+%     \@@_keys_set:nnn           ,
+%     \@@_keys_set_known:nnn     ,
+%     \@@_keys_set_known_aux:nnn
+%   }
+% \changes{2026-10-09}{v1.0n}{New function}
+%   Setting keys in the document body requires that we work in a similar
+%   way to creating instances. To have keys set in source order, we
+%   use a sequence which is set during parsing. This allows us to reuse
+%   internals. Note that the key argument is expanded exactly once, which
+%   allows for users \enquote{recycling} keys as \cs{UnusedTemplateKeys}
+%   directly rather than by value.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_keys_set:nnn #1#2#3
+  {
+    \@@_keys_set_known:nnn {#1} {#2} {#3}
+    \tl_if_empty:NF \UnusedTemplateKeys
+      {
+        \msg_error:nnV { template } { unknown-ad-hoc-keys }
+          \UnusedTemplateKeys
+      }
+  }
+\cs_new_protected:Npn \@@_keys_set_known:nnn #1#2#3
+  { \exp_args:No \@@_keys_set_known_aux:nnn {#3} {#1} {#2} }
+%    \end{macrocode}
+%   Key setting is skipped if the input is entirely blank or if it is
+%   exactly \cs{NoValue} (which could happen if material is passed at a higher
+%   level without a branching check). As well as setting native keys, we also
+%   check for any in \pkg{l3keys} for compatibility with the previous approach
+%   taken.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_keys_set_known_aux:nnn #1#2#3
+  {
+    \tl_clear:N \UnusedTemplateKeys
+    \bool_lazy_or:nnF
+      { \tl_if_blank_p:n {#1} }
+      { \tl_if_novalue_p:n {#1} }
+      {
+        \keys_set_known:nnN { template / #2  / #3 } {#1} \l_@@_tmp_tl
+        \exp_args:NnnV \@@_parse_known_values:nnn {#2} {#3} \l_@@_tmp_tl
+        \@@_recover_vars:nn {#2} {#3}
+        \seq_set_eq:NN \l_@@_key_order_seq \l_@@_value_order_seq
+        \@@_convert_to_assignments:
+        \tl_use:N \l_@@_assignments_tl
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
 % \subsection{Showing templates and instances}
 %
 % \begin{macro}{\@@_show_code:nn}
@@ -3136,6 +3194,15 @@
   {
     You~are~trying~to~use~a~template~directly~with~\UseInstance
     (or~a~similar~function),~but~the~template~types~do~not~match.
+  }
+%    \end{macrocode}
+% \changes{2026-10-08}{v1.0n}{New message}
+%    \begin{macrocode}
+\msg_new:nnnn { template } { unknown-ad-hoc-keys }
+  { Unknown~template~keys~"#1". }
+  {
+    LaTeX~was~asked~to~set~'ad~hoc'~template~keys,~but~the~keys~
+    "#1"~are~not~known~here.
   }
 \msg_new:nnnn { template } { unknown-attribute }
   { The~template~attribute~'#1'~is~unknown. }
@@ -3393,27 +3460,15 @@
 %   A friendly wrapper, with some speed up for the common case of the
 %    third argument being empty.
 % \changes{2025-01-08}{v1.0d}{Test for empty key/val list to speed up processing}
+% \changes{2026-10-09}{v1.0n}{Switch to template-native approach to key setting}
 %    \begin{macrocode}
 \cs_new_protected:Npn \SetKnownTemplateKeys #1#2#3
-  {
-    \tl_if_empty:oTF {#3}
-      {
-        \tl_set_eq:NN  \UnusedTemplateKeys \c_empty_tl
-      }
-      {
-        \keys_set_known:noN { template / #1 / #2 } {#3} \UnusedTemplateKeys
-      }
-  }
+  { \@@_keys_set_known:nnn {#1} {#2} {#3} }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
 \cs_new_protected:Npn \SetTemplateKeys #1#2#3
-  {
-    \tl_if_empty:oF {#3}
-      {
-        \keys_set:no { template / #1 / #2 } {#3}
-      }
-  }
+  { \@@_keys_set:nnn {#1} {#2} {#3} }
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
