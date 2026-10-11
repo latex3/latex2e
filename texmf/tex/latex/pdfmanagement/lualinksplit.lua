@@ -1,5 +1,5 @@
 --  This is file lualinksplit.lua
---  Version: 0.97c, 2026-05-26
+--  Version: 0.97d, 2026-10-06
 --
 --  Copyright (C) 2025 Marcel Krüger, The LaTeX Project
 --  
@@ -33,8 +33,9 @@ unless you start multiline links in linkstate 1 in which case it is less broken.
 
 It also allows to use even more linkstates, effectively allowing each positive number 
 to define a new independent link context. Links in footnotes can be supported by switching the
-linkstate in a build/column/footnotes socket plug and then assigning this plug:
-
+linkstate in a build/column/footnotes socket plug and then assigning this plug
+(the negative number number ensures that the linkstate is automatically 
+reverted at the end of the box, see below): 
 \NewSocketPlug{build/column/footnotes}{lualinksplit}{%
   \setbox\footins=\vbox{\pdfextension linkstate-2\unvbox\footins}%
 }
