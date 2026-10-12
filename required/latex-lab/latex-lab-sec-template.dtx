@@ -17,8 +17,8 @@
 %
 %    https://github.com/latex3/latex2e/issues
 %
-\def\ltlabsecIIdate{2026-10-07}
-\def\ltlabsecIIversion{0.9u}
+\def\ltlabsecIIdate{2026-10-12}
+\def\ltlabsecIIversion{0.9v}
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
 
@@ -613,6 +613,11 @@
 %    ignored by the currently defined templates but that will probably
 %    change soon, either by extending them or by providing additional
 %    ones that support these mandatory argument.
+%
+%    The code of templates of this kind  should execute
+%    \cs{UseSocket}\verb={heading/record}= so that the position of the
+%    heading is recorded. Only then special instances can be used to define
+%    layouts based on recto/verso pages.
 %
 % \end{TemplateInterfaceDescription}
 %
@@ -1257,6 +1262,32 @@
 %    changing the instance values and/or by basing them on a different
 %    template.
 %
+%    For each heading command an instance of type
+%    \texttt{heading} and one of type \texttt{headformat} is defined.
+%    The instance names are identical to the heading command with out
+%    the backslash, e.g. for \cs{section} they are named
+%    \texttt{section}, etc.
+%
+%    It is also possible to set up special instances that are only
+%    used when an unnumbered heading is typeset or when a heading is
+%    placed on a recto or verso page in twoside mode.
+%    The names for such instances looks as follows:
+%    \begin{quote}\ttfamily
+%       \meta{base-name} : \meta{recto-or-verso-empty} : unnumbered \\
+%       \meta{base-name} : \meta{recto-or-verso}
+%    \end{quote}
+%    For example, \texttt{section::unnumbered} would be the special
+%    instance for unnumbered section headings and
+%    \texttt{chapter:verso} would be a special instances for chapters
+%    on verso pages.
+%    In documents that do not use \texttt{twoside}, all pages are
+%    considered recto pages.
+%
+%    So such special instances are not set up by default, but classes that
+%    wish to produce layouts that differ based on placement or
+%    numbering can easily do so by defining such instances as necessary.
+%
+%
 % \subsubsection{Instances of \insttype{heading} templates}
 %
 % \begin{description}
@@ -1632,7 +1663,9 @@
 %  \l_@@_number_tl,
 %  \l_@@_saved_secnumdepth_tl,
 %  \l_@@_title_tl,
-%  \l_@@_placement_tl}
+%  \l_@@_placement_tl,
+%  \l_@@_instance_name_tl,
+%  \l_@@_page_type_tl}
 %
 % But these token lists needs a declaration:
 %
@@ -1643,6 +1676,8 @@
 \tl_new:N \l_@@_saved_secnumdepth_tl
 \tl_new:N \l_@@_title_tl
 \tl_new:N \l_@@_placement_tl
+\tl_new:N \l_@@_instance_name_tl
+\tl_new:N \l_@@_page_type_tl
 %    \end{macrocode}
 % \end{variable}
 %
@@ -1765,6 +1800,21 @@
     { \keys_set_known:nnN {heading} { #3 } \l_@@_instance_keys_tl }
 %    \end{macrocode}
 %
+%   By default the instance name is \texttt{\#1} so we set
+%    \cs{l_@@_instance_name_tl}.
+%    \begin{macrocode}
+  \tl_set:Nn \l_@@_instance_name_tl {#1}
+%    \end{macrocode}
+%    Then we call the socket \texttt{heading/instname} which checks if
+%    special instances for recto/verso pages or for unnumbered headings
+%    exist and if so change \cs{l_@@_instance_name_tl} so that these
+%    are called below.
+% \changes{0.9v}{2026-10-12}{Support special heading instances
+%    (recto/verso/unnumbered)}
+%    \begin{macrocode}
+  \socket_use:n {heading/instname}
+%    \end{macrocode}
+%    
 %    Finally we call the heading instance using the collected
 %    mandatory arguments. To simplify downstream processing we pass
 %    the values not the container tokenlists resulting from the above
@@ -1772,9 +1822,9 @@
 %    perhaps \cs{UseInstance} should really o-expand all arguments it
 %    receives.}
 %    \begin{macrocode}
-  \@@_debug_typeout:n{use~ 'heading'~ instance:~ #1 }
+  \@@_debug_typeout:n{use~ 'heading'~ instance:~ \l_@@_instance_name_tl }
   \use:e {
-    \exp_not:N \UseInstance{heading}{#1}
+    \exp_not:N \UseInstance{heading}{ \l_@@_instance_name_tl }
               { \exp_not:o \l_@@_instance_keys_tl }
               { \bool_if:NTF \l_@@_unnumbered_bool \BooleanTrue \BooleanFalse }
               { \exp_not:o \l_@@_title_tl}
@@ -1788,6 +1838,117 @@
   }
 }
 %    \end{macrocode}
+%
+%
+%
+%
+% \begin{socketdecl}{heading/instname}
+%    This socket checks for special instance names with \texttt{:recto}
+%    or \texttt{:verso} and possibly \texttt{:unnumbered} appended to
+%    the base name of the \texttt{heading} instance. 
+%    If one is found it adjusts \cs{l_@@_instance_name_tl}. 
+% \changes{0.9v}{2026-10-12}{Support special heading instances
+%    (recto/verso/unnumbered)}
+%    \begin{macrocode}
+\NewSocket{heading/instname}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+%
+
+% \begin{plugdecl}{extend}
+%    
+%    \begin{macrocode}
+\NewSocketPlug{heading/instname}{extend}{
+%    \end{macrocode}
+%    Set \cs{l_@@_page_type_tl} to \texttt{recto} or \texttt{verso} based
+%    on the recorded position of the heading in the previous run (or
+%    recto if unknown):
+%    \begin{macrocode}
+  \tl_set:Ne \l_@@_page_type_tl
+     { \int_if_odd:nTF
+       { \property_ref:een
+            { heading*. \int_use:N \g_@@_count_int }
+            {pagenum} { 1 }
+       }
+       {recto} {verso} }
+%    \end{macrocode}
+%    If the heading is unnumbered check for \texttt{:unnumbered} as
+%    the third component.
+%    \begin{macrocode}
+  \bool_if:NTF \l_@@_unnumbered_bool
+    { \exp_args:Nne  
+      \IfInstanceExistsTF {heading}
+                          { \l_@@_instance_name_tl :
+                            \l_@@_page_type_tl :
+                            unnumbered }
+        { \tl_set:Ne \l_@@_instance_name_tl
+             { \l_@@_instance_name_tl :
+               \l_@@_page_type_tl : unnumbered }
+        }
+        { \exp_args:Nne  
+          \IfInstanceExistsT {heading}
+                             { \l_@@_instance_name_tl
+                                :: unnumbered }
+            { \tl_set:Ne \l_@@_instance_name_tl
+                  { \l_@@_instance_name_tl
+                     :: unnumbered        }
+            }
+        }
+    }
+%    \end{macrocode}
+%    Otherwise there can only be two components:
+%    \begin{macrocode}
+    { \exp_args:Nne  
+      \IfInstanceExistsT {heading}
+                         { \l_@@_instance_name_tl :
+                           \l_@@_page_type_tl }
+        {
+          \tl_set:Ne \l_@@_instance_name_tl
+             { \l_@@_instance_name_tl :
+               \l_@@_page_type_tl       }
+        }
+    }
+}
+\AssignSocketPlug{heading/instname}{extend}
+%    \end{macrocode}
+% \end{plugdecl}
+%
+%
+%  \begin{macro}{\g_@@_count_int}
+%    To get unique labels when recording the property we use a
+%    counter. It is stepped in the \texttt{heading/record} socket.
+%    \begin{macrocode}
+\int_new:N \g_@@_count_int
+%    \end{macrocode}
+%  \end{macro}
+
+% \begin{socketdecl}{heading/record}
+%    This socket is used at the point where the heading typeset. In
+%    has to happen late to ensure that we are alreadyon the
+%    page/column on which the heading will finally appear, because
+%    that is what we want to record. It is therefore used in the
+%    \texttt{headformat} templates.
+% \changes{0.9v}{2026-10-12}{Support special heading instances
+%    (recto/verso/unnumbered)}
+%    \begin{macrocode}
+\NewSocket{heading/record}{0}
+%    \end{macrocode}
+% \end{socketdecl}
+
+% \begin{plugdecl}{page}
+%    Record the current page number in a way suitable for numeric
+%    comparison and then increment the internal counter so that we get
+%    a unique label for the next heading.
+%    \begin{macrocode}
+\NewSocketPlug{heading/record}{page}{
+  \property_record:ee { heading*. \int_use:N\g_@@_count_int } {pagenum}
+  \int_gincr:N \g_@@_count_int
+}
+\AssignSocketPlug{heading/record}{page}
+%    \end{macrocode}
+% \end{plugdecl}
+
+
 %
 %    Syntax keys that can appear in the optional argument of headings
 %    parsed by \cs{ParseLaTeXeHeading}. All other keys used there are
@@ -1817,9 +1978,9 @@
   , label      .code:n    = \tl_put_right:Nn \l_@@_label_tl { \label{#1} }
 }
 %    \end{macrocode}
-%
-%
 %  \end{macro}
+%
+%
 %
 %  \begin{macro}{\@@_find_label:w}
 %    A simple-minded check for an existing \cs{label} command in the
@@ -3117,7 +3278,17 @@
             \skip_horizontal:N \l_@@_heading_indent_dim
           }
       }
-%
+%    \end{macrocode}
+%    At this point we know for sure that we are on the page/column
+%    where the heading will finally appear so we can record this
+%    position.
+% \changes{0.9v}{2026-10-12}{Support special heading instances
+%    (recto/verso/unnumbered)}
+%    \begin{macrocode}
+    \socket_use:n {heading/record}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
     \@@_heading_format:n {
       \template_process_order_clist:nnn
          { head }{ order }
@@ -3248,10 +3419,21 @@
     \interlinepenalty \@M
     \l_@@_heading_decls_tl
     \noindent      
+%    \end{macrocode}
+%    At this point we know for sure that we are on the page/column
+%    where the heading will finally appear so we can record this
+%    position.
+% \changes{0.9v}{2026-10-12}{Support special heading instances
+%    (recto/verso/unnumbered)}
+%    \begin{macrocode}
+    \socket_use:n {heading/record}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
     \setbox\@tempboxa\hbox{{
 %    \end{macrocode}
-% The link target should be at the left text margin, or, if the section
-% is moved into the margin, at the left of the number.
+%    The link target should be at the left text margin, or, if the
+%    section is moved into the margin, at the left of the number.
 %    \begin{macrocode}
       \bool_if:NTF \l_@@_unnumbered_bool
         { 
@@ -3377,6 +3559,17 @@
            \skip_horizontal:N \l_@@_heading_indent_dim
          }
       }
+%    \end{macrocode}
+%    At this point we know for sure that we are on the page/column
+%    where the heading will finally appear so we can record this
+%    position.
+% \changes{0.9v}{2026-10-12}{Support special heading instances
+%    (recto/verso/unnumbered)}
+%    \begin{macrocode}
+    \socket_use:n {heading/record}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
     \template_process_order_clist:nnn
          { head }{ order }
          { number, text, punct, separator-a,
