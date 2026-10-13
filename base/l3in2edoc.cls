@@ -53,12 +53,17 @@
   {\par\bigskip}
 
 % support \DescribeMacro with l3doc
+\ExplSyntaxOn
 \def\@doc@describe#1#2{%
    \ifdoc@noprint\else
      \marginpar{\raggedleft
-                \strut
-                 \label{doc/function//\expandafter\@gobble\string#2}%
-                 \doc@providetarget
+                \strut % copy code from \__codedoc_get_hyper_target:nN
+                \tl_set:Ne \l__codedoc_tmpa_tl { \tl_to_str:n {#2} }
+                \tl_replace_all:NVn \l__codedoc_tmpa_tl \c_underscore_str { / }
+                \tl_remove_all:NV \l__codedoc_tmpa_tl \c_backslash_str
+                \tl_put_left:Nn \l__codedoc_tmpa_tl { doc/function// }
+                \exp_args:No \label { \l__codedoc_tmpa_tl }
+                \doc@providetarget
                 \@nameuse{PrintDescribe#1}{#2}}%
    \fi
    \ifdoc@noindex\else
@@ -67,5 +72,4 @@
  \@esphack
  \endgroup
  \ignorespaces}
-\endinput
-           
+\ExplSyntaxOff
