@@ -15,8 +15,8 @@
 %
 %    https://github.com/latex3/latex2e/issues
 %
-\def\ltlabfirstaiddate{2026-09-15}
-\def\ltlabfirstaidversion{0.86c}
+\def\ltlabfirstaiddate{2026-10-05}
+\def\ltlabfirstaidversion{0.86i}
 
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
@@ -80,7 +80,7 @@
 %  expansion in expl3 code}
 % \changes{v0.85u}{2026-04-24}{Added firstaid for H-floats.}
 % \changes{v0.85u}{2026-04-24}{Removed microtype firstaid. No longer needed.}
-%
+% \changes{v0.86f}{2026-09-20}{Added support for listings}
 % \section{Implementation}
 %
 %    \begin{macrocode}
@@ -128,9 +128,67 @@
  {\def\pgfutil@InputIfFileExists#1#2#3{\pgfutil@IfFileExists{#1}{\input{#1}\relax#2}{#3}}}
 %    \end{macrocode}
 %
+% \subsection{listings}
+% The \pkg{listings} package needs various adaptions to enable tagging support.
+% They are in an external file.
+%    \begin{macrocode}
+\AddToHook{package/listings/after}[latex-lab-firstaid]{\RequirePackage{latex-lab-listings}}
+%    \end{macrocode}
+%
 % \subsection{AMS classes}
 % 
-%    Instead of putting the first aid code into the format we now
+%    Unfortunately, the AMS classs contain a full inline copy of
+%    \pkg{amsthm} inside the class (thanks to \pkg{dostrip}) and they
+%    use \cs{newcommand}, sigh.
+%
+%    Thus, to make the new code work with these classes we have to hide
+%    some definitions, load the class and only afterwards restore our
+%    own versions.
+%
+%    So first save some of the problematical definitions under some
+%    other names (quite a handful):
+%    \begin{macrocode}
+\let \@kernel@newtheorem      \newtheorem
+\let \@kernel@newtheoremstyle \newtheoremstyle
+\let \@kernel@theoremstyle    \theoremstyle
+\let \@kernel@proof           \proof
+\let \@kernel@endproof        \endproof
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\def\undefine@thm@macros{
+  \let \newtheoremstyle \relax
+  \let \theoremstyle    \relax
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \let \proof           \relax
+  \let \endproof        \relax
+%    \end{macrocode}
+%    These we also have to undefine but there is no need to restore
+%    them later (our definitions are identical to those in the
+%    classes) we only have to avoid that \cs{newcommand} generates an
+%    error when the class is loaded.
+%    \begin{macrocode}
+  \let \pushQED    \relax
+  \let \popQED     \relax
+  \let \qedhere    \relax
+  \let \mathqed    \relax
+  \let \openbox    \relax
+}
+%    \end{macrocode}
+%    
+%    Then undefine them just before the class gets loaded:
+%    \begin{macrocode}
+\AddToHook{class/amsart/before} [block]{ \undefine@thm@macros }
+\AddToHook{class/amsbook/before}[block]{ \undefine@thm@macros }
+\AddToHook{class/amsproc/before}[block]{ \undefine@thm@macros }
+%    \end{macrocode}
+%    After the class got loaded we restore the saved versions.
+%
+%    Most of the first aid code for the AMS classes needs to be applied after
+%    the class got loaded.
+%    Instead of putting all the code in hooks and thus into the format we now
 %    write it to files that are loaded after the class has been loaded.
 %    \begin{macrocode}
 \AddToHook{class/amsbook/after}[latex-lab-firstaid]{\input{latex-lab-firstaid-amsbook.ltx}}
@@ -143,6 +201,19 @@
 %<*amscls>
 \ExplSyntaxOn
 %    \end{macrocode}
+%    
+%    Let us first restore the thmlike macros while this is fresh on
+%    our mind.  Note that we don't have to restore all the QED-related
+%    commands as ours are identical to those defined by the AMS.
+%    \begin{macrocode}
+  \let \newtheorem      \@kernel@newtheorem  
+  \let \newtheoremstyle \@kernel@newtheoremstyle
+  \let \theoremstyle    \@kernel@theoremstyle
+  \let \proof           \@kernel@proof
+  \let \endproof        \@kernel@endproof
+%    \end{macrocode}
+%    
+%    
 %    
 %    The amsart, amsbook and amsproc classes do not use \cs{@author}
 %    to store the author list but a command \cs{authors}. To be able
@@ -192,20 +263,46 @@
 %    classes have their own implementation of the command that we need
 %    to overwrite as well.
 %
-%    Provide a saved version of the \cs{newtheoremstyle} code in the
-%    format to be able to reinstall it after the class got loaded.
 %    \begin{macrocode}
-%</amscls>
-%<+package> \cs_set_eq:NN \newtheoremstyle@saved \newtheoremstyle
-%<*amscls>
-%    \end{macrocode}
-%
-%    Then reinstall it and also change the default for the vertical space.
-%    \begin{macrocode}
-\cs_set_eq:NN \newtheoremstyle \newtheoremstyle@saved 
 \tl_set:Nn \newtheoremstyle@vspace@default {
   .5\baselineskip \@plus  .2\baselineskip \@minus .2\baselineskip
 }
+%    \end{macrocode}
+%
+%    The above takes care of newly defined theoremstyles, but the
+%    default ones are already defined in the class so we have to
+%    adjust their settings directly.
+% \changes{0.86h}{2026-10-01}{Provide correct theorem-like defaults
+%    for AMS classes (tagging/1632)}
+%    \begin{macrocode}
+\EditInstance{block}{thm-plain-1}
+  { begin-vspace =  \newtheoremstyle@vspace@default }
+\DeclareInstanceCopy{block}{thm-plain-2}{thm-plain-1}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\EditInstance{block}{thm-remark-1}
+  { begin-vspace =  \newtheoremstyle@vspace@default }
+\DeclareInstanceCopy{block}{thm-remark-2}{thm-remark-1}
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\EditInstance{block}{thm-definition-1}
+  { begin-vspace =  \newtheoremstyle@vspace@default }
+\DeclareInstanceCopy{block}{thm-definition-2}{thm-definition-1}
+%    \end{macrocode}
+%
+%    Beside the spacing the thmstyles also differ from the default
+%    (but not for \texttt{amsart.cls}):
+%    \begin{macrocode}
+%<*amsbook,amsproc>
+\EditInstance{thmstyle}{plain}
+  { before-hspace =  \parindent , caption-decls = \scshape }
+\EditInstance{thmstyle}{remark}
+  { before-hspace =  \parindent , caption-decls = \scshape }
+\EditInstance{thmstyle}{definition}
+  { before-hspace =  \parindent , caption-decls = \scshape }
+%</amsbook,amsproc>
 %    \end{macrocode}
 %
 %
@@ -295,22 +392,18 @@
 %    \begin{macrocode}
 \DeclareInstance{heading}{part}{display}
   {
-    , name                = part
-    , level               = -1
-    , placement           = page
-    , start-code          =  \cleardoublepage \thispagestyle{empty}
-                              \null \vfil \markboth{}{}
-    , final-code          = \vfil \vfil \newpage\newpage \thispagestyle{empty}
-    , mark-cmd            = \partmark {#1}
-    , heading-decls       = \centering\huge\bfseries
-    , headformat-instance = part
-    , prefix              = \partname
-    , number-format       = \theheading .
-    , title-decls         = \Huge
-  }
-\DeclareInstance{headformat}{part}{display}
-  {
-    prefix-number-sep = \WordSpaceAmount{1},
+    , name                  = part
+    , level                 = -1
+    , placement             = page
+    , placement-start-code  =  \cleardoublepage \thispagestyle{empty}
+                               \null \vfil \markboth{}{}
+    , placement-end-code    = \vfil \vfil \newpage \thispagestyle{empty}
+    , mark-cmd              = \partmark {#1}
+    , heading-decls         = \centering\fontsize{\@xviipt}{22}\bfseries
+    , headformat-instance   = part
+    , text                  = \partname
+    , number-format         = #1
+    , title-decls           = \fontsize{\@xxpt}{25}\bfseries
   }
 %    \end{macrocode}
 %
@@ -327,12 +420,12 @@
     , mark-cmd             = \chaptermark {#1}
     , para-indent          = true
     , placement            = top
-    , after-penalty-vspace = 32pt
+    , after-penalty-vspace = 42pt  % 32pt plus \topskip
     , after-vspace         = 22pt
     , heading-decls        = \normalsize\mdseries\centering
     , headformat-instance  = chapter
-    , prefix               = \MakeUppercase{\chaptername}
-    , number-format        = \thechapter
+    , text                 = \MakeUppercase{\chaptername}
+    , number-format        = #1
     , title-decls          = \fontsize{\@xivpt}{18} \bfseries
     , contents-extra       = \addtocontents{lof}{\protect\addvspace{10\p@}}
                              \addtocontents{lot}{\protect\addvspace{10\p@}}
@@ -341,7 +434,7 @@
 %
 %    \begin{macrocode}
 \DeclareInstanceCopy{heading}{chapter*}{chapter}
-\EditInstance{heading}{chapter*}{ after-penalty-vspace = 62pt }
+\EditInstance{heading}{chapter*}{ after-penalty-vspace = 72pt }  % 62pt + \topskip
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -364,7 +457,7 @@
     , after-vspace        = 0.5\linespacing
     , heading-decls       = \normalfont \bfseries \centering
     , headformat-instance = section
-    , number-format       = \theheading .
+    , number-format       = #1.
     , number-decls        = \upshape
   }
 \DeclareInstance{headformat}{section}{hang}
@@ -391,9 +484,10 @@
     , level               = 2
     , mark-cmd            = \subsectionmark{#1}
     , before-vspace       = 0.5\linespacing plus 0.7\linespacing
+    , after-hspace        = \fontdimen2\font
     , heading-decls       = \normalfont \bfseries
     , headformat-instance = subsection
-    , number-format       = \theheading .
+    , number-format       = #1.
     , number-decls        = \upshape
     , title-format        = #1 \AddPunct{.}
   }
@@ -411,9 +505,10 @@
     , level               = 3
     , mark-cmd            = \subsubsectionmark{#1}
     , before-vspace       = 0pt
+    , after-hspace        = \fontdimen2\font
     , heading-decls       = \normalfont \itshape
     , headformat-instance = subsubsection
-    , number-format       = \theheading .
+    , number-format       = #1.
     , number-decls        = \upshape
     , title-format        = #1 \AddPunct{.}
   }
@@ -431,10 +526,10 @@
     , level               = 4
     , mark-cmd            = \paragraphmark{#1}
     , before-vspace       = 0pt
-    , after-vspace        = \fontdimen2 \font
+    , after-hspace        = \fontdimen2 \font
     , heading-decls       = \normalfont
     , headformat-instance = paragraph
-    , number-format       = \theheading .
+    , number-format       = #1.
     , number-decls        = \upshape
     , title-format        = #1 \AddPunct{.}
   }
@@ -452,10 +547,10 @@
     , level               = 5
     , mark-cmd            = \subparagraphmark{#1}
     , before-vspace       = 0pt
-    , after-vspace        = \fontdimen2\font
+    , after-hspace        = \fontdimen2\font
     , heading-decls       = \normalfont
     , headformat-instance = subparagraph
-    , number-format       = \theheading .
+    , number-format       = #1.
     , number-decls        = \upshape
     , title-format        = #1 \AddPunct{.}
   }
@@ -463,6 +558,29 @@
   {
     , separator-b = \hspace{0.5em}
   }
+%    \end{macrocode}
+%
+%    The running header setup from amsbook doesn't correctly function
+%    and needs adjustments. For now we provide some simple
+%    redefinitions which do not necessarily produce exactly the same results.  
+%    \begin{macrocode}
+\def\partmark#1{%
+  \markboth{}{}
+}
+\def\chaptermark#1{%
+  \markboth {\MakeUppercase{%
+      \ifnum \c@secnumdepth >\m@ne
+        \thechapter. \ %
+      \fi
+      #1}}{}
+}
+\def\sectionmark#1{%
+      \markright {\MakeUppercase{%
+        \ifnum \c@secnumdepth >\z@
+          \thesection. \ %
+        \fi
+        #1}}
+}
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -494,7 +612,7 @@
     , after-vspace        = 0.5 \linespacing
     , heading-decls       = \normalfont \bfseries \raggedright
     , headformat-instance = part
-    , prefix              = \partname
+    , text                = \partname
     , number-format       = \theheading .
     , number-decls        = \mdseries \upshape  % proc: has just \upshape
   }
@@ -543,6 +661,7 @@
     , level               = 2
     , mark-cmd            = \subsectionmark{#1}
     , before-vspace       = 0.5\linespacing plus 0.7\linespacing
+    , after-hspace        = \fontdimen2\font
     , heading-decls       = \normalfont \bfseries
     , headformat-instance = subsection
     , number-format       = \theheading .
@@ -562,6 +681,7 @@
     , level               = 3
     , mark-cmd            = \subsubsectionmark{#1}
     , before-vspace       = 0.5\linespacing plus 0.7\linespacing
+    , after-hspace        = \fontdimen2\font
     , heading-decls       = \normalfont \itshape
     , headformat-instance = subsubsection
     , number-format       = \theheading .
@@ -581,7 +701,7 @@
     , level               = 4
     , mark-cmd            = \paragraphmark{#1}
     , before-vspace       = 0pt
-    , after-vspace        = \fontdimen2\font
+    , after-hspace        = \fontdimen2\font
     , heading-decls       = \normalfont
     , headformat-instance = paragraph
     , number-format       = \theheading .
@@ -601,7 +721,7 @@
     , level               = 5
     , mark-cmd            = \subparagraphmark{#1}
     , before-vspace       = 0pt
-    , after-vspace        = \fontdimen2\font
+    , after-hspace        = \fontdimen2\font
     , heading-decls       = \normalfont
     , headformat-instance = subparagraph
     , number-format       = \theheading .
@@ -637,7 +757,7 @@
     , after-vspace        = 0.5 \linespacing
     , heading-decls       = \normalfont \bfseries \raggedright
     , headformat-instance = part
-    , prefix              = \partname
+    , text                = \partname
     , number-format       = \theheading .
     , number-decls        = \upshape
   }
@@ -685,6 +805,7 @@
     , level               = 2
     , mark-cmd            = \subsectionmark{#1}
     , before-vspace       = 0.5\linespacing plus 0.7\linespacing
+    , after-hspace        = \fontdimen2\font
     , heading-decls       = \normalfont \bfseries
     , headformat-instance = subsection
     , number-format       = \theheading .
@@ -705,6 +826,7 @@
     , level               = 3
     , mark-cmd            = \subsubsectionmark{#1}
     , before-vspace       = 0.5\linespacing plus 0.7\linespacing
+    , after-hspace        = \fontdimen2\font
     , heading-decls       = \normalfont \itshape
     , headformat-instance = subsubsection
     , number-format       = \theheading .
@@ -725,7 +847,7 @@
     , level               = 4
     , mark-cmd            = \paragraphmark{#1}
     , before-vspace       = 0pt
-    , after-vspace        = \fontdimen2\font
+    , after-hspace        = \fontdimen2\font
     , heading-decls       = \normalfont
     , headformat-instance = paragraph
     , number-format       = \theheading .
@@ -746,7 +868,7 @@
     , level               = 5
     , mark-cmd            = \subparagraphmark{#1}
     , before-vspace       = 0pt
-    , after-vspace        = \fontdimen2\font
+    , after-hspace        = \fontdimen2\font
     , heading-decls       = \normalfont
     , headformat-instance = subparagraph
     , number-format       = \theheading .
@@ -763,6 +885,55 @@
 %</amsproc>
 %    \end{macrocode}
 %
+%  
+%  
+%  
+%    \begin{macrocode}
+%<*amsbook>
+%    \end{macrocode}
+%
+%    The AMS classes do a lot of low-level overwrites to macros
+%    building out the table of contents structures. \cs{@starttoc}
+%    being one example which is partially fixed here. This isn't the
+%    full fix: various \cs{l@...} macros also need changes, but that
+%    has to wait for another day \ldots\ for now we only make sure
+%    that the code doesn't break badly, but they layout is not
+%    matching what the class normally produces!
+%    \begin{macrocode}
+\def\@starttoc#1#2{%
+  \begingroup
+  \setTrue{#1}%
+  \ifx\contentsname#2%
+    \chapter[unnumbered,toc=]{\contentsname}%
+  \else
+    \chapter[=,unnumbered]{#2}%
+  \fi
+  \typeout{#2}%
+  \makeatletter
+  \@input{\jobname.#1}%
+  \if@filesw
+    \@xp\newwrite\csname tf@#1\endcsname
+    \immediate\@xp\openout\csname tf@#1\endcsname \jobname.#1\relax
+  \fi
+  \global\@nobreakfalse
+  \endgroup
+  \newpage
+  }
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\AddToHook{begindocument}{
+  \@namedef{r@tocindent-1}{1em}
+  \@namedef{r@tocindent0}{1em}
+  \@namedef{r@tocindent1}{1em}
+}
+%    \end{macrocode}
+%    
+%
+%    \begin{macrocode}
+%</amsbook>
+%    \end{macrocode}
+%    
 %    \begin{macrocode}
 \ExplSyntaxOff
 %</amscls>
@@ -778,9 +949,9 @@
 %
 %
 %
-%  \section{fncychap}
+%  \subsection{fncychap}
 %
-%    
+%    First aid for \pkg{fncychap} is kept in a separate file.
 %    \begin{macrocode}
 \AddToHook{package/fncychap/after}[latex-lab-firstaid]{\input{latex-lab-firstaid-fncychap.ltx}}
 %    \end{macrocode}
@@ -874,7 +1045,7 @@
 %    \end{macrocode}
 %    Finally, we have the bare heading design as used in the
 %    package. When the heading is numbered then \cs{DOCH} is
-%    responsible to place the heading prefix (e.g., Chapter) and the
+%    responsible to place the fixed heading text (e.g., Chapter) and the
 %    chapter number. 
 %    \begin{macrocode}
 %    \leavevmode            % this can wait ...
