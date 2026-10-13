@@ -52,22 +52,24 @@
   }
   {\par\bigskip}
 
-% support \DescribeMacro with l3doc
+% Support \DescribeMacro with l3doc; copies code from \__codedoc_get_hyper_target:nN.
+% Also adds a \MakeLinkTarget
 \ExplSyntaxOn
-\def\@doc@describe#1#2{%
+\def\@doc@describe#1#2{
    \ifdoc@noprint\else
      \marginpar{\raggedleft
-                \strut % copy code from \__codedoc_get_hyper_target:nN
+                \strut
                 \tl_set:Ne \l__codedoc_tmpa_tl { \tl_to_str:n {#2} }
                 \tl_replace_all:NVn \l__codedoc_tmpa_tl \c_underscore_str { / }
                 \tl_remove_all:NV \l__codedoc_tmpa_tl \c_backslash_str
                 \tl_put_left:Nn \l__codedoc_tmpa_tl { doc/function// }
-                \exp_args:No \label { \l__codedoc_tmpa_tl }
+                \MakeLinkTarget[macro]{}
+                \exp_args:Ne \label { \tl_trim_spaces:V \l__codedoc_tmpa_tl }
                 \doc@providetarget
-                \@nameuse{PrintDescribe#1}{#2}}%
+                \@nameuse{PrintDescribe#1}{#2}}
    \fi
    \ifdoc@noindex\else
-     \@nameuse{Special#1Index}{#2}%
+     \@nameuse{Special#1Index}{#2}
    \fi
  \@esphack
  \endgroup
