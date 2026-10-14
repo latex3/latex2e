@@ -36,7 +36,7 @@
 %<*driver>
 % \fi
 \ProvidesFile{lttemplates.dtx}
-  [2026-10-09 v1.0n LaTeX Kernel (Prototype document functions)]
+  [2026-10-14 v1.0n LaTeX Kernel (Prototype document functions)]
 % \iffalse
 \documentclass{l3in2edoc}
 \GetFileInfo{lttemplates.dtx}
@@ -363,7 +363,13 @@
 %   within a nested command/macro.
 % \end{function}
 %
-% \begin{function}{\SetKnownTemplateKeys,\SetTemplateKeys,\UnusedTemplateKeys}
+% \begin{function}
+%   {
+%     \SetKnownTemplateKeys,
+%     \SetTemplateKeys,
+%     \SetCurrentTemplateKeys,
+%     \UnusedTemplateKeys
+%   }
 %   \begin{syntax}
 %   \cs{SetKnownTemplateKeys} \Arg{type} \Arg{template} \Arg{keyvals}
 %   \cs{SetTemplateKeys}      \Arg{type} \Arg{template} \Arg{keyvals}
@@ -377,7 +383,8 @@
 %    \cs{SetTemplateKeys}, i.e., they can overwrite the template default values and
 %    the values assigned by the instance.
 %
-%    The \cs{SetKnownTemplateKeys} and \cs{SetTemplateKeys} commands
+%    The \cs{SetKnownTemplateKeys}, \cs{SetTemplateKeys} and
+%    \cs{SetCurrentTemplateKeys} commands
 %    are only supported within the code of a template; using them
 %    elsewhere has unpredictable results.  If they are used together
 %    with \cs{AssignTemplateKeys} then the latter command should come first
@@ -400,6 +407,11 @@
 %    document-level command or environment to several templates, which
 %    is useful, if the command or environment is implemented by calling several different template instances.
 %
+%    \cs{SetCurrentTemplateKeys} works like \cs{SetKnownTemplateKeys}
+%    but obtains the name of the current \meta{type}/\meta{template}
+%    automatically based on the current context. It should be used before
+%    any other template code may be called (and thus change the value of
+%    the tracking of the current template).
 % \end{function}
 %
 %    As a variation of that, you can use this key/val
@@ -1070,6 +1082,15 @@
 %    \end{macrocode}
 % \end{variable}
 %
+% \begin{variable}{\l_@@_current_type_tl, \l_@@_current_template_tl}
+% \changes{2026-10-09}{v1.0n}{New variable}
+%   For setting the current template values.
+%    \begin{macrocode}
+\tl_new:N \l_@@_current_type_tl
+\tl_new:N \l_@@_current_template_tl
+%    \end{macrocode}
+% \end{variable}
+%
 % \begin{macro}[EXP]{\@@_tmp:n}
 % \changes{2026-10-07}{v1.0n}{New function}
 %   Scratch space.
@@ -1452,7 +1473,7 @@
           {
             \prop_clear:N \l_@@_values_prop
             \prop_clear:N \l_@@_keytypes_prop
-             \prop_clear:N \l_@@_vars_prop
+            \prop_clear:N \l_@@_vars_prop
             \seq_clear:N \l_@@_key_order_seq
             \keyval_parse:NNn
               \@@_parse_keys_elt:n \@@_parse_keys_elt:nn {#4}
@@ -1826,6 +1847,7 @@
 % \begin{macro}{\@@_store_key_implementation:nnn}
 % \changes{2026-10-08}{v1.0n}{Reset all template data in interface declaration}
 % \changes{2026-10-08}{v1.0n}{Omit error for equivalent key types}
+% \changes{2026-10-14}{v1.0n}{Retain variable information}
 %   Actually storing the implementation part of a template is quite easy
 %   as it only requires the list of keys given to be turned into a
 %   property list. There is also some error-checking to do, hence the need
@@ -1837,6 +1859,7 @@
   {
     \@@_recover_defaults:nn {#1} {#2}
     \@@_recover_keytypes:nn {#1} {#2}
+    \@@_recover_vars:nn {#1} {#2}
     \keyval_parse:nnn
       { \@@_parse_vars_elt:n } { \@@_parse_vars_elt:nnn { #1 / #2 } } {#3}
     \@@_store_vars:nn {#1} {#2}
@@ -2400,6 +2423,8 @@
           { \msg_info:nnnn { template } { declare-instance } {#3} {#1} }
         \cs_set_protected:cpe { \c_@@_instances_root_tl #1 / #3 }
           {
+            \tl_set:Nn \exp_not:N \l_@@_current_type_tl {#1}
+            \tl_set:Nn \exp_not:N \l_@@_current_template_tl {#2}
             \exp_not:N \@@_assignments_push:n
               { \exp_not:V \l_@@_assignments_tl }
             \exp_not:c { \c_@@_code_root_tl #1 / #2 }
@@ -2461,6 +2486,7 @@
 % \begin{macro}{\@@_convert_to_assignments_aux:n}
 % \begin{macro}
 %   {\@@_convert_to_assignments_aux:nn, \@@_convert_to_assignments_aux:nV}
+% \changes{2026-10-14}{v1.0n}{Correct error message}
 %   The idea on converting to a set of assignments is to loop over each
 %   key, so that the loop order follows the declaration order of the keys.
 %   This is done using a sequence as property lists are not
@@ -2504,7 +2530,7 @@
             \cs_if_exist_use:cF { @@_assign_ \l_@@_keytype_tl : }
               { \@@_assign_variable: }
           }
-          { \msg_error:nnn { template } { unknown-attribute } {#1} }
+          { \msg_error:nnn { template } { unknown-key } {#1} }
       }
   }
 \cs_generate_variant:Nn \@@_convert_to_assignments_aux:nn { nV }
@@ -2565,7 +2591,9 @@
         \@@_convert_to_assignments:
         \@@_debug_typeout:n
           { Using~template~'#2'~of~type~'#1'~directly~ \msg_line_context: }
-        \use:c { \c_@@_code_root_tl #1 / #2  }
+        \tl_set:Nn \l_@@_current_type_tl {#1}
+        \tl_set:Nn \l_@@_current_template_tl {#2}
+        \use:c { \c_@@_code_root_tl #1 / #2 }
       }
   }
 %    \end{macrocode}
@@ -3470,7 +3498,20 @@
 \cs_new_protected:Npn \SetTemplateKeys #1#2#3
   { \@@_keys_set:nnn {#1} {#2} {#3} }
 %    \end{macrocode}
-%    
+% \end{macro}
+% \begin{macro}{\SetCurrentTemplateKeys}
+% \changes{2026-10-13}{v1.0n}{New command}
+%    \begin{macrocode}
+\cs_new_protected:Npn \SetCurrentTemplateKeys #1
+  {
+    \exp_args:NVV \@@_keys_set_known:nnn
+      \l_@@_current_type_tl
+      \l_@@_current_template_tl
+      {#1}
+  }
+%    \end{macrocode} 
+% \end{macro}
+% \begin{macro}{\UnusedTemplateKeys}
 %    \begin{macrocode}
 \tl_new:N \UnusedTemplateKeys
 %    \end{macrocode}
