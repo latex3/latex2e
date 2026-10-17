@@ -36,6 +36,7 @@ typesetfiles_list = {
     "latex-lab-namespace.dtx",
     "latex-lab-sec-template.dtx",
     "latex-lab-sec.dtx",
+    "latex-lab-titlesec.dtx",
   },
   {
     "latex-lab-graphic.dtx",
@@ -202,6 +203,7 @@ specialtypesetting["latex-lab-unicode-math.dtx"] = {format = "lualatex"}
 specialtypesetting["documentmetadata-support-doc.tex"] = {format = "lualatex"}
 specialtypesetting["documentmetadata-support-code.tex"] = {format = "lualatex"}
 specialtypesetting["latex-lab-enumitem.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-titlesec.dtx"] = {format = "lualatex"}
 
 function tex(file,dir,mode)
   dir = dir or "."
