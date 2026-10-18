@@ -4,7 +4,7 @@
 %
 % None of this is meant to stay, so this class is not supposed to be used outside of the kernel documentation!
 % It may get incompatible updates and it will vanish again, eventually.
-\ProvidesClass{l3in2edoc}[2026-10-08 v1.1 Internal LaTeX documentation class based on l3doc]
+\ProvidesClass{l3in2edoc}[2026-10-08 v1.0b Internal LaTeX documentation class based on l3doc]
 
 \LoadClassWithOptions{l3doc}
 
