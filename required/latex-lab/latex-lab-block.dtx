@@ -9,8 +9,8 @@
 %
 %    https://www.latex-project.org/lppl.txt
 %
-\def\ltlabblockdate{2026-10-05}
-\def\ltlabblockversion{1.0r}
+\def\ltlabblockdate{2026-10-17}
+\def\ltlabblockversion{1.0u}
 
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2,lang=en}
@@ -3295,7 +3295,24 @@
 \cs_generate_variant:Nn \tl_if_novalue:nTF { o }
 %    \end{macrocode}
 %  \end{macro}
-%    
+%
+% \subsection{Messages}
+%
+% \changes{v1.0s}{2026-10-09}{Add module-specific message for unknown keys}
+%
+%    \begin{macrocode}
+\msg_new:nnnn { block } { unknown-keys }
+  { Some~keys~specified~on~the~ #1 ~are~unknown. }
+  {
+    The~following~keys~are~unknown~and~their~
+    values~are~ignored:\\
+    \ \ #2 \\
+    Perhaps~a~misspelling~or~the~current~template~
+    instance~uses~special~keys.
+  }
+\prop_gput:Nnn \g_msg_module_name_prop { block } { template }
+\prop_gput:Nnn \g_msg_module_type_prop { block } { LaTeX }
+%    \end{macrocode} 
 %
 % \subsection{Tracing and debugging interfaces}
 %
@@ -3776,7 +3793,7 @@
 %    is only executed for a specific name).  Before calling this hook we also set
 %    \cs{UnusedTemplateKeys} to empty. In the hook code this macro can then
 %    be filled with key/value settings (for example, from \cs{setlist})
-%    to be fed below into \cs{SetKnownTemplateKeys}.
+%    to be fed below into \cs{SetCurrentKnownTemplateKeys}.
 %    \begin{macrocode}
   \tl_set_eq:NN  \UnusedTemplateKeys \c_empty_tl
   \exp_args:Nnno \hook_use:nnw {blockenv} 1 \l_@@_env_name_tl
@@ -3793,20 +3810,18 @@
 %    We expand \texttt{\#1} once because the keys might be hidden in a
 %    user macro.
 %    \begin{macrocode}
-        { \tl_set:Ne \UnusedTemplateKeys
-             { \exp_not:o \UnusedTemplateKeys \exp_not:o { #1 } }
-        }
+        { \clist_put_right:No \UnusedTemplateKeys {#1} }
     }
 %    \end{macrocode}
 %    Finally the key list stored in \cs{UnusedTemplateKeys} is then
-%    fed to \cs{SetKnownTemplateKeys} for
-%    evaluation. \cs{SetKnownTemplateKeys} applies all keys that apply
+%    fed to \cs{SetCurrentKnownTemplateKeys} for
+%    evaluation. \cs{SetCurrentKnownTemplateKeys} applies all keys that apply
 %    to the \insttype{blockenv} template and saves those that don't
 %    back in \cs{UnusedTemplateKeys} to be applied to inner instances
 %    below. This is why we had to combine all keys and evaluate them
 %    in one go.
 %    \begin{macrocode}
-  \SetKnownTemplateKeys {blockenv} {std} \UnusedTemplateKeys
+  \SetCurrentKnownTemplateKeys \UnusedTemplateKeys
 %    \end{macrocode}
 %     The tagging recipe \texttt{standalone} implies that the
 %    \key{standalone} key is set to \texttt{true}.
@@ -4165,7 +4180,7 @@
      {
        \tl_if_empty:NF \UnusedTemplateKeys
           {
-            \msg_error:nneo { template } { unknown-keys }
+            \msg_error:nneo { block } { unknown-keys }
                 { \l_@@_env_name_tl \space environment}
                 \UnusedTemplateKeys
           }
@@ -4405,7 +4420,9 @@
 %  \changes{v0.8s}{2024/10/03}{Offer item-vspace key also on block templates}
 %  \changes{v0.8w}{2024/11/23}{Use private storage bin for parindent
 %    and not \tn{listparindent} to decouple block and list templates (tagging/767)}
+%  \changes{v1.0t}{2026-10-15}{Added a command for recalculating values in enumitem emulation}  
 %    \begin{macrocode}
+\cs_new:Npn \@@_recalculate_list_values:{}
 \DeclareTemplateCode{block}{std}{1}{
    begin-vspace           = \topsep
   ,begin-extra-vspace     = \partopsep
@@ -4428,7 +4445,9 @@
 {
     \template_debug_typeout:n{~\space template:~ 'std';~
                               argument:~ \exp_not:o{\exp_after:wN |#1|}}
-    \SetKnownTemplateKeys{block}{std}{#1}
+    \SetCurrentKnownTemplateKeys{#1}
+    \tl_if_eq:NnT \l_@@_inner_instance_type_tl {list}
+      {\@@_recalculate_list_values:}
 %    \end{macrocode}
 %    One aspect that needs a different handling is the management of
 %    \cs{par} after a block environment. If there is no empty line the
@@ -4798,6 +4817,9 @@
 %    Maybe something like this should become a public function, but
 %    for now this is a one-off for the \tn{item} command and therefore
 %    coded inline and internal to the block code.
+%
+%    TODO: consider using \cs{SetCurrentKnownTemplateKeys} and drop
+%    the arguments that then become unnecessary!
 %    \begin{macrocode}
 %\cs_new:Npn \@@_save_user_keys:n #1 {
 %  \tl_if_empty:nTF {#1}
@@ -4841,9 +4863,11 @@
 %            for use in \tn{item}}
 %    \begin{macrocode}
   \tl_if_empty:oTF {#1}
-     { \cs_set_eq:NN \@@_evaluate_saved_user_keys:nn \use_none:nn }
+     { 
+       \cs_set_eq:NN \@@_evaluate_saved_user_keys:nn \use_none:nn 
+     }
      {
-       \SetKnownTemplateKeys{list}{std}{#1}
+       \SetCurrentKnownTemplateKeys{#1}
 %    \end{macrocode}
 %    The setup for \cs{@@_evaluate_saved_user_keys:nn} is a bit tricky
 %    and has to be done with \cs{cs_set:Npe} even though we don't want
@@ -4876,7 +4900,7 @@
 % \changes{1.0i}{2026-07-28}{Do not expand key values in error message}
 % \changes{1.0i}{2026-09-24}{Use template not block error message (tagging/1619)}
 %    \begin{macrocode}
-                 { \msg_error:nneo { template } { unknown-keys }
+                 { \msg_error:nneo { block } { unknown-keys }
                        { \l_@@_env_name_tl \space environment}
                        \UnusedTemplateKeys
                  }
@@ -5079,9 +5103,9 @@
 % \changes{1.0i}{2026-07-28}{Do not expand key values in error message}
 % \changes{1.0i}{2026-09-24}{Use template not block error message (tagging/1619)}
 %    \begin{macrocode}
-    \SetKnownTemplateKeys{item}{std}{#1}
+    \SetCurrentKnownTemplateKeys{#1}
     \tl_if_empty:NF \UnusedTemplateKeys
-       { \msg_error:nneo { template } { unknown-keys }
+       { \msg_error:nneo { block } { unknown-keys }
              { \exp_not:N \item command }
              \UnusedTemplateKeys
        }
@@ -5614,7 +5638,7 @@
 %    Then we check if there are any keys passed to the instance from
 %    the outside.
 %    \begin{macrocode}
-  \SetKnownTemplateKeys{captionedtext}{thmlike}{#1}
+  \SetCurrentKnownTemplateKeys{#1}
 %    \end{macrocode}
 %    
 %    Determine if we do automatic numbering: If there was a star (so
@@ -5746,7 +5770,7 @@
 %    \end{macrocode}
 %    Applying any user keys:
 %    \begin{macrocode}
-  \SetKnownTemplateKeys{thmstyle}{std}{#1}
+  \SetCurrentKnownTemplateKeys{#1}
 %    \end{macrocode}
 %    Since this is the last template that gets applied for
 %    theorem-like environments, all keys should make sense, so if
@@ -5755,7 +5779,7 @@
 % \changes{1.0i}{2026-09-24}{Use template not block error message (tagging/1619)}
 %    \begin{macrocode}
   \tl_if_empty:NF \UnusedTemplateKeys
-     { \msg_error:nneo { template } { unknown-keys }
+     { \msg_error:nneo { block } { unknown-keys }
            { \l_@@_env_name_tl \space environment}
            \UnusedTemplateKeys
      }
@@ -6263,10 +6287,11 @@
 %  \begin{macro}{\@@_inner_begin:}
 %    Start a block that has an inner structure if it isn't also a list.
 %  This command is tagging specific, it is mapped to \cs{__kernel_displayblock_begin:}
-%   in some tagging recipes. 
+%   in some tagging recipes.
+%   \changes{1.0s}{2026-10-07}{Use attribute class} 
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_inner_begin: {
-  \tagstructbegin{tag=\l_@@_tag_inner_tag_tl}
+  \tagstructbegin{tag=\l_@@_tag_inner_tag_tl,attribute-class=\l_@@_tag_class_tl}
 }
 %    \end{macrocode}
 %  \end{macro}
@@ -7781,8 +7806,5 @@
 % the main context-dependence should not rely on it for simplicity
 % reasons and incidentally because \pkg{l3ldb} is not yet available.
 %
-%
-%
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \endinput
