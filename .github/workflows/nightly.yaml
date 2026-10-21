@@ -1,0 +1,47 @@
+name: Publish nightly
+
+on:
+  push:
+    branches:
+      - nightshade
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  l3build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - package: latex-base-dev
+            directory: base
+          - package: latex-amsmath-dev
+            directory: required/amsmath
+          - package: latex-firstaid-dev
+            directory: required/firstaid
+          - package: latex-graphics-dev
+            directory: required/graphics
+          - package: latex-lab-dev
+            directory: required/latex-lab
+          - package: latex-tools-dev
+            directory: required/tools
+    name: Publish ${{ matrix.package }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Install TeX Live
+        uses: zauguin/install-texlive@v4
+        with:
+          package_file: .github/tl_packages
+      - name: Create target directory
+        run: mkdir target
+      - name: Run l3build
+        working-directory: ${{ matrix.directory }}
+        run: l3build install --texmfhome $GITHUB_WORKSPACE/target
+      - name: Publish nightly
+        working-directory: target
+        run: |
+          ID_TOKEN=$(curl -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://nightly.typesetting.eu" | jq -r .value)
+          zip -r - . | curl --fail --data-binary @- -XPUT -H "Authorization: Bearer $ID_TOKEN" https://nightly.typesetting.eu/upload/${{ matrix.package }}
