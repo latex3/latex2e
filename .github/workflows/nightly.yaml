@@ -12,22 +12,7 @@ permissions:
 jobs:
   l3build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - package: latex-base-nightly
-            directory: base
-          - package: latex-amsmath-nightly
-            directory: required/amsmath
-          - package: latex-firstaid-nightly
-            directory: required/firstaid
-          - package: latex-graphics-nightly
-            directory: required/graphics
-          - package: latex-lab-nightly
-            directory: required/latex-lab
-          - package: latex-tools-nightly
-            directory: required/tools
-    name: Publish ${{ matrix.package }}
+    name: Publish nightly
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -37,11 +22,29 @@ jobs:
           package_file: .github/tl_packages
       - name: Create target directory
         run: mkdir target
-      - name: Run l3build
-        working-directory: ${{ matrix.directory }}
-        run: LATEX_NIGHTLY=1 l3build install --texmfhome $GITHUB_WORKSPACE/target
       - name: Publish nightly
-        working-directory: target
         run: |
           ID_TOKEN=$(curl -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://nightly.typesetting.eu" | jq -r .value)
-          zip -r - . | curl --fail --data-binary @- -XPUT -H "Authorization: Bearer $ID_TOKEN" https://nightly.typesetting.eu/upload/${{ matrix.package }}
+          while read package directory; do (
+            cd "$directory"
+            LATEX_NIGHTLY=1 l3build install --texmfhome "$GITHUB_WORKSPACE/target"
+            (
+              cd $GITHUB_WORKSPACE/target
+              zip -r - . | curl --fail --data-binary @- -XPUT -H "Authorization: Bearer $ID_TOKEN" https://nightly.typesetting.eu/upload/"$package-nightly"
+            )
+            LATEX_NIGHTLY=1 l3build uninstall --texmfhome "$GITHUB_WORKSPACE/target"
+            l3build install --texmfhome "$GITHUB_WORKSPACE/target"
+            (
+              cd $GITHUB_WORKSPACE/target
+              zip -r - . | curl --fail --data-binary @- -XPUT -H "Authorization: Bearer $ID_TOKEN" https://nightly.typesetting.eu/upload/"$package-dev"
+            )
+            l3build uninstall --texmfhome "$GITHUB_WORKSPACE/target"
+          )
+          done << EOF
+          latex-base base
+          latex-amsmath required/amsmath
+          latex-firstaid required/firstaid
+          latex-graphics required/graphics
+          latex-lab required/latex-lab
+          latex-tools required/tools
+          EOF
