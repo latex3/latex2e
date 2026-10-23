@@ -1,0 +1,50 @@
+name: Publish nightly
+
+on:
+  push:
+    branches:
+      - nightshade
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  l3build:
+    runs-on: ubuntu-latest
+    name: Publish nightly
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Install TeX Live
+        uses: zauguin/install-texlive@v4
+        with:
+          package_file: .github/tl_packages
+      - name: Create target directory
+        run: mkdir target
+      - name: Publish nightly
+        run: |
+          ID_TOKEN=$(curl -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://nightly.typesetting.eu" | jq -r .value)
+          while read package directory; do (
+            cd "$directory"
+            LATEX_NIGHTLY=1 l3build install --texmfhome "$GITHUB_WORKSPACE/target"
+            (
+              cd $GITHUB_WORKSPACE/target
+              zip -r - . | curl --fail --data-binary @- -XPUT -H "Authorization: Bearer $ID_TOKEN" https://nightly.typesetting.eu/upload/"$package-nightly"
+            )
+            LATEX_NIGHTLY=1 l3build uninstall --texmfhome "$GITHUB_WORKSPACE/target"
+            l3build install --texmfhome "$GITHUB_WORKSPACE/target"
+            (
+              cd $GITHUB_WORKSPACE/target
+              zip -r - . | curl --fail --data-binary @- -XPUT -H "Authorization: Bearer $ID_TOKEN" https://nightly.typesetting.eu/upload/"$package-dev"
+            )
+            l3build uninstall --texmfhome "$GITHUB_WORKSPACE/target"
+          )
+          done << EOF
+          latex-base base
+          latex-amsmath required/amsmath
+          latex-firstaid required/firstaid
+          latex-graphics required/graphics
+          latex-lab required/latex-lab
+          latex-tools required/tools
+          EOF
