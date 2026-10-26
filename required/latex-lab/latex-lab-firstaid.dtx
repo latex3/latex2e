@@ -15,9 +15,8 @@
 %
 %    https://github.com/latex3/latex2e/issues
 %
-\def\ltlabfirstaiddate{2026-10-24}
-\def\ltlabfirstaidversion{0.86i}
-
+\def\ltlabfirstaiddate{2026-10-26}
+\def\ltlabfirstaidversion{0.86l}
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
 \documentclass{l3in2edoc}
@@ -1046,9 +1045,16 @@
 %    Finally, we have the bare heading design as used in the
 %    package. When the heading is numbered then \cs{DOCH} is
 %    responsible to place the fixed heading text (e.g., Chapter) and the
-%    chapter number. 
+%    chapter number.
+%
+%    We start by calling \cs{fncychap@setup@thechapter} which gives
+%    \cs{thechapter} a special definition while the heading is typeset
+%    (since we are in a group here this is reverted immmediately after).
 %    \begin{macrocode}
-%    \leavevmode            % this can wait ...
+    \fncychap@setup@thechapter
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
     \bool_if:NF \l__head_unnumbered_bool
       { \DOCH }
 %    \end{macrocode}
@@ -1080,12 +1086,18 @@
 %
 %    To put a \struct{heading-number} structure around the number
 %    without really knowing how the heading layout is done, we hook
-%    into \cs{thechapter}. The \cs{thespecialchapter} command takes
-%    one argument which is normally \cs{arabic} but redefined in
-%    \cs{appendix} to become \cs{Alph}. This isn't very flexible but
-%    works for the situations for which \pkg{fncychap} was written.
+%    into \cs{thechapter}. This redefinition only happens within the
+%    \texttt{headformat} instance when we typeset the
+%    heading. Elsewhere \cs{thechapter} retains its usual definition,
+%    e.g., when used inside the document or in a running header or toc
+%    entry.
+%
+% \changes{v0.86k}{2026-10-25}{Pass number not an unexpanded
+%    \cs{thechapter} to toc (tagging/1668)}
 %    \begin{macrocode}
-\protected\def\thechapter{\thespecialchapter\arabic}
+\def\fncychap@setup@thechapter{
+  \def\thechapter{\thespecialchapter{\@arabic\c@chapter}}
+}  
 %    \end{macrocode}
 %    
 %    \begin{macrocode}
@@ -1093,7 +1105,14 @@
   \setcounter{chapter}{0}
   \setcounter{section}{0}
   \gdef\@chapapp{\appendixname}
-  \protected\gdef\thechapter{\thespecialchapter\Alph}
+  \gdef\thechapter{\@Alph\c@chapter}
+%    \end{macrocode}
+%    Add the special setup for using in the \texttt{headformat}
+%    template above.
+%    \begin{macrocode}
+  \gdef\fncychap@setup@thechapter{
+    \def\thechapter{\thespecialchapter{\@Alph\c@chapter}}
+  }  
 }
 %    \end{macrocode}
 %    
@@ -1103,15 +1122,17 @@
 %    The \cs{thespecialchapter} ensures that hmode is started and then
 %    normally generates a \struct{heading-number} structure but only
 %    if we aren't already in an \struct{Lbl}. It then typesets the
-%    current chapter counter either using \cs{arabic} or \cs{Alph}
+%    current number.
+% \changes{v0.86k}{2026-10-25}{Pass number not an unexpanded
+%    \cs{thechapter} to toc (tagging/1668)}
 %    \begin{macrocode}
 \protected\def\thespecialchapter#1{
   \leavevmode
   \tag_if_in:nTF{Lbl}
-    { #1 {chapter} }
+    { #1 }
     {
       \UseTaggingSocket{inline/begin}{tag=heading-number}
-      #1 {chapter} 
+      #1 
       \UseTaggingSocket{inline/end}
     }
 }
@@ -1147,110 +1168,6 @@
 %
 %
 %
-%
-% \subsection{verse}
-%
-%    The \pkg{verse} package has its own definition of the \env{verse}
-%    environment, which would tag correctly, except that it is
-%    overwritten by the block code in the hook
-%    \hook{begindocument/before}. So the simplest way to make tagging
-%    work is to reinstall the package version afterwards, which is
-%    what we are doing here.
-%    \begin{macrocode}
-\AddToHook{package/verse/after}[latex-lab-firstaid]{%
-  \FirstAidNeededT{verse}{sty}{2014/05/10 v2.4b verse typesetting}%
-   {%
-     \AtBeginDocument{%
-       \renewenvironment{verse}[1][\linewidth]{%
-         \stepcounter{verse@envctr}%
-         \setcounter{poemline}{0}\refstepcounter{poemline}%
-         \setcounter{vslineno}{1}%
-         \let\\=\@vscentercr
-         \list{}{\itemsep \z@
-                 \itemindent  -\vindent
-                 \listparindent\itemindent
-                 \parsep       \stanzaskip
-                 \ifdim #1 < \linewidth
-                   \rightmargin        \z@
-                   \setlength{\leftmargin}{\linewidth}%
-                   \addtolength{\leftmargin}{-#1}%
-                   \addtolength{\leftmargin}{-0.5\leftmargin}%
-                 \else
-                   \rightmargin        \leftmargin
-                 \fi
-                 \addtolength{\leftmargin}{\vindent}}%
-         \item[]%
-       }%
-       {\endlist}%
-     }%
-   }%
-}
-%    \end{macrocode}
-%    Of course, this means that the
-%    optional argument of the environment then only accepts a length
-%    value and not any more a key value list for altering the
-%    environment settings.
-%
-%    A more elaborate version could be something like this that allows
-%    key/val and legacy interface. Or one could extend the list
-%    template to support a \texttt{list-width} key.
-%\begin{verbatim}
-% \ExplSyntaxOn
-% \cs_new_protected:Npn \ExtractAndDropKey #1#2#3#4#5 {
-%   \tl_set_eq:NN #4 \c_novalue_tl      % or empty?
-%   \keys_define:nn { #1 } { #2 .code:n = \tl_set:Nn #4{##1} }
-%   \keys_set_known:nnN { #1 } { #3 } #5
-% }
-% \ExplSyntaxOff
-%
-% % Change the env definition for verse matching verse.sty
-% % This keeps the verse.sty interface as it is and only adjusts the
-% % main environment to use the basic list env with the verse.sty
-% % specific settings.
-% \makeatletter
-%
-% \AddToHook{package/verse/after}{%
-%   \AtBeginDocument{%
-%   \RenewDocumentEnvironment{verse}{={verse-width}!O{\linewidth}}%
-%     {%
-%       \stepcounter{verse@envctr}%
-%       \setcounter{poemline}{0}\refstepcounter{poemline}%
-%       \setcounter{vslineno}{1}%
-%       \let\\=\@vscentercr
-%   %
-%       \ExtractAndDropKey{verse}{verse-width}{#1}\@vswidth\@vsremainingkvlist
-%   % If other keys have been specified but not verse-width we have no
-%   % default for \@vswidth and need to set it again
-%       \ExpandArgs{o}\IfNoValueT \@vswidth
-%                         {\def\@vswidth{\linewidth}}%
-%   %
-%   % This is a bit ugly but we can't stick \cs{@vsremainingkvlist} into
-%   % the instance argument as keys are expected to be visible on
-%   % top-level not hidden inside a macro.  The alternative is to push
-%   % in \verb=#1= but then the key/value \verb/verse-width=.../ is
-%   % passed into the instance which is not known there (not harmful as
-%   % it will get ignored but noticeably more and unnecessary
-%   % processing).
-%   %
-%       \def\next##1{%
-%         \UseInstance{blockenv}{list}%
-%           {%
-%             item-indent  = -\vindent,%
-%             para-indent  = -\vindent,%
-%             para-vspace  = \stanzaskip,%
-%             item-skip    = 0pt,%
-%             left-margin  = (\linewidth-\@vswidth)/2+\vindent,%
-%             right-margin = \ifdim\@vswidth<\linewidth 0pt
-%                             \else (\linewidth-\@vswidth)/2\fi,%
-%             ##1%
-%            }}%
-%       \ExpandArgs{o}\next\@vsremainingkvlist
-%       \item\relax
-%     }{\endblockenv}%
-%   }%
-% }
-% \makeatother
-%\end{verbatim}
 %
 %
 % \subsection{cleveref}
@@ -1443,62 +1360,160 @@
 % \item New float types created with \cs{newfloat} are not properly tagged (tagging issue 890)
 % \item Non-floating floats using the \texttt{H} placement are not properly tagged.
 % \end{itemize}
-% The following firstaid addresses the last problem.
-% A flaw is that if the float is inside a paragraph and followed
+% The following firstaid addresses these problems.
+% A flaw is that if the H-float is inside a paragraph and followed
 % by text there the text is tagged as a new semantic-para structure. 
+% 
+% Because of this and other limitations the final solution may look noticeably different 
+% including the used tagging sockets, etc.
 % TODO
+% 
+% The firstaid for \pkg{float} is kept in a separate file.
+%    \begin{macrocode}
+\AddToHook{package/float/after}[latex-lab-firstaid]{\input{latex-lab-firstaid-float.ltx}}
+%</package>
+%    \end{macrocode}
+
+%    \begin{macrocode}
+%<*float>
+\ProvidesFile{latex-lab-firstaid-float.ltx}
+ [\ltlabfirstaiddate\space \ltlabfirstaidversion\space LaTeX-lab-firstaid: Tagging support for the float package]
+%    \end{macrocode}
+% Tagging sockets for the H-floats
 %    \begin{macrocode}
 \ExplSyntaxOn
-\AddToHook{package/float/after}[firstaid]
+\NewTaggingSocket{float/H/begin}{1}
+\NewTaggingSocketPlug{float/H/begin}{default}
  {
-   \@@_firstaid_float_patch_H:
+   \mode_if_horizontal:T {\tag_mc_end_push: \tag_struct_end:}
+   \tag_struct_begin:n {tag=\UseStructureName{float/#1}}
  }
-\cs_new_protected:Npn \@@_firstaid_float_patch_H:
- {
-   \NewTaggingSocket{float/H/begin}{1}
-   \NewTaggingSocketPlug{float/H/begin}{default}
-    {
-      \mode_if_horizontal:T {\tag_mc_end_push: \tag_struct_end:}
-      \tag_struct_begin:n {tag=\UseStructureName{float/##1}}
-    }
-   \AssignTaggingSocketPlug{float/H/begin}{default}
+\AssignTaggingSocketPlug{float/H/begin}{default}
 
-   \NewTaggingSocket{float/H/end}{0}
-   \NewTaggingSocketPlug{float/H/end}{default}
-    {
-       \tag_struct_end:
-       \mode_if_horizontal:T
-        {
-          \tag_struct_begin:n {tag=\UseStructureName{para/textblock}}
-          \tag_mc_begin_pop:n {}
-        }
-    }
-   \AssignTaggingSocketPlug{float/H/end}{default}
+\NewTaggingSocket{float/H/end}{0}
+\NewTaggingSocketPlug{float/H/end}{default}
+ {
+    \tag_struct_end:
+    \mode_if_horizontal:T
+     {
+       \tag_struct_begin:n {tag=\UseStructureName{para/textblock}}
+       \tag_mc_begin_pop:n {}
+     }
+ }
+\AssignTaggingSocketPlug{float/H/end}{default}
 %    \end{macrocode}
 % and here the redefinitions of the commands of \pkg{float}
+% for the H-floats:
 %    \begin{macrocode}
-   \def\@float@HH##1[H]{\UseTaggingSocket{float/H/begin}{##1}%
-     \expandafter\let\csname end##1\endcsname\float@endH
-     \let\@currbox\float@box
-     \def\@captype{##1}\setbox\@floatcapt=\vbox{}%
-     \expandafter\ifx\csname fst@##1\endcsname\relax
-     \@flstylefalse\else\@flstyletrue\fi
-     \setbox\@currbox\color@vbox\normalcolor
-       \vbox\bgroup \hsize\columnwidth \@parboxrestore
-        \@floatboxreset \@setnobreak
-     \ignorespaces}
-   \renewcommand\float@endH{\@endfloatbox\UseTaggingSocket{float/H/end}
-     \vskip\intextsep
-     \if@flstyle\setbox\@currbox\float@makebox\columnwidth\fi
-     \box\@currbox\vskip\intextsep\relax}
- }
+\def\@float@HH#1[H]{\UseTaggingSocket{float/H/begin}{#1}%
+  \expandafter\let\csname end#1\endcsname\float@endH
+  \let\@currbox\float@box
+  \def\@captype{#1}\setbox\@floatcapt=\vbox{}%
+  \expandafter\ifx\csname fst@#1\endcsname\relax
+  \@flstylefalse\else\@flstyletrue\fi
+  \setbox\@currbox\color@vbox\normalcolor
+    \vbox\bgroup \hsize\columnwidth \@parboxrestore
+     \@floatboxreset \@setnobreak
+  \ignorespaces}
+\renewcommand\float@endH{\@endfloatbox\UseTaggingSocket{float/H/end}
+  \vskip\intextsep
+  \if@flstyle\setbox\@currbox\float@makebox\columnwidth\fi
+  \box\@currbox\vskip\intextsep\relax}  
 \ExplSyntaxOff
 %    \end{macrocode}
+% Float defines two float styles which need to get tagging support.
+% This here is the plain style which is also used for plaintop and boxed:
+%    \begin{macrocode}
+\renewcommand\floatc@plain[2]{%
+  \setbox\@tempboxa\hbox{\measuring@true{\@fs@cfont #1:} #2}%
+  \UseTaggingSocket{caption/begin}{\@current@float@struct}% 
+  \ifdim\wd\@tempboxa>\hsize 
+   \UseTaggingSocket{caption/label/begin}%
+    {\@fs@cfont #1:}%
+   \UseTaggingSocket{caption/label/end}%
+%    \end{macrocode}
+% The space is intentional!
+%    \begin{macrocode}
+  \UseTaggingSocket{para/begin} % 
+     #2\par     
+  \else
+   \hbox to \hsize {\hfil
+     \UseTaggingSocket{caption/label/begin}%
+       {\@fs@cfont #1:}%
+     \UseTaggingSocket{caption/label/end}% 
+%    \end{macrocode}
+% The space is intentional!
+%    \begin{macrocode}       
+     \UseTaggingSocket{para/begin} %
+   #2%
+   \UseTaggingSocket{para/end}\hfil}%
+   \par
+  \fi
+%    \end{macrocode}
+% The caption structure is not closed here, but in the \cs{float@caption}
+% and \cs{float@ccon} commands.
+%    \begin{macrocode}
+  }
+%    \end{macrocode}
+% This adds tagging support to the ruled style:
+%    \begin{macrocode}
+\renewcommand\floatc@ruled[2]{%
+  \UseTaggingSocket{caption/begin}{\@current@float@struct}%
+  \UseTaggingSocket{caption/label/begin}%
+   {\@fs@cfont #1}% 
+  \UseTaggingSocket{caption/label/end}% 
+%    \end{macrocode}
+% The space is intentional!
+%    \begin{macrocode}    
+  \UseTaggingSocket{para/begin} #2\par %
+%    \end{macrocode}
+% The caption is not closed here but in the \cs{float@caption}
+% and \cs{float@ccon} commands.
+%    \begin{macrocode}
+ }
+%    \end{macrocode}
+% The \pkg{float} package adds a final optional argument to caption which can be used to
+% add text (this is not documented).
+% We add the \texttt{caption/end} socket after this test, so that it is part of the 
+% caption.  We also force a \cs{par} to avoid nested mc with pdflatex.
+%    \begin{macrocode}
+\long\def\float@caption#1[#2]#3{\par\addcontentsline{\@nameuse{ext@#1}}{#1}%
+   {\protect\numberline{\@nameuse{the#1}}{\ignorespaces #2}}
+  \global\setbox\@floatcapt\vbox\bgroup\@parboxrestore
+    \normalsize\@fs@capt{\@nameuse{fnum@#1}}{\ignorespaces #3}%
+    \@ifnextchar[{\float@ccon}{\UseTaggingSocket{caption/end}\egroup}%]
+      }
+\long\def\float@ccon[#1]{#1\par\UseTaggingSocket{caption/end}\egroup}
+%    \end{macrocode}
+% If a new float is declared it should setup the container. We also adapt
+% the tag of this container:
+%    \begin{macrocode}
+\renewcommand\newfloat[3]{\@namedef{ext@#1}{#3}
+  \tagpdfsetup{float/new=#1,role/new-tag=#1-floats/Sect}%
+  \AssignStructureRole{float/#1s}{#1-floats}%
+  \let\float@do=\relax
+  \xdef\@tempa{\noexpand\float@exts{\the\float@exts \float@do{#3}}}%
+  \@tempa
+  \floatplacement{#1}{#2}%
+  \@ifundefined{fname@#1}{\floatname{#1}{#1}}{}
+  \expandafter\edef\csname ftype@#1\endcsname{\value{float@type}}%
+  \addtocounter{float@type}{\value{float@type}}
+  \restylefloat{#1}%
+  \expandafter\edef\csname fnum@#1\endcsname%
+    {\expandafter\noexpand\csname fname@#1\endcsname{}
+       \expandafter\noexpand\csname the#1\endcsname}
+  \@ifnextchar[{\float@newx{#1}}%]
+    {\@ifundefined{c@#1}{\newcounter{#1}\@namedef{the#1}{\arabic{#1}}}%
+      {}}}
+%</float>
+%    \end{macrocode}
+%
 % \subsection{The \pkg{apacite} firstaid}
 % The apacite package redefines \cs{@lbibitem} and removes the arguments.
 % This means that the patching with a generic hook with arguments fails. So we readd the argument.
 % \changes{0.85x}{2026-06-08}{Correct braces around argument.}
 %    \begin{macrocode}
+%<*package>
 \AddToHook{package/apacite/after} 
   {\if@APAC@natbib@apa\def\@lbibitem[#1]#2{\NAT@swatrue\orig@nat@@@@lbibitem[#1]{#2}}\fi}
 %    \end{macrocode}
