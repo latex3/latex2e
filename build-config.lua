@@ -74,7 +74,13 @@ end
 -- for the meaning of the environment variables, but tl;dr: GITHUB_REF_TYPE says
 -- if we have a tag or a branch, GITHUB_REF_NAME has the corresponding name.
 -- If either one of them isn't set, we look at the current git HEAD.
-do
+if os.getenv'LATEX_NIGHTLY' then
+    tdsroot = "latex-nightly"
+    print("Creating/installing nightly-version in " .. tdsroot)
+    ctanpkg = ctanpkg or ""
+    ctanpkg = ctanpkg .. "-nightly"
+    ctanzip = ctanpkg
+else
   local gh_type = os.getenv'GITHUB_REF_TYPE'
   local name = os.getenv'GITHUB_REF_NAME'
   if gh_type == 'tag' and name then
