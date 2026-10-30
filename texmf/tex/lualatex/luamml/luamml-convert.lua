@@ -138,7 +138,7 @@ local function sup_style(s) return s//4*2+4+s%2 end
 -- always be considered a core operator
 
 -- We ignore large_... since they aren't used for modern fonts
-local function delim_to_table(delim)
+local function delim_to_table(delim, cur_style)
   if not delim then return end
   local props = properties[delim]
   local mathml_core = props and props.mathml_core
@@ -156,7 +156,7 @@ local function delim_to_table(delim)
   else
     local fam = delim.small_fam
     char = remap_lookup[fam << 21 | char]
-    local result = {[0] = 'mo', char, ['tex:family'] = fam ~= 0 and fam or nil, stretchy = not stretchy[char] or nil, lspace = 0, rspace = 0, [':nodes'] = {delim}, [':actual'] = char}
+    local result = {[0] = 'mo', char, ['tex:family'] = fam ~= 0 and fam or nil, stretchy = not stretchy[char] or nil, lspace = 0, rspace = 0, [':nodes'] = {delim}, [':actual'] = char, [':style'] = cur_style}
     if mathml_filter then
       return mathml_filter(result, result)
     else
@@ -184,7 +184,7 @@ local function acc_to_table(acc, cur_style, stretch)
   if stretch ~= not stretchy[char] then -- Handle nil gracefully in stretchy
     stretch = nil
   end
-  local result = {[0] = 'mo', char, ['tex:family'] = fam ~= 0 and fam or nil, stretchy = stretch, [':nodes'] = {acc}, [':actual'] = stretch and char or nil}
+  local result = {[0] = 'mo', char, ['tex:family'] = fam ~= 0 and fam or nil, stretchy = stretch, [':nodes'] = {acc}, [':actual'] = stretch and char or nil, [':style'] = cur_style}
   if mathml_filter then
     return mathml_filter(result)
   else
@@ -203,12 +203,13 @@ local function kernel_to_table(kernel, cur_style, text_families)
   if id == math_char_t then
     local fam = kernel.fam
     local char = remap_lookup[fam << 21 | kernel.char]
-    local elem = digit_map[char] and 'mn' or 'mi'
+    local elem = always_mo[char] and 'mo' or digit_map[char] and 'mn' or 'mi'
     local result = {[0] = elem,
       char,
       ['tex:family'] = fam ~= 0 and fam or nil,
       mathvariant = utf8.len(char) == 1 and elem == 'mi' and utf8.codepoint(char) < 0x10000 and 'normal' or nil,
       [':nodes'] = {kernel},
+      [':style'] = cur_style,
     }
     if mathml_filter then
     -- this applies changes from annotations, for example adding structure node references
@@ -222,7 +223,7 @@ local function kernel_to_table(kernel, cur_style, text_families)
     if kernel.list.id == hlist_t then -- We directly give up for vlists
       result = to_text(kernel.list.head)
     else
-      result = {[0] = 'mi', {[0] = 'mglyph', ['tex:box'] = kernel.list, [':nodes'] = {kernel}}}
+      result = {[0] = 'mi', {[0] = 'mglyph', ['tex:box'] = kernel.list, [':nodes'] = {kernel}, [':style'] = cur_style}}
     end
     if mathml_filter then
       return mathml_filter(result, result)
@@ -381,7 +382,7 @@ style_table.crampedscript, style_table.crampedscriptscript =
 local function radical_to_table(radical, sub, cur_style, text_families)
   local kind = radical_sub[sub]
   local nucleus, core = kernel_to_table(radical.nucleus, cur_style//2*2+1, text_families)
-  local left = delim_to_table(radical.left)
+  local left = delim_to_table(radical.left, cur_style)
   local elem
   if kind == 'radical' or kind == 'uradical' then
     -- FIXME: Check that this is really a square root
@@ -407,8 +408,8 @@ end
 local function fraction_to_table(fraction, sub, cur_style, text_families)
   local num, core = kernel_to_table(fraction.num, cur_style + 2 - cur_style//6*2, text_families)
   local denom = kernel_to_table(fraction.denom, cur_style//2*2 + 3 - cur_style//6*2, text_families)
-  local left = delim_to_table(fraction.left)
-  local right = delim_to_table(fraction.right)
+  local left = delim_to_table(fraction.left, cur_style)
+  local right = delim_to_table(fraction.right, cur_style)
   local mfrac = {[0] = 'mfrac',
     [':nodes'] = {fraction},
     [':artifact'] = true,
@@ -434,7 +435,7 @@ local function fraction_to_table(fraction, sub, cur_style, text_families)
 end
 
 local function fence_to_table(fence, sub, cur_style)
-  local delim, core = delim_to_table(fence.delim)
+  local delim, core = delim_to_table(fence.delim, cur_style)
   if core[0] ~= 'mo' then
     return delim, core
   end

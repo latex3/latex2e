@@ -42,14 +42,20 @@ typesetsuppfiles = typesetsuppfiles or
   {"color.cfg", "graphics.cfg", "ltxdoc.cfg", "ltxguide.cfg"}
 
 -- Ensure the local format file is used
-function tex(file,dir,mode)
+function tex(file,dir,cmd,mode)
   dir = dir or "."
+  cmd = cmd or typesetexe
+  local fmt = string.gsub(cmd,"tex","latex")
+  if cmd == "luatex" then cmd = "luahbtex" end
   mode = mode or "nonstopmode"
-  return runcmd(
-    'pdftex -fmt=pdflatex -interaction=' .. mode .. ' -jobname="' ..
-      string.match(file,"^[^.]*") .. '" "\\input ' .. file .. '"',
+  return runcmd(cmd .. " -fmt=" .. fmt ..
+    ' -interaction=' .. mode ..
+    ' -jobname="' .. string.match(file,"^[^.]*") ..
+    '" "\\input ' .. file .. '"',
     dir,{"TEXINPUTS","TEXFORMATS","LUAINPUTS"})
 end
+-- This means we need to use "pdftex" not "pdflatex"
+typesetexe = typesetexe or "pdftex"
 
 -- Build TDS-style zips
 packtdszip = true
@@ -68,7 +74,13 @@ end
 -- for the meaning of the environment variables, but tl;dr: GITHUB_REF_TYPE says
 -- if we have a tag or a branch, GITHUB_REF_NAME has the corresponding name.
 -- If either one of them isn't set, we look at the current git HEAD.
-do
+if os.getenv'LATEX_NIGHTLY' then
+    tdsroot = "latex-nightly"
+    print("Creating/installing nightly-version in " .. tdsroot)
+    ctanpkg = ctanpkg or ""
+    ctanpkg = ctanpkg .. "-nightly"
+    ctanzip = ctanpkg
+else
   local gh_type = os.getenv'GITHUB_REF_TYPE'
   local name = os.getenv'GITHUB_REF_NAME'
   if gh_type == 'tag' and name then
@@ -162,7 +174,7 @@ function update_tag(file,content,tagname,tagdate)
       "\n   {" .. tag .. "}\n")
     content = gsub(content,
       "\\patch@level{%-?%d}",
-      "\\patch@level{" .. rev .. "}")
+      "\\patch@level{" .. (main_branch and "" or "-") .. rev .. "}")
   end
   if tag_format == "LaTeX2e" then
     return update_tag_ltx(file,content,tag)
@@ -244,9 +256,9 @@ end
 function docinit_hook() return fmt({"pdftex"},typesetdir) end
 
 -- Shorten second run
-function typeset(file,dir)
+function typeset(file,dir,exe)
   dir = dir or "."
-  local errorlevel = tex(file,dir)
+  local errorlevel = tex(file,dir,exe)
   if errorlevel ~= 0 then
     return errorlevel
   end
@@ -258,10 +270,10 @@ function typeset(file,dir)
   for i = 2,typesetruns - 1 do
 -- we have to run tex first then then index otherwise the index isn't run on the second last run!
     errorlevel =
-      tex(file,dir,"batchmode") +
+      tex(file,dir,exe,"batchmode") +
       makeindex(name,dir,".glo",".gls",".glg",glossarystyle) +
       makeindex(name,dir,".idx",".ind",".ilg",indexstyle)
     if errorlevel ~= 0 then return errorlevel end
   end
-  return tex(file,dir)
+  return tex(file,dir,exe)
 end

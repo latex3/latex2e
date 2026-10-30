@@ -44,13 +44,23 @@ local function to_unicode(head, tail)
           end
         end
       elseif node.id'math' == id then
-        if props then
-          local mml = props.saved_mathml_table or props.saved_mathml_core
-          if mml then
-            i = i+1
-            result[i] = mml
-            n = node.end_of_math(n)
+        if sub == 0 then
+          if props then
+            local mml = props.saved_mathml_table or props.saved_mathml_core
+            if mml then
+              i = i+1
+              result[i] = mml
+              n = node.end_of_math(n)
+              if not n then break end -- Can happen if a line break hides the end
+            end
           end
+        elseif sub == 1 then
+          -- If we end up ending math mode unexpectedly we were in math mode before,
+          -- so remove anything we collected assuming it to be text.
+          for j = i, 1, -1 do
+            result[j] = nil
+          end
+          i = 0
         end
       -- elseif node.id'whatsit' == id then
         -- TODO(?)

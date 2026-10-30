@@ -9,6 +9,8 @@
    and as `write_struct(xml, true)` in the callback.
 --]]
 
+local pdf_escape = require'luamml-pdf-escape'
+
 -- Create tokens from the main tagpdf commands.
 local struct_begin = token.create'tag_struct_begin:n'
 local struct_use = token.create'tag_struct_use:n'
@@ -23,13 +25,11 @@ local tagpdfsetup = token.create'tagpdfsetup'
 
 local lbrace, rbrace = token.new(string.byte'{', 1), token.new(string.byte'}', 2)
 
-local function escape_name(name)
-  return name
-end
+local math_char_t = node.id'math_char'
 
-local function escape_string(str)
-  return str
-end
+local escape_name = pdf_escape.escape_name
+local escape_string = pdf_escape.escape_text
+local bytes_to_luatex_string = pdf_escape.bytes_to_luatex_string
 
 local ltx
 local function get_ltx()
@@ -80,7 +80,7 @@ local attributes = setmetatable({}, {__index = function(t, k)
   t[k] = attr_name
   tex.runtoks(function()
     tex.sprint(-2, tagpdfsetup, lbrace, 'role/new-attribute=', lbrace, attr_name, rbrace, lbrace, '/O/NSO/NS ', get_mathml_ns_obj(), ' 0 R')
-    tex.cprint(12, k, rbrace, rbrace)
+    tex.cprint(12, bytes_to_luatex_string(k), rbrace, rbrace)
   end)
   return attr_name
 end})
@@ -101,7 +101,7 @@ local function build_attributes(tree_node)
   for attr, val in next, tree_node do
     if type(attr) == 'string' and not string.find(attr, ':') and attr ~= 'xmlns' then
      i = i + 1
-     attrs[i] = string.format('/%s(%s)', escape_name(attr), escape_string(val))
+     attrs[i] = string.format('%s%s', escape_name(attr), escape_string(val))
     end
   end
   if i == 0 then return end
@@ -111,6 +111,110 @@ local function build_attributes(tree_node)
   for j = 1, i do attrs[j] = nil end
 
   return attr_list
+end
+
+local function convert_tounicode_to_utf8(touni)
+  if type(touni) ~= 'string' or #touni % 4 ~= 0 then
+    return false
+  end
+  local state
+  local cps, j = {}, 0
+  for i=1, #touni, 4 do
+    local unit = tonumber(string.sub(touni, i, i + 3), 16)
+    local high = unit & 0xFC00
+    if high == 0xD800 then
+      if state then
+        return false
+      end
+      state = (unit & 0x3FF) << 10
+    elseif high == 0xDC00 then
+      if not state then
+        return false
+      end
+      j = j + 1
+      cps[j], state = 0x10000 + (state | (unit & 0x3FF)), nil
+    else
+      if state then
+        return false
+      end
+      j = j + 1
+      cps[j] = unit
+    end
+  end
+  return utf8.char(table.unpack(cps, 1, i))
+end
+
+local tounicode_font_cache = setmetatable({[0] = false}, {__index = function(t, fid)
+  local fontdata = font.getfont(fid)
+  if not fontdata then
+    t[fid] = false
+    return false
+  end
+  local characters = fontdata.characters
+  local result = setmetatable({}, {__index = function(t, cp)
+    local c = characters[cp]
+    local touni = c and c.tounicode
+    local result = false
+    if touni then
+      result = convert_tounicode_to_utf8(touni) or false
+      if not result then
+        print'ERROR: Invalid ToUnicode?'
+        print(touni)
+      end
+    end
+    t[cp] = result
+    return result
+  end})
+  t[fid] = result
+  return result
+end})
+
+local tounicode_fam_cache = setmetatable({}, {__index = function(t, mathfont_locator)
+  local fam = mathfont_locator >> 2
+  local size = mathfont_locator & 3
+  if size ~= 0 then
+    size = size - 1
+  end
+  local fid = node.family_font(fam, size) -- Always using textsize. Should be enough for this usecase unless you do something weird.
+  local result = tounicode_font_cache[fid]
+  t[mathfont_locator] = result
+  return result
+end})
+
+local function try_derive_actual(tree)
+  if tree[':actual'] then return end -- No need to derive actualtext if it's already there
+  if tree[':artifact'] then return end -- No need to provide actual text for artifacts
+  for i=1, #tree do
+    if type(tree[i]) ~= 'string' then
+      return
+    end
+  end
+  local nodes = assert(tree[':nodes'])
+  if #nodes == 0 then
+    return -- Can't be used without nodes since there's no MC to annotate.
+  end
+  local intended_text = table.concat(tree)
+  local derived_text = {}
+  for i=1, #nodes do
+    local n = nodes[i]
+    if n.id ~= math_char_t then
+      derived_text = false
+      break
+    end
+    local fam, cp = n.fam, n.char
+    local size = (tree[':style'] or 0) >> 1
+    local unicode_mapping = tounicode_fam_cache[(fam << 2) | size]
+    unicode_mapping = unicode_mapping and unicode_mapping[cp]
+    if not unicode_mapping then
+      derived_text = false
+      break
+    end
+    derived_text[i] = unicode_mapping
+  end
+  derived_text = derived_text and table.concat(derived_text)
+  if intended_text ~= derived_text then
+    tree[':actual'] = intended_text
+  end
 end
 
 local stash_cnt = 0
@@ -144,22 +248,23 @@ local function write_elem(tree, stash)
   end
 
   attrs = attrs and attributes[attrs]
-  tex.sprint(-2, struct_begin, lbrace, 'tag=', tree[0], '/mathml') -- 'tag=mo/mathml' is supported syntax
+  tex.sprint(-2, struct_begin, lbrace, 'tag=', lbrace, tree[0], '/mathml', rbrace) -- 'tag=mo/mathml' is supported syntax
   if stash then tex.sprint(-2, stash) end
   if attrs then tex.sprint(-2, ', attribute=' .. attrs) end
   tex.sprint(rbrace)
 
   if tree[':nodes'] then
     local n = tree[':nodes']
+    try_derive_actual(tree)
     tex.runtoks(function()
     -- luamml-convert sets :actual on some nodes in delim_to_table and acc_to_table.
       if tree[':artifact'] then
         tex.sprint(-2, mc_begin, lbrace, 'artifact', rbrace)
       elseif tree[':actual'] then
         tex.sprint(-2, mc_begin, lbrace, 'tag=Span,actualtext=')
-        tex.cprint(12, tree[':actual'], rbrace)
+        tex.cprint(12, lbrace, tree[':actual'], rbrace, rbrace)
       else
-        tex.sprint(-2, mc_begin, lbrace, 'tag=', tree[0], rbrace)
+        tex.sprint(-2, mc_begin, lbrace, 'tag=', lbrace, tree[0], rbrace, rbrace)
       end
       -- NOTE: This will also flush all previous sprint's... That's often annoying, but in this
       -- case actually intentional.

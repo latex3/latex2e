@@ -17,7 +17,8 @@ installfiles = {
                  "*.ltx",
                  "*.sty",
 		 "glyphtounicode-cmex.tex",
-         "tagpdf-ns-latex-lab.def"  
+         "tagpdf-ns-latex-lab.def", 
+         "tagpdf-ns-latex-lab-book.def" 
 		}
 typesetfiles_list = {
   {
@@ -25,12 +26,17 @@ typesetfiles_list = {
     "blocks-doc.tex",
     "documentmetadata-support-code.tex",
     "documentmetadata-support-doc.tex",
+  },
+  {
     "latex-lab-amsmath.dtx",
-    "latex-lab-namespace.dtx",
-    "latex-lab-sec.dtx",
-    "latex-lab-sec-template.dtx",
     "latex-lab-context.dtx",
     "latex-lab-enumitem.dtx",
+    "latex-lab-firstaid.dtx",
+    "latex-lab-float.dtx",
+    "latex-lab-namespace.dtx",
+    "latex-lab-sec-template.dtx",
+    "latex-lab-sec.dtx",
+    "latex-lab-titlesec.dtx",
   },
   {
     "latex-lab-graphic.dtx",
@@ -43,21 +49,20 @@ typesetfiles_list = {
     "latex-lab-minipage.dtx",
     "latex-lab-new-or-1.dtx",
     "latex-lab-new-or-2.dtx",
-    "latex-lab-float.dtx",
-    "latex-lab-firstaid.dtx",
   },
   {
+    "latex-lab-bib.dtx",
+    "latex-lab-footnotes.dtx",
     "latex-lab-table.dtx",
+    "latex-lab-template.dtx",
     "latex-lab-testphase.dtx",
     "latex-lab-text.dtx",
     "latex-lab-tikz.dtx",
     "latex-lab-title.dtx",
-    "latex-lab-toc.dtx",
     "latex-lab-toc-hyperref-changes.dtx",
     "latex-lab-toc-kernel-changes.dtx",
+    "latex-lab-toc.dtx",
     "latex-lab-unicode-math.dtx",
-    "latex-lab-footnotes.dtx",
-    "latex-lab-bib.dtx",
   }
 }
 local doc_component_setting = os.getenv'LTX_DOC_COMPONENT'
@@ -198,6 +203,7 @@ specialtypesetting["latex-lab-unicode-math.dtx"] = {format = "lualatex"}
 specialtypesetting["documentmetadata-support-doc.tex"] = {format = "lualatex"}
 specialtypesetting["documentmetadata-support-code.tex"] = {format = "lualatex"}
 specialtypesetting["latex-lab-enumitem.dtx"] = {format = "lualatex"}
+specialtypesetting["latex-lab-titlesec.dtx"] = {format = "lualatex"}
 
 function tex(file,dir,mode)
   dir = dir or "."

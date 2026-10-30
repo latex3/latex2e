@@ -30,7 +30,7 @@
 %<*plain>
 % \fi
 % \ProvidesFile{ltluatex.dtx}
-[2025/12/23 v1.2f
+[2026-10-28 v1.2h
 % LaTeX Kernel (LuaTeX support)^^A
 %\iffalse
 %<plain>   LuaTeX support for plain TeX (core)%
@@ -198,7 +198,7 @@
 % \DescribeMacro{new_attribute}
 % |luatexbase.new_attribute(|\meta{attribute}|)|\\
 % Returns an allocation number for the \meta{attribute}, indexed from~$1$.
-% The attribute will be initialised with the marker value |-"7FFFFFFF|
+% The attribute will be initialized with the marker value |-"7FFFFFFF|
 % (`unset'). The attribute allocation sequence is shared with the \TeX{}
 % code but this function does \emph{not} define a token using
 % |\attributedef|.
@@ -233,6 +233,19 @@
 % with |\luafunction|, |\lateluafunction|, and |\luadef|,
 % indexed from~$1$. The optional \meta{functionname} argument
 % is just used for logging.
+% \end{sloppypar}
+%
+% \begin{sloppypar}
+% \noindent
+% \DescribeMacro{new_luacommand}
+% |luatexbase.new_luacommand(|\meta{csname}, \meta{fn}, \meta{...}|)|\\
+% Convenience wrapper combining |new_luafunction| with
+% |token.set_lua|. Allocates a new lua function slot for
+% \meta{csname} (as |new_luafunction| does), stores the Lua
+% function \meta{fn} in it, then calls
+% |token.set_lua(|\meta{csname}, \meta{fnalloc}, \meta{...}|)| to
+% bind \meta{csname} to that slot. Any further \meta{...} arguments
+% are passed on unchanged to |token.set_lua|.
 % \end{sloppypar}
 %
 % These functions all require access to a named \TeX{} count register
@@ -355,22 +368,23 @@
 % \noindent
 % \DescribeMacro{add_to_callback}
 % |luatexbase.add_to_callback(|^^A
-% \meta{callback}, \meta{function}, \meta{description}|)|
+% \meta{callback}, \meta{function}, \meta{identifier}|)|
 % Registers the \meta{function} into the \meta{callback} with a textual
-% \meta{description} of the function. Functions are inserted into the callback
-% in the order loaded.
+% \meta{identifier} of the function. Functions are inserted into the callback
+% in the order loaded. The \meta{identifier} should be unique for each
+% callback.
 %
 % \noindent
 % \DescribeMacro{remove_from_callback}
-% |luatexbase.remove_from_callback(|\meta{callback}, \meta{description}|)|
-% Removes the callback function with \meta{description} from the \meta{callback}.
-% The removed function and its description
+% |luatexbase.remove_from_callback(|\meta{callback}, \meta{identifier}|)|
+% Removes the callback function with \meta{identifier} from the \meta{callback}.
+% The removed function and its identifier
 % are returned as the results of this function.
 %
 % \noindent
 % \DescribeMacro{in_callback}
-% |luatexbase.in_callback(|\meta{callback}, \meta{description}|)|
-% Checks if the \meta{description} matches one of the functions added
+% |luatexbase.in_callback(|\meta{callback}, \meta{identifier}|)|
+% Checks if the \meta{identifier} matches one of the functions added
 % to the list for the \meta{callback}, returning a boolean value.
 %
 % \noindent
@@ -382,9 +396,13 @@
 % no functions registered using the callback.
 %
 % \noindent
-% \DescribeMacro{callback_descriptions}
-% A list of the descriptions of functions registered to the specified
+% \DescribeMacro{callback_identifiers}
+% A list of the identifiers of functions registered to the specified
 % callback is returned. |{}| is returned if there are no functions registered.
+%
+% \noindent
+% \DescribeMacro{callback_descriptions}
+% This is a historical alias for \texttt{callback_identifiers}.
 %
 % \noindent
 % \DescribeMacro{create_callback}
@@ -404,25 +422,25 @@
 %
 % The kind of constraint added depends on \meta{relation}:
 % \begin{description}
-%   \item[before] The callback function with description \meta{first} will be
-%     executed before the function with description \meta{second}.
-%   \item[after] The callback function with description \meta{first} will be
-%     executed after the function with description \meta{second}.
-%   \item[incompatible-warning] When both a callback function with description \meta{first}
-%     and with description \meta{second} is registered, then a warning is printed when
+%   \item[before] The callback function with identifier \meta{first} will be
+%     executed before the function with identifier \meta{second}.
+%   \item[after] The callback function with identifier \meta{first} will be
+%     executed after the function with identifier \meta{second}.
+%   \item[incompatible-warning] When both a callback function with identifier \meta{first}
+%     and with identifier \meta{second} is registered, then a warning is printed when
 %     the callback is executed.
-%   \item[incompatible-error] When both a callback function with description \meta{first}
-%     and with description \meta{second} is registered, then an error is printed when
+%   \item[incompatible-error] When both a callback function with identifier \meta{first}
+%     and with identifier \meta{second} is registered, then an error is printed when
 %     the callback is executed.
 %   \item[unrelated] Any previously declared callback rule between \meta{first}
 %     and \meta{second} gets disabled.
 % \end{description}
 % Every call to \texttt{declare_callback_rule} with a specific callback \meta{name}
-% and descriptions \meta{first} and \meta{second} overwrites all previous calls with
-% same callback and descriptions.
+% and identifier \meta{first} and \meta{second} overwrites all previous calls with
+% same callback and identifiers.
 %
 % The callback functions do not have to be registered yet when the functions is called.
-% Only the constraints for which both callback descriptions refer to callbacks
+% Only the constraints for which both callback identifiers refer to callbacks
 % registered at the time the callback is called will have an effect.
 %
 % \endgroup
@@ -978,11 +996,13 @@ local luatexbase = luatexbase
 % \changes{v1.1u}{2021/08/11}{Define missing local function}
 % \changes{v1.2b}{2023/01/19}{Remove unused local variable tex_setattribute}
 %    \begin{macrocode}
+local string_format    = string.format
 local string_gsub      = string.gsub
 local tex_count        = tex.count
 local tex_setcount     = tex.setcount
 local texio_write_nl   = texio.write_nl
 local flush_list       = node.flush_list
+local token_set_lua    = token.set_lua
 %    \end{macrocode}
 % \changes{v1.0i}{2015/11/29}{Declare this as local before used in the module error definitions (PHG)}
 %    \begin{macrocode}
@@ -1318,7 +1338,24 @@ luatexbase.new_luafunction = new_luafunction
 %    \end{macrocode}
 % \end{macro}
 %
+% \begin{macro}{new_luacommand}
+% \changes{v1.2g}{2026-09-16}{Function added}
+% A convenience wrapper around |new_luafunction| and |token.set_lua|:
+% it allocates the lua function slot, stores \meta{fn} there, and
+% binds \meta{csname} to it in one step.
+%    \begin{macrocode}
+local function new_luacommand(csname, fn, ...)
+  local fntable = lua.get_functions_table()
+  local fnalloc = new_luafunction(csname)
+  fntable[fnalloc] = fn
+  token_set_lua(csname, fnalloc, ...)
+end
+luatexbase.new_luacommand = new_luacommand
+%    \end{macrocode}
+% \end{macro}
+%
 % \subsection{Lua callback management}
+% \changes{v1.5h}{2026-10-28}{Rename callback descriptions to identifiers}
 %
 % The native mechanism for callbacks in Lua\TeX\ allows only one per function.
 % That is extremely restrictive and so a mechanism is needed to add and
@@ -1328,7 +1365,7 @@ luatexbase.new_luafunction = new_luafunction
 %
 % The main table: keys are callback names, and values are the associated lists
 % of functions. More precisely, the entries in the list are tables holding the
-% actual function as |func| and the identifying description as |description|.
+% actual function as |func| and the identifier |identifier|.
 % Only callbacks with a non-empty list of functions have an entry in this
 % list.
 %
@@ -1338,7 +1375,7 @@ luatexbase.new_luafunction = new_luafunction
 % resort.
 %
 % Additionally |callbackrules| describes the ordering constraints: It contains two
-% element tables with the descriptions of the constrained callback implementations.
+% element tables with the identifiers of the constrained callback implementations.
 % It can additionally contain a |type| entry indicating the kind of rule. A missing
 % value indicates a normal ordering constraint.
 %
@@ -1354,7 +1391,7 @@ local callbacklist = setmetatable({}, {
       local meta = {}
       for i, entry in ipairs(list) do
         local t = {value = entry, count = 0, pos = i}
-        meta[entry.description], list[i] = t, t
+        meta[entry.identifier], list[i] = t, t
       end
       local count = #list
       local pos = count
@@ -1390,7 +1427,7 @@ local callbacklist = setmetatable({}, {
       for i=1, count do -- The actual sort begins
         local current = list[i]
         if current then
-          meta[current.value.description] = nil
+          meta[current.value.identifier] = nil
           for j, cur in ipairs(current) do
             local count = cur.count
             if count == 1 then
@@ -1416,7 +1453,7 @@ local callbacklist = setmetatable({}, {
             local entry = meta[name]
             list[i + j - 1] = entry.value
             for _, post_entry in ipairs(entry) do
-              local post_name = post_entry.value.description
+              local post_name = post_entry.value.identifier
               if not remaining[post_name] then
                 remaining[post_name] = name
               end
@@ -1732,7 +1769,7 @@ local function list_handler(name)
       ret = i.func(head, ...)
       if ret == false then
         luatexbase_warning(
-          "Function `" .. i.description .. "' returned false\n"
+          "Function `" .. i.identifier .. "' returned false\n"
             .. "in callback `" .. name .."'"
          )
         return false
@@ -1763,7 +1800,7 @@ local function reverselist_handler(name)
       ret = cb.func(head, ...)
       if ret == false then
         luatexbase_warning(
-          "Function `" .. cb.description .. "' returned false\n"
+          "Function `" .. cb.identifier .. "' returned false\n"
             .. "in callback `" .. name .."'"
          )
         return false
@@ -1883,29 +1920,64 @@ luatexbase.call_callback=call_callback
 %    \end{macrocode}
 % \end{macro}
 %
+% \begin{macro}{in_callback}
+% \changes{v1.0a}{2015/09/24}{Function added}
+% \changes{v1.0h}{2015/11/27}{Guard against undefined list latex/4445}
+%   Look for a function identifier in a callback.
+%    \begin{macrocode}
+local function in_callback(name, identifier)
+  if not name
+    or name == ""
+    or not realcallbacklist[name]
+    or not callbacktypes[name]
+    or not identifier then
+      return false
+  end
+  for _, i in pairs(realcallbacklist[name]) do
+    if i.identifier == identifier then
+      return true
+    end
+  end
+  return false
+end
+luatexbase.in_callback = in_callback
+%    \end{macrocode}
+% \end{macro}
+%
 % \begin{macro}{add_to_callback}
 % \changes{v1.0a}{2015/09/24}{Function added}
 %   Add a function to a callback. First check arguments.
 % \changes{v1.0k}{2015/12/02}{Give more specific error messages (PHG)}
 % \changes{v1.2a}{2022/10/03}{Add rules for callback ordering}
+% \changes{v1.5h}{2026-10-28}{Add warning for duplicate callback identifiers}
 %    \begin{macrocode}
-local function add_to_callback(name, func, description)
+local function add_to_callback(name, func, identifier)
   if not name or name == "" then
     luatexbase_error("Unable to register callback:\n" ..
                      "valid callback name required")
   end
   if not callbacktypes[name] or
     type(func) ~= "function" or
-    not description or
-    description == "" then
+    not identifier or
+    identifier == "" then
     luatexbase_error(
       "Unable to register callback.\n\n"
         .. "Correct usage:\n"
-        .. "add_to_callback(<callback>, <function>, <description>)"
+        .. "add_to_callback(<callback>, <function>, <identifier>)"
     )
   end
 %    \end{macrocode}
-%   Then test if this callback is already in use. If not, initialise its list
+%   Check if the specified identifier is already registered. This used to
+%   be allowed but will become an error in a future release.
+%    \begin{macrocode}
+  if in_callback(name, identifier) then
+  luatexbase_warning(string_format(
+      "The identifier %s is already in use in callback %s.\n\z
+      Please change the identifier of the newly registered callback \z
+      to avoid errors in the next LaTeX release", identifier, name))
+  end
+%    \end{macrocode}
+%   Then test if this callback is already in use. If not, initialize its list
 %   and register the proper handler.
 %    \begin{macrocode}
   local l = realcallbacklist[name]
@@ -1936,7 +2008,7 @@ local function add_to_callback(name, func, description)
 %    \begin{macrocode}
   local f = {
     func        = func,
-    description = description,
+    identifier = identifier,
   }
   if callbacktypes[name] == exclusive then
     if #l == 1 then
@@ -1951,7 +2023,7 @@ local function add_to_callback(name, func, description)
 %  Keep user informed.
 %    \begin{macrocode}
   luatexbase_log(
-    "Inserting `" .. description .. "' in `" .. name .. "'."
+    "Inserting `" .. identifier .. "' in `" .. name .. "'."
   )
 end
 luatexbase.add_to_callback = add_to_callback
@@ -1969,7 +2041,7 @@ local function declare_callback_rule(name, desc1, relation, desc2)
     luatexbase_error(
       "Unable to create ordering constraint. "
         .. "Correct usage:\n"
-        .. "declare_callback_rule(<callback>, <description_a>, <description_b>)"
+        .. "declare_callback_rule(<callback>, <identifier_a>, <identifier_b>)"
     )
   end
   if relation == 'before' then
@@ -2017,18 +2089,18 @@ luatexbase.declare_callback_rule = declare_callback_rule
 % \changes{v1.2a}{2022/10/03}{Add rules for callback ordering}
 %   Remove a function from a callback. First check arguments.
 %    \begin{macrocode}
-local function remove_from_callback(name, description)
+local function remove_from_callback(name, identifier)
   if not name or name == "" then
     luatexbase_error("Unable to remove function from callback:\n" ..
                      "valid callback name required")
   end
   if not callbacktypes[name] or
-    not description or
-    description == "" then
+    not identifier or
+    identifier == "" then
     luatexbase_error(
       "Unable to remove function from callback.\n\n"
         .. "Correct usage:\n"
-        .. "remove_from_callback(<callback>, <description>)"
+        .. "remove_from_callback(<callback>, <identifier>)"
     )
   end
   local l = realcallbacklist[name]
@@ -2043,20 +2115,20 @@ local function remove_from_callback(name, description)
 %    \begin{macrocode}
   local index = false
   for i,j in ipairs(l) do
-    if j.description == description then
+    if j.identifier == identifier then
       index = i
       break
     end
   end
   if not index then
     luatexbase_error(
-      "No callback `" .. description .. "' registered for `" ..
+      "No callback `" .. identifier .. "' registered for `" ..
       name .. "'\n")
   end
   local cb = l[index]
   table.remove(l, index)
   luatexbase_log(
-    "Removing  `" .. description .. "' from `" .. name .. "'."
+    "Removing  `" .. identifier .. "' from `" .. name .. "'."
   )
   if #l == 0 then
     realcallbacklist[name] = nil
@@ -2071,33 +2143,9 @@ local function remove_from_callback(name, description)
       callback_register(name, nil)
     end
   end
-  return cb.func,cb.description
+  return cb.func,cb.identifier
 end
 luatexbase.remove_from_callback = remove_from_callback
-%    \end{macrocode}
-% \end{macro}
-%
-% \begin{macro}{in_callback}
-% \changes{v1.0a}{2015/09/24}{Function added}
-% \changes{v1.0h}{2015/11/27}{Guard against undefined list latex/4445}
-%   Look for a function description in a callback.
-%    \begin{macrocode}
-local function in_callback(name, description)
-  if not name
-    or name == ""
-    or not realcallbacklist[name]
-    or not callbacktypes[name]
-    or not description then
-      return false
-  end
-  for _, i in pairs(realcallbacklist[name]) do
-    if i.description == description then
-      return true
-    end
-  end
-  return false
-end
-luatexbase.in_callback = in_callback
 %    \end{macrocode}
 % \end{macro}
 %
@@ -2117,13 +2165,13 @@ luatexbase.disable_callback = disable_callback
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{callback_descriptions}
+% \begin{macro}{callback_identifiers}
 % \changes{v1.0a}{2015/09/24}{Function added}
 % \changes{v1.0h}{2015/11/27}{Match test in in-callback latex/4445}
-%   List the descriptions of functions registered for the given callback.
+%   List the identifiers of functions registered for the given callback.
 %   This will sort the list if necessary.
 %    \begin{macrocode}
-local function callback_descriptions (name)
+local function callback_identifiers (name)
   local d = {}
   if not name
     or name == ""
@@ -2133,12 +2181,13 @@ local function callback_descriptions (name)
     return d
   else
   for k, i in pairs(callbacklist[name]) do
-    d[k]= i.description
+    d[k]= i.identifier
     end
   end
   return d
 end
-luatexbase.callback_descriptions =callback_descriptions
+luatexbase.callback_descriptions =callback_identifiers
+luatexbase.callback_identifiers = callback_identifiers
 %    \end{macrocode}
 % \end{macro}
 %

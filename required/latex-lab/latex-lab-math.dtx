@@ -19,8 +19,8 @@
 %
 %
 
-\def\ltlabmathdate{2026-05-27}
-\def\ltlabmathversion{0.7e}
+\def\ltlabmathdate{2026-10-15}
+\def\ltlabmathversion{0.7j}
 %
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
@@ -300,7 +300,7 @@
 %     \cs{MathCollectFalse}
 %   \end{syntax}
 %  This activates/deactivates the math collection of the math shift token.
-%  See above for cases when this can be usefull.
+%  See above for cases when this can be useful.
 % \end{function}
 %
 % \section{Math tagging}
@@ -903,6 +903,15 @@
 % \end{variable}
 %
 %
+% \begin{variable}{\l_@@_math_content_artifact_bool}
+%   Tracks whether math content should be marked as artifact by default.
+%
+%    \begin{macrocode}
+\bool_new:N \l_@@_math_content_artifact_bool
+%    \end{macrocode}
+% \end{variable}
+%
+%
 %  \car{Change first tl name below: `env' $=>$ `info'?\\
 %        Or do we need an extra storage tl?}
 %
@@ -1057,7 +1066,7 @@
     \tl_if_exist:cF { g_@@_mathml_MSFT_#1_tl }
      {
        \pdf_string_from_unicode:nnN{utf16/hex}{#2}\l_@@_tmpa_tl
-       \__tag_attr_new_entry:ee
+       \tag_attr_new:ee
         {MSFT-#1}
         {/O /MSFT_Office /MSFT_MathML \l_@@_tmpa_tl }
        \tl_new:c  {g__math_mathml_MSFT_#1_tl}
@@ -1189,11 +1198,17 @@
                       \@@_luamml_activate_write:
                     }
                  }
+%    \end{macrocode}
+% \changes{0.7j}{2026-10-15}{Suppress message if tagging is not active}
+%    \begin{macrocode}
            {-1 } {
                    \AddToHook{begindocument/end}
                     {
-                     \msg_note:nnnn { tag }
-                     { luamml-status }{ disabled }{ not~create }
+                     \tag_if_active:T
+                      {
+                        \msg_note:nnnn { tag }
+                        { luamml-status }{ disabled }{ not~create }
+                      } 
                     }
                  }
            { 0 }
@@ -1416,11 +1431,15 @@
          }
         \cs_set:Npn\@@_luamml_structelem:{\luamml_structelem:}
         \cs_set:Npn\@@_luamml_ignore:{\luamml_ignore:}
+        \sys_if_engine_luatex:T {
+          \bool_set_true:N \l_@@_math_content_artifact_bool
+        }
       },
      math/mathml/structelem/false .code:n =
       {
         \cs_set_eq:NN\@@_luamml_structelem:\prg_do_nothing:
         \cs_set_eq:NN\@@_luamml_ignore:\prg_do_nothing:
+        \bool_set_false:N \l_@@_math_content_artifact_bool
       },
      math/mathml/structelem .default:n = true,
 %    \end{macrocode}
@@ -2010,9 +2029,15 @@
      }
 %    \end{macrocode}
 % \changes{0.6w}{2025-10-02}{use debug command instead of direct typeout}
+% \changes{0.7h}{2026-09-23}{mark math content as artifact in structure element mode}
 %    \begin{macrocode}
     \@@_debug_typeout:n{grabbed~math=\meaning\g_@@_grabbed_math_tl}
-    \tag_mc_begin:n{}
+    \bool_if:NTF \l_@@_math_content_artifact_bool
+      {
+        \tag_mc_begin:n{ artifact }
+      } {
+        \tag_mc_begin:n{}
+      }
   }
 \NewTaggingSocketPlug
   {math/struct/end}
@@ -2503,7 +2528,7 @@
 %    \end{macrocode}
 % \end{variable}
 %
-% Here we set up specialised handling of environments. The idea for the
+% Here we set up specialized handling of environments. The idea for the
 % \texttt{arg-spec} key is that if an environment takes arguments, we
 % don't worry during the main grabbing. Rather, we remove the arguments
 % from the grabbed content and forward only the payload. That is done by
@@ -2526,45 +2551,9 @@
 % \begin{macro}{\RegisterMathEnvironment}
 %   Set up to capture environment content and make available.
 % \changes{0.6k}{2024-12-04}{Store the current grouplevel for luamml }
+% \changes{0.7g}{2026-09-20}{Move math env end in \cs{math_register_env:nn}}
 %    \begin{macrocode}
 \cs_new_protected:Npn \math_register_env:nn #1#2
-  {
-    \tl_set:Nn \l_@@_env_name_tl {#1}
-    \keys_set:nn { @@ } {#2}
-    \cs_gset_eq:cc { @@_env_ #1 _begin: } {#1}
-    \cs_gset_eq:cc { @@_env_ #1 _end: } { end #1 }
-%
-    \ExpandArgs { nne } \RenewDocumentEnvironment {#1} { b }
-      {
-        \exp_not:N \bool_if:NTF \exp_not:N \l_@@_collected_bool
-          {
-%            \typeout{===>B1}
-          }
-          {
-%            \typeout{===>B2}
-            \cs_if_exist:cTF { @@_env #1 _aux: }
-              {
-                \exp_not:c { @@_env #1 _aux: }
-                  ##1 \exp_not:N \@@_env_end: {#1}
-              }
-              { \exp_not:N \@@_process:nn {#1} {##1} }
-            \exp_not:n { \@kernel@math@registered@begin }
-            \bool_set_true:N \exp_not:N \l_@@_collected_bool
-          }
-%        \exp_not:N \tracingall
-        \exp_not:c { @@_env_ #1 _begin: }
-        ##1
-        \exp_not:c { @@_env_ #1 _end: }
-%        \exp_not:N \tracingnone
-     }
-     {
-     }
-  }
-%    \end{macrocode}
-%  \changes{v0.6k}{2024/12/04}{Add tagging sockets for luamml support}
-%  \changes{v0.6k}{2024/12/04}{Store the current grouplevel for luamml }
-%    \begin{macrocode}
-\cs_new_protected:Npn \math_register_halign_env:nn #1#2
   {
     \tl_set:Nn \l_@@_env_name_tl {#1}
     \keys_set:nn { @@ } {#2}
@@ -2597,31 +2586,31 @@
        \exp_not:c { @@_env_ #1 _end: }
      }
   }
-
-
-
+%    \end{macrocode}
+%  \changes{v0.6k}{2024/12/04}{Add tagging sockets for luamml support}
+%  \changes{v0.6k}{2024/12/04}{Store the current grouplevel for luamml }
+%  \changes{v0.7g}{2026-09-20}{Remove \cs{math_register_halign_env:nn}}
+% \changes{0.7f}{2026-08-14}{Simplified by removing some tests}
+%    \begin{macrocode}
 \cs_new:Npn \@kernel@math@registered@begin {
-%  \ShowTagging{struct-stack}
-%\typeout{==>A1}\ShowTagging{struct-stack,mc-current}
+% \ShowTagging{struct-stack}
+  %\typeout{==>A1}\ShowTagging{struct-stack,mc-current}
+%    \end{macrocode}
+%    Before we start math display processing we need to output a
+%    dangling run-in heading, otherwise it gets inserted too late when
+%    tagging for the formula has already started.
+% \changes{0.7i}{2026-09-29}{Ensure that a run-in heading is output before
+%              starting a math display (tagging/1571)}
+%    \begin{macrocode}
+         \if@noskipsec \leavevmode \fi
+%    \end{macrocode}
+%
+%    \begin{macrocode}
   \mode_if_vertical:TF
        {
-%         \legacy_if:nTF { @endpe }
-%           { \legacy_if_set_false:n { @endpe } }
-%           { \__block_list_beginpar_vmode: }
-%
-%         \typeout{==>~ at:~ \g__tag_struct_tag_tl}
-%
-        \tag_if_active:T
-          {
-            \exp_args:Noo\str_if_eq:nnF \g__tag_struct_tag_tl { \l__tag_para_main_tag_tl }    % needs correction!
-             {
-%               \typeout{==>A2}
-               \__block_beginpar_vmode:
-             }              % needs correction!
-          }
+         \__block_beginpar_vmode:
        }
        {
-%         \typeout{==>A3}
          \UseTaggingSocket{para/textblock/end}
        }
   \tag_socket_use:nn{math/display/formula/begin}{}{}
@@ -2873,7 +2862,7 @@
 \protected\def\eqno{
   \@@_prepare_display_end:
 %    \end{macrocode}
-%    Inside the equation we set it temporarly to do nothing, because
+%    Inside the equation we set it temporarily to do nothing, because
 %    otherwise it would be executed again when \cs{dollardollar@end}
 %    is reached (not that this would matter, but it would just take
 %    unnecessary extra time).
