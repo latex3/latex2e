@@ -118,7 +118,7 @@
  - or closer to the command names, e.g., `cmd/@outputpage/before` `@outputpage/reset`, etc?
    In that case one can use the generic hooks but I'm not so keen on using generic hooks for internal commands
 
-- if we can assume that tagging for header and footer is always idential we could reuse the sockets and call them
+- if we can assume that tagging for header and footer is always identical we could reuse the sockets and call them
   `build/page/headerfoot/before` and   `build/page/headerfoot/after`
 
 
