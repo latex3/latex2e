@@ -4,7 +4,7 @@
 %
 % None of this is meant to stay, so this class is not supposed to be used outside of the kernel documentation!
 % It may get incompatible updates and it will vanish again, eventually.
-\ProvidesClass{l3in2edoc}[2026-10-08 v1.0b Internal LaTeX documentation class based on l3doc]
+\ProvidesClass{l3in2edoc}[2026-10-27 v1.0c Internal LaTeX documentation class based on l3doc]
 
 \LoadClassWithOptions{l3doc}
 
@@ -52,9 +52,9 @@
   }
   {\par\bigskip}
 
+\ExplSyntaxOn
 % Support \DescribeMacro with l3doc; copies code from \__codedoc_get_hyper_target:nN.
 % Also adds a \MakeLinkTarget
-\ExplSyntaxOn
 \def\@doc@describe#1#2{
    \ifdoc@noprint\else
      \marginpar{\raggedleft
@@ -74,4 +74,7 @@
  \@esphack
  \endgroup
  \ignorespaces}
+
+% Match ltxdoc formatting of \meta (l3doc adds a \texttt)
+\RenewDocumentCommand{\meta}{m}{\__codedoc_meta:n{#1}}
 \ExplSyntaxOff
