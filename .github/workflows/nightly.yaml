@@ -12,7 +12,22 @@ permissions:
 jobs:
   l3build:
     runs-on: ubuntu-latest
-    name: Publish nightly
+    strategy:
+      matrix:
+        include:
+          - package: latex-base
+            directory: base
+          - package: latex-amsmath
+            directory: required/amsmath
+          - package: latex-firstaid
+            directory: required/firstaid
+          - package: latex-graphics
+            directory: required/graphics
+          - package: latex-lab
+            directory: required/latex-lab
+          - package: latex-tools
+            directory: required/tools
+    name: Publish nightly for ${{ matrix.package }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -20,32 +35,30 @@ jobs:
         uses: zauguin/install-texlive@v4
         with:
           package_file: .github/tl_packages
+      - name: Create target directories
+        run: mkdir target-dev target-nightly
+      - name: Run l3build for dev
+        working-directory: ${{ matrix.directory }}
+        env:
+          TEXMFHOME: ${{ github.workspace }}/target-dev
+        run: l3build install
+      - name: Run l3build for nightly
+        working-directory: ${{ matrix.directory }}
+        env:
+          TEXMFHOME: ${{ github.workspace }}/target-nightly
+        run: LATEX_NIGHTLY=1 l3build install
       - name: Publish nightly
         run: |
           ID_TOKEN=$(curl -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://nightly.typesetting.eu" | jq -r .value)
-          while read package directory; do (
-            cd "$directory"
-            mkdir target
-            export TEXMFHOME="$(pwd)/target"
-            LATEX_NIGHTLY=1 l3build install
-            (
-              cd target
-              zip -r - . | curl --fail --data-binary @- -XPUT -H "Authorization: Bearer $ID_TOKEN" https://nightly.typesetting.eu/upload/"$package-nightly"
-            )
-            LATEX_NIGHTLY=1 l3build uninstall
-            l3build install
-            (
-              cd target
-              zip -r - . | curl --fail --data-binary @- -XPUT -H "Authorization: Bearer $ID_TOKEN" https://nightly.typesetting.eu/upload/"$package-dev"
-            )
-            l3build uninstall
+          (
+            cd target-dev
+            zip -r - . | curl --fail --data-binary @- -XPUT -H "Authorization: Bearer $ID_TOKEN" https://nightly.typesetting.eu/upload/${{ matrix.package }}-dev
           ) &
-          done << EOF
-          latex-base base
-          latex-amsmath required/amsmath
-          latex-firstaid required/firstaid
-          latex-graphics required/graphics
-          latex-lab required/latex-lab
-          latex-tools required/tools
-          EOF
-          wait
+          DEV_PID=$!
+          (
+            cd target-nightly
+            zip -r - . | curl --fail --data-binary @- -XPUT -H "Authorization: Bearer $ID_TOKEN" https://nightly.typesetting.eu/upload/${{ matrix.package }}-nightly
+          ) &
+          NIGHTLY_PID=$!
+          wait $DEV_PID
+          wait $NIGHTLY_PID
