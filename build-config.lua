@@ -32,7 +32,7 @@ checksuppfiles = checksuppfiles     or
     "*.fd",
     "*.txt",
     "load-unicode-xetex-classes.tex",
-    "lualibs*.lua", 
+    "lualibs*.lua",
     "fontloader*.lua",
     "luaotfload*.lua",
     "fixup_mathaxis.lua",
@@ -150,7 +150,7 @@ end
 function update_tag(file,content,tagname,tagdate)
   -- Set up the patch/pre-release string
   local iso = "%d%d%d%d%-%d%d%-%d%d"
-  local tag, rev = match(tagname,"^(.*):([^:]*)$") 
+  local tag, rev = match(tagname,"^(.*):([^:]*)$")
   tag = tag or tagname
   rev = rev or "0"
   if main_branch then
@@ -168,7 +168,7 @@ function update_tag(file,content,tagname,tagdate)
   end
   -- Special case for ltvers.dtx: only in base but 'quick'
   if file == "ltvers.dtx" then
-    local tag = match(tagname,"^(.*):([^:]*)$") 
+    local tag = match(tagname,"^(.*):([^:]*)$")
     content = gsub(content,
       "\n   {" .. iso .. "}\n",
       "\n   {" .. tag .. "}\n")

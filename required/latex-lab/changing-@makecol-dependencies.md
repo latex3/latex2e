@@ -101,7 +101,7 @@
 ```
 
  - Reimplementation of ftnright for Japanese, should follow whatever is going to be done for that package and then should be ok.
- 
+
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/footbib/footbib.sty
 
 ```

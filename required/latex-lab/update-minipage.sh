@@ -1,6 +1,6 @@
 
 
-#l3build save -cconfig-minipage 
+#l3build save -cconfig-minipage
 
 
 l3build save -epdftex,luatex -cconfig-minipage \
@@ -11,7 +11,7 @@ l3build save -epdftex,luatex -cconfig-minipage \
 	minipage-005-footnote \
  	minipage-006-gh723 \
  	text-phantom
- 
+
 exit
 
 

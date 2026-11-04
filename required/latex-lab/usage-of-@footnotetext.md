@@ -523,7 +523,7 @@ fits the structure
 
 % ./lineno/fnlineno.sty
 
-%% |\FNLN@@text| stores the `\@footnotetext' found, 
+%% |\FNLN@@text| stores the `\@footnotetext' found,
 %% we might check if it is `\FNLN@ltx@fntext' ... %% TODO
 \let\FNLN@@text\@footnotetext
 \def\@footnotetext{%
@@ -534,27 +534,27 @@ fits the structure
 
 \def \FNLN@text {%                      %% 2010/12/31 arg read later
     \vadjust{\penalty-\FNLN@M@swap@codepen}%
-%% Standard \LaTeX's `\@footnotetext' expands `\@thefnmark' 
-%% to produce the footnote mark at the page bottom, 
-%% right after it has been determined for the mark 
-%% in the main text. \emph{Here} the footnote text 
+%% Standard \LaTeX's `\@footnotetext' expands `\@thefnmark'
+%% to produce the footnote mark at the page bottom,
+%% right after it has been determined for the mark
+%% in the main text. \emph{Here} the footnote text
 %% will be typeset only when \emph{other} footnote marks
-%% may have been formed for typesetting the main text 
-%% paragraph before. 
+%% may have been formed for typesetting the main text
+%% paragraph before.
 %% %%% (TODO clearer wording)
-%% In the \strong{footnote list} 
+%% In the \strong{footnote list}
 %% macro |\FNLN@list|, the (\dqtd{`&\protect'ed})
-%% \emph{current} expansion <mark> of `\@thefnmark' 
-%% is stored as an item preceding the footnote text 
-%% <text>. One footnote entry in `\FNLN@list' 
+%% \emph{current} expansion <mark> of `\@thefnmark'
+%% is stored as an item preceding the footnote text
+%% <text>. One footnote entry in `\FNLN@list'
 %% thus has the form \lq`<mark>\@lt<text>\@lt'\rq.
-%% \LaTeX's internal `\g@addto@macro' is used to \emph{append} 
-%% an entry to the list (at the right). The OTR will later 
-%% take the entries from the left of the list. 
-%% 
-%% The argument of the auxiliary/temporary `\@tempa' 
-%% will contain the footnote text and thus must be able to 
-%% carry `\par' tokens. We therefore need a `\long' version of 
+%% \LaTeX's internal `\g@addto@macro' is used to \emph{append}
+%% an entry to the list (at the right). The OTR will later
+%% take the entries from the left of the list.
+%%
+%% The argument of the auxiliary/temporary `\@tempa'
+%% will contain the footnote text and thus must be able to
+%% carry `\par' tokens. We therefore need a `\long' version of
 %% `\protected@edef':
    \let\@@protect\protect
    \let\protect\@unexpandable@protect
@@ -562,7 +562,7 @@ fits the structure
    \long \edef \@tempa ##1{%
         \noexpand\g@addto@macro \noexpand\FNLN@list {%
             \@thefnmark \noexpand\@lt ##1\noexpand \@lt}}%
-%% ... issuing 
+%% ... issuing
 %%     \lq`\g@addto@macro\FNLN@list{<mark>\elt<text>\@lt}'\rq\ ...
    \@tempa                              %% reads arg
 }

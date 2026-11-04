@@ -25,4 +25,4 @@
   l3build save -c config-minipage -e luatex minipage-006-gh723
   l3build save -c config-float -e luatex float-sidewaystable float-002 marginpar-01 float-003 marginpar-03 float-001 marginpar-04-gh-444 float-005-double float-004
   l3build save -c config-bib -e luatex bib-008-natbib bib-005 bib-009 bib-010-natbib bib-006 bib-007-natbib
-  l3build save -c config-title -e luatex title-006 title-005 title-007 title-003 title-004 title-002 title-009 title-008 
+  l3build save -c config-title -e luatex title-006 title-005 title-007 title-003 title-004 title-002 title-009 title-008
