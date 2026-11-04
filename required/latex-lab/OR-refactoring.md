@@ -5,27 +5,27 @@
 ```
 \def\@makecol{%
   \UseHook {build/column/before}%              % <--------
-%  
+%
   \setbox \@outputbox \box \@cclv
   \@outputbox@removebskip
-%  
+%
   \UseTaggingSocket{build/column/outputbox}              % <--------
-%  
+%
   \let \@elt \relax
   \xdef \@freelist {\@freelist \@midlist}%
   \global \let \@midlist \@empty
-%  
+%
   \UseSocket {build/column/outputbox}%         % <--------
-%  
+%
   \ifvbox \@kludgeins
     \@make@specialcolbox
   \else
     \@make@normalcolbox
   \fi
   \global \maxdepth \@maxdepth
-%  
+%
   \UseHook {build/column/before/after}%              % <--------
-}  
+}
 ```
 
 
@@ -72,7 +72,7 @@
        \moveright \@themargin \vbox {%
           \setbox \@tempboxa \vbox to\headheight {%
               \vfil
-%             
+%
               \pdfannot_link_off:
               \UseTaggingSocket{build/page/header}{}  % <--------
                 {
@@ -82,14 +82,14 @@
                   \color@endbox
                 }
               \pdfannot_link_on:
-%             
+%
            }%
            \dp \@tempboxa \z@
            \box \@tempboxa
            \vskip \headsep
            \box \@outputbox
            \baselineskip \footskip
-%             
+%
            \pdfannot_link_off:
            \UseTaggingSocket{build/page/footer}{}     % <--------
               {
@@ -99,7 +99,7 @@
                   \color@endbox
               }
            \pdfannot_link_on:
-%             
+%
       }%
    }%
    \global \let \if@newlist \@@if@newlist
