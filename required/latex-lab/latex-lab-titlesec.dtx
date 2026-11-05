@@ -724,7 +724,11 @@
 %
 % \DescribeMacro\titleformat
 %
-% The \cs{titleformat} declaration has the following syntax:
+% The \cs{titleformat} declaration has the following two syntax variations:
+% \begin{verbatim}
+%  \titleformat*{cmd}{before-code}
+% \end{verbatim}
+% or
 % \begin{verbatim}
 %  \titleformat{cmd}[shape]{format}{label}{sep}{before-code}[after-code]
 % \end{verbatim}
@@ -766,9 +770,9 @@
 %
 %    \begin{macrocode}
 \DeclareDocumentCommand\titlerule{so}
-                       { \IfBooleanTF #1 \titleruleleaders \titlerulenormal }
-\DeclareDocumentCommand\titleruleleaders{m} { \csnotyetprovided \titlerule }
-\DeclareDocumentCommand\titlerulenormal {}  { \csnotyetprovided \titlerule }
+                       { \IfBooleanTF #1 \titlerule@leaders \titlerule@normal }
+\DeclareDocumentCommand\titlerule@leaders{m} { \csnotyetprovided \titlerule }
+\DeclareDocumentCommand\titlerule@normal {}  { \csnotyetprovided \titlerule }
 %    \end{macrocode}
 %
 %    \begin{macrocode}
@@ -778,7 +782,283 @@
 %
 %
 %
-%\subsection{Instance adjustments based on options}
+%
+%
+%
+%
+%
+%  \begin{macro}{\titleformat}
+%    Because of the two syntax variants we need to pick up the
+%    arguments in two steps, starting with just scanning for a star
+%    and picking up the \meta{cmd} argument.
+%    Arguments are therefore:
+%    \begin{description}
+%    \item[1: star] simple or complex setup
+%    \item[2: cmd]   Used without the backslash in the instance names,
+%      etc. Alternatively, this is a key value list, with keys: \key{name},
+%      \key{page}, and \key{numberless}.
+%    \end{description}
+%    Further arguments depend on whether we do simple or complex adjustments \ldots
+%
+%    \begin{macrocode}
+\DeclareDocumentCommand\titleformat {s ={name}m }{
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \tl_clear:N \l_@@_page_type_tl
+  \keys_set:nn {titlesec} {#2}
+  \tl_set:Ne \l_@@_instance_name_tl {
+    \l_@@_csname_tl
+    \bool_if:NTF \l_@@_unnumbered_bool
+      {
+        :
+        \tl_if_empty:NF \l_@@_page_type_tl
+           { \l_@@_page_type_tl }
+        : unnumbered
+      }
+      {
+        \tl_if_empty:NF \l_@@_page_type_tl
+           { : \l_@@_page_type_tl }
+      }
+  }
+%\show\l_@@_instance_name_tl
+  \exp_args:Nno
+  \IfInstanceExistsF {heading}{ \l_@@_instance_name_tl }
+    {
+      \tl_if_eq:NNTF \l_@@_csname_tl \l_@@_instance_name_tl
+        {
+	  \ERROR-unknown-instance
+	}
+        {
+	  \DeclareInstanceCopy {heading}
+	                       \l_@@_instance_name_tl
+			       \l_@@_csname_tl
+          \EditInstance {heading} {\l_@@_instance_name_tl}
+	    { headformat-instance:o = \l_@@_instance_name_tl }
+%
+          \DeclareInstanceCopy {headformat}
+	                       \l_@@_instance_name_tl
+			       \l_@@_csname_tl
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+           \typeout{---> \InstanceValue{heading}{chapter}{from~ template}}
+           \typeout{---> \InstanceValue{heading}{\l_@@_instance_name_tl}{from~ template}}
+%
+	}
+    }
+    \IfBooleanTF #1
+    \@@_format_simple:n
+    \@@_format_full:w
+}
+%    \end{macrocode}
+%
+%
+%
+%    \begin{macrocode}
+\keys_define:nn {titlesec}{
+  , name .code:n  = \tl_set:Ne \l_@@_csname_tl { \cs_to_str:N #1 }
+  , page .choice:
+  , page / odd   .code:n  = \tl_set:Nn \l_@@_page_type_tl {recto}
+  , page / recto .code:n  = \tl_set:Nn \l_@@_page_type_tl {recto}
+  , page / even  .code:n  = \tl_set:Nn \l_@@_page_type_tl {verso}
+  , page / verso .code:n  = \tl_set:Nn \l_@@_page_type_tl {verso}
+  , numberless .bool_set:N = \l_@@_unnumbered_bool
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%
+%  \begin{macro}{\@@_format_simple:n}
+%    
+%    \begin{macrocode}
+\DeclareDocumentCommand \@@_format_simple:n { m }{
+  \__head_prep_decls_and_format_from_tl:nNN {#1}
+     \l_@@_heading_decls_tl
+     \l_@@_title_format_tl
+%\show \l_@@_heading_decls_tl   
+%\show \l_@@_title_format_tl
+  \exp_args:Nno
+  \EditInstance {heading}{ \l_@@_instance_name_tl }
+      {
+	, title-decls:o   = \l_@@_heading_decls_tl
+	, title-format:o  = \l_@@_title_format_tl {##1} \par
+      }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%
+%  \begin{macro}{\@@_format_full:w}
+%    
+%
+%    Arguments:
+%    \begin{description}
+%    \item[1: cmd]   Used without the backslash in the instance names,
+%      etc. Alternatively, this is a key value list, with keys: name,
+%      page, numberless.
+%    \item[2: shape] Optional
+%    \item[3: format] Mapped to \key{heading-decls}
+%    \item[4: label]  Mapped to \key{number-format}
+%    \item[5: sep]    In display it is the vertical space between
+%      label and title (mapped to \key{});
+%      in block it is a horizontal
+%      space between label and title (mapped to \key{});
+%      in frame is is;
+%    \item[6: before-code]
+%    \item[7: after-code] Optional; with hang mapped to
+%      \key{separator-d} if used
+%    \end{description}
+%
+%    \begin{macrocode}
+\DeclareDocumentCommand \@@_format_full:w { O{hang} m m m m o }{
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \__head_prep_decls_and_format_from_tl:nNN {#5}
+     \l_@@_heading_decls_tl
+     \l_@@_title_format_tl      
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \typeout{-->~ shape:~ hang }
+  \str_case:nnF {#1}
+      {
+        { hang }
+        { \@@_shape_hang:nnnn {#2}{#3}{#4}{#6} }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+        { block }
+        { \@@_shape_block:nnnn {#2}{#3}{#4}{#6} }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+        { frame }
+        { }
+      }
+      { \ERROR-unknown-shape }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%
+%  \begin{macro}{\@@_shape_hang:nnnn}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_shape_hang:nnnn #1#2#3#4 {
+  \typeout{args:\detokenize{#1|#2|#3|#4}}
+%    \end{macrocode}
+%    If the current instance was based on the \texttt{display}
+%    template we can use it but if it was a \texttt{runin} template we
+%    need to redeclare it (reusing most of the key values).  
+%    \begin{macrocode}
+  \tl_if_eq:enF
+     { \InstanceValue{heading}{ \l_@@_csname_tl }{ from~template } }
+     { display }
+     {
+%    \end{macrocode}
+%    The current template may not have a \ke{after-vspace} key, so we
+%    need to go slowly: check if we get a value and if not supply some
+%    default.
+%    \begin{macrocode}
+       \tl_set:Ne \l_@@_after_vspace_tl
+          { \InstanceValue{heading}{ \l_@@_csname_tl }{after-vspace} }
+       \tl_if_empty:NT \l_@@_after_vspace_tl
+          { \tl_set:Nn \l_@@_after_vspace_tl {0pt} }
+%    \end{macrocode}
+%    The other keys should all be present, so we can now redeclare the
+%    instance referring to their current values directly.
+%    \begin{macrocode}
+       \use:e {
+         \DeclareInstance {heading}{ \l_@@_instance_name_tl }{display}
+           {
+             , name = \l_@@_csname_tl 
+             , level = \InstanceValue{heading}{ \l_@@_csname_tl }{level}
+             , placement = \InstanceValue{heading}{ \l_@@_csname_tl }{placement}
+             , mark-cmd = \InstanceValue{heading}{ \l_@@_csname_tl }{mark-cmd}
+             , contents-extra = \InstanceValue{heading}{ \l_@@_csname_tl }{contents-extra}
+             , before-vspace = \InstanceValue{heading}{ \l_@@_csname_tl }{before-vspace}
+             , after-vspace = \l_@@_after_vspace_tl
+           }
+       }
+     }
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+  \use:e {
+    \EditInstance {heading}{ \l_@@_instance_name_tl }
+      {
+        , headformat-instance = \l_@@_instance_name_tl 
+        , heading-decls = \exp_not:n {#1}
+        , number-format = \exp_not:n {#2}
+        , title-decls   = \exp_not:o \l_@@_heading_decls_tl 
+        , title-format  = \exp_not:o \l_@@_title_format_tl {##1} \par
+      }
+  %
+    \DeclareInstance {headformat}{ \l_@@_instance_name_tl }{hang}
+      {
+%    \end{macrocode}
+%    Check: may not exist!
+%    \begin{macrocode}
+        , left-margin  = \InstanceValue{headformat}{ \l_@@_csname_tl }{left-margin}
+        , right-margin = \InstanceValue{headformat}{ \l_@@_csname_tl }{right-margin}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+        , order-hang  = { text,separator-a,?,number,punct,separator-b,? }
+        , order       = { title, separator-c, subtitle, separator-d }
+        , separator-b = \exp_not:n { \nobreak \hspace{#3} }
+        , separator-d = \IfValueT {#4}{ \exp_not:n {\par #4 } }
+      }
+  }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+%
+%  \begin{macro}{\@@_shape_block:nnnn}
+%    
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_shape_block:nnnn #1#2#3#4 {
+  \use:e {
+    \EditInstance {heading}{ \l_@@_csname_tl }
+      {
+	 heading-decls = \exp_not:n {#1}
+       , number-format = \exp_not:n {#2}
+       , title-decls   = \exp_not:o \l_@@_heading_decls_tl 
+       , title-format  = \exp_not:o \l_@@_title_format_tl {##1} \par
+      }
+   }
+  %
+  \use:e {
+    \EditInstance {headformat}{ \l_@@_csname_tl }
+     {
+	 order = { title, separator-c, subtitle, separator-d }
+       , separator-b = \exp_not:n { \nobreak \hspace{#3} }
+       , separator-d = \IfValueT {#4}{ \exp_not:n {\par #4 } }
+     }
+  }
+}
+%    \end{macrocode}
+%  \end{macro}
+%
+%
+%
+%
+% \subsection{Instance adjustments based on options}
 %
 %
 %
