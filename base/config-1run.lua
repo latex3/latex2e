@@ -1,4 +1,4 @@
--- Tests that have only 1 run 
+-- Tests that have only 1 run
 
 checksearch  = false
 testfiledir  = "testfiles-1run"

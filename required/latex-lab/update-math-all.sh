@@ -30,14 +30,14 @@ l3build save -cconfig-math \
 	mathml-AF-hash\
 	mathml-write\
 	math-phantom \
-	mtag-008-gh765       
+	mtag-008-gh765
 
 l3build save -cconfig-math-luatex \
     amsmath-mbox\
     array\
     fakemath\
     label-align-pdf\
-    label-alignat-pdf\ 
+    label-alignat-pdf\
     label-flalign-pdf\
     label-gather-pdf\
     label-multline-pdf\
