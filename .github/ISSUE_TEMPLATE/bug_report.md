@@ -24,11 +24,11 @@ assignees: ''
 \begin{document}
 
   % Demonstration of issue here
-  
+
 \end{document}
 ```
 
 
-## Log file (required) and possibly PDF file  
+## Log file (required) and possibly PDF file
 
 <!--- Use drag-and-drop  (remember: .log file is required!) -->

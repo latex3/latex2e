@@ -22,7 +22,7 @@ Scan of TeXlive 2022  for checking ... may not be longer accurate and may contai
     {\kern\MT@outer@kern\kern3sp\kern-3sp\relax}%
 ./microtype/microtype-pdftex.def
 
- 
+
     \ifdim\lastkern=-3sp \unkern
       \ifdim\lastkern=3sp \kern-3sp
     {\kern\MT@outer@kern\kern3sp\kern-3sp\relax}%

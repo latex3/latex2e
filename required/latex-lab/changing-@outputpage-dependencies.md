@@ -208,7 +208,7 @@
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/arabtex/altxext.sty
 
 ```
-	\@combinedblfloats \@outputpage 
+	\@combinedblfloats \@outputpage
 	{\@outputpage \@startdblcolumn }\endgroup
 ```
 
@@ -418,7 +418,7 @@
 
  - Could be implemented with `{cmd/@outputpage/before}` and `{cmd/@outputpage/after}`.
  - Doubt that the group added is actually necessary.
- 
+
 
 #### /usr/local/texlive/2024/texmf-dist/tex/latex/lscapeenhanced/lscapeenhanced.sty
 

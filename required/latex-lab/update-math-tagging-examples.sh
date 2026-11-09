@@ -12,6 +12,6 @@ l3build save -cconfig-math-tagging-examples \
 	math-17-default \
 	math-17-alt+mathmlAF+texAF \
 	math-17-alt-noluamml \
-	math-17-alt+structelem+rolemap+mathmlAF+texAF 
+	math-17-alt+structelem+rolemap+mathmlAF+texAF
 
 
