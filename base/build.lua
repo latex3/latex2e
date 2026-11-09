@@ -248,7 +248,7 @@ end
 dofile (maindir .. "/build-config.lua")
 
 -- Build format for pdfTeX and LuaTeX
-function docinit_hook() 
+function docinit_hook()
     cp("ltnews??.tex",docfiledir,typesetdir)     -- needed to be there for ltnews.tex
     return fmt({"pdftex","luatex"},typesetdir)
 end

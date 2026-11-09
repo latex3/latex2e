@@ -22,7 +22,7 @@ assignees: ''
 \begin{document}
 
   % Demonstration of issue here
-  
+
 \end{document}
 ```
 
@@ -37,6 +37,6 @@ assignees: ''
 \begin{document}
 
   % Demonstration of issue here
-  
+
 \end{document}
 ```

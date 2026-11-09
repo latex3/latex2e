@@ -17,8 +17,8 @@ installfiles = {
                  "*.ltx",
                  "*.sty",
 		 "glyphtounicode-cmex.tex",
-         "tagpdf-ns-latex-lab.def", 
-         "tagpdf-ns-latex-lab-book.def" 
+         "tagpdf-ns-latex-lab.def",
+         "tagpdf-ns-latex-lab-book.def"
 		}
 typesetfiles_list = {
   {
@@ -116,7 +116,7 @@ checksearch  = true
 
 -- Allow for TU and other test configurations
 
-checkconfigs = 
+checkconfigs =
  {"build","config-OR",
   "config-math","config-math-luatex",
   "config-OR-luatex",
