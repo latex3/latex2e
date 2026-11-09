@@ -55,14 +55,14 @@ changes.  It is described through a fixed (but extensible?) set of names:
 - `<empty name>` denotes that there is no special secondary context, i.e.,
    that we are producing material in `\normalsize`
 - `tiny`         denotes that we are typesetting in `\tiny` font size
-- `scriptsize`  
-- `footnotesize`  
-- `small`  
-- `large`  
-- `Large`  
-- `LARGE`  
-- `huge`  
-- `Huge`  
+- `scriptsize`
+- `footnotesize`
+- `small`
+- `large`
+- `Large`
+- `LARGE`
+- `huge`
+- `Huge`
 
 
 ### Setting context

@@ -1,16 +1,16 @@
 # Notes on compatibility code
 
-This tries to classify patches to packages and kernel codes in the latex-lab files. 
+This tries to classify patches to packages and kernel codes in the latex-lab files.
 The classification uses these descriptions:
 
 * **kernel**: patches to „kernel“ code that are done directly by the code and should be permanently active. A general TODO: move them into the proper places.
 
 * **begindocument**: code that tries to overwrite changes done in the preamble by incompatible packages or classes (or author commands) in the begindocument hook and that
-should  be disabled if a class uses `\NeedsDocumentMetadata` or `\SupportsDocumentMetadata`. 
+should  be disabled if a class uses `\NeedsDocumentMetadata` or `\SupportsDocumentMetadata`.
 
-* **class**: patches of specific classes in the class/XXX/after hook. Should be disabled if this specific class uses the `\NeedsDocumentMetadata` or `\SupportsDocumentMetadata`.  
+* **class**: patches of specific classes in the class/XXX/after hook. Should be disabled if this specific class uses the `\NeedsDocumentMetadata` or `\SupportsDocumentMetadata`.
 
-* **package**: patches to packages in the package/XXX/after. Should be disabled if the specific package uses  `\NeedsDocumentMetadata` or `\SupportsDocumentMetadata`  
+* **package**: patches to packages in the package/XXX/after. Should be disabled if the specific package uses  `\NeedsDocumentMetadata` or `\SupportsDocumentMetadata`
 
 * **other**: stuff that (currently) doesn't fit.
 
@@ -25,12 +25,12 @@ classes that claim to support the tagging code and use `\NeedsDocumentMetadata` 
     * tagging aware definition of `\l@XXXX` command if `\@dottedtocline` is not used
       This should also contain support for hyperref.
     * tagging aware definitions of `quote`, `quotation`, `verse`
-    * tagging aware definition of `\@makecaption` 
-    * tagging aware definition of `\@makefntext` (this can be simply `\cs_set_eq:NN \@makefntext \fnote_makefntext:n`)  
+    * tagging aware definition of `\@makecaption`
+    * tagging aware definition of `\@makefntext` (this can be simply `\cs_set_eq:NN \@makefntext \fnote_makefntext:n`)
 * take into account code executed in the specific class/after hook if a standard class is loaded as base class.
 * be careful not to break the tagging support when redefining existing LaTeX commands or environments (for example `\title`, `\author`, `bibliography`). The kernel redefinitions listed below gives an overview but is not meant to be the complete story. More changes are in `lttagging.dtx` in LaTeX base, in packages like `array`, `colortbl`, `tabularx` and external packages that try to support tagging.
-* consider tagging support when defining new commands or environments.      
-* consider how to handle incompatible packages that break the tagging support again. 
+* consider tagging support when defining new commands or environments.
+* consider how to handle incompatible packages that break the tagging support again.
 * keep track of changes in the tagging code and test regularly ...
 
 ## Patches in latex-lab files
@@ -52,11 +52,11 @@ loaded in the package hook by `latex-lab-testphase`, see below.
 
 ### latex-lab-bib.dtx
 
-* kernel: various changes to kernel commands, mostly using cmd-hooks. 
+* kernel: various changes to kernel commands, mostly using cmd-hooks.
 * package `natbib`: undo a change made to kernel command
 * package `biblatex`: avoid an error if `hyperref` is not used
-* package `hyperref`: undo a `natbib` patch 
-* TODO: 
+* package `hyperref`: undo a `natbib` patch
+* TODO:
     * rewrite code in `cmd/blx@bibinit/after` hook so that `biblatex` can take it over.
     * move content of `cmd/blx@bibinit/after` into `package/biblatex/after` hook.
     * check if `biblatex` now works without `hyperref` and if the patch is still needed.
@@ -68,17 +68,17 @@ loaded in the package hook by `latex-lab-testphase`, see below.
 
 * kernel: redefines `\@doendpe`
 * kernel: redefines `\begin`
-* kernel: redefine `\newtheorem`, `\@thm`, `\@begintheorem`, `\@opargbegintheorem`, `\@endtheorem` 
+* kernel: redefine `\newtheorem`, `\@thm`, `\@begintheorem`, `\@opargbegintheorem`, `\@endtheorem`
 * kernel: redefines `\centering`, `\raggedright`, `\raggedleft`, defines `\justifying`
 
 TODO: Currently the block code uses the `begindocument/before` hook to redefine commands.
-But these are „kernel“ redefinitions. They should be done once before loading the class, and then again in the `begindocument` hook so that they can be disabled together with the other code. 
+But these are „kernel“ redefinitions. They should be done once before loading the class, and then again in the `begindocument` hook so that they can be disabled together with the other code.
 
-* kernel/begindocument: redefines `\item`. 
-* kernel/begindocument: redefines `center`, `flushright`, `flushleft`. 
-* kernel/begindocument: redefines `verbatim`, `verbatim*`. 
-* kernel/begindocument: redefines `itemize`, `enumerate`, `description`. 
-* kernel/begindocument: redefines `list`, `trivlist`  
+* kernel/begindocument: redefines `\item`.
+* kernel/begindocument: redefines `center`, `flushright`, `flushleft`.
+* kernel/begindocument: redefines `verbatim`, `verbatim*`.
+* kernel/begindocument: redefines `itemize`, `enumerate`, `description`.
+* kernel/begindocument: redefines `list`, `trivlist`
 * begindocument: redefines `quote`, `quotation`, `verse` (these are only defined by classes)
 
 * other: suppress `hyperref` patches `\def\hyper@nopatch@thm{}`
@@ -90,7 +90,7 @@ But these are „kernel“ redefinitions. They should be done once before loadin
 * class `amsart|amsbook|amsproc`: code that corrects the abstract
 * package `amsthm`: code that corrects theorem
 
-* package `verse`: code that reinstates the definition of the verse environment. This code is only needed if the block code redefines verse at begin document. So not quite clear how the logic should be here.  What should verse do to be always compatible? Move its definition to begin environment? 
+* package `verse`: code that reinstates the definition of the verse environment. This code is only needed if the block code redefines verse at begin document. So not quite clear how the logic should be here.  What should verse do to be always compatible? Move its definition to begin environment?
 
 * package `cleveref`: code that corrects `\@makefntext`
 * package `booktabs`: make rules tagging aware
@@ -99,16 +99,16 @@ But these are „kernel“ redefinitions. They should be done once before loadin
 ### latex-lab-float.dtx
 
 * kernel: redefinition of `\@xfloat`, `\end@float`, `\end@dblfloat`, `\caption`
-* begindocument: `\@makecaption` 
+* begindocument: `\@makecaption`
 * other: suppresses `hyperref` patches `\def\hyper@nopatch@caption{}`
 
 ### latex-lab-footnotes.dtx
 
 * begindocument: sets `\footnotemargin`  (??)
 * begindocument: patches `\@makefntext`
-* class `memoir`: changes footnote commands 
+* class `memoir`: changes footnote commands
 * package `setspace`: changes footnote command
-* other: suppress `hyperref` patches `\def\hyper@nopatch@footnote{}` 
+* other: suppress `hyperref` patches `\def\hyper@nopatch@footnote{}`
 
 
 ### latex-lab-graphics.dtx
@@ -119,7 +119,7 @@ But these are „kernel“ redefinitions. They should be done once before loadin
 ### latex-lab-l3doc-tagging.dtx
 
 lots of specific redefinitions for l3doc. Currently loaded as a style after the class.
-Contains a redefinition at begindocument that probably is not needed if the block code doesn't redefine verbatim at begindocument. 
+Contains a redefinition at begindocument that probably is not needed if the block code doesn't redefine verbatim at begindocument.
 
 ### latex-lab-marginpar.dtx
 
@@ -127,10 +127,10 @@ Contains a redefinition at begindocument that probably is not needed if the bloc
 
 ### latex-lab-math.dtx
 
-* kernel: changes the math handling to math grabbing. Redefines all math environments and more. amsmath environments are change by loading the latex-lab-amsmath.ltx above after amsmath has been loaded. 
+* kernel: changes the math handling to math grabbing. Redefines all math environments and more. amsmath environments are change by loading the latex-lab-amsmath.ltx above after amsmath has been loaded.
 * kernel: redefines `\mathpalette` if lualatex is used
 * relies on changes in `array.sty` for handling of math in tabular preambles.
-* other: forces the loading of `amsmath` at the end of the preamble (to allow user to pass options). 
+* other: forces the loading of `amsmath` at the end of the preamble (to allow user to pass options).
 
 ### latex-lab-mathintent.dtx
 
@@ -166,7 +166,7 @@ now empty. TODO: Should be removed at some time
 ### latex-lab-sec.dtx
 
 * kernel: redefines `\@startsection`, `\@kernel@tag@hangfrom`, `\@sect` etc
-* other: redefines `\chapter` and `\part` in class/after hook. 
+* other: redefines `\chapter` and `\part` in class/after hook.
   ??? This should be disabled too in compatible classes. Or restrict that to the standard classes???
 * other: suppress `hyperref` patches `\def\hyper@nopatch@sectioning{}`
 * TODO: remove now unneeded `\MakeLinkTarget` redefinition
@@ -178,7 +178,7 @@ Most table related changes are in `array.sty`.
 
 * kernel: adds a command via `cmd/array/before`.
 * package `longtable`: patches `\LT@makecaption`
-* other: Defines some roles in begin document. TODO: check if we can move that to 
+* other: Defines some roles in begin document. TODO: check if we can move that to
    latex-lab-namespace.
 
 ### latex-lab-testphase.dtx
@@ -187,7 +187,7 @@ If testphase=math is used:
 
 * package `amsmath`: loads latex-lab-amsmath.ltx, see above latex-lab-amsmath
 * package `mathtools`: loads latex-lab-mathtools.ltx, see above latex-lab-mathtools
-* package `unicode-math`: loads latex-lab-unicode-math.ltx, see below. 
+* package `unicode-math`: loads latex-lab-unicode-math.ltx, see below.
 
 ### latex-lab-text.dtx
 
@@ -217,7 +217,7 @@ If testphase=math is used:
 
 ### latex-lab-toc.dtx
 
-no patches, relies on the changes in latex-lab-toc-kernel-changes. 
+no patches, relies on the changes in latex-lab-toc-kernel-changes.
 TODO: check if code can be cleaned up.
 
 ### latex-lab-unicode-math.dtx

@@ -6,7 +6,7 @@
 
 <!--- You might be creating this pull request hoping for feedback or intentionally half-way though the development process. Delete lines as needed. -->
 
-- Feedback wanted 
+- Feedback wanted
 - Under development
 - Ready to merge
 

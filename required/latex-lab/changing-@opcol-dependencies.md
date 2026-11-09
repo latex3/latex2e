@@ -84,7 +84,7 @@
 ```
 
  - should be implemented with `{cmd/@opcol/before}`
- 
+
 
 
 

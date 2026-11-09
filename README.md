@@ -23,7 +23,7 @@ comprises:
   - Essential tools (`tools`)
   - Core graphics and color support (`graphics`)
   - Key mathematics support (`amsmath`)
-  - First aid for LaTeX  (`firstaid`) 
+  - First aid for LaTeX (`firstaid`)
   - LaTeX laboratory (`latex-lab`)
 
 The main public Git repository is hosted on

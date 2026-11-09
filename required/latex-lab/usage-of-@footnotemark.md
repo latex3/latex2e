@@ -33,7 +33,7 @@ Scan of TeXlive 2022  for checking ... may not be longer accurate and may contai
 \let \a@@footnotemark \@footnotemark
 
 \def \a@footnotemark {% inside Arabic environment
-\iftrans \unskip \unskip \nobreak \@makefnmark \fi 
+\iftrans \unskip \unskip \nobreak \@makefnmark \fi
 \ifarab \a@spacefalse \putwordb@x \@makefnmark \a@spacetrue \fi }
 
 % ./hyperref/hyperref.sty
@@ -184,6 +184,6 @@ Scan of TeXlive 2022  for checking ... may not be longer accurate and may contai
     \ifhmode\spacefactor\@x@sf\fi
     \relax
   }
- 
+
 
 ```
