@@ -20,7 +20,7 @@
 %% 
 %% File: l3doc.dtx
 \RequirePackage{calc}
-\ProvidesExplClass{l3doc}{2026-09-09}{}
+\ProvidesExplClass{l3doc}{2026-11-10}{}
   {L3 Experimental documentation class}
 \clist_new:N \g_docinput_clist
 \seq_new:N \g_doc_functions_seq
@@ -1775,7 +1775,7 @@
   { \bool_gset_false:N \g__codedoc_typeset_implementation_bool }
 \DeclareDocumentCommand \AlsoImplementation { }
   { \bool_gset_true:N \g__codedoc_typeset_implementation_bool }
-\DeclareDocumentCommand \StopEventually { m }
+\DeclareDocumentCommand \StopEventually { +m }
   {
     \bool_if:NTF \g__codedoc_typeset_implementation_bool
       {
