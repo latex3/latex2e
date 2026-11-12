@@ -237,6 +237,7 @@ end
 
 -- Due to our need to set up the format, we pass the exe here not the cmd
 specialtypesetting = specialtypesetting or {}
+specialtypesetting["interface2.tex"] = {cmd = "luatex"}
 specialtypesetting["ltnews.tex"] = {cmd = "luatex"}
 -- We have to do this for all the numbered issues as well, as they are not
 -- generated from the main ltnews.tex file but are separate files
