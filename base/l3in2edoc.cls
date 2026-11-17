@@ -75,6 +75,15 @@
  \endgroup
  \ignorespaces}
 
+% Suppress math tagging in \meta, \marg, etc.
+\cs_set_eq:NN \__codedoc_meta_withmathtagging:n \__codedoc_meta:n
+\cs_set_protected:Npn \__codedoc_meta:n #1
+  {
+    \group_begin:
+    \MathCollectFalse
+    \__codedoc_meta_withmathtagging:n { #1 }
+    \group_end:
+  }
 % Match ltxdoc formatting of \meta (l3doc adds a \texttt)
 \RenewDocumentCommand{\meta}{m}{\__codedoc_meta:n{#1}}
 \ExplSyntaxOff
