@@ -363,7 +363,9 @@
 %  \TemplateKey{standalone}{boolean}
 %     {If true, surrounds the environment implicitly with \cs{par}
 %     commands. Forced to true when \key{tagging-recipe} is
-%     \keyvalue{standalone}.}{false}
+%     \keyvalue{standalone}. If the tagging recipe is \keyvalue{list}
+%     and \key{standalone} is true then the semantic para that normally
+%     surrounds a list is omitted.}{false}
 %
 %  \TemplateKey{transparent-level}{boolean}{Is this \insttype{blockenv}
 %      transparent for any blocks nested inside?}{false}
@@ -3878,7 +3880,7 @@
          \par
          \bool_set_eq:NN \l__tag_para_flattened_bool \l_@@_flattened_bool
        }
-       { \@@_debug_endpe_typeout:n {===>~ standalone = true}
+       { \@@_debug_endpe_typeout:n {===>~ standalone = false}
        }
 %    \end{macrocode}
 %    We need to know later if we have nested \insttype{blockenv}s
@@ -4092,7 +4094,7 @@
 %  \begin{macro}{\BlockEnv,\SimpleBlockEnv}
 %    To simplify the environment declarations later we provide two
 %    simple commands that invoke a \insttype{blockenv} instance. The
-%    matching counterpart to these commands is \cs{BockEnvEnd}
+%    matching counterpart to these commands is \cs{BlockEnvEnd}
 %    (defined below) that carries out all necessary action when a
 %    block environment ends.
 %    \begin{macrocode}
@@ -4286,29 +4288,59 @@
 %    blockenv has a special definition for \cs{par}.    
 % \changes{1.0e}{2026-06-15}{@endpe handling adjusted}
 %    \begin{macrocode}
-    \bool_if:NT \l__@@_standalone_bool { \aftergroup \par }
+    \bool_if:NT \l_@@_standalone_bool { \aftergroup \par }
+%    \end{macrocode}
+%
+%    How to handle \texttt{@endpe} depends on the tagging recipe we use
+%    and also on the setting of \cs{l_@@_standalone_bool}.
+%  \changes{v1.0y}{2026/10/16}{New logic how to set \texttt{@endpe}}
+%    \begin{macrocode}
+    \str_case:onF \l_@@_tagging_recipe_tl
+        {
 %    \end{macrocode}
 %    If the \key{tagging-recipe} is \keyvalue{noop} we do not set
 %    \texttt{@endpe} at all so its value is whatever it was set to in
 %    the body of the environment (which may have ended in a list, for
 %    example). 
 %    \begin{macrocode}
-    \tl_if_eq:NnF \l_@@_tagging_recipe_tl { noop }
+          { noop } {}
 %    \end{macrocode}
-%    If the \key{tagging-recipe} is \keyvalue{standalone} we set it to
-%    false. This is necessary because the \cs{par} is put in with
-%    \cs{aftergroup} and there is a subtle racing condition with the
-%    way the \texttt{@endpe} setting propagates out of groups (also
-%    using \cs{aftergroup}. As a result it would be again true after
-%    this implicit empty line resulting in havoc.
+%    If the \key{tagging-recipe} is \keyvalue{standalone} we set
+%    \texttt{@endpe} to false. This is necessary because the \cs{par}
+%    is put in with \cs{aftergroup} and there is a subtle racing
+%    condition with the way the \texttt{@endpe} setting propagates out
+%    of groups (also using \cs{aftergroup}). As a result it would
+%    again be true after this implicit empty line resulting in
+%    havoc.
 %    \begin{macrocode}
-       { \tl_if_eq:NnTF \l_@@_tagging_recipe_tl { standalone }
-            \@endpefalse
+          { standalone }  \@endpefalse
 %    \end{macrocode}
-%    For all other recipes we can safely set it to true.
+%    In case of \keyvalue{list} the situation depends on whether or
+%    not a standalone list was requested. If that is the case then
+%    there is no semantic-para around the list so we need to set
+%    \texttt{@endpe} to \texttt{false} becasue that would otherwise
+%    attempt to close that non-existent structure (and it has no other
+%    affect as we have issued a \cs{par} before so we are already in
+%    vertical mode). Given that any following material should start a
+%    new semantic para in case of \cs{l_@@_standalone_bool} and we
+%    have already issued a \cs{par}, there is
+%    no need to trigger \texttt{@endpe} handling to determine if a
+%    \cs{par} follows in that case.
 %    \begin{macrocode}
-            \@endpetrue
+          { list }  {
+                      \bool_if:NTF \l_@@_standalone_bool
+                         \@endpefalse
+                         \@endpetrue
+                    }
        }
+%    \end{macrocode}
+%    For all other recipes we have to set it to true so that the
+%    \cs{par} situation after the environment is checked. In case
+%    \cs{l_@@_standalone_bool} is true the \texttt{@endpe} handling
+%    only closes the semantic para, but
+%    we still need it for that.
+%    \begin{macrocode}
+           \@endpetrue
 }
 %    \end{macrocode}
 %
@@ -4316,10 +4348,11 @@
 %
 %
 %  \begin{macro}{\@@_if_list:T,\@@_if_list:TF}
-%    The following code may need some redesigning, as there is no good test for \enquote{is
-%    this environment a \enquote{list} that has \tn{item}s}. For now
-%    this here does the trick well enough as \tn{item}s are only
-%    supported if the \key{inner-instance-type} is \keyvalue{list}.
+%    The following code may need some redesigning, as there is no good
+%    test for \enquote{is this environment a \enquote{list} that has
+%    \tn{item}s}. For now this here does the trick well enough as
+%    \tn{item}s are only supported if the \key{inner-instance-type} is
+%    \keyvalue{list}.
 %  \changes{v0.8q}{2024/09/03}{Provide a test for: Am I in a list?}
 %    \begin{macrocode}
 \cs_new:Npn \@@_if_list:T
@@ -5555,7 +5588,7 @@
 %    If the previous \cs{item} ended in an environment requesting
 %    \texttt{@endpe} handling we have to ensure that a \cs{par} is
 %    seen so that the semantic paragraph surrounding that environment
-%    ends (as it can't extend to the next item.
+%    ends (as it can't extend to the next item).
 %    \begin{macrocode}
           \if@endpe \par \fi
 %    \end{macrocode}
@@ -6717,10 +6750,31 @@
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_recipe_list:
 {
-  \cs_set_eq:NN \__kernel_displayblock_beginpar_hmode:w
-                                              \@@_beginpar_hmode:N
-  \cs_set_eq:NN \__kernel_displayblock_beginpar_vmode:
-                                              \@@_beginpar_vmode:
+%    \end{macrocode}
+%    If \cs{l_@@_standalone_bool} is \texttt{true}, i.e., if the list
+%    should be its own paragraph, there is no need to surround the
+%    list with a semantic para structure. We therefore have to change
+%    \cs{__kernel_displayblock_beginpar_vmode:} to do nothing. We
+%    can't be in hmode in that case because requesting
+%    \texttt{standalone} will issue a \cs{par} at the very beginning
+%    of the list to ensure that we are in vertical mode (so \cs{ERROR}
+%    here really: can't happen).
+%  \changes{v1.0y}{2026/10/16}{Do not surround a list with a semantic
+%    para if \texttt{standalone} was requested.}
+%    \begin{macrocode}
+  \bool_if:NTF \l_@@_standalone_bool
+     {
+       \cs_set_eq:NN \__kernel_displayblock_beginpar_hmode:w
+                     \ERROR
+       \cs_set_eq:NN \__kernel_displayblock_beginpar_vmode:
+                     \prg_do_nothing:
+     }
+     {
+       \cs_set_eq:NN \__kernel_displayblock_beginpar_hmode:w
+                     \@@_beginpar_hmode:N
+       \cs_set_eq:NN \__kernel_displayblock_beginpar_vmode:
+                     \@@_beginpar_vmode:
+     }
   \cs_set_eq:NN \__kernel_displayblock_begin: \@@_list_begin:
   \cs_set_eq:NN \__kernel_displayblock_end:   \@@_list_end:
 %    \end{macrocode}
