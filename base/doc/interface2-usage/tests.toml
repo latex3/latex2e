@@ -1,0 +1,282 @@
+# Test cases for the detection rules in update-usage.py.
+# Run:  update-usage.py --test
+#
+# Each test gives a code snippet, the command (without backslash) and the
+# expected classification: "modifier", "reader" or "absent" (command not
+# mentioned at all). "register = true/false" overrides the register list
+# from config.toml. When you add or change a rule, add a test here.
+
+# --- plain definitions --------------------------------------------------
+
+[[test]]
+name = "using a command inside a definition is reading"
+command = "@alph"
+code = '''\def\theenumii{\@alph\c@enumii}'''
+expect = "reader"
+
+[[test]]
+name = "\\def redefines"
+command = "@alph"
+code = '''\def\@alph#1{\ifcase#1\or a\fi}'''
+expect = "modifier"
+
+[[test]]
+name = "\\def with { on the next line"
+command = "@Roman"
+code = '''\def\@Roman
+  {y}'''
+expect = "modifier"
+
+[[test]]
+name = "\\let redefines"
+command = "@alph"
+code = '''\let\@alph\greek@alph'''
+expect = "modifier"
+
+[[test]]
+name = "\\let with ="
+command = "wlog"
+code = '''\let\wlog=\@gobble'''
+expect = "modifier"
+
+[[test]]
+name = "\\renewcommand with braces"
+command = "@alph"
+code = '''\renewcommand*{\@alph}[1]{\abjad{#1}}'''
+expect = "modifier"
+
+[[test]]
+name = "\\providecommand does not change an existing definition"
+command = "DeclareRelease"
+code = '''\providecommand\DeclareRelease[3]{}'''
+expect = "reader"
+
+[[test]]
+name = "\\AddToHook{cmd/...} counts as a change"
+command = "@alph"
+code = '''\AddToHook{cmd/@alph/before}{\foo}'''
+expect = "modifier"
+
+[[test]]
+name = "\\expandafter\\def\\csname X\\endcsname"
+command = "@gobble"
+code = '''\expandafter\def\csname @gobble\endcsname#1{}'''
+expect = "modifier"
+
+# --- \futurelet -----------------------------------------------------------
+
+[[test]]
+name = "\\futurelet changes its first argument"
+command = "@let@token"
+code = '''\futurelet\@let@token\@ifnch'''
+expect = "modifier"
+
+[[test]]
+name = "\\futurelet does not change its second argument"
+command = "@ifnch"
+code = '''\futurelet\@let@token\@ifnch'''
+expect = "reader"
+
+# --- definers used as arguments ---------------------------------------
+
+[[test]]
+name = "definer passed as argument (caption3)"
+command = "edef"
+code = '''\caption@teststar\caption@setdefault\def\edef}'''
+expect = "reader"
+
+[[test]]
+name = "list of definers as data (gmampulex)"
+command = "xdef"
+code = '''T{\def\xdef\gdef\pdef}{\def}'''
+expect = "reader"
+
+[[test]]
+name = "definer as second argument of \\let"
+command = "let"
+code = '''\let\cpt@def\edef\let\swap\cptswap'''
+expect = "reader"
+
+[[test]]
+name = "definer as argument of \\ifx with #1"
+command = "let"
+code = '''\ifx#1\def\let\uc@temp@a\thr@@\fi'''
+expect = "reader"
+
+[[test]]
+name = "definition after a complete \\let on the same line"
+command = "@gobblethree"
+code = '''\let\@nx\noexpand \long\def\@gobblethree#1#2#3{}'''
+expect = "modifier"
+
+[[test]]
+name = "local redefinition of a primitive is reported (hyperref)"
+command = "edef"
+code = '''\let\edef\HyPsd@DefCommand'''
+expect = "modifier"
+
+# --- \expandafter chains ----------------------------------------------
+
+[[test]]
+name = "\\expandafter\\def\\expandafter\\X defines X"
+command = "@fortmp"
+code = '''\expandafter\def\expandafter\@fortmp\expandafter{#2}'''
+expect = "modifier"
+
+[[test]]
+name = "... and does not define \\expandafter"
+command = "expandafter"
+code = '''\expandafter\def\expandafter\@fortmp\expandafter{#2}'''
+expect = "reader"
+
+[[test]]
+name = "\\expandafter chain with \\let"
+command = "@fnsymbol"
+code = '''\expandafter\let\expandafter\@fnsymbol\csname foo\endcsname'''
+expect = "modifier"
+
+[[test]]
+name = "ams \\@xp chain"
+command = "@alph"
+code = '''\@xp\def\@xp\@alph\@xp{\@alph x}'''
+expect = "modifier"
+
+[[test]]
+name = "\\let\\@xp\\expandafter is no chain"
+command = "let"
+code = '''\let\@xp\expandafter \let\@nx\noexpand'''
+expect = "reader"
+
+# --- registers --------------------------------------------------------
+
+[[test]]
+name = "register assignment with ="
+command = "@tempdima"
+code = '''\@tempdima=3pt'''
+expect = "modifier"
+
+[[test]]
+name = "register set with \\setlength"
+command = "@tempdimb"
+code = '''\setlength{\@tempdimb}{2pt}'''
+expect = "modifier"
+
+[[test]]
+name = "bare register assignment"
+command = "@tempcnta"
+code = '''\@tempcnta\z@'''
+expect = "modifier"
+
+[[test]]
+name = "bare assignment inside a group"
+command = "itemsep"
+code = '''{\itemsep 2pt}'''
+expect = "modifier"
+
+[[test]]
+name = "register read by \\vskip"
+command = "topsep"
+code = '''\vskip\topsep'''
+expect = "reader"
+
+[[test]]
+name = "register read by \\kern despite following value"
+command = "partopsep"
+code = '''\kern\partopsep 3pt'''
+expect = "reader"
+
+[[test]]
+name = "register read in a comparison"
+command = "@tempdimc"
+code = '''\ifdim\@tempdimc>\z@\fi'''
+expect = "reader"
+
+[[test]]
+name = "counter set by name"
+command = "c@bottomnumber"
+code = '''\setcounter{bottomnumber}{3}'''
+expect = "modifier"
+
+[[test]]
+name = "keyword macro followed by a value is not an assignment"
+command = "@plus"
+register = false
+code = '''\vskip 3pt\@plus 2pt'''
+expect = "reader"
+
+# --- temporary changes ------------------------------------------------
+
+[[test]]
+name = "saved, changed and restored is temporary (fp.sty)"
+command = "message"
+code = '''\let\FP@save@message\message
+\def\message#1{}
+\input{foo}
+\let\message\FP@save@message'''
+expect = "reader"
+
+[[test]]
+name = "saved and wrapped without restore is a change"
+command = "@alph"
+code = '''\let\savedfoo\@alph
+\def\@alph{x\savedfoo}'''
+expect = "modifier"
+
+[[test]]
+name = "absent command"
+command = "@alph"
+code = '''\def\foo{bar}'''
+expect = "absent"
+
+
+# --- [toplevel_only] commands -------------------------------------------
+
+[[test]]
+name = "toplevel_only: local \\let inside a definition is a use"
+command = "label"
+toplevel_only = true
+code = '''\def\my@toc#1{{\let\label\@gobble \let\index\@gobble #1}}'''
+expect = "reader"
+
+[[test]]
+name = "toplevel_only: top-level redefinition counts"
+command = "label"
+toplevel_only = true
+code = '''\let\orig@label\label
+\def\label#1{\orig@label{#1}\mark@it{#1}}'''
+expect = "modifier"
+
+[[test]]
+name = "toplevel_only: redefinition in \\AtBeginDocument counts"
+command = "label"
+toplevel_only = true
+code = '''\AtBeginDocument{\let\label\my@label}'''
+expect = "modifier"
+
+[[test]]
+name = "toplevel_only: redefinition in \\AddToHook counts"
+command = "label"
+toplevel_only = true
+code = '''\AddToHook{begindocument}[mypkg]{\let\label\my@label}'''
+expect = "modifier"
+
+[[test]]
+name = "toplevel_only: redefinition in \\@ifpackageloaded counts"
+command = "label"
+toplevel_only = true
+code = '''\@ifpackageloaded{hyperref}{\let\label\my@label}{}'''
+expect = "modifier"
+
+[[test]]
+name = "toplevel_only: change inside a plain group is a use"
+command = "label"
+toplevel_only = true
+code = '''{\let\label\relax \input{aux-copy}}'''
+expect = "reader"
+
+[[test]]
+name = "without toplevel_only a local \\let still counts"
+command = "label"
+toplevel_only = false
+code = '''\def\my@toc#1{{\let\label\@gobble #1}}'''
+expect = "modifier"
