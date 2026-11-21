@@ -362,6 +362,7 @@
   {
     \bool_if:NT \g__interfacetwo_index_bool
       {
+        \__interfacetwo_index_meta:
         \tl_set:Ne \l__interfacetwo_index_entry_tl
           {
             \tl_to_str:N \l__codedoc_index_escaped_key_tl =
@@ -467,6 +468,135 @@
     command~is~described,~all~others~indicate~pages~where~it~is~mentioned.
   }
 
+% Placeholders in command names (concept entries such as
+% \the\meta{counter}): l3doc prints the names of function/variable
+% entries verbatim, and \cs{the\meta{counter}} is indexed with the
+% tokenized \meta in the key (see interface2-issues.md). So both the
+% entry heading and the argument of \cs are processed as strings:
+% \meta{x} in them is typeset as \meta{x}, the index key keeps the
+% string "\meta{x}" (so mentions and the description share one index
+% entry) and the index shows \meta{x} as well. A backslash that is part
+% of the name in front of a placeholder is written \\meta{x}, e.g.
+% \cs{\meta{enc}\\meta{cmd}} for the encoding-specific commands.
+\tl_new:N \l__interfacetwo_meta_tl
+\cs_new_protected:Npn \__interfacetwo_meta_typeset:n #1
+  {
+    \tl_set:Nn \l__interfacetwo_meta_tl {#1}
+    \regex_replace_all:nnN
+      { \\meta \ * \{ ( [^\{\}]* (?: \{ [^\{\}]* \} [^\{\}]* )* ) \} }
+      { \c{__interfacetwo_meta_rescan:n} \cB\{ \1 \cE\} }
+      \l__interfacetwo_meta_tl
+    \l__interfacetwo_meta_tl
+  }
+\cs_generate_variant:Nn \__interfacetwo_meta_typeset:n { V }
+% the argument of \meta is a string here; rescan it, so that, e.g.,
+% \meta{mathversion\textsubscript{1}} works
+\tl_new:N \l__interfacetwo_meta_arg_tl
+\cs_new_protected:Npn \__interfacetwo_meta_rescan:n #1
+  {
+    % (\cs has already replaced the spaces by \@xobeysp)
+    \tl_set:Nn \l__interfacetwo_meta_arg_tl {#1}
+    \tl_replace_all:Nnn \l__interfacetwo_meta_arg_tl { \@xobeysp } { ~ }
+    \exp_args:NNnV \tl_set_rescan:Nnn \l__interfacetwo_meta_arg_tl { }
+      \l__interfacetwo_meta_arg_tl
+    \exp_args:NV \meta \l__interfacetwo_meta_arg_tl
+  }
+% copy of l3doc's version, printing the name with \__interfacetwo_meta_typeset:n
+\cs_set_protected:Npn \__codedoc_typeset_function_block:nN #1#2
+  {
+    \__codedoc_function_index:e
+      { #1 \bool_if:NT #2 { \tl_to_str:n {TF} } }
+    \__codedoc_function_label:eN {#1} #2
+    \__interfacetwo_meta_typeset:n {#1}
+    \bool_if:NT #2 { \__codedoc_typeset_TF: }
+    \__codedoc_typeset_expandability:
+    \seq_if_empty:NF \g__codedoc_variants_seq
+      { \__codedoc_typeset_variant_list:nN {#1} #2 }
+    \\
+  }
+% copy of l3doc's \__codedoc_cmd:nn (behind \cs), same change
+\cs_set_protected:Npn \__codedoc_cmd:nn #1#2
+  {
+    \bool_set_false:N \l__codedoc_cmd_noindex_bool
+    \bool_set_true:N \l__codedoc_cmd_replace_bool
+    \tl_set:Nn \l__codedoc_cmd_index_tl { \q_no_value }
+    \tl_set:Nn \l__codedoc_cmd_module_tl { \q_no_value }
+    \keys_set:nn { l3doc/cmd } {#1}
+    \tl_set:Nn \l__codedoc_cmd_tl {#2}
+    % a name with placeholders (\cs{the\meta{counter}}, also
+    % \cs{?\\meta{cmd}} where \\ is a control symbol followed by the
+    % letters "meta") is processed as a string, written as in an entry
+    % heading (no space after \meta)
+    \exp_args:NnV \regex_match:nnT { \c{meta} | \c{\\} meta \{ }
+      \l__codedoc_cmd_tl
+      {
+        \tl_set:Ne \l__codedoc_cmd_tl { \tl_to_str:N \l__codedoc_cmd_tl }
+        \regex_replace_all:nnN { (\\meta) \ + (\{) } { \1 \2 }
+          \l__codedoc_cmd_tl
+      }
+    \bool_if:NT \l__codedoc_cmd_replace_bool
+      {
+        \tl_set_rescan:Nnn \l__codedoc_tmpb_tl { } { _ }
+        \tl_replace_all:NVn \l__codedoc_cmd_tl \l__codedoc_tmpb_tl { _ }
+        \__codedoc_replace_at_at:N \l__codedoc_cmd_tl
+        \tl_replace_all:NnV \l__codedoc_cmd_tl { _ } \l__codedoc_tmpb_tl
+      }
+    \mode_if_math:T { \mbox }
+      {
+        \bool_if:NT \l__codedoc_allow_indexing_bool { \__codedoc_target: }
+        \verbatim@font
+        \__codedoc_if_almost_str:VT \l__codedoc_cmd_tl
+          {
+            \__kernel_tl_set:Nx \l__codedoc_cmd_tl { \tl_to_str:N \l__codedoc_cmd_tl }
+            \bool_if:NT \g__codedoc_cs_break_bool
+              {
+                \regex_replace_all:nnN
+                  { ([^\\\_]\_*) \_ ([^\_]) }
+                  { \1 \c{BreakableUnderscore} \2 }
+                  \l__codedoc_cmd_tl
+              }
+          }
+        \tl_replace_all:Nnn \l__codedoc_cmd_tl { ~ } { \@xobeysp }
+        \__interfacetwo_meta_typeset:V \l__codedoc_cmd_tl
+        \@
+      }
+    \bool_if:NT \l__codedoc_allow_indexing_bool
+      {
+        \bool_if:NF \l__codedoc_cmd_noindex_bool
+          {
+            \quark_if_no_value:NF \l__codedoc_cmd_index_tl
+              {
+                \__kernel_tl_set:Nx \l__codedoc_cmd_tl
+                  { \c_backslash_str \exp_not:o { \l__codedoc_cmd_index_tl } }
+              }
+            \exp_args:No \__codedoc_key_get:n { \l__codedoc_cmd_tl }
+            \quark_if_no_value:NF \l__codedoc_cmd_module_tl
+              {
+                \__kernel_tl_set:Nx \l__codedoc_index_module_tl
+                  { \tl_to_str:N \l__codedoc_cmd_module_tl }
+              }
+            \__codedoc_special_index_module:ooonN
+              { \l__codedoc_index_key_tl }
+              { \l__codedoc_index_macro_tl }
+              { \l__codedoc_index_module_tl }
+              { usage }
+              \l__codedoc_index_internal_bool
+          }
+      }
+  }
+% in the index: the escaped name gives \verb*&...!\meta{x}...& (each
+% backslash written as \quotechar\tl_to_str:N\bslash); show \meta{x} by
+% ending \verb* around it
+\cs_new_protected:Npn \__interfacetwo_index_meta:
+  {
+    \regex_replace_all:nnN
+      {
+        \c{quotechar} \c{tl_to_str:N} \c{bslash} meta
+        \{ ( [^\{\}]* (?: \{ [^\{\}]* \} [^\{\}]* )* ) \}
+      }
+      { \& \c{string} \c{meta} \cB\{ \1 \cE\} \c{string} \c{verb} \* \& }
+      \l__codedoc_index_escaped_macro_tl
+  }
 \ExplSyntaxOff \makeatother
 
 % l3doc restarts section numbers in each part; here they run through
@@ -570,7 +700,8 @@
   (always shown in full); \enquote{Set by} lists packages that set a
   variable that is meant to be set (such as \cs{@currentlabel} or
   \cs{topsep}) or redefine a function that is meant to be redefined
-  (such as the \cs{...@elt} markers of data lists); \enquote{Used by} lists packages that only use a
+  (such as the \cs{...@elt} markers of data lists); \enquote{Used by} lists
+  packages that only use a
   command (not given for user commands). Long \enquote{Set by} and
   \enquote{Used by} lists show only the first names and the total.
   The lists come from an automated search of \texttt{tex/latex} that
@@ -907,6 +1038,23 @@
 
 
 
+\begin{function}[int]
+  {
+    \\\meta{cmd}
+  }
+  \begin{syntax}
+    \cs{\\meta{cmd}}
+  \end{syntax}
+  The inner command of a command \cs{\meta{cmd}} defined with
+  \cs{newcommand} (or \cs{renewcommand}, \cs{providecommand}) with an
+  optional argument: its name is a backslash followed by the name of
+  \cs{\meta{cmd}}; it takes all arguments with the optional one delimited
+  by brackets, while \cs{\meta{cmd}} supplies the default. The name contains
+  characters other than letters, so the command
+  can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{function}
+
 
 %-----------------------------------------------
 \subsection{Environments}
@@ -990,7 +1138,8 @@
   closes the group. Hence all local settings inside an environment
   are undone at its end.
 
-  This is not the engine primitive \cs{end} but a \LaTeX{} command replacing it; the original primitive is still available as \cs{@@end}.
+  This is not the engine primitive \cs{end} but a \LaTeX{} command replacing
+  it; the original primitive is still available as \cs{@@end}.
 \end{function}
 \modifiedby[begin]{aastex701, aedpatch, alatex, arabtex.tex, blkarray,
   blog, docidx2e, docindex, emulateapj, etoolbox, extract, gmenvir,
@@ -1125,6 +1274,28 @@
 \usedby{apxproof, checkend, highlightlatex, lwarp, pfarrei,
   sseqmessages.code.tex, standalone, tcbbreakable.code.tex,
   tcbmagazine.code.tex, tcolorbox, zref-env}
+
+
+
+\begin{function}[]
+  {
+    \\meta{env},
+    \end\meta{env}
+  }
+  \begin{syntax}
+    \cs{\meta{env}} \meta{arguments of the environment, if any}
+    \cs{end\meta{env}} \quad \% no arguments
+  \end{syntax}
+  The begin and end code of the environment \meta{env}:
+  \cs{begin}\Arg{env} executes \cs{\meta{env}} and \cs{end}\Arg{env}
+  \cs{end\meta{env}}. Defined by \cs{newenvironment} etc. (for
+  environments defined with \cs{NewDocumentEnvironment} these are
+  internal helpers). Many environments are documented here by these two
+  commands, e.g., \cs{itemize} and \cs{enditemize}. \meta{env} may
+  contain characters other than letters; then the commands can only be
+  used via \cs{csname} \ldots{} \cs{endcsname} (or \cs{@nameuse},
+  \cs{@namedef}, \ldots).
+\end{function}
 
 
 %-----------------------------------------------
@@ -1336,6 +1507,25 @@
   thm-listof, titleps, titleref, tudscrdoc, typeface, ucs, unbtex,
   unbtexcite, underscore, upmethodology-fmt, utexasthesis, versonotes,
   xdoc2, xifthen}
+
+
+
+\begin{function}[int]
+  {
+    \\meta{cmd}\meta{space}
+  }
+  \begin{syntax}
+    \cs{\meta{cmd}\meta{space}}
+  \end{syntax}
+  The inner command of a robust command \cs{\meta{cmd}} defined with
+  \cs{DeclareRobustCommand}: its name is that of \cs{\meta{cmd}} followed by
+  a space, and it holds the actual definition, while \cs{\meta{cmd}} only
+  calls \cs{protect}\cs{\meta{cmd}\meta{space}}. Commands made robust with
+  \cs{MakeRobust} use the same scheme. The name contains characters other
+  than letters, so the command
+  can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{function}
 
 
 %-----------------------------------------------
@@ -1873,7 +2063,8 @@ whether the command already exists.
   Defines \meta{cmd} locally. The \meta{parameter text} consists of
   parameters \texttt{\#1} to \texttt{\#9} (in order), possibly mixed
   with delimiter tokens; e.g., with \texttt{\#1.\#2} as \meta{parameter
-  text} the first argument is delimited by a dot. Prefixes \cs{global}, \cs{long}, and \cs{protected} can
+  text} the first argument is delimited by a dot. Prefixes \cs{global},
+  \cs{long}, and \cs{protected} can
   be put in front. The \meta{replacement text} is stored unexpanded.
 
   This is an engine primitive.
@@ -10909,6 +11100,111 @@ register (defined internally with \cs{newcount}) with the name
 
 
 
+\begin{variable}[readonly]
+  {
+    \c@\meta{counter}
+  }
+  The count register holding the value of the \LaTeX{} counter
+  \meta{counter}, allocated by \cs{newcounter} (e.g., \cs{c@page},
+  \cs{c@section}). Its value is obtained with \cs{value}\Arg{counter}
+  and changed with \cs{setcounter}, \cs{addtocounter}, \cs{stepcounter}
+  etc., which also take care of the counters reset by \meta{counter}
+  (\cs{cl@\meta{counter}}); assignments to the register directly bypass
+  that. \meta{counter} may contain characters other than letters; then the
+  command
+  can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{variable}
+
+
+
+\begin{function}[settable]
+  {
+    \the\meta{counter}
+  }
+  \begin{syntax}
+    \cs{the\meta{counter}}
+  \end{syntax}
+  The printed representation of \meta{counter}, defined by
+  \cs{newcounter} as \cs{@arabic}\cs{c@\meta{counter}}; classes and
+  packages redefine it (e.g., \cs{thesection}, \cs{thepage}). Used by
+  \cs{ref} (via \cs{@currentlabel}, together with \cs{p@\meta{counter}})
+  and wherever the number is typeset. \meta{counter} may contain
+  characters other than letters; then the command can only be used via
+  \cs{csname} \ldots{} \cs{endcsname} (or \cs{@nameuse}, \cs{@namedef},
+  \ldots).
+\end{function}
+
+
+
+\begin{variable}[settable]
+  {
+    \p@\meta{counter}
+  }
+  A prefix put in front of \cs{the\meta{counter}} when
+  \cs{refstepcounter} sets \cs{@currentlabel}, i.e., when the counter is
+  referenced with \cs{ref}. Empty by default; classes set, e.g.,
+  \cs{p@enumii} to \cs{theenumi}, so that a reference to an item of a
+  nested list shows both numbers. \meta{counter} may contain characters
+  other than letters; then the command can only be used via \cs{csname}
+  \ldots{} \cs{endcsname} (or \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{variable}
+
+
+
+\begin{variable}[readonly]
+  {
+    \cl@\meta{counter}
+  }
+  The reset list of \meta{counter}: an \cs{@elt} list
+  (\cs{@elt}\Arg{counter_1}\cs{@elt}\Arg{counter_2}\ldots) of the
+  counters that are reset to zero when \meta{counter} is stepped with
+  \cs{stepcounter} or \cs{refstepcounter}. Extended by \cs{@addtoreset}
+  and \cs{counterwithin}, reduced by \cs{counterwithout}. \meta{counter}
+  may contain characters other than letters; then the command can only
+  be used via \cs{csname} \ldots{} \cs{endcsname} (or \cs{@nameuse},
+  \cs{@namedef}, \ldots).
+\end{variable}
+
+
+
+\begin{function}[settable]
+  {
+    \theH\meta{counter}
+  }
+  \begin{syntax}
+    \cs{theH\meta{counter}}
+  \end{syntax}
+  A representation of \meta{counter} that is unique in the document,
+  used to build hyperlink targets: \cs{refstepcounter} sets
+  \cs{@currentHref} to \meta{counter}\texttt{.}\cs{theH\meta{counter}}.
+  \cs{newcounter} defines it as the arabic value, prefixed with
+  \cs{theH}\meta{parent}\texttt{.} if the counter is reset by another
+  counter (\cs{@addtoreset}). Packages redefine it if the value of
+  \meta{counter} can repeat (e.g., for counters that are reset
+  independently of the counters they are numbered within).
+  \meta{counter} may contain characters other than letters; then the
+  command can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{function}
+
+
+
+\begin{variable}[int,readonly]
+  {
+    \alias@ctr@\meta{counter}
+  }
+  Defined for a counter made an alias of another one with
+  \cs{newcounteralias}\Arg{counter}\Arg{other}: holds the name of the
+  counter \meta{other} that \meta{counter} shares its value,
+  \cs{the\meta{counter}}, \cs{p@\meta{counter}} and reset list with.
+  Alias counters cannot be used in \cs{@addtoreset}; the underlying
+  counter is found by following these definitions. \meta{counter} may
+  contain characters other than letters; then the command can only be
+  used via \cs{csname} \ldots{} \cs{endcsname} (or \cs{@nameuse},
+  \cs{@namedef}, \ldots).
+\end{variable}
+
 
 %-----------------------------------------------
 \subsection{Representation of counter values}
@@ -11185,6 +11481,27 @@ register (defined internally with \cs{newcount}) with the name
   romanbar, srbtiks, xtuformat}
 
 
+
+\begin{function}[]
+  {
+    \@\meta{style},
+    \\meta{style}
+  }
+  \begin{syntax}
+    \cs{@\meta{style}} \meta{count register}
+    \cs{\meta{style}} \Arg{counter}
+  \end{syntax}
+  The counter representations: \meta{style} is one of \texttt{arabic},
+  \texttt{roman}, \texttt{Roman}, \texttt{alph}, \texttt{Alph} and
+  \texttt{fnsymbol}. \cs{@\meta{style}} takes a count register (or
+  number), \cs{\meta{style}} the name of a \LaTeX{} counter.
+  \cs{pagenumbering} \Arg{style} sets \cs{thepage} to
+  \cs{@\meta{style}}\cs{c@page}, so a package can add a style by
+  defining both commands for a new \meta{style}. \meta{style} may
+  contain characters other than letters; then the commands can only be
+  used via \cs{csname} \ldots{} \cs{endcsname} (or \cs{@nameuse},
+  \cs{@namedef}, \ldots).
+\end{function}
 
 
 %-----------------------------------------------
@@ -11580,6 +11897,29 @@ the documentation of \texttt{lthooks}.
 \usedby[ProvideMirroredHookPair]{}
 
 
+
+\begin{function}[deprecated]
+  {
+    \@\meta{name}hook
+  }
+  \begin{syntax}
+    \cs{@\meta{name}hook}
+  \end{syntax}
+%
+  The legacy \LaTeXe{} way of providing hooks: a macro to which code
+  is added (e.g., with \cs{g@addto@macro}) and that is executed at the
+  right place. These hooks have been (largely) removed from the kernel
+  code even if the hook macro itself is still defined to receive code.
+  
+
+  When the hook \meta{name} is declared or used by the hook management,
+  the code collected in a command \cs{@\meta{name}hook} is moved into
+  the hook (as the label \texttt{legacy}) and the command is cleared.
+  Remaining commands of that form are typically deprecated; use
+  \cs{AddToHook} instead. \meta{name} may contain characters other than
+  letters; then the command can only be used via \cs{csname} \ldots{}
+  \cs{endcsname} (or \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{function}
 
 
 %-----------------------------------------------
@@ -13819,13 +14159,15 @@ programmers defining design solutions. Typically used either in the
   \begin{syntax}
     \cs{@latex@error}\{Unknown symbol font `\#2'\}\cs{@eha}
   \end{syntax}
-  Simple fixed help texts for error messages used together with \cs{@latex@error} as shown in the example.
+  Simple fixed help texts for error messages used together with
+  \cs{@latex@error} as shown in the example.
 
   \cs{@eha} gives \texttt{Your command was ignored. Type ...}
 
   \cs{@ehb} gives \texttt{You've lost some text. \cs{@ehc}}
 
-  \cs{@ehc} gives \texttt{Try typing <return> to proceed. If that doesn't work ...}
+  \cs{@ehc} gives \texttt{Try typing <return> to proceed. If that doesn't
+  work ...}
 
   \cs{@ehd} gives the lovely \texttt{You're in trouble here. \cs{@ehc}}
 \end{function}
@@ -14270,7 +14612,9 @@ programmers defining design solutions. Typically used either in the
 
   Needs \pkg{tracefnt} package.
 
-  This is not the engine primitive \cs{tracingfonts} but a \LaTeX{} command replacing it; the original primitive is still available as \cs{tex_tracingfonts:D} but not to be used.
+  This is not the engine primitive \cs{tracingfonts} but a \LaTeX{} command
+  replacing it; the original primitive is still available as
+  \cs{tex_tracingfonts:D} but not to be used.
 \end{function}
 \modifiedby{}
 
@@ -14475,6 +14819,23 @@ programmers defining design solutions. Typically used either in the
   pxjodel, scrbase, scrbase-20260202, skeyval, skeyval-ltxpatch,
   statistik, stdpage, subfig, totpages, ustitle, xkeyval}
 \publicusedby{}
+
+
+
+\begin{function}[int]
+  {
+    \@pkg-disable@\meta{file}.\meta{ext}
+  }
+  \begin{syntax}
+    \cs{@pkg-disable@\meta{file}.\meta{ext}}
+  \end{syntax}
+  Defined by \cs{disable@package@load}\Arg{file}\Arg{code}: a later
+  request to load the package \meta{file} executes \meta{code} instead
+  and issues an info message. Removed by \cs{reenable@package@load}.
+  The name contains characters other than letters, so the command
+  can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{function}
 
 
 %-----------------------------------------------
@@ -14755,12 +15116,112 @@ programmers defining design solutions. Typically used either in the
   scrbase-20260202, subfig, totpages}
 
 
+
+\begin{variable}[readonly]
+  {
+    \opt@\meta{file}.\meta{ext}
+  }
+  The comma separated list of options the package or class
+  \meta{file}.\meta{ext} was loaded with (also those given with
+  \cs{PassOptionsToPackage}); tested by \cs{@ifpackagewith} and
+  \cs{@ifclasswith}. The name contains characters other than letters, so the
+  command
+  can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{variable}
+
+
+
+\begin{variable}[int,readonly]
+  {
+    \@raw@opt@\meta{file}.\meta{ext}
+  }
+  The options of the package or class \meta{file}.\meta{ext} as
+  given, i.e., without the normalization done for
+  \cs{opt@\meta{file}.\meta{ext}}
+  (spaces in \texttt{key=value} options are kept); used by the
+  key-value option processing. The name contains characters other than
+  letters, so the command
+  can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{variable}
+
+
+
+\begin{function}[int]
+  {
+    \ds@\meta{option}
+  }
+  \begin{syntax}
+    \cs{ds@\meta{option}}
+  \end{syntax}
+  The code declared with \cs{DeclareOption}\Arg{option}\Arg{code},
+  executed by \cs{ProcessOptions} if \meta{option} was given. \meta{option}
+  may contain characters other than letters (e.g., \texttt{11pt}); then the
+  command can only be used via \cs{csname}
+  \ldots{} \cs{endcsname} (or \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{function}
+
+
+
+\begin{function}[int]
+  {
+    \unprocessedoptions-\meta{file}.\meta{ext}
+  }
+  \begin{syntax}
+    \cs{unprocessedoptions-\meta{file}.\meta{ext}}
+  \end{syntax}
+  Set while loading the package or class \meta{file}.\meta{ext}
+  (to \cs{@@unprocessedoptions}): if the package doesn't process its
+  options (\cs{ProcessOptions}, \cs{ProcessKeyOptions}), it is executed
+  at the end of the package and reports the options as unused.
+  Undefined again afterwards. The name contains characters other than
+  letters, so the command
+  can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{function}
+
+
 %-----------------------------------------------
 \subsection{Options: key-value interface}
 
 
+
+\begin{function}[int]
+  {
+    \opt@handler@\meta{file}.\meta{ext}
+  }
+  \begin{syntax}
+    \cs{opt@handler@\meta{file}.\meta{ext}}
+  \end{syntax}
+  The key-value option handler of the package or class
+  \meta{file}.\meta{ext}, set up by \cs{ProcessKeyOptions}; used to
+  process options passed later, e.g., by a second \cs{usepackage} with
+  options. The name contains characters other than letters, so the command
+  can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{function}
+
+
 %-----------------------------------------------
 \subsection{Checking what is loaded}
+
+
+
+\begin{variable}[readonly]
+  {
+    \ver@\meta{file}.\meta{ext}
+  }
+%
+  Defined when the package or class \meta{file}.\meta{ext} is loaded
+  (\meta{ext} is \texttt{sty} or \texttt{cls}): holds the date, version
+  and description given in its \cs{ProvidesPackage} or
+  \cs{ProvidesClass} declaration (or is empty). \cs{@ifpackageloaded},
+  \cs{@ifpackagelater} and their class versions test it. The name
+  contains characters other than letters, so the command can only be
+  used via \cs{csname} \ldots{} \cs{endcsname} (or \cs{@nameuse},
+  \cs{@namedef}, \ldots).
+\end{variable}
 
 
 %-----------------------------------------------
@@ -14862,6 +15323,18 @@ programmers defining design solutions. Typically used either in the
   unicode-math-xetex, unicode-persianmath, xcomment}
 
 
+
+\begin{variable}[int,readonly]
+  {
+    \\meta{file}.\meta{ext}-h@@k
+  }
+  The code collected by \cs{AtEndOfPackage} or \cs{AtEndOfClass} while
+  the package or class \meta{file}.\meta{ext} is loaded; executed (and
+  then made undefined) at the end of that file. The name contains characters
+  other than letters, so the command
+  can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{variable}
 
 
 %-----------------------------------------------
@@ -15397,6 +15870,37 @@ programmers defining design solutions. Typically used either in the
 \modifiedby{}
 \usedby{afthesis, antyktor, g-brief, g-brief2, journal, ltugboat,
   ltugproc, myletter, paper}
+
+
+
+\begin{variable}[int,readonly]
+  {
+    \@file-subst@\meta{file}
+  }
+  Defined by \cs{declare@file@substitution}\Arg{file}\Arg{subst}:
+  holds the name of the file to be read instead of \meta{file}
+  (substitutions are followed, loops are detected). Removed by
+  \cs{undeclare@file@substitution}. The name contains characters other than
+  letters, so the command
+  can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{variable}
+
+
+
+\begin{variable}[int,readonly]
+  {
+    \cp@\meta{file}
+  }
+  The checkpoint of the \cs{include} file \meta{file}: the values of all
+  counters at its end, written to the \texttt{.aux} file
+  (\cs{@writeckpt}) and read back with \cs{@setckpt}, so the counters
+  are correct after an \cs{include} file that is not read because of
+  \cs{includeonly}. \meta{file} may contain characters other than letters;
+  then the command can only be used via
+  \cs{csname} \ldots{} \cs{endcsname} (or \cs{@nameuse}, \cs{@namedef},
+  \ldots).
+\end{variable}
 
 
 %-----------------------------------------------
@@ -16230,6 +16734,37 @@ programmers defining design solutions. Typically used either in the
 \subsection{Declaring encoding-specific commands}
 
 
+
+\begin{function}[int]
+  {
+    \\meta{enc}\\meta{cmd},
+    \?\\meta{cmd},
+    \\meta{enc}\\meta{cmd}-\meta{char},
+    \\meta{enc}-cmd
+  }
+  \begin{syntax}
+    \cs{\meta{enc}\\meta{cmd}}
+    \cs{?\\meta{cmd}}
+    \cs{\meta{enc}\\meta{cmd}-\meta{char}}
+    \cs{\meta{enc}-cmd}
+  \end{syntax}
+  The definitions behind an encoding-specific command \cs{\meta{cmd}}:
+  \cs{\meta{enc}\\meta{cmd}} is its definition in encoding \meta{enc} (made by
+  \cs{DeclareTextCommand}, \cs{DeclareTextSymbol}, \ldots),
+  \cs{?\\meta{cmd}} the default used in encodings without own definition
+  (\cs{DeclareTextCommandDefault} etc.), and
+  \cs{\meta{enc}\\meta{cmd}-\meta{char}} a composite of \cs{\meta{cmd}} with the
+  character or command \meta{char} (\cs{DeclareTextComposite}).
+  \cs{\meta{enc}-cmd} is set to \cs{@changed@cmd} for every encoding
+  declared with \cs{DeclareFontEncoding}; it handles commands without
+  a definition for \meta{enc} by installing the default
+  \cs{?\\meta{cmd}} (or an error if there is none). The names contain
+  a backslash (and other non-letters), so they can't even be generated
+  with \cs{csname} directly; use \cs{expandafter}\cs{string} or the
+  declaration commands.
+\end{function}
+
+
 %-----------------------------------------------
 \subsection{Accents}
 
@@ -16393,7 +16928,8 @@ syntax characters in \TeX{}.
   {
     \@wrong@font@char
   }
-  Internal helper function used in a warning/error message used by \cs{UseTextSymbol}.
+  Internal helper function used in a warning/error message used by
+  \cs{UseTextSymbol}.
 \end{function}
 \modifiedby{}
 \usedby{}
@@ -16533,7 +17069,8 @@ syntax characters in \TeX{}.
     \textsubscript
   }
   \begin{syntax}
-    \cs{textsuperscript} \Arg{text} \quad \cs{textsubscript} \Arg{text}
+    \cs{textsuperscript} \Arg{text}
+    \cs{textsubscript} \Arg{text}
   \end{syntax}
   Typesets \meta{text} raised (lowered) in the script size of the
   current font, e.g., for ordinals or chemical formulas in text. The
@@ -16615,7 +17152,8 @@ syntax characters in \TeX{}.
     \textsubscript@space
   }
   \begin{syntax}
-    \cs{textsuperscript@space} \quad \cs{textsubscript@space}
+    \cs{textsuperscript@space}
+    \cs{textsubscript@space}
   \end{syntax}
   The space added after the material of \cs{textsuperscript} and
   \cs{textsubscript}: by default an unbreakable \cs{scriptspace}, as
@@ -16635,7 +17173,8 @@ syntax characters in \TeX{}.
     \textsubscript@offset
   }
   \begin{syntax}
-    \cs{textsuperscript@offset} \quad \cs{textsubscript@offset}
+    \cs{textsuperscript@offset}
+    \cs{textsubscript@offset}
   \end{syntax}
   Dimen expressions giving the amount by which \cs{textsuperscript}
   raises and \cs{textsubscript} lowers its material (in box 0 when
@@ -17613,7 +18152,8 @@ series, shape, and size. For details see \texttt{fntguide}.
   {
     \bfseries@sf
   }
-  Series used by \cs{bfseries} in the sans serif family. Should be set only through
+  Series used by \cs{bfseries} in the sans serif family. Should be set only
+  through
   \cs{DeclareFontSeriesDefault}.
 \end{variable}
 \setby{AlegreyaSans, ClearSans, CooperHewitt, FiraSans, GoSans,
@@ -17634,7 +18174,8 @@ series, shape, and size. For details see \texttt{fntguide}.
   {
     \bfseries@tt
   }
-  Series used by \cs{bfseries} in the typewriter family. Should be set only through
+  Series used by \cs{bfseries} in the typewriter family. Should be set only
+  through
   \cs{DeclareFontSeriesDefault}.
 \end{variable}
 \setby{FiraMono, GoMono, atkinson, cascadia-code, courierten,
@@ -17675,7 +18216,8 @@ series, shape, and size. For details see \texttt{fntguide}.
   {
     \mdseries@sf
   }
-  Series used by \cs{mdseries} in the sans serif family. Should be set only through
+  Series used by \cs{mdseries} in the sans serif family. Should be set only
+  through
   \cs{DeclareFontSeriesDefault}.
 \end{variable}
 \setby{AlegreyaSans, ClearSans, CooperHewitt, FiraSans, GoSans,
@@ -17695,7 +18237,8 @@ series, shape, and size. For details see \texttt{fntguide}.
   {
     \mdseries@tt
   }
-  Series used by \cs{mdseries} in the typewriter family. Should be set only through
+  Series used by \cs{mdseries} in the typewriter family. Should be set only
+  through
   \cs{DeclareFontSeriesDefault}.
 \end{variable}
 \setby{FiraMono, GoMono, atkinson, cascadia-code, courierten,
@@ -18506,6 +19049,22 @@ series, shape, and size. For details see \texttt{fntguide}.
 
 
 
+\begin{function}[int]
+  {
+    \s@fct@\meta{sizefunction}
+  }
+  \begin{syntax}
+    \cs{s@fct@\meta{sizefunction}}
+  \end{syntax}
+  The code of the size function \meta{sizefunction} declared with
+  \cs{DeclareSizeFunction}, used in the size specifications of
+  \cs{DeclareFontShape}. The size functions of the kernel have names
+  consisting of letters (\texttt{s}, \texttt{gen}, \texttt{sub}, \ldots)
+  or the empty name (\cs{s@fct@}); for names containing other characters
+  the command can only be used via \cs{csname} \ldots{} \cs{endcsname}
+  (or \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{function}
+
 
 %-----------------------------------------------
 \subsection{Font axes and change rules}
@@ -18691,6 +19250,20 @@ series, shape, and size. For details see \texttt{fntguide}.
 \usedby{}
 
 
+
+\begin{variable}[int,readonly]
+  {
+    \series@\meta{from}@\meta{to},
+    \shape@\meta{from}@\meta{to}
+  }
+  The change rules for the series and shape axes, declared with
+  \cs{DeclareFontSeriesChangeRule} and \cs{DeclareFontShapeChangeRule}:
+  \Arg{result}\Arg{alternative} to use when changing from series (shape)
+  \meta{from} to \meta{to}. \meta{from} and \meta{to} may contain
+  characters other than letters; then the commands can only be used via
+  \cs{csname} \ldots{} \cs{endcsname} (or \cs{@nameuse}, \cs{@namedef},
+  \ldots).
+\end{variable}
 
 
 %-----------------------------------------------
@@ -20289,6 +20862,71 @@ series, shape, and size. For details see \texttt{fntguide}.
 \usedby{unicode-math-luatex, unicode-math-xetex, unicode-persianmath}
 
 
+
+\begin{constant}[]
+  {
+    \sym\meta{name}
+  }
+  The math group number of the symbol font \meta{name} declared with
+  \cs{DeclareSymbolFont} (e.g., \cs{symletters}, \cs{symoperators});
+  used in \cs{DeclareMathSymbol}, \cs{DeclareMathDelimiter} etc. and in
+  \cs{mathcode} and \cs{fam} assignments. \meta{name} may contain
+  characters other than letters; then the command can only be used via
+  \cs{csname} \ldots{} \cs{endcsname} (or \cs{@nameuse}, \cs{@namedef},
+  \ldots).
+\end{constant}
+
+
+
+\begin{variable}[int,readonly]
+  {
+    \mv@\meta{version},
+    \mv@\meta{version}@frozen,
+    \mv@\meta{version}@reset,
+    \c@mv@\meta{version}
+  }
+  The data of the math version \meta{version}: \cs{mv@\meta{version}}
+  holds the code setting up the math groups of the version (built by
+  \cs{DeclareMathVersion}, \cs{SetSymbolFont},
+  \cs{DeclareMathAlphabet}, \ldots), executed by \cs{glb@settings},
+  i.e., in the first formula after a change of size or math version;
+  the count register \cs{c@mv@\meta{version}} holds the number of
+  allocated math groups.
+
+  Math alphabets used for the first time are allocated on the fly. In
+  the preamble this is permanent; in the document the version is
+  \enquote{frozen} as soon as only \cs{c@localmathalphabets} math groups
+  are left: \cs{mv@\meta{version}@frozen} becomes a copy of
+  \cs{mv@\meta{version}}, the count is saved and
+  \cs{mv@\meta{version}@reset} is defined. From then on further
+  allocations are local to a formula: \cs{mv@\meta{version}@reset}
+  (empty until the version is frozen) is executed after every formula
+  (\cs{check@mathfonts} adds it with \cs{aftergroup}) and, at the top
+  math level, undoes the allocations beyond the frozen state;
+  \cs{mathversion}, used inside a top-level formula, resets a frozen
+  version unconditionally. \meta{version} may contain characters other
+  than letters; then the commands can only be used via \cs{csname}
+  \ldots{} \cs{endcsname} (or \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{variable}
+
+
+
+\begin{function}[int,readonly]
+  {
+    \S@\meta{size}
+  }
+  \begin{syntax}
+    \cs{S@\meta{size}}
+  \end{syntax}
+  The math font sizes for text size \meta{size} (in points, without
+  unit): sets \cs{tf@size}, \cs{sf@size} and \cs{ssf@size} as declared
+  with \cs{DeclareMathSizes} or computed on first use. The name contains
+  characters other than letters, so the command
+  can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{function}
+
+
 %-----------------------------------------------
 \subsection{Document-level math font commands}
 
@@ -20493,6 +21131,61 @@ series, shape, and size. For details see \texttt{fntguide}.
 
 
 
+\begin{variable}[int,readonly]
+  {
+    \\meta{enc}/\meta{family}/\meta{series}/\meta{shape},
+    \\meta{enc}/\meta{family}/\meta{series}/\meta{shape}/\meta{size}
+  }
+  The first one holds the font shape data declared by
+  \cs{DeclareFontShape} for the shape (sizes and fonts to use), the
+  second is the font identifier of a loaded font, i.e., a command
+  defined with \cs{font}, e.g., \texttt{\textbackslash T1/cmr/m/n/10}.
+  \cs{selectfont} defines the latter from the former. The name contains
+  characters other than letters, so the command
+  can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{variable}
+
+
+
+\begin{variable}[int,readonly]
+  {
+    \\meta{enc}+\meta{family}
+  }
+  Defined (as \cs{@empty}) when NFSS has tried to load the font
+  definition file \meta{enc}\meta{family}\texttt{.fd}, so the file is
+  read only once. The name contains characters other than letters, so the
+  command
+  can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{variable}
+
+
+
+\begin{function}[int]
+  {
+    \T@\meta{enc},
+    \M@\meta{enc},
+    \D@\meta{enc}
+  }
+  \begin{syntax}
+    \cs{T@\meta{enc}}
+    \cs{M@\meta{enc}}
+    \cs{D@\meta{enc}}
+  \end{syntax}
+  The settings of the font encoding \meta{enc}: \cs{T@\meta{enc}} is the
+  text code and \cs{M@\meta{enc}} the math code from
+  \cs{DeclareFontEncoding} (executed when the encoding is selected in
+  text or math), \cs{D@\meta{enc}} sets the default family, series and
+  shape from \cs{DeclareFontSubstitution}. \cs{T@\meta{enc}} is also
+  tested to find out whether an encoding is declared. \meta{enc} may contain
+  characters other than letters (digits count as such, e.g., \texttt{T1});
+  then the command can only be used via
+  \cs{csname} \ldots{} \cs{endcsname} (or \cs{@nameuse}, \cs{@namedef},
+  \ldots).
+\end{function}
+
+
 %===============================================
 \section{Spacing, line and page breaking}
 
@@ -20524,7 +21217,8 @@ series, shape, and size. For details see \texttt{fntguide}.
   The command \cs{space} is a command that contains a space character
   as its replacement material. For typesetting this is identical to
   using \verb*=\ = but in other cases there are differences:
-  \cs{csname}\texttt{ X}\cs{space}\cs{endcsname} produces a macro name with a space
+  \cs{csname}\texttt{ X}\cs{space}\cs{endcsname} produces a macro name with
+  a space
   character in the name. In that position \cs{\space} (as a
   typesetting instruction) would not be allowed. For the same reason
   you need to use \cs{space} and not \cs{\space} inside \cs{typeout}.
@@ -21437,8 +22131,12 @@ series, shape, and size. For details see \texttt{fntguide}.
   \TeX{} primitives (which have been renamed to \cs{@kernel@eqno} and
   \cs{@kernel@leqno}). In documents use \env{equation} instead.
 
-  This is not the engine primitive \cs{eqno} but a \LaTeX{} command replacing it; the original primitive is still available as \cs{@kernel@eqno} but not to be used.
-  This is not the engine primitive \cs{leqno} but a \LaTeX{} command replacing it; the original primitive is still available as \cs{@kernel@leqno} but not to be used.
+  This is not the engine primitive \cs{eqno} but a \LaTeX{} command
+  replacing it; the original primitive is still available as
+  \cs{@kernel@eqno} but not to be used.
+  This is not the engine primitive \cs{leqno} but a \LaTeX{} command
+  replacing it; the original primitive is still available as
+  \cs{@kernel@leqno} but not to be used.
 \end{function}
 \modifiedby[eqno]{IEEEtran, IEEEtrantools, amsart, amsbook, amsproc,
   amsthm, latex-xetex-bidi.def, mathpartir, nath, plain-xetex-bidi.def}
@@ -21847,8 +22545,12 @@ series, shape, and size. For details see \texttt{fntguide}.
   \cs{frozen@everydisplay}, respectively (after \LaTeX{} has done what
   it wants to do to set up math). Packages may add code to them.
 
-  This is not the engine primitive \cs{everymath} but a \LaTeX{} command replacing it; the original primitive is still available as \cs{frozen@everymath} but not to be used.
-  This is not the engine primitive \cs{everydisplay} but a \LaTeX{} command replacing it; the original primitive is still available as \cs{frozen@everydisplay} but not to be used.
+  This is not the engine primitive \cs{everymath} but a \LaTeX{} command
+  replacing it; the original primitive is still available as
+  \cs{frozen@everymath} but not to be used.
+  This is not the engine primitive \cs{everydisplay} but a \LaTeX{} command
+  replacing it; the original primitive is still available as
+  \cs{frozen@everydisplay} but not to be used.
 \end{function}
 \modifiedby[everymath]{}
 \modifiedby[everydisplay]{}
@@ -21885,8 +22587,10 @@ series, shape, and size. For details see \texttt{fntguide}.
 
   Currently some packages alter its content, which should not be the case!
 
-  \cs{frozen@everymath} is the \LaTeX{} name for the engine primitive \cs{everymath}.
-  \cs{frozen@everydisplay} is the \LaTeX{} name for the engine primitive \cs{everydisplay}.
+  \cs{frozen@everymath} is the \LaTeX{} name for the engine primitive
+  \cs{everymath}.
+  \cs{frozen@everydisplay} is the \LaTeX{} name for the engine primitive
+  \cs{everydisplay}.
 \end{constant}
 \modifiedby[frozen@everymath]{pdfsync}
 \modifiedby[frozen@everydisplay]{pdfsync}
@@ -22241,6 +22945,40 @@ The kernel only provides placeholders; the color support comes from the
 \end{variable}
 \modifiedby{etoc}
 \publicusedby{ltugboat, ltx-talk, sblbook, sblreport, tocloft}
+
+
+
+\begin{function}[settable]
+  {
+    \l@\meta{type}
+  }
+  \begin{syntax}
+    \cs{l@\meta{type}} \Arg{entry} \Arg{page}
+  \end{syntax}
+  Typesets an entry of type \meta{type} in a contents list (table of
+  contents, list of figures, \ldots), where \meta{type} is the second
+  argument of \cs{addcontentsline}: a sectioning level (\cs{l@section})
+  or a float type (\cs{l@figure}). Defined by the classes, usually with
+  \cs{@dottedtocline}. Note that babel and \cs{newlanguage} use names of
+  the same form, \cs{l@}\meta{language}, for language numbers.
+  \meta{type} may contain characters other than letters; then the
+  command can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{function}
+
+
+
+\begin{variable}[int,readonly]
+  {
+    \tf@\meta{ext}
+  }
+  The write stream of the contents file \cs{jobname}\texttt{.}\meta{ext}
+  (\texttt{toc}, \texttt{lof}, \texttt{lot}, \ldots), allocated and
+  opened by \cs{@starttoc}\Arg{ext} unless \cs{nofiles} is in effect;
+  \cs{@writefile} writes to it. \meta{ext} may contain characters other
+  than letters; then the command can only be used via \cs{csname}
+  \ldots{} \cs{endcsname} (or \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{variable}
 
 
 %-----------------------------------------------
@@ -24479,6 +25217,68 @@ The kernel only provides placeholders; the color support comes from the
   hyperref, iitem, lingmacros, ltxtools-doc, lwarp, paralist}
 
 
+
+\begin{function}[user,settable]
+  {
+    \labelitem\meta{level}
+  }
+  \begin{syntax}
+    \cs{labelitem\meta{level}}
+  \end{syntax}
+  The label of the items of an \env{itemize} list at nesting level
+  \meta{level} (\texttt{i}, \texttt{ii}, \texttt{iii} or \texttt{iv}),
+  i.e., \cs{labelitemi} to \cs{labelitemiv}; defined by the classes
+  and redefined to change the bullets.
+\end{function}
+
+
+
+\begin{function}[user,settable]
+  {
+    \labelenum\meta{level}
+  }
+  \begin{syntax}
+    \cs{labelenum\meta{level}}
+  \end{syntax}
+  The label of the items of an \env{enumerate} list at nesting level
+  \meta{level} (\texttt{i} to \texttt{iv}), i.e., \cs{labelenumi} to
+  \cs{labelenumiv}; defined by the classes in terms of the counters
+  \texttt{enum}\meta{level}. These are ordinary counters, i.e.,
+  \cs{theenumi}, \cs{p@enumii}, \ldots{} follow the scheme of
+  \cs{the\meta{counter}} and \cs{p@\meta{counter}}.
+\end{function}
+
+
+
+\begin{variable}[settable]
+  {
+    \leftmargin\meta{level}
+  }
+  Dimen registers: the left margin of a list at nesting level
+  \meta{level} (\texttt{i} to \texttt{vi}), i.e., \cs{leftmargini} to
+  \cs{leftmarginvi}. The \cs{list} environment sets \cs{leftmargin} to
+  the value for the current level before executing \cs{@list\meta{level}}
+  and its second argument. Set by the classes.
+\end{variable}
+
+
+
+\begin{function}[settable]
+  {
+    \@list\meta{level}
+  }
+  \begin{syntax}
+    \cs{@list\meta{level}}
+  \end{syntax}
+  The parameter settings of a list at nesting level \meta{level}
+  (\texttt{i} to \texttt{vi}), i.e., \cs{@listi} to \cs{@listvi},
+  executed by \cs{list}: typically they set \cs{leftmargin},
+  \cs{topsep}, \cs{parsep}, \cs{itemsep} etc. Defined by the
+  classes; \cs{@listi} is also redefined by the size commands
+  (\cs{small}, \cs{footnotesize}, \ldots).
+\end{function}
+
+
 %-----------------------------------------------
 \subsection{Standard environments}
 
@@ -25361,6 +26161,21 @@ The kernel only provides placeholders; the color support comes from the
 \publicusedby{lastpagemodern, pageslts}
 
 
+
+\begin{variable}[readonly]
+  {
+    \r@\meta{label}
+  }
+  The data of the label \meta{label}, defined by \cs{newlabel} when the
+  \texttt{.aux} file is read: \Arg{number}\Arg{page}, extended by
+  hyperref and others with further fields; used by \cs{ref} and
+  \cs{pageref}. \meta{label} may contain characters other than letters
+  (e.g., \texttt{sec:intro}); then the command can only be used via
+  \cs{csname} \ldots{} \cs{endcsname} (or \cs{@nameuse}, \cs{@namedef},
+  \ldots).
+\end{variable}
+
+
 %-----------------------------------------------
 \subsection{Properties}
 
@@ -25429,6 +26244,19 @@ The kernel only provides placeholders; the color support comes from the
   bibunits, blx-bibtex-ms.def, blx-bibtex.def, databib,
   databib-2019-09-27, directory, figbib, gloss, jurarsp, ltugboat,
   multibbl, multibib, nmbib, nxuthesis, rhode-island-thesis, thuthesis}
+
+
+
+\begin{variable}[readonly]
+  {
+    \b@\meta{key}
+  }
+  The label of the citation \meta{key} (e.g., its number), defined by
+  \cs{bibcite} when the \texttt{.aux} file is read; used by \cs{cite}.
+  \meta{key} may contain characters other than letters; then the command
+  can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{variable}
 
 
 %-----------------------------------------------
@@ -26137,7 +26965,8 @@ The kernel only provides placeholders; the color support comes from the
     \end@dblfloat
   }
   \begin{syntax}
-    \cs{end@float} \quad \cs{end@dblfloat}
+    \cs{end@float}
+    \cs{end@dblfloat}
   \end{syntax}
   End of a single-column (double-column) float: closes the float box
   with \cs{@endfloatbox}, checks its height with \cs{@largefloatcheck}
@@ -26215,7 +27044,8 @@ The kernel only provides placeholders; the color support comes from the
     \@dblfloatplacement
   }
   \begin{syntax}
-    \cs{@floatplacement} \quad \cs{@dblfloatplacement}
+    \cs{@floatplacement}
+    \cs{@dblfloatplacement}
   \end{syntax}
   Set the internal float placement values for a new column (page)
   from the user parameters \texttt{topnumber}, \cs{topfraction},
@@ -26306,6 +27136,65 @@ The kernel only provides placeholders; the color support comes from the
 \modifiedby{}
 \usedby{algorithmlite, cidarticle, float, floatrow,
   latex-localize-misc-xetex-xepersian.def, llncs, lni, tudscrposter}
+
+
+
+\begin{variable}[settable]
+  {
+    \ext@\meta{float}
+  }
+  The extension of the contents file that lists the floats of type
+  \meta{float}, e.g., \texttt{lof} for \cs{ext@figure}, \texttt{lot} for
+  \cs{ext@table}; used by \cs{@caption} for \cs{addcontentsline}.
+  Defined by the classes for every float type. \meta{float} may contain
+  characters other than letters; then the command can only be used via
+  \cs{csname} \ldots{} \cs{endcsname} (or \cs{@nameuse}, \cs{@namedef},
+  \ldots).
+\end{variable}
+
+
+
+\begin{variable}[settable]
+  {
+    \fps@\meta{float}
+  }
+  The default placement specifier of floats of type \meta{float}, used
+  if the float environment has no optional argument (e.g.,
+  \texttt{tbp}). Defined by the classes for every float type.
+  \meta{float} may contain characters other than letters; then the
+  command can only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{variable}
+
+
+
+\begin{variable}[readonly]
+  {
+    \ftype@\meta{float}
+  }
+  The type number of floats of type \meta{float}: a different power of 2
+  for each type (1 for \texttt{figure}, 2 for \texttt{table}); floats of
+  the same type are kept in order. Defined by the classes for every
+  float type. \meta{float} may contain characters other than letters;
+  then the command can only be used via \cs{csname} \ldots{}
+  \cs{endcsname} (or \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{variable}
+
+
+
+\begin{variable}[int,readonly]
+  {
+    \bx@\meta{id}
+  }
+  The insertions (i.e., box registers with associated registers)
+  available for floats and marginal notes, kept in \cs{@freelist}: the
+  kernel allocates 52 (\cs{bx@A} to \cs{bx@Z} and \cs{bx@AA} to
+  \cs{bx@ZZ}), \cs{extrafloats} adds more, named \cs{bx@\meta{number}}.
+  The names \cs{bx@A} to \cs{bx@ZZ} consist of letters; for those
+  allocated by \cs{extrafloats}, which contain digits, the command can
+  only be used via \cs{csname} \ldots{} \cs{endcsname} (or
+  \cs{@nameuse}, \cs{@namedef}, \ldots).
+\end{variable}
 
 
 %-----------------------------------------------
@@ -26419,6 +27308,24 @@ The kernel only provides placeholders; the color support comes from the
   turabian-thesis, uwthesis, xtufte-common.def, zref-titleref}
 \publicusedby{active-conf, exam-n, figcaps, float, hpsdiss, mnras,
   rasti, topcapt, wrapfig2}
+
+
+
+\begin{function}[settable]
+  {
+    \fnum@\meta{float}
+  }
+  \begin{syntax}
+    \cs{fnum@\meta{float}}
+  \end{syntax}
+  The label of a caption of a float of type \meta{float}, e.g.,
+  \enquote{Figure~3}: \cs{figurename}\verb*| |\cs{thefigure} for
+  \cs{fnum@figure}. Passed to \cs{@makecaption} by \cs{@caption}.
+  Defined by the classes for every float type. \meta{float} may contain
+  characters other than letters; then the command can only be used via
+  \cs{csname} \ldots{} \cs{endcsname} (or \cs{@nameuse}, \cs{@namedef},
+  \ldots).
+\end{function}
 
 
 %-----------------------------------------------
@@ -27173,7 +28080,8 @@ The kernel only provides placeholders; the color support comes from the
     \normalmarginpar
   }
   \begin{syntax}
-    \cs{reversemarginpar} \quad \cs{normalmarginpar}
+    \cs{reversemarginpar}
+    \cs{normalmarginpar}
   \end{syntax}
   Declarations: \cs{reversemarginpar} puts the following marginal notes
   into the opposite margin from the default one (e.g., into the left
@@ -27210,7 +28118,8 @@ The kernel only provides placeholders; the color support comes from the
     \@xympar
   }
   \begin{syntax}
-    \cs{@xmpar} \oarg{left text} \Arg{text} \quad \cs{@ympar} \Arg{text}
+    \cs{@xmpar} \oarg{left text} \Arg{text}
+    \cs{@ympar} \Arg{text}
   \end{syntax}
   Implementation of \cs{marginpar} with and without optional argument:
   they put the left and right versions of the note into \cs{@marbox}
@@ -27698,6 +28607,44 @@ The kernel only provides placeholders; the color support comes from the
 \end{function}
 \setby{}
 \publicusedby{}
+
+
+
+\begin{function}[settable]
+  {
+    \\meta{section}mark
+  }
+  \begin{syntax}
+    \cs{\meta{section}mark} \Arg{title}
+  \end{syntax}
+  Called by the sectioning command \meta{section} (\cs{chapter},
+  \cs{section}, \ldots) with the (short) title, to set the marks for the
+  running heads. Does nothing by default; page styles such as
+  \texttt{headings} and \texttt{myheadings} redefine the ones they need,
+  e.g., \cs{sectionmark} to call \cs{markright}. \meta{section} may
+  contain characters other than letters; then the command can only be
+  used via \cs{csname} \ldots{} \cs{endcsname} (or \cs{@nameuse},
+  \cs{@namedef}, \ldots).
+\end{function}
+
+
+
+\begin{function}[settable]
+  {
+    \ps@\meta{style}
+  }
+  \begin{syntax}
+    \cs{ps@\meta{style}}
+  \end{syntax}
+  Sets up the page style \meta{style}, i.e., defines \cs{@oddhead},
+  \cs{@oddfoot}, \cs{@evenhead}, \cs{@evenfoot} and the
+  \cs{\meta{section}mark} commands; executed by
+  \cs{pagestyle}\Arg{style} and \cs{thispagestyle}\Arg{style}. Defining
+  such a command creates a new page style. \meta{style} may contain
+  characters other than letters; then the command can only be used via
+  \cs{csname} \ldots{} \cs{endcsname} (or \cs{@nameuse}, \cs{@namedef},
+  \ldots).
+\end{function}
 
 
 %-----------------------------------------------
