@@ -13,8 +13,8 @@ each entry, naming the kernel file(s) defining its commands (shown as a
 margin note).
 
 Which list command is used comes from the entry itself:
-  variable without [readonly]  -> \setby      (setting is expected)
-  function with [settable]      -> \setby      (redefining is expected)
+  variable or function with [settable] -> \setby (setting/redefining
+                               is expected; review mark [v,s] or [s])
   everything else              -> \modifiedby (changing is not expected)
   [user] entries               -> no "used by" list
   [int] entries                -> \usedby, otherwise \publicusedby
@@ -475,10 +475,10 @@ def written_lists(entry, res):
     names = [n for n in entry['names'] if n in res]
     multi = len(entry['names']) > 1
     opts = entry['opts']
-    # "Set by" for variables meant to be set, and for functions marked
-    # [settable] (meant to be redefined, e.g. the \\...@elt list markers)
-    settable = ((entry['env'] == 'variable' and 'readonly' not in opts)
-                or 'settable' in opts)
+    # "Set by" only for entries marked [settable]: variables meant to be
+    # set and functions meant to be redefined (e.g. the \\...@elt list
+    # markers); a plain variable ([v]) gets "Modified by"
+    settable = 'settable' in opts
     changed, used = [], []
     for n in names:
         opt = n if multi else None
