@@ -129,15 +129,16 @@ NAMEDEF = (r'(?:\\expandafter\s*' + PFX + r'(?:\\[gex]?def|\\let)' + E +
            r'|\\AddToHook\s*\{\s*cmd/(?:NAME)/)')
 
 # --- assignments (only for registers, see config.toml) ---------------
-ASSIGN = (r'(?:(?:\\setlength|\\addtolength|\\advance|\\multiply|\\divide'
+# (\X=... is a separate rule, because \ifdim\X=... is a comparison)
+ASSIGN = (r'(?:\\setlength|\\addtolength|\\advance|\\multiply|\\divide'
           r'|\\settowidth|\\settoheight|\\settodepth|\\setbox|\\sbox|\\savebox'
-          r'|\\global|\\deflength)' + E + r'\s*\{?\s*(?:CS)' + E +
-          r'|(?:CS)' + E + r'\s*=)')
+          r'|\\global|\\deflength|\\begin\s*\{lrbox\})' + E +
+          r'\s*\{?\s*(?:CS)' + E)
 COUNTER = r'\\(?:set|addto|step|refstep)counter\s*\{\s*(?:NAME)\s*\}'
 # Bare assignment \X<value>: the value must start like a number or a
 # kernel constant, and \X must not be read by the command in front of it
 # (\vskip\topsep 3pt, \ifdim\@tempdima>..., \advance\x\@tempdima 2...).
-BARE_VALUE = (r'\s*(?:[-+]?[\d.]|\\z@|\\p@|\\@ne|\\m@ne|\\tw@|\\thr@@'
+BARE_VALUE = (r'\s*(?:[-+]?[\d.]|#+\d|\\z@|\\p@|\\@ne|\\m@ne|\\tw@|\\thr@@'
               r'|\\@M|\\maxdimen|\\@m)')
 READ_BEFORE = re.compile(
     r'\\(?:vskip|hskip|kern|advance|ifdim|ifnum|ifcase|the|multiply|divide'
@@ -148,6 +149,13 @@ READ_BEFORE = re.compile(
     r'|\\(?:advance|multiply|divide|setlength|addtolength)\s*\{?\s*'
     r'\\[A-Za-z@]+\s*\}?\s*(?:by)?\s*\{?\s*$'
     r'|[<>=]\s*$')
+
+
+def _line_before(text, pos):
+    """Up to 40 characters before POS, but only from the current line
+    (a command ending the previous line does not read \\X)."""
+    pre = text[max(0, pos - 40):pos]
+    return pre[pre.rfind('\n') + 1:]
 
 
 class Rule:
@@ -176,7 +184,7 @@ class Rule:
             if ARG_BEFORE.search(pre) and not LET_COMPLETE.search(pre):
                 return False
         if self.read_before:
-            if READ_BEFORE.search(text[max(0, start - 40):start]):
+            if READ_BEFORE.search(_line_before(text, start)):
                 return False
         return self.after is None or bool(self.after.match(text, end))
 
@@ -187,7 +195,7 @@ class Rule:
             if ARG_BEFORE.search(pre) and not LET_COMPLETE.search(pre):
                 return 'the definer is itself an argument of the command before it'
         if self.read_before:
-            if READ_BEFORE.search(text[max(0, start - 40):start]):
+            if READ_BEFORE.search(_line_before(text, start)):
                 return 'the register is read by the command before it'
         if self.after is not None and not self.after.match(text, end):
             if self.read_before:
@@ -239,6 +247,15 @@ def modification_rules(cmd, is_register):
         rules.append(Rule('assign',
                           pattern=ASSIGN.replace('CS', re.escape('\\' + cmd))))
         rules.append(Rule('bare-assign', before='', after=BARE_VALUE,
+                          read_before=True))
+        # \X = <value>, unless \X is read by \ifdim, \ifnum, ... before it
+        rules.append(Rule('eq-assign', before='', after=r'\s*=',
+                          read_before=True))
+        # box dimensions: \wd\X=0pt, \ht\X\z@, \dp\X\dp\Y (but not
+        # \ifdim\wd\X=...)
+        rules.append(Rule('box-dimen', before=r'\\(?:wd|ht|dp)' + E + r'\s*',
+                          after=r'\s*=?(?:' + BARE_VALUE +
+                                r'|\s*\\(?:wd|ht|dp)' + E + r')',
                           read_before=True))
         if cmd.startswith('c@'):
             rules.append(Rule('counter',
@@ -621,7 +638,7 @@ def explain(cmd, path, cfg):
                     verdict = (f'local change (rule {r.name}) -- inside other'
                                ' code, ignored')
                 break
-            if r.name == 'bare-assign':   # matches every register use: no news
+            if r.name in ('bare-assign', 'eq-assign'):   # matches every register use: no news
                 continue
             verdict = f'used -- rule {r.name} looked like a change, but {why}'
         if verdict:
