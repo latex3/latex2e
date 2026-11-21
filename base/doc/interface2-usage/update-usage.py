@@ -6,18 +6,18 @@ For every command documented in interface2.tex (function, variable and
 constant environments) this script searches a TeX Live tree
 (texmf-dist/tex/latex, minus the core bundles) and records which files
 change the command and which only use it. The result is written back
-into interface2.tex as \modifiers / \setters / \readers / \publicreaders
+into interface2.tex as \modifiedby / \setby / \usedby / \publicusedby
 lines directly after each \end{function|variable|constant}; any existing
 such lines are replaced. It also writes a \sourcefile{<dtx>} line before
 each entry, naming the kernel file(s) defining its commands (shown as a
 margin note).
 
 Which list command is used comes from the entry itself:
-  variable without [readonly]  -> \setters   (setting is expected)
-  function with [settable]      -> \setters   (redefining is expected)
-  everything else              -> \modifiers (changing is not expected)
-  [user] entries               -> no readers list
-  [int] entries                -> \readers, otherwise \publicreaders
+  variable without [readonly]  -> \setby      (setting is expected)
+  function with [settable]      -> \setby      (redefining is expected)
+  everything else              -> \modifiedby (changing is not expected)
+  [user] entries               -> no "used by" list
+  [int] entries                -> \usedby, otherwise \publicusedby
 
 Usage
   update-usage.py                 update ../interface2.tex in place
@@ -393,8 +393,8 @@ def apply_overrides(res, cfg):
 # interface2.tex
 # =====================================================================
 ENV_BEGIN = re.compile(r'\\begin\{(function|variable|constant)\}(?:\[([^\]]*)\])?')
-USAGE_LINE = re.compile(r'\\(modifiers|setters|readers|publicreaders)\b(?:\[([^\]]*)\])?')
-USAGE_COMMANDS = ('modifiers', 'setters', 'readers', 'publicreaders')
+USAGE_LINE = re.compile(r'\\(modifiedby|setby|usedby|publicusedby)\b(?:\[([^\]]*)\])?')
+USAGE_COMMANDS = ('modifiedby', 'setby', 'usedby', 'publicusedby')
 
 
 def parse_entries(lines):
@@ -450,7 +450,7 @@ def strip_usage(lines):
         text = ' '.join(chunk)
         items = text[text.index('{', m.end()) + 1:text.rindex('}')]
         cmd = m.group(2) or (names[0] if names else '?')
-        kind = 'modifiers' if m.group(1) in ('modifiers', 'setters') else 'readers'
+        kind = 'modifiers' if m.group(1) in ('modifiedby', 'setby') else 'readers'
         old[cmd][kind] = {x.strip().replace('\\_', '_')
                           for x in items.split(',') if x.strip()}
     return out, old
@@ -482,10 +482,10 @@ def written_lists(entry, res):
     changed, used = [], []
     for n in names:
         opt = n if multi else None
-        changed.append((n, 'setters' if settable else 'modifiers',
+        changed.append((n, 'setby' if settable else 'modifiedby',
                         sorted(res[n]['modifiers']), opt))
         if 'user' not in opts:
-            used.append((n, 'readers' if 'int' in opts else 'publicreaders',
+            used.append((n, 'usedby' if 'int' in opts else 'publicusedby',
                          sorted(res[n]['readers']), opt))
     return changed + used
 
@@ -701,7 +701,7 @@ def main():
     changes = 0
     for e in entries:
         for n, cmd, items, _ in written_lists(e, res):
-            kind = 'modifiers' if cmd in ('modifiers', 'setters') else 'readers'
+            kind = 'modifiers' if cmd in ('modifiedby', 'setby') else 'readers'
             before, now = old.get(n, {}).get(kind, set()), set(items)
             if before == now:
                 continue
