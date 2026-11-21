@@ -219,6 +219,20 @@ class Rule:
         return found
 
 
+# Token registers (config: [registers] toks): set in more ways than the
+# other registers, e.g. \X{...}, \X\expandafter{...}, \X=\Y (another
+# token register) or \addto@hook\X{...}
+TOKS = set()
+
+
+def register_names(cfg):
+    """All register names from config.toml (token registers included);
+    also records the token registers in TOKS."""
+    TOKS.clear()
+    TOKS.update(cfg['registers'].get('toks', []))
+    return set(cfg['registers']['names']) | TOKS
+
+
 def modification_rules(cmd, is_register):
     """All rules that detect a change of \\cmd."""
     nm = re.escape(cmd)
@@ -253,6 +267,14 @@ def modification_rules(cmd, is_register):
                           read_before=True))
         # box dimensions: \wd\X=0pt, \ht\X\z@, \dp\X\dp\Y (but not
         # \ifdim\wd\X=...)
+        if cmd in TOKS:
+            other = '|'.join(re.escape(t) for t in sorted(TOKS | {'toks@', 'toks'}))
+            # \X{..}, \X\expandafter{..}, \X=\Y (unless \X is read before)
+            rules.append(Rule('toks-assign', before='',
+                              after=r'\s*=?\s*(?:\{|\\(?:expandafter|@xp|' + other + r')' + E + r')',
+                              read_before=True))
+            rules.append(Rule('addto-hook',
+                              pattern=r'\\addto@hook\s*\{?\s*' + re.escape('\\' + cmd) + E))
         rules.append(Rule('box-dimen', before=r'\\(?:wd|ht|dp)' + E + r'\s*',
                           after=r'\s*=?(?:' + BARE_VALUE +
                                 r'|\s*\\(?:wd|ht|dp)' + E + r')',
@@ -579,7 +601,7 @@ def entry_sources(entry, sources):
 def run_tests(path, cfg):
     with open(path, 'rb') as fh:
         tests = tomllib.load(fh)['test']
-    registers = set(cfg['registers']['names'])
+    registers = register_names(cfg)
     failed = 0
     for t in tests:
         text = '\n'.join(STRIP_COMMENT.sub('', l) for l in t['code'].split('\n'))
@@ -607,7 +629,7 @@ def explain(cmd, path, cfg):
             sys.exit(f'file not found: {path}')
         path = found_path
     text = read_source(path)
-    registers = set(cfg['registers']['names'])
+    registers = register_names(cfg)
     rules = modification_rules(cmd, cmd in registers)
     toponly = cmd in cfg.get('toplevel_only', {}).get('names', [])
     kind, found = classify(text, cmd, rules, toponly)
@@ -638,7 +660,7 @@ def explain(cmd, path, cfg):
                     verdict = (f'local change (rule {r.name}) -- inside other'
                                ' code, ignored')
                 break
-            if r.name in ('bare-assign', 'eq-assign'):   # matches every register use: no news
+            if r.name in ('bare-assign', 'eq-assign', 'toks-assign'):   # matches every register use: no news
                 continue
             verdict = f'used -- rule {r.name} looked like a change, but {why}'
         if verdict:
@@ -705,7 +727,7 @@ def main():
     commands = sorted({n for e in entries for n in e['names'] if sweepable(n)})
     if args.only:
         commands = [c.lstrip('\\') for c in args.only]
-    registers = set(cfg['registers']['names'])
+    registers = register_names(cfg)
     unknown = registers - set(commands)
     if unknown and not args.only:
         print('note: registers not documented:', ' '.join(sorted(unknown)))
