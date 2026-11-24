@@ -5076,16 +5076,9 @@
 %
 %
 % \begin{template}{item std}
-%   The item template has one hidden key \key{label} which is not available on the
-%    template for setting because it is only used to receive any
-%    optional data passed to the \tn{item} command. We therefore
-%    declare it with \cs{keys_define:nn} and ensure that the optional
-%    argument data to \tn{item} (if it is not a key/value list
-%    already) is passed to this \key{label} key.
-%    \begin{macrocode}
-\keys_define:nn { template/item/std }
-                { label .tl_set:N = \l_@@_label_given_tl }
-%    \end{macrocode}
+%    The item template expects that \cs{l_@@_label_given_tl} already
+%    holds the label data from the optional argument or \cs{NoValue}
+%    if none was present.
 %
 % \fmi{alignment is mostly wrong (test short medium and multiline
 % labels)}
@@ -5139,14 +5132,6 @@
                               argument:~ \exp_not:n{|#1|}}
 %    \end{macrocode}
 %    
-%    First deal with the key--value input, which in particular may
-%    provide a value for the label (the usual optional argument of
-%    \tn{item}). For this we set \cs{l_@@_label_given_tl} to
-%    \cs{c_novalue_tl} so that we can identify if an optional argument
-%    was given.
-%    \begin{macrocode}
-%    \tl_set_eq:NN \l_@@_label_given_tl \c_novalue_tl
-%    \end{macrocode}
 %    First we evaluate and set any keys specified on the list
 %    environment by calling
 %    \cs{@@_evaluate_saved_user_keys:nn}. This generates an error if
@@ -5601,19 +5586,39 @@
 %    \end{macrocode}
 %    We now take a look at the content of the optional argument and
 %    set up two variables: \cs{l_@@_item_keys_tl} (the keys that we
-%    need to pass to the label instance) 
+%    need to pass to the label instance)  and \cs{l_@@_label_given_tl}
+%    (the label data from the optional argument or given as
+%    \texttt{label=...} there).
+%  \changes{v1.0z}{2026/11/24}{Simply \cs{item} parsing (tagging/1731)}
 %    \begin{macrocode}
-          \tl_if_novalue:nTF {#1}          % avoids reparsing label={}
+          \tl_if_novalue:nTF {#1}
+%    \end{macrocode}
+%    If there was no optional argument then we have no keys to pass
+%    and the data is \cs{NoValue} (we use \texttt{_eq:) so we assign
+%    the internal form).
+%    \begin{macrocode}
             { \tl_clear:N \l_@@_item_keys_tl
               \tl_set_eq:NN \l_@@_label_given_tl \c_novalue_tl
             }
+%    \end{macrocode}
+%    Otherwise we have to distinguish between an empty optional
+%    argument (but present) and one with a key value list inside.
+%    \begin{macrocode}
             { \tl_if_blank:nTF {#1}
-              { %\tl_set:Nn \l_@@_item_keys_tl { label={} }
-                \tl_clear:N \l_@@_item_keys_tl
+%    \end{macrocode}
+%    If empty we set both variablesa to empty.
+%    \begin{macrocode}
+              { \tl_clear:N \l_@@_item_keys_tl
                 \tl_clear:N \l_@@_label_given_tl
               }
-              { %\tl_set:Nn \l_@@_item_keys_tl { #1 }
-                \tl_set_eq:NN \l_@@_label_given_tl \c_novalue_tl
+%    \end{macrocode}
+%    Otherwise, we process the list with \cs{keys_set_known:nnN}. That
+%    puts all key values except for \texttt{label=...} in
+%    \cs{l_@@_item_keys_tl} and the data from \key{label}  if present into
+%    \cs{l_@@_label_given_tl}. To handle the case that there was no
+%    \key{label} key, we preset that variable again to \cs{NoValue}.
+%    \begin{macrocode}
+              { \tl_set_eq:NN \l_@@_label_given_tl \c_novalue_tl
                 \keys_set_known:nnN {template/item/std} { #1 } \l_@@_item_keys_tl
               }
             }
@@ -5638,28 +5643,13 @@
             }
             { \@@_inter_item: }
 %    \end{macrocode}
-%    To avoid unnecessary key/val processing we make a quick check if
-%    there was an optional argument.
+%    The keys for the instance are in \cs{l_@@_item_keys_tl} so we
+%    pass its content to \cs{@@_item_instance:n}
 %    \begin{macrocode}
           \exp_args:No \@@_item_instance:n \l_@@_item_keys_tl
-%          \tl_if_novalue:nTF {#1}          % avoids reparsing label={}
-%            { \@@_item_instance:n { } }
-%    \end{macrocode}
-%    If there was an optional argument but it was empty we interpret
-%    it as a request to use an empty label and not as an empty key/val
-%    list. In that case \texttt{\#1} is empty and not a comma list
-%    that includes \texttt{label=...} due to the way the
-%    \cs{NewDocument} parsing works, so we can make use of that fact!
-%  \changes{v0.8q}{2026/08/27}{Treat empty optional \cs{item}
-%    argument as an empty label (tagging/1557)}
-%    \begin{macrocode}
-%            { \tl_if_blank:nTF {#1}
-%                { \@@_item_instance:n { label={} } }
-%                { \@@_item_instance:n {#1} }
-%            }
 %    \end{macrocode}
 %    The \insttype{item} instance puts the item label into
-%    \cs{g_@@_label_standalone_bool} ready to be placed later. To make
+%    \cs{g_@@_labels_box} ready to be placed later. To make
 %    that happen we need to signal that by setting the legacy switch
 %    \texttt{@inlabel} to true. However, if this is a label that
 %    should be always placed \enquote{standalone} we instead typeset it
@@ -5683,13 +5673,22 @@
     }
 }
 %    \end{macrocode}
+%    
+%    To make the \cs{keys_set_known:nnN} used above work we need to
+%    define a \cs{label} key to set \cs{l_@@_label_given_tl} if
+%    present. We therefore declare it with \cs{keys_define:nn}.
+%    \begin{macrocode}
+\keys_define:nn { template/item/std }
+                { label .tl_set:N = \l_@@_label_given_tl }
+%    \end{macrocode}
 % \end{macro}
 %
 %
-%  \begin{macro}{\l_@@_item_keys_tl}
-%    
+%  \begin{macro}{\l_@@_item_keys_tl,\l_@@_label_given_tl}
+%    Declare the two variables we used above.
 %    \begin{macrocode}
 \tl_new:N \l_@@_item_keys_tl
+\tl_new:N \l_@@_label_given_tl
 %    \end{macrocode}
 %  \end{macro}
 %
