@@ -15,8 +15,8 @@
 %
 %    https://github.com/latex3/latex2e/issues
 %
-\def\ltlabtbldate{2026-09-24}
-\def\ltlabtblversion{0.85v}
+\def\ltlabtbldate{2026-11-20}
+\def\ltlabtblversion{0.85w}
 %<*driver>
 \DocumentMetadata{tagging=on,pdfstandard=ua-2}
 \documentclass[kernel]{l3in2edoc}
@@ -158,6 +158,13 @@
 % used and in that case the code
 % ignores a \texttt{table/header-rows} setting.
 %
+% Every cell then gets a \texttt{Headers} attribute with the \texttt{ID}s
+% of its header cells. They are found in the same way as browsers find
+% the header cells of an HTML table, so header rows inside the table (e.g.\
+% \verb|table/header-rows={1,5}|), header cells spanning rows or columns
+% and header columns on the right side work too.
+% This isn't done yet in a \env{longtable}.
+%
 % \subsection{Spanning of cells}
 %
 % \cs{multicolumn} is supported out of the box and will create a structure with a
@@ -221,10 +228,13 @@
 % or changed with \verb|\tagpdfsetup{table/tagging=presentation}| or
 % \verb|\tagpdfsetup{table/tagging=div}|.
 %
-% \item Only simple header rows and columns are currently supported. Complex headers with
-% subheaders will be handled later as that needs some syntax changes. Tables
-% with more than one header row or column are probably not pdf/UA conformant as the headers array in
-% the cells is missing.
+% \item Header cells can currently only be declared as full rows and columns.
+% Single header cells inside the table need some syntax changes and will be
+% handled later.
+%
+% \item The cells of a \env{longtable} don't get a \texttt{Headers} array yet. So a
+% \env{longtable} with more than one header row or column is probably not pdf/UA
+% conformant.
 %
 % \item A \pkg{longtable} \cs{caption} is currently simply formatted as a multicolumn and
 % not tagged as a \texttt{Caption} structure.
@@ -266,7 +276,7 @@
 %
 %  \item Debugging code and messages must be improved.
 %
-%  \item Cells need an \texttt{Headers} array.
+%  \item Cells in a \env{longtable} need an \texttt{Headers} array.
 %
 %  \item Row spans should be supported (but perhaps need syntax support)
 %
@@ -571,6 +581,11 @@
 \NewTaggingSocketPlug{tbl/finalize}{Table}
   {
     \@@_set_header_rows:
+%    \end{macrocode}
+%    Then the cells get their \texttt{Headers} arrays. This needs the
+%    scope classes set by \cs{@@_set_header_rows:}.
+%    \begin{macrocode}
+    \@@_set_headers:
 %    \end{macrocode}
 %    Similarly, we restore the outer values of the structure data when
 %    we leave the table.
@@ -1088,7 +1103,9 @@
 %   \texttt{ID}s of \texttt{TH} cell.
 % \end{itemize}
 %
-% For now we support only header rows.
+% Header rows and header columns are supported. The scope is set with
+% an attribute class, the \texttt{Headers} array is added by
+% \cs{@@_set_headers:} described below.
 %
 % The attributes \texttt{TH-col}, \texttt{TH-row} and \texttt{TH-both} (for the
 % scope of a header column) and \texttt{ARIA-role-presentation} are declared in 
@@ -1145,6 +1162,483 @@
                      }
                  }          
              }
+          }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsubsection{Headers arrays}
+%
+% The scope of a header cell is enough for simple tables, but with
+% more than one header row or column or with header cells spanning
+% rows or columns a data cell needs a \texttt{Headers} attribute to
+% find its header cells: an array with the \texttt{ID}s of these cells
+% (ISO~32000-2, table~384, and ISO~14289-2, 8.2.5.26).
+%
+% The header cells of a cell are found with the algorithm for
+% assigning header cells of the HTML standard (see
+% \url{https://html.spec.whatwg.org/multipage/tables.html#header-and-data-cell-semantics}),
+% so a PDF table gets the same headers as the same table in HTML:
+% \begin{itemize}
+% \item For every row the cell covers, the code goes to the left
+%   until the edge of the table and collects the header cells. For
+%   every column the cell covers, it goes up and does the same.
+%
+% \item A header cell with the scope \texttt{Column} (class
+%   \texttt{TH-col}) is not used when going left, a header cell with
+%   the scope \texttt{Row} (class \texttt{TH-row}) is not used when
+%   going up.
+%
+% \item A group of header cells ends at the next data cell.
+%   A header cell further away with the same position and size as a
+%   header cell in an earlier group is not used. So in a table with
+%   a header row in the middle (e.g.\ \verb|table/header-rows={1,5}|)
+%   the cells below this row get the headers of this row, and not
+%   additionally the matching headers of the first row.
+% \end{itemize}
+% The \texttt{Headers} array lists first the row headers and then the
+% column headers, nearest first. Header cells get a \texttt{Headers}
+% array too if there are header cells before them.
+%
+% HTML only looks left and up. As a header column can be on the right
+% (e.g.\ \verb|table/header-columns={-1}|) and a header row at the
+% bottom, a data cell without a row header on its left side looks
+% right, and a data cell without a column header above it looks down.
+%
+% The scope of a header cell is taken from its attribute class, so
+% \cs{@@_set_headers:} must be called after \cs{@@_set_header_rows:}.
+% It must also be called before \cs{@@_restore_struct_data:} as it
+% needs the structure numbers of the cells.
+% Currently it is only used in the \texttt{tbl/finalize} plug; cells
+% in a \env{longtable} don't get a \texttt{Headers} array yet.
+% \changes{0.85w}{2026-11-20}{Add Headers arrays to table cells}
+%
+% \begin{variable}
+%   {
+%     \l_@@_hdr_grid_prop,
+%     \l_@@_hdr_top_prop, \l_@@_hdr_bottom_prop,
+%     \l_@@_hdr_left_prop, \l_@@_hdr_right_prop,
+%     \l_@@_hdr_scope_prop
+%   }
+%   \cs{l_@@_hdr_grid_prop} maps a slot \meta{row}\texttt{,}\meta{column}
+%   of the table to the structure number of the cell covering it.
+%   The next four props hold the first and last row and column of
+%   every cell, and \cs{l_@@_hdr_scope_prop} the scope of every header
+%   cell (\texttt{Column}, \texttt{Row} or \texttt{Both}).
+%    \begin{macrocode}
+\prop_new:N \l_@@_hdr_grid_prop
+\prop_new:N \l_@@_hdr_top_prop
+\prop_new:N \l_@@_hdr_bottom_prop
+\prop_new:N \l_@@_hdr_left_prop
+\prop_new:N \l_@@_hdr_right_prop
+\prop_new:N \l_@@_hdr_scope_prop
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{variable}
+%   {
+%     \l_@@_hdr_cells_seq, \l_@@_hdr_opaque_seq, \l_@@_hdr_block_seq,
+%     \l_@@_hdr_row_clist,
+%     \l_@@_hdr_rowheaders_clist, \l_@@_hdr_colheaders_clist,
+%     \l_@@_hdr_cell_tl, \l_@@_hdr_scope_tl, \l_@@_hdr_ids_tl,
+%     \l_@@_hdr_rows_int, \l_@@_hdr_cols_int, \l_@@_hdr_index_int,
+%     \l_@@_hdr_top_int, \l_@@_hdr_bottom_int,
+%     \l_@@_hdr_left_int, \l_@@_hdr_right_int,
+%     \l_@@_hdr_y_int, \l_@@_hdr_x_int,
+%     \l_@@_hdr_scan_bool, \l_@@_hdr_inblock_bool, \l_@@_hdr_skip_bool
+%   }
+%   \cs{l_@@_hdr_cells_seq} holds the structure numbers of all cells
+%   in the order of the table.
+%   \cs{l_@@_hdr_opaque_seq} and \cs{l_@@_hdr_block_seq} are the
+%   \enquote{opaque headers} and the current \enquote{header block}
+%   of the HTML algorithm. The other variables are used while going
+%   through the table.
+%    \begin{macrocode}
+\seq_new:N   \l_@@_hdr_cells_seq
+\seq_new:N   \l_@@_hdr_opaque_seq
+\seq_new:N   \l_@@_hdr_block_seq
+\clist_new:N \l_@@_hdr_row_clist
+\clist_new:N \l_@@_hdr_rowheaders_clist
+\clist_new:N \l_@@_hdr_colheaders_clist
+\tl_new:N    \l_@@_hdr_cell_tl
+\tl_new:N    \l_@@_hdr_scope_tl
+\tl_new:N    \l_@@_hdr_ids_tl
+\int_new:N   \l_@@_hdr_rows_int
+\int_new:N   \l_@@_hdr_cols_int
+\int_new:N   \l_@@_hdr_index_int
+\int_new:N   \l_@@_hdr_top_int
+\int_new:N   \l_@@_hdr_bottom_int
+\int_new:N   \l_@@_hdr_left_int
+\int_new:N   \l_@@_hdr_right_int
+\int_new:N   \l_@@_hdr_y_int
+\int_new:N   \l_@@_hdr_x_int
+\bool_new:N  \l_@@_hdr_scan_bool
+\bool_new:N  \l_@@_hdr_inblock_bool
+\bool_new:N  \l_@@_hdr_skip_bool
+%    \end{macrocode}
+% \end{variable}
+%
+% \begin{macro}[EXP]{\@@_hdr_cell:nn}
+%   The structure number of the cell covering a slot. It is empty if
+%   there is no cell.
+%    \begin{macrocode}
+\cs_new:Npn \@@_hdr_cell:nn #1 #2 % #1 row, #2 column
+  { \prop_item:Ne \l_@@_hdr_grid_prop { #1 , #2 } }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_hdr_add_slot:nn, \@@_hdr_record:nnn}
+%   \cs{@@_hdr_add_slot:nn} finds the cell of a slot and records it.
+%   The cells of a row are taken in order from
+%   \cs{g_@@_struct_cells_seq}, the cells after the first one of a
+%   \cs{multicolumn} are stored there as negative numbers.
+%   A slot covered by a cell spanning rows (see
+%   \cs{@@_gset_untagged_row_cells:nn}) belongs to the cell in the
+%   same column of the row above.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_hdr_add_slot:nn #1 #2 % #1 row, #2 column
+  {
+    \@@_if_tag_cell:nnTF { #1 } { #2 }
+      {
+        \int_incr:N \l_@@_hdr_index_int
+        \tl_set:Ne \l_@@_hdr_cell_tl
+          {
+            \clist_item:Nn \l_@@_hdr_row_clist
+              { \l_@@_hdr_index_int }
+          }
+        \tl_if_empty:NF \l_@@_hdr_cell_tl
+          {
+            \tl_set:Ne \l_@@_hdr_cell_tl
+              { \int_abs:n { \l_@@_hdr_cell_tl } }
+          }
+      }
+      {
+        \tl_set:Ne \l_@@_hdr_cell_tl
+          { \@@_hdr_cell:nn { \int_eval:n { #1 - 1 } } { #2 } }
+      }
+    \tl_if_empty:NF \l_@@_hdr_cell_tl
+      { \@@_hdr_record:nnV { #1 } { #2 } \l_@@_hdr_cell_tl }
+  }
+%    \end{macrocode}
+%   \cs{@@_hdr_record:nnn} stores the cell for the slot and updates
+%   the first and last row and column of the cell. The slots are
+%   visited row by row, so the first slot of a cell gives its top
+%   left corner.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_hdr_record:nnn #1 #2 #3
+  % #1 row, #2 column, #3 cell
+  {
+    \prop_put:Nnn \l_@@_hdr_grid_prop { #1 , #2 } { #3 }
+    \prop_if_in:NnTF \l_@@_hdr_top_prop { #3 }
+      {
+        \prop_put:Nnn \l_@@_hdr_bottom_prop { #3 } { #1 }
+        \prop_put:Nne \l_@@_hdr_right_prop { #3 }
+          {
+            \int_max:nn { #2 }
+              { \prop_item:Nn \l_@@_hdr_right_prop { #3 } }
+          }
+      }
+      {
+        \prop_put:Nnn \l_@@_hdr_top_prop    { #3 } { #1 }
+        \prop_put:Nnn \l_@@_hdr_bottom_prop { #3 } { #1 }
+        \prop_put:Nnn \l_@@_hdr_left_prop   { #3 } { #2 }
+        \prop_put:Nnn \l_@@_hdr_right_prop  { #3 } { #2 }
+        \seq_put_right:Nn \l_@@_hdr_cells_seq { #3 }
+      }
+  }
+\cs_generate_variant:Nn \@@_hdr_record:nnn { nnV }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_hdr_get_scope:n}
+%   This stores the scope of a header cell. It is taken from the
+%   attribute class set in the cell code and by \cs{@@_set_header_rows:}.
+%   Cells without one of these classes are data cells.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_hdr_get_scope:n #1 % #1 cell
+  {
+    \tl_clear:N \l_@@_tmpa_tl
+    \tag_get:nnN { #1 } { struct_C } \l_@@_tmpa_tl
+    \str_set:NV \l_@@_tmpa_str \l_@@_tmpa_tl
+    \str_if_in:NnTF \l_@@_tmpa_str { /TH-both }
+      { \prop_put:Nnn \l_@@_hdr_scope_prop { #1 } { Both } }
+      {
+        \str_if_in:NnTF \l_@@_tmpa_str { /TH-col }
+          { \prop_put:Nnn \l_@@_hdr_scope_prop { #1 } { Column } }
+          {
+            \str_if_in:NnT \l_@@_tmpa_str { /TH-row }
+              { \prop_put:Nnn \l_@@_hdr_scope_prop { #1 } { Row } }
+          }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_hdr_scan:nnnnnN, \@@_hdr_scan_cell:nN}
+%   \cs{@@_hdr_scan:nnnnnN} is the scan of the HTML algorithm. It
+%   starts at the slot in row |#2| and column |#3| of the cell |#1|,
+%   goes in steps of |#4| rows and |#5| columns to the edge of the
+%   table and adds the header cells it finds to the comma list |#6|.
+%   If the cell |#1| is itself a header cell, the scan starts in a
+%   header block.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_hdr_scan:nnnnnN #1 #2 #3 #4 #5 #6
+  {
+    \seq_clear:N \l_@@_hdr_opaque_seq
+    \seq_clear:N \l_@@_hdr_block_seq
+    \prop_if_in:NnTF \l_@@_hdr_scope_prop { #1 }
+      {
+        \bool_set_true:N \l_@@_hdr_inblock_bool
+        \seq_put_right:Nn \l_@@_hdr_block_seq { #1 }
+      }
+      { \bool_set_false:N \l_@@_hdr_inblock_bool }
+    \int_set:Nn \l_@@_hdr_y_int { #2 }
+    \int_set:Nn \l_@@_hdr_x_int { #3 }
+    \bool_set_true:N \l_@@_hdr_scan_bool
+    \bool_while_do:Nn \l_@@_hdr_scan_bool
+      {
+        \int_add:Nn \l_@@_hdr_y_int { #4 }
+        \int_add:Nn \l_@@_hdr_x_int { #5 }
+        \bool_lazy_any:nTF
+          {
+            { \int_compare_p:nNn { \l_@@_hdr_y_int } < { 1 } }
+            { \int_compare_p:nNn { \l_@@_hdr_x_int } < { 1 } }
+            {
+              \int_compare_p:nNn
+                { \l_@@_hdr_y_int } > { \l_@@_hdr_rows_int }
+            }
+            {
+              \int_compare_p:nNn
+                { \l_@@_hdr_x_int } > { \l_@@_hdr_cols_int }
+            }
+          }
+          { \bool_set_false:N \l_@@_hdr_scan_bool }
+          {
+            \tl_set:Ne \l_@@_hdr_cell_tl
+              {
+                \@@_hdr_cell:nn
+                  { \int_use:N \l_@@_hdr_y_int }
+                  { \int_use:N \l_@@_hdr_x_int }
+              }
+%    \end{macrocode}
+%   Empty slots and slots of the cell |#1| itself are skipped.
+%    \begin{macrocode}
+            \bool_lazy_or:nnF
+              { \tl_if_empty_p:N \l_@@_hdr_cell_tl }
+              { \str_if_eq_p:ee { \l_@@_hdr_cell_tl } { #1 } }
+              { \@@_hdr_scan_cell:nN { #5 } #6 }
+          }
+      }
+  }
+%    \end{macrocode}
+%   \cs{@@_hdr_scan_cell:nN} handles the cell \cs{l_@@_hdr_cell_tl}
+%   found by the scan. |#1| is the column step, so it is zero when the
+%   scan goes up or down. A data cell ends the current header block,
+%   its header cells are then added to the opaque headers.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_hdr_scan_cell:nN #1 #2
+  % #1 column step, #2 clist
+  {
+    \prop_get:NeNTF \l_@@_hdr_scope_prop
+      { \l_@@_hdr_cell_tl } \l_@@_hdr_scope_tl
+      {
+        \bool_set_true:N \l_@@_hdr_inblock_bool
+        \seq_put_right:NV \l_@@_hdr_block_seq \l_@@_hdr_cell_tl
+        \bool_set_false:N \l_@@_hdr_skip_bool
+        \int_compare:nNnTF { #1 } = { 0 }
+          {
+            \str_if_eq:eeT { \l_@@_hdr_scope_tl } { Row }
+              { \bool_set_true:N \l_@@_hdr_skip_bool }
+            \@@_hdr_if_hidden:NN
+              \l_@@_hdr_left_prop \l_@@_hdr_right_prop
+          }
+          {
+            \str_if_eq:eeT { \l_@@_hdr_scope_tl } { Column }
+              { \bool_set_true:N \l_@@_hdr_skip_bool }
+            \@@_hdr_if_hidden:NN
+              \l_@@_hdr_top_prop \l_@@_hdr_bottom_prop
+          }
+        \bool_if:NF \l_@@_hdr_skip_bool
+          {
+            \clist_if_in:NVF #2 \l_@@_hdr_cell_tl
+              { \clist_put_right:NV #2 \l_@@_hdr_cell_tl }
+          }
+      }
+      {
+        \bool_if:NT \l_@@_hdr_inblock_bool
+          {
+            \bool_set_false:N \l_@@_hdr_inblock_bool
+            \seq_concat:NNN \l_@@_hdr_opaque_seq
+              \l_@@_hdr_opaque_seq \l_@@_hdr_block_seq
+            \seq_clear:N \l_@@_hdr_block_seq
+          }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_hdr_if_hidden:NN}
+%   This sets \cs{l_@@_hdr_skip_bool} to true if one of the opaque
+%   headers has the same first and last line as the cell
+%   \cs{l_@@_hdr_cell_tl}. When going up or down, |#1| and |#2| are
+%   the props with the first and last column, when going left or right
+%   the props with the first and last row.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_hdr_if_hidden:NN #1 #2
+  {
+    \seq_map_inline:Nn \l_@@_hdr_opaque_seq
+      {
+        \bool_lazy_and:nnT
+          {
+            \int_compare_p:nNn { \prop_item:Nn #1 { ##1 } }
+              = { \prop_item:Ne #1 { \l_@@_hdr_cell_tl } }
+          }
+          {
+            \int_compare_p:nNn { \prop_item:Nn #2 { ##1 } }
+              = { \prop_item:Ne #2 { \l_@@_hdr_cell_tl } }
+          }
+          {
+            \bool_set_true:N \l_@@_hdr_skip_bool
+            \seq_map_break:
+          }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_hdr_set_cell_headers:n}
+%   This collects the header cells of the cell |#1| and adds the
+%   \texttt{Headers} attribute to its structure.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_hdr_set_cell_headers:n #1 % #1 cell
+  {
+    \int_set:Nn \l_@@_hdr_top_int
+      { \prop_item:Nn \l_@@_hdr_top_prop { #1 } }
+    \int_set:Nn \l_@@_hdr_bottom_int
+      { \prop_item:Nn \l_@@_hdr_bottom_prop { #1 } }
+    \int_set:Nn \l_@@_hdr_left_int
+      { \prop_item:Nn \l_@@_hdr_left_prop { #1 } }
+    \int_set:Nn \l_@@_hdr_right_int
+      { \prop_item:Nn \l_@@_hdr_right_prop { #1 } }
+%    \end{macrocode}
+%   The row headers, left of the cell and if there are none and the
+%   cell is a data cell, right of the cell:
+%    \begin{macrocode}
+    \clist_clear:N \l_@@_hdr_rowheaders_clist
+    \int_step_inline:nnn
+      { \l_@@_hdr_top_int } { \l_@@_hdr_bottom_int }
+      {
+        \@@_hdr_scan:nnnnnN { #1 }
+          { ##1 } { \int_use:N \l_@@_hdr_left_int }
+          { 0 } { -1 } \l_@@_hdr_rowheaders_clist
+      }
+    \bool_lazy_and:nnT
+      { \clist_if_empty_p:N \l_@@_hdr_rowheaders_clist }
+      { ! \prop_if_in_p:Nn \l_@@_hdr_scope_prop { #1 } }
+      {
+        \int_step_inline:nnn
+          { \l_@@_hdr_top_int } { \l_@@_hdr_bottom_int }
+          {
+            \@@_hdr_scan:nnnnnN { #1 }
+              { ##1 } { \int_use:N \l_@@_hdr_right_int }
+              { 0 } { 1 } \l_@@_hdr_rowheaders_clist
+          }
+      }
+%    \end{macrocode}
+%   The column headers, above the cell and if there are none and the
+%   cell is a data cell, below the cell:
+%    \begin{macrocode}
+    \clist_clear:N \l_@@_hdr_colheaders_clist
+    \int_step_inline:nnn
+      { \l_@@_hdr_left_int } { \l_@@_hdr_right_int }
+      {
+        \@@_hdr_scan:nnnnnN { #1 }
+          { \int_use:N \l_@@_hdr_top_int } { ##1 }
+          { -1 } { 0 } \l_@@_hdr_colheaders_clist
+      }
+    \bool_lazy_and:nnT
+      { \clist_if_empty_p:N \l_@@_hdr_colheaders_clist }
+      { ! \prop_if_in_p:Nn \l_@@_hdr_scope_prop { #1 } }
+      {
+        \int_step_inline:nnn
+          { \l_@@_hdr_left_int } { \l_@@_hdr_right_int }
+          {
+            \@@_hdr_scan:nnnnnN { #1 }
+              { \int_use:N \l_@@_hdr_bottom_int } { ##1 }
+              { 1 } { 0 } \l_@@_hdr_colheaders_clist
+          }
+      }
+    \clist_concat:NNN \l_@@_hdr_rowheaders_clist
+      \l_@@_hdr_rowheaders_clist \l_@@_hdr_colheaders_clist
+    \clist_remove_duplicates:N \l_@@_hdr_rowheaders_clist
+    \clist_if_empty:NF \l_@@_hdr_rowheaders_clist
+      {
+        \@@_trace:n
+          {
+            ==>~Headers~of~cell~#1:~
+            \clist_use:Nn \l_@@_hdr_rowheaders_clist {,}
+          }
+      }
+%    \end{macrocode}
+%   Now the \texttt{ID}s. If the \pkg{tagpdf} version doesn't know the
+%   keyword \texttt{struct\_id} for \cs{tag_get:nnN} the list stays
+%   empty and no attribute is added.
+%    \begin{macrocode}
+    \tl_clear:N \l_@@_hdr_ids_tl
+    \clist_map_inline:Nn \l_@@_hdr_rowheaders_clist
+      {
+        \tl_clear:N \l_@@_tmpa_tl
+        \tag_get:nnN { ##1 } { struct_id } \l_@@_tmpa_tl
+        \tl_put_right:Ne \l_@@_hdr_ids_tl
+          { \l_@@_tmpa_tl \c_space_tl }
+      }
+    \tl_trim_spaces:N \l_@@_hdr_ids_tl
+    \tl_if_empty:NF \l_@@_hdr_ids_tl
+      {
+        \tag_struct_gput:nne { #1 } { attribute }
+          { /O~/Table~/Headers~[ \l_@@_hdr_ids_tl ] }
+      }
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\@@_set_headers:}
+%   This builds the grid of the table, stores the scope of the header
+%   cells and then adds the \texttt{Headers} attributes. Tables without
+%   header cells, e.g.\ presentation tables, are left alone.
+%    \begin{macrocode}
+\cs_new_protected:Npn \@@_set_headers:
+  {
+    \prop_clear:N \l_@@_hdr_grid_prop
+    \prop_clear:N \l_@@_hdr_top_prop
+    \prop_clear:N \l_@@_hdr_bottom_prop
+    \prop_clear:N \l_@@_hdr_left_prop
+    \prop_clear:N \l_@@_hdr_right_prop
+    \prop_clear:N \l_@@_hdr_scope_prop
+    \seq_clear:N  \l_@@_hdr_cells_seq
+    \int_set:Nn \l_@@_hdr_rows_int
+      { \seq_count:N \g_@@_struct_cells_seq }
+    \int_set:Nn \l_@@_hdr_cols_int { \g_@@_table_cols_tl }
+    \int_step_inline:nn { \l_@@_hdr_rows_int }
+      {
+        \clist_set:Ne \l_@@_hdr_row_clist
+          { \seq_item:Nn \g_@@_struct_cells_seq { ##1 } }
+        \int_zero:N \l_@@_hdr_index_int
+        \int_step_inline:nn { \l_@@_hdr_cols_int }
+          { \@@_hdr_add_slot:nn { ##1 } { ####1 } }
+      }
+    \seq_map_inline:Nn \l_@@_hdr_cells_seq
+      {
+        \tag_if_struct_exist:nT { ##1 }
+          { \@@_hdr_get_scope:n { ##1 } }
+      }
+    \prop_if_empty:NF \l_@@_hdr_scope_prop
+      {
+        \seq_map_inline:Nn \l_@@_hdr_cells_seq
+          {
+            \tag_if_struct_exist:nT { ##1 }
+              { \@@_hdr_set_cell_headers:n { ##1 } }
           }
       }
   }
