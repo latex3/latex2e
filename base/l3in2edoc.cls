@@ -4,7 +4,7 @@
 %
 % None of this is meant to stay, so this class is not supposed to be used outside of the kernel documentation!
 % It may get incompatible updates and it will vanish again, eventually.
-\ProvidesClass{l3in2edoc}[2026-10-27 v1.0c Internal LaTeX documentation class based on l3doc]
+\ProvidesClass{l3in2edoc}[2026-11-17 v1.0d Internal LaTeX documentation class based on l3doc]
 
 \LoadClassWithOptions{l3doc}
 
@@ -75,6 +75,15 @@
  \endgroup
  \ignorespaces}
 
+% Suppress math tagging in \meta, \marg, etc.
+\cs_set_eq:NN \__codedoc_meta_withmathtagging:n \__codedoc_meta:n
+\cs_set_protected:Npn \__codedoc_meta:n #1
+  {
+    \group_begin:
+    \MathCollectFalse
+    \__codedoc_meta_withmathtagging:n { #1 }
+    \group_end:
+  }
 % Match ltxdoc formatting of \meta (l3doc adds a \texttt)
 \RenewDocumentCommand{\meta}{m}{\__codedoc_meta:n{#1}}
 \ExplSyntaxOff
