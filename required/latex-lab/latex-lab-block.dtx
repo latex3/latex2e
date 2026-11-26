@@ -4252,8 +4252,15 @@
   \legacy_if:nF { @noparlist }
     { \@@_skip_set_to_last:N \l_tmpa_skip
       \dim_compare:nNnT \l_tmpa_skip > \c_zero_dim
-        { \skip_vertical:n { - \l_tmpa_skip }
-          \skip_vertical:n { \l_tmpa_skip + \parskip - \@outerparskip }
+%    \end{macrocode}
+%    If \cs{parskip} and \cs{@outerparskip} have the same value then
+%    there is no point backing out the last skip and then reinserting
+%    it with exactly the same value.
+%    \begin{macrocode}
+        { \skip_if_eq:nnF \parskip \@outerparskip
+            { \skip_vertical:n { - \l_tmpa_skip }
+              \skip_vertical:n { \l_tmpa_skip + \parskip - \@outerparskip }
+            }
         }
       \addpenalty \@endparpenalty
 %    \end{macrocode}
@@ -4553,8 +4560,13 @@
 %    that text starts with a display block, so we ensure that the
 %    heading gets typeset now.\fmi{This is similar to the standalone case
 %    for block captions so perhaps that can be combined, check}
+%    We also set \texttt{@nobreak} so that below we do not add
+%    \cs{beginparpenalty} which would be a legal breakpoint after the heading.
+%  \changes{v1.0y}{2026/11/18}{Prevent break if following a runin heading (github/140)}
 %    \begin{macrocode}
-       { \mode_leave_vertical: }
+       { \mode_leave_vertical:
+         \legacy_if_gset_true:n { @nobreak }
+       }
 %    \end{macrocode}
 %    If no such heading is waiting we might have a block caption
 %    waiting to be typeset and this might be requested to be set
@@ -4709,25 +4721,131 @@
       }      
       { \legacy_if_set_false:n { @noparlist }
         \legacy_if:nT { @newlist } { \@noitemerr }
-        \legacy_if:nTF { @nobreak }
 %    \end{macrocode}
-%    We are not resetting \texttt{@nobreak} here as it should also
+%    If \texttt{@nobreak} is true we should not add a
+%    \cs{@beginparpenalty} but instead add a penalty of \texttt{10000}
+%    using \cs{addpenalty} so that previous glue is seen by following
+%    glue. Unfortunately, the kernel definition of \cs{addpenalty}
+%    does nothing if \texttt{@nobreak} is true, which is not quite
+%    right: if there was no previous \cs{nobreak} already (most of the
+%    time there is, but not always) then any following glue introduces
+%    a break point! The new implementation of \cs{addpenalty}
+%    (currently still in \texttt{latex-lab-sec-template.dtx})
+%    therefore always adds a penalty and in case of \texttt{@nobreak}
+%    being true it adds \texttt{10000} instead of the requested
+%    one. This means we can simply use \cs{addpenalty} here and still
+%    get \texttt{@nobreak} honored.
+%  \changes{v1.0y}{2026/11/18}{Prevent break if following a runin heading.
+%      Also, improve the logic how vertical spacing is added
+%      before the block (github/140)}
+%    \begin{macrocode}
+        \addpenalty \@beginparpenalty
+%    \end{macrocode}
+%    However, we need to explicitly test for \texttt{@nobreak} to add
+%    the right skip, and
+%    we are not resetting \texttt{@nobreak} here as it should also
 %    apply to the upcoming item.
 %    \begin{macrocode}
-          { \addpenalty{ 10000 }
-            \addvspace{ \skip_eval:n{\@outerparskip-\parsep} }
+        \legacy_if:nTF { @nobreak }
+          { \addvspace{ \skip_eval:n{\@outerparskip-\parsep} } }
+%    In case you are wondering why we don't use \cs{addvspace} twice
+%    as it was done originally: we need to keep the 
+%    glues separate, because the first glue value is the one we
+%    need to compare any earlier glue with. The next one in contrast
+%    is there to cancel the following \cs{parskip}.
+%    \begin{macrocode}
+          { \adddoublevspace{ \l_@@_effective_top_skip
+                                 + \@outerparskip      }
+                            { - \parsep }
           }
-          { \addpenalty \@beginparpenalty
-            \addvspace { \skip_eval:n { \l_@@_effective_top_skip +
-                                        \@outerparskip } }
-            \addvspace { - \parsep }
-          }
-     }
+      }
 }
 %    \end{macrocode}
 % \end{template}
 %
 %
+%  \begin{macro}{\adddoublevspace}
+%    
+%    \begin{macrocode}
+\protected\def\adddoublevspace #1#2 {
+  \ifhmode \ifinner \@LRmoderr \else \par \fi \fi
+  \if@minipage\else
+    \l_tmpa_skip \lastskip 
+    \skip_if_eq:nnTF \l_tmpa_skip \z@
+      { \skip_vertical:n { #1 + #2 } }
+      {
+        \skip_set:Nn \l_tmpb_skip {#1}
+        \@xadddoublevskip {#2}
+      }
+  \fi
+}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\def\@xadddoublevskip #1 {
+  \ifdim\l_tmpa_skip<\l_tmpb_skip
+    \skip_vertical:n { -\l_tmpa_skip }
+    \skip_vertical:n { \l_tmpb_skip + #1 }
+  \else
+    \ifdim\l_tmpb_skip<\z@
+      \ifdim\l_tmpa_skip<\z@
+      \else
+        \skip_add:Nn \l_tmpb_skip { \l_tmpa_skip + #1 }
+        \skip_if_eq:nnF \l_tmpa_skip \l_tmpb_skip
+          { \skip_vertical:n { -\l_tmpa_skip }
+            \vskip \l_tmpb_skip
+          }
+      \fi
+    \else
+      \skip_set:Nn \l_tmpb_skip { \l_tmpa_skip + #1 }
+        \skip_if_eq:nnF \l_tmpa_skip \l_tmpb_skip
+          { \skip_vertical:n { -\l_tmpa_skip }
+            \vskip \l_tmpb_skip
+          }
+    \fi
+  \fi
+}
+%    \end{macrocode}
+%  \end{macro}
+%  
+%  
+%  \begin{macro}{\addvspace}
+%    Compared to the original in \LaTeXe{} there is only one change:
+%    we do test against \cs{c_zero_skip} in order to catch cases where
+%    only the plus or minus parts have a non-zero value.
+%    \begin{macrocode}
+\protected\def\addvspace # 1{%
+  \ifhmode \ifinner \@LRmoderr \else \par \fi \fi
+  \if@minipage\else
+    \l_tmpa_skip \lastskip 
+    \skip_if_eq:nnTF \l_tmpa_skip \c_zero_skip
+      { \@vspace@calcify{#1} }
+      { \setlength\l_tmpb_skip{#1}
+        \@xaddvskip
+      }
+  \fi
+}
+%    \end{macrocode}
+%    
+%    \begin{macrocode}
+\def\@xaddvskip{
+  \ifdim\l_tmpa_skip<\l_tmpb_skip
+    \vskip-\l_tmpa_skip
+    \vskip\l_tmpb_skip
+  \else
+    \ifdim\l_tmpb_skip<\z@
+      \ifdim\l_tmpa_skip<\z@
+      \else
+        \advance\l_tmpb_skip\l_tmpa_skip
+        \vskip-\l_tmpa_skip
+        \vskip \l_tmpb_skip
+      \fi
+    \fi
+  \fi
+}
+%    \end{macrocode}
+%  \end{macro}
+%  
 %
 %
 %
