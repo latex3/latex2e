@@ -6,6 +6,7 @@
 --
 -- l3backend-color.dtx  (with options: `lua')
 -- l3backend-opacity.dtx  (with options: `lua')
+-- l3backend-pdf.dtx  (with options: `lua')
 -- 
 -- Copyright (C) 2023-2026 The LaTeX Project
 -- 
@@ -123,3 +124,11 @@ if pdfmanagement_active and luaotfload and luaotfload.set_transparent_colorstack
     return '/' .. result .. ' gs'
   end, 'l3opacity')
 end
+-- File: l3backend-pdf.dtx
+luatexbase.new_luacommand(
+  '__pdf_backend_object_stream_generate:w',
+  function()
+    token.put_next(token.new(0x110000 + token.scan_int(), 12))
+  end,
+  'global'
+)
