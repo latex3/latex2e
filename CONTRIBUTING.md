@@ -64,7 +64,7 @@ choice. You are, of course, welcome to report issues in these areas,
 using the procedure explained below, but in all likelihood such reports
 will be marked as 'won't fix'.
 
-The reason is is that the kernel interfaces and the document classes
+The reason is that the kernel interfaces and the document classes
 have been used for many years in essentially all documents (even
 documents using different classes often build them upon the standard
 classes in the background) and thus such changes would break or as a
